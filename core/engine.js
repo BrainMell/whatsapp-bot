@@ -22066,7 +22066,9 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
-                    // Ship Meter
+                    // Ship Meter -> Match Meter image card (v2 2026-09-17)
+                    // Deterministic multi-factor engine + rendered card.
+                    // No RPG lore - ship is standalone from the RPG.
                     if (
                       lowerTxt ===
                         `${botConfig.getPrefix().toLowerCase()} ship` ||
@@ -22078,176 +22080,148 @@ _💡 Reply with another number from your search list!_`.trim();
                       let mentions =
                         m.message.extendedTextMessage?.contextInfo
                           ?.mentionedJid || [];
-
-                      // Support reply if no mentions
                       if (mentions.length === 0 && target) {
                         mentions = [target];
                       }
+                      const shipText = txt
+                        .substring(
+                          `${botConfig.getPrefix().toLowerCase()} ship `
+                            .length,
+                        )
+                        .trim();
 
-                      // Check for usage
-                      if (mentions.length === 0) {
-                        const textInput = txt
-                          .substring(
-                            `${botConfig.getPrefix().toLowerCase()} ship `
-                              .length,
-                          )
-                          .trim();
-                        if (!textInput) {
-                          return await sendUsage(
-                            sock,
-                            chatId,
-                            BOT_MARKER,
-                            "❤️ SHIP",
-                            "ship @u1 @u2",
-                            "ship @friend1 @friend2",
-                            "Check the compatibility between two people!",
-                          );
-                        }
+                      if (mentions.length === 0 && !shipText) {
+                        return await sendUsage(
+                          sock,
+                          chatId,
+                          BOT_MARKER,
+                          "💞 SHIP",
+                          "ship @u1 @u2",
+                          "ship alice + bob",
+                          "Render a compatibility card for a pair!",
+                        );
                       }
 
-                      let score = 0;
-                      let comment = ``;
-                      let namesDisplay = "";
+                      await sock.sendMessage(chatId, {
+                        react: { text: "💘", key: m.key },
+                      });
 
-                      // ---------------------------------------------------------
-                      // SCENARIO 1: AI ANALYSIS (If users are tagged)
-                      // ---------------------------------------------------------
-                      if (mentions.length > 0) {
-                        await sock.sendMessage(chatId, {
-                          react: { text: "💘", key: m.key },
+                      try {
+                        const shipCards = require('./rpg/shipCardRenderer');
+
+                        let jid1 = null, jid2 = null, p1 = null, p2 = null;
+                        let name1, name2;
+
+                        if (mentions.length > 0) {
+                          jid1 =
+                            mentions.length === 2 ? mentions[0] : senderJid;
+                          jid2 =
+                            mentions.length === 2 ? mentions[1] : mentions[0];
+                          p1 = getUserProfile(jid1) || {};
+                          p2 = getUserProfile(jid2) || {};
+                          // v2 FIX: getDisplayName already treats the
+                          // 'Adventurer' placeholder as missing and falls
+                          // back to the real WhatsApp name - never prefer a
+                          // raw nickname that may be the placeholder.
+                          name1 = economy.getDisplayName(jid1);
+                          name2 = economy.getDisplayName(jid2);
+                        } else {
+                          const parts = shipText
+                            .split(/\s*(?:\band\b|\bx\b|&|\+|,|×)\s*/i)
+                            .map((s) => s.trim())
+                            .filter(Boolean);
+                          name1 = parts[0] || "Someone";
+                          name2 = parts[1] || "Someone Else";
+                        }
+
+                        // ── Multi-factor engine (deterministic per pair) ──
+                        const result = shipCards.computeShip({
+                          name1,
+                          name2,
+                          jid1,
+                          jid2,
+                          p1,
+                          p2,
                         });
 
-                        // Determine who is being shipped
-                        const u1Jid =
-                          mentions.length === 2 ? mentions[0] : senderJid;
-                        const u2Jid =
-                          mentions.length === 2 ? mentions[1] : mentions[0];
-
-                        // Load profiles
-                        const p1 = getUserProfile(u1Jid) || {};
-                        const p2 = getUserProfile(u2Jid) || {};
-
-                        const name1 = p1.nickname || economy.getDisplayName(u1Jid);
-                        const name2 = p2.nickname || economy.getDisplayName(u2Jid);
-                        namesDisplay = `${name1} & ${name2}`;
-
-                        // Format data for AI
-                        const formatData = (p) => {
-                          const likes =
-                            p.memories?.likes?.join(", ") || "Unknown";
-                          const dislikes =
-                            p.memories?.dislikes?.join(", ") || "Unknown";
-                          const hobbies =
-                            p.memories?.hobbies?.join(", ") || "Unknown";
-                          const personality =
-                            p.notes?.map((n) => n.content).join(". ") ||
-                            "Mystery";
-                          return `Likes: ${likes} | Dislikes: ${dislikes} | Hobbies: ${hobbies} | Notes: ${personality}`;
-                        };
-
-                        const prompt = `
-        Analyze romantic compatibility between two people based on this data:
-
-        Person A (${name1}): ${formatData(p1)}
-        Person B (${name2}): ${formatData(p2)}
-
-        Task:
-        1. Calculate a compatibility percentage (0-100).
-        2. Write a short, funny, 1-sentence verdict (roast them if incompatible).
-
-        Output JSON ONLY:
-        {"score": number, "comment": "string"}
-        `;
-
-                        try {
-                          const res = await groq.chat.completions.create({
-                            messages: [{ role: "user", content: prompt }],
-                            model: "openai/gpt-oss-20b",
-                            response_format: { type: "json_object" },
-                          });
-
-                          const result = JSON.parse(
-                            res.choices[0].message.content,
-                          );
-                          score = result.score;
-                          comment = result.comment;
-                        } catch (err) {
-                          console.error("AI Ship Error:", err);
-                          // Fallback to random if AI fails
-                          score = Math.floor(Math.random() * 101);
-                          comment = "The stars remain silent... (AI Error)";
+                        // Optional AI verdict (comment ONLY - the score always
+                        // comes from the deterministic engine). Guarded:
+                        // 12s timeout, needs real profile data on both sides.
+                        const hasData = (p) =>
+                          p &&
+                          (((p.notes || []).length > 0) ||
+                            (p.memories &&
+                              ((p.memories.likes || []).length +
+                                (p.memories.hobbies || []).length +
+                                (p.memories.personal || []).length) >
+                                0));
+                        if (jid1 && jid2 && hasData(p1) && hasData(p2)) {
+                          try {
+                            const res = await Promise.race([
+                              groq.chat.completions.create({
+                                messages: [
+                                  {
+                                    role: "user",
+                                    content: `Two people: ${name1} and ${name2}.
+${name1}: likes=${(p1.memories?.likes || []).join(", ") || "?"}; hobbies=${(p1.memories?.hobbies || []).join(", ") || "?"}
+${name2}: likes=${(p2.memories?.likes || []).join(", ") || "?"}; hobbies=${(p2.memories?.hobbies || []).join(", ") || "?"}
+Compatibility score (from the engine): ${result.score}/100.
+Write ONE witty verdict line (max 90 chars) about their compatibility. Roast them lightly if the score is low. Plain text only - no percentages, no emoji.`,
+                                  },
+                                ],
+                                model: "openai/gpt-oss-20b",
+                                max_tokens: 70,
+                              }),
+                              new Promise((_, rej) =>
+                                setTimeout(
+                                  () => rej(new Error("ai timeout")),
+                                  12000,
+                                ),
+                              ),
+                            ]);
+                            const t = (
+                              res.choices?.[0]?.message?.content || ""
+                            )
+                              .trim()
+                              .replace(/^["']+|["']+$/g, "");
+                            if (t && t.length <= 150) result.comment = t;
+                          } catch (err) {
+                            console.error(
+                              "Ship AI verdict failed (canned fallback):",
+                              err.message,
+                            );
+                          }
                         }
-                      }
 
-                      // ---------------------------------------------------------
-                      // SCENARIO 2: MATH HASH (If just text provided)
-                      // ---------------------------------------------------------
-                      else {
-                        const textInput = txt
-                          .substring(
-                            `${botConfig.getPrefix().toLowerCase()} ship `
-                              .length,
-                          )
-                          .trim();
-                        if (!textInput)
-                          return await sock.sendMessage(chatId, {
-                            text:
-                              BOT_MARKER +
-                              `Who are we shipping? Tag them or type names!`,
-                          });
+                        const buf = await shipCards.renderShipCard({
+                          name1,
+                          name2,
+                          score: result.score,
+                          factors: result.factors,
+                          tier: result.tier,
+                          comment: result.comment,
+                          mash: result.mash,
+                          hearts: result.hearts,
+                        });
 
-                        namesDisplay = textInput;
+                        const caption = [
+                          `💞 *${name1} × ${name2}*`,
+                          `${result.tier.emoji} *${result.tier.label}* - *${result.score}%* match`,
+                          `_${result.comment}_`,
+                        ].join("\n");
 
-                        // Deterministic Hash Logic (So "A+B" always gives same score)
-                        const pairString = textInput
-                          .toLowerCase()
-                          .split(/\s+(?:and|x|&|\+)\s+/i)
-                          .sort()
-                          .join("");
-                        let hash = 0;
-                        for (let i = 0; i < pairString.length; i++) {
-                          hash =
-                            pairString.charCodeAt(i) + ((hash << 5) - hash);
+                        const sendOpts = { image: buf, caption };
+                        if (jid1 && jid2) {
+                          sendOpts.mentions = [jid1, jid2];
                         }
-                        score = Math.abs(hash % 101);
-
-                        // Generic comments based on score
-                        if (score > 90)
-                          comment = "It's destiny! Put a ring on it! 💍";
-                        else if (score > 75)
-                          comment = "Getting spicy in here. 🔥";
-                        else if (score > 50)
-                          comment = "There's potential... maybe. ⚖️";
-                        else if (score > 25) comment = "It's a bit chilly. 🧊";
-                        else comment = "Run. Just run. ☠️";
+                        return await sock.sendMessage(chatId, sendOpts);
+                      } catch (err) {
+                        console.error("Ship card error:", err);
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER +
+                            `❌ Ship card failed: ${err.message}`,
+                        });
                       }
-                      // ⚡ POLISHED BOND READING (2026-09-17): hearts bar,
-                      // fate tiers flavored with the bot's lore, destiny roll.
-                      const hearts = Math.max(0, Math.min(10, Math.round(score / 10)));
-                      const heartBar = '❤️'.repeat(hearts) + '💔'.repeat(10 - hearts);
-                      const tiers = [
-                        [90, '💍', 'CELESTIAL DECREE', 'The Divine Architect himself signed this bond. Not even the Primordial Chaos can undo it.'],
-                        [75, '💖', 'SOULBOUND SPARKS', 'Two Divine Sparks burning as one - the Infected flee from this kind of energy.'],
-                        [50, '⚖️', 'A BOND IN BALANCE', 'Chaos whispers doubts, but the spark is real. Cleanse a few dungeons together and watch it grow.'],
-                        [25, '🧊', 'FADING EMBERS', 'Even the Architect squints at this pairing. A few co-op quests might rekindle it.'],
-                        [-1, '☠️', 'THE VOID CLAIMS IT', 'The Chaos showed me this pairing in a dream and I woke up screaming. Run.'],
-                      ];
-                      const tier = tiers.find((t) => score > t[0]) || tiers[tiers.length - 1];
-                      const destiny = 11 + (Math.abs(score * 7919) % 89); // stable per-pair roll 11-99
-                      const response = [
-                        `${BOT_MARKER} ${tier[1]} *BOND READING* ${tier[1]}`,
-                        ``,
-                        `💞 *Pair:* ${namesDisplay}`,
-                        `🔮 *Compatibility:* ${score}%`,
-                        `❤️ ${heartBar}`,
-                        `🌌 *Destiny index:* ${destiny}/100`,
-                        ``,
-                        `📜 *Verdict:* ${comment}`,
-                        `✨ *Fate tier:* ${tier[2]}`,
-                        `_${tier[3]}_`,
-                      ].join('\n');
-
-                      return await sock.sendMessage(chatId, { text: response });
                     }
 
                     // Random Joke
