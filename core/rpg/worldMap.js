@@ -8,7 +8,7 @@
 //  | `.j world`           | First World   | none (available from the beginning) |
 //  | `.j world beyond`    | World Beyond  | adventurer rank S                   |
 //  | `.j world afterlife` | Afterlife     | the dead-soul reading feature       |
-//  | `.j world abyss`     | Abyss         | ABYSS_MAP_UNLOCK (PROPOSED lvl 20)  |
+//  | `.j world abyss`     | Abyss         | ABYSS_MAP_UNLOCK (CONFIRMED lvl 20) |
 //
 //  LOCKED-BEHAVIOUR HARD CONTRACT (§1): a locked map request must NOT render
 //  the map at all - the bot replies with the requirement and nothing else.
@@ -28,9 +28,9 @@ const botConfig = require('../../botConfig');
 const P = () => botConfig.getPrefix();
 
 // ─── GATE CONSTANTS ──────────────────────────────────────────────────────────
-// PROPOSED (owner recall, unconfirmed): `.j world abyss` unlock level.
-// Single configurable constant so the owner can set it without touching
-// logic (world_map.md §1 / additional_ideas/ideas.md #15).
+// CONFIRMED by owner (2026-09-19): `.j world abyss` unlocks at level 20.
+// Single configurable constant so the owner can still retune it without
+// touching logic (world_map.md §1 / additional_ideas/ideas.md #15).
 const ABYSS_MAP_UNLOCK = 20;
 
 // Dead-soul reading feature: NOT yet implemented in the bot (the soul-sight
@@ -49,25 +49,53 @@ function _rankAtLeast(rank, min) {
 }
 
 // ─── PER-REALM INFO CARDS (fixed text — no randomized lore baked in) ─────────
+// Owner ruling (2026-09-19): captions double as EXPLORATION GUIDES - each
+// area tells the player where to go and what can be found/what finds them.
 const INFO = {
     first_world: [
         'four quadrants - worlds without number - the Presence holds the center.',
         'the world completes a crossing every five hours - five days under its sky.',
+        '',
+        'where to explore: dungeon hunts start at the guild - .j adventure, .j solo,',
+        '.j raid. corrupted worlds and dungeon-worlds scatter all four quadrants,',
+        'and every dungeon entry generates a new dungeon-world.',
+        '',
+        'where to find things: repairs at the blacksmith (.j repair), brewing and',
+        'cooking (.j brew, .j cook), runes (.j rune), wares (.j shop), mending',
+        'flesh (.j hospital). the daily world lives here.',
     ],
     world_beyond: [
         'the space the First World does not occupy. god-rank realm, above ordinary',
         'dimensionality. the chart will not name it.',
+        '',
+        'where to explore: nowhere, by ordinary right. rank S earns the chart,',
+        'not the crossing. the First World rides inside - everything else here',
+        'stays unnamed, and unnamed things are not found. they find you.',
     ],
     afterlife: [
         'it rides its own circuit - about two real days - sharing nothing with the',
         'First World\'s path. once in seven days the three meet.',
         'what that meeting means is not yet written.',
+        '',
+        'where to explore: the shore that runs along this circuit - where the dead',
+        'arrive, and some of them wait. the guild does not yet teach the reading of',
+        'dead souls, so to the living this chart stays shut.',
     ],
     abyss: [
         'it does not orbit. it lies beneath - rings upon rings, shrinking as they',
         'descend, without end. every entry generates a new dungeon-world.',
         'one universal entry cycle: five hours locked, one hour open. the window',
         'closing never pulls anyone back out.',
+        '',
+        'where to explore: .j abyss enter - each run descends floor by floor',
+        '(12h cooldown; entry obeys the 6h gate). the chart opens at level 20.',
+        '',
+        'what finds you: floors 1-30 keep their creatures. from 31 some fights are',
+        'player-shaped - wanderers, and mirrors on boss floors. from 50, other',
+        'banners march. from 90, timeline drifters.',
+        '',
+        'deep finds: void essence and rarer spoils - enough to feed the deep brews',
+        '(.j brew): abyssal tonic, warden\'s broth, banner ale.',
     ],
 };
 
@@ -273,7 +301,7 @@ async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
 
 module.exports = {
     showWorld,
-    ABYSS_MAP_UNLOCK,          // PROPOSED level 20 (configurable constant)
+    ABYSS_MAP_UNLOCK,          // CONFIRMED level 20 (owner, 2026-09-19; configurable)
     _rankAtLeast,
     _refuseBeyond,
     _refuseAfterlife,

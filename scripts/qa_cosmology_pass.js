@@ -169,7 +169,7 @@ console.log('✓ enemyVariants: spawn policy by depth, MIRROR/DRIFTER rules, dat
 
 // ─── worldMap gates (locked = requirement text, never a render) ─────────────
 const worldMap = require('../core/rpg/worldMap');
-assert.strictEqual(worldMap.ABYSS_MAP_UNLOCK, 20); // PROPOSED owner recall
+assert.strictEqual(worldMap.ABYSS_MAP_UNLOCK, 20); // CONFIRMED by owner (2026-09-19)
 {
     const ref = worldMap._refuseBeyond('A');
     assert.ok(ref.includes('S'), 'rank requirement named');

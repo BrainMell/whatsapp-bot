@@ -513,7 +513,7 @@ function renderAbyssSheet(t = Date.now()) {
             legend: false,
             note: 'the abyss is not a region of any map - it is a separate structure beneath the circles',
             seal: 'IV',
-            footer: '".j world abyss" - unlock is a configurable constant (ABYSS_MAP_UNLOCK) - owner recall: level 20',
+            footer: '".j world abyss" - ABYSS_MAP_UNLOCK constant - owner confirmed: level 20',
         });
     });
 }

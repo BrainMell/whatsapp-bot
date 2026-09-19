@@ -20,15 +20,21 @@
 ## Tuning knobs (owner-adjustable)
 
 - `loreDrops.CONFIG` — BASE_CHANCE 0.10, COOLDOWN_MS 30 min, RECENT_RING 10, IMPORTANT_WEIGHT 0.4
-- `worldMap.ABYSS_MAP_UNLOCK` — **20 (PROPOSED, owner recall; single constant)**
+- `worldMap.ABYSS_MAP_UNLOCK` — **20 (CONFIRMED by owner, 2026-09-19; single constant)**
 - `enemyVariants.VARIANT_CHANCE / MIRROR_BOSS_CHANCE / GLOBAL_WANDERER_CHANCE / NPC_SIGHTING_CHANCE`
 - Per-surface chances at every call site (8/10/12/15 % per the design table)
 - Cosmology anchors: `cosmology.T0`, epsilon windows (`FW_BOTTOM_EPS`, `AL_ALIGNMENT_EPS`) set the triune's ~weekly recurrence
 
-## Open owner decisions (unchanged from the design package)
+## Owner rulings applied (2026-09-19)
 
-1. Triune consequence — the window fires; nothing is scheduled on it yet (`ideas.md` #13)
-2. `ABYSS_MAP_UNLOCK` = 20 needs one word to finalize (`ideas.md` #15)
+1. **Abyss map unlock = level 20 — CONFIRMED.** `ABYSS_MAP_UNLOCK` stays a single constant; the "PROPOSED" flag is retired everywhere (`ideas.md` #15 resolved).
+2. **Triune alignment = later phase.** The window keeps firing as a readable state (~weekly by construction) and stays flaggable via `triuneWindow`, but **nothing is scheduled on it for now** — the consequence mechanic is deliberately deferred by the owner (`ideas.md` #13 stays open for when that phase begins).
+3. **World map captions = exploration guides.** Every `.j world` sheet caption now tells the player where to explore and what to find (or what finds them) in that area — guild hunts, craft surfaces, variant floors by depth, deep brews, gate levels.
+
+## Open owner decisions (remaining)
+
+1. Triune consequence — **deferred by owner ("later")**: the window fires; nothing is scheduled on it yet (`ideas.md` #13)
+2. ~~`ABYSS_MAP_UNLOCK` = 20 needs one word to finalize~~ — **RESOLVED: level 20 confirmed** (`ideas.md` #15)
 3. Afterlife sheet stays locked until the dead-soul reading feature exists
 4. NPC skill trees remain V2 (owner sign-off; never stored on User)
 
