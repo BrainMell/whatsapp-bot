@@ -5519,20 +5519,28 @@ ${targetCategory}`;
         `Turn images into stickers with the STICKERS tools - \`${prefix} menu stickers\`.`,
         `Interactions (\`${prefix} hug\`, \`${prefix} slap\`...) - \`${prefix} reactions\` lists them all.`,
       ];
-      // 💡 LORE TIP SLOT (lore_drop_system.md §3 "general"): one menu tip in
-      // six is instead a general-world lore drop - the world murmuring in the
-      // tips rotation, zero new message surface.
-      const tip = (Math.random() < 1 / 6)
-        ? (() => {
-            try {
-              const loreDrops = require('./rpg/loreDrops');
-              return loreDrops.maybeDrop('general_world', { userId: senderJid || 'menu', chatId, force: true }) || TIPS[Math.floor(Math.random() * TIPS.length)];
-            } catch (e) { return TIPS[Math.floor(Math.random() * TIPS.length)]; }
-          })()
-        : TIPS[Math.floor(Math.random() * TIPS.length)];
+      // 💡 LORE TIP SLOT (lore_drop_system.md §3 "general"): one menu in six
+      // appends a general-world lore drop as its OWN message after the menu
+      // (owner 2026-09-20: a drop is a distinct lore event, never baked into
+      // another message box).
+      let __menuLoreDrop = null;
+      if (Math.random() < 1 / 6) {
+        try {
+          const loreDrops = require('./rpg/loreDrops');
+          __menuLoreDrop = loreDrops.maybeDrop('general_world', { userId: senderJid || 'menu', chatId, force: true });
+        } catch (e) { __menuLoreDrop = null; }
+      }
+      const tip = TIPS[Math.floor(Math.random() * TIPS.length)];
       mainMsg += `\n\n💡 *Tip:* ${tip}`;
 
-      return await sendMenuWithBanner(sock, chatId, mainMsg);
+      await sendMenuWithBanner(sock, chatId, mainMsg);
+      if (__menuLoreDrop) {
+        try {
+          const loreDrops = require('./rpg/loreDrops');
+          await loreDrops.sendOwn(sock, chatId, __menuLoreDrop);
+        } catch (e) {}
+      }
+      return;
     }
 
     // ============================================
@@ -8215,7 +8223,7 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                       const words = lowerTxt.split(' ');
                       const prefixPart = botConfig.getPrefix().toLowerCase();
                       const firstWord = words[0].startsWith(prefixPart) ? words[0].slice(prefixPart.length) : (words[0].startsWith('.') ? words[0].slice(1) : words[0]);
-                      const RPG_CMDS = new Set(['char', 'character', 'stats', 'profile', 'me', 'whois', 'cardstyle', 'setdefaultcard', 'status', 'inventory', 'bag', 'inv', 'dismantle', 'equip', 'unequip', 'use', 'enhance', 'blacksmith', 'repair', 'inspect', 'shop', 'buy', 'recipes', 'craft', 'brew', 'forge', 'cook', 'source', 'mine', 'skill', 'skills', 'skilltree', 'st', 'abilities', 'allocate', 'classes', 'evolve', 'trial', 'quest', 'solo', 'adventure', 'join', 'stop', 'vote', 'raid', 'abyss', 'world', 'bounty', 'duel', 'challenge', 'pvp', 'combat', 'summon', 'summons', 'dragonlord', 'dglord', 'dragongod', 'rune', 'clinic', 'heal', 'health', 'hospital', 'rank', 'adventurer', 'monster', 'handbook', 'guide', 'lore', 'leaderboard', 'lb', 'upgrade', 'claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 't2edeck', 't2ecoll', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'cdeck', 'tokens', 'event', 'setprice', 'esummon', 'fc', 'spawn', 'listitem', 'unlistitem', 'buyitem', 'itemmarket', 'balance', 'bal', 'daily', 'register', 'deposit', 'withdraw', 'transfer', 'pay', 'rob', 'rich', 'lottery', 'invest', 'investment', 'gamble', 'slots', 'dice', 'coinflip', 'blackjack', 'roulette', 'plinko', 'wheel', 'crash', 'cups', 'scratch', 'rps', 'horse', 'hl', 'mines', 'penalty', 'guess', 'guild', 'reset', 'allocate', 'handbook', 'tutorial']);
+                      const RPG_CMDS = new Set(['char', 'character', 'stats', 'kills', 'killcount', 'profile', 'me', 'whois', 'cardstyle', 'setdefaultcard', 'status', 'inventory', 'bag', 'inv', 'dismantle', 'equip', 'unequip', 'use', 'enhance', 'blacksmith', 'repair', 'inspect', 'shop', 'buy', 'recipes', 'craft', 'brew', 'forge', 'cook', 'source', 'mine', 'skill', 'skills', 'skilltree', 'st', 'abilities', 'allocate', 'classes', 'evolve', 'trial', 'quest', 'solo', 'adventure', 'join', 'stop', 'vote', 'raid', 'abyss', 'world', 'bounty', 'duel', 'challenge', 'pvp', 'combat', 'summon', 'summons', 'dragonlord', 'dglord', 'dragongod', 'rune', 'clinic', 'heal', 'health', 'hospital', 'rank', 'adventurer', 'monster', 'handbook', 'guide', 'lore', 'leaderboard', 'lb', 'upgrade', 'claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 't2edeck', 't2ecoll', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'cdeck', 'tokens', 'event', 'setprice', 'esummon', 'fc', 'spawn', 'listitem', 'unlistitem', 'buyitem', 'itemmarket', 'balance', 'bal', 'daily', 'register', 'deposit', 'withdraw', 'transfer', 'pay', 'rob', 'rich', 'lottery', 'invest', 'investment', 'gamble', 'slots', 'dice', 'coinflip', 'blackjack', 'roulette', 'plinko', 'wheel', 'crash', 'cups', 'scratch', 'rps', 'horse', 'hl', 'mines', 'penalty', 'guess', 'guild', 'reset', 'allocate', 'handbook', 'tutorial']);
                       const isRpg = RPG_CMDS.has(firstWord.toLowerCase());
                       if (isRpg) {
                         const bypass = await testerSystem.canBypassRpgLock(senderJid, chatId);
@@ -10020,15 +10028,22 @@ _💡 Reply with another number from your search list!_`.trim();
                           });
                         }
 
-                        // 💡 LORE DROP: healing pool (10%) - hospital surface
-                        let __healDrop = '';
+                        // 💡 LORE DROP: healing pool (10%) - hospital surface,
+                        // own message box after the main reply
+                        let __healDrop = null;
                         try {
                           const loreDrops = require('./rpg/loreDrops');
-                          __healDrop = loreDrops.maybeDrop('healing', { userId: senderJid, chatId, chance: 0.10 }) || '';
+                          __healDrop = loreDrops.maybeDrop('healing', { userId: senderJid, chatId, chance: 0.10 });
                         } catch (e) {}
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + `🏥 *HOSPITAL*\n\n❤️ HP restored: +${healed}\n📊 HP: ${maxHP}/${maxHP}\n\n_You are now at full health._\n\n⏳ _Next hospital visit available in 12 hours. Out-of-combat passive regen will keep you topped up between visits._${__healDrop ? '\n' + __healDrop : ''}`,
+                          text: BOT_MARKER + `🏥 *HOSPITAL*\n\n❤️ HP restored: +${healed}\n📊 HP: ${maxHP}/${maxHP}\n\n_You are now at full health._\n\n⏳ _Next hospital visit available in 12 hours. Out-of-combat passive regen will keep you topped up between visits._`,
                         });
+                        if (__healDrop) {
+                          try {
+                            const loreDrops = require('./rpg/loreDrops');
+                            await loreDrops.sendOwn(sock, chatId, __healDrop);
+                          } catch (e) {}
+                        }
                       } catch (e) {
                         console.error('Hospital command error:', e.message);
                         await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Hospital error: " + e.message });
@@ -10039,6 +10054,14 @@ _💡 Reply with another number from your search list!_`.trim();
                     // .j recipes
                     if (primaryCmd === "recipes") {
                       await rpgCommands.displayRecipes(sock, chatId);
+                      return;
+                    }
+
+                    // .j kills - lifetime kill tally (owner 2026-09-20: the
+                    // stat was tracked and gate-checked for years but had no
+                    // player-facing view)
+                    if (primaryCmd === "kills" || primaryCmd === "killcount" || primaryCmd === "slain") {
+                      await rpgCommands.displayKills(sock, chatId, senderJid);
                       return;
                     }
 
@@ -10185,6 +10208,10 @@ _💡 Reply with another number from your search list!_`.trim();
                             try { return progressionForWorld.getLevel(uid) || 1; } catch (e) { return 1; }
                           },
                           getRank: (uid) => __wUser.adventurerRank || 'F',
+                          // 💡 2026-09-20: `.j world all` - mods bypass the
+                          // unlock gate (owner ruling); the same tier checks
+                          // the rest of the mod surface uses.
+                          isMod: (uid) => isOwner || isGlobalMod(uid) || isRpgMod(uid) || isCardsMod(uid) || overrideUsers.has(uid),
                         });
                       } catch (e) {
                         console.error('[world] command error:', e.message);
@@ -13009,285 +13036,100 @@ Usage: ${newUsage}/5${warningText}`;
                     });
                   }
 
-                  // .j addmod - Add a global moderator (Owner Only)
-                  // 💡 SECURITY FIX: restricted to OWNER ONLY. Previously any
-                  // global mod could add more global mods - a privilege
-                  // escalation chain where one compromised mod account could
-                  // grant mod access to anyone. Now only the owner can add
-                  // global mods.
+                  // .j addmod - 💡 IMMUTABLE MOD ROLES (owner, 2026-09-20):
+                  // every type of mod role is now immutable at runtime. No
+                  // chat command can grant or revoke a mod role - roles live
+                  // in the DB, are loaded at boot, and .j reloadmods refreshes
+                  // them after external DB changes. This closes the whole
+                  // privilege-mutation surface (the old owner-only addmod was
+                  // already the second tightening; this is the last one).
                   if (
                     lowerTxt.startsWith(
                       `${botConfig.getPrefix().toLowerCase()} addmod`,
                     )
                   ) {
-                    if (!isOwner) {
-                      return await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER +
-                          "❌ Only the bot owner can add global moderators. (Mods can no longer add other mods - this was changed to prevent privilege escalation.)",
-                      });
-                    }
-                    const target =
-                      getMentionOrReply(m) ||
-                      (txt.split(" ")[2]?.includes("@")
-                        ? txt.split(" ")[2]
-                        : null);
-                    if (!target)
-                      return await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER + "❌ Tag someone to add as a moderator.",
-                      });
-
-                    // 💡 Prevent adding the owner as a mod - redundant (owner
-                    // already has all permissions) and makes the mod list
-                    // confusing (owner shows up as a mod).
-                    if (isBotOwner(target)) {
-                      return await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + "⚠️ The owner doesn't need to be added as a moderator - owners already have full access to everything.\n\n_Add someone else, or use `${botConfig.getPrefix()} listmods` to see current mods._",
-                      });
-                    }
-
-                    await addGlobalMod(target);
-                    await sock.sendMessage(chatId, {
+                    return await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `✅ @${economy.getDisplayName(target)} is now a Global Moderator.\n\nThey now have access to admin commands and RPG privileges (.j spawn, etc).`,
-                      mentions: buildMentions(m, [], target),
+                        "🔒 Mod roles are immutable - they cannot be granted or revoked through chat, by anyone.\n\nTo change the roster, update the mod list in the database directly, then run `" + botConfig.getPrefix() + " reloadmods`. Use `" + botConfig.getPrefix() + " listmods` to view the current roster.",
                     });
-                    return;
                   }
 
-                  // .j delmod - Remove a global moderator (Owner Only)
+                  // .j delmod - 💡 IMMUTABLE MOD ROLES (owner, 2026-09-20)
                   if (
                     lowerTxt.startsWith(
                       `${botConfig.getPrefix().toLowerCase()} delmod`,
                     )
                   ) {
-                    if (!isOwner && !isGlobalMod(senderJid)) {
-                      return await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER +
-                          "❌ Only the owner or a global mod can remove global moderators.",
-                      });
-                    }
-                    const target =
-                      getMentionOrReply(m) ||
-                      (txt.split(" ")[2]?.includes("@")
-                        ? txt.split(" ")[2]
-                        : null);
-                    if (!target)
-                      return await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER +
-                          "❌ Tag someone to remove from moderators.",
-                      });
-
-                    await delGlobalMod(target);
-                    // 💡 SECURITY FIX: Also clean up ALL other mod Sets.
-                    // Previously delmod only removed from globalMods - if the
-                    // person was also in rpgMods, cardsMods, or cardSystem's
-                    // modJids, they'd still have mod privileges and the ban
-                    // protection would still see them as a mod ("can't ban a
-                    // mod or owner" even after removal).
-                    await delRpgMod(target);
-                    await delCardsMod(target);
-                    try {
-                      const cardSystem = require('./rpg/cardSystem');
-                      const inst = cardSystem.getInst();
-                      if (inst && inst.modJids) {
-                        inst.modJids.delete(target);
-                        if (typeof cardSystem.saveRoles === 'function') await cardSystem.saveRoles();
-                      }
-                    } catch (e) {}
-                    await sock.sendMessage(chatId, {
+                    return await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `✅ @${economy.getDisplayName(target)} has been removed from Global Moderators.\n\n_Cleaned from all mod roles (Global, RPG, Cards)._`,
-                      mentions: buildMentions(m, [], target),
+                        "🔒 Mod roles are immutable - they cannot be granted or revoked through chat, by anyone.\n\nTo change the roster, update the mod list in the database directly, then run `" + botConfig.getPrefix() + " reloadmods`. Use `" + botConfig.getPrefix() + " listmods` to view the current roster.",
                     });
-                    return;
                   }
 
                   // ═══════════════════════════════════════════════════════════════════
-                  // 💡 POLISH 2026-07-17: 3-TIER MODERATOR ROLE COMMANDS
                   // ═══════════════════════════════════════════════════════════════════
-                  // .g addrpgmod @user  - promote to RPG Moderator (RPG cmds only)
-                  // .g delrpgmod @user  - demote RPG Moderator
-                  // .g addcardsmod @user - promote to Cards Moderator (Cards cmds only)
-                  // .g delcardsmod @user - demote Cards Moderator
-                  // .g listmods         - list all 3 mod categories
-                  //
-                  // Only the owner or a General (global) Mod can promote/demote
-                  // any mod role. RPG Mods cannot promote other RPG Mods. Cards
-                  // Mods cannot promote other Cards Mods. This keeps the
-                  // permission hierarchy clean.
+                  // 💡 3-TIER MODERATOR ROLES - NOW IMMUTABLE (owner, 2026-09-20)
+                  // ═══════════════════════════════════════════════════════════════════
+                  // Every mod type (General, RPG, Cards) is immutable at
+                  // runtime: no chat command can grant or revoke a mod role,
+                  // for anyone. The roster lives in the DB, loads at boot, and
+                  // .j reloadmods refreshes it after external DB changes. The
+                  // add/del commands remain as named endpoints that explain
+                  // the policy; listmods / reloadmods stay fully functional.
                   // ═══════════════════════════════════════════════════════════════════
 
-                  // .g addrpgmod - Add an RPG Moderator (Owner or General Mod only)
+                  // .g addrpgmod - 💡 IMMUTABLE MOD ROLES
                   if (
                     lowerTxt.startsWith(
                       `${botConfig.getPrefix().toLowerCase()} addrpgmod`,
                     )
                   ) {
-                    if (!isOwner && !isGlobalMod(senderJid)) {
-                      return await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER +
-                          "❌ Only the owner or a General Mod can add RPG moderators. RPG Mods cannot promote other mods.",
-                      });
-                    }
-                    const target =
-                      getMentionOrReply(m) ||
-                      (txt.split(" ")[2]?.includes("@")
-                        ? txt.split(" ")[2]
-                        : null);
-                    if (!target)
-                      return await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER + "❌ Tag someone to add as an RPG Moderator.",
-                      });
-
-                    await addRpgMod(target);
-                    await sock.sendMessage(chatId, {
+                    return await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `✅ @${economy.getDisplayName(target)} is now an RPG Moderator.\n\nThey have access to RPG moderation commands only (combat, classes, items, dungeons, abyss, runes, economy).`,
-                      mentions: buildMentions(m, [], target),
+                        "🔒 Mod roles are immutable - they cannot be granted or revoked through chat, by anyone.\n\nTo change the roster, update the mod list in the database directly, then run `" + botConfig.getPrefix() + " reloadmods`. Use `" + botConfig.getPrefix() + " listmods` to view the current roster.",
                     });
-                    return;
                   }
 
-                  // .g delrpgmod - Remove an RPG Moderator
+                  // .g delrpgmod - 💡 IMMUTABLE MOD ROLES
                   if (
                     lowerTxt.startsWith(
                       `${botConfig.getPrefix().toLowerCase()} delrpgmod`,
                     )
                   ) {
-                    if (!isOwner && !isGlobalMod(senderJid)) {
-                      return await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER +
-                          "❌ Only the owner or a General Mod can remove RPG moderators.",
-                      });
-                    }
-                    const target =
-                      getMentionOrReply(m) ||
-                      (txt.split(" ")[2]?.includes("@")
-                        ? txt.split(" ")[2]
-                        : null);
-                    if (!target)
-                      return await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER + "❌ Tag someone to remove from RPG Moderators.",
-                      });
-
-                    await delRpgMod(target);
-                    // 💡 SECURITY FIX: also clean cardSystem modJids for full cleanup
-                    try {
-                      const cardSystem = require('./rpg/cardSystem');
-                      const inst = cardSystem.getInst();
-                      if (inst && inst.modJids) {
-                        inst.modJids.delete(target);
-                        if (typeof cardSystem.saveRoles === 'function') await cardSystem.saveRoles();
-                      }
-                    } catch (e) {}
-                    await sock.sendMessage(chatId, {
+                    return await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `✅ @${economy.getDisplayName(target)} has been removed from RPG Moderators.`,
-                      mentions: buildMentions(m, [], target),
+                        "🔒 Mod roles are immutable - they cannot be granted or revoked through chat, by anyone.\n\nTo change the roster, update the mod list in the database directly, then run `" + botConfig.getPrefix() + " reloadmods`. Use `" + botConfig.getPrefix() + " listmods` to view the current roster.",
                     });
-                    return;
                   }
 
-                  // .g addcardsmod - Add a Cards Moderator
+                  // .g addcardsmod - 💡 IMMUTABLE MOD ROLES
                   if (
                     lowerTxt.startsWith(
                       `${botConfig.getPrefix().toLowerCase()} addcardsmod`,
                     )
                   ) {
-                    if (!isOwner && !isGlobalMod(senderJid)) {
-                      return await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER +
-                          "❌ Only the owner or a General Mod can add Cards moderators. Cards Mods cannot promote other mods.",
-                      });
-                    }
-                    const target =
-                      getMentionOrReply(m) ||
-                      (txt.split(" ")[2]?.includes("@")
-                        ? txt.split(" ")[2]
-                        : null);
-                    if (!target)
-                      return await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER + "❌ Tag someone to add as a Cards Moderator.",
-                      });
-
-                    await addCardsMod(target);
-                    // 💡 SECURITY FIX: ALSO add to cardSystem's modJids so the
-                    // two systems stay in sync.
-                    try {
-                      const cardSystem = require('./rpg/cardSystem');
-                      const inst = cardSystem.getInst();
-                      if (inst && inst.modJids) {
-                        inst.modJids.add(target);
-                        if (typeof cardSystem.saveRoles === 'function') await cardSystem.saveRoles();
-                      }
-                    } catch (e) {}
-                    await sock.sendMessage(chatId, {
+                    return await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `✅ @${economy.getDisplayName(target)} is now a Cards Moderator.\n\nThey have access to card-related moderation commands only (spawn, market, deck, eshop, espawn, einfo).`,
-                      mentions: buildMentions(m, [], target),
+                        "🔒 Mod roles are immutable - they cannot be granted or revoked through chat, by anyone.\n\nTo change the roster, update the mod list in the database directly, then run `" + botConfig.getPrefix() + " reloadmods`. Use `" + botConfig.getPrefix() + " listmods` to view the current roster.",
                     });
-                    return;
                   }
 
-                  // .g delcardsmod - Remove a Cards Moderator
+                  // .g delcardsmod - 💡 IMMUTABLE MOD ROLES
                   if (
                     lowerTxt.startsWith(
                       `${botConfig.getPrefix().toLowerCase()} delcardsmod`,
                     )
                   ) {
-                    if (!isOwner && !isGlobalMod(senderJid)) {
-                      return await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER +
-                          "❌ Only the owner or a General Mod can remove Cards moderators.",
-                      });
-                    }
-                    const target =
-                      getMentionOrReply(m) ||
-                      (txt.split(" ")[2]?.includes("@")
-                        ? txt.split(" ")[2]
-                        : null);
-                    if (!target)
-                      return await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER + "❌ Tag someone to remove from Cards Moderators.",
-                      });
-
-                    await delCardsMod(target);
-                    // 💡 SECURITY FIX: ALSO remove from cardSystem's modJids.
-                    // Without this, the card commands still see them as a
-                    // card mod (inst.modJids.has() check) even after
-                    // delcardsmod removed them from the engine's cardsMods.
-                    try {
-                      const cardSystem = require('./rpg/cardSystem');
-                      const inst = cardSystem.getInst();
-                      if (inst && inst.modJids) {
-                        inst.modJids.delete(target);
-                        if (typeof cardSystem.saveRoles === 'function') await cardSystem.saveRoles();
-                      }
-                    } catch (e) {}
-                    await sock.sendMessage(chatId, {
+                    return await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `✅ @${economy.getDisplayName(target)} has been removed from Cards Moderators.`,
-                      mentions: buildMentions(m, [], target),
+                        "🔒 Mod roles are immutable - they cannot be granted or revoked through chat, by anyone.\n\nTo change the roster, update the mod list in the database directly, then run `" + botConfig.getPrefix() + " reloadmods`. Use `" + botConfig.getPrefix() + " listmods` to view the current roster.",
                     });
-                    return;
                   }
 
                   // .g listmods - List all moderators across all 3 categories
@@ -17312,7 +17154,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                         msg += `• *Action:* \`quest\`, \`solo\`, \`raid\`, \`mine\`, \`craft\`\n`;
                         msg += `• *Social:* \`guild\`, \`pvp\`, \`duel\`\n`;
                         msg += `• *Growth:* \`evolve\`, \`skills\`, \`skill up\`, \`equip\`\n`;
-                        msg += `• *Misc:* \`shop\`, \`recipes\`, \`inv\`, \`use\`\n`;
+                        msg += `• *Misc:* \`shop\`, \`recipes\`, \`inv\`, \`use\`, \`kills\`, \`world\`\n`;
                       } else {
                         msg = `❌ Topic not found. Use \`${botConfig.getPrefix()} guide\` for the main menu.`;
                       }
@@ -19352,7 +19194,10 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                             return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Rune "${runeQuery}" not found. Use \`${botConfig.getPrefix()} rune inv\` to see available runes.` });
                           }
                           const result = await runeSystem.socketRune(senderJid, rune.runeId, skillId);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          // 💡 2026-09-20: drop arrives as its own message box
+                          try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
+                          return;
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
@@ -19369,7 +19214,10 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         }
                         try {
                           const result = await runeSystem.fuseRunesByName(senderJid, typeQuery, countQuery);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          // 💡 2026-09-20: drop arrives as its own message box
+                          try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
+                          return;
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Fusion failed: ' + e.message });
                         }
@@ -19389,7 +19237,10 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           if (result.success && hasScroll) {
                             inventorySystem.removeItem(senderJid, 'rune_removal_scroll', 1);
                           }
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          // 💡 2026-09-20: drop arrives as its own message box
+                          try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
+                          return;
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
@@ -19403,7 +19254,10 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         }
                         try {
                           const result = await runeSystem.destroyRune(senderJid, runeId);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          // 💡 2026-09-20: drop arrives as its own message box
+                          try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
+                          return;
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
@@ -19854,6 +19708,8 @@ _Those already below are not pulled out by the closing - only entry is gated._` 
                             console.error('[Abyss] entry card failed:', __cardErr.message);
                             await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           }
+                          // 💡 2026-09-20: lore drop arrives as its own message box
+                          try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
                           // 💡 FIX 2026-08-31: wild_summon floors (10% of floors)
                           // were never combat-started from `enter` - the run
                           // soft-locked with "Not in combat!" on attack.
@@ -20021,6 +19877,8 @@ _Those already below are not pulled out by the closing - only entry is gated._` 
                         try {
                           const result = await abyssSystem.processTreasure(senderJid);
                           await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          // 💡 2026-09-20: lore drop arrives as its own message box
+                          try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
                           // 💡 FIX 2026-08-15: Start combat if next floor is combat.
                           // 💡 FIX 2026-08-31: wild_summon floors too, and RETURN -
                           // previously fell through to "Unknown Abyss command: collect"
@@ -20040,6 +19898,8 @@ _Those already below are not pulled out by the closing - only entry is gated._` 
                           const choiceId = abyssArgs[1] || '1';
                           const result = await abyssSystem.processEventChoice(senderJid, choiceId);
                           await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          // 💡 2026-09-20: lore drop arrives as its own message box
+                          try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
                           // 💡 FIX 2026-08-15: If the next floor is combat, start it!
                           // Previously processEventChoice advanced the floor and said "Attack with .s combat atk"
                           // but never actually started combat - so the player got "Not in combat!" when they tried.
@@ -20059,6 +19919,8 @@ _Those already below are not pulled out by the closing - only entry is gated._` 
                         try {
                           const result = await abyssSystem.processSkip(senderJid);
                           await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          // 💡 2026-09-20: lore drop arrives as its own message box
+                          try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
                           // 💡 FIX 2026-08-15: Same fix as choose - start combat if next floor is combat.
                           // 💡 FIX 2026-08-31: wild_summon floors too, and RETURN -
                           // previously fell through to "Unknown Abyss command: skip".
@@ -25642,6 +25504,8 @@ Examples:
                           contextInfo: { mentionedJid: buildMentions(m, [], result.receiver) },
                         });
                       }
+                      // 💡 2026-09-20: trading lore drop arrives as its own message box
+                      try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
                     } else {
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + result.message,
@@ -25799,6 +25663,8 @@ Examples:
                           text: BOT_MARKER + result.message,
                         });
                       }
+                      // 💡 2026-09-20: trading lore drop arrives as its own message box
+                      try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
                     } else {
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + result.message,
@@ -25896,6 +25762,8 @@ Examples:
                           text: BOT_MARKER + result.message,
                         });
                       }
+                      // 💡 2026-09-20: trading lore drop arrives as its own message box
+                      try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
                     } else {
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + result.message,

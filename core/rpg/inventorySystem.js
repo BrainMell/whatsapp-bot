@@ -1289,6 +1289,7 @@ function useItem(userId, rawItemId, targetSlot = null) {
 
     // Effect handling
     let effectMsg = "";
+    let useItemLoreDrop = null; // 💡 2026-09-20: out-of-band lore drop (own message)
     let consumed = true;
 
     // ── OUT-OF-BATTLE CONSUMABLE EFFECTS (2026-09-15) ─────────────────
@@ -1343,13 +1344,16 @@ function useItem(userId, rawItemId, targetSlot = null) {
         if (itemInfo.cureStatus) {
             healMsg += `\n✨ Negative status effects clear automatically outside battle.`;
         }
-        // 💡 LORE DROP: healing voice on potion use (10%)
+        // 💡 LORE DROP: healing voice on potion use (10%) - carried out of
+        // band on result.loreDrop; the handler sends it as its own message
+        // (owner ruling: a drop is a distinct lore event, not a tacked line).
+        let __loreDrop = null;
         try {
             const loreDrops = require('./loreDrops');
-            const drop = loreDrops.maybeDrop('healing', { userId, chance: 0.10 });
-            if (drop) healMsg += `\n${drop}`;
+            __loreDrop = loreDrops.maybeDrop('healing', { userId, chance: 0.10 });
         } catch (e) {}
         effectMsg = healMsg;
+        useItemLoreDrop = __loreDrop;
     }
     else if (itemInfo.effect === 'cure_status') {
         // Status effects are battle-scoped; outside combat there is nothing
@@ -1481,7 +1485,7 @@ function useItem(userId, rawItemId, targetSlot = null) {
     progression.saveProgression(userId);
     economy.saveUser(userId);
 
-    return { success: true, message: effectMsg };
+    return { success: true, message: effectMsg, loreDrop: useItemLoreDrop };
 }
 
 // ==========================================

@@ -587,7 +587,7 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
         if (cardBuffer && cardBuffer.length > 0) {
           let cap = `✨ *STAT ALLOCATION* ✨\n`;
           cap += `Available Points: *${Number(sheet.statPoints) || 0}*\n\n`;
-          cap += `🎯 *How to allocate - one command per stat (5 pts each):*\n`;
+          cap += `🎯 *How to allocate - every point delivers the exact value shown:*\n`;
           for (const allocS of ["hp", "atk", "def", "mag", "spd", "luck", "crit"]) {
             const allocPer = allocPerPoint[allocS.toUpperCase()] || 1;
             cap += `• \`${getPrefix()} allocate ${allocS} 5\` → +${allocPer * 5} ${allocS.toUpperCase()}\n`;
@@ -601,15 +601,15 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
 
       let msg = `✨ *STAT ALLOCATION* ✨\n\n`;
       msg += `Available Points: *${sheet.statPoints}*\n\n`;
-      msg += `Spend points to increase your power:\n`;
-      msg += `• *HP*: +15-60 HP\n`;
-      msg += `• *ATK*: +3-12 Attack\n`;
-      msg += `• *DEF*: +2-8 Defense\n`;
-      msg += `• *MAG*: +3-12 Magic\n`;
-      msg += `• *SPD*: +2-8 Speed\n`;
-      msg += `• *LUCK*: +2-8 Luck\n`;
-      msg += `• *CRIT*: +1-4% Crit\n\n`;
-      msg += `💡 *Higher class tiers get more value per point!*\n\n`;
+      msg += `Every point delivers exactly:\n`;
+      msg += `• *HP*: +15 per point\n`;
+      msg += `• *ATK*: +3 per point\n`;
+      msg += `• *DEF*: +2 per point\n`;
+      msg += `• *MAG*: +3 per point\n`;
+      msg += `• *SPD*: +2 per point\n`;
+      msg += `• *LUCK*: +2 per point\n`;
+      msg += `• *CRIT*: +1 per point\n\n`;
+      msg += `💡 *EVOLVED and ASCENDED classes earn double per point!*\n\n`;
       msg += `Usage: \`${getPrefix()} allocate <stat> [amount]\`\n`;
       msg += `Example: \`${getPrefix()} allocate atk 5\``;
       

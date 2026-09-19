@@ -31,6 +31,7 @@ function mockSock() {
         if (first.image) {
             assert.ok(first.image.length > 50000, 'PNG buffer attached');
             assert.ok(first.caption.includes('four quadrants'), 'info card in caption');
+            assert.ok(first.caption.length <= 400, 'caption stays SHORT (owner 2026-09-20: subtle, no dumps)');
         }
     }
     {
@@ -69,11 +70,11 @@ function mockSock() {
         await worldMap.showWorld(sock2, 'chat1', 'user1', 'abyss', { getLevel: () => 20, getRank: () => 'A' });
         const m2 = sock2.sent[0].msg;
         assert.ok(m2.image || m2.text, 'abyss sheet at unlock level');
-        if (m2.image) assert.ok(m2.caption.includes('.j abyss enter'), 'explorer pointer in caption');
+        if (m2.image) assert.ok(m2.caption.includes('rings upon rings'), 'caption carries the one identifying line (no command dumps per owner 2026-09-20)');
     }
     {
         // all four renders actually produce PNG buffers (renderer smoke)
-        for (const fn of [worldMapRenderer.renderFirstWorldSheet, worldMapRenderer.renderWorldBeyondSheet,
+        for (const fn of [worldMapRenderer.renderCosmologyAtlasSheet, worldMapRenderer.renderFirstWorldSheet, worldMapRenderer.renderWorldBeyondSheet,
             worldMapRenderer.renderAfterlifeSheet, worldMapRenderer.renderAbyssSheet]) {
             const buf = await fn();
             assert.ok(buf && buf.length > 50000, 'sheet renders to a real PNG');

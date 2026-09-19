@@ -49,44 +49,50 @@ function _rankAtLeast(rank, min) {
 }
 
 // ─── PER-REALM INFO CARDS (fixed text — no randomized lore baked in) ─────────
-// Owner ruling (2026-09-19, subtlety pass): captions are lean exploration
-// guides. They point, they don't explain. Mechanics and secrets are learned
-// by playing; the lore drops reveal them. No equations, no spawn tables.
+// Owner ruling (2026-09-20): captions are SHORT and subtle. One or two lines
+// that say what the chart is - nothing more. Mechanics and secrets are
+// discovered by playing; the lore drops reveal the rest. No guides, no
+// command lists, no lore dumps.
 const INFO = {
     first_world: [
         'four quadrants, worlds without number. the Presence holds the center.',
-        '',
-        'where to explore: dungeon hunts start at the guild (.j adventure, .j solo,',
-        '.j raid). corrupted worlds scatter all four quadrants.',
-        '',
-        'where to find things: the blacksmith (.j repair), brewing and cooking',
-        '(.j brew, .j cook), runes (.j rune), wares (.j shop), mending flesh (.j hospital).',
     ],
     world_beyond: [
         'the space the First World does not occupy. the chart will not name it.',
-        '',
-        'the First World rides inside. everything else here stays unnamed.',
-        'unnamed things are not found. they find you.',
     ],
     afterlife: [
         'it rides its own circuit, sharing nothing with the First World\'s path.',
-        '',
-        'the shore runs along this circuit, where the dead arrive',
-        'and some of them wait.',
     ],
     abyss: [
         'rings upon rings, shrinking as they descend, without end.',
-        '',
-        'where to explore: .j abyss enter. the gate opens for a while, then shuts.',
-        '',
-        'what finds you: past the thirtieth floor, some things wear faces.',
-        'deeper still, they wear banners. past the ninetieth, one of them walks like you.',
-        '',
-        'deep finds: void essence and rarer spoils, enough for the deep brews (.j brew).',
+    ],
+    all: [
+        'the whole of it, gathered on one page. what each map keeps quiet,',
+        'the world itself will tell you - in its own time.',
     ],
 };
 
 // ─── TEXT FALLBACKS (§5 - every render path keeps a text answer) ─────────────
+
+function _asciiAll(t) {
+    const lines = [
+        '*THE COSMOLOGY - ALL CHARTS*',
+        '```',
+        '  WORLD BEYOND ( the boundary is not named )',
+        '     .---------------------------.',
+        '    /      _______________       \\',
+        '   |  II  /    FIRST WORLD \\   I  |',
+        '   |    |   + ORDER +      |     |',
+        '   |  III \\_______________/  IV  |',
+        '    \\___________  ______________/',
+        '                \\/  ( bottom link )',
+        '  AFTERLIFE ~ ~ o ~ ~ ~ ~ o ~ ~ its own circuit',
+        '  ABYSS   ( ( ( ring ) ) )  beneath, not around',
+        '```',
+    ];
+    for (const l of cosmology.statusLines(t)) lines.push(l);
+    return lines.join('\n');
+}
 
 function _asciiFirstWorld(t) {
     const lines = [
@@ -217,13 +223,13 @@ async function _sendSheet(sock, chatId, buffer, infoLines, asciiFn, t) {
 // ─── COMMAND ENTRY ───────────────────────────────────────────────────────────
 
 /**
- * `.j world [beyond|afterlife|abyss]`
+ * `.j world [all|beyond|afterlife|abyss]`
  * @param {object} sock
  * @param {string} chatId
  * @param {string} userId   sender jid
- * @param {string} subArg   '' | 'beyond' | 'afterlife' | 'abyss' (aliases ok)
- * @param {object} [helpers] { getLevel(userId), getRank(userId) } injected by
- *                          the engine to avoid a heavy require cycle
+ * @param {string} subArg   '' | 'all' | 'beyond' | 'afterlife' | 'abyss' (aliases ok)
+ * @param {object} [helpers] { getLevel(userId), getRank(userId), isMod(userId) }
+ *                          injected by the engine to avoid a heavy require cycle
  */
 async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
     const t = Date.now();
@@ -234,7 +240,8 @@ async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
         ? 'first_world'
         : (sub === 'beyond' || sub === 'worldbeyond' || sub === 'world beyond' ? 'world_beyond'
             : (sub === 'afterlife' ? 'afterlife'
-                : (sub === 'abyss' ? 'abyss' : null)));
+                : (sub === 'abyss' ? 'abyss'
+                    : (sub === 'all' || sub === 'atlas' || sub === 'cosmology' || sub === 'everything' ? 'all' : null))));
 
     if (norm === null) {
         return sock.sendMessage(chatId, {
@@ -245,8 +252,48 @@ async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
                 `\`${P()} world beyond\` - the outer boundary (rank S)`,
                 `\`${P()} world afterlife\` - the shore of the dead`,
                 `\`${P()} world abyss\` - the descent beneath`,
+                `\`${P()} world all\` - every chart gathered on one page`,
             ].join('\n'),
         });
+    }
+
+    // ── ALL: the gathered chart. Owner ruling (2026-09-20): mods see it
+    // regardless of progress; regular players earn it by unlocking every
+    // map they CAN unlock (First World is open from the start, Beyond needs
+    // rank S, Abyss needs level 20). The Afterlife joins the requirement
+    // automatically once the dead-soul reading exists - until then it is
+    // not holdable against the player, or the command would be dead content.
+    if (norm === 'all') {
+        const isMod = typeof helpers.isMod === 'function' ? !!helpers.isMod(userId) : false;
+        if (!isMod) {
+            const rank = typeof helpers.getRank === 'function' ? helpers.getRank(userId) : 'F';
+            let level = 1;
+            try {
+                level = typeof helpers.getLevel === 'function'
+                    ? helpers.getLevel(userId)
+                    : (require('./progression').getLevel(userId) || 1);
+            } catch (e) {}
+            const missing = [];
+            if (!_rankAtLeast(rank, 'S')) missing.push(`rank *S* (yours: *${String(rank || 'F').toUpperCase()}*)`);
+            if (level < ABYSS_MAP_UNLOCK) missing.push(`level *${ABYSS_MAP_UNLOCK}* (yours: *${Math.max(0, Math.floor(level))}*)`);
+            if (_hasDeadSoulFeature(userId) === false) {
+                // feature absent for everyone - not held against the player
+            }
+            if (missing.length > 0) {
+                return sock.sendMessage(chatId, {
+                    text: [
+                        '*THE GATHERED CHART IS NOT YOURS YET.*',
+                        '',
+                        'What you still need:',
+                        ...missing.map((m) => `- ${m}`),
+                        '',
+                        '_each map is shown on its own page as you earn it._',
+                    ].join('\n'),
+                });
+            }
+        }
+        const buf = await renderer.renderCosmologyAtlasSheet(t);
+        return _sendSheet(sock, chatId, buf, INFO.all, _asciiAll, t);
     }
 
     // ── GATES (hard contract: locked = requirement text ONLY, no render) ──
@@ -289,6 +336,7 @@ async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
 module.exports = {
     showWorld,
     ABYSS_MAP_UNLOCK,          // CONFIRMED level 20 (owner, 2026-09-19; configurable)
+    INFO,                      // 💡 exported for QA caption checks
     _rankAtLeast,
     _refuseBeyond,
     _refuseAfterlife,

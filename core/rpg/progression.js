@@ -410,34 +410,19 @@ function allocateStatPoint(userId, stat, amount = 1) {
     if (classData?.tier === 'ASCENDED') tierMultiplier = 2.0; // Balanced - was 4.0, halved to prevent stat explosion
     
     const baseStatValues = { hp: 15, atk: 3, def: 2, mag: 3, spd: 2, luck: 2, crit: 1 };
-    
-    // Soft cap: after N points invested in a single stat, each additional point
-    // is worth only half. This discourages pure min-maxing without blocking it.
-    // 💡 FIX P2 (2026-08-16): Soft cap scales with level - was fixed at 20,
-    // meaning 86% of L100 stat points were at half-value. Now:
-    // SOFT_CAP = 20 + floor(level / 5). At L100 → 40, allowing meaningful
-    // investment in 2-3 stats without making min-maxing trivial.
-    const pointsAlreadyInStat = (user.allocatedStatPoints?.[s] || 0);
-    const SOFT_CAP = 20 + Math.floor((user.level || 1) / 5);
-    let effectiveMult = tierMultiplier;
-    if (pointsAlreadyInStat >= SOFT_CAP) {
-        effectiveMult = tierMultiplier * 0.5; // half-value after soft cap
-    } else if (pointsAlreadyInStat + amount > SOFT_CAP) {
-        // Partial: some points land below cap, some above
-        const below = SOFT_CAP - pointsAlreadyInStat;
-        const above = amount - below;
-        const belowGain = Math.floor(baseStatValues[s] * tierMultiplier * below);
-        const aboveGain = Math.floor(baseStatValues[s] * tierMultiplier * 0.5 * above);
-        const gainedValue = belowGain + aboveGain;
-        if (!user.allocatedStatPoints) user.allocatedStatPoints = {};
-        user.allocatedStatPoints[s] = (user.allocatedStatPoints[s] || 0) + amount;
-        user.allocatedStats[s] = (user.allocatedStats[s] || 0) + gainedValue;
-        user.statPoints -= amount;
-        if (s === 'hp') bumpPersistentHPWithStatGain(userId, gainedValue);
-        saveProgression(userId);
-        return { success: true, stat: stat.toUpperCase(), pointsSpent: amount, valueGained: gainedValue, remainingPoints: user.statPoints };
-    }
-    const gainedValue = Math.floor(baseStatValues[s] * effectiveMult * amount);
+
+    // 💡 OWNER FIX 2026-09-20 ("the Allocate card is not fixed yet"): the old
+    // soft cap halved gains past 20 + level/5 points in one stat, so the
+    // card advertised "+3/pt, allocate ATK 5 -> +15" while the system paid
+    // 1.5/pt - and Math.floor(1.5) rounded SINGLE-point allocs down to +1/pt
+    // (a 67% silent loss). Players allocated in 1-point increments because
+    // that is what the command example teaches. Owner ruling: the card is
+    // the contract - every point delivers exactly base × tier, integer
+    // per-point (bases are 1/2/3/15, tiers are ×1 or ×2), so the advertised
+    // math and the paid math can never diverge again. Min-max discouragement
+    // now lives in respec costs and reward tables, not in silent halving.
+    const perPoint = Math.floor(baseStatValues[s] * tierMultiplier);
+    const gainedValue = perPoint * amount;
     
     // Track points spent per stat so resetStats can refund correctly
     if (!user.allocatedStatPoints) user.allocatedStatPoints = {};

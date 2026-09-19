@@ -508,6 +508,75 @@ function renderAbyssSheet(t = Date.now()) {
     });
 }
 
+// ─── SHEET 0: COSMOLOGY ATLAS (.j world all) ────────────────────────────────
+// All four charts on one page: the living circles (World Beyond + First
+// World, live geometry), the Afterlife's own circuit, and the Abyss descent.
+// The four clocks stay separate systems - each body is drawn at ITS OWN
+// live phase, nothing is merged into one clock.
+function renderCosmologyAtlasSheet(t = Date.now()) {
+    return _render((ctx) => {
+        _titleBlock(ctx,
+            'SUB-MAPS I-IV COMBINED',
+            'THE COSMOLOGY',
+            'every chart the guild holds, gathered on one page');
+
+        // living circles (World Beyond boundary + First World inside), top half
+        // (cy/R chosen so the WB top clears the title block's subtitle at y=172)
+        const cx = W / 2, cy = 480, R = 250;
+        ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(226,210,178,0.45)'; ctx.fill();
+        ctx.lineWidth = 2.2; ctx.strokeStyle = PAL.ink; ctx.stroke();
+
+        const g = _liveGeometry(cx, cy, R, t);
+        _drawFirstWorld(ctx, g);
+
+        // labels: parchment pill underlay keeps them readable over dots/lines
+        const _pill = (text, x, y, font, color) => {
+            ctx.font = font;
+            const w = ctx.measureText(text).width;
+            ctx.fillStyle = 'rgba(234,221,196,0.85)';
+            ctx.fillRect(x - w / 2 - 10, y - 15, w + 20, 22);
+            _centered(ctx, text, y, font, color);
+        };
+        _pill('WORLD BEYOND', cx, cy - R - 16, '15px "Cinzel"', PAL.inkSoft);
+        _pill('FIRST WORLD', cx, cy + 58, '18px "Cinzel"', PAL.ink);
+
+        // Afterlife circuit (its own path, its own phase) - lower left
+        const acx = 300, acy = 920, aR = 150;
+        ctx.beginPath(); ctx.arc(acx, acy, aR, 0, Math.PI * 2);
+        ctx.setLineDash([7, 8]); ctx.strokeStyle = PAL.afterlife; ctx.lineWidth = 1.8;
+        ctx.stroke(); ctx.setLineDash([]);
+        const ap = cosmology.alPhase(t) * Math.PI * 2 - Math.PI / 2;
+        const ax = acx + Math.cos(ap) * aR, ay = acy + Math.sin(ap) * aR;
+        ctx.beginPath(); ctx.arc(ax, ay, 12, 0, Math.PI * 2);
+        ctx.fillStyle = PAL.parchment; ctx.fill();
+        ctx.lineWidth = 3; ctx.strokeStyle = PAL.afterlife; ctx.stroke();
+        ctx.beginPath(); ctx.arc(ax, ay, 5, 0, Math.PI * 2);
+        ctx.fillStyle = PAL.afterlife; ctx.fill();
+        _pill('AFTERLIFE', acx, acy - 4, '14px "Cinzel"', PAL.afterlife);
+        _pill('a circuit of its own', acx, acy + 18, 'italic 12px "IM Fell Italic"', PAL.inkSoft);
+
+        // Abyss descent (does not orbit) - lower right
+        _drawAbyssDescent(ctx, 700, 810, 0.72);
+        _pill('THE ABYSS', 700, 772, '14px "Cinzel"', PAL.inkSoft);
+        _pill('beneath, not around', 700, 1092, 'italic 12px "IM Fell Italic"', PAL.inkSoft);
+
+        // triune alignment beam when it happens to be now
+        const tri = cosmology.triuneWindow(t);
+        if (tri.aligned) {
+            ctx.beginPath();
+            ctx.moveTo(ax, ay); ctx.lineTo(g.fwx, g.fwy + g.r);
+            ctx.strokeStyle = PAL.wax; ctx.lineWidth = 2.4; ctx.stroke();
+            _centered(ctx, 'THE THREE ARE ALIGNED NOW', 1130, '14px "Cinzel"', PAL.wax);
+        }
+
+        _bottomStack(ctx, {
+            seal: 'I-IV',
+            footer: '".j world all" - the gathered chart',
+        });
+    });
+}
+
 // ─── CANVAS DRIVER ───────────────────────────────────────────────────────────
 
 function _render(drawFn) {
@@ -527,6 +596,7 @@ function _render(drawFn) {
 }
 
 module.exports = {
+    renderCosmologyAtlasSheet,
     renderFirstWorldSheet,
     renderWorldBeyondSheet,
     renderAfterlifeSheet,

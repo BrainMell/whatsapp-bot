@@ -6314,12 +6314,14 @@ async function handleAbyssVictory(sock, sessionKey) {
     pmsg += packLeft > 0 ? `👥 ${packLeft} more pack member(s) waiting after this one!\n\n` : '\n';
     pmsg += `_Use \`${botConfig.getPrefix()} combat attack\` to fight!_`;
     // 💡 LORE DROP (abyss.md §4 pack-fight moment): "another one steps out"
-    // - creature pool, low chance, its own message so it stays one-per-reply.
+    // - creature pool, low chance, delivered as its OWN message (owner
+    // ruling 2026-09-20: a drop is a distinct lore event, not a tacked line).
+    let __packDrop = null;
     try {
-      const __packDrop = loreDrops.maybeDrop('abyss_unknown_creature', { userId: senderJid, chatId: state.chatId, chance: 0.10 });
-      if (__packDrop) pmsg += `\n${__packDrop}`;
+      __packDrop = loreDrops.maybeDrop('abyss_unknown_creature', { userId: senderJid, chatId: state.chatId, chance: 0.10 });
     } catch (e) {}
     try { await sock.sendMessage(state.chatId, { text: pmsg }); } catch (e) {}
+    await loreDrops.sendOwn(sock, state.chatId, __packDrop);
 
     deleteGameState(sessionKey);
     await startAbyssCombat(sock, state.chatId, senderJid, nextPackEnemy, run, state.abyssFloor);
@@ -6367,21 +6369,33 @@ async function handleAbyssVictory(sock, sessionKey) {
   // 💡 LORE DROP (victory attach point, abyss.md §4): ONE drop keyed by the
   // DEFEATED encounter - abyss pools by variant tag / depth escalation, or an
   // environmental observation. Never on wild_summon (they are friendly
-  // faces), never two drops in one reply, never on failure.
-  let __victoryDropped = false;
+  // faces), never two drops in one reply, never on failure. Delivered as
+  // its OWN message after the floor-clear text (owner ruling 2026-09-20).
+  let __victoryDrop = null;
   try {
     const __defeated = state.enemies[0];
     if (__defeated && run.currentEncounterType === 'combat' && !__defeated.isWildSummon) {
       if (__defeated.humanoid && Math.random() < 0.15) {
-        const __bark = loreDrops.maybeDrop('encounters_bark', { userId: senderJid, chatId: state.chatId, chance: 1 });
-        if (__bark) { msg += `\n${__bark}`; __victoryDropped = true; }
+        __victoryDrop = loreDrops.maybeDrop('encounters_bark', { userId: senderJid, chatId: state.chatId, chance: 1 });
       } else {
         const __pool = loreDrops.routeAbyssCategory(__defeated, state.abyssFloor);
-        const __drop = loreDrops.maybeDrop(__pool, { userId: senderJid, chatId: state.chatId, chance: 0.12 });
-        if (__drop) { msg += `\n${__drop}`; __victoryDropped = true; }
+        __victoryDrop = loreDrops.maybeDrop(__pool, { userId: senderJid, chatId: state.chatId, chance: 0.12 });
       }
     }
   } catch (e) {}
+  const __victoryDropped = !!__victoryDrop;
+
+  // 💡 OPENER: roll a next-floor opener only when the victory block did not
+  // already drop (never two drops in one reply). Sent as its own message.
+  let __openerDrop = null;
+  if (!__victoryDropped && encounter.type === 'combat') {
+    try {
+      __openerDrop = loreDrops.maybeDrop(
+        encounter.enemy && encounter.enemy.humanoid ? 'encounters_bark' : 'encounters_opener',
+        { userId: senderJid, chatId: state.chatId, chance: encounter.enemy && encounter.enemy.humanoid ? 1 : 0.10 }
+      );
+    } catch (e) {}
+  }
 
   if (encounter.type === 'combat') {
     msg += `🕳️ *Floor ${newFloor}* - ${encounter.enemy.name}\n`;
@@ -6390,18 +6404,8 @@ async function handleAbyssVictory(sock, sessionKey) {
       msg += `👥 *PACK FIGHT* - ${encounter.packQueue.length + 1} enemies, one after another (no HP reset between them)!\n`;
     }
     msg += `_Use \`${botConfig.getPrefix()} combat attack\` to fight!_`;
-    // 💡 LORE DROP: next-floor opener/bark ONLY if the victory block did not
-    // already drop (never two drops in one reply).
-    if (!__victoryDropped) {
-      try {
-        const opener = loreDrops.maybeDrop(
-          encounter.enemy && encounter.enemy.humanoid ? 'encounters_bark' : 'encounters_opener',
-          { userId: senderJid, chatId: state.chatId, chance: encounter.enemy && encounter.enemy.humanoid ? 1 : 0.10 }
-        );
-        if (opener) msg += `\n${opener}`;
-      } catch (e) {}
-    }
     try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e) {}
+    await loreDrops.sendOwn(sock, state.chatId, __victoryDrop || __openerDrop);
     await startAbyssCombat(sock, state.chatId, senderJid, encounter.enemy, run, newFloor);
   } else if (encounter.type === 'wild_summon') {
     msg += `🐉 *Floor ${newFloor}* - Wild ${encounter.wildSummonSpecies} appeared!*\n`;
@@ -6415,12 +6419,14 @@ async function handleAbyssVictory(sock, sessionKey) {
     msg += `_${encounter.treasure.desc}_\n\n`;
     msg += `_Collect with \`${botConfig.getPrefix()} abyss collect\` | Skip with \`${botConfig.getPrefix()} abyss skip\`_`;
     try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e) {}
+    await loreDrops.sendOwn(sock, state.chatId, __victoryDrop || __openerDrop);
   } else if (encounter.type === 'event') {
     msg += `${encounter.event.icon} *Floor ${newFloor}* - ${encounter.event.name}\n`;
     msg += `_${encounter.event.desc}_\n\n`;
     encounter.event.choices.forEach(c => { msg += `\`${c.id}\` - ${c.text}\n`; });
     msg += `\n_Choose with \`${botConfig.getPrefix()} abyss choose <1/2>\`_`;
     try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e) {}
+    await loreDrops.sendOwn(sock, state.chatId, __victoryDrop || __openerDrop);
   }
 }
 
@@ -8729,7 +8735,7 @@ async function endAdventure(sock, sessionKey, victory = true) {
       // payout cannot be delivered (market-cap circuit breaker, unregistered
       // economy account, unresolved LID) - and the summary still printed
       // "Gold: X" while the wallet never moved. Surface delivery failures.
-      const _delivered = economy.addMoney(player.jid, totalGoldThisRun);
+      const _delivered = economy.addMoney(player.jid, totalGoldThisRun, 'Quest completion reward');
       if (_delivered === false) {
         console.error(`[QuestPayout] FAILED: ${player.jid} did not receive ${totalGoldThisRun} Zeni (market cap / unregistered account / JID resolution).`);
         msg += `  ⚠️ _Gold delivery FAILED (${totalGoldThisRun.toLocaleString()} Zeni). Your account could not be credited - tell a mod you saw this._\n\n`;

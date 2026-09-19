@@ -736,21 +736,22 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
     // 💡 LORE DROP (lore_drop_system.md §2/§3, 8% on a high-frequency surface):
     // category follows the recipe family - BREWING/COOKING -> brewing pool,
     // WEAPON/ARMOR (forge family) -> blacksmith pool, everything else ->
-    // crafting pool. One drop max, success paths only.
-    let dropMsg = '';
+    // crafting pool. Carried OUT-OF-BAND on result.loreDrop - the handler
+    // sends it as its own message box (owner ruling 2026-09-20).
+    let craftLoreDrop = null;
     try {
       const loreDrops = require('./loreDrops');
       const cat = (recipe.category === 'BREWING' || recipe.category === 'COOKING')
         ? 'brewing'
         : (recipe.category === 'WEAPON' || recipe.category === 'ARMOR' ? 'blacksmith' : 'crafting');
-      const drop = loreDrops.maybeDrop(cat, { userId, chance: 0.08 });
-      if (drop) dropMsg = `\n${drop}`;
+      craftLoreDrop = loreDrops.maybeDrop(cat, { userId, chance: 0.08 });
     } catch (e) {}
 
     return {
         success: true,
-        message: `⚒️ *${typeLabel} SUCCESSFUL: ${recipe.name}*\n\nYou created 1x ${recipe.name}!${goldCostMsg}${guildMsg}${dropMsg}`,
-        recipe
+        message: `⚒️ *${typeLabel} SUCCESSFUL: ${recipe.name}*\n\nYou created 1x ${recipe.name}!${goldCostMsg}${guildMsg}`,
+        recipe,
+        loreDrop: craftLoreDrop,
     };
 }
 

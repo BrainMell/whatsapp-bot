@@ -1,6 +1,9 @@
-// Final functional smoke: .j world captions through the REAL showWorld path
-// (mock sock; no DB). Verifies the upgraded exploration captions flow into
-// both the image-caption path and the text fallback path.
+// Functional smoke: .j world captions through the REAL showWorld path
+// (mock sock; no DB).
+// 2026-09-20 owner ruling: captions are SHORT and subtle - one or two lines,
+// no mechanics, no command dumps, no lore spills. Lore belongs to the drops.
+// Also covers the NEW `.j world all` gathered-chart gate (mods bypass,
+// regular players need every unlockable map).
 process.env.GO_IMAGE_SERVICE_URL = process.env.GO_IMAGE_SERVICE_URL || 'http://127.0.0.1:7860';
 const worldMap = require('../core/rpg/worldMap');
 
@@ -22,38 +25,57 @@ function assert(cond, label) {
     assert(sent.length === 1 && !sent[0].image, 'locked abyss (lvl 12): refusal only, zero image bytes');
     assert(/level \*20\*/.test(sent[0].text), 'refusal names the CONFIRMED requirement (level 20)');
 
-    // 2. unlocked abyss map at level 20 → image + caption with new guide lines
+    // 2. unlocked abyss map at level 20 → image + SHORT subtle caption
     sent.length = 0;
     await worldMap.showWorld(mockSock, chatId, user, 'abyss', { getLevel: () => 20 });
     const cap = sent[0].caption || '';
     assert(!!sent[0].image, 'unlocked abyss (lvl 20): image renders');
-    assert(cap.includes('.j abyss enter'), 'abyss caption: WHERE TO EXPLORE pointer present');
-    assert(cap.includes('wear faces'), 'abyss caption: subtle variant hint present (no spawn table)');
-    assert(cap.includes('walks like you'), 'abyss caption: subtle drifter hint present');
-    assert(cap.includes('.j brew'), 'abyss caption: deep brews pointer present');
-    assert(!cap.includes('dungeon-world'), 'abyss caption: no mechanic leak (floor-is-world stays with the lore drops)');
-    assert(!cap.includes('five hours'), 'abyss caption: no schedule leak');
-    assert(cap.length <= 1024, 'abyss caption within WhatsApp 1024-char limit (' + cap.length + ')');
+    assert(cap.includes('rings upon rings'), 'abyss caption: the one identifying line is present');
+    assert(!cap.includes('.j abyss enter'), 'abyss caption: NO command dump');
+    assert(!cap.includes('wear faces'), 'abyss caption: NO variant-band spill (lore drops own that)');
+    assert(!cap.includes('walks like you'), 'abyss caption: NO drifter spill');
+    assert(!cap.includes('.j brew'), 'abyss caption: NO deep-brew pointer');
+    assert(!cap.includes('dungeon-world') && !cap.includes('five hours'), 'abyss caption: no cosmology leak');
+    assert(cap.length <= 400, 'abyss caption is SHORT (' + cap.length + ' chars)');
 
-    // 3. First World sheet caption: town services + hunts
+    // 3. First World sheet caption: short, no service list
     sent.length = 0;
     await worldMap.showWorld(mockSock, chatId, user, '', {});
     const capFW = sent[0].caption || '';
     assert(!!sent[0].image, 'First World: image renders (no gate)');
-    assert(capFW.includes('.j adventure') && capFW.includes('.j repair'), 'FW caption: hunts + blacksmith named');
-    assert(capFW.includes('.j brew') && capFW.includes('.j hospital'), 'FW caption: brewing + hospital named');
+    assert(capFW.includes('four quadrants'), 'FW caption: the one identifying line is present');
+    assert(!capFW.includes('.j adventure') && !capFW.includes('.j repair'), 'FW caption: NO command dump');
     assert(!capFW.includes('five hours'), 'FW caption: no orbit equation leak');
-    assert(capFW.length <= 1024, 'FW caption within limit (' + capFW.length + ')');
+    assert(capFW.length <= 400, 'FW caption is SHORT (' + capFW.length + ' chars)');
 
     // 4. world beyond locked at rank A → refusal, no render
     sent.length = 0;
     await worldMap.showWorld(mockSock, chatId, user, 'beyond', { getRank: () => 'A' });
     assert(sent.length === 1 && !sent[0].image && /rank \*S\*/.test(sent[0].text), 'beyond locked at rank A: refusal only');
 
-    // 5. invalid sub → usage menu
+    // 5. invalid sub → usage menu (now lists .j world all)
     sent.length = 0;
     await worldMap.showWorld(mockSock, chatId, user, 'narnia', {});
-    assert(/WORLD CHARTS/.test(sent[0].text), 'invalid sub-arg: usage menu');
+    assert(/WORLD CHARTS/.test(sent[0].text) && sent[0].text.includes('world all'), 'invalid sub-arg: usage menu lists world all');
+
+    // 6. NEW `.j world all` - low-rank low-level player: refusal names BOTH gaps
+    sent.length = 0;
+    await worldMap.showWorld(mockSock, chatId, user, 'all', { getLevel: () => 8, getRank: () => 'B' });
+    assert(sent.length === 1 && !sent[0].image, 'world all (B rank, lvl 8): refusal only, zero image bytes');
+    assert(/rank \*S\*/.test(sent[0].text) && /level \*20\*/.test(sent[0].text), 'world all refusal names rank S AND level 20');
+
+    // 7. NEW `.j world all` - earned it (rank S + lvl 20): renders
+    sent.length = 0;
+    await worldMap.showWorld(mockSock, chatId, user, 'all', { getLevel: () => 20, getRank: () => 'S' });
+    const capAll = sent[0].caption || '';
+    assert(!!sent[0].image, 'world all (S rank, lvl 20): atlas renders');
+    assert(capAll.includes('gathered on one page'), 'world all caption: identifying line present');
+    assert(capAll.length <= 400, 'world all caption is SHORT (' + capAll.length + ' chars)');
+
+    // 8. NEW `.j world all` - MOD bypass at zero progress
+    sent.length = 0;
+    await worldMap.showWorld(mockSock, chatId, user, 'all', { getLevel: () => 1, getRank: () => 'F', isMod: () => true });
+    assert(!!sent[0].image, 'world all: mod bypass renders regardless of progress');
 
     console.log(process.exitCode ? 'CAPTION SMOKE: FAILURES ABOVE' : 'CAPTION SMOKE: ALL PASS');
 })().catch(e => { console.error('SMOKE ERROR:', e); process.exit(1); });

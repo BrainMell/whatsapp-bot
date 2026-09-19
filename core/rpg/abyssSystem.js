@@ -311,13 +311,15 @@ async function startRun(userId, playerStats, ctx = {}) {
   }
 
   // 💡 LORE DROP (occasional plain text, one max): fight-opener beat on the
-  // starting floor, or a general-world line on non-hostile floors.
-  startMsg += _encounterIntroDrop(encounter);
+  // starting floor, or a general-world line on non-hostile floors. Carried
+  // out-of-band on result.loreDrop - the handler sends it as its own message.
+  const startLoreDrop = _encounterIntroDrop(encounter) || null;
 
   return {
     success: true,
     run,
     message: startMsg,
+    loreDrop: startLoreDrop,
   };
 }
 
@@ -660,10 +662,11 @@ async function processTreasure(userId) {
   // 💡 FIX 2026-08-31: shared applier - adds the missing wild_summon branch
   // (previously a wild-summon roll left the PREVIOUS floor's encounter data
   // in place, allowing repeated treasure collection = loot duplication).
-  msg += applyNextEncounter(run, nextEncounter);
+  const __next = applyNextEncounter(run, nextEncounter);
+  msg += __next.msg;
 
   await run.save();
-  return { success: true, message: msg, run };
+  return { success: true, message: msg, run, loreDrop: __next.loreDrop };
 }
 
 // ─── PROCESS EVENT CHOICE ─────────────────────────────────────────────────
@@ -677,14 +680,15 @@ async function processTreasure(userId) {
 // - this helper mirrors its logic for all advance paths.
 function applyNextEncounter(run, nextEncounter) {
   let msg = '';
+  let loreDrop = null; // 💡 2026-09-20: out-of-band, own message box
   if (nextEncounter.type === 'combat') {
     run.currentEnemy = nextEncounter.enemy;
     run.currentEncounterType = 'combat';
     run.currentEncounterData = null;
     run.packQueue = Array.isArray(nextEncounter.packQueue) ? nextEncounter.packQueue : [];
-    msg += `\n🕳️ *Floor ${run.currentFloor}* - ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n${run.packQueue.length ? `\U0001F465 *PACK FIGHT* - ${run.packQueue.length + 1} enemies, one after another (no HP reset between them)!\n` : ''}_Attack with \`${P()} combat attack\`_`;
+    msg += `\n🕳️ *Floor ${run.currentFloor}* - ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n${run.packQueue.length ? `👥 *PACK FIGHT* - ${run.packQueue.length + 1} enemies, one after another (no HP reset between them)!\n` : ''}_Attack with \`${P()} combat attack\`_`;
     // 💡 LORE DROP: opener beat / humanoid bark (one max per reply)
-    msg += _encounterIntroDrop(nextEncounter);
+    loreDrop = _encounterIntroDrop(nextEncounter) || null;
   } else if (nextEncounter.type === 'wild_summon') {
     run.currentEnemy = nextEncounter.enemy;
     run.currentEncounterType = 'wild_summon';
@@ -699,16 +703,16 @@ function applyNextEncounter(run, nextEncounter) {
     run.currentEncounterData = nextEncounter.treasure;
     msg += `\n${nextEncounter.treasure.icon} *Floor ${run.currentFloor}* - ${nextEncounter.treasure.name}\n_Collect with \`${P()} abyss collect\`_`;
     // 💡 LORE DROP: npc sighting / general world on non-hostile floors
-    msg += _encounterIntroDrop(nextEncounter);
+    loreDrop = _encounterIntroDrop(nextEncounter) || null;
   } else if (nextEncounter.type === 'event') {
     run.currentEnemy = null;
     run.currentEncounterType = 'event';
     run.currentEncounterData = nextEncounter.event;
     msg += `\n${_eventFloorText(nextEncounter.event, run.currentFloor)}`;
     // 💡 LORE DROP: npc sighting / general world on non-hostile floors
-    msg += _encounterIntroDrop(nextEncounter);
+    loreDrop = _encounterIntroDrop(nextEncounter) || null;
   }
-  return msg;
+  return { msg, loreDrop };
 }
 
 async function processEventChoice(userId, choiceId) {
@@ -793,10 +797,11 @@ async function processEventChoice(userId, choiceId) {
   // 💡 FIX 2026-08-31: shared applier - adds the missing wild_summon branch
   // (previously a wild-summon roll left the PREVIOUS floor's encounter data
   // in place, allowing repeated treasure collection = loot duplication).
-  msg += applyNextEncounter(run, nextEncounter);
+  const __next = applyNextEncounter(run, nextEncounter);
+  msg += __next.msg;
 
   await run.save();
-  return { success: true, message: msg, run };
+  return { success: true, message: msg, run, loreDrop: __next.loreDrop };
 }
 
 // ─── PROCESS SKIP (skip treasure/event floor) ─────────────────────────────
@@ -810,30 +815,31 @@ async function processSkip(userId) {
   let msg = `⏭️ You skip floor ${run.currentFloor}.\n`;
   run.currentFloor += 1;
   const nextEncounter = generateFloorEncounter(run.currentFloor);
+  let skipLoreDrop = null; // 💡 2026-09-20: out-of-band, own message box
   if (nextEncounter.type === 'combat') {
     run.currentEnemy = nextEncounter.enemy;
     run.currentEncounterType = 'combat';
     run.currentEncounterData = null;
     run.packQueue = Array.isArray(nextEncounter.packQueue) ? nextEncounter.packQueue : [];
-    msg += `\n🕳️ *Floor ${run.currentFloor}* - ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n${run.packQueue.length ? `\U0001F465 *PACK FIGHT* - ${run.packQueue.length + 1} enemies, one after another (no HP reset between them)!\n` : ''}_Attack with \`${P()} combat attack\`_`;
+    msg += `\n🕳️ *Floor ${run.currentFloor}* - ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n${run.packQueue.length ? `👥 *PACK FIGHT* - ${run.packQueue.length + 1} enemies, one after another (no HP reset between them)!\n` : ''}_Attack with \`${P()} combat attack\`_`;
     // 💡 LORE DROP: opener beat / humanoid bark (one max per reply)
-    msg += _encounterIntroDrop(nextEncounter);
+    skipLoreDrop = _encounterIntroDrop(nextEncounter) || null;
   } else if (nextEncounter.type === 'treasure') {
     run.currentEnemy = null;
     run.currentEncounterType = 'treasure';
     run.currentEncounterData = nextEncounter.treasure;
     msg += `\n${nextEncounter.treasure.icon} *Floor ${run.currentFloor}* - ${nextEncounter.treasure.name}\n_Collect with \`${P()} abyss collect\`_`;
-    msg += _encounterIntroDrop(nextEncounter);
+    skipLoreDrop = _encounterIntroDrop(nextEncounter) || null;
   } else if (nextEncounter.type === 'event') {
     run.currentEnemy = null;
     run.currentEncounterType = 'event';
     run.currentEncounterData = nextEncounter.event;
     msg += `\n${_eventFloorText(nextEncounter.event, run.currentFloor)}`;
-    msg += _encounterIntroDrop(nextEncounter);
+    skipLoreDrop = _encounterIntroDrop(nextEncounter) || null;
   }
 
   await run.save();
-  return { success: true, message: msg, run };
+  return { success: true, message: msg, run, loreDrop: skipLoreDrop };
 }
 
 // ─── PROCESS DEATH ────────────────────────────────────────────────────────

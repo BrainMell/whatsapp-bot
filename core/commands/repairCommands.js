@@ -71,13 +71,12 @@ async function displayBlacksmith(sock, chatId, userId) {
         msg += `- Repair all items: \`${getPrefix()}repair all\`\n`;
     }
 
-    // 💡 LORE DROP: blacksmith voice on the menu view (10%)
-    try {
-        const drop = loreDrops.maybeDrop('blacksmith', { userId, chatId, chance: 0.10 });
-        if (drop) msg += `\n${drop}`;
-    } catch (e) {}
-
+    // 💡 LORE DROP: blacksmith voice on the menu view (10%) - its own
+    // message box (owner ruling: a drop is a distinct lore event).
+    let __loreDrop = null;
+    try { __loreDrop = loreDrops.maybeDrop('blacksmith', { userId, chatId, chance: 0.10 }); } catch (e) {}
     await sock.sendMessage(chatId, { text: msg });
+    await loreDrops.sendOwn(sock, chatId, __loreDrop);
 }
 
 /**
@@ -128,13 +127,12 @@ async function repair(sock, chatId, userId, target) {
         successMsg += `Successfully repaired all equipped items for 💰 ${getZENI()}${totalCost.toLocaleString()}.\n`;
         successMsg += `Your gear is now in pristine condition! ✨`;
 
-        // 💡 LORE DROP: blacksmith voice (12%)
-        try {
-            const drop = loreDrops.maybeDrop('blacksmith', { userId, chatId, chance: 0.12 });
-            if (drop) successMsg += `\n${drop}`;
-        } catch (e) {}
+        // 💡 LORE DROP: blacksmith voice (12%) - own message box
+        let __loreDrop = null;
+        try { __loreDrop = loreDrops.maybeDrop('blacksmith', { userId, chatId, chance: 0.12 }); } catch (e) {}
 
-        return await sock.sendMessage(chatId, { text: successMsg });
+        await sock.sendMessage(chatId, { text: successMsg });
+        await loreDrops.sendOwn(sock, chatId, __loreDrop);
     }
     
     // Repair single item
@@ -186,13 +184,12 @@ async function repair(sock, chatId, userId, target) {
     successMsg += `Successfully repaired *${selectedItem.name}* (${selectedSlot.toUpperCase()}) for 💰 ${getZENI()}${cost.toLocaleString()}.\n`;
     successMsg += `Remaining Wallet: 💰 ${getZENI()}${(user.wallet || 0).toLocaleString()}`;
 
-    // 💡 LORE DROP: blacksmith voice (12%)
-    try {
-        const drop = loreDrops.maybeDrop('blacksmith', { userId, chatId, chance: 0.12 });
-        if (drop) successMsg += `\n${drop}`;
-    } catch (e) {}
+    // 💡 LORE DROP: blacksmith voice (12%) - own message box
+    let __loreDrop = null;
+    try { __loreDrop = loreDrops.maybeDrop('blacksmith', { userId, chatId, chance: 0.12 }); } catch (e) {}
 
     await sock.sendMessage(chatId, { text: successMsg });
+    await loreDrops.sendOwn(sock, chatId, __loreDrop);
 }
 
 /**

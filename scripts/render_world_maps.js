@@ -10,6 +10,7 @@ const renderer = require('../core/rpg/worldMapRenderer');
     fs.mkdirSync(out, { recursive: true });
 
     const sheets = [
+        ['atlas_all', () => renderer.renderCosmologyAtlasSheet()],
         ['first_world', () => renderer.renderFirstWorldSheet()],
         ['world_beyond', () => renderer.renderWorldBeyondSheet()],
         ['afterlife', () => renderer.renderAfterlifeSheet()],

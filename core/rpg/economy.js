@@ -690,20 +690,31 @@ function addMoney(userId, amount, description = "Money Added") {
   let val = Math.floor(Number(amount));
   if (!Number.isFinite(val) || val <= 0) return false;
 
-  // 💡 P4 Item 5: Market cap circuit breaker - block rewards if cap reached.
-  // (unchanged from above)
+  // 💡 P4 Item 5: Market cap circuit breaker.
+  // 💡 ROOT-CAUSE FIX 2026-09-20 (owner: "Gold delivery failed, your account
+  // could not be credited"): this breaker used to RETURN false here, and it
+  // was the real killer behind "quest money not increasing". Two facts made
+  // it a permanent economy-wide freeze:
+  //   1. DEFAULT_MARKET_CAP (500M) was calibrated to the size of the CURRENT
+  //      economy ("~3700 players × ~135K avg = ~500M"), so a grown economy
+  //      sits at/over the cap at all times.
+  //   2. Wallet/bank caps were REMOVED by owner request (2026-09-12), so the
+  //      total only ever grows.
+  // Once total >= cap, EVERY addMoney failed forever - quest payouts, shop
+  // sales, bounties, refunds, dailies - while the balance display stayed
+  // frozen. A hard freeze that eats players' earnings is not anti-inflation,
+  // it's a game-breaking bug. The breaker is now ADVISORY: it logs loudly
+  // (throttled) so the operator can raise the cap, but it NEVER blocks a
+  // payout. Reward-table tuning is the correct anti-inflation lever.
   if (_marketCap !== null) {
     let quickTotal = 0;
     for (const [jid, u] of economyData) {
       quickTotal += (u.wallet || 0) + (u.bank || 0);
       if (quickTotal >= _marketCap) break;
     }
-    if (quickTotal >= _marketCap) {
-      // 💡 FIX 2026-09-19: log the economy total + cap - "quest money not
-      // increasing" reports are undiagnosable when the only trace is
-      // "(cap reached)" with no numbers.
-      console.log(`[MarketCap] Reward blocked: ${description} for ${userId} - economy total ${Math.round(quickTotal).toLocaleString()} >= cap ${Number(_marketCap).toLocaleString()}`);
-      return false;
+    if (quickTotal >= _marketCap && Date.now() - _capAlertLast > 60000) {
+      _capAlertLast = Date.now();
+      console.warn(`[MarketCap] ⚠️ ECONOMY AT CAP: total ~${Math.round(quickTotal).toLocaleString()} >= cap ${Number(_marketCap).toLocaleString()} - payouts still deliver (breaker is advisory). Raise the cap via economy.setMarketCap() if this is unexpected.`);
     }
   }
 
@@ -726,9 +737,13 @@ function addMoney(userId, amount, description = "Money Added") {
       });
     }
     // If there's still earned money left after debt, add it to wallet
+    // 💡 FIX 2026-09-20: this path returned user.wallet - which is 0 when the
+    // wallet is empty, a FALSY value every caller reads as "delivery failed"
+    // (e.g. raidSystem paid = addMoney(...) -> "reward failed"). The money
+    // WAS delivered (to debt). Return an unambiguous truthy success.
     if (remainingEarned <= 0) {
       scheduleSave(userId);
-      return user.wallet; // All earnings went to debt
+      return true; // All earnings went to debt - payout did happen
     }
     // Partial - add remaining to wallet
     val = remainingEarned;
@@ -1080,12 +1095,14 @@ function transferMoney(fromUserId, toUserId, amount) {
   scheduleSave(fromUserId);
   scheduleSave(toUserId);
   
-  // 💡 LORE DROP: trading voice (10%)
-  let __trDrop = '';
+  // 💡 LORE DROP: trading voice (10%) - out-of-band on result.loreDrop
+  // (owner 2026-09-20: a drop is its own message box, never baked into
+  // the transfer summary text). The economy layer has no socket, so the
+  // command handler delivers it.
+  let __trDrop = null;
   try {
     const loreDrops = require('./loreDrops');
-    const drop = loreDrops.maybeDrop('trading', { userId: fromUserId, chance: 0.10 });
-    if (drop) __trDrop = `\n${drop}`;
+    __trDrop = loreDrops.maybeDrop('trading', { userId: fromUserId, chance: 0.10 });
   } catch (e) {}
 
   return {
@@ -1099,7 +1116,8 @@ function transferMoney(fromUserId, toUserId, amount) {
 💵 *Received by ${getDisplayName(toUserId)}:* ${getZENI()}${receiverGets.toLocaleString()}
 ━━━━━━━━━━━━━━━━
 
-💰 *Your New Balance:* ${getZENI()}${sender.wallet.toLocaleString()}${__trDrop}`,
+💰 *Your New Balance:* ${getZENI()}${sender.wallet.toLocaleString()}`,
+    loreDrop: __trDrop,
     receiver: toUserId,
     amount: val,
     taxAmount,
@@ -1168,12 +1186,11 @@ function deposit(userId, amount) {
 
   scheduleSave(userId);
 
-  // 💡 LORE DROP: trading voice (10%)
-  let __depDrop = '';
+  // 💡 LORE DROP: trading voice (10%) - out-of-band on result.loreDrop
+  let __depDrop = null;
   try {
     const loreDrops = require('./loreDrops');
-    const drop = loreDrops.maybeDrop('trading', { userId, chance: 0.10 });
-    if (drop) __depDrop = `\n${drop}`;
+    __depDrop = loreDrops.maybeDrop('trading', { userId, chance: 0.10 });
   } catch (e) {}
 
   return {
@@ -1186,7 +1203,8 @@ function deposit(userId, amount) {
 
 💰 *Wallet:* ${getZENI()}${user.wallet.toLocaleString()}
 🏦 *Bank:* ${getZENI()}${user.bank.toLocaleString()}
-📊 *Total:* ${getZENI()}${(user.wallet + user.bank).toLocaleString()}${__depDrop}`,
+📊 *Total:* ${getZENI()}${(user.wallet + user.bank).toLocaleString()}`,
+    loreDrop: __depDrop,
     amount: val,
     wallet: user.wallet,
     bank: user.bank,
@@ -1265,12 +1283,11 @@ function withdraw(userId, amount) {
 
   scheduleSave(userId);
 
-  // 💡 LORE DROP: trading voice (10%)
-  let __wdDrop = '';
+  // 💡 LORE DROP: trading voice (10%) - out-of-band on result.loreDrop
+  let __wdDrop = null;
   try {
     const loreDrops = require('./loreDrops');
-    const drop = loreDrops.maybeDrop('trading', { userId, chance: 0.10 });
-    if (drop) __wdDrop = `\n${drop}`;
+    __wdDrop = loreDrops.maybeDrop('trading', { userId, chance: 0.10 });
   } catch (e) {}
 
   return {
@@ -1283,7 +1300,8 @@ function withdraw(userId, amount) {
 
 💰 *Wallet:* ${getZENI()}${user.wallet.toLocaleString()}
 🏦 *Bank:* ${getZENI()}${user.bank.toLocaleString()}
-📊 *Total:* ${getZENI()}${(user.wallet + user.bank).toLocaleString()}${__wdDrop}`,
+📊 *Total:* ${getZENI()}${(user.wallet + user.bank).toLocaleString()}`,
+    loreDrop: __wdDrop,
     amount: val,
     wallet: user.wallet,
     bank: user.bank,
@@ -2293,6 +2311,7 @@ function getMentionJid(jid) {
 const DEFAULT_MARKET_CAP = 500_000_000;
 let _marketCap = null; // cached from DB
 let _marketCapChecked = 0; // timestamp of last check
+let _capAlertLast = 0; // 💡 2026-09-20: throttle for the advisory cap warning (1/min)
 
 async function getMarketCap() {
   // Cache for 60 seconds to avoid hitting MongoDB on every reward
@@ -2326,6 +2345,13 @@ async function setMarketCap(amount) {
   } catch (e) {
     return { success: false, message: `❌ Failed: ${e.message}` };
   }
+}
+
+// 💡 QA hook (2026-09-20): arm/disarm the in-memory breaker without touching
+// the DB, so tests can simulate the tripped-breaker state that froze payouts.
+function _testSetMarketCap(val) {
+  _marketCap = (val === null || val === undefined) ? null : Math.floor(Number(val));
+  _marketCapChecked = Date.now();
 }
 
 // Check if the economy is at the cap. Called at reward-grant time.
@@ -2423,6 +2449,7 @@ module.exports = {
   DAILY_QUEST_CAP,
   getMarketCap,
   setMarketCap,
+  _testSetMarketCap,
   isMarketCapReached,
   getTotalCommunityZeni,
   DEFAULT_MARKET_CAP,

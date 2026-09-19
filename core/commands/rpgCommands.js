@@ -26,9 +26,46 @@ function safeGuildInfo(jid) {
 }
 const getCurrency = () => botConfig.getCurrency();
 
-// ========================================== 
-// 📊 CHARACTER SHEET 
-// ========================================== 
+// ==========================================
+// 💀 KILL COUNT - .j kills
+//    Owner request (2026-09-20): the stat existed forever (user.stats.kills,
+//    incremented in recordEnemyKill on every dungeon/abyss/boss kill and
+//    required by DOOMSLAYER ascension at 500) but there was NO way to view
+//    it. This is the player-facing tally. Text-only by design: it is a
+//    ledger line, not an event card.
+// ==========================================
+async function displayKills(sock, chatId, senderJid) {
+    const user = economy.getUser(senderJid);
+    if (!user) {
+        return await sock.sendMessage(chatId, { text: `❌ Not registered! Use \`${getPrefix()} register\` first.` });
+    }
+    const stats = user.stats || {};
+    const totalKills = stats.kills || 0;
+    const undead = stats.undeadKills || 0;
+    const dragons = stats.dragonsKilled || 0;
+    const bosses = stats.bossesDefeated || 0;
+    const pvpWins = user.pvpWins || 0;
+
+    let msg = `💀 *KILL COUNT*\n`;
+    msg += `━━━━━━━━━━━━━━━\n`;
+    msg += `⚔️ Total Kills: *${totalKills.toLocaleString()}*\n`;
+    msg += `👑 Bosses Slain: *${bosses.toLocaleString()}*\n`;
+    msg += `🐉 Dragons Slain: *${dragons.toLocaleString()}*\n`;
+    msg += `🦴 Undead Slain: *${undead.toLocaleString()}*\n`;
+    msg += `🗡️ PvP Wins: *${pvpWins.toLocaleString()}*\n`;
+    msg += `━━━━━━━━━━━━━━━\n`;
+    // Ascension context - the count is not just vanity, it gates classes.
+    if (totalKills < 500) {
+        msg += `\n_${totalKills.toLocaleString()}/500 kills toward the next trial that demands blood._`;
+    } else {
+        msg += `\n_The count is high enough for any trial that demands blood._`;
+    }
+    await sock.sendMessage(chatId, { text: msg });
+}
+
+// ==========================================
+// 📊 CHARACTER SHEET
+// ==========================================
 
 async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
     inventorySystem.repairUserEquipmentStats(senderJid);
@@ -828,10 +865,24 @@ async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CR
             } else {
                 throw new Error("No image buffer returned");
             }
+            // 💡 2026-09-20: craft lore drops ride out-of-band on
+            // result.loreDrop and arrive as their own message box.
+            if (result.loreDrop) {
+                try {
+                    const loreDrops = require('../rpg/loreDrops');
+                    await loreDrops.sendOwn(sock, chatId, result.loreDrop);
+                } catch (e) {}
+            }
         } catch (e) {
             console.error("Failed to generate crafting image card:", e.message);
             // Fallback to text message
             await sock.sendMessage(chatId, { text: result.message });
+            if (result.loreDrop) {
+                try {
+                    const loreDrops = require('../rpg/loreDrops');
+                    await loreDrops.sendOwn(sock, chatId, result.loreDrop);
+                } catch (e) {}
+            }
         }
     } else {
         await sock.sendMessage(chatId, { text: `❌ *ACTION FAILED*\n\n${result.reason || result.message}` });
@@ -1029,7 +1080,17 @@ async function useItem(sock, chatId, senderJid, target) {
     }
 
     const result = inventorySystem.useItem(senderJid, itemId, targetSlot);
-    if (result.success) await sock.sendMessage(chatId, { text: `✅ *ITEM USED!*\n━━━━━━━━━━━━━━━\n📦 *Item:* ${itemId}\n✨ *Effect:* ${result.message}\n━━━━━━━━━━━━━━━` });
+    if (result.success) {
+        await sock.sendMessage(chatId, { text: `✅ *ITEM USED!*\n━━━━━━━━━━━━━━━\n📦 *Item:* ${itemId}\n✨ *Effect:* ${result.message}\n━━━━━━━━━━━━━━━` });
+        // 💡 2026-09-20: lore drops travel out-of-band and arrive as their
+        // own message box (owner ruling).
+        if (result.loreDrop) {
+            try {
+                const loreDrops = require('../rpg/loreDrops');
+                await loreDrops.sendOwn(sock, chatId, result.loreDrop);
+            } catch (e) {}
+        }
+    }
     else await sock.sendMessage(chatId, { text: `❌ ${result.message}` });
 }
 
@@ -1349,11 +1410,12 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
     } catch (e) {}
 
     // 💡 LORE DROP: legacy gear recipes are the forge family -> blacksmith
-    // voice (8%). Computed ONCE, appended to whichever reply path succeeds.
-    let __craftDrop = '';
+    // voice (8%). Sent as its OWN message after whichever reply path
+    // succeeds (owner ruling: a drop is a distinct lore event).
+    let __craftDrop = null;
     try {
         const loreDrops = require('../rpg/loreDrops');
-        __craftDrop = loreDrops.maybeDrop('blacksmith', { userId: senderJid, chatId, chance: 0.08 }) || '';
+        __craftDrop = loreDrops.maybeDrop('blacksmith', { userId: senderJid, chatId, chance: 0.08 });
     } catch (e) {}
 
     // Generate transaction card image if possible
@@ -1390,13 +1452,14 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
         });
         confirmMsg += `\n➕ *Received:* \n`;
         confirmMsg += `  • ${recipe.output.qty}x *${outputInfo.name || recipe.output.itemId}*\n`;
-        confirmMsg += `━━━━━━━━━━━━━━━━${__craftDrop ? '\n' + __craftDrop : ''}`;
+        confirmMsg += `━━━━━━━━━━━━━━━━`;
 
         if (imgBuf) {
             await sock.sendMessage(chatId, { 
                 image: imgBuf, 
                 caption: confirmMsg 
             });
+            await loreDropsSendOwn(sock, chatId, __craftDrop);
         } else {
             throw new Error("No image buffer returned");
         }
@@ -1414,9 +1477,18 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
         });
         confirmMsg += `\n➕ *Received:* \n`;
         confirmMsg += `  • ${recipe.output.qty}x *${outputInfo.name || recipe.output.itemId}*\n`;
-        confirmMsg += `━━━━━━━━━━━━━━━━${__craftDrop ? '\n' + __craftDrop : ''}`;
+        confirmMsg += `━━━━━━━━━━━━━━━━`;
         await sock.sendMessage(chatId, { text: confirmMsg });
+        await loreDropsSendOwn(sock, chatId, __craftDrop);
     }
+}
+
+// 💡 helper: fire-and-forget own-box delivery for the craft lore drop
+async function loreDropsSendOwn(sock, chatId, drop) {
+    try {
+        const loreDrops = require('../rpg/loreDrops');
+        await loreDrops.sendOwn(sock, chatId, drop);
+    } catch (e) {}
 }
 
 
@@ -1602,4 +1674,4 @@ async function handleSetDefaultCard(sock, chatId, senderJid, args) {
     }
 }
 
-module.exports = { displayCharacterSheet, handleCardStyle, handleSetDefaultCard, displayInventory, displayEquipmentCard, allocateStats, resetStats, displayLeaderboard, sellItem, upgradeInventory, equipItem, unequipItem, useItem, displayRecipes, craftItem, dismantleItem, mineOre, showItemSource, enhanceItem, cookItem, brewItem, forgeItem, handleCraftCommand, CRAFTING_RECIPES };
+module.exports = { displayCharacterSheet, handleCardStyle, handleSetDefaultCard, displayInventory, displayEquipmentCard, allocateStats, resetStats, displayLeaderboard, sellItem, upgradeInventory, equipItem, unequipItem, useItem, displayRecipes, craftItem, dismantleItem, mineOre, showItemSource, enhanceItem, cookItem, brewItem, forgeItem, handleCraftCommand, displayKills, CRAFTING_RECIPES };

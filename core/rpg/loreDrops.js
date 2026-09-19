@@ -428,6 +428,46 @@ function maybeDrop(category, opts = {}) {
 }
 
 /**
+ * 💡 OWNER RULING (2026-09-20): a lore drop is its own event. It must NOT
+ * be appended into the host command's text box - it arrives as a SEPARATE
+ * message right after the main reply, so it reads like a distinct lore
+ * moment instead of a tacked-on line.
+ *
+ * Fire-and-forget delivery: never throws, never blocks the host flow,
+ * returns true when a message was dispatched.
+ *
+ * @param {object} sock     baileys socket (or anything with sendMessage)
+ * @param {string} chatId   target chat
+ * @param {string|null} drop  formatted drop from maybeDrop (null = no-op)
+ * @returns {Promise<boolean>}
+ */
+async function sendOwn(sock, chatId, drop) {
+    try {
+        if (!drop || typeof drop !== 'string' || !sock || !chatId) return false;
+        await sock.sendMessage(chatId, { text: drop });
+        return true;
+    } catch (e) {
+        try { console.error('[loreDrop] sendOwn failed:', e.message); } catch (_) {}
+        return false;
+    }
+}
+
+/**
+ * Convenience: roll a drop AND send it as its own message.
+ *   await loreDrops.dropOwn(sock, chatId, 'blacksmith', { userId, chatId, chance: 0.1 });
+ * Keeps call sites that need the roll + send pattern to one line.
+ */
+async function dropOwn(sock, chatId, category, opts = {}) {
+    try {
+        const drop = maybeDrop(category, opts);
+        if (!drop) return false;
+        return await sendOwn(sock, chatId, drop);
+    } catch (e) {
+        return false;
+    }
+}
+
+/**
  * Route an Abyss victory drop category by encounter reality.
  *
  * V1 heuristic (implementation/abyss.md §3) + V2 variant tags when present:
@@ -475,6 +515,8 @@ module.exports = {
     CONFIG,
     POOLS,
     maybeDrop,
+    sendOwn,
+    dropOwn,
     routeAbyssCategory,
     formatDrop,
     poolStats,

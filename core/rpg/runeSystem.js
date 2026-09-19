@@ -672,13 +672,13 @@ async function fuseRunesByName(userJid, typeQuery, countQuery) {
   let msg = `🔮 *FUSION COMPLETE!*\n\nFused ${fusedCount} pair(s) of ${RUNE_TYPES[matchedType].name}:\n`;
   for (const r of results) msg += `  ✅ ${r}\n`;
   msg += `\nUse \`${require('../../botConfig').getPrefix()} rune inv\` to see your upgraded runes.`;
-  // 💡 LORE DROP: enchanting voice (10%)
+  // 💡 LORE DROP: enchanting voice (10%) - out-of-band, own message box
+  let __loreDrop = null;
   try {
     const loreDrops = require('./loreDrops');
-    const drop = loreDrops.maybeDrop('enchanting', { userId: userJid, chance: 0.10 });
-    if (drop) msg += `\n${drop}`;
+    __loreDrop = loreDrops.maybeDrop('enchanting', { userId: userJid, chance: 0.10 });
   } catch (e) {}
-  return { success: true, message: msg, fusedCount };
+  return { success: true, message: msg, fusedCount, loreDrop: __loreDrop };
 }
 
 // ─── GET RUNES SOCKETED IN A SKILL ────────────────────────────────────────
@@ -741,16 +741,17 @@ async function socketRune(userJid, runeId, skillId) {
   await rune.save();
 
   let __socketMsg = `✅ Socketed ${RUNE_TYPES[rune.type].name} (${RUNE_TIERS[rune.tier].name}) into ${skillId}.`;
-  // 💡 LORE DROP: enchanting voice (10%)
+  // 💡 LORE DROP: enchanting voice (10%) - out-of-band, own message box
+  let __socketLoreDrop = null;
   try {
     const loreDrops = require('./loreDrops');
-    const drop = loreDrops.maybeDrop('enchanting', { userId: userJid, chance: 0.10 });
-    if (drop) __socketMsg += `\n${drop}`;
+    __socketLoreDrop = loreDrops.maybeDrop('enchanting', { userId: userJid, chance: 0.10 });
   } catch (e) {}
   return {
     success: true,
     message: __socketMsg,
     rune,
+    loreDrop: __socketLoreDrop,
   };
 }
 
@@ -840,16 +841,17 @@ async function removeRune(userJid, runeQuery, hasScroll = false) {
   await rune.save();
 
   let __removeMsg = `✅ Removed ${RUNE_TYPES[rune.type].name} (${RUNE_TIERS[rune.tier].name}) from skill. The rune is back in your inventory.`;
-  // 💡 LORE DROP: enchanting voice (10%)
+  // 💡 LORE DROP: enchanting voice (10%) - out-of-band, own message box
+  let __removeLoreDrop = null;
   try {
     const loreDrops = require('./loreDrops');
-    const drop = loreDrops.maybeDrop('enchanting', { userId: userJid, chance: 0.10 });
-    if (drop) __removeMsg += `\n${drop}`;
+    __removeLoreDrop = loreDrops.maybeDrop('enchanting', { userId: userJid, chance: 0.10 });
   } catch (e) {}
   return {
     success: true,
     message: __removeMsg,
     rune,
+    loreDrop: __removeLoreDrop,
   };
 }
 
@@ -864,15 +866,16 @@ async function destroyRune(userJid, runeQuery) {
 
   await Rune.deleteOne({ runeId: rune.runeId });
   let __destroyMsg = `💀 Destroyed ${RUNE_TYPES[rune.type].name} (${RUNE_TIERS[rune.tier].name}). It's gone forever.`;
-  // 💡 LORE DROP: enchanting voice (10%)
+  // 💡 LORE DROP: enchanting voice (10%) - out-of-band, own message box
+  let __destroyLoreDrop = null;
   try {
     const loreDrops = require('./loreDrops');
-    const drop = loreDrops.maybeDrop('enchanting', { userId: userJid, chance: 0.10 });
-    if (drop) __destroyMsg += `\n${drop}`;
+    __destroyLoreDrop = loreDrops.maybeDrop('enchanting', { userId: userJid, chance: 0.10 });
   } catch (e) {}
   return {
     success: true,
     message: __destroyMsg,
+    loreDrop: __destroyLoreDrop,
   };
 }
 
