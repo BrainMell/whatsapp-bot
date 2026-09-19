@@ -1952,6 +1952,28 @@ function botScope() {
   try { return botConfig.getBotId() || "global"; } catch (e) { return "global"; }
 }
 const scopedKey = (key) => `${botScope()}|${key}`;
+// 💡 QUEST-START STALL FIX 2026-09-20 (owner: "quests and raids don't even
+// start anymore"): when the scoping fix above landed, every key became
+// "bot|..." - but MANY internal call sites pass an ALREADY-SCOPED key back
+// into the lookup helpers: executeEncounter(sessionKey), selectRandomEncounter
+// (sessionKey), getTargets/getHealTarget/getHealMult (25+ ability sites),
+// deleteGameState(sessionKey) at ~15 cleanup sites, and any helper receiving
+// state.sessionKey. Probing a scoped key through scopedKey() double-prefixes
+// ("Joker|Joker|chat") and the fallback scans compared state.chatId against
+// the prefixed string - so EVERY probe silently missed. Result: the raid
+// registered, the start card went out, then executeEncounter got null and
+// returned - no encounter ever spawned, no enemies, silence. Abilities no-
+// op'ed, cleanup deleted nothing (states leaked). WhatsApp JIDs never contain
+// "|", so stripping everything before the first "|" is unambiguous. A foreign
+// bot's key ("Subaru|chat") strips and then re-scopes under THIS bot - still
+// finds nothing, so cross-bot isolation is preserved.
+function unscopeKey(key) {
+  if (typeof key === "string") {
+    const idx = key.indexOf("|");
+    if (idx > -1) return key.slice(idx + 1);
+  }
+  return key;
+}
 // STRICT: states created before this fix (no botId) are treated as foreign
 // so the leak cannot survive the deploy. All creation sites stamp botId.
 const sameBot = (state) => !!state && state.botId === botScope();
@@ -1999,6 +2021,11 @@ function isUserInAnyCombat(userId) {
 
 function getGameState(chatId, senderJid = null) {
   if (!chatId) return null;
+
+  // 💡 Normalize bot-scoped keys ("Joker|chat[_jid]") to their raw form so
+  // callers that pass state.sessionKey back in resolve correctly. Must run
+  // BEFORE the composed-key split below. See unscopeKey note above.
+  chatId = unscopeKey(chatId);
 
   // 💡 COMPAT: callers sometimes pass a pre-composed "chat_jid" solo key as
   // the first argument (chat IDs and JIDs never contain "_"). Split it so
@@ -2051,6 +2078,13 @@ function isUserInAdventure(sessionKey) {
 }
 
 function deleteGameState(chatId, senderJid = null) {
+  // 💡 Normalize bot-scoped keys first - ~15 call sites pass the SCOPED
+  // state.sessionKey here (quest end, abyss victory/defeat cleanup, stops).
+  // Without stripping, the delete probed "Joker|Joker|..." and matched
+  // nothing: finished quests/raids leaked their state forever and could
+  // wedge a chat with "a raid is already active" until the 30-min sweeper.
+  // See unscopeKey note above.
+  chatId = unscopeKey(chatId);
   // Determine the key (bot-scoped - see the CROSS-BOT note at gameStates)
   let key = scopedKey(chatId);
   if (senderJid) {
@@ -9060,7 +9094,12 @@ const handleCombatAction = async (
     if (state.solo && state.inCombat) {
       state.inCombat = false;
       state.combatProcessing = false;
-      const sessionKey = chatId + '_' + senderJid;
+      // 💡 KEY-SCOPING FIX: state.sessionKey is the key this state actually
+      // lives under (bot-scoped since the cross-bot fix). Rebuilding the key
+      // unscoped here ("chat_jid") made gameStates.get() MISS, so the
+      // dead-solo-player force-end silently no-op'ed and combat stayed
+      // inCombat forever.
+      const sessionKey = state.sessionKey || scopedKey(`${chatId}_${senderJid}`);
       endCombat(sock, false, sessionKey).catch(() => {});
       return "💀 *You have fallen!* Quest ended.";
     }
@@ -10855,6 +10894,8 @@ module.exports = {
   },
   initAdventure,
   joinAdventure,
+  // exported for qa_quest_flow.js (registration-window expiry simulation)
+  startJourney,
   getDungeonMenu,
   stopQuest,
   handleBuy,
