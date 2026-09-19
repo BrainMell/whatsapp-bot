@@ -8720,6 +8720,27 @@ async function endAdventure(sock, sessionKey, victory = true) {
       portraitPlayers.push({ name: player.name, xp: `+${totalXpEarned.toLocaleString()} XP`, zeni: `+${totalGoldThisRun.toLocaleString()} ${economy.getZENI ? economy.getZENI() : 'Z'}` });
 
       economy.addMoney(player.jid, totalGoldThisRun);
+      // 💡 FIX (tester issue a332f1): quest rewards vanish silently when the
+      // player carries a system debt - addMoney's auto-debt deduction eats
+      // the ENTIRE payout, but the summary still shows "Gold: X". Tell the
+      // player where their gold went instead of leaving them confused.
+      const _rewardUser = economy.getUser(player.jid);
+      if (_rewardUser && _rewardUser.debt && _rewardUser.debt.amount > 0) {
+        msg += `  💸 _Your earnings went to debt repayment. Remaining debt: ${Number(_rewardUser.debt.amount).toLocaleString()} Zeni._\n\n`;
+      }
+      // 💡 FIX (tester issue a332f1): quest-end HP was never written back to
+      // the persistent pool (only per-encounter combat ends were). Potions
+      // used after the last fight - or ending the quest between floors -
+      // were lost, and players kept spawning new quests at 1 HP. Same
+      // contract as the per-encounter write-back: clamp 0..max.
+      if (player.jid && player.stats && player.stats.maxHp) {
+        const finalHP = player.currentHP !== undefined ? player.currentHP : player.stats.hp;
+        economy.setPersistentHP(player.jid, finalHP, player.stats.maxHp);
+      }
+      if (player.jid && player.stats && player.stats.maxEnergy) {
+        const finalEn = Number.isFinite(player.stats.energy) ? player.stats.energy : player.stats.maxEnergy;
+        economy.setPersistentEnergy(player.jid, finalEn, player.stats.maxEnergy);
+      }
       // 💡 P4 Item 5: Increment daily quest count when quest completes
       if (victory) {
         economy.incrementDailyQuestCount(player.jid);
@@ -9591,7 +9612,13 @@ async function applyAbilityEffect(
       }
 
       // Apply CC (Crowd Control)
-      if (effect.cc && Math.random() * 100 < (effect.ccChance || 100)) {
+      // 💡 FIX (tester issue 526f3b): AOE CC was full-strength against a
+      // SINGLE target - solo players ate a 40% stun chance on every slam
+      // (bosses slammed 95% of turns), which read as a stun-lock. Real-RPG
+      // rule: area CC is diluted when it only ever hits one victim.
+      const _ccChanceBase = effect.ccChance || 100;
+      const _ccChance = opponentSide.length === 1 ? _ccChanceBase * 0.5 : _ccChanceBase;
+      if (effect.cc && Math.random() * 100 < _ccChance) {
         const sRes = applyStatusEffect(
           target,
           effect.cc,

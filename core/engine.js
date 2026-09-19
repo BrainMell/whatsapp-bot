@@ -1831,10 +1831,18 @@ async function startBot(configInstance) {
       try {
         console.log(`[Audio] Query: "${query}" | sender=${chatId}`);
         const data = await goService.getAudioInfo(query);
+        // 💡 FIX (tester issue 5268cb): distinguish "the service is down"
+        // from "nothing matched" so testers stop seeing one vague message.
+        if (data && data.error === 'service_unreachable') {
+          console.error(`[Audio] Service unreachable for "${query}": ${data.detail}`);
+          return await sock.sendMessage(chatId, {
+            text: BOT_MARKER + "🎧 The music service is unreachable right now. It's usually back in a few minutes - please try again.",
+          });
+        }
         if (!data || !data.metadata || !data.audioURL) {
           console.error(`[Audio] No results for "${query}"`);
           return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + "❌ No results found or service unavailable.",
+            text: BOT_MARKER + "🎧 Nothing matched that search. Try a different title or add the artist's name.",
           });
         }
 
@@ -18593,6 +18601,19 @@ _Sorted by guild level + XP_
                         // on a debt the player still owed. Roll everything back
                         // on failure.
                         const loanPaid = economy.addMoney(senderJid, amount, `Guild loan from ${userGuild}`);
+                        // 💡 FIX (tester issue bed035): borrowers with an
+                        // outstanding system debt never SEE the loan - addMoney's
+                        // auto-debt deduction swallows the whole payout silently,
+                        // so the loan reads as "not working". Refuse the loan
+                        // up-front instead of lending into the debt hole.
+                        const _borrowerDoc = economy.getUser(senderJid);
+                        if (_borrowerDoc && _borrowerDoc.debt && _borrowerDoc.debt.amount > 0) {
+                          // Roll back the loan record + bank debit (same as a failed payout)
+                          guild.balance = bankBalance;
+                          guild.loans = guild.loans.filter(l => !l.takenAt || (l.amount !== amount) || l.repaid);
+                          await guilds.syncGuild(userGuild);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You have an outstanding debt of *${Number(_borrowerDoc.debt.amount).toLocaleString()} Zeni*. Everything you earn currently goes to debt repayment, so the guild can't lend to you until it's cleared.\n\n_Last quest/loan earnings were also swallowed by the debt - clear it first._` });
+                        }
                         if (!loanPaid) {
                           // Roll back the loan record + bank debit
                           guild.balance = bankBalance;

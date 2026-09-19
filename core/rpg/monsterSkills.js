@@ -975,10 +975,16 @@ function evaluateAction(enemy, players, allies = []) {
             return { action: 'skill', skill: ultimateSkill, target: defaultTarget };
         }
 
-        // AoE slam - id is 'slam' in BOSS archetype. 💡 HARDER: 85% chance
-        // (was 80%) and smart-target the lowest-HP player for pressure.
+        // AoE slam - id is 'slam' in BOSS archetype. 💡 FIX (tester issue
+        // 526f3b): was 95% of turns with no cooldown - solo players were
+        // chain-stunned by Titanic Slam and never got to act. Now: 70%
+        // chance and a 2-turn cooldown between slams.
+        if (enemy._slamCd && enemy._slamCd > 0) enemy._slamCd -= 1;
         const slamSkill = available.find(s => s.id === 'slam' || s.type === 'aoe');
-        if (slamSkill && Math.random() > 0.05) return { action: 'skill', skill: slamSkill, target: defaultTarget };
+        if (slamSkill && !enemy._slamCd && Math.random() > 0.30) {
+            enemy._slamCd = 2;
+            return { action: 'skill', skill: slamSkill, target: defaultTarget };
+        }
 
         // Fallback: use any available offensive skill
         const offSkill = available.find(s => ['attack', 'magic', 'aoe', 'damage_cc', 'execute'].includes(s.type));

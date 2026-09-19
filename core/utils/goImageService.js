@@ -757,20 +757,36 @@ class GoImageService {
    * YouTube Audio Info & direct URL (Go Service)
    */
   async getAudioInfo(query) {
-    try {
-      // 2026-09-14 audio v3: GO_AUDIO_SERVICE_URL lets this box route audio
-      // through the WARP-capable Go service while image rendering stays
-      // local. 180s budget: the Deezer -> JioSaavn -> YouTube-via-WARP
-      // chain needs headroom on a cold challenge-solver cache.
-      const base = process.env.GO_AUDIO_SERVICE_URL || this.baseUrl;
+    // 💡 FIX (tester issue 5268cb): every failure (service down, timeout,
+    // empty search) collapsed to null, so the bot always said "No results
+    // found or service unavailable" and testers could not tell whether the
+    // query or the service was at fault. Now: one retry for transient
+    // network errors, and the failure REASON is surfaced to the caller.
+    const base = process.env.GO_AUDIO_SERVICE_URL || this.baseUrl;
+    const attempt = async () => {
       const response = await axios.get(base + "/api/scrape/audio", {
         params: { query },
         timeout: 180000,
       });
       return response.data;
+    };
+    // 2026-09-14 audio v3: 180s budget per attempt (see note above).
+    try {
+      return await attempt();
     } catch (error) {
+      const status = error && error.response ? error.response.status : null;
+      const transient = !status || status >= 500 || error.code === 'ECONNABORTED' || error.code === 'ECONNRESET';
+      if (transient) {
+        try {
+          console.warn(`[GoService] Audio transient failure (${error.message}), retrying once...`);
+          return await attempt();
+        } catch (retryError) {
+          console.error("GoService Audio Info Error (retry):", retryError.message);
+          return { error: 'service_unreachable', detail: retryError.message };
+        }
+      }
       console.error("GoService Audio Info Error:", error.message);
-      return null;
+      return { error: 'service_unreachable', detail: error.message };
     }
   }
 

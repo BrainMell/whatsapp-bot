@@ -80,7 +80,12 @@ function scheduleSave(userId) {
   if (typeof userId === 'string' && userId.startsWith('sandbox_')) {
     return;
   }
-  pendingSaves.add(userId);
+  // 💡 FIX (tester issue a335e9): resolve to the canonical cache key here
+  // too - pendingSaves + saveUser both operate on raw jids otherwise, and
+  // an unresolved jid would silently no-op inside saveUser.
+  let saveKey = userId;
+  try { saveKey = resolveJidHelper(userId) || userId; } catch (e) { saveKey = userId; }
+  pendingSaves.add(saveKey);
   if (!saveTimer) {
     saveTimer = setTimeout(async () => {
       const toSave = [...pendingSaves];
@@ -137,25 +142,33 @@ function saveEconomy() {
 
 // NEW: Save specific user to MongoDB (Background Sync)
 async function saveUser(userId) {
-    const data = economyData.get(userId);
+    // 💡 FIX (tester issue a335e9): saveUser never resolved the JID, while
+    // getUser DOES. For LID/phone JID mismatches, getUser returned the
+    // canonical cached object (so in-memory edits like cardStyle worked)
+    // but saveUser looked the RAW jid up in the cache, found nothing and
+    // SILENTLY DROPPED the save. Style/settings persisted only until the
+    // cache reloaded, then "reset". Resolve at this choke point so every
+    // save path (direct + scheduleSave) persists to the canonical doc.
+    const resolvedId = resolveJidHelper(userId);
+    const data = economyData.get(resolvedId);
     if (!data) return;
 
     // 💡 SANDBOX: never persist sandbox users to the User collection -
     // they're stored in the AdminSandbox collection instead. Without this
     // guard, every economy.saveUser('sandbox_...') call creates a junk
     // document in the users collection that pollutes the cache on restart.
-    if (typeof userId === 'string' && userId.startsWith('sandbox_')) {
+    if (typeof resolvedId === 'string' && resolvedId.startsWith('sandbox_')) {
         return;
     }
 
     try {
         await User.findOneAndUpdate(
-            { userId: userId },
+            { userId: resolvedId },
             { $set: data },
             { upsert: true, returnDocument: 'after' }
         );
     } catch (err) {
-        console.error(`❌ Failed to save user ${userId}:`, err.message);
+        console.error(`❌ Failed to save user ${resolvedId}:`, err.message);
     }
 }
 

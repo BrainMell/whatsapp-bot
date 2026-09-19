@@ -507,6 +507,15 @@ function abilityEffectText(effect) {
     const dot = ABILITY_DOT_NAME[String(effect.dot || '').toLowerCase()] || human(effect.dot);
     const buff = human(effect.buffType);
     const debuff = human(effect.debuffType);
+    // 💡 FIX (tester issue 1c4322): damage skills carry their power in
+    // `effect.multiplier` (a fraction of ATK/MAG), not `effect.value` - the
+    // abilities list showed "Deals damage" with no numbers. Render the
+    // multiplier whenever present, falling back to flat value.
+    const mult = Number(effect.multiplier);
+    const atkWord = effect.damageType === 'magic' ? 'MAG' : effect.damageType === 'true' ? 'TRUE' : 'ATK';
+    const powerTxt = (Number.isFinite(mult) && mult > 0)
+        ? `${Math.round(mult * 100)}% ${atkWord}`
+        : (v != null ? `${v}` : null);
     const join = (parts, fallback) => {
         const out = parts.filter(Boolean).join(' + ');
         return out || fallback;
@@ -514,19 +523,19 @@ function abilityEffectText(effect) {
 
     switch (t) {
         case 'damage':
-            return v != null ? `Deals ${v} damage${durTxt}` : 'Deals damage';
+            return powerTxt ? `Deals ${powerTxt} damage${durTxt}` : 'Deals damage';
         case 'damage_cc':
         case 'crowd_control':
-            return join([v != null ? `${v} damage` : '', cc ? `${cc}${durTxt}` : ''], 'Control effect');
+            return join([powerTxt ? `${powerTxt} damage` : '', cc ? `${cc}${durTxt}` : ''], 'Control effect');
         case 'damage_dot':
         case 'damage_over_time':
-            return join([v != null ? `${v} damage` : '', dot ? `${dot}${durTxt}` : 'damage over time'], 'Damage over time');
+            return join([powerTxt ? `${powerTxt} damage` : '', dot ? `${dot}${durTxt}` : 'damage over time'], 'Damage over time');
         case 'damage_heal':
-            return v != null ? `${v} damage, heals the user for part of it` : 'Damage that heals the user';
+            return powerTxt ? `${powerTxt} damage, heals the user for part of it` : 'Damage that heals the user';
         case 'hybrid_damage':
-            return v != null ? `${v} hybrid damage (phys + magic)` : 'Hybrid damage';
+            return powerTxt ? `${powerTxt} hybrid damage (phys + magic)` : 'Hybrid damage';
         case 'chain':
-            return v != null ? `${v} damage that chains to nearby foes` : 'Chained damage';
+            return powerTxt ? `${powerTxt} damage that chains to nearby foes` : 'Chained damage';
         case 'heal':
             return v != null ? `Restores ${v} HP` : 'Restores HP';
         case 'heal_over_time':
@@ -562,11 +571,11 @@ function abilityEffectText(effect) {
         case 'berserk':
             return v != null ? `Berserk: +${v}% damage at low HP${durTxt}` : 'Berserk state';
         case 'aoe':
-            return v != null ? `${v} damage to all enemies` : 'Hits all enemies';
+            return powerTxt ? `${powerTxt} damage to all enemies` : 'Hits all enemies';
         case 'execute':
             return v != null ? `Executes foes below ${v}% HP` : 'Executes weakened foes';
         case 'drain':
-            return v != null ? `Drains ${v} HP from the target` : 'Drains HP';
+            return powerTxt ? `Drains ${powerTxt} from the target` : 'Drains HP';
         case 'summon':
             return 'Summons an ally to fight';
         case 'passive':
@@ -574,7 +583,7 @@ function abilityEffectText(effect) {
         case 'negative':
             return 'Passive effect';
         case 'dragon':
-            return v != null ? `${v} draconic damage` : 'Draconic damage';
+            return powerTxt ? `${powerTxt} draconic damage` : 'Draconic damage';
         default: {
             const name = human(t) || 'Special effect';
             return v != null ? `${name} (${v})${durTxt}` : name;

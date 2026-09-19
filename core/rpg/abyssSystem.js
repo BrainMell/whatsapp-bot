@@ -49,6 +49,19 @@ const enemyVariants = require('./enemyVariants');
 //   humanoid variant enemy -> bark (15%) or opener (10%)
 //   regular combat         -> opener (10%)
 //   treasure/event         -> npc sighting (8%) or general world (12%)
+// 💡 FIX (tester issue ef0fa0): event floors reached via
+// applyNextEncounter / processSkip printed only the event NAME and the
+// "choose" hint, never the desc or the choice texts (floor 1 did). Every
+// event floor now renders the same block: name, desc, choices, hint.
+function _eventFloorText(event, floorLabel) {
+  let t = `${event.icon} *Floor ${floorLabel}* - ${event.name}\n_${event.desc}_\n\n`;
+  (event.choices || []).forEach(c => {
+    t += `\`${c.id}\` - ${c.text}\n`;
+  });
+  t += `\n_Choose with \`${P()} abyss choose <1/2>\`_`;
+  return t;
+}
+
 function _encounterIntroDrop(encounter) {
   try {
     if (!encounter) return '';
@@ -294,11 +307,7 @@ async function startRun(userId, playerStats, ctx = {}) {
   } else if (encounter.type === 'treasure') {
     startMsg += `${encounter.treasure.icon} *Floor 1 - ${encounter.treasure.name}*\n_${encounter.treasure.desc}_\n\n_Collect with \`${P()} abyss collect\`_\n_Skip with \`${P()} abyss skip\`_`;
   } else if (encounter.type === 'event') {
-    startMsg += `${encounter.event.icon} *Floor 1 - ${encounter.event.name}*\n_${encounter.event.desc}_\n\n`;
-    encounter.event.choices.forEach(c => {
-      startMsg += `\`${c.id}\` - ${c.text}\n`;
-    });
-    startMsg += `\n_Choose with \`${P()} abyss choose <1/2>\`_`;
+    startMsg += _eventFloorText(encounter.event, 1);
   }
 
   // 💡 LORE DROP (occasional plain text, one max): fight-opener beat on the
@@ -695,7 +704,7 @@ function applyNextEncounter(run, nextEncounter) {
     run.currentEnemy = null;
     run.currentEncounterType = 'event';
     run.currentEncounterData = nextEncounter.event;
-    msg += `\n${nextEncounter.event.icon} *Floor ${run.currentFloor}* - ${nextEncounter.event.name}\n_Choose with \`${P()} abyss choose <1/2>\`_`;
+    msg += `\n${_eventFloorText(nextEncounter.event, run.currentFloor)}`;
     // 💡 LORE DROP: npc sighting / general world on non-hostile floors
     msg += _encounterIntroDrop(nextEncounter);
   }
@@ -819,7 +828,7 @@ async function processSkip(userId) {
     run.currentEnemy = null;
     run.currentEncounterType = 'event';
     run.currentEncounterData = nextEncounter.event;
-    msg += `\n${nextEncounter.event.icon} *Floor ${run.currentFloor}* - ${nextEncounter.event.name}\n_Choose with \`${P()} abyss choose <1/2>\`_`;
+    msg += `\n${_eventFloorText(nextEncounter.event, run.currentFloor)}`;
     msg += _encounterIntroDrop(nextEncounter);
   }
 
