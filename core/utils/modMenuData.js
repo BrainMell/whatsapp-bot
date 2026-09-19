@@ -1,11 +1,24 @@
 // ============================================
-// 🛡️ MOD TERMINAL DATA - 2026-09-10
+// 🛡️ MOD TERMINAL DATA - rebuilt 2026-09-19
 // Single source of truth for the mod menu.
 // Mirrors the regular menu UX: main grid ->
 // category drill-down -> command explain mode.
 //
-// Categories are deliberately ONE WORD each - the drill-down is
-//   <prefix> mod rpg | cards | management | system | admin
+// ⚠️ ACCURACY CONTRACT (2026-09-19 rebuild):
+// Every `usage` below is the REAL invocation as the
+// bot dispatches it - verified against engine.js /
+// adminConsole.js / cardSystem.js dispatch sites by
+// scripts/qa_mod_menu.js. Do NOT list a command here
+// unless its dispatch exists, and do NOT invent a
+// `mod ` prefix: most commands run standalone, only
+// the GM console tools run under `.j mod <sub>`.
+//
+// Fields per command:
+//   cmd     - lookup key for explain mode (multiword OK)
+//   usage   - real invocation WITHOUT prefix, args terse
+//   desc    - one short line
+//   console - true = runs via `.j mod <sub>` (adminConsole)
+//   eg      - optional full example (shown in explain mode)
 //
 // tier = minimum role to SEE the category:
 //   'owner' : bot owner only
@@ -17,60 +30,47 @@
 
 const MOD_MENU = {
   RPG: {
-    name: "RPG",
+    name: "RPG Tools",
     emoji: "🧬",
     tier: "rpg",
     commands: [
-      { cmd: "setlevel", desc: "Set a player's level (1-100), instant + cache flushed.", usage: "mod setlevel <@user> <1-100>" },
-      { cmd: "setstat", desc: "Set any player stat (str, mag, def, agi, etc.).", usage: "mod setstat <@user> <stat> <value>" },
-      { cmd: "setwallet", desc: "Set a player's wallet to an exact amount.", usage: "mod setwallet <@user> <amount>" },
-      { cmd: "giveitem", desc: "Give items - partial names OK (fuzzy match).", usage: "mod giveitem <@user> <item> [qty]" },
-      { cmd: "takeitem", desc: "Remove items from a player's inventory.", usage: "mod takeitem <@user> <item> [qty]" },
-      { cmd: "giveskill", desc: "Grant a skill by ID or name, optional level.", usage: "mod giveskill <@user> <skill> [level]" },
-      { cmd: "revokeskill", desc: "Remove a skill from a player.", usage: "mod revokeskill <@user> <skill>" },
-      { cmd: "givepoints", desc: "Grant allocatable stat points.", usage: "mod givepoints <@user> <amount>" },
-      { cmd: "giveskillpoints", desc: "Grant allocatable skill points.", usage: "mod giveskillpoints <@user> <amount>" },
-      { cmd: "setskillpoints", desc: "Set skill points to an exact value.", usage: "mod setskillpoints <@user> <amount>" },
-      { cmd: "givezeni", desc: "Grant Zeni directly.", usage: "mod givezeni <@user> <amount>" },
-      { cmd: "giverune", desc: "Grant an Abyss rune by name/tier.", usage: "mod giverune <@user> <rune>" },
-      { cmd: "givesummon", desc: "Grant a summon to a player.", usage: "mod givesummon <@user> <summon>" },
-      { cmd: "setrank", desc: "Set a player's RPG rank (E to SSS).", usage: "mod setrank <@user> <rank>" },
-      { cmd: "forceevolve", desc: "Force a class evolution, no requirements.", usage: "mod forceevolve <@user> <class>" },
-      { cmd: "resetplayer", desc: "Wipe stats AND skills - destructive, no undo.", usage: "mod resetplayer <@user>" },
-      { cmd: "unstick", desc: "Safely clear stuck combat state.", usage: "mod unstick <@user>" },
-      { cmd: "inspect", desc: "Full character sheet: stats, skills, class, gear.", usage: "mod inspect <@user>" },
-      { cmd: "godmode", desc: "Sandbox godmode toggle - testing only, never live.", usage: "mod godmode" },
-      { cmd: "sandbox", desc: "Enter the sandbox test environment.", usage: "mod sandbox" },
-      { cmd: "modclass", desc: "Switch YOUR class freely (no args = class list).", usage: "modclass <name or ID>" },
-      { cmd: "setdefaultcard", desc: "Pick the server-wide DEFAULT character card (10 styles).", usage: "setdefaultcard <1-10|name>" },
-
-      // ── Content Forge (merged into RPG - 2026-09-10, one-word groups) ──
-      { cmd: "createskill", desc: "Interactive skill creator (bot DMs you).", usage: "mod createskill" },
-      { cmd: "createclass", desc: "Interactive class creator.", usage: "mod createclass" },
-      { cmd: "enableskill", desc: "Re-enable a disabled skill.", usage: "mod enableskill <name>" },
-      { cmd: "disableskill", desc: "Disable a skill game-wide, instant.", usage: "mod disableskill <name>" },
-      { cmd: "enemy", desc: "Create a custom test enemy.", usage: "mod enemy <name> ..." },
-      { cmd: "enemyskill", desc: "Attach a skill to a test enemy.", usage: "mod enemyskill <enemy> <skill>" },
-      { cmd: "fightenemy", desc: "Spin up a fight vs a test enemy (no perm loss).", usage: "mod fightenemy <enemy>" },
+      { cmd: "setlevel", usage: "mod setlevel [@user] <1-100>", desc: "Set a player's level, instant + cache flushed.", console: true },
+      { cmd: "setstat", usage: "mod setstat [@user] <stat> <value>", desc: "Set any player stat (str, mag, def, agi...).", console: true },
+      { cmd: "setwallet", usage: "mod setwallet [@user] <amount>", desc: "Set a player's wallet to an exact amount.", console: true },
+      { cmd: "giveitem", usage: "mod giveitem [@user] <item> [qty]", desc: "Give items, partial names OK (alias: give / additem).", console: true },
+      { cmd: "takeitem", usage: "mod takeitem [@user] <item> [qty]", desc: "Remove items from a player's inventory.", console: true },
+      { cmd: "giveskill", usage: "mod giveskill [@user] <skill> [level]", desc: "Grant a skill by ID or name.", console: true },
+      { cmd: "revokeskill", usage: "mod revokeskill [@user] <skill>", desc: "Remove a skill from a player.", console: true },
+      { cmd: "givepoints", usage: "mod givepoints [@user] <amount>", desc: "Grant allocatable stat points.", console: true },
+      { cmd: "giveskillpoints", usage: "mod giveskillpoints [@user] <amount>", desc: "Grant allocatable skill points.", console: true },
+      { cmd: "setskillpoints", usage: "mod setskillpoints [@user] <amount>", desc: "Set skill points to an exact value.", console: true },
+      { cmd: "givezeni", usage: "mod givezeni [@user] <amount>", desc: "Grant Zeni directly.", console: true },
+      { cmd: "giverune", usage: "mod giverune [@user] <rune>", desc: "Grant an Abyss rune by name/tier.", console: true },
+      { cmd: "givesummon", usage: "mod givesummon [@user] <summon>", desc: "Grant a summon to a player.", console: true },
+      { cmd: "setrank", usage: "mod setrank [@user] <E-SSS>", desc: "Set a player's RPG rank.", console: true },
+      { cmd: "forceevolve", usage: "mod forceevolve [@user] <class>", desc: "Force a class evolution, no requirements.", console: true },
+      { cmd: "resetplayer", usage: "mod resetplayer [@user]", desc: "Wipe stats AND skills - destructive, no undo.", console: true },
+      { cmd: "unstick", usage: "mod unstick [@user]", desc: "Safely clear stuck combat state.", console: true },
+      { cmd: "inspect", usage: "mod inspect [@user]", desc: "Full character sheet: stats, skills, class, gear.", console: true },
+      { cmd: "setdefaultcard", usage: "setdefaultcard <1-10|name>", desc: "Server-wide DEFAULT character card style." },
     ],
   },
 
-  MANAGEMENT: {
-    name: "Management",
-    emoji: "🛡️",
-    tier: "gmod",
+  FORGE: {
+    name: "Forge & Sandbox",
+    emoji: "🏗️",
+    tier: "rpg",
     commands: [
-      { cmd: "addmod", desc: "Add a global bot moderator.", usage: "mod addmod @user" },
-      { cmd: "delmod", desc: "Remove a global moderator.", usage: "mod delmod @user" },
-      { cmd: "addrpgmod", desc: "Add an RPG mod (player tools tier).", usage: "mod addrpgmod @user" },
-      { cmd: "delrpgmod", desc: "Remove an RPG mod.", usage: "mod delrpgmod @user" },
-      { cmd: "addcardsmod", desc: "Add a card mod (cards tier).", usage: "mod addcardsmod @user" },
-      { cmd: "delcardsmod", desc: "Remove a card mod.", usage: "mod delcardsmod @user" },
-      { cmd: "mods", desc: "List all 3 mod categories.", usage: "mod mods" },
-      { cmd: "ban", desc: "Perma-ban a user from the bot.", usage: "mod ban @user" },
-      { cmd: "unban", desc: "Lift a bot ban.", usage: "mod unban @user" },
-      { cmd: "banlist", desc: "Show all banned users.", usage: "mod banlist" },
-      { cmd: "reloaduser", desc: "Hard-reload a user from DB (after manual edits).", usage: "mod reloaduser @user" },
+      { cmd: "createskill", usage: "mod createskill", desc: "Interactive skill creator (bot DMs you).", console: true },
+      { cmd: "createclass", usage: "mod createclass", desc: "Interactive class creator.", console: true },
+      { cmd: "enableskill", usage: "mod enableskill <name>", desc: "Re-enable a disabled skill.", console: true },
+      { cmd: "disableskill", usage: "mod disableskill <name>", desc: "Disable a skill game-wide, instant.", console: true },
+      { cmd: "enemy", usage: "mod enemy <list|info|setstat|sethp|setxp|setgold|reset>", desc: "Create and tune test enemies.", console: true },
+      { cmd: "enemyskill", usage: "mod enemyskill <enemy> <skill>", desc: "Attach or tune skills on a test enemy.", console: true },
+      { cmd: "fightenemy", usage: "mod fightenemy <enemy>", desc: "Fight a test enemy, no perm loss.", console: true },
+      { cmd: "sandbox", usage: "mod sandbox <on|off|status|save|reset|...>", desc: "Sandbox test environment (many subcommands).", console: true },
+      { cmd: "godmode", usage: "mod godmode <on|off>", desc: "Sandbox godmode toggle - testing only.", console: true },
+      { cmd: "modclass", usage: "modclass <name|ID>", desc: "Switch YOUR class freely (no args = class list)." },
     ],
   },
 
@@ -79,22 +79,64 @@ const MOD_MENU = {
     emoji: "🎴",
     tier: "card",
     commands: [
-      { cmd: "spawn", desc: "Force-spawn a card by ID or name.", usage: "mod spawn <id/name>" },
-      { cmd: "espawn", desc: "Force-spawn an event (E-tier) card.", usage: "mod espawn <id/name>" },
-      { cmd: "einfo", desc: "Inspect an event card's details.", usage: "mod einfo <id/name>" },
-      { cmd: "event start", desc: "Start a token event.", usage: "mod event start" },
-      { cmd: "event stop", desc: "Stop the active token event.", usage: "mod event stop" },
-      { cmd: "event status", desc: "Check token event status.", usage: "mod event status" },
-      { cmd: "t2edeck", desc: "Manage the eShop deck (add/remove/price/clear).", usage: "mod t2edeck [action]" },
-      { cmd: "eshop deck approve", desc: "Approve a pending deck listing.", usage: "mod eshop deck approve <id>" },
-      { cmd: "eshop deck reject", desc: "Reject a pending deck listing.", usage: "mod eshop deck reject <id>" },
-      { cmd: "eshop deck pending", desc: "View decks awaiting approval.", usage: "mod eshop deck pending" },
-      { cmd: "setprice edeck", desc: "Set an eShop slot price.", usage: "mod setprice edeck <slot> <price>" },
-      { cmd: "spawnset", desc: "Set per-bot spawn interval (or reset).", usage: "mod spawnset <minutes> | reset" },
-      { cmd: "spawninfo", desc: "View current spawn configuration + timer.", usage: "mod spawninfo" },
-      { cmd: "cards on", desc: "Enable card spawns for this group.", usage: "mod cards on" },
-      { cmd: "cards off", desc: "Disable card spawns for this group.", usage: "mod cards off" },
-      { cmd: "cardmod", desc: "Manage card moderators.", usage: "mod cardmod <add/del/list> @user" },
+      { cmd: "spawn", usage: "spawn <id|name> [| tier]", desc: "Force-spawn a card by ID or fuzzy name." },
+      { cmd: "espawn", usage: "espawn <id|name>", desc: "Force-spawn an event (E-tier) card." },
+      { cmd: "einfo", usage: "einfo <id|name>", desc: "Inspect an event card's details." },
+      { cmd: "event", usage: "event <start|stop|status>", desc: "Control the token event.", eg: "event start" },
+      { cmd: "cards", usage: "cards <on|off>", desc: "Toggle card spawns for this group." },
+      { cmd: "t2edeck", usage: "t2edeck <add|remove|price|clear>", desc: "Manage the eShop deck.", eg: "t2edeck add <slot> <cardId> <price>" },
+      { cmd: "eshop deck", usage: "eshop deck <pending|approve|reject>", desc: "Moderate pending deck listings.", eg: "eshop deck approve <id>" },
+      { cmd: "setprice", usage: "setprice edeck <slot> <price>", desc: "Set an eShop slot price." },
+      { cmd: "spawnset", usage: "spawnset <minutes|reset|tier ...>", desc: "Spawn interval + tier weights." },
+      { cmd: "spawninfo", usage: "spawninfo", desc: "Current spawn configuration + timer." },
+      { cmd: "reloadcards", usage: "reloadcards", desc: "Reload cards_data.json without a restart." },
+      { cmd: "setmarketprice", usage: "setmarketprice <tier> <amount>", desc: "Card market reference prices." },
+      { cmd: "rc", usage: "rc @user <card> [tier]", desc: "Force-remove a player's card." },
+      { cmd: "erc", usage: "erc @user <eventcard>", desc: "Force-remove a player's event card." },
+      { cmd: "trc", usage: "trc @user <tokens>", desc: "Remove event tokens from a player." },
+      { cmd: "ci", usage: "ci <card>", desc: "Look up who holds a card." },
+      { cmd: "cardmod", usage: "cardmod <add|del|list> @user", desc: "Manage card mods (owner/global only)." },
+    ],
+  },
+
+  TESTERS: {
+    name: "Testers & Issues",
+    emoji: "🧪",
+    tier: "rpg",
+    commands: [
+      { cmd: "bug", usage: "bug <text>", desc: "Submit a bug report ([cat:sev] prefix optional).", eg: "bug [bug:high] PvP initiative is wrong" },
+      { cmd: "issues", usage: "issues [count] [status]", desc: "View tester issues (alias: issue)." },
+      { cmd: "organizeissues", usage: "organizeissues", desc: "Send all open issues to Groq for cleanup." },
+      { cmd: "editissue", usage: "editissue <id> [cat:sev]", desc: "Edit an issue's category/severity." },
+      { cmd: "deleteissue", usage: "deleteissue <id>", desc: "Permanently delete one issue." },
+      { cmd: "clearissues", usage: "clearissues", desc: "Delete ALL collected issues." },
+      { cmd: "addgtester", usage: "addgtester @user", desc: "Promote a Game Tester." },
+      { cmd: "delgtester", usage: "delgtester @user", desc: "Remove a Game Tester." },
+      { cmd: "listtesters", usage: "listtesters", desc: "List current Game Testers." },
+      { cmd: "testmode", usage: "testmode <on|off|status>", desc: "RPG maintenance lock (testers + mods bypass)." },
+      { cmd: "testgc", usage: "testgc <add|remove|list>", desc: "Manage tester GC list (bypasses the lock)." },
+    ],
+  },
+
+  MANAGEMENT: {
+    name: "Management",
+    emoji: "🛡️",
+    tier: "gmod",
+    commands: [
+      { cmd: "addmod", usage: "addmod @user", desc: "Add a global bot moderator." },
+      { cmd: "delmod", usage: "delmod @user", desc: "Remove a global moderator." },
+      { cmd: "addrpgmod", usage: "addrpgmod @user", desc: "Add an RPG mod (player tools tier)." },
+      { cmd: "delrpgmod", usage: "delrpgmod @user", desc: "Remove an RPG mod." },
+      { cmd: "addcardsmod", usage: "addcardsmod @user", desc: "Add a card mod (cards tier)." },
+      { cmd: "delcardsmod", usage: "delcardsmod @user", desc: "Remove a card mod." },
+      { cmd: "mods", usage: "mods", desc: "List global mods." },
+      { cmd: "listmods", usage: "listmods", desc: "List every mod tier." },
+      { cmd: "reloadmods", usage: "reloadmods", desc: "Re-sync mod sets from DB." },
+      { cmd: "reloaduser", usage: "reloaduser @user", desc: "Hard-reload a user from DB (after manual edits)." },
+      { cmd: "pardon", usage: "pardon @user", desc: "Unified unban + unhardban + unblock." },
+      { cmd: "lookupban", usage: "lookupban @user", desc: "Which ban/block list is a target on." },
+      { cmd: "nuke", usage: "nuke", desc: "Remove all non-protected members. DESTRUCTIVE." },
+      { cmd: "guild purge", usage: "guild purge", desc: "Wipe ALL guild data. DESTRUCTIVE." },
     ],
   },
 
@@ -103,60 +145,138 @@ const MOD_MENU = {
     emoji: "⚙️",
     tier: "gmod",
     commands: [
-      { cmd: "updateall", desc: "Broadcast a message to all groups.", usage: "mod updateall [message]" },
-      { cmd: "setpack", desc: "Set the default sticker pack name.", usage: "mod setpack <name>" },
-      { cmd: "setauthor", desc: "Set the sticker author metadata.", usage: "mod setauthor <name>" },
-      { cmd: "instances", desc: "Cross-instance health dashboard (mods).", usage: "mod instances" },
-      { cmd: "debug", desc: "Dump live internals for diagnosis.", usage: "mod debug" },
-      { cmd: "opscheck", desc: "Verify deploy pipeline: commit, uptime, host.", usage: "mod opscheck" },
-      { cmd: "abyss admin", desc: "Abyss admin: reset/clear/setfloor/purge/inspect.", usage: "mod abyss admin [action]" },
-      { cmd: "raid admin", desc: "Raid admin: spawn/end/sethp/revive/kick/skip/purge.", usage: "mod raid admin [action]" },
-      { cmd: "bounty admin", desc: "Bounty admin: cancel/purge/expire.", usage: "mod bounty admin [action]" },
-      { cmd: "war admin", desc: "Guild war admin: spawn/resolve/champion/purge/sync.", usage: "mod war admin [action]" },
-      { cmd: "rank toggleperm", desc: "Grant rank toggle permission to a tier.", usage: "mod rank toggleperm <level>" },
-      { cmd: "rank togglelock", desc: "Hard-lock rank toggling for everyone.", usage: "mod rank togglelock on|off" },
+      { cmd: "updateall", usage: "updateall [message]", desc: "Broadcast to all groups (numbered GC picker)." },
+      { cmd: "mode updates", usage: "mode updates <on|off|all>", desc: "Updates feed: per-chat toggle, all = broadcast." },
+      { cmd: "setpack", usage: "setpack <name>", desc: "Set the default sticker pack name." },
+      { cmd: "setauthor", usage: "setauthor <name>", desc: "Set the sticker author metadata." },
+      { cmd: "instances", usage: "instances", desc: "Cross-instance health dashboard." },
+      { cmd: "debug", usage: "debug", desc: "Dump live connection/queue internals." },
+      { cmd: "opscheck", usage: "opscheck", desc: "Verify deploy pipeline: commit, uptime, host." },
+      { cmd: "category", usage: "category <enable|disable> <cat>", desc: "Toggle command categories (categories = list)." },
+      { cmd: "reload", usage: "reload", desc: "Reload bot caches + both Go image servers." },
+      { cmd: "abyss admin", usage: "abyss admin <reset|clear|setfloor|purge|inspect>", desc: "Abyss admin actions." },
+      { cmd: "raid admin", usage: "raid admin <spawn|end|sethp|revive|kick|skip|purge>", desc: "Raid admin actions." },
+      { cmd: "bounty admin", usage: "bounty admin <cancel|purge|expire>", desc: "Bounty admin actions." },
+      { cmd: "war admin", usage: "war admin <spawn|resolve|champion|purge|sync|...>", desc: "Guild war admin (owner/global only)." },
     ],
   },
 
-  ADMIN: {
-    name: "Admin",
-    emoji: "⚔️",
+  MODERATION: {
+    name: "Moderation",
+    emoji: "🧨",
     tier: "any",
     commands: [
-      { cmd: "warn", desc: "Warn a member - 5 warnings = auto-kick.", usage: "mod warn @user [reason]" },
-      { cmd: "resetwarn", desc: "Clear a user's warnings.", usage: "mod resetwarn @user" },
-      { cmd: "mute", desc: "Mute a user for a duration.", usage: "mod mute @user <time>" },
-      { cmd: "unmute", desc: "Unmute immediately.", usage: "mod unmute @user" },
-      { cmd: "kick", desc: "Remove a user from the group.", usage: "mod kick @user" },
-      { cmd: "block", desc: "Block a user from bot commands.", usage: "mod block @user" },
-      { cmd: "unblock", desc: "Unblock a user.", usage: "mod unblock @user" },
-      { cmd: "glock", desc: "Lock chat (or rank-lock with 'glock rank <level>').", usage: "mod glock | glock rank <level> | glock open" },
-      { cmd: "gunlock", desc: "Unlock the group for everyone.", usage: "mod gunlock" },
-      { cmd: "pin", desc: "Pin a message (reply to it).", usage: "mod pin" },
+      { cmd: "warn", usage: "warn @user [reason]", desc: "Warn a member - 5 warnings = auto-kick." },
+      { cmd: "resetwarn", usage: "resetwarn @user", desc: "Clear a user's warnings." },
+      { cmd: "warnings", usage: "warnings @user", desc: "View a user's warnings." },
+      { cmd: "mute", usage: "mute @user <10s|5m|2h|1d>", desc: "Timed mute, auto-deletes their messages." },
+      { cmd: "unmute", usage: "unmute @user", desc: "Unmute immediately." },
+      { cmd: "kick", usage: "kick @user", desc: "Remove a user from the group." },
+      { cmd: "block", usage: "block @user", desc: "Block a user from bot commands." },
+      { cmd: "unblock", usage: "unblock @user", desc: "Unblock a user." },
+      { cmd: "blocklist", usage: "blocklist", desc: "Show blocked users." },
+      { cmd: "ban", usage: "ban @user", desc: "Perma-ban a user from the bot (all mods)." },
+      { cmd: "unban", usage: "unban @user", desc: "Lift a bot ban." },
+      { cmd: "banlist", usage: "banlist", desc: "Show all banned users." },
+      { cmd: "glock", usage: "glock [rank <N>|open]", desc: "Lock chat, or rank-lock it." },
+      { cmd: "gunlock", usage: "gunlock", desc: "Unlock the group for everyone." },
+      { cmd: "pin", usage: "pin", desc: "Pin a message (reply to it)." },
+      { cmd: "promote", usage: "promote @user", desc: "Promote to WhatsApp group admin." },
+      { cmd: "demote", usage: "demote @user", desc: "Demote a WhatsApp group admin." },
+    ],
+  },
+
+  GROUP: {
+    name: "Group Tools",
+    emoji: "👥",
+    tier: "any",
+    commands: [
+      { cmd: "on", usage: "on", desc: "Enable the bot in this chat." },
+      { cmd: "off", usage: "off", desc: "Disable the bot in this chat." },
+      { cmd: "antilink", usage: "antilink [on|off|action <delete|warn|kick>]", desc: "Link protection." },
+      { cmd: "antibot", usage: "antibot [on|off|action|mode]", desc: "Bot detection." },
+      { cmd: "antispam", usage: "antispam [on|off]", desc: "Spam protection." },
+      { cmd: "announce", usage: "announce <on|off>", desc: "Promote/demote announcements." },
+      { cmd: "news", usage: "news <on|off>", desc: "Anime news feed toggle." },
+      { cmd: "gstatus", usage: "gstatus [lock on|off|delete|caption]", desc: "Group status posts." },
+      { cmd: "welcome", usage: "welcome <on|off>", desc: "Toggle welcome messages." },
+      { cmd: "setwelcome", usage: "setwelcome <text>", desc: "Set the welcome message." },
+      { cmd: "bye", usage: "bye <on|off>", desc: "Toggle goodbye messages." },
+      { cmd: "setbye", usage: "setbye <text>", desc: "Set the goodbye message." },
+      { cmd: "greetings", usage: "greetings", desc: "Greeting status view." },
+      { cmd: "rank", usage: "rank <on|off|setup>", desc: "Toggle the rank system / init the ladder." },
+      { cmd: "rank toggleperm", usage: "rank toggleperm <1-5|clear>", desc: "Configure who may toggle ranks." },
+      { cmd: "rank togglelock", usage: "rank togglelock <on|off>", desc: "Hard-lock rank toggling for everyone." },
+      { cmd: "rank add", usage: "rank add <lvl> <icon> <name> | remove <lvl>", desc: "Edit the rank ladder." },
+      { cmd: "set rank", usage: "set rank @user <lvl>", desc: "Assign a group rank (unrank to remove)." },
+      { cmd: "title", usage: "title <set|remove> @user <title>", desc: "Custom titles." },
+      { cmd: "rank allow", usage: "rank allow|deny <lvl> <cmd>", desc: "Per-tier command permissions." },
+    ],
+  },
+
+  OWNER: {
+    name: "Owner",
+    emoji: "👑",
+    tier: "owner",
+    commands: [
+      { cmd: "hardban", usage: "hardban @user", desc: "Owner perma-ban that mods can't undo." },
+      { cmd: "unhardban", usage: "unhardban @user", desc: "Reverse a hard-ban." },
+      { cmd: "hardmute", usage: "hardmute @user", desc: "Global no-expiry mute." },
+      { cmd: "unhardmute", usage: "unhardmute @user", desc: "Reverse a hard-mute." },
+      { cmd: "endauction", usage: "endauction", desc: "Force-close the card auction early." },
+      { cmd: "setauctiongc", usage: "setauctiongc <gc_id|here>", desc: "Designate the auction group." },
     ],
   },
 };
 
+// Flat lookup: cmd key (lowercased) -> entry. Built once.
+const LOOKUP = {};
+for (const [key, cat] of Object.entries(MOD_MENU)) {
+  for (const c of cat.commands) {
+    c.category = key;
+    LOOKUP[c.cmd.toLowerCase()] = c;
+  }
+}
+
+// Resolve a standalone (non-console) command from partial args.
+// Tries 3-word, then 2-word, then 1-word prefixes - so
+// ["eshop","deck","approve","5"] and ["rank","toggleperm"] both hit.
+// Returns the entry or null. Used by the mod terminal to redirect
+// `.j mod spawn ...` style runs to their real standalone form.
+function findStandalone(args) {
+  if (!args || args.length === 0) return null;
+  const clean = args.map((a) => String(a).toLowerCase());
+  for (let n = Math.min(3, clean.length); n >= 1; n--) {
+    const key = clean.slice(0, n).join(" ");
+    const hit = LOOKUP[key];
+    if (hit && !hit.console) return hit;
+  }
+  return null;
+}
+
 // 💡 MOD TIPS: one randomly chosen each time the terminal opens.
-// Covers GM tooling, cards, system admin + group moderation -
-// not just RPG (parity with the regular menu's rotating tips).
+// Every tip shows the REAL invocation - same accuracy contract
+// as the menu itself.
 const MOD_TIPS = [
   `Run \`{p} mod inspect\` before \`{p} mod resetplayer\` - resets wipe stats AND skills, no undo.`,
   `\`{p} mod unstick\` safely clears stuck combat when a player can't act.`,
   `\`{p} mod godmode\` is sandbox-only - never leave it on during live fights.`,
-  `After every code deploy, \`{p} mod opscheck\` proves the pipeline end-to-end.`,
-  `\`{p} mod instances\` shows all bot siblings; \`{p} bots\` is the player-friendly version.`,
-  `\`{p} mod spawnset reset\` returns card spawn timing to defaults.`,
-  `Check \`{p} mod eshop deck pending\` regularly - creators wait on approvals.`,
-  `Stop a token event with \`{p} mod event stop\` before starting a new one.`,
+  `After every code deploy, \`{p} opscheck\` proves the pipeline end-to-end.`,
+  `\`{p} instances\` shows all bot siblings; \`{p} bots\` is the player-friendly version.`,
+  `\`{p} spawnset reset\` returns card spawn timing to defaults.`,
+  `Check \`{p} eshop deck pending\` regularly - creators wait on approvals.`,
+  `Stop a token event with \`{p} event stop\` before starting a new one.`,
   `\`{p} mod giveitem\` and \`{p} mod giverune\` accept partial names (fuzzy match).`,
-  `\`{p} mod debug\` dumps live internals - first stop when something feels off.`,
-  `After manual DB edits, \`{p} mod reloaduser @user\` flushes the cache.`,
+  `\`{p} debug\` dumps live internals - first stop when something feels off.`,
+  `After manual DB edits, \`{p} reloaduser @user\` flushes the cache.`,
   `Target anyone with @mention, a reply, or omit it to target yourself.`,
-  `\`{p} mod <command>\` (no extra args) shows that command's full usage guide.`,
+  `RPG tools run under \`{p} mod <command>\`; cards, system and group tools run standalone - each entry shows its real form.`,
   `Group commands (warn/mute/kick) also need the bot to be a WhatsApp group admin.`,
-  `\`{p} mod spawn\` accepts card IDs or fuzzy names - partial works.`,
-  `Banned users list: \`{p} mod banlist\` - audit it now and then.`,
+  `\`{p} spawn\` accepts card IDs or fuzzy names - partial works.`,
+  `Audit \`{p} banlist\` and \`{p} blocklist\` now and then.`,
+  `Bug reports: \`{p} bug\` to file, \`{p} issues\` to review, \`{p} organizeissues\` to tidy with Groq.`,
+  `\`{p} testmode on\` locks the RPG for everyone except testers and mods.`,
+  `\`{p} mod <command>\` with no extra args explains that command.`,
 ];
 
-module.exports = { MOD_MENU, MOD_TIPS };
+module.exports = { MOD_MENU, MOD_TIPS, findStandalone };

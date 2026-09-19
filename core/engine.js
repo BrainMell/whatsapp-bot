@@ -5585,11 +5585,14 @@ ${targetCategory}`;
           const [key, cat] = catMatch;
           let catMsg =
             GET_BANNER(`${cat.emoji} ${cat.name.toUpperCase()} - MOD`) + `\n\n`;
+          // Each entry shows its REAL invocation - most mod commands run
+          // standalone (.j spawn, .j updateall, .j warn...); only the GM
+          // console tools live under `.j mod <sub>`.
           cat.commands.forEach((c) => {
-            catMsg += `➤ \`${prefix} mod ${c.cmd}\` - ${c.desc}\n`;
+            catMsg += `➤ \`${prefix} ${c.usage}\`\n`;
           });
+          catMsg += `\n➤ Type \`${prefix} mod <command>\` for details.`;
           catMsg += `\n➤ Type \`${prefix} mod\` to go back.`;
-          catMsg += `\n\n💡 *Tip:* ${tip}`;
           await sendMenuWithBanner(sock, chatId, catMsg);
           return true;
         }
@@ -5607,9 +5610,9 @@ ${targetCategory}`;
           if (isBareLookup && !isModclassList && visible.some(([k]) => k === exact.catKey)) {
             const cat = MOD_MENU[exact.catKey];
             let explainMsg = GET_BANNER(`${cat.emoji} ${botConfig.getBotName().toUpperCase()}`) + `\n\n`;
-            explainMsg += `*Command:* \`${prefix} mod ${exact.cmd}\`\n\n`;
+            explainMsg += `*Command:* \`${prefix} ${exact.usage}\`\n\n`;
             explainMsg += `*Description:*\n${exact.desc}\n\n`;
-            explainMsg += `*Usage:*\n\`${prefix} ${exact.usage}\`\n\n`;
+            if (exact.eg) explainMsg += `*Example:*\n\`${prefix} ${exact.eg}\`\n\n`;
             explainMsg += `*Category:*\n${cat.name}`;
             explainMsg += `\n\n💡 *Tip:* ${tip}`;
             await sendMenuWithBanner(sock, chatId, explainMsg);
@@ -8838,6 +8841,19 @@ _💡 Reply with another number from your search list!_`.trim();
                       const rendered = await sendModMenu(sock, chatId, senderJid, modArgs, isOwner);
                       if (rendered) {
                         return;
+                      }
+
+                      // Standalone commands (spawn, updateall, warn, ...) don't
+                      // live under "mod". If the first args name one, redirect
+                      // to its real form instead of the console's generic
+                      // unknown-command help. Runs before the console tier
+                      // check so card mods get card-tool redirects too.
+                      const { findStandalone } = require("./utils/modMenuData");
+                      const standalone = findStandalone(modArgs);
+                      if (standalone) {
+                        return reply(BOT_MARKER +
+                          `❌ \`${botConfig.getPrefix()} ${standalone.cmd}\` runs on its own, not under \`mod\`.\n\n` +
+                          `Real form: \`${botConfig.getPrefix()} ${standalone.usage}\``);
                       }
 
                       // Subcommand run - route to admin console (unchanged behavior)
@@ -13481,7 +13497,12 @@ Usage: ${newUsage}/5${warningText}`;
                   }
 
                   // .j issues [n] [status] - View collected tester issues
-                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} issues`)) {
+                  // ".j issue" accepted as alias (2026-09-19).
+                  if (
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} issues`) ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} issue` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} issue `)
+                  ) {
                     const isTester = isGameTester(senderJid) || isOwner || isGlobalMod(senderJid) || isRpgMod(senderJid);
                     const inTesterGc = await testerSystem.isTesterGc(chatId);
                     if (!isTester && !inTesterGc) {
