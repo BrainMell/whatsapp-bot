@@ -162,8 +162,16 @@ async function saveUser(userId) {
     }
 
     try {
+        // 💡 LOAN-BUG FIX 2026-09-20: after a cross-format heal (LID incoming,
+        // account stored under phone, or vice versa) the cache holds the doc
+        // under BOTH keys, but the account's CANONICAL key is data.userId -
+        // the key the User collection actually knows. Upserting under the
+        // resolved (incoming-format) key birthed a SECOND account document
+        // for the same player, splitting their wallet across two docs
+        // depending on which bot/prefix they typed at.
+        const canonicalId = (typeof data.userId === 'string' && data.userId) ? data.userId : resolvedId;
         await User.findOneAndUpdate(
-            { userId: resolvedId },
+            { userId: canonicalId },
             { $set: data },
             { upsert: true, returnDocument: 'after' }
         );
@@ -180,10 +188,22 @@ async function saveUser(userId) {
 async function reloadUserFromDB(userId) {
     const resolvedId = resolveJidHelper(userId);
     try {
-        const dbUser = await User.findOne({ userId: resolvedId });
+        // 💡 LOAN-BUG FIX 2026-09-20: single-key lookup missed users stored
+        // under the OTHER jid format (lid vs phone). Use the shared variant
+        // lookup (incl. LidMapping-resolved numbers) - see jidLookupVariants.
+        let dbUser = null;
+        for (const variant of jidLookupVariants(userId)) {
+            dbUser = await User.findOne({ userId: variant });
+            if (dbUser) break;
+        }
         if (!dbUser) return false;
         const userData = dbUser.toObject();
         economyData.set(resolvedId, userData);
+        // 💡 Also alias under the account's own DB key so later lookups in
+        // either format hit the same cached object (same as syncUserFromDB).
+        if (userData.userId && userData.userId !== resolvedId) {
+            economyData.set(userData.userId, userData);
+        }
         console.log(`🔄 Reloaded user ${resolvedId} from DB (statPoints: ${userData?.progression?.statPoints})`);
         return true;
     } catch (err) {
@@ -2090,6 +2110,41 @@ function getPunishmentStatus(userId) {
   return { blocked: false };
 }
 
+// 💡 LOAN-BUG FIX 2026-09-20 (ROOT CAUSE of "could not credit your wallet"):
+// the DB-heal lookups only swapped the JID DOMAIN (@lid <-> @s.whatsapp.net)
+// and never consulted the LidMapping for the OTHER NUMBER. A player
+// registered as `2348012345678@s.whatsapp.net` whose messages arrive as
+// `105712667648066@lid` was looked up as: <lid>@lid, <lid>@s.whatsapp.net -
+// but NEVER as the mapped phone `2348012345678@s.whatsapp.net`. The heal
+// missed, getUser stayed null, addMoney returned false - the loan/wallet
+// "registration or JID issue". This builds every sensible variant,
+// INCLUDING the LidMapping-resolved ones, in priority order.
+function jidLookupVariants(userId) {
+  const variants = [];
+  const push = (v) => { if (v && !variants.includes(v)) variants.push(v); };
+  let resolvedId = userId;
+  try { resolvedId = resolveJidHelper(userId) || userId; } catch (e) { resolvedId = userId; }
+  push(resolvedId);
+  push(userId);
+  const lidResolver = (() => { try { return require('../utils/lidResolver'); } catch (e) { return null; } })();
+  const expand = (jid) => {
+    if (typeof jid !== 'string' || !jid.includes('@')) return;
+    const num = jid.split('@')[0].split(':')[0];
+    if (!num) return;
+    push(`${num}@s.whatsapp.net`);
+    push(`${num}@lid`);
+    if (lidResolver) {
+      try {
+        if (lidResolver.lidCache.has(num)) push(`${lidResolver.lidCache.get(num)}@s.whatsapp.net`);
+        if (lidResolver.phoneCache.has(num)) push(`${lidResolver.phoneCache.get(num)}@lid`);
+      } catch (e) { /* cache unavailable - variants above still apply */ }
+    }
+  };
+  expand(userId);
+  expand(resolvedId);
+  return variants;
+}
+
 async function syncUserFromDB(userId) {
   const resolvedId = resolveJidHelper(userId);
   const cachedUser = economyData.get(resolvedId);
@@ -2098,22 +2153,13 @@ async function syncUserFromDB(userId) {
   }
 
   try {
-    // 💡 CRITICAL FIX: query MongoDB with BOTH the resolved JID and the
-    // original JID. All users in MongoDB are stored as @lid JIDs, but
-    // resolveJidHelper might return a @s.whatsapp.net JID (or vice versa).
-    // Without this, syncUserFromDB can't find the user → they stay
-    // unregistered in cache → every command fails.
-    let user = await User.findOne({ userId: resolvedId }).lean();
-    if (!user && typeof userId === 'string' && userId !== resolvedId) {
-      user = await User.findOne({ userId: userId }).lean();
-    }
-    // 💡 Also try @lid ↔ @s.whatsapp.net swap
-    if (!user && typeof resolvedId === 'string') {
-      if (resolvedId.endsWith('@lid')) {
-        user = await User.findOne({ userId: resolvedId.replace('@lid', '@s.whatsapp.net') }).lean();
-      } else if (resolvedId.endsWith('@s.whatsapp.net')) {
-        user = await User.findOne({ userId: resolvedId.replace('@s.whatsapp.net', '@lid') }).lean();
-      }
+    // 💡 LOAN-BUG FIX 2026-09-20: query the User collection under EVERY
+    // jid variant (resolved, raw, domain-swapped, LidMapping-resolved).
+    // The old queries missed users stored under the mapped number.
+    let user = null;
+    for (const variant of jidLookupVariants(userId)) {
+      user = await User.findOne({ userId: variant }).lean();
+      if (user) break;
     }
     if (user) {
       if (user.inventory && user.inventory instanceof Map) {

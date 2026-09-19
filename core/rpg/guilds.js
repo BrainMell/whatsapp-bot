@@ -208,9 +208,12 @@ async function syncGuildSystem() {
 }
 
 // NEW: Sync specific guild
+// 💡 LOAN-BUG FIX 2026-09-20: now returns true/false so money-critical
+// callers (guild loan borrow/repay) can detect a FAILED persist and claw
+// the transaction back instead of silently desyncing memory vs MongoDB.
 async function syncGuild(guildName) {
     const g = globalGuildData.guilds[guildName];
-    if (!g) return;
+    if (!g) return false;
 
     try {
         await GuildModel.updateOne(
@@ -247,8 +250,10 @@ async function syncGuild(guildName) {
             },
             { upsert: true }
         );
+        return true;
     } catch (err) {
         console.error(`Error syncing guild ${guildName}:`, err.message);
+        return false;
     }
 }
 
@@ -1050,8 +1055,56 @@ ${message || 'Guild members, gather!'}
 //========================================
 
 //==================this part handles guild points and activity rewards==================
+// 💡 LOAN-BUG FIX 2026-09-20: this was a RAW exact-key lookup - the only
+// member lookup in the guild system with zero JID tolerance (getGuildMember
+// and isGuildOwner both loose-match). A user whose membership is keyed by
+// phone JID but whose incoming messages arrive as LID (or with a device
+// suffix) resolved to "not in a guild" / wrong-bank failures even though
+// the guild system knows them. Exact key stays first; canonical resolver
+// and bare-number fallbacks follow the same convention as getGuildMember.
 function getUserGuild(userJid) {
-  return globalGuildData.memberGuilds[userJid];
+  if (!userJid) return undefined;
+  let guildName = globalGuildData.memberGuilds[userJid];
+  if (guildName) return guildName;
+  // 1. economy's canonical resolver (lidCache/phoneCache + format swap)
+  try {
+    const resolved = economy.resolveJid(userJid);
+    if (resolved && resolved !== userJid) {
+      guildName = globalGuildData.memberGuilds[resolved];
+      if (guildName) return guildName;
+    }
+  } catch (e) { /* resolver unavailable - fall through */ }
+  // 2. bare-number loose match (device-suffix / format tolerance)
+  const bare = String(userJid).split('@')[0].split(':')[0];
+  if (bare) {
+    for (const [jid, gName] of Object.entries(globalGuildData.memberGuilds)) {
+      if (jid.split('@')[0].split(':')[0] === bare) return gName;
+    }
+  }
+  return undefined;
+}
+
+// 💡 LOAN-BUG FIX 2026-09-20: Joker and Subaru are separate processes, each
+// with its own guild cache loaded at boot - and every syncGuild writes the
+// FULL document, so the instances clobber each other's bank balance. A loan
+// computed from stale memory either refuses ("max loan = 0") against money
+// the guild actually has, or lends against money that is already gone.
+// refreshGuildMoney re-reads the guild document from MongoDB (the shared
+// source of truth) and merges the MONEY fields into the in-memory object
+// right before anything money-critical runs. Read-only on miss/error.
+async function refreshGuildMoney(guildName) {
+  const guild = globalGuildData.guilds[guildName];
+  if (!guild) return null;
+  try {
+    const doc = await GuildModel.findOne({ guildId: guildName }).lean();
+    if (doc) {
+      if (typeof doc.balance === 'number') guild.balance = doc.balance;
+      if (Array.isArray(doc.loans)) guild.loans = doc.loans;
+    }
+  } catch (err) {
+    console.error(`[Guild] refreshGuildMoney(${guildName}) DB read failed, using cached money fields:`, err.message);
+  }
+  return guild;
 }
 
 // 💡 OWNER RULE 2026-09-11: character cards show "[guild title] of [guild name]".
@@ -1461,6 +1514,7 @@ module.exports = {
   getCardGuildInfo,
   getGuild,
   getGuildMember,
+  refreshGuildMoney,
   isGuildOwner,
   isGuildAdmin,
 

@@ -7885,9 +7885,10 @@ _Repay with `.g guild loan repay <amount>`_
 
 *Total owed: 350,000 Zeni*
 
-_Repay with `.g guild loan repay <amount>`_
+Repay: `.g guild loan repay <amount>`
+_7-day term, then 10% of earnings auto-deducts._
 ```
-- **Notes:** overdue branch replaces `Xd left` with `⚠️ OVERDUE`.
+- **Notes:** overdue branch replaces `Xd left` with `⚠️ OVERDUE`. 2026-09-20 rework: the no-arg form now RESPONDS (old gate required a trailing space and silently ignored bare `.g guild loan`) and leads with the bank balance + max loan, healed from MongoDB.
 
 ### UI-E4-156 - Loan repay: usage / no loans
 - **Loc:** `core/engine.js:16938-16944`
@@ -7932,10 +7933,11 @@ no-loans variant:
 ```
 ❌ Usage: `.g guild loan <amount>` (or `list` / `repay <amount>`)
 ```
-over-max:
+over-max (now shows the DB-fresh bank total so the number is auditable):
 ```
-❌ Max loan is 10% of guild bank = ${maxLoan} Zeni.
-_Requested: ${amount} Zeni_
+❌ Max loan is 10% of the guild bank.
+🏦 *${userGuild}* bank: ${bankBalance} Zeni → max loan ${maxLoan} Zeni.
+_Requested: ${amount}_
 ```
 too much existing debt:
 ```
@@ -7967,20 +7969,22 @@ recruit variant:
 ```
 - **Notes:** -
 
-### UI-E4-160 - Guild loan: credit-failure rollback
-- **Loc:** `core/engine.js:17017-17022`
-- **Trigger:** wallet credit fails after loan recorded
+### UI-E4-160 - Guild loan: credit-failure / unresolvable account
+- **Loc:** `core/engine.js` (guild loan block, 2026-09-20 rework)
+- **Trigger:** borrower account unresolvable BEFORE any money moves (pre-gate), or addMoney false
 - **Type:** error
 - **Banner:** none
 - **Template:**
 ```
-❌ Loan failed: could not credit your wallet (registration or JID issue). Nothing was deducted from the guild bank.
+❌ Loan failed: your account could not be credited because this bot can't find your registration (JID: `${senderJid}`).
+_Nothing was borrowed and the guild bank was not touched. Try the bot you registered with, or ask a mod to check your account._
 ```
-- **Example render:**
+addMoney-false variant:
 ```
-❌ Loan failed: could not credit your wallet (registration or JID issue). Nothing was deducted from the guild bank.
+❌ Loan failed: could not credit your wallet. Nothing was borrowed and nothing was deducted from the guild bank.
+_If this keeps happening, ask a mod to check your account registration._
 ```
-- **Notes:** rollback notice for the 2026-08-31 zeni-destruction fix.
+- **Notes:** 2026-09-20 rework - root cause was the DB-heal lookup never querying the LidMapping-resolved phone number (domain swap only). Borrower is now healed via all JID variants BEFORE any mutation, and a [GuildLoan] console diagnostic names the JID when refusal happens.
 
 ### UI-E4-161 - Guild loan success
 - **Loc:** `core/engine.js:17024`
