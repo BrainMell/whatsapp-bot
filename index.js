@@ -720,12 +720,14 @@ async function boot() {
             try {
               if (!user) continue;
               // BUG 2 FIX: skip users in active combat
-              if (guildAdventureRef && typeof guildAdventureRef.getGameState === 'function') {
-                // Check both solo + group session keys
-                const soloState = guildAdventureRef.getGameState(userId, userId);
-                if (soloState?.inCombat) { skipped++; continue; }
-                // Also check if they're in any group combat - scan is expensive
-                // so we rely on the solo check (most combat is solo for Abyss/dungeon)
+              // 💡 CROSS-BOT FIX 2026-09-20: battle state is now bot-scoped
+              // (Joker battles are invisible to Subaru and vice versa), so
+              // the regen pass uses an explicit any-bot check instead of a
+              // scoped lookup - a player fighting on EITHER bot must not be
+              // passively healed mid-battle.
+              if (guildAdventureRef && typeof guildAdventureRef.isUserInAnyCombat === 'function') {
+                if (guildAdventureRef.isUserInAnyCombat(userId)) { skipped++; continue; }
+                // Group combat covered by the same scan (solo + group states)
               }
 
               // BUG 1 FIX: resolve class properly. user.class is a STRING.

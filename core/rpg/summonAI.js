@@ -184,7 +184,11 @@ async function performSummonAction(sock, summonEntity, sessionKey) {
   // Lazy-require guildAdventure to avoid circular dependency
   // (guildAdventure requires summonAI at top, summonAI needs gameStates from guildAdventure)
   const guildAdventure = require('./guildAdventure');
-  const state = guildAdventure.gameStates?.get(sessionKey);
+  // 💡 CROSS-BOT FIX 2026-09-20: battle keys are bot-scoped now; use the
+  // safe accessor so a raw or scoped session key both resolve correctly.
+  const state = guildAdventure.getScopedState
+    ? guildAdventure.getScopedState(sessionKey)
+    : guildAdventure.gameStates?.get(sessionKey);
   if (!state) {
     console.error('[SummonAI] No game state for session:', sessionKey);
     return;

@@ -200,21 +200,71 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // 💡 HELPER: parse admin args. When there's an @mention, it's the first
     // arg. When there's no mention (self-target), the first arg IS the value.
-    // This function strips any mention-like args and returns {target, remaining}.
-    function parseAdminArgs(getMentionOrReply, m, senderJid, args) {
+    // 💡 NUMERIC-ARG FIX 2026-09-20 (owner: commands only work when the number
+    // is clickable like a contact): the old filter SILENTLY DROPPED every
+    // 10+ digit argument, which broke real use in both directions:
+    //   • ".j admin givezeni 251453323092189 200" (bare number = target):
+    //     the number was swallowed, remaining=[200], and the command paid
+    //     the MOD 200 - only a clickable @mention ever reached the player.
+    //   • Large legitimate values ("setwallet 10000000000") were eaten and
+    //     the command answered with its usage line.
+    // New contract:
+    //   - @mention or reply -> target (unchanged).
+    //   - FIRST arg phone/JID-like AND more args follow -> TARGET attempt:
+    //     resolve through economy (LID/phone variants included). Found ->
+    //     that player; not found -> CLEAR error (never a silent self-give,
+    //     never a trillion-Zeni amount).
+    //   - A number in ANY OTHER position is a plain VALUE and is NEVER
+    //     stripped: "givezeni 1234567890" = self +1,234,567,890.
+    // Returns null (after sending the error) on an unresolvable target.
+    async function parseAdminArgs(getMentionOrReply, m, senderJid, args) {
+        const hasExplicitCtx = !!getMentionOrReply(m) ||
+            !!m?.message?.extendedTextMessage?.contextInfo?.participant;
         const target = resolveTargetJid(getMentionOrReply, m, senderJid);
-        // Filter out mention-like args:
-        // - Contains '@' (JID format: 251453323092189@lid or @s.whatsapp.net)
-        // - Bare phone numbers / LIDs (10+ consecutive digits, no @)
-        //   These were passing the filter and getting parsed as the amount,
-        //   causing "givezeni 251453323092189 200" to give 251 TRILLION Zeni.
-        const remaining = args.filter(a =>
-            !a.includes('@') &&
-            !/^\d{10,}$/.test(a) &&  // bare phone/LID (10+ digits, no @)
-            !/^\d{10,}@/.test(a)      // JID format (digits@...)
-        );
-        const isSelfTarget = target === senderJid && !getMentionOrReply(m);
+        const rest = args.slice();
+
+        const PHONE_LIKE = /^\+?\d{9,20}$/;     // bare phone / LID number
+        const JID_LIKE = /^\+?\d{9,20}@.+$/;    // full JID typed by hand
+
+        if (!hasExplicitCtx && rest.length >= 2) {
+            const first = rest[0];
+            if (PHONE_LIKE.test(first) || JID_LIKE.test(first)) {
+                const resolved = resolveNumberTarget(first);
+                if (resolved) {
+                    rest.shift();
+                    const remaining = rest.filter((a) => !a.includes('@'));
+                    return { target: resolved, remaining, isSelfTarget: false };
+                }
+                // They clearly meant to target that number - fail LOUDLY
+                // instead of silently paying/gifting themselves.
+                await sock.sendMessage(chatId, {
+                    text: BOT_MARKER +
+                        `❌ No registered player found for *${first}*.` +
+                        `\nUse an @mention, reply to one of their messages, or drop the number to target yourself.`
+                });
+                return null;
+            }
+        }
+
+        // Strip leftover mention tokens (@...) - keep every bare number.
+        const remaining = rest.filter((a) => !a.includes('@'));
+        const isSelfTarget = target === senderJid && !hasExplicitCtx;
         return { target, remaining, isSelfTarget };
+    }
+
+    // Resolve a bare phone/LID number to a registered player account.
+    // economy.getUser resolves LID↔phone variants internally, so probing
+    // both domain spellings is enough to find the canonical account.
+    function resolveNumberTarget(raw) {
+        const digits = String(raw).replace(/^\+/, '').split('@')[0].split(':')[0];
+        if (!/^\d{9,20}$/.test(digits)) return null;
+        for (const candidate of [`${digits}@s.whatsapp.net`, `${digits}@lid`]) {
+            try {
+                const u = economy.getUser(candidate);
+                if (u) return candidate;
+            } catch (e) { /* try next variant */ }
+        }
+        return null;
     }
 
     // No subcommand - show detailed help
@@ -366,7 +416,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── SET LEVEL ──────────────────────────────────────────────────────────
     if (sub === 'setlevel') {
-        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!_parsed) return;
+        const { target, remaining } = _parsed;
         const level = parseInt(remaining[0]);
         if (!level || level < 1 || level > 100) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin setlevel <@user> <1-100>\`` });
@@ -388,7 +440,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── SET STAT ───────────────────────────────────────────────────────────
     if (sub === 'setstat') {
-        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!_parsed) return;
+        const { target, remaining } = _parsed;
         const statName = (remaining[0] || '').toLowerCase();
         const value = parseInt(remaining[1]);
         const validStats = ['hp', 'atk', 'def', 'mag', 'spd', 'luck', 'crit'];
@@ -410,9 +464,11 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── SET WALLET ─────────────────────────────────────────────────────────
     if (sub === 'setwallet') {
-        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!_parsed) return;
+        const { target, remaining } = _parsed;
         const amount = parseInt(remaining[0]);
-        if (!target || isNaN(amount) || amount < 0) {
+        if (!target || !Number.isSafeInteger(amount) || amount < 0) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin setwallet <@user> <amount>\`` });
         }
         const user = economy.getUser(target);
@@ -430,7 +486,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
     // Auto-detects: if query matches a summon species → givesummon.
     // If query matches a rune type → giverune. Otherwise → giveitem.
     if (sub === 'give' || sub === 'additem') {
-        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!_parsed) return;
+        const { target, remaining } = _parsed;
         if (!target || remaining.length < 1) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin give <@user> <thing> [qty|level|tier]\`\n\nAuto-detects:\n  • Summon species (bat, slime, mushroom, ...) → gives summon\n  • Rune type (POWER, EFFICIENCY, FROST_CONVERSION, ...) → gives rune\n  • Otherwise → gives inventory item\n\nExamples:\n  \`${prefix} admin give @user bat 5\` (bat summon, level 5)\n  \`${prefix} admin give @user POWER GREATER\` (Power rune, Greater tier)\n  \`${prefix} admin give @user health_potion 5\` (5 health potions)` });
         }
@@ -515,7 +573,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── GIVE ITEM ──────────────────────────────────────────────────────────
     if (sub === 'giveitem') {
-        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!_parsed) return;
+        const { target, remaining } = _parsed;
         const itemName = remaining.join(' ').trim();
         // Try to parse "itemname qty" from the remaining args
         const parts = itemName.split(/\s+/);
@@ -554,7 +614,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── GIVE SUMMON (PHASE 7 2026-08-29) ─────────────────────────────────────
     if (sub === 'givesummon') {
-        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!_parsed) return;
+        const { target, remaining } = _parsed;
         if (!target || remaining.length < 1) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin givesummon <@user> <species> [level]\`\nExample: \`${prefix} admin givesummon @user bat 5\`\n\nUse \`${prefix} summon codex\` to see all species.` });
         }
@@ -585,7 +647,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── GIVE RUNE (PHASE 7 2026-08-29) ───────────────────────────────────────
     if (sub === 'giverune') {
-        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!_parsed) return;
+        const { target, remaining } = _parsed;
         if (!target || remaining.length < 1) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin giverune <@user> <type> [tier]\`\nExample: \`${prefix} admin giverune @user POWER GREATER\`\n\nTypes: POWER, EFFICIENCY, FOCUS, ENDURANCE, PIERCE, FROST_CONVERSION, WET, STAR, etc.\nTiers: LESSER, NORMAL, GREATER, ABYSSAL (default: NORMAL).` });
         }
@@ -617,7 +681,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── TAKE ITEM ──────────────────────────────────────────────────────────
     if (sub === 'takeitem') {
-        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!_parsed) return;
+        const { target, remaining } = _parsed;
         const itemName = remaining.join(' ').trim();
         const parts = itemName.split(/\s+/);
         let qty = 1;
@@ -645,7 +711,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── GIVE SKILL ─────────────────────────────────────────────────────────
     if (sub === 'giveskill') {
-        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!_parsed) return;
+        const { target, remaining } = _parsed;
         const skillQuery = remaining.join(' ').trim();
         const parts = skillQuery.split(/\s+/);
         let level = 1;
@@ -676,7 +744,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── REVOKE SKILL ───────────────────────────────────────────────────────
     if (sub === 'revokeskill') {
-        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!_parsed) return;
+        const { target, remaining } = _parsed;
         const skillName = remaining.join(' ').trim();
         if (!target || !skillName) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin revokeskill <@user> <skill_name>\`` });
@@ -701,7 +771,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── RESET PLAYER ───────────────────────────────────────────────────────
     if (sub === 'resetplayer') {
-        const { target } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!_parsed) return;
+        const { target } = _parsed;
         if (!target) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin resetplayer <@user>\`` });
         }
@@ -725,7 +797,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── FORCE EVOLVE ───────────────────────────────────────────────────────
     if (sub === 'forceevolve') {
-        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!_parsed) return;
+        const { target, remaining } = _parsed;
         const className = remaining.join(' ').trim();
         if (!target || !className) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin forceevolve <@user> <class_name>\`` });
@@ -748,9 +822,11 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── GIVE STAT POINTS ───────────────────────────────────────────────────
     if (sub === 'givepoints') {
-        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!_parsed) return;
+        const { target, remaining } = _parsed;
         const amount = parseInt(remaining[0]);
-        if (!target || isNaN(amount) || amount <= 0) {
+        if (!target || !Number.isSafeInteger(amount) || amount <= 0) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin givepoints <@user> <amount>\`` });
         }
         const user = economy.getUser(target);
@@ -767,9 +843,11 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── GIVE ZENI ──────────────────────────────────────────────────────────
     if (sub === 'givezeni') {
-        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!_parsed) return;
+        const { target, remaining } = _parsed;
         const amount = parseInt(remaining[0]);
-        if (!target || isNaN(amount) || amount <= 0) {
+        if (!target || !Number.isSafeInteger(amount) || amount <= 0) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin givezeni <@user> <amount>\`` });
         }
         const user = economy.getUser(target);
@@ -785,7 +863,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── SET RANK ───────────────────────────────────────────────────────────
     if (sub === 'setrank') {
-        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!_parsed) return;
+        const { target, remaining } = _parsed;
         const rank = (remaining[0] || '').toUpperCase();
         const validRanks = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'GOD'];
         if (!target || !validRanks.includes(rank)) {
@@ -804,7 +884,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── UNSTICK (clear stuck combat state) ─────────────────────────────────
     if (sub === 'unstick') {
-        const { target } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!_parsed) return;
+        const { target } = _parsed;
         if (!target) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin unstick <@user>\`` });
         }
@@ -836,7 +918,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── INSPECT (full character inspection) ────────────────────────────────
     if (sub === 'inspect') {
-        const { target } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!_parsed) return;
+        const { target } = _parsed;
         if (!target) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin inspect <@user>\`` });
         }
@@ -1228,9 +1312,11 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
     // ── SET SKILL POINTS (admin gives RPG skill points to any account) ───
     // ═══════════════════════════════════════════════════════════════════════
     if (sub === 'setskillpoints') {
-        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!_parsed) return;
+        const { target, remaining } = _parsed;
         const amount = parseInt(remaining[0]);
-        if (!target || isNaN(amount) || amount < 0) {
+        if (!target || !Number.isSafeInteger(amount) || amount < 0) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin setskillpoints <@user> <amount>\`\n\n_Sets RPG skill points (used to unlock abilities). Use \`givepoints\` for stat points._` });
         }
         const user = economy.getUser(target);
@@ -1246,9 +1332,11 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── GIVE SKILL POINTS (admin adds RPG skill points) ───────────────────
     if (sub === 'giveskillpoints') {
-        const { target, remaining } = parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!_parsed) return;
+        const { target, remaining } = _parsed;
         const amount = parseInt(remaining[0]);
-        if (!target || isNaN(amount) || amount <= 0) {
+        if (!target || !Number.isSafeInteger(amount) || amount <= 0) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin giveskillpoints <@user> <amount>\`` });
         }
         const user = economy.getUser(target);
@@ -1666,7 +1754,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         // ── sandbox setwallet <amount> ──
         if (sandboxSub === 'setwallet') {
             const amount = parseInt(args[2]);
-            if (isNaN(amount) || amount < 0) {
+            if (!Number.isSafeInteger(amount) || amount < 0) {
                 return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin sandbox setwallet <amount>\`` });
             }
             try {
@@ -1681,7 +1769,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         // ── sandbox givezeni <amount> ──
         if (sandboxSub === 'givezeni') {
             const amount = parseInt(args[2]);
-            if (isNaN(amount) || amount <= 0) {
+            if (!Number.isSafeInteger(amount) || amount <= 0) {
                 return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin sandbox givezeni <amount>\`` });
             }
             try {

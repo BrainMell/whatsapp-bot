@@ -7794,42 +7794,64 @@ _Building levels: Hall L2, Training L1, Treasury L0_
 - **Notes:** interest line only when rate>0; labelled-key style (`📊 *Guild Level:*`) differs from key-emoji style used in UI-E4-147.
 
 ### UI-E4-152 - Guild donate: usage + insufficient funds
-- **Loc:** `core/engine.js:16873-16875` (+16882-16884, 16947-16949 same funds template)
-- **Trigger:** `.g guild donate` malformed or wallet < amount (also `.g guild loan repay`)
-- **Type:** error
-- **Banner:** none
+> 💡 REBUILT 2026-09-20 (owner: "donate is still old style"): bare form now
+> answers with a usage card (the old trailing-space gate swallowed it into
+> the unknown-command card), amounts strip thousands separators, and the
+> bank persist failure refunds the wallet. Locs: donate block in engine.js
+> (search "GUILD DONATE").
+- **Loc:** donate block in `core/engine.js` (guild family)
+- **Trigger:** `.g guild donate` (bare) or malformed amount, or wallet < amount
+- **Type:** usage card / error
+- **Banner:** `┏━━━┓ 🏛️ *GUILD DONATE* ┗━━━┛`
 - **Template:**
 ```
-❌ Usage: `.g guild donate <amount>`
+┏━━━━━━━━━━━━━━━━━┓
+┃ 🏛️ *GUILD DONATE*
+┗━━━━━━━━━━━━━━━━━┛
+
+Donate Zeni from your wallet to your guild's bank.
+
+▫️ Usage: `.j guild donate <amount>`
+▫️ Example: `.j guild donate 50,000`
+
+_Donations earn guild XP (capped per donation) and feed the guild bank for loans, perks and wars._
 ```
 funds variant:
 ```
-❌ You only have ${userWallet} Zeni in your wallet.
+❌ You only have *${userWallet}* Zeni in your wallet.
+_Requested donation: ${amount}._
 ```
 - **Example render:**
 ```
-❌ You only have 45,200 Zeni in your wallet.
+❌ You only have *45,200* Zeni in your wallet.
+_Requested donation: 100,000._
 ```
-- **Notes:** funds template shared by donate (16883) and loan-repay (16948).
+- **Notes:** persist-failure variant: "❌ Donation failed: the guild bank could not be saved. Your wallet was refunded - nothing was lost. Try again shortly."
 
 ### UI-E4-153 - Guild donate success
-- **Loc:** `core/engine.js:16894-16895`
+- **Loc:** donate block in `core/engine.js` (guild family)
 - **Trigger:** `.g guild donate <amount>`
 - **Type:** confirm
-- **Banner:** none
+- **Banner:** `┏━━━┓ 🏛️ *DONATION RECEIVED* ┗━━━┛`
 - **Template:**
 ```
-✅ Donated ${amount} Zeni to *${userGuild}*.
-🏛️ Bank: ${balance} Zeni
-🎁 Guild XP: +${xpAward}
+┏━━━━━━━━━━━━━━━━━┓
+┃ 🏛️ *DONATION RECEIVED*
+┗━━━━━━━━━━━━━━━━━┛
+
+💰 Donated: *${amount} Zeni* → *${userGuild}*
+🏦 Guild bank: *${balance} Zeni*
+🎁 Guild XP: *+${xpAward}*
+
+_The guild thanks you, benefactor._
 ```
 - **Example render:**
 ```
-✅ Donated 500,000 Zeni to *DragonSlayers*.
-🏛️ Bank: 1,312,500 Zeni
-🎁 Guild XP: +5
+💰 Donated: *500,000 Zeni* → *DragonSlayers*
+🏦 Guild bank: *1,312,500 Zeni*
+🎁 Guild XP: *+5*
 ```
-- **Notes:** XP capped at 100/donation (inflation fix comment at 16887-16891).
+- **Notes:** XP capped at 100/donation (inflation fix). Comma-tolerant amount ("50,000" = 50000).
 
 ### UI-E4-154 - Guild loans: none
 - **Loc:** `core/engine.js:16918-16919`

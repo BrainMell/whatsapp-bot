@@ -17,8 +17,30 @@ const combatImageGenerator = require('./combatImageGenerator');
 const inventorySystem = require('./inventorySystem');
 const lootSystem = require('./lootSystem');
 
-const activeDuels = new Map();  // chatId → duelState
-const duelInvites = new Map();  // chatId → { challenger, target, stake, timestamp }
+// 💡 CROSS-BOT STATE LEAK FIX 2026-09-20 (owner: battle state must be
+// scoped by bot identity): Joker and Subaru run in ONE process, so these
+// chat-keyed Maps were cross-visible - a duel started on one bot could be
+// accepted or attacked from the other (".s combat atk" driving a Joker
+// duel). Keys are now transparently prefixed with the owning bot's
+// identity (same scoping chess.js / cardSystem.js already use).
+function botScope() {
+    try { return botConfig.getBotId() || 'global'; } catch (e) { return 'global'; }
+}
+class ScopedMap {
+    constructor() { this._m = new Map(); }
+    _k(k) { return `${botScope()}|${k}`; }
+    get(k) { return this._m.get(this._k(k)); }
+    set(k, v) { this._m.set(this._k(k), v); return this; }
+    has(k) { return this._m.has(this._k(k)); }
+    delete(k) { return this._m.delete(this._k(k)); }
+    // For keys obtained from entries() (already scoped) - the expiry
+    // sweeper iterates BOTH bots' states and must delete the exact key.
+    deleteKey(k) { return this._m.delete(k); }
+    entries() { return this._m.entries(); }
+    values() { return this._m.values(); }
+}
+const activeDuels = new ScopedMap();  // chatId → duelState
+const duelInvites = new ScopedMap();  // chatId → { challenger, target, stake, timestamp }
 
 function resolveJid(jid) {
     if (!jid) return jid;
@@ -1978,13 +2000,13 @@ setInterval(() => {
     
     for (const [chatId, invite] of duelInvites.entries()) {
         if (now - invite.timestamp > CHALLENGE_TIMEOUT) {
-            duelInvites.delete(chatId);
+            duelInvites.deleteKey(chatId);
         }
     }
     
     for (const [chatId, duel] of activeDuels.entries()) {
         if (now - duel.lastAction > PVP_TIMEOUT_MS) {
-            activeDuels.delete(chatId);
+            activeDuels.deleteKey(chatId);
             // 💡 FIX 2026-08-31: refund escrowed stakes on timeout. Both
             // players' stakes were deducted at accept; previously the sweeper
             // just deleted the state - the entire pot was destroyed and both

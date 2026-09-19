@@ -5833,7 +5833,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           await new Promise((r) => setTimeout(r, 2000));
         } catch (err) {
           console.error(
-            `❌❌ Failed to send article to ${chatId}:`,
+            `❌ Failed to send article to ${chatId}:`,
             err.message,
           );
         }
@@ -5879,7 +5879,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         allGroups = Object.keys(groupsData);
       } catch (err) {
         console.error(
-          "❌❌ Failed to fetch groups from WhatsApp:",
+          "❌ Failed to fetch groups from WhatsApp:",
           err.message,
         );
         // Fallback to groupSettings if WhatsApp fetch fails
@@ -6572,7 +6572,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
             return metadata;
           } catch (e) {
             console.error(
-              `❌❌ Failed to fetch metadata for ${id}:`,
+              `❌ Failed to fetch metadata for ${id}:`,
               e.message,
             );
             return cached || null;
@@ -8223,7 +8223,7 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                       const words = lowerTxt.split(' ');
                       const prefixPart = botConfig.getPrefix().toLowerCase();
                       const firstWord = words[0].startsWith(prefixPart) ? words[0].slice(prefixPart.length) : (words[0].startsWith('.') ? words[0].slice(1) : words[0]);
-                      const RPG_CMDS = new Set(['char', 'character', 'stats', 'kills', 'killcount', 'profile', 'me', 'whois', 'cardstyle', 'setdefaultcard', 'status', 'inventory', 'bag', 'inv', 'dismantle', 'equip', 'unequip', 'use', 'enhance', 'blacksmith', 'repair', 'inspect', 'shop', 'buy', 'recipes', 'craft', 'brew', 'forge', 'cook', 'source', 'mine', 'skill', 'skills', 'skilltree', 'st', 'abilities', 'allocate', 'classes', 'evolve', 'trial', 'quest', 'solo', 'adventure', 'join', 'stop', 'vote', 'raid', 'abyss', 'world', 'bounty', 'duel', 'challenge', 'pvp', 'combat', 'summon', 'summons', 'dragonlord', 'dglord', 'dragongod', 'rune', 'clinic', 'heal', 'health', 'hospital', 'rank', 'adventurer', 'monster', 'handbook', 'guide', 'lore', 'leaderboard', 'lb', 'upgrade', 'claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 't2edeck', 't2ecoll', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'cdeck', 'tokens', 'event', 'setprice', 'esummon', 'fc', 'spawn', 'listitem', 'unlistitem', 'buyitem', 'itemmarket', 'balance', 'bal', 'daily', 'register', 'deposit', 'withdraw', 'transfer', 'pay', 'rob', 'rich', 'lottery', 'invest', 'investment', 'gamble', 'slots', 'dice', 'coinflip', 'blackjack', 'roulette', 'plinko', 'wheel', 'crash', 'cups', 'scratch', 'rps', 'horse', 'hl', 'mines', 'penalty', 'guess', 'guild', 'reset', 'allocate', 'handbook', 'tutorial']);
+                      const RPG_CMDS = new Set(['char', 'character', 'stats', 'kills', 'killcount', 'profile', 'me', 'whois', 'cardstyle', 'setdefaultcard', 'status', 'inventory', 'bag', 'inv', 'dismantle', 'equip', 'unequip', 'use', 'enhance', 'blacksmith', 'repair', 'inspect', 'shop', 'buy', 'recipes', 'craft', 'brew', 'forge', 'cook', 'source', 'mine', 'skill', 'skills', 'skilltree', 'st', 'abilities', 'allocate', 'classes', 'evolve', 'trial', 'quest', 'solo', 'adventure', 'join', 'stop', 'vote', 'raid', 'abyss', 'world', 'bounty', 'duel', 'challenge', 'pvp', 'combat', 'summon', 'summons', 'dragonlord', 'dglord', 'dragongod', 'rune', 'clinic', 'heal', 'health', 'hospital', 'rank', 'adventurer', 'monster', 'handbook', 'guide', 'lore', 'leaderboard', 'lb', 'upgrade', 'claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 't2edeck', 't2ecoll', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'cdeck', 'tokens', 'event', 'setprice', 'esummon', 'fc', 'spawn', 'listitem', 'unlistitem', 'buyitem', 'itemmarket', 'balance', 'bal', 'daily', 'register', 'deposit', 'withdraw', 'transfer', 'rob', 'rich', 'lottery', 'invest', 'investment', 'gamble', 'slots', 'dice', 'coinflip', 'blackjack', 'roulette', 'plinko', 'wheel', 'crash', 'cups', 'scratch', 'rps', 'horse', 'hl', 'mines', 'penalty', 'guess', 'guild', 'reset', 'handbook', 'tutorial']);
                       const isRpg = RPG_CMDS.has(firstWord.toLowerCase());
                       if (isRpg) {
                         const bypass = await testerSystem.canBypassRpgLock(senderJid, chatId);
@@ -10057,11 +10057,14 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
-                    // .j kills - lifetime kill tally (owner 2026-09-20: the
-                    // stat was tracked and gate-checked for years but had no
-                    // player-facing view)
+                    // .j kills - the Fortune Teller's reading (owner
+                    // 2026-09-20: the stat existed for years but had no
+                    // player-facing view; the designed Fortune Teller system
+                    // — locked sight / reader's fee / ledger card — replaces
+                    // the interim plain text ledger. Aliases kept.)
                     if (primaryCmd === "kills" || primaryCmd === "killcount" || primaryCmd === "slain") {
-                      await rpgCommands.displayKills(sock, chatId, senderJid);
+                      const soulReader = require('./rpg/soulReader');
+                      await soulReader.viewKills(sock, chatId, senderJid, cmdArgs.slice(1));
                       return;
                     }
 
@@ -10450,7 +10453,7 @@ _💡 Reply with another number from your search list!_`.trim();
                       msg += `🐉 *SUMMON SYSTEM*\n`;
                       msg += `━━━━━━━━━━━━━━━\n`;
                       msg += `7️⃣ *BUY EGG:* \`${currentPrefix} shop\` → buy Basic Summon Egg (5K Zeni)\n\n`;
-                      msg += `8️⃣ *HATCH:* \`${currentPrefix} summon use <egg>\` - get a monster companion!\n\n`;
+                      msg += `8️⃣ *HATCH:* \`${currentPrefix} summon hatch <egg_id>\` - get a monster companion!\n\n`;
                       msg += `9️⃣ *DEPLOY:* \`${currentPrefix} summon deploy <#>\` - equip your summon for combat\n\n`;
                       msg += `🔟 *SUMMON DUEL:* \`${currentPrefix} summon duel @user\` - monster vs monster PvP!\n\n`;
                       msg += `━━━━━━━━━━━━━━━\n`;
@@ -10891,7 +10894,7 @@ _💡 Reply with another number from your search list!_`.trim();
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            `🚫 *SYSTEM LOCKOUT* 🚫\n\n@${economy.getDisplayName(senderJid)} has been **BLOCKED** for excessive spamming of high-frequency commands.\n\nContact an admin to appeal.`,
+                            `🚫 *SYSTEM LOCKOUT* 🚫\n\n@${economy.getDisplayName(senderJid)} has been *BLOCKED* for excessive spamming of high-frequency commands.\n\nContact an admin to appeal.`,
                           mentions: [senderJid],
                         });
                         return;
@@ -11039,7 +11042,7 @@ _💡 Reply with another number from your search list!_`.trim();
                       return; // stop processing this message
                     } catch (err) {
                       console.log(
-                        "❌❌ Failed to delete muted user message:",
+                        "❌ Failed to delete muted user message:",
                         err.message,
                       );
                     }
@@ -13917,7 +13920,7 @@ Usage: ${newUsage}/5${warningText}`;
                         });
                       } catch (err) {
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to lock group: " + err.message,
+                          text: BOT_MARKER + "❌ Failed to lock group: " + err.message,
                         });
                       }
                       return;
@@ -14212,7 +14215,7 @@ Usage: ${newUsage}/5${warningText}`;
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            "❌❌ Failed to pin message. Make sure I have admin permissions and the message exists.",
+                            "❌ Failed to pin message. Make sure I have admin permissions and the message exists.",
                         });
                       }
                     }
@@ -14912,7 +14915,7 @@ Moderation:
                         }
                       } catch (err) {
                         console.error(
-                          "❌❌ Failed to send initial news:",
+                          "❌ Failed to send initial news:",
                           err.message,
                         );
                       }
@@ -16599,7 +16602,7 @@ ${memberList}`;
                     } catch (err) {
                       console.error("❌ Tagall send error:", err);
                       await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + "❌❌ Failed to send announcement.",
+                        text: BOT_MARKER + "❌ Failed to send announcement.",
                       });
                     }
 
@@ -16834,7 +16837,7 @@ ${memberList}`;
                       await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          "❌❌ Failed to send hidden tag message.",
+                          "❌ Failed to send hidden tag message.",
                       });
                     }
 
@@ -17123,7 +17126,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                         msg += `  - *Reward:* *Dragon Heart* (Required for Dragonslayer class).\n\n`;
                         msg += `💡 Keep an eye on the shop for rare keys to other secret realms!`;
                       } else if (topic === "pvp") {
-                        msg = ` Arena 🏟️ *PVP & DUELS*\n\n`;
+                        msg = `🏟️ *PVP & DUELS*\n\n`;
                         msg += `• *Duels:* Challenge anyone with \`${botConfig.getPrefix()} pvp <@user>\` for bragging rights.\n`;
                         msg += `• *Wager:* Bet Zeni on your combat skills.\n`;
                         msg += `• *Arena:* Climb the seasonal leaderboard for unique titles and Mythic gear rewards.`;
@@ -17228,7 +17231,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                       } catch (err) {
                         console.error("Guild create error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to create guild!",
+                          text: BOT_MARKER + "❌ Failed to create guild!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -17261,7 +17264,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                       } catch (err) {
                         console.error("Guild delete error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to delete guild!",
+                          text: BOT_MARKER + "❌ Failed to delete guild!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -17301,7 +17304,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                       } catch (err) {
                         console.error("Guild join error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to join guild!",
+                          text: BOT_MARKER + "❌ Failed to join guild!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -17321,7 +17324,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                       } catch (err) {
                         console.error("Guild leave error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to leave guild!",
+                          text: BOT_MARKER + "❌ Failed to leave guild!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -17341,7 +17344,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                         console.error("Guild board error:", err);
                         await sock.sendMessage(chatId, {
                           text:
-                            BOT_MARKER + "❌❌ Failed to fetch guild board!",
+                            BOT_MARKER + "❌ Failed to fetch guild board!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -17360,7 +17363,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            `❌ Usage: \`${botConfig.getPrefix().toLowerCase()}\` guild invite @user\n\nMention someone or reply to them to invite them!`,
+                            `❌ Usage: \`${botConfig.getPrefix()} guild invite @user\`\n\nMention someone or reply to them to invite them!`,
                         });
                         return;
                       }
@@ -17398,7 +17401,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                       } catch (err) {
                         console.error("Guild invite error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to send invite!",
+                          text: BOT_MARKER + "❌ Failed to send invite!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -17445,7 +17448,7 @@ Type:
                       } catch (err) {
                         console.error("Guild invites error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to check invites!",
+                          text: BOT_MARKER + "❌ Failed to check invites!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -17464,7 +17467,7 @@ Type:
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            `❌ Usage: \`${botConfig.getPrefix().toLowerCase()}\` guild promote @user\n\nMention someone or reply to them to promote!`,
+                            `❌ Usage: \`${botConfig.getPrefix()} guild promote @user\`\n\nMention someone or reply to them to promote!`,
                         });
                         return;
                       }
@@ -17497,7 +17500,7 @@ Admins can:
                       } catch (err) {
                         console.error("Guild promote error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to promote member!",
+                          text: BOT_MARKER + "❌ Failed to promote member!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -17516,7 +17519,7 @@ Admins can:
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            `❌ Usage: \`${botConfig.getPrefix().toLowerCase()}\` guild demote @user or reply to them.`,
+                            `❌ Usage: \`${botConfig.getPrefix()} guild demote @user\` or reply to them.`,
                         });
                         return;
                       }
@@ -17541,7 +17544,7 @@ Admins can:
                       } catch (err) {
                         console.error("Guild demote error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to demote admin!",
+                          text: BOT_MARKER + "❌ Failed to demote admin!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -17560,7 +17563,7 @@ Admins can:
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            `❌ Usage: \`${botConfig.getPrefix().toLowerCase()}\` guild kick @user or reply to them.`,
+                            `❌ Usage: \`${botConfig.getPrefix()} guild kick @user\` or reply to them.`,
                         });
                         return;
                       }
@@ -17588,7 +17591,7 @@ Admins can:
                       } catch (err) {
                         console.error("Guild kick error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to kick member!",
+                          text: BOT_MARKER + "❌ Failed to kick member!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -17601,8 +17604,9 @@ Admins can:
 
                     if (
                       lowerTxt.startsWith(
-                        `${botConfig.getPrefix().toLowerCase()} guild title `,
-                      )
+                        `${botConfig.getPrefix().toLowerCase()} guild title`,
+                      ) &&
+                      !lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild titles`)
                     ) {
                       const targetUser = getMentionOrReply(m);
 
@@ -17610,7 +17614,7 @@ Admins can:
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            `❌ Usage: \`${botConfig.getPrefix().toLowerCase()}\` guild title @user <title>\n\nExample: \`${botConfig.getPrefix().toLowerCase()}\` guild title @john Elite Warrior`,
+                            `❌ Usage: \`${botConfig.getPrefix()} guild title @user <title>\`\n\nExample: \`${botConfig.getPrefix()} guild title @john Elite Warrior\``,
                         });
                         return;
                       }
@@ -17645,7 +17649,7 @@ Admins can:
                       } catch (err) {
                         console.error("Guild title error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to set guild title!",
+                          text: BOT_MARKER + "❌ Failed to set guild title!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -17805,11 +17809,7 @@ Admins can:
                           return;
                         }
 
-                        let listText = `╔════════════╗
-║ 🏰 *GUILD LIST* 🏰
-╚════════════╝
-
-`;
+                        let listText = `┏━━━━━━━━━━━━━━━━━┓\n┃ 🏰 *GUILD LIST*\n┗━━━━━━━━━━━━━━━━━┛\n\n`;
 
                         const allOwners = [];
 
@@ -17840,7 +17840,7 @@ Admins can:
                       } catch (err) {
                         console.error("Guild list error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to load guild list!",
+                          text: BOT_MARKER + "❌ Failed to load guild list!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -17925,7 +17925,7 @@ Admins can:
                       } catch (err) {
                         console.error("Guild members error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to load members!",
+                          text: BOT_MARKER + "❌ Failed to load members!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -17934,15 +17934,23 @@ Admins can:
                     // `${botConfig.getPrefix().toLowerCase()}` guild tag <message>
                     if (
                       lowerTxt.startsWith(
-                        `${botConfig.getPrefix().toLowerCase()} guild tag `,
+                        `${botConfig.getPrefix().toLowerCase()} guild tag`,
                       )
                     ) {
                       const message = txt
                         .substring(
-                          `${botConfig.getPrefix().toLowerCase()} guild tag `
-                            .length,
+                          `${botConfig.getPrefix().toLowerCase()} guild tag `.length,
                         )
                         .trim();
+
+                      if (!message) {
+                        await sock.sendMessage(chatId, {
+                          text:
+                            BOT_MARKER +
+                            `❌ Usage: \`${botConfig.getPrefix()} guild tag <message>\`\n_Mentions every guild member with your message._`,
+                        });
+                        return;
+                      }
 
                       try {
                         const result = await guilds.tagGuildMembers(
@@ -17962,7 +17970,7 @@ Admins can:
                         console.error(`Guild tag error:`, err);
                         await sock.sendMessage(chatId, {
                           text:
-                            BOT_MARKER + "❌❌ Failed to tag guild members!",
+                            BOT_MARKER + "❌ Failed to tag guild members!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -17972,20 +17980,19 @@ Admins can:
                     // `${botConfig.getPrefix().toLowerCase()}` guild motto <text>
                     if (
                       lowerTxt.startsWith(
-                        `${botConfig.getPrefix().toLowerCase()} guild motto `,
+                        `${botConfig.getPrefix().toLowerCase()} guild motto`,
                       )
                     ) {
                       const motto = txt
                         .substring(
-                          `${botConfig.getPrefix().toLowerCase()} guild motto `
-                            .length,
+                          `${botConfig.getPrefix().toLowerCase()} guild motto `.length,
                         )
                         .trim();
 
                       if (!motto) {
                         await sock.sendMessage(chatId, {
                           text:
-                            BOT_MARKER + "❌ Usage: `.j guild motto <text>`",
+                            BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} guild motto <text>\`\n_Leaders only - sets the guild's slogan._`,
                         });
                         return;
                       }
@@ -18025,12 +18032,7 @@ Admins can:
                           return;
                         }
 
-                        let leaderboardText = `╔══════════════╗
-   🏆 *GUILD LEADERBOARD* 🏆
-╚═════════════╝
-_Sorted by guild level + XP_
-
-`;
+                        let leaderboardText = `┏━━━━━━━━━━━━━━━━━┓\n┃ 🏆 *GUILD LEADERBOARD*\n┗━━━━━━━━━━━━━━━━━┛\n_Sorted by guild level + XP_\n\n`;
 
                         // Use points leaderboard as primary (fallback to mini-game if empty)
                         const primaryList = pointsLeaderboard.length > 0 ? pointsLeaderboard : miniGameLeaderboard;
@@ -18071,7 +18073,7 @@ _Sorted by guild level + XP_
                       } catch (err) {
                         console.error("Guild leaderboard error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to load leaderboard!",
+                          text: BOT_MARKER + "❌ Failed to load leaderboard!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -18113,18 +18115,7 @@ _Sorted by guild level + XP_
                           return;
                         }
 
-                        let text = `╔═══════════════════╗
-   🏆 GUILD INFO 🏆
-╚═══════════════════╝
-
-🏰 *${userGuild}*
-📊 Level: ${info.guilds[userGuild]?.level || 1}
-⭐ XP: ${pointsData.points.toLocaleString()}/${((info.guilds[userGuild]?.level || 1) * 1000).toLocaleString()}
-💰 Guild Funds: ${(info.guilds[userGuild]?.balance || 0).toLocaleString()} Zeni
-
-━━━━━━━━━━━━━━━━
-📈 Recent Activity:
-`;
+                        let text = `┏━━━━━━━━━━━━━━━━━┓\n┃ 🏆 *GUILD POINTS*\n┗━━━━━━━━━━━━━━━━━┛\n\n🏰 *${userGuild}*\n📊 Level: ${info.guilds[userGuild]?.level || 1}\n⭐ XP: ${pointsData.points.toLocaleString()}/${((info.guilds[userGuild]?.level || 1) * 1000).toLocaleString()}\n💰 Guild Funds: ${(info.guilds[userGuild]?.balance || 0).toLocaleString()} Zeni\n\n📈 *Recent Activity:*\n`;
 
                         const recentHistory = pointsData.history
                           .slice(-5)
@@ -18157,7 +18148,7 @@ _Sorted by guild level + XP_
                         console.error("Guild points error:", err);
                         await sock.sendMessage(chatId, {
                           text:
-                            BOT_MARKER + "❌❌ Failed to load guild points!",
+                            BOT_MARKER + "❌ Failed to load guild points!",
                           mentions: [senderJid],
                         });
                       }
@@ -18216,7 +18207,7 @@ _Sorted by guild level + XP_
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            "❌❌ Failed to load points leaderboard!",
+                            "❌ Failed to load points leaderboard!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -18315,40 +18306,90 @@ _Sorted by guild level + XP_
                       return;
                     }
 
-                    // `.g guild donate <amount>` - donate Zeni from wallet to guild bank
-                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild donate `)) {
+                    // `.g guild donate` / `.g guild donate <amount>` - donate
+                    // Zeni from wallet to guild bank
+                    // 💡 UI-STYLE FIX 2026-09-20 (owner: donate is still old
+                    // style): 1) the gate required a TRAILING SPACE, so a bare
+                    // `${prefix} guild donate` fell through to the unknown-
+                    // command card instead of answering with usage; 2) the
+                    // amount was parseInt'd raw, so "100,000" donated 100
+                    // (commas silently dropped); 3) the response was a plain
+                    // 3-liner from the old template era. Rebuilt on the guild-
+                    // loan pattern: bare form = usage card, comma-tolerant
+                    // amount, checked money flow, modern response.
+                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild donate`) &&
+                        !lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild donated`)) {
                       try {
-                        const amountStr = lowerTxt.split(' ')[3];
-                        const amount = parseInt(amountStr, 10);
-                        if (!amount || amount <= 0) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} guild donate <amount>\`` });
+                        const P = botConfig.getPrefix();
+                        const tokens = lowerTxt.split(/\s+/);
+                        const amountRaw = String(tokens[3] || '').replace(/,/g, '');
+
+                        // Bare form / bad amount -> usage card
+                        if (!amountRaw || !/^\d+$/.test(amountRaw) || parseInt(amountRaw, 10) <= 0) {
+                          let usage = `┏━━━━━━━━━━━━━━━━━┓\n┃ 🏛️ *GUILD DONATE*\n┗━━━━━━━━━━━━━━━━━┛\n\n`;
+                          usage += `Donate Zeni from your wallet to your guild's bank.\n\n`;
+                          usage += `▫️ Usage: \`${P} guild donate <amount>\`\n`;
+                          usage += `▫️ Example: \`${P} guild donate 50,000\`\n\n`;
+                          usage += `_Donations earn guild XP (capped per donation) and feed the guild bank for loans, perks and wars._`;
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + usage });
                         }
+                        const amount = parseInt(amountRaw, 10);
+
                         const userGuild = guilds.getUserGuild(senderJid);
                         if (!userGuild) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You are not in a guild. Use \`${P} guild create\` or \`${P} guild join\` first.` });
+                        }
+                        const guild = guilds.getGuild(userGuild);
+                        if (!guild) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Guild not found.' });
                         }
                         const economy = require('./rpg/economy');
+
+                        // Money-critical: pull fresh state from the shared DB
+                        // before moving anything (same discipline as the loan
+                        // rework - the other instance keeps its own caches).
+                        await guilds.refreshGuildMoney(userGuild);
+                        let donor = economy.getUser(senderJid);
+                        if (!donor) {
+                          await economy.syncUserFromDB(senderJid);
+                          donor = economy.getUser(senderJid);
+                        }
+                        if (!donor) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Could not locate your economy account (JID: \`${senderJid}\`). Nothing was charged. Try the bot you registered with, or ask a mod.` });
+                        }
+
                         const userWallet = economy.getGold(senderJid);
                         if (userWallet < amount) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You only have ${userWallet.toLocaleString()} Zeni in your wallet.` });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You only have *${userWallet.toLocaleString()}* Zeni in your wallet.\n_Requested donation: ${amount.toLocaleString()}._` });
                         }
-                        // 💡 LOAN-BUG FIX 2026-09-20: the removeMoney result was
-                        // ignored - a racing balance change could credit the
-                        // guild from an empty wallet (free guild money).
+                        // Checked debit: a racing balance change can no longer
+                        // credit the guild from an empty wallet.
                         const donated = economy.removeMoney(senderJid, amount, `Donation to ${userGuild}`);
                         if (!donated) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You only have ${economy.getGold(senderJid).toLocaleString()} Zeni in your wallet.` });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You only have *${economy.getGold(senderJid).toLocaleString()}* Zeni in your wallet.` });
                         }
-                        guilds.addGuildBalance(userGuild, amount);
+                        guild.balance = (guild.balance || 0) + amount;
                         // 💡 QA FIX: cap donation XP to prevent inflation.
                         // Was 1 XP per 1000 Zeni - depositing 500M = 500K XP,
                         // which broke the level curve. Now: 1 XP per 100K Zeni,
                         // capped at 100 XP per donation.
                         const xpAward = Math.min(100, Math.max(1, Math.floor(amount / 100000)));
                         guilds.addGuildPoints(userGuild, xpAward, `donation by ${senderJid}`);
-                        // Sync to DB
-                        await guilds.syncGuild(userGuild);
-                        await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Donated ${amount.toLocaleString()} Zeni to *${userGuild}*.\n🏛️ Bank: ${((guilds.getGuild(userGuild).balance) || 0).toLocaleString()} Zeni\n🎁 Guild XP: +${xpAward}` });
+                        // Sync to DB - if the bank persist fails, refund the
+                        // wallet (never take money without recording it).
+                        const persisted = await guilds.syncGuild(userGuild);
+                        if (!persisted) {
+                          economy.addMoney(senderJid, amount, 'Guild donation refund (bank persist failed)');
+                          await guilds.refreshGuildMoney(userGuild);
+                          console.error(`[GuildDonate] persist FAILED for ${userGuild}: ${amount} refunded to ${senderJid}`);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Donation failed: the guild bank could not be saved. Your wallet was refunded - nothing was lost. Try again shortly.' });
+                        }
+                        let msg = `┏━━━━━━━━━━━━━━━━━┓\n┃ 🏛️ *DONATION RECEIVED*\n┗━━━━━━━━━━━━━━━━━┛\n\n`;
+                        msg += `💰 Donated: *${amount.toLocaleString()} Zeni* → *${userGuild}*\n`;
+                        msg += `🏦 Guild bank: *${((guild.balance) || 0).toLocaleString()} Zeni*\n`;
+                        msg += `🎁 Guild XP: *+${xpAward}*\n\n`;
+                        msg += `_The guild thanks you, benefactor._`;
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                       } catch (e) {
                         await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                       }
@@ -18957,7 +18998,7 @@ _Sorted by guild level + XP_
 `;
                         }
                         msg += `
-_Kill dragons in the Dragon Dungeon (.g solo dragon) or S+ dungeons._`;
+_Kill dragons in the Dragon Dungeon (\`${botConfig.getPrefix()} solo dragon\`) or S+ dungeons._`;
                         await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                       } catch (e) {
                         await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
@@ -18966,7 +19007,10 @@ _Kill dragons in the Dragon Dungeon (.g solo dragon) or S+ dungeons._`;
                     }
 
                     // 💡 .g guild archetype <type> - change guild archetype (leader only, costs 1M Zeni)
-                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild archetype `)) {
+                    // 💡 BARE-FORM FIX: the gate required a trailing space, so
+                    // a bare `${prefix} guild archetype` fell through to the
+                    // unknown-command card instead of listing the valid types.
+                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild archetype`)) {
                       try {
                         const userGuild = guilds.getUserGuild(senderJid);
                         if (!userGuild) {
@@ -18978,7 +19022,7 @@ _Kill dragons in the Dragon Dungeon (.g solo dragon) or S+ dungeons._`;
                         const parts = txt.trim().split(/\s+/);
                         const newType = parts[3]?.toUpperCase();
                         if (!['ADVENTURER', 'MERCHANT', 'RESEARCH'].includes(newType)) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Invalid archetype. Use: ADVENTURER, MERCHANT, or RESEARCH.' });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} guild archetype <type>\`\n\nValid archetypes:\n• *ADVENTURER* — +15% XP from dungeons\n• *MERCHANT* — +10% gold + 10% sell value\n• *RESEARCH* — −10% crafting material cost\n\n_Cost: 1,000,000 Zeni from the guild bank._` });
                         }
                         const guild = guilds.getGuild(userGuild);
                         if (guild.type === newType) {
@@ -19472,7 +19516,8 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       if (bountySub === 'place') {
                         const targetJid = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0]
                           || (bountyArgs[1]?.includes('@') ? bountyArgs[1] : null);
-                        const amount = parseInt(bountyArgs[2], 10);
+                        // 💡 COMMA FIX: thousands separators no longer silently shrink the bounty
+                        const amount = parseInt(String(bountyArgs[2] || '').replace(/,/g, ''), 10);
                         if (!targetJid || !amount) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} bounty place @target <amount>\`` });
                         }
@@ -21215,7 +21260,7 @@ _Those already below are not pulled out by the closing - only entry is gated._` 
                           react: { text: "❌", key: m.key },
                         });
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to fetch images.",
+                          text: BOT_MARKER + "❌ Failed to fetch images.",
                         });
                       }
 
@@ -21339,7 +21384,7 @@ _Those already below are not pulled out by the closing - only entry is gated._` 
                             );
                           } catch (imgErr) {
                             console.error(
-                              `❌❌ Failed to send image ${i + 1}:`,
+                              `❌ Failed to send image ${i + 1}:`,
                               imgErr.message,
                             );
                             continue;
@@ -25240,7 +25285,7 @@ ${senderName} said y'all should know:
                       await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          `❌ You need to register first!\n\nType: \`\`${botConfig.getPrefix().toLowerCase()}\` register <nickname>\``,
+                          `❌ You need to register first!\n\nType: \`${botConfig.getPrefix()} register <nickname>\``,
                       });
                       return;
                     }
@@ -25329,7 +25374,7 @@ ${senderName} said y'all should know:
                       await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          `❌ You need to register first!\n\nType: \`\`${botConfig.getPrefix().toLowerCase()}\` register <nickname>\``,
+                          `❌ You need to register first!\n\nType: \`${botConfig.getPrefix()} register <nickname>\``,
                       });
                       return;
                     }
@@ -25449,7 +25494,7 @@ ${senderName} said y'all should know:
                       await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          `❌ You need to register first!\n\nType: \`\`${botConfig.getPrefix().toLowerCase()}\` register <nickname>\``,
+                          `❌ You need to register first!\n\nType: \`${botConfig.getPrefix()} register <nickname>\``,
                       });
                       return;
                     }
@@ -25519,7 +25564,7 @@ ${senderName} said y'all should know:
                       await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          `❌ You need to register first!\n\nType: \`\`${botConfig.getPrefix().toLowerCase()}\` register <nickname>\``,
+                          `❌ You need to register first!\n\nType: \`${botConfig.getPrefix()} register <nickname>\``,
                       });
                       return;
                     }
@@ -25542,7 +25587,8 @@ Examples:
                     }
 
                     const args = txt.split(` `);
-                    const amount = parseInt(args[args.length - 1]); // Last arg is amount
+                    // 💡 COMMA FIX: thousands separators no longer shrink transfers
+                    const amount = parseInt(String(args[args.length - 1] || '').replace(/,/g, ''), 10); // Last arg is amount
 
                     if (isNaN(amount) || amount <= 0) {
                       await sock.sendMessage(chatId, {
@@ -25661,7 +25707,7 @@ Examples:
                     } catch (err) {
                       console.error("Rich leaderboard error:", err);
                       await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + "❌❌ Failed to load leaderboard!",
+                        text: BOT_MARKER + "❌ Failed to load leaderboard!",
                       });
                     }
                     return;
@@ -25680,7 +25726,8 @@ Examples:
                     )
                   ) {
                     const args = txt.split(` `);
-                    let amount = args[2];
+                    // 💡 COMMA FIX: "deposit 100,000" deposited 100
+                    let amount = String(args[2] || '').replace(/,/g, '');
 
                     if (!amount) {
                       await sock.sendMessage(chatId, {
@@ -25696,7 +25743,7 @@ Examples:
                       const balance = economy.getBalance(senderJid);
                       amount = balance;
                     } else {
-                      amount = parseInt(amount);
+                      amount = parseInt(amount, 10);
                     }
 
                     if (isNaN(amount) || amount <= 0) {
@@ -25773,7 +25820,8 @@ Examples:
                     )
                   ) {
                     const args = txt.split(` `);
-                    let amount = args[2];
+                    // 💡 COMMA FIX: "withdraw 100,000" withdrew 100
+                    let amount = String(args[2] || '').replace(/,/g, '');
 
                     if (!amount) {
                       await sock.sendMessage(chatId, {
@@ -25789,7 +25837,7 @@ Examples:
                       const bankData = economy.getBankBalance(senderJid);
                       amount = bankData.bank;
                     } else {
-                      amount = parseInt(amount);
+                      amount = parseInt(amount, 10);
                     }
 
                     if (isNaN(amount) || amount <= 0) {
@@ -25895,8 +25943,11 @@ Examples:
                       return cmdNames.some(name => lower.endsWith(name));
                     });
                     if (cmdIdx === -1) return { amount: NaN, extra: null, extra2: null, cmdWord: null };
-                    
-                    const amount = parseInt(args[cmdIdx + 1]);
+
+                    // 💡 COMMA FIX 2026-09-20: "cf 100,000" donated 100 -
+                    // strip thousands separators before parsing (same fix as
+                    // guild donate / loan repay).
+                    const amount = parseInt(String(args[cmdIdx + 1] || '').replace(/,/g, ''), 10);
                     const extra = args[cmdIdx + 2];
                     const extra2 = args[cmdIdx + 3];
                     return { amount, extra, extra2, cmdWord: args[cmdIdx], rawArgs: args.slice(cmdIdx) };
@@ -27033,7 +27084,7 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            `❌ You need to register first!\n\nType: \`\`${botConfig.getPrefix().toLowerCase()}\` register <nickname>\``,
+                            `❌ You need to register first!\n\nType: \`${botConfig.getPrefix()} register <nickname>\``,
                         });
                       } else {
                         await sock.sendMessage(chatId, {
@@ -27096,7 +27147,7 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                       await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          `❌❌ Failed to refresh metadata. Make sure I am in this group!`,
+                          `❌ Failed to refresh metadata. Make sure I am in this group!`,
                       });
                     }
                     return;
@@ -27168,7 +27219,7 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                     } catch (err) {
                       console.error("Summary Error:", err.message);
                       await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + "❌❌ Failed to create summary.",
+                        text: BOT_MARKER + "❌ Failed to create summary.",
                       });
                     }
                     return;
@@ -27317,6 +27368,34 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                   // DEBATE TRACKER COMMANDS
                   // ============================================
 
+                  // bare `${prefix} debate` / `${prefix} debate on` (no topic/users) -> usage
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} debate` ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} debate on` ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} debate help`
+                  ) {
+                    await sock.sendMessage(chatId, {
+                      text:
+                        BOT_MARKER +
+                        `┏━━━━━━━━━━━━━━━━━┓
+┃ ⚖️ *DEBATE* — AI-judged duel
+┗━━━━━━━━━━━━━━━━━┛
+
+⚔️ Start: \`${botConfig.getPrefix()} debate on <topic> @user\`
+   (or tag two users to pit them against each other)
+
+💬 While active: only the two debaters can talk.
+🙋 Spectators: react 🙋 to a message for a 1-message pass.
+
+⚖️ End: \`${botConfig.getPrefix()} judge\` - the AI scores both sides and names a winner.
+🚫 Cancel: \`${botConfig.getPrefix()} debate off\`
+🏆 Rankings: \`${botConfig.getPrefix()} debate leaderboard\`
+
+_Needs the bot to be a group admin (it locks the group and promotes the debaters)._`,
+                    });
+                    return;
+                  }
+
                   // `${botConfig.getPrefix().toLowerCase()}` debate on <topic> @user1 @user2
                   if (
                     lowerTxt.startsWith(
@@ -27365,23 +27444,23 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                       await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          `━━━━━━━━━━━━━━━━━
-⚖️ *DEBATE USAGE* ⚖️
-━━━━━━━━━━━━━━━━━
+                          `┏━━━━━━━━━━━━━━━━━┓
+┃ ⚖️ *DEBATE* — how to start
+┗━━━━━━━━━━━━━━━━━┛
 
-❌ *Error:* You must specify who is debating!
+❌ You must name the two debaters.
 
-💡 *Option 1 (Admin vs User):*
-\`${botConfig.getPrefix().toLowerCase()} debate on <topic> @user\`
-_(Or reply to their message)_
+1️⃣ *You vs someone:*
+\`${botConfig.getPrefix()} debate on <topic> @user\`
+_(or reply to their message)_
 
-💡 *Option 2 (User vs User):*
-\`${botConfig.getPrefix().toLowerCase()} debate on <topic> @user1 @user2\`
+2️⃣ *Two others:*
+\`${botConfig.getPrefix()} debate on <topic> @user1 @user2\`
 
 📌 *Example:*
-\`${botConfig.getPrefix().toLowerCase()} debate on Messi is better than Ronaldo @user1 @user2\`
+\`${botConfig.getPrefix()} debate on Messi is better than Ronaldo @user1 @user2\`
 
-━━━━━━━━━━━━━━━━━`,
+⚖️ \`${botConfig.getPrefix()} judge\` ends the debate with the AI verdict.`,
                       });
                       return;
                     }
@@ -28485,8 +28564,9 @@ _(Or reply to their message)_
                       "guild join",
                       "guild leave",
                       "guild invite",
-                      "guild accept",
-                      "guild decline",
+                      // 💡 STALE SUGGESTION FIX 2026-09-20: removed
+                      // "guild accept"/"guild decline" - the dispatch was
+                      // deleted; invites are accepted via `.j invites`.
                       "guild list",
                       "guild members",
                       "guild tag",

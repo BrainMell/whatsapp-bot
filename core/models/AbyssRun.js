@@ -8,6 +8,12 @@ const AbyssRunSchema = new mongoose.Schema({
   // new runs after their first run completed/died (E11000 duplicate key).
   // Now multiple AbyssRun documents can exist per user (active + history).
   userId: { type: String, required: true, index: true },
+  // 💡 CROSS-BOT STATE LEAK FIX 2026-09-20: which bot instance (Joker /
+  // Subaru) owns this run. Runs live in SHARED MongoDB - without this, a
+  // run started on one bot was attackable from the other. Optional +
+  // defaulting to null so pre-existing in-flight runs stay reachable
+  // (activeRunFilter in abyssSystem matches null-botId runs for both bots).
+  botId: { type: String, default: null },
   currentFloor: { type: Number, default: 1 },
   monstersKilled: { type: Number, default: 0 },
   bossesKilled: { type: Number, default: 0 },

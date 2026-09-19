@@ -1940,6 +1940,22 @@ const ENCOUNTER_TYPES = {
 
 const gameStates = new Map(); // sessionKey -> state
 
+// 💡 CROSS-BOT STATE LEAK FIX 2026-09-20 (owner: ".s combat atk" drove a
+// battle Joker started): Joker and Subaru run in ONE process, so this Map
+// is a shared singleton - and its keys were chat-scoped only. A battle
+// created by one bot was fully visible to the other. Every key is now
+// prefixed with the owning bot's identity (botConfig.getBotId(), the same
+// scoping chess.js / cardSystem.js / murdermystery already use) and every
+// state stamps its botId at creation. Lookups only return THIS bot's
+// battles; the sweeper still iterates both bots' states (memory cleanup).
+function botScope() {
+  try { return botConfig.getBotId() || "global"; } catch (e) { return "global"; }
+}
+const scopedKey = (key) => `${botScope()}|${key}`;
+// STRICT: states created before this fix (no botId) are treated as foreign
+// so the leak cannot survive the deploy. All creation sites stamp botId.
+const sameBot = (state) => !!state && state.botId === botScope();
+
 // 💡 AUDIT FIX 2026-08-01 (Round 4): periodic sweeper for stale game states.
 // If the bot crashes mid-combat or a player abandons a quest, the state
 // stays in the Map forever. On a long-running bot with 3000+ users, this
@@ -1968,22 +1984,47 @@ setInterval(() => {
     }
 }, 5 * 60 * 1000); // every 5 min
 
+// 💡 CROSS-BOT FIX: "is this player mid-fight on ANY bot?" - used by the
+// out-of-combat passive regen so it can't heal a player during a battle
+// that the other bot instance is running.
+function isUserInAnyCombat(userId) {
+  if (!userId) return false;
+  for (const state of gameStates.values()) {
+    if (state.inCombat && Array.isArray(state.players) && state.players.some((p) => p.jid === userId)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function getGameState(chatId, senderJid = null) {
   if (!chatId) return null;
 
+  // 💡 COMPAT: callers sometimes pass a pre-composed "chat_jid" solo key as
+  // the first argument (chat IDs and JIDs never contain "_"). Split it so
+  // the scoped probes below still hit.
+  let chat = chatId;
+  let player = senderJid;
+  if (!player && typeof chatId === "string" && chatId.includes("_")) {
+    const idx = chatId.indexOf("_");
+    chat = chatId.slice(0, idx);
+    player = chatId.slice(idx + 1);
+  }
+
   // 1. If senderJid is provided, check for THEIR solo raid first
-  if (senderJid) {
-    const soloKey = `${chatId}_${senderJid}`;
+  if (player) {
+    const soloKey = scopedKey(`${chat}_${player}`);
     if (gameStates.has(soloKey)) return gameStates.get(soloKey);
   }
 
   // 2. Check for group raid (keyed by chatId)
-  if (gameStates.has(chatId)) return gameStates.get(chatId);
+  const groupKey = scopedKey(chat);
+  if (gameStates.has(groupKey)) return gameStates.get(groupKey);
 
   // 3. Fallback: If no senderJid but we need the state (e.g. from a timer),
-  // find the FIRST active raid in this chat
-  for (const [key, state] of gameStates.entries()) {
-    if (state.chatId === chatId && state.active) return state;
+  // find the FIRST active raid in this chat - THIS BOT's raids only.
+  for (const [, state] of gameStates.entries()) {
+    if (state.chatId === chat && state.active && sameBot(state)) return state;
   }
 
   return null;
@@ -1991,12 +2032,18 @@ function getGameState(chatId, senderJid = null) {
 
 function isUserInAdventure(sessionKey) {
   if (gameStates.has(sessionKey)) return true;
-  const parts = sessionKey.split("_");
+  // 💡 CROSS-BOT FIX: accept raw "chat_jid" keys (skillCommands builds its
+  // own) and probe the scoped solo + group forms for THIS bot.
+  let raw = typeof sessionKey === "string" ? sessionKey : "";
+  if (raw.includes("|")) raw = raw.slice(raw.indexOf("|") + 1);
+  if (!raw) return false;
+  if (gameStates.has(scopedKey(raw))) return true;
+  const parts = raw.split("_");
   if (parts.length > 1) {
     const chatId = parts[0];
     const senderJid = parts[1];
-    const groupState = gameStates.get(chatId);
-    if (groupState && groupState.active && groupState.players.some(p => p.jid === senderJid)) {
+    const groupState = gameStates.get(scopedKey(chatId));
+    if (groupState && sameBot(groupState) && groupState.active && groupState.players.some(p => p.jid === senderJid)) {
       return true;
     }
   }
@@ -2004,19 +2051,20 @@ function isUserInAdventure(sessionKey) {
 }
 
 function deleteGameState(chatId, senderJid = null) {
-  // Determine the key
-  let key = chatId;
+  // Determine the key (bot-scoped - see the CROSS-BOT note at gameStates)
+  let key = scopedKey(chatId);
   if (senderJid) {
-    const soloKey = `${chatId}_${senderJid}`;
+    const soloKey = scopedKey(`${chatId}_${senderJid}`);
     if (gameStates.has(soloKey)) key = soloKey;
   }
 
-  const state = gameStates.get(key);
+  let state = gameStates.get(key);
   if (!state) {
-    // Fallback search
+    // Fallback search - THIS BOT's states only
     for (const [k, s] of gameStates.entries()) {
       if (
         s.chatId === chatId &&
+        sameBot(s) &&
         (!senderJid || s.players.some((p) => p.jid === senderJid))
       ) {
         key = k;
@@ -2040,7 +2088,7 @@ function checkChatLimits(chatId, isSolo, senderJid) {
   let userHasSolo = false;
 
   for (const state of gameStates.values()) {
-    if (state.chatId === chatId && state.active) {
+    if (state.chatId === chatId && state.active && sameBot(state)) {
       if (state.solo) {
         soloCount++;
         if (state.players.some((p) => p.jid === senderJid)) userHasSolo = true;
@@ -6042,7 +6090,7 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
  * Start an Abyss combat encounter using the real combat engine.
  */
 async function startAbyssCombat(sock, chatId, senderJid, enemy, abyssRun, floor) {
-  const sessionKey = `${chatId}_${senderJid}`;
+  const sessionKey = scopedKey(`${chatId}_${senderJid}`);
 
   if (gameStates.has(sessionKey)) {
     const existing = gameStates.get(sessionKey);
@@ -6196,6 +6244,7 @@ async function startAbyssCombat(sock, chatId, senderJid, enemy, abyssRun, floor)
     isEndingCombat: false,
   };
 
+  state.botId = botScope(); // 💡 CROSS-BOT LEAK FIX: stamp the owning bot
   gameStates.set(sessionKey, state);
 
   await startCombat(sock, null, { enemies: [combatEnemy], type: 'COMBAT' }, sessionKey);
@@ -6859,7 +6908,7 @@ const initAdventure = async (
   const limitCheck = checkChatLimits(chatId, solo, senderJid);
   if (!limitCheck.allowed) return { success: false, msg: limitCheck.msg };
 
-  const sessionKey = solo ? `${chatId}_${senderJid}` : chatId;
+  const sessionKey = solo ? scopedKey(`${chatId}_${senderJid}`) : scopedKey(chatId);
   if (gameStates.has(sessionKey)) {
     return {
       success: false,
@@ -7027,6 +7076,7 @@ const initAdventure = async (
     // (honored in startJourney for solo quests only).
     skipShop: !!(opts && opts.skipShop),
   });
+  state.botId = botScope(); // 💡 CROSS-BOT LEAK FIX: stamp the owning bot
   gameStates.set(sessionKey, state);
 
   // Auto-join for solo
@@ -7404,9 +7454,10 @@ const stopQuest = (chatId, senderJid = null, isAdmin = false) => {
     let stoppedAny = false;
     let wasSolo = false;
 
-    // Search all states for ANY quest in this chatId
+    // Search all states for ANY quest in this chatId (THIS BOT only -
+    // the other bot's admin handles their own states)
     for (const [key, state] of gameStates.entries()) {
-      if (state.chatId === chatId && state.active) {
+      if (state.chatId === chatId && state.active && sameBot(state)) {
         wasSolo = state.solo;
         state.active = false;
         state.phase = "IDLE";
@@ -9129,7 +9180,7 @@ const handleCombatAction = async (
   state.lastActivity = Date.now();
 
   // Execute action immediately
-  const sessionKey = state.solo ? `${chatId}_${senderJid}` : chatId;
+  const sessionKey = state.solo ? scopedKey(`${chatId}_${senderJid}`) : scopedKey(chatId);
   await performAction(sock, player, action, sessionKey);
 
   return null; // Action processed
@@ -10889,6 +10940,16 @@ module.exports = {
   },
   getGameState,
   isUserInAdventure,
+  deleteGameState,
+  checkChatLimits,
+  // 💡 CROSS-BOT FIX: index.js passive regen must skip players fighting on
+  // EITHER bot (the old shared-state lookup did that by accident).
+  isUserInAnyCombat,
+  // 💡 CROSS-BOT FIX: safe accessor for callers holding a possibly-raw key.
+  getScopedState(key) {
+    if (gameStates.has(key)) return gameStates.get(key);
+    return gameStates.get(scopedKey(key));
+  },
   // Export for use in index.js
   CLASSES,
   CONSUMABLES,

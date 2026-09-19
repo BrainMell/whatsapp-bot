@@ -38,6 +38,25 @@ const mongoose = require('mongoose');
 const botConfig = require('../../botConfig');
 const P = () => botConfig.getPrefix();
 
+// 💡 CROSS-BOT STATE LEAK FIX 2026-09-20: AbyssRun lives in SHARED MongoDB,
+// so a run started on Joker was fully visible (and attackable) from Subaru.
+// Player-facing run actions now resolve THIS bot's runs only; legacy runs
+// (created before the botId field) stay reachable so nobody's in-flight run
+// breaks on deploy. Run CREATION stamps the owning bot; startRun's stale-
+// run check intentionally stays unscoped (auto-retreating a stale run and
+// blocking on a fresh one is correct regardless of which bot owns it).
+// Leaderboards remain global by design.
+function botScope() {
+  try { return botConfig.getBotId() || 'global'; } catch (e) { return 'global'; }
+}
+function activeRunFilter(userId) {
+  return {
+    userId,
+    status: 'active',
+    $or: [{ botId: botScope() }, { botId: { $exists: false } }, { botId: null }],
+  };
+}
+
 // 💡 COSMOLOGY PASS (2026-09-19): lore drops + player-variant enemies.
 // Owner-approved systems from the design package (implementation/
 // lore_drop_system.md, enemy_variants.md, abyss.md). In-memory only.
@@ -260,6 +279,7 @@ async function startRun(userId, playerStats, ctx = {}) {
   // Create new run
   const run = new AbyssRun({
     userId,
+    botId: botScope(), // 💡 CROSS-BOT LEAK FIX: stamp the owning bot
     currentFloor: 1,
     lootAccumulator: { xp: 0, gold: 0, runes: [], items: [] },
     playerSnapshot: {
@@ -579,7 +599,7 @@ function generateFloorEnemy(floor, ctx = {}) {
 
 // ─── PROCESS TREASURE COLLECTION ──────────────────────────────────────────
 async function processTreasure(userId) {
-  const run = await AbyssRun.findOne({ userId, status: 'active' });
+  const run = await AbyssRun.findOne(activeRunFilter(userId));
   if (!run) return { success: false, message: '❌ No active Abyss run.' };
   if (run.currentEncounterType !== 'treasure') {
     return { success: false, message: '❌ There is no treasure to collect on this floor.' };
@@ -716,7 +736,7 @@ function applyNextEncounter(run, nextEncounter) {
 }
 
 async function processEventChoice(userId, choiceId) {
-  const run = await AbyssRun.findOne({ userId, status: 'active' });
+  const run = await AbyssRun.findOne(activeRunFilter(userId));
   if (!run) return { success: false, message: '❌ No active Abyss run.' };
   if (run.currentEncounterType !== 'event') {
     return { success: false, message: '❌ There is no event to respond to on this floor.' };
@@ -806,7 +826,7 @@ async function processEventChoice(userId, choiceId) {
 
 // ─── PROCESS SKIP (skip treasure/event floor) ─────────────────────────────
 async function processSkip(userId) {
-  const run = await AbyssRun.findOne({ userId, status: 'active' });
+  const run = await AbyssRun.findOne(activeRunFilter(userId));
   if (!run) return { success: false, message: '❌ No active Abyss run.' };
   if (run.currentEncounterType === 'combat') {
     return { success: false, message: '❌ Cannot skip a combat floor. Attack or retreat!' };
@@ -911,7 +931,7 @@ async function processDeath(userId, run, deathMsg) {
 // ─── RETREAT ──────────────────────────────────────────────────────────────
 // Player retreats - keep 100% of loot, run ends as 'completed'
 async function retreat(userId) {
-  const run = await AbyssRun.findOne({ userId, status: 'active' });
+  const run = await AbyssRun.findOne(activeRunFilter(userId));
   if (!run) {
     return { success: false, message: '❌ No active Abyss run to retreat from.' };
   }
@@ -1007,7 +1027,7 @@ async function addToLeaderboard(userId, deepestFloor, monstersKilled, bossesKill
 
 // ─── GET RUN STATUS ───────────────────────────────────────────────────────
 async function getRunStatus(userId) {
-  const run = await AbyssRun.findOne({ userId, status: 'active' });
+  const run = await AbyssRun.findOne(activeRunFilter(userId));
   if (!run) return null;
   return run;
 }

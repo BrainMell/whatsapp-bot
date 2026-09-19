@@ -13,15 +13,35 @@ let activeDebates = {};
 let debateLeaderboard = {};
 let spectators = new Map(); // chatId -> Map(userId -> { expiry, msgCount })
 
+// 💡 CROSS-BOT FIX 2026-09-20: Joker and Subaru share this process (and the
+// system KV collection). A single `active_debates` key meant a debate
+// started on one bot was visible (and judge-able/cancellable) from the
+// other. Debate SESSIONS are per-bot; the leaderboard stays global.
+function debatesKey() {
+    let id = 'global';
+    try { id = botConfig.getBotId() || 'global'; } catch (e) {}
+    return `active_debates_${id}`;
+}
+
+// 💡 CROSS-BOT FIX (in-memory half): the module object is a singleton shared
+// by both bot instances in this process, so even per-bot DB keys alone would
+// leak live sessions across bots. Every access goes through these scoped
+// keys (per-bot in memory AND per-bot in the persisted KV).
+function _dkey(chatId) {
+    let id = 'global';
+    try { id = botConfig.getBotId() || 'global'; } catch (e) {}
+    return `${id}|${chatId}`;
+}
+
 // Load debates and leaderboard from system cache
 function loadDebates() {
-    activeDebates = system.get('active_debates', {});
-    debateLeaderboard = system.get('debate_leaderboard', {});
+    activeDebates = system.get(debatesKey(), {}) || {};
+    debateLeaderboard = system.get('debate_leaderboard', {}) || {};
 }
 
 // Save data to MongoDB
 function saveDebates() {
-    system.set('active_debates', activeDebates);
+    system.set(debatesKey(), activeDebates);
 }
 
 function saveLeaderboard() {
@@ -51,10 +71,45 @@ function recordParticipation(jid, score) {
 // Initial load
 loadDebates();
 
+// ═══ IDENTITY HELPERS (LID-aware) ═══════════════════════════════════════
+// 💡 DEBATE FIX 2026-09-20 (owner: ".j debate says the bot isn't an admin"):
+// the old check built the bot id as "<phone>@s.whatsapp.net" and compared it
+// EXACTLY against groupMetadata.participants[].id - but in LID-privacy
+// groups participant ids are "<num>@lid", so the check failed even when the
+// bot IS an admin and can lock/promote perfectly well. Match by user part
+// across BOTH bot identities (sock.user.id = phone, sock.user.lid = LID).
+const _userPart = (jid) => String(jid || '').split('@')[0].split(':')[0];
+
+function _botUserParts(sock) {
+    const parts = new Set();
+    for (const src of [sock?.user?.id, sock?.user?.lid]) {
+        const u = _userPart(src);
+        if (u) parts.add(u);
+    }
+    return parts;
+}
+
+function _participantIsAdmin(p) {
+    return p?.admin === 'admin' || p?.admin === 'superadmin';
+}
+
+function botIsGroupAdmin(groupMetadata, sock) {
+    if (!groupMetadata?.participants || !groupMetadata.participants.length) return false;
+    const bots = _botUserParts(sock);
+    if (!bots.size) return false;
+    return groupMetadata.participants.some((p) => _participantIsAdmin(p) && bots.has(_userPart(p.id)));
+}
+
+function userIsGroupAdmin(groupMetadata, jid) {
+    if (!groupMetadata?.participants || !groupMetadata.participants.length) return false;
+    const target = _userPart(jid);
+    return groupMetadata.participants.some((p) => _participantIsAdmin(p) && _userPart(p.id) === target);
+}
+
 module.exports = {
     startDebate: async (sock, chatId, topic, debater1Jid, debater2Jid, groupMetadata, BOT_MARKER, smartGroqCall, MODELS) => {
         // Check if debate already active
-        if (activeDebates[chatId]) {
+        if (activeDebates[_dkey(chatId)]) {
             return { 
                 success: false, 
                 message: BOT_MARKER + `❌ A debate is already in progress! Use \`${botConfig.getPrefix()} judge\` to end it.` 
@@ -62,24 +117,31 @@ module.exports = {
         }
 
         // 🛡️ Admin Check: Bot must be admin to lock group and promote
-        const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
-        const botIsAdmin = groupMetadata.participants.some(p => p.id === botId && (p.admin === 'admin' || p.admin === 'superadmin'));
-        if (!botIsAdmin) {
+        // (LID-aware - see the DEBATE FIX note above the helpers)
+        if (!chatId || !String(chatId).endsWith('@g.us') || !groupMetadata) {
+            return {
+                success: false,
+                message: BOT_MARKER + '❌ Debates run in *groups* only.'
+            };
+        }
+        if (!botIsGroupAdmin(groupMetadata, sock)) {
             return {
                 success: false,
                 message: BOT_MARKER + "❌ I need to be an *Admin* to manage the debate (lock group/promote debaters)!"
             };
         }
 
-        // Check if debaters were already admins
-        const debater1WasAdmin = groupMetadata.participants.some(p => p.id === debater1Jid && (p.admin === 'admin' || p.admin === 'superadmin'));
-        const debater2WasAdmin = groupMetadata.participants.some(p => p.id === debater2Jid && (p.admin === 'admin' || p.admin === 'superadmin'));
+        // Check if debaters were already admins (LID-aware user-part match -
+        // the old exact match always missed LID-group admins, so real admins
+        // got DEMOTED at the end of their own debate)
+        const debater1WasAdmin = userIsGroupAdmin(groupMetadata, debater1Jid);
+        const debater2WasAdmin = userIsGroupAdmin(groupMetadata, debater2Jid);
 
         // Create debate session
         const DEBATE_DURATION_MS = 2 * 60 * 60 * 1000; // 2 hours
         const expirationTime = Date.now() + DEBATE_DURATION_MS;
 
-        activeDebates[chatId] = {
+        activeDebates[_dkey(chatId)] = {
             topic: topic,
             debater1: debater1Jid,
             debater2: debater2Jid,
@@ -102,22 +164,23 @@ module.exports = {
             await sock.groupParticipantsUpdate(chatId, [debater1Jid], 'promote');
             await sock.groupParticipantsUpdate(chatId, [debater2Jid], 'promote');
 
-            const message = BOT_MARKER + `━━━━━━━━━━━━━━━
-🎭 *DEBATE STARTED* 🎭
-━━━━━━━━━━━━━━━
+            const message = BOT_MARKER + `┏━━━━━━━━━━━━━━━━━┓
+┃ 🎭 *DEBATE STARTED*
+┗━━━━━━━━━━━━━━━━━┛
 
 📌 *Topic:* ${topic}
 
 ⚔️ *Debaters:*
 @${economy.getDisplayName(debater1Jid)} vs @${economy.getDisplayName(debater2Jid)}
 
-━━━━━━━━━━━━━━━
-🔒 Group locked
+🔒 Group locked to debaters
 👑 Debaters promoted
-🤖 AI recording...
+🤖 AI is recording every argument
 
-Type \`${botConfig.getPrefix()} judge\` for verdict!
-━━━━━━━━━━━━━━━`;
+💬 Debate freely - the group reopens at the verdict.
+⚖️ Type \`${botConfig.getPrefix()} judge\` when you're done!
+
+🙋 _Spectators: react 🙋 to any message for a 1-message spectator pass._`;
 
             await sock.sendMessage(chatId, {
                 text: message,
@@ -127,7 +190,7 @@ Type \`${botConfig.getPrefix()} judge\` for verdict!
             return { success: true };
         } catch (err) {
             console.error('Debate start error:', err);
-            delete activeDebates[chatId];
+            delete activeDebates[_dkey(chatId)];
             saveDebates();
             return { 
                 success: false, 
@@ -137,7 +200,7 @@ Type \`${botConfig.getPrefix()} judge\` for verdict!
     },
 
     recordArgument: (chatId, senderJid, message) => {
-        const debate = activeDebates[chatId];
+        const debate = activeDebates[_dkey(chatId)];
         if (!debate) return;
 
         // 💡 FIX: Normalize JIDs before comparison - previously strict !==
@@ -163,7 +226,7 @@ Type \`${botConfig.getPrefix()} judge\` for verdict!
     },
 
     judgeDebate: async (sock, chatId, BOT_MARKER, smartGroqCall, MODELS) => {
-        const debate = activeDebates[chatId];
+        const debate = activeDebates[_dkey(chatId)];
         
         if (!debate) {
             return { 
@@ -199,14 +262,15 @@ Type \`${botConfig.getPrefix()} judge\` for verdict!
         const debater1Name = debate.debater1.split('@')[0];
         const debater2Name = debate.debater2.split('@')[0];
 
-        // Organize arguments by debater
+        // Organize arguments by debater (normalized - device suffixes and
+        // LID/phone spellings must not split one debater's argument list)
         const debater1Args = debate.arguments
-            .filter(arg => arg.debater === debate.debater1)
+            .filter(arg => normJid(arg.debater) === normJid(debate.debater1))
             .map(arg => arg.message)
             .join('\n\n');
         
         const debater2Args = debate.arguments
-            .filter(arg => arg.debater === debate.debater2)
+            .filter(arg => normJid(arg.debater) === normJid(debate.debater2))
             .map(arg => arg.message)
             .join('\n\n');
 
@@ -275,22 +339,22 @@ Respond ONLY in this JSON format:
             recordParticipation(loserJid, loserScore);
 
             // Build verdict message
-            const verdictMessage = BOT_MARKER + `━━━━━━━━━━━━━━━
-⚖️ *DEBATE VERDICT* ⚖️
-━━━━━━━━━━━━━━━
+            const verdictMessage = BOT_MARKER + `┏━━━━━━━━━━━━━━━━━┓
+┃ ⚖️ *DEBATE VERDICT*
+┗━━━━━━━━━━━━━━━━━┛
 
 📌 *Topic:* ${debate.topic}
 
 🏆 *WINNER:* @${economy.getDisplayName(winnerJid)}
 
 📊 *SCORES:*
-@${debater1Name}: ${verdict.debater1_score}
-@${debater2Name}: ${verdict.debater2_score}
+@${economy.getDisplayName(debate.debater1)}: ${verdict.debater1_score}
+@${economy.getDisplayName(debate.debater2)}: ${verdict.debater2_score}
 
-━━━━━━━━━━━━━━━
-Total Args: ${debate.arguments.length}
-Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
-━━━━━━━━━━━━━━━`;
+💬 Arguments heard: *${debate.arguments.length}*
+⏱️ Duration: *${Math.round((Date.now() - debate.startTime) / 60000)}m*
+
+_the group is unlocked. debate again anytime._`;
 
             // Unlock group and demote debaters if they weren't admins before
             try {
@@ -309,7 +373,7 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
             clearTimeout(debate.timeoutId);
 
             // Clear debate
-            delete activeDebates[chatId];
+            delete activeDebates[_dkey(chatId)];
             saveDebates();
 
             await sock.sendMessage(chatId, {
@@ -329,7 +393,7 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
     },
 
     isDebateActive: (chatId) => {
-        return !!activeDebates[chatId];
+        return !!activeDebates[_dkey(chatId)];
     },
 
     getDebateLeaderboard: (BOT_MARKER) => {
@@ -342,22 +406,26 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
             .sort((a, b) => b.wins - a.wins || b.totalScore - a.totalScore)
             .slice(0, 10);
 
-        let msg = BOT_MARKER + "🏆 *DEBATE LEADERBOARD* 🏆\n\n";
+        let msg = BOT_MARKER + `┏━━━━━━━━━━━━━━━━━┓
+┃ 🏆 *DEBATE LEADERBOARD*
+┗━━━━━━━━━━━━━━━━━┛
+
+`;
         sorted.forEach((u, i) => {
             const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "👤";
             msg += `${medal} @${economy.getDisplayName(u.jid)}\n`;
-            msg += `   Wins: ${u.wins} | Avg Score: ${Math.round(u.totalScore / u.debates)}\n\n`;
+            msg += `   Wins: *${u.wins}* | Avg Score: *${Math.round(u.totalScore / u.debates)}*\n\n`;
         });
 
         return { text: msg, mentions: sorted.map(u => u.jid) };
     },
 
     getActiveDebate: (chatId) => {
-        return activeDebates[chatId] || null;
+        return activeDebates[_dkey(chatId)] || null;
     },
 
     cancelDebate: async (sock, chatId, BOT_MARKER) => {
-        const debate = activeDebates[chatId];
+        const debate = activeDebates[_dkey(chatId)];
 
         if (!debate) {
             return { success: false, message: BOT_MARKER + "❌ No active debate!" };
@@ -376,20 +444,20 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
             }
             // 💡 FIX: Clean up spectators - previously only handleDebateTimeout
             // did this, leaving spectators promoted after cancel/judge.
-            if (spectators.has(chatId)) {
-                const groupSpectators = spectators.get(chatId);
+            if (spectators.has(_dkey(chatId))) {
+                const groupSpectators = spectators.get(_dkey(chatId));
                 for (const [jid, data] of groupSpectators.entries()) {
                     if (!data.wasAdmin) {
                         await sock.groupParticipantsUpdate(chatId, [jid], 'demote').catch(() => {});
                     }
                 }
-                spectators.delete(chatId);
+                spectators.delete(_dkey(chatId));
             }
         } catch (err) {
             console.log('⚠️ Error during cleanup:', err.message);
         }
 
-        delete activeDebates[chatId];
+        delete activeDebates[_dkey(chatId)];
         saveDebates();
 
         return {
@@ -399,7 +467,7 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
     },
 
     handleDebateTimeout: async (sock, chatId, BOT_MARKER) => {
-        const debate = activeDebates[chatId];
+        const debate = activeDebates[_dkey(chatId)];
         if (!debate) return; // Debate might have been cleared already
 
         console.log(`Debate for chat ${chatId} timed out.`);
@@ -415,14 +483,14 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
             }
             
             // Cleanup spectators
-            if (spectators.has(chatId)) {
-                const groupSpectators = spectators.get(chatId);
+            if (spectators.has(_dkey(chatId))) {
+                const groupSpectators = spectators.get(_dkey(chatId));
                 for (const [jid, data] of groupSpectators.entries()) {
                     if (!data.wasAdmin) {
                         await sock.groupParticipantsUpdate(chatId, [jid], 'demote').catch(() => {});
                     }
                 }
-                spectators.delete(chatId);
+                spectators.delete(_dkey(chatId));
             }
         } catch (err) {
             console.log('⚠️ Error during timeout cleanup:', err.message);
@@ -434,12 +502,12 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
         });
 
         // Clear debate
-        delete activeDebates[chatId];
+        delete activeDebates[_dkey(chatId)];
         saveDebates();
     },
 
     addSpectator: async (sock, chatId, userId, wasAdmin, BOT_MARKER) => {
-        const debate = activeDebates[chatId];
+        const debate = activeDebates[_dkey(chatId)];
         if (!debate) return;
 
         // 💡 FIX: Don't allow debaters to be added as spectators - they
@@ -453,11 +521,11 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
             return { success: false, message: "❌ Debaters cannot be spectators!" };
         }
 
-        if (!spectators.has(chatId)) {
-            spectators.set(chatId, new Map());
+        if (!spectators.has(_dkey(chatId))) {
+            spectators.set(_dkey(chatId), new Map());
         }
 
-        const groupSpectators = spectators.get(chatId);
+        const groupSpectators = spectators.get(_dkey(chatId));
         
         // Prevent spam adding
         if (groupSpectators.has(userId)) return;
@@ -494,8 +562,8 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
     },
 
     removeSpectator: async (sock, chatId, userId, BOT_MARKER, reason = "") => {
-        if (!spectators.has(chatId)) return;
-        const groupSpectators = spectators.get(chatId);
+        if (!spectators.has(_dkey(chatId))) return;
+        const groupSpectators = spectators.get(_dkey(chatId));
         const data = groupSpectators.get(userId);
         
         if (!data) return;
@@ -507,7 +575,7 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
         }
 
         groupSpectators.delete(userId);
-        if (groupSpectators.size === 0) spectators.delete(chatId);
+        if (groupSpectators.size === 0) spectators.delete(_dkey(chatId));
 
         if (reason) {
             await sock.sendMessage(chatId, { 
@@ -518,8 +586,8 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
     },
 
     isSpectator: (chatId, userId) => {
-        if (!spectators.has(chatId)) return false;
-        return spectators.get(chatId).has(userId);
+        if (!spectators.has(_dkey(chatId))) return false;
+        return spectators.get(_dkey(chatId)).has(userId);
     },
 
     logModeration: (chatId, userId, content, approved, reasoning) => {
