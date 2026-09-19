@@ -699,7 +699,10 @@ function addMoney(userId, amount, description = "Money Added") {
       if (quickTotal >= _marketCap) break;
     }
     if (quickTotal >= _marketCap) {
-      console.log(`[MarketCap] Reward blocked: ${description} for ${userId} (cap reached)`);
+      // 💡 FIX 2026-09-19: log the economy total + cap - "quest money not
+      // increasing" reports are undiagnosable when the only trace is
+      // "(cap reached)" with no numbers.
+      console.log(`[MarketCap] Reward blocked: ${description} for ${userId} - economy total ${Math.round(quickTotal).toLocaleString()} >= cap ${Number(_marketCap).toLocaleString()}`);
       return false;
     }
   }

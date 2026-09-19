@@ -158,6 +158,22 @@ function mockSock() {
     }
     console.log('✓ cosmology: four clocks remain four separate systems');
 
+    // ─── 6. combat source guard: CC dilution stays in scope (2026-09-19) ──
+    // Live report: the damage-branch CC chance referenced `opponentSide`,
+    // which only exists in the AOE branch - every cc-carrying damage skill
+    // crashed with "opponentSide is not defined". Pin the local-count fix.
+    {
+        const fs = require('fs');
+        const path = require('path');
+        const gaSrc = fs.readFileSync(path.join(__dirname, '../core/rpg/guildAdventure.js'), 'utf8');
+        assert.ok(gaSrc.includes('const _livingOpponents = player.isEnemy'), 'damage-branch CC uses a local living-opponent count');
+        assert.ok(!/const _ccChanceBase[\s\S]{0,220}opponentSide/.test(gaSrc), 'no opponentSide reference near the damage-branch CC roll');
+        assert.ok(gaSrc.includes('_aoeCcChance = opponentSide.length === 1'), 'AOE branch CC dilution present');
+        // payout observability: quest gold delivery failures must be surfaced
+        assert.ok(gaSrc.includes('[QuestPayout] FAILED'), 'quest payout failure is logged + surfaced');
+    }
+    console.log('✓ combat: CC dilution in scope, quest payout failures surfaced');
+
     console.log('\nALL INTEGRATION CHECKS PASSED');
     process.exit(0);
 })().catch((e) => { console.error('INTEGRATION FAIL:', e.message); process.exit(1); });

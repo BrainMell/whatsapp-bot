@@ -8148,7 +8148,13 @@ async function processVotes(sock, encounter, sessionKey) {
     for (const player of state.players) {
       if (player.isDead) continue;  // 💡 FIX: dead players don't receive encounter rewards
       if (finalOutcome.gold) {
-        economy.addMoney(player.jid, finalOutcome.gold);
+        // 💡 FIX 2026-09-19: fire-and-forget payout - a false return (market
+        // cap, unregistered account) vanished silently. Log it loudly so
+        // reports like "quest money not increasing" can be diagnosed.
+        const _encPaid = economy.addMoney(player.jid, finalOutcome.gold);
+        if (_encPaid === false) {
+          console.error(`[QuestPayout] Encounter gold FAILED: ${player.jid} +${finalOutcome.gold} (market cap / unregistered account).`);
+        }
       }
       if (finalOutcome.damage) {
         player.stats.hp = Math.max(0, player.stats.hp - finalOutcome.damage);
@@ -8719,7 +8725,15 @@ async function endAdventure(sock, sessionKey, victory = true) {
       msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${totalXpEarned.toLocaleString()} _(combat: ${(player.xpEarned || 0).toLocaleString()} + bonus: ${(finalXP + guildBonusXp).toLocaleString()})_\n  💰 Gold: ${totalGoldThisRun.toLocaleString()}\n  🏅 GP: +${gpGain}\n  ${player.isDead ? "💀 Fallen" : "✅ Survived"}\n\n`;
       portraitPlayers.push({ name: player.name, xp: `+${totalXpEarned.toLocaleString()} XP`, zeni: `+${totalGoldThisRun.toLocaleString()} ${economy.getZENI ? economy.getZENI() : 'Z'}` });
 
-      economy.addMoney(player.jid, totalGoldThisRun);
+      // 💡 FIX 2026-09-19 (tester re-report): addMoney returns false when the
+      // payout cannot be delivered (market-cap circuit breaker, unregistered
+      // economy account, unresolved LID) - and the summary still printed
+      // "Gold: X" while the wallet never moved. Surface delivery failures.
+      const _delivered = economy.addMoney(player.jid, totalGoldThisRun);
+      if (_delivered === false) {
+        console.error(`[QuestPayout] FAILED: ${player.jid} did not receive ${totalGoldThisRun} Zeni (market cap / unregistered account / JID resolution).`);
+        msg += `  ⚠️ _Gold delivery FAILED (${totalGoldThisRun.toLocaleString()} Zeni). Your account could not be credited - tell a mod you saw this._\n\n`;
+      }
       // 💡 FIX (tester issue a332f1): quest rewards vanish silently when the
       // player carries a system debt - addMoney's auto-debt deduction eats
       // the ENTIRE payout, but the summary still shows "Gold: X". Tell the
@@ -9616,8 +9630,16 @@ async function applyAbilityEffect(
       // SINGLE target - solo players ate a 40% stun chance on every slam
       // (bosses slammed 95% of turns), which read as a stun-lock. Real-RPG
       // rule: area CC is diluted when it only ever hits one victim.
+      // 💡 FIX 2026-09-19 (live report): this line referenced `opponentSide`,
+      // which only exists inside the AOE branch below - EVERY cc-carrying
+      // damage skill (player or boss) threw "opponentSide is not defined"
+      // and the whole ability died mid-cast. Count the caster's living
+      // opposition locally instead.
+      const _livingOpponents = player.isEnemy
+        ? state.players.filter((p) => !p.isDead)
+        : state.enemies.filter((e) => e.stats.hp > 0);
       const _ccChanceBase = effect.ccChance || 100;
-      const _ccChance = opponentSide.length === 1 ? _ccChanceBase * 0.5 : _ccChanceBase;
+      const _ccChance = _livingOpponents.length === 1 ? _ccChanceBase * 0.5 : _ccChanceBase;
       if (effect.cc && Math.random() * 100 < _ccChance) {
         const sRes = applyStatusEffect(
           target,
@@ -9758,7 +9780,15 @@ async function applyAbilityEffect(
       }
 
       // Apply CC (Crowd Control)
-      if (effect.cc && Math.random() * 100 < (effect.ccChance || 100)) {
+      // 💡 FIX (526f3b completion, 2026-09-19): the solo-victim dilution
+      // originally only existed in the damage branch (and crashed there -
+      // see the _livingOpponents fix). AOE slams now dilute too: full
+      // chance while the wave has several targets, halved when only one
+      // opponent is left standing.
+      const _aoeCcChance = opponentSide.length === 1
+        ? (effect.ccChance || 100) * 0.5
+        : (effect.ccChance || 100);
+      if (effect.cc && Math.random() * 100 < _aoeCcChance) {
         const sRes = applyStatusEffect(
           target,
           effect.cc,
