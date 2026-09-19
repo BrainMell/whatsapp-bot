@@ -27,10 +27,12 @@ function assert(cond, label) {
     await worldMap.showWorld(mockSock, chatId, user, 'abyss', { getLevel: () => 20 });
     const cap = sent[0].caption || '';
     assert(!!sent[0].image, 'unlocked abyss (lvl 20): image renders');
-    assert(cap.includes('.j abyss enter'), 'abyss caption: WHERE TO EXPLORE line present');
-    assert(cap.includes('from 31'), 'abyss caption: variant floor band 31 present');
-    assert(cap.includes('timeline drifters'), 'abyss caption: drifter band present');
-    assert(cap.includes('abyssal tonic'), 'abyss caption: deep brews named');
+    assert(cap.includes('.j abyss enter'), 'abyss caption: WHERE TO EXPLORE pointer present');
+    assert(cap.includes('wear faces'), 'abyss caption: subtle variant hint present (no spawn table)');
+    assert(cap.includes('walks like you'), 'abyss caption: subtle drifter hint present');
+    assert(cap.includes('.j brew'), 'abyss caption: deep brews pointer present');
+    assert(!cap.includes('dungeon-world'), 'abyss caption: no mechanic leak (floor-is-world stays with the lore drops)');
+    assert(!cap.includes('five hours'), 'abyss caption: no schedule leak');
     assert(cap.length <= 1024, 'abyss caption within WhatsApp 1024-char limit (' + cap.length + ')');
 
     // 3. First World sheet caption: town services + hunts
@@ -40,6 +42,7 @@ function assert(cond, label) {
     assert(!!sent[0].image, 'First World: image renders (no gate)');
     assert(capFW.includes('.j adventure') && capFW.includes('.j repair'), 'FW caption: hunts + blacksmith named');
     assert(capFW.includes('.j brew') && capFW.includes('.j hospital'), 'FW caption: brewing + hospital named');
+    assert(!capFW.includes('five hours'), 'FW caption: no orbit equation leak');
     assert(capFW.length <= 1024, 'FW caption within limit (' + capFW.length + ')');
 
     // 4. world beyond locked at rank A → refusal, no render

@@ -212,7 +212,7 @@ function _liveStrip(ctx, y) {
 function _bottomStack(ctx, opts = {}) {
     if (opts.legend !== false) {
         _legend(ctx, 1196);
-        _centered(ctx, 'timelines are not mapped - every world holds infinite timeline variants (world to variant)',
+        _centered(ctx, 'timelines are not mapped. every world holds more than the guild can chart',
             1222, 'italic 13px "IM Fell Italic"', PAL.inkSoft);
     }
     if (opts.note) {
@@ -326,9 +326,9 @@ function _drawAbyssDescent(ctx, x, yTop, scale = 1, label = true) {
 function renderFirstWorldSheet(t = Date.now()) {
     return _render((ctx) => {
         _titleBlock(ctx,
-            'SUB-MAP I OF IV - ITS OWN SHEET, NOT A CROP',
+            'SUB-MAP I OF IV',
             'THE FIRST WORLD',
-            '"the world" - open by default; four quadrants; all kinds of worlds scatter freely');
+            '"the world". the quadrants hold every kind of world');
 
         // WB ghost circle (the First World rides INSIDE the World Beyond)
         const cx = W / 2, cy = 640, R = 350;
@@ -342,33 +342,27 @@ function renderFirstWorldSheet(t = Date.now()) {
         // info plates (clear of the WB circle: at plate bottom y=308 the
         // circle spans x 389-611; plates end at 375 / start at 625)
         _plate(ctx, 55, 200, 320, 108, 'PRESENCE OF ORDER', [
-            'sits at the exact center of the First World',
-            '- not of the World Beyond - and moves',
-            'with it. It held the world after the Sundering.',
+            'sits at the exact center of the First World,',
+            'and moves with it. It held the world',
+            'after the Sundering.',
         ]);
-        _plate(ctx, 625, 200, 320, 108, 'MOVEMENT INDICATOR', [
-            'the wax marker rides clockwise inside the',
-            'First World and reaches the bottom link',
-            'as the orbit completes.',
+        _plate(ctx, 625, 200, 320, 108, 'THE MARKER', [
+            'a wax marker rides the crossing.',
+            'guild surveyors set their calendars by it.',
         ]);
         _plate(ctx, 55, 1050, 390, 108, 'QUADRANT LAW', [
-            'the four quadrants are divisions of the',
-            'First World - not categories. Any quadrant',
-            'may hold known, corrupted or dungeon worlds.',
+            'divisions of the First World, not borders.',
+            'every quadrant holds known worlds,',
+            'corrupted worlds, and worse.',
         ]);
         _plate(ctx, 555, 1050, 390, 108, 'DUNGEON-WORLDS', [
-            'a dungeon is a world fully consumed by',
-            'Chaos. Each entry generates a NEW',
-            'dungeon-world - the count is endless.',
+            'worlds fully consumed by Chaos.',
+            'no two expeditions report the same one.',
         ]);
-
-        // orbit direction hint
-        ctx.font = '14px "Cinzel"'; ctx.fillStyle = PAL.inkSoft; ctx.textAlign = 'center';
-        ctx.fillText('CLOCKWISE ORBIT - 5 REAL HOURS = 5 IN-GAME DAYS', cx, cy + R + 28);
 
         _bottomStack(ctx, {
             seal: 'I',
-            footer: '".j world" renders this sheet - no unlock requirement defined - available from the beginning',
+            footer: '".j world" - the chart every adventurer carries',
         });
     });
 }
@@ -377,9 +371,9 @@ function renderFirstWorldSheet(t = Date.now()) {
 function renderWorldBeyondSheet(t = Date.now()) {
     return _render((ctx) => {
         _titleBlock(ctx,
-            'SUB-MAP II OF IV - S RANK REQUIRED TO CHART IT',
+            'SUB-MAP II OF IV',
             'THE WORLD BEYOND',
-            'the outermost boundary - god-rank realm, above ordinary dimensionality');
+            'the outermost boundary, above ordinary dimensionality');
 
         const cx = W / 2, cy = 640, R = 350;
         // WB solid boundary - the space inside the boundary not occupied by FW
@@ -397,18 +391,17 @@ function renderWorldBeyondSheet(t = Date.now()) {
         ]);
         _plate(ctx, 625, 200, 320, 108, 'THE MEASURE', [
             'the First World\'s rim touches this center;',
-            'its far rim touches the outer edge -',
-            'therefore its radius is exactly half.',
+            'its far rim touches the outer edge.',
         ]);
 
         _centered(ctx, 'WORLD BEYOND', cy + R - 80, '26px "Cinzel"', PAL.ink);
         ctx.font = 'italic 15px "IM Fell Italic"'; ctx.fillStyle = PAL.inkSoft;
-        ctx.fillText('the space it does not occupy - the chart will not name it', cx, cy + R - 54);
+        ctx.fillText('the space it does not occupy. the chart will not name it', cx, cy + R - 54);
 
         _bottomStack(ctx, {
             legend: false,
             seal: 'II',
-            footer: '".j world beyond" - adventurer rank S required - a locked request never renders this sheet',
+            footer: '".j world beyond" - the outer chart',
         });
     });
 }
@@ -417,9 +410,9 @@ function renderWorldBeyondSheet(t = Date.now()) {
 function renderAfterlifeSheet(t = Date.now()) {
     return _render((ctx) => {
         _titleBlock(ctx,
-            'SUB-MAP III OF IV - REQUIRES THE READING OF DEAD SOULS',
+            'SUB-MAP III OF IV',
             'THE AFTERLIFE',
-            'an independent orbital body - its circuit shares nothing with the First World\'s');
+            'it rides its own circuit, sharing nothing with the First World\'s path');
 
         // small FW/WB reference (top)
         const cx = W / 2, cy = 380, R = 200;
@@ -446,17 +439,16 @@ function renderAfterlifeSheet(t = Date.now()) {
 
         _centered(ctx, 'AFTERLIFE ORBIT', acy - 6, '16px "Cinzel"', PAL.afterlife);
         ctx.font = 'italic 14px "IM Fell Italic"'; ctx.fillStyle = PAL.inkSoft;
-        ctx.fillText('one circuit = about 2 real days - independent orbital calculation', acx, acy + 18);
+        ctx.fillText('a circuit of its own, on a schedule the guild has not charted', acx, acy + 18);
 
         _plate(ctx, 55, 950, 420, 108, 'THE SHORE', [
-            'the dead-soul reading is the only road to',
-            'this sheet. Without it, the shore is not',
-            'drawn for you - this map refuses to render.',
+            'the reading of dead souls is the only road here.',
+            'without it, the shore stays undrawn.',
         ]);
         _plate(ctx, 525, 950, 420, 108, 'THE THREE', [
-            'once in seven days the afterlife, the First',
-            'World\'s bottom link, and the abyss below',
-            'are found aligned. What that means is not yet written.',
+            'some nights, the afterlife, the First World\'s',
+            'bottom link, and the abyss below are found aligned.',
+            'what that means is not yet written.',
         ]);
 
         // triune beam when aligned (wax-red, distinct from the routine link)
@@ -471,7 +463,7 @@ function renderAfterlifeSheet(t = Date.now()) {
         _bottomStack(ctx, {
             legend: false,
             seal: 'III',
-            footer: '".j world afterlife" - requires the dead-soul checking feature - a locked request never renders this sheet',
+            footer: '".j world afterlife" - the shore chart',
         });
     });
 }
@@ -482,23 +474,21 @@ function renderAbyssSheet(t = Date.now()) {
         _titleBlock(ctx,
             'SUB-MAP IV OF IV - THE DESCENT THAT DOES NOT ORBIT',
             'THE ABYSS',
-            'repeating rings shrinking as they descend - continuing without end');
+            'rings upon rings, shrinking as they descend, without end');
 
-        _centered(ctx, 'THE LIVING CIRCLES LIE ABOVE - THE ABYSS DOES NOT ORBIT THEM',
+        _centered(ctx, 'THE LIVING CIRCLES LIE ABOVE. THE ABYSS DOES NOT ORBIT THEM.',
             208, '13px "Cinzel"', PAL.inkSoft);
 
         _drawAbyssDescent(ctx, W / 2, 290, 1.0);
 
         const win = cosmology.abyssWindow(t);
-        _plate(ctx, 55, 880, 420, 108, 'THE ENTRY CYCLE', [
-            'one universal cycle for all who descend:',
-            'five hours locked, then one hour of entry.',
-            'the window closes for no one already inside.',
+        _plate(ctx, 55, 880, 420, 108, 'THE GATE', [
+            'it opens for a while, then shuts.',
+            'it does not shut for anyone already inside.',
         ]);
-        _plate(ctx, 525, 880, 420, 108, 'THE LAW BELOW', [
-            'every dungeon entry generates a new',
-            'dungeon-world; the deep does not reuse',
-            'the worlds it swallows.',
+        _plate(ctx, 525, 880, 420, 108, 'BELOW', [
+            'the rings continue past the last one drawn.',
+            'expeditions stop numbering them.',
         ]);
 
         // LIVE gate status seal
@@ -511,9 +501,9 @@ function renderAbyssSheet(t = Date.now()) {
 
         _bottomStack(ctx, {
             legend: false,
-            note: 'the abyss is not a region of any map - it is a separate structure beneath the circles',
+            note: 'the abyss is not a region of any map. it is a separate structure beneath the circles',
             seal: 'IV',
-            footer: '".j world abyss" - ABYSS_MAP_UNLOCK constant - owner confirmed: level 20',
+            footer: '".j world abyss" - the deep chart',
         });
     });
 }

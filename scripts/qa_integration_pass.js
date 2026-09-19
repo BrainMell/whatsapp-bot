@@ -69,7 +69,7 @@ function mockSock() {
         await worldMap.showWorld(sock2, 'chat1', 'user1', 'abyss', { getLevel: () => 20, getRank: () => 'A' });
         const m2 = sock2.sent[0].msg;
         assert.ok(m2.image || m2.text, 'abyss sheet at unlock level');
-        if (m2.image) assert.ok(m2.caption.includes('five hours locked'), 'entry-cycle info in caption');
+        if (m2.image) assert.ok(m2.caption.includes('.j abyss enter'), 'explorer pointer in caption');
     }
     {
         // all four renders actually produce PNG buffers (renderer smoke)

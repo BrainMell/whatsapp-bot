@@ -187,12 +187,12 @@ function statusLines(t = Date.now()) {
     const al = alPhase(t);
     const tri = triuneWindow(t);
     const lines = [];
-    lines.push(`the First World: ${(fw * 100).toFixed(0)}% through its crossing (one orbit = 5 hours = 5 days under its sky)`);
+    lines.push(`the First World: ${(fw * 100).toFixed(0)}% through its crossing`);
     lines.push(`the abyss gate: ${w.label}`);
-    lines.push(`the afterlife: ${(al * 100).toFixed(0)}% through its own circuit (~2 days)`);
+    lines.push(`the afterlife: ${(al * 100).toFixed(0)}% through its circuit`);
     lines.push(tri.aligned
-        ? `the three are aligned NOW — window closes in ~${tri.minutesLeft} min`
-        : 'the three are not aligned (the alignment is read, not scheduled)');
+        ? `the three are aligned now. window closes in ~${tri.minutesLeft} min`
+        : 'the three are not aligned');
     return lines;
 }
 
