@@ -425,6 +425,28 @@ const BREWING_RECIPES = {
         desc: 'Grants an invincible shield for 1 turn.',
         ingredients: { 'obsidian_chunk': 2, 'refined_steel': 5, 'boss_essence': 1 },
         result: { id: 'fortress_potion', usable: true, effect: 'invincibility' }
+    },
+    // 💡 DEEP BREWS (cosmology pass 2026-09-19): abyss-tier brewing. Reuse
+    // EXISTING effect ids + EXISTING ingredient ids only - no new mechanics.
+    // Effect values follow the established fraction semantics (see
+    // inventorySystem.useItem: 'heal'/'restore_energy' use fraction of max).
+    'abyssal_tonic': {
+        name: 'Abyssal Tonic', id: 'abyssal_tonic', category: 'BREWING',
+        desc: 'A deep-pressed tonic that restores all Energy. The color is not from any berry.',
+        ingredients: { 'void_essence': 1, 'mana_crystal': 2, 'mana_dew': 2 },
+        result: { id: 'abyssal_tonic', usable: true, effect: 'restore_energy', effectValue: 1.0, rarity: 'EPIC' }
+    },
+    'warden_broth': {
+        name: "Warden's Broth", id: 'warden_broth', category: 'BREWING',
+        desc: 'Hospital broth made the soldier way. Restores 60% of Max HP.',
+        ingredients: { 'healing_herb': 8, 'mana_dew': 2, 'ghost_essence': 1 },
+        result: { id: 'warden_broth', usable: true, effect: 'heal', effectValue: 0.60, rarity: 'RARE' }
+    },
+    'banner_ale': {
+        name: 'Banner Ale', id: 'banner_ale', category: 'BREWING',
+        desc: 'Forge-town courage in a cup. +35% ATK and MAG for 3 turns (battle only).',
+        ingredients: { 'strength_brew': 2, 'obsidian_chunk': 2 },
+        result: { id: 'banner_ale', usable: true, effect: 'buff_all', effectValue: 35, duration: 3, rarity: 'UNCOMMON' }
     }
 };
 
@@ -710,9 +732,24 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
 
     const typeLabel = recipe.category === 'COOKING' ? 'COOKING' : (recipe.category === 'BREWING' ? 'BREWING' : 'CRAFT');
     const goldCostMsg = goldCost > 0 ? `\n💸 Zeni cost: ${goldCost.toLocaleString()}` : '';
+
+    // 💡 LORE DROP (lore_drop_system.md §2/§3, 8% on a high-frequency surface):
+    // category follows the recipe family - BREWING/COOKING -> brewing pool,
+    // WEAPON/ARMOR (forge family) -> blacksmith pool, everything else ->
+    // crafting pool. One drop max, success paths only.
+    let dropMsg = '';
+    try {
+      const loreDrops = require('./loreDrops');
+      const cat = (recipe.category === 'BREWING' || recipe.category === 'COOKING')
+        ? 'brewing'
+        : (recipe.category === 'WEAPON' || recipe.category === 'ARMOR' ? 'blacksmith' : 'crafting');
+      const drop = loreDrops.maybeDrop(cat, { userId, chance: 0.08 });
+      if (drop) dropMsg = `\n${drop}`;
+    } catch (e) {}
+
     return {
         success: true,
-        message: `⚒️ *${typeLabel} SUCCESSFUL: ${recipe.name}*\n\nYou created 1x ${recipe.name}!${goldCostMsg}${guildMsg}`,
+        message: `⚒️ *${typeLabel} SUCCESSFUL: ${recipe.name}*\n\nYou created 1x ${recipe.name}!${goldCostMsg}${guildMsg}${dropMsg}`,
         recipe
     };
 }

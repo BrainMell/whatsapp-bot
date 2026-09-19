@@ -5511,7 +5511,17 @@ ${targetCategory}`;
         `Turn images into stickers with the STICKERS tools - \`${prefix} menu stickers\`.`,
         `Interactions (\`${prefix} hug\`, \`${prefix} slap\`...) - \`${prefix} reactions\` lists them all.`,
       ];
-      const tip = TIPS[Math.floor(Math.random() * TIPS.length)];
+      // 💡 LORE TIP SLOT (lore_drop_system.md §3 "general"): one menu tip in
+      // six is instead a general-world lore drop - the world murmuring in the
+      // tips rotation, zero new message surface.
+      const tip = (Math.random() < 1 / 6)
+        ? (() => {
+            try {
+              const loreDrops = require('./rpg/loreDrops');
+              return loreDrops.maybeDrop('general_world', { userId: senderJid || 'menu', chatId, force: true }) || TIPS[Math.floor(Math.random() * TIPS.length)];
+            } catch (e) { return TIPS[Math.floor(Math.random() * TIPS.length)]; }
+          })()
+        : TIPS[Math.floor(Math.random() * TIPS.length)];
       mainMsg += `\n\n💡 *Tip:* ${tip}`;
 
       return await sendMenuWithBanner(sock, chatId, mainMsg);
@@ -8194,7 +8204,7 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                       const words = lowerTxt.split(' ');
                       const prefixPart = botConfig.getPrefix().toLowerCase();
                       const firstWord = words[0].startsWith(prefixPart) ? words[0].slice(prefixPart.length) : (words[0].startsWith('.') ? words[0].slice(1) : words[0]);
-                      const RPG_CMDS = new Set(['char', 'character', 'stats', 'profile', 'me', 'whois', 'cardstyle', 'setdefaultcard', 'status', 'inventory', 'bag', 'inv', 'dismantle', 'equip', 'unequip', 'use', 'enhance', 'blacksmith', 'repair', 'inspect', 'shop', 'buy', 'recipes', 'craft', 'brew', 'forge', 'cook', 'source', 'mine', 'skill', 'skills', 'skilltree', 'st', 'abilities', 'allocate', 'classes', 'evolve', 'trial', 'quest', 'solo', 'adventure', 'join', 'stop', 'vote', 'raid', 'abyss', 'bounty', 'duel', 'challenge', 'pvp', 'combat', 'summon', 'summons', 'dragonlord', 'dglord', 'dragongod', 'rune', 'clinic', 'heal', 'health', 'hospital', 'rank', 'adventurer', 'monster', 'handbook', 'guide', 'lore', 'leaderboard', 'lb', 'upgrade', 'claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 't2edeck', 't2ecoll', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'cdeck', 'tokens', 'event', 'setprice', 'esummon', 'fc', 'spawn', 'listitem', 'unlistitem', 'buyitem', 'itemmarket', 'balance', 'bal', 'daily', 'register', 'deposit', 'withdraw', 'transfer', 'pay', 'rob', 'rich', 'lottery', 'invest', 'investment', 'gamble', 'slots', 'dice', 'coinflip', 'blackjack', 'roulette', 'plinko', 'wheel', 'crash', 'cups', 'scratch', 'rps', 'horse', 'hl', 'mines', 'penalty', 'guess', 'guild', 'reset', 'allocate', 'handbook', 'tutorial']);
+                      const RPG_CMDS = new Set(['char', 'character', 'stats', 'profile', 'me', 'whois', 'cardstyle', 'setdefaultcard', 'status', 'inventory', 'bag', 'inv', 'dismantle', 'equip', 'unequip', 'use', 'enhance', 'blacksmith', 'repair', 'inspect', 'shop', 'buy', 'recipes', 'craft', 'brew', 'forge', 'cook', 'source', 'mine', 'skill', 'skills', 'skilltree', 'st', 'abilities', 'allocate', 'classes', 'evolve', 'trial', 'quest', 'solo', 'adventure', 'join', 'stop', 'vote', 'raid', 'abyss', 'world', 'bounty', 'duel', 'challenge', 'pvp', 'combat', 'summon', 'summons', 'dragonlord', 'dglord', 'dragongod', 'rune', 'clinic', 'heal', 'health', 'hospital', 'rank', 'adventurer', 'monster', 'handbook', 'guide', 'lore', 'leaderboard', 'lb', 'upgrade', 'claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 't2edeck', 't2ecoll', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'cdeck', 'tokens', 'event', 'setprice', 'esummon', 'fc', 'spawn', 'listitem', 'unlistitem', 'buyitem', 'itemmarket', 'balance', 'bal', 'daily', 'register', 'deposit', 'withdraw', 'transfer', 'pay', 'rob', 'rich', 'lottery', 'invest', 'investment', 'gamble', 'slots', 'dice', 'coinflip', 'blackjack', 'roulette', 'plinko', 'wheel', 'crash', 'cups', 'scratch', 'rps', 'horse', 'hl', 'mines', 'penalty', 'guess', 'guild', 'reset', 'allocate', 'handbook', 'tutorial']);
                       const isRpg = RPG_CMDS.has(firstWord.toLowerCase());
                       if (isRpg) {
                         const bypass = await testerSystem.canBypassRpgLock(senderJid, chatId);
@@ -9986,8 +9996,14 @@ _💡 Reply with another number from your search list!_`.trim();
                           });
                         }
 
+                        // 💡 LORE DROP: healing pool (10%) - hospital surface
+                        let __healDrop = '';
+                        try {
+                          const loreDrops = require('./rpg/loreDrops');
+                          __healDrop = loreDrops.maybeDrop('healing', { userId: senderJid, chatId, chance: 0.10 }) || '';
+                        } catch (e) {}
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + `🏥 *HOSPITAL*\n\n❤️ HP restored: +${healed}\n📊 HP: ${maxHP}/${maxHP}\n\n_You are now at full health._\n\n⏳ _Next hospital visit available in 12 hours. Out-of-combat passive regen will keep you topped up between visits._`,
+                          text: BOT_MARKER + `🏥 *HOSPITAL*\n\n❤️ HP restored: +${healed}\n📊 HP: ${maxHP}/${maxHP}\n\n_You are now at full health._\n\n⏳ _Next hospital visit available in 12 hours. Out-of-combat passive regen will keep you topped up between visits._${__healDrop ? '\n' + __healDrop : ''}`,
                         });
                       } catch (e) {
                         console.error('Hospital command error:', e.message);
@@ -10130,6 +10146,26 @@ _💡 Reply with another number from your search list!_`.trim();
                     // .j lore
                     if (primaryCmd === "lore") {
                       await guildAdventure.showLore(sock, chatId);
+                      return;
+                    }
+
+                    // .j world [beyond|afterlife|abyss] - live cosmology charts
+                    // (owner pass-3 geometry; gates per world_map.md §1)
+                    if (primaryCmd === "world" || primaryCmd === "maps" || primaryCmd === "map") {
+                      try {
+                        const worldMap = require('./rpg/worldMap');
+                        const progressionForWorld = require('./rpg/progression');
+                        const __wUser = economy.getUser(senderJid) || {};
+                        await worldMap.showWorld(sock, chatId, senderJid, cmdArgs.slice(1).join(" "), {
+                          getLevel: (uid) => {
+                            try { return progressionForWorld.getLevel(uid) || 1; } catch (e) { return 1; }
+                          },
+                          getRank: (uid) => __wUser.adventurerRank || 'F',
+                        });
+                      } catch (e) {
+                        console.error('[world] command error:', e.message);
+                        await sock.sendMessage(chatId, { text: '❌ The charts refuse to unroll just now. Try again shortly.' });
+                      }
                       return;
                     }
 
@@ -19655,7 +19691,7 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                         msg += `• \`${botConfig.getPrefix()} combat item\` - use item\n`;
                         msg += `• \`${botConfig.getPrefix()} combat flee\` - flee (penalty)\n\n`;
                         msg += `*Abyss Commands:*\n`;
-                        msg += `• \`${botConfig.getPrefix()} abyss enter\` - start a run (12h cooldown)\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss enter\` - start a run (12h cooldown; entry obeys the universal 6h gate: 5h locked + 1h open)\n`;
                         msg += `• \`${botConfig.getPrefix()} abyss resume\` - restart combat after disconnect\n`;
                         msg += `• \`${botConfig.getPrefix()} abyss collect\` - collect treasure\n`;
                         msg += `• \`${botConfig.getPrefix()} abyss choose <1/2>\` - event choice\n`;
@@ -19683,6 +19719,45 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                           if (level < 20) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to be at least level 20 to enter the Abyss.\n_Current level: ' + level + '_' });
                           }
+                          // 💡 ABYSS UNIVERSAL ENTRY WINDOW (cosmology pass,
+                          // owner consolidated review §6): one universal 6-hour
+                          // cycle across ALL players - 5 h locked + 1 h entry
+                          // window. The window gates ENTRY ONLY: players already
+                          // inside are never extracted by it closing. Owner/mod
+                          // bypass mirrors the cooldown bypass above.
+                          try {
+                            const cosmology = require('./rpg/cosmology');
+                            const __w = cosmology.abyssWindow();
+                            const __gateBypass = typeof engine.isBotOwner === 'function' && (engine.isBotOwner(senderJid) || engine.isRpgMod(senderJid));
+                            if (!__w.open && !__gateBypass) {
+                              return sock.sendMessage(chatId, { text: BOT_MARKER + `🕳️ *THE GATE IS SEALED*
+
+The abyss admits new descenters only during its one-hour window - five hours locked, one hour open, one cycle for everyone.
+⏳ The gate opens in *${__w.label.replace('locked ', '')}*.
+_Those already below are not pulled out by the closing - only entry is gated._` });
+                            }
+                          } catch (__gateErr) {
+                            console.error('[Abyss] entry window check failed:', __gateErr.message);
+                          }
+                          // 💡 ABYSS UNIVERSAL ENTRY WINDOW (cosmology pass,
+                          // owner consolidated review §6): one universal 6-hour
+                          // cycle across ALL players - 5 h locked + 1 h entry
+                          // window. The window gates ENTRY ONLY: players already
+                          // inside are never extracted by it closing. Owner/mod
+                          // bypass mirrors the cooldown bypass above.
+                          try {
+                            const cosmology = require('./rpg/cosmology');
+                            const __w = cosmology.abyssWindow();
+                            const __gateBypass = typeof engine.isBotOwner === 'function' && (engine.isBotOwner(senderJid) || engine.isRpgMod(senderJid));
+                            if (!__w.open && !__gateBypass) {
+                              return sock.sendMessage(chatId, { text: BOT_MARKER + `🕳️ *THE GATE IS SEALED*
+\nThe abyss admits new descenters only during its one-hour window - five hours locked, one hour open, one cycle for everyone.
+⏳ The gate opens in *${__w.label.replace('locked ', '')}*.
+_Those already below are not pulled out by the closing - only entry is gated._` });
+                            }
+                          } catch (__gateErr) {
+                            console.error('[Abyss] entry window check failed:', __gateErr.message);
+                          }
                           const userClassObj = economy.getUserClass(senderJid);
                           const classIdForAbyss = userClassObj?.id || user.class || 'FIGHTER';
                           const baseStats = progression.getBaseStats(senderJid, classIdForAbyss);
@@ -19697,7 +19772,7 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                             // roll against it (was never snapshotted).
                             spd: baseStats.spd || 5,
                           };
-                          const result = await abyssSystem.startRun(senderJid, playerStats);
+                          const result = await abyssSystem.startRun(senderJid, playerStats, { playerClassId: classIdForAbyss });
                           if (!result.success) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           }

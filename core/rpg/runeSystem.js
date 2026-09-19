@@ -672,6 +672,12 @@ async function fuseRunesByName(userJid, typeQuery, countQuery) {
   let msg = `🔮 *FUSION COMPLETE!*\n\nFused ${fusedCount} pair(s) of ${RUNE_TYPES[matchedType].name}:\n`;
   for (const r of results) msg += `  ✅ ${r}\n`;
   msg += `\nUse \`${require('../../botConfig').getPrefix()} rune inv\` to see your upgraded runes.`;
+  // 💡 LORE DROP: enchanting voice (10%)
+  try {
+    const loreDrops = require('./loreDrops');
+    const drop = loreDrops.maybeDrop('enchanting', { userId: userJid, chance: 0.10 });
+    if (drop) msg += `\n${drop}`;
+  } catch (e) {}
   return { success: true, message: msg, fusedCount };
 }
 
@@ -734,9 +740,16 @@ async function socketRune(userJid, runeId, skillId) {
   rune.socketedAt = new Date();
   await rune.save();
 
+  let __socketMsg = `✅ Socketed ${RUNE_TYPES[rune.type].name} (${RUNE_TIERS[rune.tier].name}) into ${skillId}.`;
+  // 💡 LORE DROP: enchanting voice (10%)
+  try {
+    const loreDrops = require('./loreDrops');
+    const drop = loreDrops.maybeDrop('enchanting', { userId: userJid, chance: 0.10 });
+    if (drop) __socketMsg += `\n${drop}`;
+  } catch (e) {}
   return {
     success: true,
-    message: `✅ Socketed ${RUNE_TYPES[rune.type].name} (${RUNE_TIERS[rune.tier].name}) into ${skillId}.`,
+    message: __socketMsg,
     rune,
   };
 }
@@ -826,9 +839,16 @@ async function removeRune(userJid, runeQuery, hasScroll = false) {
   rune.socketedAt = null;
   await rune.save();
 
+  let __removeMsg = `✅ Removed ${RUNE_TYPES[rune.type].name} (${RUNE_TIERS[rune.tier].name}) from skill. The rune is back in your inventory.`;
+  // 💡 LORE DROP: enchanting voice (10%)
+  try {
+    const loreDrops = require('./loreDrops');
+    const drop = loreDrops.maybeDrop('enchanting', { userId: userJid, chance: 0.10 });
+    if (drop) __removeMsg += `\n${drop}`;
+  } catch (e) {}
   return {
     success: true,
-    message: `✅ Removed ${RUNE_TYPES[rune.type].name} (${RUNE_TIERS[rune.tier].name}) from skill. The rune is back in your inventory.`,
+    message: __removeMsg,
     rune,
   };
 }
@@ -843,9 +863,16 @@ async function destroyRune(userJid, runeQuery) {
   if (rune.onMarket) return { success: false, message: '❌ Cancel the market listing first.' };
 
   await Rune.deleteOne({ runeId: rune.runeId });
+  let __destroyMsg = `💀 Destroyed ${RUNE_TYPES[rune.type].name} (${RUNE_TIERS[rune.tier].name}). It's gone forever.`;
+  // 💡 LORE DROP: enchanting voice (10%)
+  try {
+    const loreDrops = require('./loreDrops');
+    const drop = loreDrops.maybeDrop('enchanting', { userId: userJid, chance: 0.10 });
+    if (drop) __destroyMsg += `\n${drop}`;
+  } catch (e) {}
   return {
     success: true,
-    message: `💀 Destroyed ${RUNE_TYPES[rune.type].name} (${RUNE_TIERS[rune.tier].name}). It's gone forever.`,
+    message: __destroyMsg,
   };
 }
 

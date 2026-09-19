@@ -1348,6 +1348,14 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
         economy.trackMissionStat(senderJid, 'itemsCrafted', recipe.output.qty || 1);
     } catch (e) {}
 
+    // 💡 LORE DROP: legacy gear recipes are the forge family -> blacksmith
+    // voice (8%). Computed ONCE, appended to whichever reply path succeeds.
+    let __craftDrop = '';
+    try {
+        const loreDrops = require('../rpg/loreDrops');
+        __craftDrop = loreDrops.maybeDrop('blacksmith', { userId: senderJid, chatId, chance: 0.08 }) || '';
+    } catch (e) {}
+
     // Generate transaction card image if possible
     try {
         // 💡 PERF PATCH 2026-07-27: cached + 8s timeout (was no timeout, could hit 90s global)
@@ -1382,7 +1390,7 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
         });
         confirmMsg += `\n➕ *Received:* \n`;
         confirmMsg += `  • ${recipe.output.qty}x *${outputInfo.name || recipe.output.itemId}*\n`;
-        confirmMsg += `━━━━━━━━━━━━━━━━`;
+        confirmMsg += `━━━━━━━━━━━━━━━━${__craftDrop ? '\n' + __craftDrop : ''}`;
 
         if (imgBuf) {
             await sock.sendMessage(chatId, { 
@@ -1406,7 +1414,7 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
         });
         confirmMsg += `\n➕ *Received:* \n`;
         confirmMsg += `  • ${recipe.output.qty}x *${outputInfo.name || recipe.output.itemId}*\n`;
-        confirmMsg += `━━━━━━━━━━━━━━━━`;
+        confirmMsg += `━━━━━━━━━━━━━━━━${__craftDrop ? '\n' + __craftDrop : ''}`;
         await sock.sendMessage(chatId, { text: confirmMsg });
     }
 }

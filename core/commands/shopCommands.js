@@ -443,8 +443,14 @@ async function buyItem(sock, chatId, senderJid, input) {
             }
         }
 
+        // 💡 LORE DROP: trading voice (8% on shop buy)
+        let __shopDrop = '';
+        try {
+            const loreDrops = require('../rpg/loreDrops');
+            __shopDrop = loreDrops.maybeDrop('trading', { userId: senderJid, chatId, chance: 0.08 }) || '';
+        } catch (e) {}
         await sock.sendMessage(chatId, {
-            text: `✅ *PURCHASE SUCCESSFUL!*\n\n${result.message}\n\n💸 Paid: ${getZENI()}${item.cost.toLocaleString()}`
+            text: `✅ *PURCHASE SUCCESSFUL!*\n\n${result.message}\n\n💸 Paid: ${getZENI()}${item.cost.toLocaleString()}${__shopDrop}`
         });
     } else {
         await sock.sendMessage(chatId, { text: result.message });

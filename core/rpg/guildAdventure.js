@@ -33,6 +33,10 @@ const combatIntegration = require("./combatIntegration");
 const guilds = require("./guilds");
 const classSystem = require("./classSystem");
 const monsterSkills = require("./monsterSkills");
+// 💡 COSMOLOGY PASS (2026-09-19): lore drops + player-variant enemies
+// (owner-approved design package systems; in-memory only).
+const loreDrops = require("./loreDrops");
+const enemyVariants = require("./enemyVariants");
 // 💡 Summoner System (Phase 2) - see download/SUMMONER_SYSTEM_DESIGN.md
 const summonSystem = require("./summonSystem");
 const summonAI = require("./summonAI");
@@ -1603,6 +1607,15 @@ function generateCombatEncounter(chatId) {
     theme: env.name,
     description: env.modifier.desc,
   };
+
+  // 💡 GLOBAL WANDERER SWAP (enemy_variants.md §5): a small chance that ONE
+  // mob in any standard dungeon encounter is a WANDERER <CLASS> - a
+  // person-shaped other using player-class naming/behaviour. Data-level
+  // swap (naming, archetype, humanoid sprite); stats untouched.
+  try {
+    const __wClassId = (state.players && state.players[0] && state.players[0].class && state.players[0].class.id) || 'FIGHTER';
+    enemyVariants.maybeSwapWanderer(encounter.enemies, __wClassId);
+  } catch (e) {}
 
   return encounter;
 }
@@ -6112,6 +6125,16 @@ async function startAbyssCombat(sock, chatId, senderJid, enemy, abyssRun, floor)
     isBoss: enemy.isBoss || false,
     isWildSummon: enemy.isWildSummon || false,
     level: enemy.level || floor,
+    // 💡 SPRITE PASS-THROUGH (UI-CB-15 fix): abyss enemies now carry a real
+    // spriteIndex (element-family sheet) + bossId so the Go service renders
+    // the right body instead of sheet slot 0 for everything.
+    spriteIndex: Math.max(0, Math.floor(Number(enemy.spriteIndex) || 0)),
+    bossId: enemy.bossId || '',
+    // 💡 PLAYER-VARIANT ENEMIES: tags ride along for lore routing + barks.
+    humanoid: enemy.humanoid || false,
+    variantTag: enemy.variantTag || null,
+    variantKind: enemy.variantKind || null,
+    dialogueFirst: enemy.dialogueFirst || false,
     stats: {
       hp: enemyHp,
       maxHp: enemyMaxHp,
@@ -6290,6 +6313,12 @@ async function handleAbyssVictory(sock, sessionKey) {
     pmsg += `🎁 +${addRewards.xp} XP, +${addRewards.gold} Zeni (pack share)\n`;
     pmsg += packLeft > 0 ? `👥 ${packLeft} more pack member(s) waiting after this one!\n\n` : '\n';
     pmsg += `_Use \`${botConfig.getPrefix()} combat attack\` to fight!_`;
+    // 💡 LORE DROP (abyss.md §4 pack-fight moment): "another one steps out"
+    // - creature pool, low chance, its own message so it stays one-per-reply.
+    try {
+      const __packDrop = loreDrops.maybeDrop('abyss_unknown_creature', { userId: senderJid, chatId: state.chatId, chance: 0.10 });
+      if (__packDrop) pmsg += `\n${__packDrop}`;
+    } catch (e) {}
     try { await sock.sendMessage(state.chatId, { text: pmsg }); } catch (e) {}
 
     deleteGameState(sessionKey);
@@ -6303,7 +6332,10 @@ async function handleAbyssVictory(sock, sessionKey) {
   run.currentEnergy = Math.min(run.playerSnapshot?.maxEnergy || 100, run.currentEnergy + 20);
 
   // Generate next encounter
-  const encounter = abyssSystem.generateFloorEncounter(newFloor);
+  // 💡 PLAYER VARIANTS: pass the player's class so MIRROR/WANDERER variants
+  // can roll on floors 31+ (enemy_variants.md §5).
+  const __playerClassId = (player.class && player.class.id) || 'FIGHTER';
+  const encounter = abyssSystem.generateFloorEncounter(newFloor, { playerClassId: __playerClassId });
   if (encounter.type === 'combat' || encounter.type === 'wild_summon') {
     run.currentEnemy = encounter.enemy;
     run.currentEncounterType = encounter.type;
@@ -6332,6 +6364,25 @@ async function handleAbyssVictory(sock, sessionKey) {
   msg += `🎁 +${rewards.xp} XP, +${rewards.gold} Zeni${runeMsg}${fragmentMsg}\n`;
   msg += `❤️ HP: ${Math.floor(run.currentHp)}/${Math.floor(run.playerSnapshot?.maxHp || 0)}\n\n`;
 
+  // 💡 LORE DROP (victory attach point, abyss.md §4): ONE drop keyed by the
+  // DEFEATED encounter - abyss pools by variant tag / depth escalation, or an
+  // environmental observation. Never on wild_summon (they are friendly
+  // faces), never two drops in one reply, never on failure.
+  let __victoryDropped = false;
+  try {
+    const __defeated = state.enemies[0];
+    if (__defeated && run.currentEncounterType === 'combat' && !__defeated.isWildSummon) {
+      if (__defeated.humanoid && Math.random() < 0.15) {
+        const __bark = loreDrops.maybeDrop('encounters_bark', { userId: senderJid, chatId: state.chatId, chance: 1 });
+        if (__bark) { msg += `\n${__bark}`; __victoryDropped = true; }
+      } else {
+        const __pool = loreDrops.routeAbyssCategory(__defeated, state.abyssFloor);
+        const __drop = loreDrops.maybeDrop(__pool, { userId: senderJid, chatId: state.chatId, chance: 0.12 });
+        if (__drop) { msg += `\n${__drop}`; __victoryDropped = true; }
+      }
+    }
+  } catch (e) {}
+
   if (encounter.type === 'combat') {
     msg += `🕳️ *Floor ${newFloor}* - ${encounter.enemy.name}\n`;
     msg += `HP: ${Math.floor(encounter.enemy.stats?.hp ?? encounter.enemy.hp)}/${Math.floor(encounter.enemy.stats?.maxHp ?? encounter.enemy.maxHp)}\n`;
@@ -6339,6 +6390,17 @@ async function handleAbyssVictory(sock, sessionKey) {
       msg += `👥 *PACK FIGHT* - ${encounter.packQueue.length + 1} enemies, one after another (no HP reset between them)!\n`;
     }
     msg += `_Use \`${botConfig.getPrefix()} combat attack\` to fight!_`;
+    // 💡 LORE DROP: next-floor opener/bark ONLY if the victory block did not
+    // already drop (never two drops in one reply).
+    if (!__victoryDropped) {
+      try {
+        const opener = loreDrops.maybeDrop(
+          encounter.enemy && encounter.enemy.humanoid ? 'encounters_bark' : 'encounters_opener',
+          { userId: senderJid, chatId: state.chatId, chance: encounter.enemy && encounter.enemy.humanoid ? 1 : 0.10 }
+        );
+        if (opener) msg += `\n${opener}`;
+      } catch (e) {}
+    }
     try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e) {}
     await startAbyssCombat(sock, state.chatId, senderJid, encounter.enemy, run, newFloor);
   } else if (encounter.type === 'wild_summon') {

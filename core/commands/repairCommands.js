@@ -6,6 +6,9 @@ const inventorySystem = require('../rpg/inventorySystem');
 const durabilitySystem = require('../rpg/durabilitySystem');
 const economy = require('../rpg/economy');
 const botConfig = require('../../botConfig');
+// 💡 COSMOLOGY PASS: occasional blacksmith lore drops (plain text, never on
+// failure, 30-min per-user cooldown handled inside the module).
+const loreDrops = require('../rpg/loreDrops');
 
 const getZENI = () => botConfig.getCurrency().symbol;
 const getPrefix = () => botConfig.getPrefix();
@@ -67,7 +70,13 @@ async function displayBlacksmith(sock, chatId, userId) {
         msg += `  Example: \`${getPrefix()}repair main_hand\` or \`${getPrefix()}repair 1\`\n`;
         msg += `- Repair all items: \`${getPrefix()}repair all\`\n`;
     }
-    
+
+    // 💡 LORE DROP: blacksmith voice on the menu view (10%)
+    try {
+        const drop = loreDrops.maybeDrop('blacksmith', { userId, chatId, chance: 0.10 });
+        if (drop) msg += `\n${drop}`;
+    } catch (e) {}
+
     await sock.sendMessage(chatId, { text: msg });
 }
 
@@ -118,7 +127,13 @@ async function repair(sock, chatId, userId, target) {
         let successMsg = `🔨 *REPAIRS COMPLETE!* 🔨\n━━━━━━━━━━━━━━━━━━━━\n`;
         successMsg += `Successfully repaired all equipped items for 💰 ${getZENI()}${totalCost.toLocaleString()}.\n`;
         successMsg += `Your gear is now in pristine condition! ✨`;
-        
+
+        // 💡 LORE DROP: blacksmith voice (12%)
+        try {
+            const drop = loreDrops.maybeDrop('blacksmith', { userId, chatId, chance: 0.12 });
+            if (drop) successMsg += `\n${drop}`;
+        } catch (e) {}
+
         return await sock.sendMessage(chatId, { text: successMsg });
     }
     
@@ -170,7 +185,13 @@ async function repair(sock, chatId, userId, target) {
     let successMsg = `🔨 *REPAIRS COMPLETE!* 🔨\n━━━━━━━━━━━━━━━━━━━━\n`;
     successMsg += `Successfully repaired *${selectedItem.name}* (${selectedSlot.toUpperCase()}) for 💰 ${getZENI()}${cost.toLocaleString()}.\n`;
     successMsg += `Remaining Wallet: 💰 ${getZENI()}${(user.wallet || 0).toLocaleString()}`;
-    
+
+    // 💡 LORE DROP: blacksmith voice (12%)
+    try {
+        const drop = loreDrops.maybeDrop('blacksmith', { userId, chatId, chance: 0.12 });
+        if (drop) successMsg += `\n${drop}`;
+    } catch (e) {}
+
     await sock.sendMessage(chatId, { text: successMsg });
 }
 

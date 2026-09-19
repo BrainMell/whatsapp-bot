@@ -38,6 +38,36 @@ const mongoose = require('mongoose');
 const botConfig = require('../../botConfig');
 const P = () => botConfig.getPrefix();
 
+// 💡 COSMOLOGY PASS (2026-09-19): lore drops + player-variant enemies.
+// Owner-approved systems from the design package (implementation/
+// lore_drop_system.md, enemy_variants.md, abyss.md). In-memory only.
+const loreDrops = require('./loreDrops');
+const enemyVariants = require('./enemyVariants');
+
+// ─── ENCOUNTER LORE (one drop per reply, never on failure) ───────────────
+// Chooses at most ONE drop for a floor-intro/next-floor block:
+//   humanoid variant enemy -> bark (15%) or opener (10%)
+//   regular combat         -> opener (10%)
+//   treasure/event         -> npc sighting (8%) or general world (12%)
+function _encounterIntroDrop(encounter) {
+  try {
+    if (!encounter) return '';
+    if (encounter.type === 'combat' && encounter.enemy) {
+      const e = encounter.enemy;
+      if (e.humanoid && Math.random() < 0.15) {
+        return loreDrops.maybeDrop('encounters_bark', { chance: 1 }) || '';
+      }
+      return loreDrops.maybeDrop('encounters_opener', { chance: 0.10 }) || '';
+    }
+    if (encounter.type === 'treasure' || encounter.type === 'event') {
+      const r = Math.random();
+      if (r < 0.08) return loreDrops.maybeDrop('encounters_npc', { chance: 1 }) || '';
+      if (r < 0.20) return loreDrops.maybeDrop('general_world', { chance: 1 }) || '';
+    }
+    return '';
+  } catch (e) { return ''; }
+}
+
 // ─── FLOOR TIER DEFINITIONS ───────────────────────────────────────────────
 function getFloorTier(floor) {
   if (floor >= 200) return 'GOD';
@@ -133,7 +163,8 @@ function getFloorRewards(floor, isBoss, rewardMult = 1) {
 const RUN_COOLDOWN_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 // ─── START A NEW ABYSS RUN ────────────────────────────────────────────────
-async function startRun(userId, playerStats) {
+// ctx { playerClassId } enables player-variant enemy rolls (enemy_variants §5)
+async function startRun(userId, playerStats, ctx = {}) {
   // 💡 AUTO-RETREAT: if the player has an existing active run that's been
   // inactive for more than 30 minutes, auto-retreat it so they can start
   // a new one. Previously, stale runs would block new entries indefinitely
@@ -236,7 +267,7 @@ async function startRun(userId, playerStats) {
   });
 
   // Generate first floor encounter (may be combat, treasure, event, or wild_summon)
-  const encounter = generateFloorEncounter(1);
+  const encounter = generateFloorEncounter(1, { playerClassId: ctx.playerClassId });
   if (encounter.type === 'combat' || encounter.type === 'wild_summon') {
     run.currentEnemy = encounter.enemy;
     run.currentEncounterType = encounter.type;
@@ -270,6 +301,10 @@ async function startRun(userId, playerStats) {
     startMsg += `\n_Choose with \`${P()} abyss choose <1/2>\`_`;
   }
 
+  // 💡 LORE DROP (occasional plain text, one max): fight-opener beat on the
+  // starting floor, or a general-world line on non-hostile floors.
+  startMsg += _encounterIntroDrop(encounter);
+
   return {
     success: true,
     run,
@@ -279,11 +314,12 @@ async function startRun(userId, playerStats) {
 
 // ─── GENERATE FLOOR ENCOUNTER ─────────────────────────────────────────────
 // 20% chance of treasure/event instead of combat on non-boss floors.
-function generateFloorEncounter(floor) {
+// ctx { playerClassId } enables player-variant rolls (floors 31+ per design).
+function generateFloorEncounter(floor, ctx = {}) {
   const isBoss = isBossFloor(floor);
 
   // Boss floors are always combat
-  if (isBoss) return { type: 'combat', enemy: generateFloorEnemy(floor) };
+  if (isBoss) return { type: 'combat', enemy: generateFloorEnemy(floor, ctx) };
 
   // 💡 SUMMON PROGRESSION SYSTEM (2026-08-01): 10% chance of wild summon encounter.
   // When triggered, the player fights a wild summon species. Winning drops
@@ -320,13 +356,13 @@ function generateFloorEncounter(floor) {
   // enemy fights at full strength, then 1-2 weakened (55% stats) pack
   // members jump in one after another while your HP stays where it was.
   // Boss floors and wild summons stay solo duels.
-  const primary = generateFloorEnemy(floor);
+  const primary = generateFloorEnemy(floor, ctx);
   if (floor >= 5 && Math.random() < 0.35) {
     const maxPack = floor >= 15 ? 3 : 2;
     const packSize = 2 + Math.floor(Math.random() * (maxPack - 1)); // 2..maxPack
     const packQueue = [];
     for (let i = 1; i < packSize; i++) {
-      const member = generateFloorEnemy(floor);
+      const member = generateFloorEnemy(floor, ctx);
       member.isPackMember = true;
       member.packIndex = i + 1;
       member.packSize = packSize;
@@ -458,12 +494,19 @@ function generateEventEncounter(floor) {
 }
 
 // ─── GENERATE FLOOR ENEMY ─────────────────────────────────────────────────
-function generateFloorEnemy(floor) {
+function generateFloorEnemy(floor, ctx = {}) {
   const tier = getFloorTier(floor);
   const isBoss = isBossFloor(floor);
   const mult = getFloorMultiplier(floor);
 
-  let name, baseStats;
+  // 💡 PLAYER-VARIANT ENEMIES (owner-confirmed, enemy_variants.md §5):
+  // floors 31+ add player-variant weights (escalation by depth), floor 90+
+  // adds TIMELINE_DRIFTER, MIRROR can replace boss-floor enemies from 31+.
+  // Variants use the regular enemy-generation process end to end.
+  const variant = enemyVariants.rollAbyssVariant(floor, isBoss, ctx.playerClassId);
+  if (variant) return variant;
+
+  let name, baseStats, enemyId;
   if (isBoss) {
     // 💡 FIX 2026-08-15: ABYSS_BOSS_POOL[tier] is now an ARRAY of boss IDs.
     // Pick one randomly so the player doesn't face the same boss every time.
@@ -471,6 +514,7 @@ function generateFloorEnemy(floor) {
     const bossId = Array.isArray(bossPool)
       ? bossPool[Math.floor(Math.random() * bossPool.length)]
       : bossPool;
+    enemyId = bossId;
     name = bossId.replace(/_/g, ' ');
     // Boss base stats - scaled hard
     baseStats = {
@@ -482,8 +526,9 @@ function generateFloorEnemy(floor) {
     };
   } else {
     const pool = ABYSS_ENEMY_POOLS[tier] || ABYSS_ENEMY_POOLS.F;
-    const enemyId = pool[Math.floor(Math.random() * pool.length)];
-    name = enemyId.replace(/_/g, ' ');
+    const poolId = pool[Math.floor(Math.random() * pool.length)];
+    enemyId = poolId;
+    name = poolId.replace(/_/g, ' ');
     baseStats = {
       hp: Math.floor(500 * mult),
       maxHp: Math.floor(500 * mult),
@@ -503,6 +548,12 @@ function generateFloorEnemy(floor) {
     spd: baseStats.spd,
     isBoss,
     level: Math.max(1, floor),
+    // 💡 SPRITE FIX (UI-CB-15): abyss enemies previously never set
+    // spriteIndex, so EVERY abyss mob rendered as enemy sheet slot 0 (the
+    // same bat). Map enemy ids -> element-family sheet indices, and give
+    // bosses a clean bossId key for the Go boss-sprite map.
+    spriteIndex: enemyVariants.abyssSpriteIndex(enemyId),
+    bossId: isBoss ? String(enemyId || '').toUpperCase().replace(/\s+/g, '_') : undefined,
   };
 }
 
@@ -623,6 +674,8 @@ function applyNextEncounter(run, nextEncounter) {
     run.currentEncounterData = null;
     run.packQueue = Array.isArray(nextEncounter.packQueue) ? nextEncounter.packQueue : [];
     msg += `\n🕳️ *Floor ${run.currentFloor}* - ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n${run.packQueue.length ? `\U0001F465 *PACK FIGHT* - ${run.packQueue.length + 1} enemies, one after another (no HP reset between them)!\n` : ''}_Attack with \`${P()} combat attack\`_`;
+    // 💡 LORE DROP: opener beat / humanoid bark (one max per reply)
+    msg += _encounterIntroDrop(nextEncounter);
   } else if (nextEncounter.type === 'wild_summon') {
     run.currentEnemy = nextEncounter.enemy;
     run.currentEncounterType = 'wild_summon';
@@ -636,11 +689,15 @@ function applyNextEncounter(run, nextEncounter) {
     run.currentEncounterType = 'treasure';
     run.currentEncounterData = nextEncounter.treasure;
     msg += `\n${nextEncounter.treasure.icon} *Floor ${run.currentFloor}* - ${nextEncounter.treasure.name}\n_Collect with \`${P()} abyss collect\`_`;
+    // 💡 LORE DROP: npc sighting / general world on non-hostile floors
+    msg += _encounterIntroDrop(nextEncounter);
   } else if (nextEncounter.type === 'event') {
     run.currentEnemy = null;
     run.currentEncounterType = 'event';
     run.currentEncounterData = nextEncounter.event;
     msg += `\n${nextEncounter.event.icon} *Floor ${run.currentFloor}* - ${nextEncounter.event.name}\n_Choose with \`${P()} abyss choose <1/2>\`_`;
+    // 💡 LORE DROP: npc sighting / general world on non-hostile floors
+    msg += _encounterIntroDrop(nextEncounter);
   }
   return msg;
 }
@@ -750,16 +807,20 @@ async function processSkip(userId) {
     run.currentEncounterData = null;
     run.packQueue = Array.isArray(nextEncounter.packQueue) ? nextEncounter.packQueue : [];
     msg += `\n🕳️ *Floor ${run.currentFloor}* - ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n${run.packQueue.length ? `\U0001F465 *PACK FIGHT* - ${run.packQueue.length + 1} enemies, one after another (no HP reset between them)!\n` : ''}_Attack with \`${P()} combat attack\`_`;
+    // 💡 LORE DROP: opener beat / humanoid bark (one max per reply)
+    msg += _encounterIntroDrop(nextEncounter);
   } else if (nextEncounter.type === 'treasure') {
     run.currentEnemy = null;
     run.currentEncounterType = 'treasure';
     run.currentEncounterData = nextEncounter.treasure;
     msg += `\n${nextEncounter.treasure.icon} *Floor ${run.currentFloor}* - ${nextEncounter.treasure.name}\n_Collect with \`${P()} abyss collect\`_`;
+    msg += _encounterIntroDrop(nextEncounter);
   } else if (nextEncounter.type === 'event') {
     run.currentEnemy = null;
     run.currentEncounterType = 'event';
     run.currentEncounterData = nextEncounter.event;
     msg += `\n${nextEncounter.event.icon} *Floor ${run.currentFloor}* - ${nextEncounter.event.name}\n_Choose with \`${P()} abyss choose <1/2>\`_`;
+    msg += _encounterIntroDrop(nextEncounter);
   }
 
   await run.save();

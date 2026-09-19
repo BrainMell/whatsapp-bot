@@ -1064,6 +1064,14 @@ function transferMoney(fromUserId, toUserId, amount) {
   scheduleSave(fromUserId);
   scheduleSave(toUserId);
   
+  // 💡 LORE DROP: trading voice (10%)
+  let __trDrop = '';
+  try {
+    const loreDrops = require('./loreDrops');
+    const drop = loreDrops.maybeDrop('trading', { userId: fromUserId, chance: 0.10 });
+    if (drop) __trDrop = `\n${drop}`;
+  } catch (e) {}
+
   return {
     success: true,
     message: `✅ *TRANSFER SUCCESSFUL!*
@@ -1075,7 +1083,7 @@ function transferMoney(fromUserId, toUserId, amount) {
 💵 *Received by ${getDisplayName(toUserId)}:* ${getZENI()}${receiverGets.toLocaleString()}
 ━━━━━━━━━━━━━━━━
 
-💰 *Your New Balance:* ${getZENI()}${sender.wallet.toLocaleString()}`,
+💰 *Your New Balance:* ${getZENI()}${sender.wallet.toLocaleString()}${__trDrop}`,
     receiver: toUserId,
     amount: val,
     taxAmount,
@@ -1144,6 +1152,14 @@ function deposit(userId, amount) {
 
   scheduleSave(userId);
 
+  // 💡 LORE DROP: trading voice (10%)
+  let __depDrop = '';
+  try {
+    const loreDrops = require('./loreDrops');
+    const drop = loreDrops.maybeDrop('trading', { userId, chance: 0.10 });
+    if (drop) __depDrop = `\n${drop}`;
+  } catch (e) {}
+
   return {
     success: true,
     message: `✅ *DEPOSIT SUCCESSFUL!*
@@ -1154,7 +1170,7 @@ function deposit(userId, amount) {
 
 💰 *Wallet:* ${getZENI()}${user.wallet.toLocaleString()}
 🏦 *Bank:* ${getZENI()}${user.bank.toLocaleString()}
-📊 *Total:* ${getZENI()}${(user.wallet + user.bank).toLocaleString()}`,
+📊 *Total:* ${getZENI()}${(user.wallet + user.bank).toLocaleString()}${__depDrop}`,
     amount: val,
     wallet: user.wallet,
     bank: user.bank,
@@ -1233,6 +1249,14 @@ function withdraw(userId, amount) {
 
   scheduleSave(userId);
 
+  // 💡 LORE DROP: trading voice (10%)
+  let __wdDrop = '';
+  try {
+    const loreDrops = require('./loreDrops');
+    const drop = loreDrops.maybeDrop('trading', { userId, chance: 0.10 });
+    if (drop) __wdDrop = `\n${drop}`;
+  } catch (e) {}
+
   return {
     success: true,
     message: `✅ *WITHDRAWAL SUCCESSFUL!*
@@ -1243,7 +1267,7 @@ function withdraw(userId, amount) {
 
 💰 *Wallet:* ${getZENI()}${user.wallet.toLocaleString()}
 🏦 *Bank:* ${getZENI()}${user.bank.toLocaleString()}
-📊 *Total:* ${getZENI()}${(user.wallet + user.bank).toLocaleString()}`,
+📊 *Total:* ${getZENI()}${(user.wallet + user.bank).toLocaleString()}${__wdDrop}`,
     amount: val,
     wallet: user.wallet,
     bank: user.bank,

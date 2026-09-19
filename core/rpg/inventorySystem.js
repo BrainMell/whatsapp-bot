@@ -1343,6 +1343,12 @@ function useItem(userId, rawItemId, targetSlot = null) {
         if (itemInfo.cureStatus) {
             healMsg += `\n✨ Negative status effects clear automatically outside battle.`;
         }
+        // 💡 LORE DROP: healing voice on potion use (10%)
+        try {
+            const loreDrops = require('./loreDrops');
+            const drop = loreDrops.maybeDrop('healing', { userId, chance: 0.10 });
+            if (drop) healMsg += `\n${drop}`;
+        } catch (e) {}
         effectMsg = healMsg;
     }
     else if (itemInfo.effect === 'cure_status') {
