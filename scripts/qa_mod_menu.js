@@ -156,10 +156,11 @@ mainMsg += `\n➤ Type \`${PREFIX} mod <CATEGORY>\` to see its commands.`;
 mainMsg += `\n➤ Type \`${PREFIX} mod <command>\` for details.\n\n💡 *Tip:* ${worstTip}`;
 checkView("main grid", mainMsg);
 
-// Category views (longest usage per category matters now)
+// Category views (ticket #b4f818: labels are the SHORT action word `c.cmd`,
+// not the full usage path - matches engine.js sendModMenu's category render)
 for (const [catKey, cat] of Object.entries(MOD_MENU)) {
   let msg = banner(`${cat.emoji} ${cat.name.toUpperCase()} - MOD`) + `\n\n`;
-  for (const c of cat.commands) msg += `➤ \`${PREFIX} ${c.usage}\`\n`;
+  for (const c of cat.commands) msg += `➤ \`${c.cmd}\`\n`;
   msg += `\n➤ Type \`${PREFIX} mod <command>\` for details.`;
   msg += `\n➤ Type \`${PREFIX} mod\` to go back.`;
   checkView(`category ${catKey}`, msg);

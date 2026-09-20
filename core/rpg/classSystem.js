@@ -31,6 +31,12 @@ const STARTER_CLASSES = {
         tier: 'STARTER',
         role: 'DPS',
         stats: { hp: 90, atk: 10, def: 5, mag: 3, spd: 16, luck: 14, crit: 18 },
+        // 💡 TICKET #b5087a (2026-09-21): Scouts had NO passive and the worst
+        // solo-leveling kit of all starters (ATK growth 1.1, HP 0.9, def 0.8).
+        // Pathfinder gives the solo path practical legs: +25% damage and +25%
+        // XP while fighting with NO living allies (implemented in
+        // guildAdventure.getClassPassiveDamageMult + _soloHunterXpMult).
+        passive: { name: 'Pathfinder', desc: `+25% damage and +25% XP when hunting alone - no allies in the fight.`, effect: 'solo_hunter', value: 25 },
         evolves_into: ['ROGUE', 'MONK', 'SAMURAI', 'NINJA'],
     },
     
@@ -238,7 +244,7 @@ const EVOLVED_CLASSES = {
         stats: { hp: 550, atk: 45, def: 40, mag: 35, spd: 15, luck: 25, crit: 20 },
         requirement: { level: 75, questsCompleted: 200, dragonsKilled: 25, gold: 500000, trialBoss: 'LEVIATHAN' }, // 💡 reduced from 100 to 25
         evolutionCost: 500000,
-        passive: { name: 'Dragon Heart', desc: `Immune to all status effects. Reduces all damage taken by 50%.`, effect: 'damage_reduction', value: 50 },
+        passive: { name: 'Dragon Heart', desc: `Immune to all status effects. Reduces all damage taken by 50%. Dragon's Fury: +25% damage dealt, and dragon-kind takes 3× damage from you.`, effect: 'damage_reduction', value: 50 },
         // SHELVED: evolves_into: ['ASTRALWYRM'],
         isUnique: true, // 💡 Only ONE player may hold this class - ever.
         uniqueLockId: 'LEVIATHAN', // matches DragonGod model's bossId

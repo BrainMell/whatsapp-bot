@@ -41,6 +41,22 @@ function _hasDeadSoulFeature(_userId) {
     return false;
 }
 
+// 💡 TICKET #b4f71c (2026-09-21): STAFF AFTERLIFE ACCESS. Owners, global
+// moderators and RPG moderators can consult the afterlife chart without the
+// (still unimplemented) dead-soul feature. Normal players are unaffected -
+// the locked = no-render hard contract still holds for them. The engine is
+// lazily required INSIDE the call (mirrors abyssSystem.js:241) to avoid the
+// circular-import trap; on any failure this fail-closes to `false`.
+function _isStaff(userId) {
+    try {
+        const engine = require('../engine');
+        return !!(engine.isBotOwner?.(userId) || engine.isGlobalMod?.(userId) || engine.isRpgMod?.(userId));
+    } catch (e) {
+        try { console.error('[worldMap] staff check failed, fail-closed:', e.message); } catch (_) {}
+        return false;
+    }
+}
+
 const RANK_ORDER = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS'];
 function _rankAtLeast(rank, min) {
     const i = RANK_ORDER.indexOf(String(rank || 'F').toUpperCase());
@@ -191,6 +207,7 @@ function _refuseAfterlife() {
     ].join('\n');
 }
 
+
 function _refuseAbyss(level) {
     return [
         '*THE ABYSS IS NOT CHARTED FOR YOU YET.*',
@@ -264,7 +281,10 @@ async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
     // automatically once the dead-soul reading exists - until then it is
     // not holdable against the player, or the command would be dead content.
     if (norm === 'all') {
-        const isMod = typeof helpers.isMod === 'function' ? !!helpers.isMod(userId) : false;
+        // 💡 TICKET #b4f5d2 (2026-09-21): staff bypass extended to ALL staff
+        // tiers (owner / global mod / RPG mod) via the same _isStaff resolver
+        // the afterlife sheet uses, in addition to the injected isMod helper.
+        const isMod = (typeof helpers.isMod === 'function' ? !!helpers.isMod(userId) : false) || _isStaff(userId);
         if (!isMod) {
             const rank = typeof helpers.getRank === 'function' ? helpers.getRank(userId) : 'F';
             let level = 1;
@@ -307,7 +327,10 @@ async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
     }
 
     if (norm === 'afterlife') {
-        if (!_hasDeadSoulFeature(userId)) {
+        // 💡 TICKET #b4f71c: staff (owner / global mod / RPG mod) may consult
+        // the afterlife chart without the dead-soul feature. Everyone else
+        // still gets the locked refusal - no render, no preview.
+        if (!_hasDeadSoulFeature(userId) && !_isStaff(userId)) {
             return sock.sendMessage(chatId, { text: _refuseAfterlife() });
         }
         const buf = await renderer.renderAfterlifeSheet(t);

@@ -21,7 +21,12 @@ function buildPayload(players, enemies, options = {}) {
     return {
         players: players.map(p => ({
             name: String(p.name || 'Unknown'),
-            class: String(p.class?.id || p.class || 'FIGHTER'),
+            // 💡 TICKET #b4f7aa (2026-09-21): fall back to APPRENTICE, the same
+            // fallback the character sheet uses (CLASS_SPRITE_SETS.APPRENTICE in
+            // profileCardRenderer) - combat previously fell back to a DIFFERENT
+            // class ('FIGHTER'), so unknown/mod-created classes rendered a
+            // different sprite in combat than on their character sheet.
+            class: String(p.class?.id || p.class || 'APPRENTICE'),
             level: Math.floor(Number(p.level) || 1),
             hp: Math.floor(Number(p.hp || 0)),
             maxHp: Math.floor(Number(p.stats?.maxHp || p.maxHp || 100)),
@@ -29,7 +34,9 @@ function buildPayload(players, enemies, options = {}) {
             energy: Math.floor(Number(p.stats?.energy || p.energy || 100)),
             maxEnergy: Math.floor(Number(p.stats?.maxEnergy || p.maxEnergy || 100)),
             adventurerRank: String(p.adventurerRank || 'F'),
-            spriteIndex: Math.floor(Number(p.spriteIndex) || 0),
+            // 💡 TICKET #b4f7aa: clamp exactly like the sheet resolver
+            // (Math.max(0, ...)) so negative/NaN indices can desync the sprite.
+            spriteIndex: Math.max(0, Math.floor(Number(p.spriteIndex) || 0)),
             // 💡 NEW 2026-08-05: Pass mode + species so Go service renders summon sprites
             mode: String(p.mode || (p._isSummon ? 'summon' : '') || ''),
             species: String(p.species || p.type || '')
@@ -49,6 +56,13 @@ function buildPayload(players, enemies, options = {}) {
             level: Math.floor(Number(e.level || e.stats?.level || 1))
         })),
         // 💡 Phase 7: Include summons in the combat render payload.
+        // 💡 TICKET #b4fc58 (2026-09-21): pass each summon's FACING through to
+        // the renderer ('right' = facing the enemy side, 'left' = facing its
+        // own side). summonAI.performSummonAction updates summonEntity.facing
+        // every turn; summonSystem.buildCombatEntity defaults it to 'right'.
+        // The Go renderer flips the sprite horizontally when facing === 'left',
+        // matching player-sprite facing behavior. Static (turret) summons keep
+        // their orientation.
         summons: (options.summons || []).map(s => ({
             name: String(s.name || 'Summon'),
             species: String(s.type || s.species || 'skeleton'),
@@ -56,7 +70,8 @@ function buildPayload(players, enemies, options = {}) {
             maxHp: Math.floor(Number(s.stats?.maxHp || s.maxHP || 100)),
             justDied: Boolean(s.justDied),
             ownerIndex: Math.floor(Number(s.ownerIndex) || 0),
-            isStationary: Boolean(s.isStationary)
+            isStationary: Boolean(s.isStationary),
+            facing: String(s.facing || 'right')
         })),
         combatType: String(options.combatType || 'PVE'),
         rank: String(options.rank || 'F'),

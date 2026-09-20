@@ -85,7 +85,15 @@ const STAT_GROWTH = {
         SAINT: { hp: 1.8, atk: 1.0, def: 1.8, mag: 1.8, spd: 1.2, luck: 1.8, crit: 1.2 },
         ARCHDRUID: { hp: 1.8, atk: 1.4, def: 1.6, mag: 1.8, spd: 1.4, luck: 1.5, crit: 1.4 },
         TYCOON: { hp: 1.5, atk: 1.5, def: 1.5, mag: 1.5, spd: 1.5, luck: 3.5, crit: 1.5 },
-        DRAGON_GOD: { hp: 2.5, atk: 2.2, def: 2.2, mag: 1.5, spd: 1.5, luck: 1.8, crit: 1.8 },
+        // 💡 TICKET #b5087a (2026-09-21): mag growth 1.5 → 1.8. Formula audit:
+        // Apocalypse Wing (the ult) scales off MAG, and maxEnergy's 3×MAG term
+        // makes Dragon God's pool the smallest of the ASCENDED line - while
+        // mages sit at 2.0-2.2 MAG growth. 1.8 keeps Dragon God a bruiser
+        // (still below every mage) but stops its signature ability from
+        // scaling off its weakest stat. Combined with Dragon's Fury (+25% all
+        // damage) and the carried-over dragon bane, the class lands in the
+        // viable end-game band without homogenizing it.
+        DRAGON_GOD: { hp: 2.5, atk: 2.2, def: 2.2, mag: 1.8, spd: 1.5, luck: 1.8, crit: 1.8 },
         SHOGUN: { hp: 1.8, atk: 2.0, def: 1.5, mag: 0.8, spd: 1.8, luck: 1.5, crit: 2.2 },
         KAGE: { hp: 1.4, atk: 2.2, def: 1.0, mag: 1.2, spd: 2.8, luck: 2.0, crit: 3.0 },
         VIRTUOSO: { hp: 1.4, atk: 1.2, def: 1.2, mag: 1.8, spd: 1.6, luck: 2.5, crit: 1.5 },
@@ -198,15 +206,20 @@ function getUser(userId) {
 function getXPForLevel(level) {
     if (level <= 1) return 0;
 
-    // 💡 REBALANCE (2026-09-15, owner order: "make it 50% easier to level
-    // up"): cumulative requirement halved again - floor(200 × L²). History:
-    // 2026-08-16 80×L² → 2026-09-14 400×L² (owner: level 81 in days via
-    // raids) → now 200×L² (owner: ×5 felt too heavy). Per-level cost is
-    // 200×(2L+1) = 400L + 200 XP:
-    //   L10:  20,000   L25: 125,000   L50: 500,000
-    //   L75:  1,125,000   L90: 1,620,000   L100: 2,000,000
-    // (L1→2: 600 XP … L99→100: 39,800 XP).
-    return Math.floor(200 * level * level);
+    // 💡 REBALANCE (2026-09-21, ticket #b508e7 - owner order: "Increase
+    // leveling difficulty by 20%"): cumulative requirement raised ×1.2 to
+    // floor(240 × L²). History: 2026-08-16 80×L² → 2026-09-14 400×L² →
+    // 2026-09-15 200×L² (owner: ×5 felt too heavy) → now 240×L² (exact +20%
+    // on the 200 baseline). Per-level cost is 240×(2L+1) XP:
+    //   L10:  24,000   L25: 150,000   L50: 600,000
+    //   L75:  1,350,000   L90: 1,944,000   L100: 2,400,000
+    // (L1→2: 720 XP … L99→100: 47,760 XP).
+    // Single insertion point by design: EVERY source (quests, completion,
+    // raids, abyss, PvP, trivia) and every display derives from this one
+    // function, so the increase cannot double-stack with any modifier. The
+    // Scout Pathfinder solo XP bonus (#b5087a) is a GAIN-side offset and
+    // deliberately separate from this requirement-side change.
+    return Math.floor(240 * level * level);
 }
 
 function getXPForNextLevel(userId) {
@@ -400,17 +413,6 @@ function allocateStatPoint(userId, stat, amount = 1) {
     const s = stat.toLowerCase();
     if (!validStats.includes(s)) return { success: false, message: `Invalid stat!` };
     
-    // NEW: Tier-based scaling for point values
-    const mainUser = economy.getUser(userId);
-    const classSystem = require('./classSystem');
-    const classData = mainUser ? classSystem.getClassById(mainUser.class) : null;
-    
-    let tierMultiplier = 1.0;
-    if (classData?.tier === 'EVOLVED') tierMultiplier = 2.0; // Significant boost
-    if (classData?.tier === 'ASCENDED') tierMultiplier = 2.0; // Balanced - was 4.0, halved to prevent stat explosion
-    
-    const baseStatValues = { hp: 15, atk: 3, def: 2, mag: 3, spd: 2, luck: 2, crit: 1 };
-
     // 💡 OWNER FIX 2026-09-20 ("the Allocate card is not fixed yet"): the old
     // soft cap halved gains past 20 + level/5 points in one stat, so the
     // card advertised "+3/pt, allocate ATK 5 -> +15" while the system paid
@@ -421,8 +423,14 @@ function allocateStatPoint(userId, stat, amount = 1) {
     // per-point (bases are 1/2/3/15, tiers are ×1 or ×2), so the advertised
     // math and the paid math can never diverge again. Min-max discouragement
     // now lives in respec costs and reward tables, not in silent halving.
-    const perPoint = Math.floor(baseStatValues[s] * tierMultiplier);
-    const gainedValue = perPoint * amount;
+    //
+    // 💡 TICKET #b4f78f (2026-09-21): the value math still lives in ONE place
+    // - previewAllocation() - which mirrors EXACTLY this owner contract
+    // (base × tier per point, no soft cap). The UI reads the same function,
+    // so the displayed per-point rate can never disagree with what the
+    // backend pays.
+    const preview = previewAllocation(userId, s, amount);
+    const gainedValue = preview.gainedValue;
     
     // Track points spent per stat so resetStats can refund correctly
     if (!user.allocatedStatPoints) user.allocatedStatPoints = {};
@@ -447,7 +455,23 @@ function resetStats(userId) {
     //
     // If allocatedStatPoints is missing (legacy user), reconstruct it from
     // allocatedStats using the CORRECT reverse conversion rates.
+    //
+    // 💡 TICKET #b4f78f (2026-09-21): the legacy fallback now accounts for
+    // the class TIER multiplier (EVOLVED/ASCENDED = 2.0). The old fallback
+    // divided by the base value only, so a tier-2 allocation (e.g. 6 ATK
+    // from 3 points) refunded DOUBLE the points actually spent. The inverse
+    // uses points = value / (base × tier) and never returns more points than
+    // could have produced the stored value. (Soft-cap halving is deliberately
+    // NOT assumed - it would under-refund legacy users whose allocation
+    // predates the cap.)
     const BASE_STAT_VALUES = { hp: 15, atk: 3, def: 2, mag: 3, spd: 2, luck: 2, crit: 1 };
+    let tierMult = 1.0;
+    try {
+        const classSystem = require('./classSystem');
+        const mainUser = economy.getUser(userId);
+        const classData = mainUser ? classSystem.getClassById(mainUser.class) : null;
+        if (classData?.tier === 'EVOLVED' || classData?.tier === 'ASCENDED') tierMult = 2.0;
+    } catch (e) {}
 
     let totalPointsSpent = 0;
     if (user.allocatedStatPoints) {
@@ -456,7 +480,7 @@ function resetStats(userId) {
         // Legacy fallback: reverse-calculate points from stat values
         for (const [stat, value] of Object.entries(user.allocatedStats)) {
             const baseVal = BASE_STAT_VALUES[stat] || 3;
-            totalPointsSpent += Math.floor((Number(value) || 0) / baseVal);
+            totalPointsSpent += Math.floor((Number(value) || 0) / (baseVal * tierMult));
         }
     }
 
@@ -553,10 +577,61 @@ function getGPLeaderboard(limit = 10) {
     return leaderboard;
 }
 
+// 💡 TICKET #b508e7 companion (#b4f78f): stat points a player earns for
+// climbing from `fromLevel` to `toLevel` - the EXACT formula the level-up
+// paths use (5/level + milestone bonuses). adminConsole setlevel now uses
+// this instead of its old hardcoded 2/level, so granted points always match
+// the same levels earned through play.
+function getStatPointsForRange(fromLevel, toLevel) {
+    const from = Math.max(1, Math.floor(Number(fromLevel) || 1));
+    const to = Math.max(from, Math.floor(Number(toLevel) || from));
+    let points = 0;
+    for (let level = from + 1; level <= to; level++) {
+        points += STAT_GROWTH.STAT_POINTS_PER_LEVEL;
+        if (STAT_GROWTH.MILESTONE_BONUSES[level]) points += STAT_GROWTH.MILESTONE_BONUSES[level];
+    }
+    return points;
+}
+
+// 💡 TICKET #b4f78f: allocation preview - SINGLE source of truth for "how
+// much VALUE do N points buy right now on this stat". Mirrors the owner
+// contract (2026-09-20): every point delivers exactly base × tier - the soft
+// cap was REMOVED by owner ruling ("the card is the contract"), so there is
+// no partial/halving math to diverge from. allocateStatPoint and the
+// .j allocate UI both read this.
+function previewAllocation(userId, stat, amount = 1) {
+    const user = getUser(userId);
+    if (!user) return { gainedValue: 0, perPoint: 0, tierMultiplier: 1, pointsAlreadyInStat: 0 };
+    const validStats = ['hp', 'atk', 'def', 'mag', 'spd', 'luck', 'crit'];
+    const s = String(stat || '').toLowerCase();
+    if (!validStats.includes(s)) {
+        return { gainedValue: 0, perPoint: 0, tierMultiplier: 1, pointsAlreadyInStat: 0 };
+    }
+    const amt = Math.max(1, Math.floor(Number(amount) || 1));
+
+    const mainUser = economy.getUser(userId);
+    const classSystem = require('./classSystem');
+    const classData = mainUser ? classSystem.getClassById(mainUser.class) : null;
+    let tierMultiplier = 1.0;
+    if (classData?.tier === 'EVOLVED') tierMultiplier = 2.0;
+    if (classData?.tier === 'ASCENDED') tierMultiplier = 2.0;
+
+    const baseStatValues = { hp: 15, atk: 3, def: 2, mag: 3, spd: 2, luck: 2, crit: 1 };
+    const perPoint = Math.floor(baseStatValues[s] * tierMultiplier);
+    return {
+        gainedValue: perPoint * amt,
+        perPoint,
+        nextSinglePointValue: perPoint,
+        tierMultiplier,
+        pointsAlreadyInStat: (user.allocatedStatPoints?.[s] || 0),
+    };
+}
+
 module.exports = {
     loadProgression, saveProgression, getUser, addXP, awardXP: addXP, awardGP,
     getLevel, getGP, getXPForLevel, getXPForNextLevel,
     getBaseStats, allocateStatPoint, resetStats, getUserStats, getUserRank,
+    getStatPointsForRange, previewAllocation,
     ACHIEVEMENTS, checkLevelAchievements, checkCommandAchievements, checkGPAchievements,
     getCharacterSheet, getLeaderboard,
     getXPLeaderboard: (limit) => getLeaderboard('xp', limit),

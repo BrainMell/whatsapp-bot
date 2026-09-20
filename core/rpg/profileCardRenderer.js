@@ -638,12 +638,24 @@ async function renderProfileCard(params) {
     // 🧩 SPRITE CONSISTENCY 2026-09-17: resolve the player's ASSIGNED sprite
     // exactly like the Go renderer does: list[spriteIndex % list.length].
     const clsKey = String(params.classData?.id || params.classData?.name || '').toUpperCase();
-    const list = CLASS_SPRITE_SETS[clsKey] || CLASS_SPRITE_SETS.APPRENTICE;
-    const idx = Math.max(0, Math.floor(Number(params.user?.spriteIndex) || 0));
-    const file = list[idx % list.length];
-    spriteImg = await loadChar(file);
-    if (!spriteImg && file !== list[0]) spriteImg = await loadChar(list[0]);
-    if (!spriteImg) spriteImg = await loadChar('apprentice1.png');
+    // 💡 TICKET #b4fbef (2026-09-21): mod-created classes carry their OWN
+    // sprite (newClass.sprite, chosen at creation via the CLASS CREATOR
+    // template). If the class defines one, it wins over the registry -
+    // otherwise custom classes would always fall back to APPRENTICE art.
+    // Same clean/-first resolution + same fallback chain as below.
+    let file = null;
+    if (params.classData?.sprite) {
+      const custom = String(params.classData.sprite).trim().replace(/^\/+/, '');
+      spriteImg = await loadChar(custom.endsWith('.png') ? custom : `${custom}.png`);
+    }
+    if (!spriteImg) {
+      const list = CLASS_SPRITE_SETS[clsKey] || CLASS_SPRITE_SETS.APPRENTICE;
+      const idx = Math.max(0, Math.floor(Number(params.user?.spriteIndex) || 0));
+      file = list[idx % list.length];
+      spriteImg = await loadChar(file);
+      if (!spriteImg && file !== list[0]) spriteImg = await loadChar(list[0]);
+      if (!spriteImg) spriteImg = await loadChar('apprentice1.png');
+    }
   }
   await drawPortrait(ctx, lay.portrait, { pfpImg, spriteImg });
 

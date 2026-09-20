@@ -550,10 +550,18 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
         const allocUser = economy.getUser(senderJid);
         const allocClass = allocUser ? classSystem.getClassById(allocUser.class) : null;
         const allocTier = allocClass?.tier || 'STARTER';
-        const allocMult = (allocTier === 'EVOLVED' || allocTier === 'ASCENDED') ? 2.0 : 1.0;
+        // 💡 TICKET #b4f78f (2026-09-21): the per-point rates shown on this
+        // card come from progression.previewAllocation - the EXACT function
+        // the backend pays with, mirroring the owner contract (every point
+        // delivers base × tier; the soft cap was removed by owner ruling
+        // 2026-09-20). UI and backend read one math source, so they can never
+        // disagree again.
         const allocBase = { hp: 15, atk: 3, def: 2, mag: 3, spd: 2, luck: 2, crit: 1 };
         const allocPerPoint = {};
-        for (const [k, v] of Object.entries(allocBase)) allocPerPoint[k.toUpperCase()] = Math.max(1, Math.floor(v * allocMult));
+        for (const k of Object.keys(allocBase)) {
+          const pv = progression.previewAllocation(senderJid, k, 1);
+          allocPerPoint[k.toUpperCase()] = Math.max(1, pv.nextSinglePointValue || pv.perPoint || 1);
+        }
         const allocProg = progression.getUser(senderJid) || {};
         const allocInvRaw = allocProg.allocatedStatPoints || {};
         const allocInv = {};
@@ -589,10 +597,12 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
           cap += `Available Points: *${Number(sheet.statPoints) || 0}*\n\n`;
           cap += `🎯 *How to allocate - every point delivers the exact value shown:*\n`;
           for (const allocS of ["hp", "atk", "def", "mag", "spd", "luck", "crit"]) {
-            const allocPer = allocPerPoint[allocS.toUpperCase()] || 1;
-            cap += `• \`${getPrefix()} allocate ${allocS} 5\` → +${allocPer * 5} ${allocS.toUpperCase()}\n`;
+            // 💡 TICKET #b4f78f: show what 5 points ACTUALLY buy (base × tier,
+            // from the same function the backend pays with).
+            const allocPreview = progression.previewAllocation(senderJid, allocS, 5);
+            cap += `• \`${getPrefix()} allocate ${allocS} 5\` → +${allocPreview.gainedValue} ${allocS.toUpperCase()}\n`;
           }
-          cap += `\n💡 *Higher class tiers get more value per point!*`;
+          cap += `\n💡 *EVOLVED and ASCENDED classes earn double per point!*`;
           return await sock.sendMessage(chatId, { image: cardBuffer, caption: getBotMarker() + cap }, { quoted: m });
         }
       } catch (cardErr) {

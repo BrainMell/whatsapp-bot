@@ -168,6 +168,10 @@ for (let i = 0; i < 200; i++) {
 console.log('✓ enemyVariants: spawn policy by depth, MIRROR/DRIFTER rules, data-level swap, sprite mapping');
 
 // ─── worldMap gates (locked = requirement text, never a render) ─────────────
+// 💡 STUB ENGINE (#b4f71c staff bypass): worldMap._isStaff lazily requires
+// ../engine - pre-seed the require cache so QA never loads the real engine.
+const __enginePath = require.resolve('../core/engine.js');
+require.cache[__enginePath] = { id: __enginePath, filename: __enginePath, loaded: true, exports: { isBotOwner: () => false, isGlobalMod: () => false, isRpgMod: () => false } };
 const worldMap = require('../core/rpg/worldMap');
 assert.strictEqual(worldMap.ABYSS_MAP_UNLOCK, 20); // CONFIRMED by owner (2026-09-19)
 {

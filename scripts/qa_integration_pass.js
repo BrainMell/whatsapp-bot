@@ -3,6 +3,13 @@
 process.env.NODE_ENV = 'test';
 
 const assert = require('assert');
+
+// 💡 STUB ENGINE (#b4f71c staff bypass): worldMap._isStaff lazily requires
+// ../engine - pre-seed the require cache so QA never loads the real engine.
+// Non-staff stub keeps the "afterlife never renders for players" contract.
+const __enginePath = require.resolve('../core/engine.js');
+require.cache[__enginePath] = { id: __enginePath, filename: __enginePath, loaded: true, exports: { isBotOwner: () => false, isGlobalMod: () => false, isRpgMod: () => false } };
+
 const cosmology = require('../core/rpg/cosmology');
 const loreDrops = require('../core/rpg/loreDrops');
 const enemyVariants = require('../core/rpg/enemyVariants');

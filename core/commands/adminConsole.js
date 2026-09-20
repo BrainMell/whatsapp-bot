@@ -177,6 +177,26 @@ async function handleModClass(sock, chatId, senderJid, args, BOT_MARKER, prefix)
 // 2. ADMIN CONSOLE - Direct Actions
 // ═══════════════════════════════════════════════════════════════════════════
 
+// 💡 TICKET #b4f7bd (2026-09-21): robust numeric parsing for every numeric
+// admin command (givezeni, givepoints, setwallet, setlevel, setstat,
+// sandbox amounts...). parseInt used to read "1,000" as 1 and "100k" as 100,
+// and amounts copy-pasted from WhatsApp linkified text can carry invisible
+// Unicode (\u2060 etc.) that made parseInt return NaN - the reported
+// "plain numbers like 100/5000 are rejected" behavior.
+function parseAdminNumber(raw) {
+    if (raw === undefined || raw === null) return NaN;
+    let s = String(raw)
+        .replace(/[\u200b-\u200f\u202a-\u202e\u2060-\u2064\uFEFF]/g, '') // invisibles
+        .replace(/[,\s'_]/g, '')                                        // separators
+        .toLowerCase();
+    let mult = 1;
+    if (/\dk$/.test(s)) { mult = 1e3; s = s.replace(/k$/, ''); }
+    else if (/\dm$/.test(s)) { mult = 1e6; s = s.replace(/m$/, ''); }
+    else if (/\db$/.test(s)) { mult = 1e9; s = s.replace(/b$/, ''); }
+    if (!/^\d+(\.\d+)?$/.test(s)) return NaN;
+    return Math.floor(parseFloat(s) * mult);
+}
+
 async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix, getMentionOrReply) {
     const sub = args[0]?.toLowerCase();
 
@@ -419,7 +439,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
         const { target, remaining } = _parsed;
-        const level = parseInt(remaining[0]);
+        const level = parseAdminNumber(remaining[0]);
         if (!level || level < 1 || level > 100) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin setlevel <@user> <1-100>\`` });
         }
@@ -430,10 +450,16 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         user.progression = user.progression || {};
         user.progression.level = level;
         user.progression.xp = xpForLevel;
-        user.progression.statPoints = (user.progression.statPoints || 0) + (level - oldLevel) * 2;
+        // 💡 TICKET #b4f78f (2026-09-21): the grant rate was 2/level while the
+        // normal level-up path awards 5/level + milestone bonuses - setlevel
+        // silently UNDER-granted stat points vs the same levels earned through
+        // play. Use the exact same formula (single source of truth in
+        // progression.getStatPointsForRange).
+        const __statPtsDelta = progression.getStatPointsForRange(oldLevel, level);
+        user.progression.statPoints = (user.progression.statPoints || 0) + __statPtsDelta;
         economy.scheduleSave(target);
         return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `✅ *LEVEL SET*\n\n👤 @${economy.getDisplayName(target)}\n📊 Level: ${oldLevel} → *${level}*\n⚡ XP set to ${xpForLevel.toLocaleString()}\n💎 +${(level - oldLevel) * 2} stat points granted`,
+            text: BOT_MARKER + `✅ *LEVEL SET*\n\n👤 @${economy.getDisplayName(target)}\n📊 Level: ${oldLevel} → *${level}*\n⚡ XP set to ${xpForLevel.toLocaleString()}\n💎 +${__statPtsDelta} stat points granted (5/level + milestones)`,
             mentions: [target]
         });
     }
@@ -444,7 +470,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         if (!_parsed) return;
         const { target, remaining } = _parsed;
         const statName = (remaining[0] || '').toLowerCase();
-        const value = parseInt(remaining[1]);
+        const value = parseAdminNumber(remaining[1]);
         const validStats = ['hp', 'atk', 'def', 'mag', 'spd', 'luck', 'crit'];
         if (!target || !validStats.includes(statName) || isNaN(value)) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin setstat <@user> <hp|atk|def|mag|spd|luck|crit> <value>\`` });
@@ -455,6 +481,15 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         user.progression.allocatedStats = user.progression.allocatedStats || {};
         const oldValue = user.progression.allocatedStats[statName] || 0;
         user.progression.allocatedStats[statName] = value;
+        // 💡 TICKET #b4f78f (2026-09-21): allocatedStatPoints is the refund
+        // LEDGER that resetStats/.j respec read - setstat used to write
+        // allocatedStats ONLY, so a later respec refunded the wrong number of
+        // points for the stat the admin touched. Keep the ledger in sync with
+        // the tier-1 equivalent (conservative: never refunds more than the
+        // base conversion rate implies).
+        user.progression.allocatedStatPoints = user.progression.allocatedStatPoints || {};
+        const __baseVals = { hp: 15, atk: 3, def: 2, mag: 3, spd: 2, luck: 2, crit: 1 };
+        user.progression.allocatedStatPoints[statName] = Math.max(0, Math.round(value / (__baseVals[statName] || 3)));
         economy.scheduleSave(target);
         return await sock.sendMessage(chatId, {
             text: BOT_MARKER + `✅ *STAT SET*\n\n👤 @${economy.getDisplayName(target)}\n📊 ${statName.toUpperCase()}: ${oldValue} → *${value}*`,
@@ -467,7 +502,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
         const { target, remaining } = _parsed;
-        const amount = parseInt(remaining[0]);
+        const amount = parseAdminNumber(remaining[0]);
         if (!target || !Number.isSafeInteger(amount) || amount < 0) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin setwallet <@user> <amount>\`` });
         }
@@ -825,7 +860,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
         const { target, remaining } = _parsed;
-        const amount = parseInt(remaining[0]);
+        const amount = parseAdminNumber(remaining[0]);
         if (!target || !Number.isSafeInteger(amount) || amount <= 0) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin givepoints <@user> <amount>\`` });
         }
@@ -846,9 +881,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
         const { target, remaining } = _parsed;
-        const amount = parseInt(remaining[0]);
+        const amount = parseAdminNumber(remaining[0]);
         if (!target || !Number.isSafeInteger(amount) || amount <= 0) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin givezeni <@user> <amount>\`` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin givezeni <@user> <amount>\`\nAmounts accept plain numbers and separators: \`100\`, \`5,000\`, \`5k\`` });
         }
         const user = economy.getUser(target);
         if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ User not found.' });
@@ -1027,7 +1062,23 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
     // ── CREATE CLASS (template) ────────────────────────────────────────────
     if (sub === 'createclass') {
-        const template = `📝 *CLASS CREATOR*\n\nReply to this message with the filled-in template:\n\n\`\`\`\nName: <class name>\nIcon: <emoji>\nTier: <STARTER|EVOLVED|ASCENDED>\nRole: <TANK|DPS|MAGE|SUPPORT|HYBRID>\nHP: <base hp>\nATK: <base atk>\nDEF: <base def>\nMAG: <base mag>\nSPD: <base spd>\nLUCK: <base luck>\nCRIT: <base crit>\nDesc: <short description>\nEvolvesFrom: <parent class ID or NONE>\nReqLevel: <level to evolve into this - optional>\nReqQuests: <quests to evolve into this - optional>\nPassiveName: <passive name>\nPassiveEffect: <all_stats|dodge_chance|magic_damage|regen|lifesteal|damage_reduction|scaling_damage|crit_when_low|etc>\nPassiveValue: <number>\n\`\`\`\n\n_Created classes are saved to the database - they survive restarts._`;
+        // 💡 TICKET #b4fbef (2026-09-21): Sprite field added - mods can pick
+        // the class's sprite at creation time. Values are file names from
+        // core/rpgasset/characters (clean/ copies preferred automatically).
+        const spriteNames = (() => {
+            try {
+                const fs = require('fs');
+                const path = require('path');
+                const dir = path.join(__dirname, '..', 'rpgasset', 'characters');
+                const clean = path.join(dir, 'clean');
+                const all = new Set();
+                for (const d of [dir, clean]) {
+                    try { for (const f of fs.readdirSync(d)) if (f.toLowerCase().endsWith('.png')) all.add(f); } catch (e) {}
+                }
+                return Array.from(all).sort().slice(0, 10).join(', ') + ', ...';
+            } catch (e) { return 'e.g. warrior1.png'; }
+        })();
+        const template = `📝 *CLASS CREATOR*\n\nReply to this message with the filled-in template:\n\n\`\`\`\nName: <class name>\nIcon: <emoji>\nSprite: <sprite file - optional, e.g. ${spriteNames}>\nTier: <STARTER|EVOLVED|ASCENDED>\nRole: <TANK|DPS|MAGE|SUPPORT|HYBRID>\nHP: <base hp>\nATK: <base atk>\nDEF: <base def>\nMAG: <base mag>\nSPD: <base spd>\nLUCK: <base luck>\nCRIT: <base crit>\nDesc: <short description>\nEvolvesFrom: <parent class ID or NONE>\nReqLevel: <level to evolve into this - optional>\nReqQuests: <quests to evolve into this - optional>\nPassiveName: <passive name>\nPassiveEffect: <all_stats|dodge_chance|magic_damage|regen|lifesteal|damage_reduction|scaling_damage|crit_when_low|etc>\nPassiveValue: <number>\n\`\`\`\n\n_Created classes are saved to the database - they survive restarts. The Sprite you pick is used on character sheets; unknown names fall back to the Apprentice art._`;
         return await sock.sendMessage(chatId, { text: BOT_MARKER + template });
     }
 
@@ -1315,7 +1366,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
         const { target, remaining } = _parsed;
-        const amount = parseInt(remaining[0]);
+        const amount = parseAdminNumber(remaining[0]);
         if (!target || !Number.isSafeInteger(amount) || amount < 0) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin setskillpoints <@user> <amount>\`\n\n_Sets RPG skill points (used to unlock abilities). Use \`givepoints\` for stat points._` });
         }
@@ -1335,7 +1386,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
         const { target, remaining } = _parsed;
-        const amount = parseInt(remaining[0]);
+        const amount = parseAdminNumber(remaining[0]);
         if (!target || !Number.isSafeInteger(amount) || amount <= 0) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin giveskillpoints <@user> <amount>\`` });
         }
@@ -1753,7 +1804,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
         // ── sandbox setwallet <amount> ──
         if (sandboxSub === 'setwallet') {
-            const amount = parseInt(args[2]);
+            const amount = parseAdminNumber(args[2]);
             if (!Number.isSafeInteger(amount) || amount < 0) {
                 return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin sandbox setwallet <amount>\`` });
             }
@@ -1768,7 +1819,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
         // ── sandbox givezeni <amount> ──
         if (sandboxSub === 'givezeni') {
-            const amount = parseInt(args[2]);
+            const amount = parseAdminNumber(args[2]);
             if (!Number.isSafeInteger(amount) || amount <= 0) {
                 return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin sandbox givezeni <amount>\`` });
             }
@@ -2089,6 +2140,33 @@ async function handleClassCreationReply(sock, chatId, senderJid, replyText, BOT_
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ A class with ID \`${classId}\` already exists. Pick a different name.` });
         }
 
+        // 💡 TICKET #b4fbef (2026-09-21): SPRITE selection - validate against
+        // the actual sprite files on disk (characters/ + characters/clean/)
+        // so a typo degrades to the Apprentice fallback with a clear warning
+        // instead of a silently broken class.
+        let spriteWarning = null;
+        let chosenSprite = null;
+        if (data.Sprite) {
+            const fs = require('fs');
+            const path = require('path');
+            const charDir = path.join(__dirname, '..', 'rpgasset', 'characters');
+            const wantedRaw = String(data.Sprite).trim().replace(/^\/+/, '');
+            const wanted = wantedRaw.toLowerCase().endsWith('.png') ? wantedRaw : `${wantedRaw}.png`;
+            let found = null;
+            try {
+                const files = new Set();
+                for (const d of [charDir, path.join(charDir, 'clean')]) {
+                    try { for (const f of fs.readdirSync(d)) files.add(f); } catch (e) {}
+                }
+                found = Array.from(files).find((f) => f.toLowerCase() === wanted.toLowerCase());
+            } catch (e) {}
+            if (found) {
+                chosenSprite = found;
+            } else {
+                spriteWarning = `Sprite "${data.Sprite}" not found in the sprite library - the class will use Apprentice art until it is re-created with a valid file name.`;
+            }
+        }
+
         // ── validated fields ──
         const TIERS = ['STARTER', 'EVOLVED', 'ASCENDED'];
         const ROLES = ['TANK', 'DPS', 'MAGE', 'SUPPORT', 'HYBRID'];
@@ -2120,6 +2198,7 @@ async function handleClassCreationReply(sock, chatId, senderJid, replyText, BOT_
             },
             evolves_into: [],
         };
+        if (chosenSprite) newClass.sprite = chosenSprite;
 
         if (data.EvolvesFrom && data.EvolvesFrom.toUpperCase() !== 'NONE') {
             const parent = classSystem.getClassById(data.EvolvesFrom.toUpperCase());
@@ -2170,8 +2249,10 @@ async function handleClassCreationReply(sock, chatId, senderJid, replyText, BOT_
         }
 
         let msg = `✅ *CLASS CREATED!*\n\n${data.Icon || '✨'} *${data.Name}*\n🆔 \`${classId}\`\n📊 Tier: ${newClass.tier} | Role: ${newClass.role}\n❤️ HP: ${newClass.stats.hp} | ⚔️ ATK: ${newClass.stats.atk} | 🛡️ DEF: ${newClass.stats.def}\n🔮 MAG: ${newClass.stats.mag} | 💨 SPD: ${newClass.stats.spd} | 🍀 LUCK: ${newClass.stats.luck}\n📝 ${data.Desc || ''}\n`;
+        if (chosenSprite) msg += `🖼️ Sprite: *${chosenSprite}*\n`;
         if (newClass.evolvedFrom) msg += `🧬 Evolves from: *${newClass.evolvedFrom}*${newClass.requirement ? ` (Lv ${newClass.requirement.level || 0}+ / ${newClass.requirement.questsCompleted || 0} quests)` : ''}\n`;
         if (newClass.passive) msg += `✨ Passive: ${newClass.passive.name} (${newClass.passive.effect} ${newClass.passive.value})\n`;
+        if (spriteWarning) msg += `\n⚠️ ${spriteWarning}\n`;
         if (warnings.length) msg += `\n⚠️ ${warnings.join('\n⚠️ ')}\n`;
         msg += `\n💾 _Saved to database - survives restarts._\n_Selectable now via \`${prefix} modclass ${data.Name}\`; players see it in \`${prefix} classes\`${newClass.evolvedFrom ? ' and it appears in the evolve chain' : ''}._`;
 
@@ -2189,4 +2270,6 @@ module.exports = {
     resolveClass,
     resolveSkill,
     resolveItem,
+    // 💡 TICKET #b4f7bd: exported for QA pinning (scripts/qa_ticket_pass.js)
+    parseAdminNumber,
 };

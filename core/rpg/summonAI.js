@@ -304,8 +304,13 @@ async function performSummonAction(sock, summonEntity, sessionKey) {
         const abilityRes = await guildAdventure.applyAbilityEffect(
           sock, summonEntity, skill, effect, targetIndex, chatId
         );
-        if (abilityRes && abilityRes.msg) {
-          actionMsg += abilityRes.msg;
+        if (abilityRes && abilityRes.message) {
+          // 💡 FIX (2026-09-21, summon ticket pass): applyAbilityEffect returns
+          // { message, damage, healing } - the old code read `.msg`, which is
+          // always undefined, so the summon-skill branch ALWAYS fell through
+          // to the generic "uses a skill" line and the real effect text
+          // (damage breakdown, buffs, CC) was never shown.
+          actionMsg += abilityRes.message;
         } else {
           actionMsg += `✨ ${summonEntity.icon} ${summonEntity.name} uses ${skill.name || 'a skill'}!`;
         }
@@ -326,6 +331,20 @@ async function performSummonAction(sock, summonEntity, sessionKey) {
   } else {
     actionMsg += `${summonEntity.icon} ${summonEntity.name} hesitates.`;
   }
+
+  // 💡 TICKET #b4fc58 (2026-09-21): FACING. The summon now records which way
+  // it is facing after every decision, and the combat renderer payload
+  // carries that facing (combatImageGenerator -> Go renderer). Summon
+  // entities default to facing the enemy side ('right'); when the action
+  // targets an ally (guard/heal/ally-buff) it turns back toward its own
+  // side ('left'). This mirrors the player-sprite facing behavior contract.
+  try {
+    if (decision.target) {
+      summonEntity.facing = decision.target.isEnemy ? 'right' : 'left';
+    } else {
+      summonEntity.facing = 'right';
+    }
+  } catch (e) {}
 
   // 7. Send the action message + generate combat image
   if (actionMsg.trim()) {

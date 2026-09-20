@@ -745,6 +745,13 @@ function buildCombatEntity(summon, summonerJid) {
     isStationary: species?.isStationary || false,  // turrets can't move
     autoAttack: species?.autoAttack || false,
 
+    // 💡 TICKET #b4fc58 (2026-09-21): facing default - player-side summons
+    // stand on the left of the battle scene and face the enemy side ('right').
+    // summonAI.performSummonAction updates this every turn based on the
+    // action's target (enemy → 'right', ally → 'left'), and the combat
+    // renderer payload carries it so the sprite flips like player sprites do.
+    facing: 'right',
+
     // Echo to apply on death
     echoId: summon.echoId,
 

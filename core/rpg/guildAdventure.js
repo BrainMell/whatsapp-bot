@@ -1988,8 +1988,32 @@ setInterval(() => {
     const now = Date.now();
     let swept = 0;
     for (const [key, state] of gameStates.entries()) {
-        // Skip active states (inCombat means a fight is in progress)
-        if (state?.inCombat) continue;
+        // 💡 TICKET #b4c0ff(c) (2026-09-21): wedged-combat reaping. Active
+        // fights are still skipped - BUT a fight whose turn machinery is
+        // fully dead (no resolveTurn, no timers, nobody processing, no
+        // pending actions) can never advance again and used to be skipped
+        // forever, leaking the state and pinning the "⏳ Next action
+        // loading..." card. If nothing is armed that could ever advance the
+        // fight AND it has been idle >30 min, end and reap it.
+        if (state?.inCombat) {
+            const __hasPending = state.pendingActions && Object.keys(state.pendingActions).length > 0;
+            const __armed = state.resolveTurn || state.combatProcessing || __hasPending ||
+              (state.timers && Object.values(state.timers).some((t) => !!t));
+            if (!__armed) {
+                const __last = state.lastActivity || state.createdAt || 0;
+                if (__last > 0 && (now - __last) > STALE_STATE_TIMEOUT_MS) {
+                    state.inCombat = false;
+                    state.active = false;
+                    if (state.timers) {
+                        Object.values(state.timers).forEach((t) => { if (t) clearTimeout(t); });
+                    }
+                    gameStates.delete(key);
+                    swept++;
+                    console.log(`🧹 [GameStates] Reaped wedged combat ${key} (inCombat but nothing armed, idle >30min).`);
+                }
+            }
+            continue;
+        }
         // Check lastActivity - fall back to createdAt if not set
         const lastActivity = state?.lastActivity || state?.createdAt || 0;
         if (lastActivity > 0 && (now - lastActivity) > STALE_STATE_TIMEOUT_MS) {
@@ -2418,7 +2442,7 @@ function calculateDamage(
   // passiveKillBonus from damage_on_kill if present (consumed after this hit).
   if (!attacker.isEnemy) {
     try {
-      const passiveMult = getClassPassiveDamageMult(attacker, target, isAbility);
+      const passiveMult = getClassPassiveDamageMult(attacker, target, isAbility, { solo: _isSoloFighter(attacker, chatId) });
       if (passiveMult !== 1) damage = Math.floor(damage * passiveMult);
       // One-shot kill bonus (consumed on use)
       if (attacker.passiveKillBonus && attacker.passiveKillBonus > 1) {
@@ -3642,13 +3666,83 @@ function applyClassPassivePerTurn(player, state) {
 
 // Get a damage multiplier (1.0 = no change) from inline damage passives.
 // Called from calculateDamage when computing outgoing damage.
-function getClassPassiveDamageMult(attacker, target, isAbility) {
+// 💡 TICKET #b4c0ff companion: one icon resolver for every combat message
+// that prints a target icon. Players never carry `.icon` (their emoji lives
+// on `.class.icon`) and some raw enemy entities reach message builders
+// without an icon fallback - both produced literal
+// "undefined MellowDiHOfHeaven takes 30 damage!" lines. Every target-icon
+// template now goes through this, so no combat message can print `undefined`.
+function combatTargetIcon(target) {
+  if (!target) return "👤";
+  if (target.isEnemy || target.isSummon) return target.icon || "👾";
+  return target.class?.icon || "👤";
+}
+
+// 💡 TICKET #b5087a (2026-09-21): Pathfinder XP. A Scout (solo_hunter
+// passive) hunting with NO living allies earns +25% XP - which offsets the
+// global +20% XP-curve increase (#b508e7) specifically on the Scout solo
+// leveling path, so the harder curve does not make the existing solo
+// problem worse. Party play gains nothing from it.
+function _soloHunterXpMult(player, state) {
+  try {
+    if (!player || player.isDead || player.isEnemy || player._isSummon || player.isSummon) return 1;
+    const passive = player.class?.passive;
+    if (!passive || passive.effect !== 'solo_hunter') return 1;
+    const alive = (state?.players || []).filter((p) => p && !p.isDead && !p._isSummon && !p.isSummon);
+    if (alive.length !== 1) return 1;
+    const value = Number(passive.value) || 25;
+    return 1 + value / 100;
+  } catch (e) {
+    return 1;
+  }
+}
+
+// 💡 TICKET #b5087a (2026-09-21): is the attacker the ONLY living human in
+// this fight? Used by the Scout Pathfinder passive (solo_hunter). Duels and
+// PvP keep their own storage, so a missing state simply means "not solo".
+function _isSoloFighter(attacker, sessionKey) {
+  try {
+    if (!attacker || attacker.isEnemy || attacker._isSummon || !sessionKey) return false;
+    const st = gameStates.get(sessionKey);
+    if (!st || !Array.isArray(st.players)) return false;
+    const alive = st.players.filter((p) => p && !p.isDead && !p._isSummon && !p.isSummon);
+    return alive.length === 1 && (alive[0] === attacker || alive[0].jid === attacker.jid);
+  } catch (e) {
+    return false;
+  }
+}
+
+function getClassPassiveDamageMult(attacker, target, isAbility, ctx = {}) {
   if (!attacker || !attacker.class || !attacker.class.passive) return 1;
   if (attacker.isEnemy) return 1;  // passives are for players only
 
   const passive = attacker.class.passive;
   const value = Number(passive.value) || 0;
   let mult = 1;
+
+  // 💡 TICKET #b5087a (2026-09-21): DRAGON'S FURY. Dragon God lost ALL
+  // offensive passives on evolution - Dragonslayer's dragon_3x (3x vs
+  // dragonkind) was replaced by the purely defensive Dragon Heart, while
+  // the mage ASCENDED line kept magic_damage/energy passives and bigger
+  // MAG scaling. Formula audit: Dragon God's ult scales off its weakest
+  // stat (MAG mod 1.5 vs mages 2.0-2.2), its energy pool is the smallest
+  // (3x MAG term), and as a TANK it draws 1.5x threat. Dragon Heart now
+  // also carries the dragon's wrath: +25% outgoing damage on everything,
+  // and the dragon-slaying bane carries over (3x vs dragon-kind).
+  if (attacker.class.id === 'DRAGON_GOD') {
+    mult *= 1.25;
+    if (target && target.id && String(target.id).toUpperCase().includes('DRAGON')) {
+      mult *= 3;
+    }
+  }
+
+  // 💡 TICKET #b5087a: SCOUT PATHFINDER - Scouts had no passive at all and
+  // the worst solo-leveling kit (ATK growth 1.1, HP 0.9, def 0.8 against
+  // solo-scaled enemies). +25% damage while fighting with no allies keeps
+  // the solo path practical (matches the Pathfinder XP bonus).
+  if (passive.effect === 'solo_hunter' && ctx && ctx.solo) {
+    mult *= 1 + (value > 0 ? value : 25) / 100;
+  }
 
   switch (passive.effect) {
     case 'damage_when_low_hp':
@@ -4625,7 +4719,7 @@ async function performAction(sock, player, action, sessionKey) {
         resultMsg += noDamageReason;
         turnInfo.action = { name: "Failed Attack" };
       } else if (wasEvaded) {
-        resultMsg += `💨 *MISS!* ${resolvedTarget.icon} ${resolvedTarget.name} evaded the attack.`;
+        resultMsg += `💨 *MISS!* ${combatTargetIcon(resolvedTarget)} ${resolvedTarget.name} evaded the attack.`;
         turnInfo.action = { name: "Missed Attack" };
       } else {
         resolvedTarget.stats.hp -= damage;
@@ -4657,7 +4751,7 @@ async function performAction(sock, player, action, sessionKey) {
         };
         resolvedTarget.combatStats.damageTaken += damage;
 
-        resultMsg += `${isCrit ? "💥 CRITICAL! " : ""}Strikes ${resolvedTarget.icon} ${resolvedTarget.name} for *${damage}* damage!`;
+        resultMsg += `${isCrit ? "💥 CRITICAL! " : ""}Strikes ${combatTargetIcon(resolvedTarget)} ${resolvedTarget.name} for *${damage}* damage!`;
 
         // ⚔️ Weapon & Equipment Passive Triggers on Hit
         const weaponId = player.equipment?.main_hand?.id || player.equipment?.main_hand;
@@ -5142,6 +5236,22 @@ async function performAction(sock, player, action, sessionKey) {
     try {
       await sock.sendMessage(state.chatId, { text: '⚠️ Action failed (error: ' + (err?.message || 'unknown') + '). Your turn has been reset - try again.' }).catch(() => {});
     } catch (e) {}
+    // 💡 TICKET #b4c0ff(c) (2026-09-21): the failed action used to leave the
+    // turn promise UNRESOLVED forever - the turn timer was already cleared at
+    // the top of performAction, nothing re-armed it, and the round loop blocked
+    // on the promise with the last turn card stuck on "⏳ Next action loading..."
+    // indefinitely. The failed action now counts as a skipped turn: resolve the
+    // promise so the round always advances (pendingActions is cleared in the
+    // finally below, so the player's next action starts a fresh turn).
+    try {
+      if (state && state.inCombat && state.resolveTurn) {
+        const __resolveFailedTurn = state.resolveTurn;
+        state.resolveTurn = null;
+        __resolveFailedTurn();
+      }
+    } catch (resolveErr) {
+      console.error('[Combat] failed to resolve hung turn:', resolveErr?.message || resolveErr);
+    }
   } finally {
     // 💡 GUARANTEE: always clear pendingActions, even if we threw somewhere.
     // This is the fix for the "Action already chosen!" soft-lock bug.
@@ -5245,7 +5355,9 @@ async function performEnemyAction(sock, enemy, sessionKey) {
           const statusPrefix = state.pendingStatusMsg ? state.pendingStatusMsg + '\n' : '';
           state.pendingStatusMsg = null;
           if (abilityRes && abilityRes.message) {
-            const fullMsg = statusPrefix + `💥 *${enemy.name}* UNLEASHES *${skillData.name}*!\n\n${abilityRes.message.trim()}`;
+            // 💡 TICKET #b4c0ff: the "UNLEASHES" telegraph above already
+            // announced the enemy + skill once - don't repeat it here.
+            const fullMsg = statusPrefix + abilityRes.message.trim();
             try { await sock.sendMessage(chatId, { text: fullMsg }); } catch (e) {}
           }
           setTimeout(() => resolve(), turnDelay);
@@ -5296,7 +5408,10 @@ async function performEnemyAction(sock, enemy, sessionKey) {
           state.pendingStatusMsg = null;
           state.roundLog = state.roundLog || [];
           if (abilityRes && abilityRes.message) {
-            const fullMsg = statusPrefix + `💥 *${enemy.name}* UNLEASHES THE CHARGE!\n\n${abilityRes.message.trim()}`;
+            // 💡 TICKET #b4c0ff: single announcement - the charge-release
+            // telegraph above already named the enemy, so this is the
+            // breakdown only.
+            const fullMsg = statusPrefix + abilityRes.message.trim();
             let sentImmediately = false;
             try {
               await sock.sendMessage(chatId, { text: fullMsg });
@@ -5396,8 +5511,14 @@ async function performEnemyAction(sock, enemy, sessionKey) {
         // damage wasn't being shown.
         state.roundLog = state.roundLog || [];
         if (abilityRes && abilityRes.message) {
-          // Build a combined message: announcement + damage breakdown
-          const fullMsg = `⚡ *${enemy.name}* uses *${skill.name}*!\n\n${abilityRes.message.trim()}`;
+          // 💡 TICKET #b4c0ff (2026-09-21): this used to prepend ANOTHER
+          // "⚡ *enemy* uses *skill*!" line even though applyAbilityEffect
+          // already opens its message with "<icon> <enemy> uses *<ability>*!"
+          // - so the enemy name AND the ability name appeared twice in one
+          // message (the "Abyssal Singularity displayed twice" report).
+          // The breakdown message is now sent as-is: one announcement, then
+          // the damage lines.
+          const fullMsg = abilityRes.message.trim();
           let sentImmediately = false;
           try {
             await sock.sendMessage(chatId, { text: fullMsg });
@@ -6617,7 +6738,11 @@ async function endCombat(sock, victory, sessionKey) {
   const playerCount = Math.max(1, alivePlayers.length);
   // Total gold = base × player count (boss fights don't multiply by player count)
   const totalGold = baseGold * (isBossFight ? 1 : playerCount);
-  const xpPerPlayer = Math.floor(totalXP / playerCount);
+  let xpPerPlayer = Math.floor(totalXP / playerCount);
+  // 💡 TICKET #b5087a: solo Scout Pathfinder XP bonus (see helper above).
+  if (playerCount === 1 && alivePlayers.length === 1) {
+    xpPerPlayer = Math.floor(xpPerPlayer * _soloHunterXpMult(alivePlayers[0], state));
+  }
   const goldPerPlayer = Math.floor(totalGold / playerCount);
 
   const encounterType = state.currentEncounterType || "COMBAT";
@@ -8772,6 +8897,10 @@ async function endAdventure(sock, sessionKey, victory = true) {
   for (const player of state.players) {
    try {
     const finalXP = Math.floor(_baseCompletionXP * multiplier);
+    // 💡 TICKET #b5087a: solo Scout Pathfinder XP bonus applies to quest
+    // completion XP as well as per-combat XP.
+    const __soloXpMult = _soloHunterXpMult(player, state);
+    const __finalXPBase = Math.floor(finalXP * __soloXpMult);
     let finalGold = Math.floor(player.goldEarned * multiplier * (1 + (player.passiveGoldFind || 0) / 100));
     let bonusGold = player.isDead ? 0 : _baseBonusGold;
     const gpGain = player.isDead ? 0 : _baseGp;
@@ -8791,7 +8920,7 @@ async function endAdventure(sock, sessionKey, victory = true) {
       let guildBonusGold = 0;
       let guildBonusXp = 0;
       if (guildGoldMult > 1.0) guildBonusGold = Math.floor((finalGold + bonusGold) * (guildGoldMult - 1.0));
-      if (guildXpMult > 1.0) guildBonusXp = Math.floor(finalXP * (guildXpMult - 1.0));
+      if (guildXpMult > 1.0) guildBonusXp = Math.floor(__finalXPBase * (guildXpMult - 1.0));
 
       // 💡 QA FIX: apply guild bonus BEFORE the gold cap, not after.
       // Previously the cap applied to base gold, then guild bonus was
@@ -8801,7 +8930,7 @@ async function endAdventure(sock, sessionKey, victory = true) {
       // player earned way less XP than they actually did. The per-combat
       // XP was already awarded via progression.addXP during each fight,
       // but never shown in the final summary.
-      const totalXpEarned = (player.xpEarned || 0) + finalXP + guildBonusXp;
+      const totalXpEarned = (player.xpEarned || 0) + __finalXPBase + guildBonusXp;
       let totalGoldThisRun = finalGold + bonusGold + guildBonusGold;
       // 💡 OWNER RULE (2026-09-12): if a lucky run blows past the per-run
       // gold cap, silently scale the payout to the cap - NEVER tell the
@@ -8813,7 +8942,7 @@ async function endAdventure(sock, sessionKey, victory = true) {
         bonusGold = Math.floor(bonusGold * ratio);
         totalGoldThisRun = finalGold + bonusGold; // recalculate without guild bonus (it's absorbed)
       }
-      msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${totalXpEarned.toLocaleString()} _(combat: ${(player.xpEarned || 0).toLocaleString()} + bonus: ${(finalXP + guildBonusXp).toLocaleString()})_\n  💰 Gold: ${totalGoldThisRun.toLocaleString()}\n  🏅 GP: +${gpGain}\n  ${player.isDead ? "💀 Fallen" : "✅ Survived"}\n\n`;
+      msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${totalXpEarned.toLocaleString()} _(combat: ${(player.xpEarned || 0).toLocaleString()} + bonus: ${(__finalXPBase + guildBonusXp).toLocaleString()})_\n  💰 Gold: ${totalGoldThisRun.toLocaleString()}\n  🏅 GP: +${gpGain}\n  ${player.isDead ? "💀 Fallen" : "✅ Survived"}\n\n`;
       portraitPlayers.push({ name: player.name, xp: `+${totalXpEarned.toLocaleString()} XP`, zeni: `+${totalGoldThisRun.toLocaleString()} ${economy.getZENI ? economy.getZENI() : 'Z'}` });
 
       // 💡 FIX 2026-09-19 (tester re-report): addMoney returns false when the
@@ -8900,11 +9029,12 @@ async function endAdventure(sock, sessionKey, victory = true) {
     }
 
     // 💡 Phase 2: Apply guild XP multiplier to the XP award
-    let xpToAward = finalXP;
+    // (base includes the solo Scout Pathfinder bonus - see __finalXPBase)
+    let xpToAward = __finalXPBase;
     try {
       const guildPerks = require('./guildPerks');
       const guildXpMult = guildPerks.getXpMultiplier(player.jid);
-      xpToAward = Math.floor(finalXP * guildXpMult);
+      xpToAward = Math.floor(__finalXPBase * guildXpMult);
     } catch (e) {}
     progression.awardXP(player.jid, xpToAward);
 
@@ -9678,9 +9808,7 @@ async function applyAbilityEffect(
       if (target.stats.hp <= 0) {
         target.justDied = true;
       }
-      const targetIcon = target.isEnemy
-        ? target.icon
-        : target.class?.icon || "👤";
+      const targetIcon = combatTargetIcon(target);
       msg += `💥 ${targetIcon} ${target.name} takes ${damage} damage!`;
       if (isCrit) msg += ` 💥 *CRITICAL HIT!*`;
       msg += `\n`;
@@ -9859,7 +9987,10 @@ async function applyAbilityEffect(
       if (target.stats.hp <= 0) {
         target.justDied = true;
       }
-      msg += `💥 ${target.icon} ${target.name} takes ${damage} damage!`;
+      // 💡 TICKET #b4c0ff: players have no `.icon` - the raw `${target.icon}`
+      // printed "undefined" in every enemy AOE. combatTargetIcon resolves the
+      // right emoji for players, summons and enemies alike.
+      msg += `💥 ${combatTargetIcon(target)} ${target.name} takes ${damage} damage!`;
       if (isCrit) msg += ` 💥 *CRITICAL HIT!*`;
       msg += `\n`;
 
@@ -11007,4 +11138,10 @@ module.exports = {
   // 💡 NEW 2026-08-07: Export for summonAI to generate combat images + full skill effects
   nextTurn,
   applyAbilityEffect,
+  // 💡 TICKET QA (2026-09-21): combat-message/solo-passive helpers, exported
+  // so qa_ticket_pass.js can pin their behavior (icon normalization +
+  // Pathfinder solo math) without going through the full combat loop.
+  combatTargetIcon,
+  _soloHunterXpMult,
+  _isSoloFighter,
 };

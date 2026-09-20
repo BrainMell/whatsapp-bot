@@ -5,6 +5,10 @@
 // Also covers the NEW `.j world all` gathered-chart gate (mods bypass,
 // regular players need every unlockable map).
 process.env.GO_IMAGE_SERVICE_URL = process.env.GO_IMAGE_SERVICE_URL || 'http://127.0.0.1:7860';
+// 💡 STUB ENGINE (#b4f71c staff bypass): worldMap._isStaff lazily requires
+// ../engine - pre-seed the require cache so QA never loads the real engine.
+const __enginePath = require.resolve('../core/engine.js');
+require.cache[__enginePath] = { id: __enginePath, filename: __enginePath, loaded: true, exports: { isBotOwner: () => false, isGlobalMod: () => false, isRpgMod: () => false } };
 const worldMap = require('../core/rpg/worldMap');
 
 const sent = [];

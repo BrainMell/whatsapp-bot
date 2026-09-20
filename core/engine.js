@@ -2917,6 +2917,31 @@ async function startBot(configInstance) {
         return true;
       }
     }
+
+    // ⚡ SIBLING-BOT REGISTRY (ticket #b4fa57, 2026-09-21): all enabled
+    // instances share ONE process. Every bot registers its JID + LID here on
+    // its first message so any bot can recognize a message SENT BY a sibling
+    // bot. Bots must never react to each other's messages (AI fallback,
+    // no-prefix reply handlers) - only human users drive those responses.
+    // This kills the bot-to-bot echo half of the duplicate-response bug.
+    if (!globalThis.__activeBotIdentities) globalThis.__activeBotIdentities = new Set();
+    function registerBotIdentity(jid, lid) {
+      try {
+        if (jid) globalThis.__activeBotIdentities.add(String(jid));
+        if (lid) globalThis.__activeBotIdentities.add(String(lid));
+      } catch (e) {}
+    }
+    function isSiblingBot(jid) {
+      if (!jid) return false;
+      const j = String(jid);
+      if (!globalThis.__activeBotIdentities.has(j)) return false;
+      // it's a known bot identity - sibling UNLESS it is THIS bot itself
+      // (the caller checks isSelf separately before this point).
+      return !(j === botJidOfSelf() );
+    }
+    function botJidOfSelf() {
+      try { return jidNormalizedUser(sock.user ? sock.user.id : ''); } catch (e) { return null; }
+    }
     const spamTracker = new Map();
     const menuSessions = new Map();
 
@@ -5593,11 +5618,12 @@ ${targetCategory}`;
           const [key, cat] = catMatch;
           let catMsg =
             GET_BANNER(`${cat.emoji} ${cat.name.toUpperCase()} - MOD`) + `\n\n`;
-          // Each entry shows its REAL invocation - most mod commands run
-          // standalone (.j spawn, .j updateall, .j warn...); only the GM
-          // console tools live under `.j mod <sub>`.
+          // Each entry shows its SHORT action label (ticket #b4f818):
+          // `sandbox`, `createclass`, `givezeni` - not the full invocation
+          // path. The real invocation form lives in the explain view
+          // (`.j mod <command>`) and in the footer hint below.
           cat.commands.forEach((c) => {
-            catMsg += `➤ \`${prefix} ${c.usage}\`\n`;
+            catMsg += `➤ \`${c.cmd}\`\n`;
           });
           catMsg += `\n➤ Type \`${prefix} mod <command>\` for details.`;
           catMsg += `\n➤ Type \`${prefix} mod\` to go back.`;
@@ -5614,8 +5640,13 @@ ${targetCategory}`;
           const cmdWordCount = exact.cmd.split(" ").length;
           const isBareLookup = cleanArgs.length === cmdWordCount;
           // modclass with no args shows the interactive class list - keep that.
-          const isModclassList = exact.cmd === "modclass";
-          if (isBareLookup && !isModclassList && visible.some(([k]) => k === exact.catKey)) {
+          // 💡 TICKET #b4f855: createclass must ALSO fall through to the admin
+          // console - `.j mod createclass` must open the real CLASS CREATOR
+          // template (detailed creation fields), not the generic one-line menu
+          // description. It was being intercepted by this explain view.
+          const isFallThroughCmd =
+            exact.cmd === "modclass" || exact.cmd === "createclass";
+          if (isBareLookup && !isFallThroughCmd && visible.some(([k]) => k === exact.catKey)) {
             const cat = MOD_MENU[exact.catKey];
             let explainMsg = GET_BANNER(`${cat.emoji} ${botConfig.getBotName().toUpperCase()}`) + `\n\n`;
             explainMsg += `*Command:* \`${prefix} ${exact.usage}\`\n\n`;
@@ -7197,6 +7228,10 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   const botLid = sock.authState.creds?.me?.lid
                     ? jidNormalizedUser(sock.authState.creds.me.lid)
                     : null;
+                  // ⚡ SIBLING-BOT REGISTRY (ticket #b4fa57): let every instance
+                  // on this process know who we are, so messages SENT BY a
+                  // sibling bot can be recognized and never reacted to.
+                  registerBotIdentity(botJid, botLid);
 
                   // ⚡ INTERACTION TRACKER (2026-09-17): record @tags /
                   // reply-targets per pair for the ship Match Meter.
@@ -7731,16 +7766,46 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                       return out;
                     };
 
+                    // 💡 TICKET #b4fa05 (2026-09-21): media-type validation.
+                    // Group statuses only render for a known set of media types;
+                    // anything else (documents, HEIC images, unsupported codecs)
+                    // silently produced a status that WhatsApp never displayed,
+                    // which testers reported as "gstatus cannot upload media".
+                    // Now: normalize/verify the mimetype, set it explicitly on
+                    // the payload (so Baileys doesn't guess), and throw a clear
+                    // typed error for unsupported types.
+                    const GS_UNSUPPORTED = '__gs_unsupported_media__';
+                    const gsCheckMediaType = (kind, msg) => {
+                      const mt = String((msg && msg.mimetype) || '').toLowerCase();
+                      if (kind === 'image') {
+                        if (mt && !/^image\/(jpeg|jpg|png|webp)$/.test(mt)) {
+                          throw Object.assign(new Error(`Unsupported image type (${mt || 'unknown'}). Use JPG, PNG or WEBP.`), { code: GS_UNSUPPORTED });
+                        }
+                        return mt || 'image/jpeg';
+                      }
+                      if (kind === 'video') {
+                        if (mt && !/^video\/(mp4|webm|quicktime|3gpp)$/.test(mt)) {
+                          throw Object.assign(new Error(`Unsupported video type (${mt || 'unknown'}). Use MP4 (H.264).`), { code: GS_UNSUPPORTED });
+                        }
+                        return mt === 'video/quicktime' ? 'video/mp4' : (mt || 'video/mp4');
+                      }
+                      return null;
+                    };
+
                     const gsBuildPayload = async (kind, msg, buf, caption) => {
                       const mediaBuf = buf || (await gsDownloadBuf(msg, kind));
                       if (kind === "image") {
                         const payload = { image: mediaBuf };
+                        const __mt = gsCheckMediaType('image', msg);
+                        if (__mt) payload.mimetype = __mt;
                         payload.jpegThumbnail = await gsImageThumbB64(mediaBuf);
                         if (caption) payload.caption = caption;
                         return payload;
                       }
                       if (kind === "video") {
                         const payload = { video: mediaBuf };
+                        const __mt = gsCheckMediaType('video', msg);
+                        if (__mt) payload.mimetype = __mt;
                         payload.jpegThumbnail = await gsVideoThumbB64(mediaBuf);
                         if (caption) payload.caption = caption;
                         return payload;
@@ -7763,11 +7828,23 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                         const b = payload.image || payload.video || payload.audio || payload.sticker;
                         console.log(`[GStatus] uploading ${payload.image ? "image" : payload.video ? "video" : payload.audio ? "audio" : "sticker"} (${Math.round((b.length || 0) / 1024)}KB)…`);
                       }
-                      const genPromise = generateWAMessageContent(payload, { upload: sock2.waUploadToServer });
+                      const genPromise = generateWAMessageContent(payload, {
+                        upload: sock2.waUploadToServer,
+                        // 💡 TICKET #b4fa05 (2026-09-21): the standalone
+                        // generateWAMessageContent call does NOT inherit the
+                        // socket's mediaUploadTimeoutMs (20s) - timeoutMs was
+                        // undefined, meaning NO upload timeout. Videos then
+                        // hung until this function's 90s race killed the post,
+                        // which surfaced to testers as "gstatus can't upload
+                        // media". Give status posts an explicit 60s upload
+                        // budget (statuses carry big videos) and raise the
+                        // race backstop to 120s so the upload can finish.
+                        mediaUploadTimeoutMs: 60000,
+                      });
                       const inner = isMedia
                         ? await Promise.race([
                             genPromise,
-                            new Promise((_, reject) => setTimeout(() => reject(new Error("media upload timed out after 90s - try a smaller file")), 90000)),
+                            new Promise((_, reject) => setTimeout(() => reject(new Error("media upload timed out after 120s - try a smaller file")), 120000)),
                           ])
                         : await genPromise;
                       // 2026-09-15 v3: mirror gifted-baileys GiftedStatus.sendGroupStatus
@@ -7867,8 +7944,12 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                           });
                         } catch (gsPendErr) {
                           console.log("[GStatus] pending post failed:", gsPendErr?.message || gsPendErr);
+                          // 💡 TICKET #b4fa05: name unsupported media explicitly.
+                          const __pendReason = gsPendErr?.code === GS_UNSUPPORTED
+                            ? gsPendErr.message
+                            : String(gsPendErr?.message || gsPendErr).slice(0, 120);
                           await sock.sendMessage(chatId, {
-                            text: BOT_MARKER + `❌ Could not post the group status: ${String(gsPendErr?.message || gsPendErr).slice(0, 120)}`,
+                            text: BOT_MARKER + `❌ Could not post the group status: ${__pendReason}`,
                           });
                         }
                         return; // handled - do not run the rest of the pipeline
@@ -8111,18 +8192,32 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
 
                   // 💡 SKILL/CLASS CREATION REPLY HANDLER - when a mod replies to
                   // the template message from .g admin createskill/createclass
+                  // 💡 FIX (ticket #b4fa57, 2026-09-21): this no-prefix mutation
+                  // path used to run on EVERY bot instance that shared the group
+                  // (they all share the same mods) - so one mod reply created the
+                  // skill/class three times and produced three responses. Two
+                  // guards now:
+                  //   1. Sibling suppression: a message authored by another bot
+                  //      never triggers the creator reply flow.
+                  //   2. electOnce: a shared claim keyed on the WhatsApp message
+                  //      id means exactly ONE instance processes a given reply.
                   const _quotedCtx = m.message?.extendedTextMessage?.contextInfo;
                   const _quotedText = _quotedCtx?.quotedMessage?.conversation ||
                     _quotedCtx?.quotedMessage?.extendedTextMessage?.text || '';
                   if (_quotedText && (isOwner || isGlobalMod(senderJid) || isRpgMod(senderJid))) {
-                    if (_quotedText.includes('SKILL CREATOR')) {
-                      const adminConsole = require('./commands/adminConsole');
-                      await adminConsole.handleSkillCreationReply(sock, chatId, senderJid, txt, BOT_MARKER, botConfig.getPrefix());
-                      return;
-                    }
-                    if (_quotedText.includes('CLASS CREATOR')) {
-                      const adminConsole = require('./commands/adminConsole');
-                      await adminConsole.handleClassCreationReply(sock, chatId, senderJid, txt, BOT_MARKER, botConfig.getPrefix());
+                    if (isSiblingBot(senderJid)) {
+                      console.log(`⏭️ [${BOT_ID}] CREATOR reply from sibling bot ${senderJid} ignored (anti-duplicate).`);
+                    } else if (_quotedText.includes('SKILL CREATOR') || _quotedText.includes('CLASS CREATOR')) {
+                      if (electOnce('creator_reply', (m && m.key && m.key.id) || `${chatId}:${Date.now()}`)) {
+                        const adminConsole = require('./commands/adminConsole');
+                        if (_quotedText.includes('SKILL CREATOR')) {
+                          await adminConsole.handleSkillCreationReply(sock, chatId, senderJid, txt, BOT_MARKER, botConfig.getPrefix());
+                        } else {
+                          await adminConsole.handleClassCreationReply(sock, chatId, senderJid, txt, BOT_MARKER, botConfig.getPrefix());
+                        }
+                      } else {
+                        console.log(`🗳️ [${BOT_ID}] CREATOR reply ${m.key?.id} already claimed by a sibling - skipping.`);
+                      }
                       return;
                     }
                   }
@@ -14763,6 +14858,7 @@ Commands:
                           : m.message.audioMessage ? "audio"
                             : m.message.stickerMessage ? "sticker" : null;
                     let payload = null;
+                    let __gsMediaError = null;
                     try {
                       const qKind =
                         qm?.imageMessage ? "image"
@@ -14791,6 +14887,15 @@ Commands:
                       }
                     } catch (dlErr) {
                       console.log("[GStatus] media download failed:", dlErr?.message);
+                      // 💡 TICKET #b4fa05: unsupported media must get an explicit
+                      // rejection - not silently arm a 60s "waiting for media" window.
+                      if (dlErr?.code === GS_UNSUPPORTED) __gsMediaError = dlErr;
+                    }
+
+                    if (__gsMediaError) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ ${__gsMediaError.message}\n_Text and JPG/PNG/WEBP images, MP4 videos, audio and stickers all post fine._`,
+                      });
                     }
 
                     if (!payload) {
@@ -19746,44 +19851,58 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                           if (level < 20) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to be at least level 20 to enter the Abyss.\n_Current level: ' + level + '_' });
                           }
-                          // 💡 ABYSS UNIVERSAL ENTRY WINDOW (cosmology pass,
-                          // owner consolidated review §6): one universal 6-hour
+                          // 💡 ABYSS UNIVERSAL ENTRY WINDOW + WORLD ALIGNMENT
+                          // (cosmology pass, owner consolidated review §6;
+                          // tickets #b4c0ec + #b4f5b0): one universal 6-hour
                           // cycle across ALL players - 5 h locked + 1 h entry
                           // window. The window gates ENTRY ONLY: players already
-                          // inside are never extracted by it closing. Owner/mod
-                          // bypass mirrors the cooldown bypass above.
-                          try {
-                            const cosmology = require('./rpg/cosmology');
-                            const __w = cosmology.abyssWindow();
-                            const __gateBypass = typeof engine.isBotOwner === 'function' && (engine.isBotOwner(senderJid) || engine.isRpgMod(senderJid));
+                          // inside are never extracted by it closing.
+                          //
+                          // 💡 FIX (#b4c0ec + #b4f5b0, 2026-09-21): this gate
+                          // used to reference an undefined `engine` identifier
+                          // (ReferenceError swallowed by the catch) so it FAILED
+                          // OPEN - the Abyss never closed and the staff bypass
+                          // never worked. Two rules now:
+                          //   1. FAIL CLOSED (#b4c0ec): if the world-alignment
+                          //      system is unavailable/disconnected or returns
+                          //      garbage, the gate stays SEALED. No alignment
+                          //      state = no access.
+                          //   2. ALIGNMENT GATE (#b4f5b0): the 6h window IS the
+                          //      world-alignment state for the descent - window
+                          //      closed = the worlds are not aligned, the gate is
+                          //      SEALED for everyone. Normal player checks (level/
+                          //      registration) do not bypass it. Staff (owner /
+                          //      RPG mod) bypass mirrors the cooldown bypass in
+                          //      abyssSystem. (the FW-bottom routine link and the
+                          //      weekly triune stay separate clocks - never merged
+                          //      into the entry schedule)
+                          {
+                            let __w = null;
+                            let __gateAlive = true;
+                            try {
+                              const cosmology = require('./rpg/cosmology');
+                              __w = cosmology.abyssWindow();
+                              if (!__w || typeof __w.open !== 'boolean' || typeof __w.label !== 'string') {
+                                __gateAlive = false;
+                              }
+                            } catch (__gateErr) {
+                              console.error('[Abyss] world-alignment system unavailable - gate fails CLOSED:', __gateErr.message);
+                              __gateAlive = false;
+                            }
+                            const __gateBypass = isBotOwner(senderJid) || isRpgMod(senderJid);
+                            if (!__gateAlive) {
+                              return sock.sendMessage(chatId, { text: BOT_MARKER + `🕳️ *THE GATE IS SEALED*
+
+The alignment of the worlds cannot be read right now - and the abyss does not open on a maybe.
+_Try again soon; those already below are not pulled out._` });
+                            }
                             if (!__w.open && !__gateBypass) {
                               return sock.sendMessage(chatId, { text: BOT_MARKER + `🕳️ *THE GATE IS SEALED*
 
-The abyss admits new descenters only during its one-hour window - five hours locked, one hour open, one cycle for everyone.
+The worlds are not aligned for the descent right now - the abyss admits new descenters only during its one-hour window, five hours locked, one hour open, one cycle for everyone.
 ⏳ The gate opens in *${__w.label.replace('locked ', '')}*.
 _Those already below are not pulled out by the closing - only entry is gated._` });
                             }
-                          } catch (__gateErr) {
-                            console.error('[Abyss] entry window check failed:', __gateErr.message);
-                          }
-                          // 💡 ABYSS UNIVERSAL ENTRY WINDOW (cosmology pass,
-                          // owner consolidated review §6): one universal 6-hour
-                          // cycle across ALL players - 5 h locked + 1 h entry
-                          // window. The window gates ENTRY ONLY: players already
-                          // inside are never extracted by it closing. Owner/mod
-                          // bypass mirrors the cooldown bypass above.
-                          try {
-                            const cosmology = require('./rpg/cosmology');
-                            const __w = cosmology.abyssWindow();
-                            const __gateBypass = typeof engine.isBotOwner === 'function' && (engine.isBotOwner(senderJid) || engine.isRpgMod(senderJid));
-                            if (!__w.open && !__gateBypass) {
-                              return sock.sendMessage(chatId, { text: BOT_MARKER + `🕳️ *THE GATE IS SEALED*
-\nThe abyss admits new descenters only during its one-hour window - five hours locked, one hour open, one cycle for everyone.
-⏳ The gate opens in *${__w.label.replace('locked ', '')}*.
-_Those already below are not pulled out by the closing - only entry is gated._` });
-                            }
-                          } catch (__gateErr) {
-                            console.error('[Abyss] entry window check failed:', __gateErr.message);
                           }
                           const userClassObj = economy.getUserClass(senderJid);
                           const classIdForAbyss = userClassObj?.id || user.class || 'FIGHTER';
@@ -28822,6 +28941,12 @@ _(or reply to their message)_
                       `${botConfig.getPrefix().toLowerCase()}`,
                     );
                   if (isCommand && txt.split(` `).length > 1) return;
+
+                  // ⚡ SIBLING-BOT SUPPRESSION (ticket #b4fa57): never let the AI
+                  // respond to another bot's message. Two bots chatting (or a
+                  // bot's output mentioning a sibling's name) used to make BOTH
+                  // bots answer - duplicate outputs and infinite echo risk.
+                  if (isSiblingBot(senderJid)) return;
 
                   // check if bot should respond (mentioned, replied to, or keyword)
                   const waContextInfo =

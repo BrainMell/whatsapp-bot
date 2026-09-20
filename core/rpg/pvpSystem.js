@@ -602,7 +602,14 @@ function buildDuelPlayer(jid, userData, stats, idx, equalise = false) {
         stats,
         level: progData?.level || 1,
         class: classData,
-        spriteIndex: userData.spriteIndex || idx,
+        // 💡 TICKET #b4f7aa (2026-09-21): `|| idx` treated a LEGITIMATE sprite
+        // slot 0 (the schema default) as falsy and substituted the roster
+        // index instead - duel sprites differed from the character sheet for
+        // every player whose chosen sprite was the first slot. Nullish-safe
+        // resolution now, matching guildAdventure's combat entities.
+        spriteIndex: (userData.spriteIndex === undefined || userData.spriteIndex === null || !Number.isFinite(Number(userData.spriteIndex)))
+            ? idx
+            : Math.max(0, Math.floor(Number(userData.spriteIndex))),
         statusEffects: [],
         buffs: [],
         cooldowns: {},
