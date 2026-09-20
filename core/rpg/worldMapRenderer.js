@@ -577,6 +577,185 @@ function renderCosmologyAtlasSheet(t = Date.now()) {
     });
 }
 
+// ─── GATE CARDS (2026-09-21 owner ticket: alignment and access failures get
+// ─── an IMAGE CARD that carries the refusal visually, not just in text) ──────
+//
+//  renderAbyssMisalignedCard  the abyss gate seen from outside: the living
+//                             circles above, the descent below, and the
+//                             alignment link between them NOT met. Two
+//                             variants: 'closed' (the worlds are simply not
+//                             aligned for the descent right now) and
+//                             'unreadable' (the alignment cannot be read at
+//                             all, so the gate fails closed).
+//  renderAfterlifeLockedCard  the shore on its own circuit, the road toward
+//                             it ending mid gap. The requirement (the
+//                             reading of dead souls) is stated in a plate;
+//                             the map itself is never drawn (hard contract:
+//                             a locked map is never rendered).
+//
+//  Both reuse the Royal Decree chrome of the four sheets so the refusal
+//  reads as part of the same visual family. Text on the cards is minimal;
+//  the situation is carried by the drawing.
+
+// A large diagonal refusal stamp across the visual (kept subtle so it reads
+// as a seal on the chart, not a UI error banner). Position/size overridable
+// so it never covers the card's key link work.
+function _refusalStamp(ctx, label, opts = {}) {
+    const y = opts.y || 760;
+    const lw = opts.lw || 560, lh = opts.lh || 128;
+    ctx.save();
+    ctx.translate(W / 2, y);
+    ctx.rotate(opts.rot != null ? opts.rot : -0.16);
+    ctx.fillStyle = 'rgba(139,26,43,0.14)';
+    ctx.fillRect(-lw / 2, -lh / 2, lw, lh);
+    ctx.strokeStyle = 'rgba(139,26,43,0.75)';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(-lw / 2, -lh / 2, lw, lh);
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(-lw / 2 + 9, -lh / 2 + 9, lw - 18, lh - 18);
+    ctx.font = `${opts.font || 58}px "Cinzel Deco"`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(139,26,43,0.88)';
+    ctx.fillText(String(label || 'SEALED').toUpperCase(), 0, Math.floor(lh * 0.2));
+    ctx.restore();
+}
+
+function renderAbyssMisalignedCard(opts = {}) {
+    const mode = opts.mode === 'unreadable' ? 'unreadable' : 'closed';
+    const t = Date.now();
+    return _render((ctx) => {
+        _titleBlock(ctx,
+            mode === 'unreadable'
+                ? 'THE ALIGNMENT OF THE WORLDS CANNOT BE READ'
+                : 'THE WORLDS ARE NOT ALIGNED FOR THE DESCENT',
+            'THE GATE IS SEALED',
+            mode === 'unreadable'
+                ? 'the gate does not open on a maybe'
+                : 'the abyss admits new descenters only while the window is open');
+
+        // the living circles (World Beyond boundary + First World, live phase)
+        const cx = W / 2, cy = 430, R = 210;
+        ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(226,210,178,0.45)'; ctx.fill();
+        ctx.lineWidth = 2.2; ctx.strokeStyle = PAL.ink; ctx.stroke();
+        ctx.setLineDash([6, 7]);
+        ctx.beginPath(); ctx.arc(cx, cy, R * 0.82, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(58,42,30,0.3)'; ctx.lineWidth = 1; ctx.stroke();
+        ctx.setLineDash([]);
+        const g = _liveGeometry(cx, cy, R, t);
+        _drawFirstWorld(ctx, g, { noLinkLabel: true });
+        _centered(ctx, 'THE FIRST WORLD', cy + R + 26, '15px "Cinzel"', PAL.inkSoft);
+
+        // the alignment link between them: drawn NOT MET. A thread leaves the
+        // First World's bottom link and stops in the void, short of the abyss.
+        const bx = g.fwx, by = g.fwy + g.r;
+        const gapY = 736;
+        ctx.setLineDash([3, 6]);
+        ctx.strokeStyle = 'rgba(139,26,43,0.8)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx, gapY - 24); ctx.stroke();
+        ctx.setLineDash([]);
+        // broken end sockets that do not meet
+        ctx.strokeStyle = PAL.wax; ctx.lineWidth = 2.4;
+        ctx.beginPath(); ctx.arc(bx, gapY - 10, 9, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(bx - 7, gapY + 2); ctx.lineTo(bx + 7, gapY + 16); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(bx + 7, gapY + 2); ctx.lineTo(bx - 7, gapY + 16); ctx.stroke();
+        _centered(ctx, mode === 'unreadable' ? 'THE ALIGNMENT CANNOT BE READ' : 'THE ALIGNMENT IS NOT MET',
+            gapY + 46, '14px "Cinzel"', PAL.wax);
+
+        // the descent below (kept clear of the link labels)
+        _centered(ctx, 'THE ABYSS', 832, '15px "Cinzel"', PAL.inkSoft);
+        _drawAbyssDescent(ctx, cx, 858, 0.85);
+
+        // refusal stamp across the descent band (clear of link + labels)
+        _refusalStamp(ctx, mode === 'unreadable' ? 'UNREAD' : 'SEALED', { y: 938, lw: 470, lh: 104, font: 46, rot: -0.12 });
+
+        _plate(ctx, 55, 1020, 420, 118, mode === 'unreadable' ? 'WHY THE SHUTTER' : 'WHY THE GATE HOLDS', [
+            mode === 'unreadable'
+                ? 'the alignment of the worlds cannot be read,'
+                : 'the gate opens one hour in six,',
+            mode === 'unreadable'
+                ? 'and the abyss does not open on a maybe.'
+                : 'and only while the worlds meet.',
+            'those already below are not pulled out.',
+        ]);
+        _plate(ctx, 525, 1020, 420, 118, 'THE WINDOW', [
+            mode === 'unreadable'
+                ? 'wait, and ask again soon.'
+                : `the gate opens in ${String(opts.opensInLabel || 'a while').replace(/^locked /, '')}.`,
+            'entry is gated, not the descent itself.',
+        ]);
+
+        _bottomStack(ctx, {
+            legend: false,
+            seal: 'IV',
+            footer: 'the descent is refused, politely and completely',
+        });
+    });
+}
+
+function renderAfterlifeLockedCard(t = Date.now()) {
+    return _render((ctx) => {
+        _titleBlock(ctx,
+            'THE SHORE IS NOT DRAWN FOR YOU YET',
+            'THE AFTERLIFE',
+            'the road is missing its crossing');
+
+        // the afterlife on its own circuit (invariant #5), far and unreachable
+        const acx = W / 2, acy = 470, aR = 235;
+        ctx.beginPath(); ctx.arc(acx, acy, aR, 0, Math.PI * 2);
+        ctx.setLineDash([7, 8]); ctx.strokeStyle = PAL.afterlife; ctx.lineWidth = 1.8;
+        ctx.stroke(); ctx.setLineDash([]);
+        _centered(ctx, 'THE AFTERLIFE ORBIT', acy - aR + 74, '16px "Cinzel"', PAL.afterlife);
+        ctx.font = 'italic 14px "IM Fell Italic"'; ctx.fillStyle = PAL.inkSoft;
+        ctx.fillText('it rides its own circuit, sharing nothing with the First World', acx, acy - aR + 100);
+        const ap = cosmology.alPhase(t) * Math.PI * 2 - Math.PI / 2;
+        const ax = acx + Math.cos(ap) * aR, ay = acy + Math.sin(ap) * aR;
+        ctx.beginPath(); ctx.arc(ax, ay, 15, 0, Math.PI * 2);
+        ctx.fillStyle = PAL.parchment; ctx.fill();
+        ctx.lineWidth = 3.5; ctx.strokeStyle = PAL.afterlife; ctx.stroke();
+        ctx.beginPath(); ctx.arc(ax, ay, 6.5, 0, Math.PI * 2);
+        ctx.fillStyle = PAL.afterlife; ctx.fill();
+
+        // the refusal stamp sits in the orbit's empty center, like a mark on
+        // a chart the surveyor declined to finish
+        _refusalStamp(ctx, 'LOCKED', { y: acy + 30, lw: 430, lh: 100, font: 44, rot: -0.14 });
+
+        // the road: it leaves the viewer's side and stops mid gap
+        const startX = 250, startY = 950;
+        const endX = 450, endY = 768;
+        ctx.setLineDash([2, 7]);
+        ctx.strokeStyle = 'rgba(74,85,104,0.85)'; ctx.lineWidth = 2.4;
+        ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(endX, endY); ctx.stroke();
+        ctx.setLineDash([]);
+        // the crossing that is missing: a closed gate glyph where the road dies
+        const gx = endX + 44, gy = endY - 26;
+        ctx.strokeStyle = PAL.afterlife; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(gx - 16, gy + 18); ctx.lineTo(gx - 16, gy - 18); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(gx + 16, gy + 18); ctx.lineTo(gx + 16, gy - 18); ctx.stroke();
+        ctx.lineWidth = 2;
+        for (let i = -2; i <= 2; i++) {
+            ctx.beginPath(); ctx.moveTo(gx - 16, gy + i * 7); ctx.lineTo(gx + 16, gy + i * 7); ctx.stroke();
+        }
+        _waxSeal(ctx, gx + 44, gy + 32, 'III');
+        _centered(ctx, 'THE CROSSING IS NOT TAUGHT YET', gy + 62, '14px "Cinzel"', PAL.afterlife);
+
+        _plate(ctx, 55, 1020, 420, 118, 'WHAT YOU NEED', [
+            'the reading of dead souls.',
+            'the guild does not yet teach it.',
+        ]);
+        _plate(ctx, 525, 1020, 420, 118, 'UNTIL THEN', [
+            'the shore stays undrawn.',
+            'a locked map is never rendered.',
+        ]);
+
+        _bottomStack(ctx, {
+            legend: false,
+            seal: 'III',
+            footer: 'the shore is refused, politely and completely',
+        });
+    });
+}
+
 // ─── CANVAS DRIVER ───────────────────────────────────────────────────────────
 
 function _render(drawFn) {
@@ -601,6 +780,8 @@ module.exports = {
     renderWorldBeyondSheet,
     renderAfterlifeSheet,
     renderAbyssSheet,
+    renderAbyssMisalignedCard,
+    renderAfterlifeLockedCard,
     _liveGeometry,
     _worldDots,
     PAL,

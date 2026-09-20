@@ -329,9 +329,24 @@ async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
     if (norm === 'afterlife') {
         // 💡 TICKET #b4f71c: staff (owner / global mod / RPG mod) may consult
         // the afterlife chart without the dead-soul feature. Everyone else
-        // still gets the locked refusal - no render, no preview.
+        // still gets the locked refusal - the map itself is never rendered.
+        // 💡 2026-09-21 owner: the locked refusal now also renders an IMAGE
+        // CARD that carries the refusal visually (the shore on its own
+        // circuit, the road missing its crossing, a LOCKED seal). The chart
+        // stays unrendered - the card is a refusal, not a preview. The text
+        // requirement stays as the caption and as the render-failure fallback
+        // (house rule: cards never dead-end).
         if (!_hasDeadSoulFeature(userId) && !_isStaff(userId)) {
-            return sock.sendMessage(chatId, { text: _refuseAfterlife() });
+            const txt = _refuseAfterlife();
+            try {
+                const card = await renderer.renderAfterlifeLockedCard();
+                if (card && card.length > 100) {
+                    return sock.sendMessage(chatId, { image: card, caption: txt });
+                }
+            } catch (e) {
+                try { console.error('[worldMap] afterlife locked card failed:', e.message); } catch (_) {}
+            }
+            return sock.sendMessage(chatId, { text: txt });
         }
         const buf = await renderer.renderAfterlifeSheet(t);
         return _sendSheet(sock, chatId, buf, INFO.afterlife, _asciiAfterlife, t);

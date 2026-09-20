@@ -57,6 +57,15 @@ function assert(cond, label) {
     await worldMap.showWorld(mockSock, chatId, user, 'beyond', { getRank: () => 'A' });
     assert(sent.length === 1 && !sent[0].image && /rank \*S\*/.test(sent[0].text), 'beyond locked at rank A: refusal only');
 
+    // 4b. afterlife locked (dead-soul feature absent) → LOCKED CARD + requirement
+    // caption (owner 2026-09-21: access failures get a visual refusal card; the
+    // map itself is still never rendered)
+    sent.length = 0;
+    await worldMap.showWorld(mockSock, chatId, user, 'afterlife', { getRank: () => 'A' });
+    assert(sent.length === 1 && !!sent[0].image, 'afterlife locked: refusal CARD renders');
+    assert(/reading of dead souls/.test(sent[0].caption || ''), 'afterlife locked: caption names the requirement');
+    assert((sent[0].caption || '').length <= 400, 'afterlife locked caption is SHORT');
+
     // 5. invalid sub → usage menu (now lists .j world all)
     sent.length = 0;
     await worldMap.showWorld(mockSock, chatId, user, 'narnia', {});

@@ -7234,6 +7234,11 @@ const initAdventure = async (
     // 💡 2026-09-14 owner: ".solo f -s" - skip the 90s pre-raid shop
     // (honored in startJourney for solo quests only).
     skipShop: !!(opts && opts.skipShop),
+    // 💡 DEAD WORLD (2026-09-21 owner ticket): card chrome + the test flag
+    // for ".j solo f -d" (forces the Dead World encounter on the first
+    // regular combat encounter; the normal ".j solo f" flow is untouched).
+    dungeonName: rankData.name,
+    deadWorldForced: !!(opts && opts.forceDeadWorld),
   });
   state.botId = botScope(); // 💡 CROSS-BOT LEAK FIX: stamp the owning bot
   gameStates.set(sessionKey, state);
@@ -7846,6 +7851,28 @@ async function executeEncounter(sock, groq, encounterType, sessionKey) {
   } else if (encounterType === "NON_COMBAT") {
     encounter = selectRandomEncounter(sessionKey);
   } else {
+    // 💡 DEAD WORLD (2026-09-21 owner ticket): a regular COMBAT encounter has
+    // a 5% chance to spawn nothing at all. The dungeon behaves completely
+    // normally until this spawn point; then no monsters are generated - the
+    // Dead World sequence plays instead (empty scene card, six separate
+    // thought boxes, a survival victory card). Bosses, elites, rests, non
+    // combat events and trials are never touched; once per run; the
+    // encounter slot is consumed exactly like a cleared fight, with no
+    // combat rewards because nothing was fought.
+    if (encounterType === "COMBAT") {
+      const deadWorld = require("./deadWorld");
+      if (deadWorld.shouldTrigger(state)) {
+        state.currentEncounter = deadWorld.marker(state.encounter);
+        state.currentEncounterType = "DEAD_WORLD";
+        await deadWorld.runEncounter(sock, state);
+        setTimeout(() => {
+          nextStage(sock, state.groq, sessionKey).catch((e) =>
+            console.error("[Quest] nextStage error (dead world):", e?.message || e),
+          );
+        }, state.solo ? 1000 : GAME_CONFIG.BREAK_TIME);
+        return;
+      }
+    }
     encounter = classEncounters.generateEncounter(
       state.players,
       encounterType,

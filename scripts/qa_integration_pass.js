@@ -58,12 +58,18 @@ function mockSock() {
         assert.ok(m.image || m.text, 'unlocked beyond delivers (image or text fallback)');
     }
     {
-        // afterlife: dead-soul feature not implemented -> always refused, no render
+        // afterlife: dead-soul feature not implemented -> refused with the
+        // LOCKED CARD (owner 2026-09-21: access failures get an image card
+        // that carries the refusal visually). The MAP SHEET itself is never
+        // rendered - the card is a refusal, not a preview.
         const sock = mockSock();
         await worldMap.showWorld(sock, 'chat1', 'user1', 'afterlife', { getLevel: () => 99, getRank: () => 'SSS' });
         const m = sock.sent[0].msg;
-        assert.ok(m.text && m.text.includes('dead souls'));
-        assert.strictEqual(m.image, undefined, 'afterlife map must never render while feature is absent');
+        const refusalBody = m.caption || m.text || '';
+        assert.ok(refusalBody.includes('dead souls'), 'refusal text names the requirement (caption or text)');
+        assert.ok(m.image, 'locked afterlife sends the refusal CARD (owner 2026-09-21)');
+        const sheetBuf = await worldMapRenderer.renderAfterlifeSheet();
+        assert.ok(!m.image.equals(sheetBuf), 'the refusal card is NOT the afterlife map sheet');
     }
     {
         // abyss: below unlock -> refusal; at/above -> render

@@ -9453,6 +9453,12 @@ _💡 Reply with another number from your search list!_`.trim();
                       // 💡 2026-09-14 owner: ".solo f -s" - skip flag for the
                       // 90-second pre-raid shop timer (solo quests only).
                       const skipShop = isSolo && cmdArgs.slice(1).includes("-s");
+                      // 💡 DEAD WORLD (2026-09-21 owner ticket): ".j solo f -d"
+                      // forces the Dead World encounter on the first regular
+                      // combat encounter of a SOLO run, for testing the full
+                      // sequence without waiting on the 5% roll. The normal
+                      // ".j solo f" behavior is untouched.
+                      const forceDeadWorld = isSolo && cmdArgs.slice(1).includes("-d");
                       const ranks = [
                         "f",
                         "e",
@@ -9480,7 +9486,7 @@ _💡 Reply with another number from your search list!_`.trim();
                         senderJid,
                         smartGroqCall,
                         null,
-                        { skipShop },
+                        { skipShop, forceDeadWorld },
                       );
                       if (result.success && !result.isMenu) {
                         const state = guildAdventure.getGameState(
@@ -19891,17 +19897,41 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                             }
                             const __gateBypass = isBotOwner(senderJid) || isRpgMod(senderJid);
                             if (!__gateAlive) {
-                              return sock.sendMessage(chatId, { text: BOT_MARKER + `🕳️ *THE GATE IS SEALED*
+                              // 💡 2026-09-21 owner: alignment failures get an
+                              // IMAGE CARD that carries the refusal visually
+                              // (text stays as the caption / fallback).
+                              const __sealedTxt = BOT_MARKER + `🕳️ *THE GATE IS SEALED*
 
 The alignment of the worlds cannot be read right now - and the abyss does not open on a maybe.
-_Try again soon; those already below are not pulled out._` });
+_Try again soon; those already below are not pulled out._`;
+                              try {
+                                const __gateBuf = await (require('./rpg/worldMapRenderer')).renderAbyssMisalignedCard({ mode: 'unreadable' });
+                                if (__gateBuf && __gateBuf.length > 100) {
+                                  return sock.sendMessage(chatId, { image: __gateBuf, caption: __sealedTxt });
+                                }
+                              } catch (__gateCardErr) {
+                                console.error('[Abyss] sealed gate card failed:', __gateCardErr.message);
+                              }
+                              return sock.sendMessage(chatId, { text: __sealedTxt });
                             }
                             if (!__w.open && !__gateBypass) {
-                              return sock.sendMessage(chatId, { text: BOT_MARKER + `🕳️ *THE GATE IS SEALED*
+                              // 💡 2026-09-21 owner: worlds-not-aligned refusal
+                              // renders the misalignment card (link not met,
+                              // live window countdown in the plate).
+                              const __closedTxt = BOT_MARKER + `🕳️ *THE GATE IS SEALED*
 
 The worlds are not aligned for the descent right now - the abyss admits new descenters only during its one-hour window, five hours locked, one hour open, one cycle for everyone.
 ⏳ The gate opens in *${__w.label.replace('locked ', '')}*.
-_Those already below are not pulled out by the closing - only entry is gated._` });
+_Those already below are not pulled out by the closing - only entry is gated._`;
+                              try {
+                                const __gateBuf = await (require('./rpg/worldMapRenderer')).renderAbyssMisalignedCard({ mode: 'closed', opensInLabel: String(__w.label || '') });
+                                if (__gateBuf && __gateBuf.length > 100) {
+                                  return sock.sendMessage(chatId, { image: __gateBuf, caption: __closedTxt });
+                                }
+                              } catch (__gateCardErr) {
+                                console.error('[Abyss] closed gate card failed:', __gateCardErr.message);
+                              }
+                              return sock.sendMessage(chatId, { text: __closedTxt });
                             }
                           }
                           const userClassObj = economy.getUserClass(senderJid);

@@ -247,11 +247,15 @@ section('world all + afterlife staff access (#b4f5d2 + #b4f71c)');
   __engineStub.isRpgMod = () => false;
   ok(true, 'staff (_isStaff resolver): gathered atlas renders without helpers');
 
-  // afterlife: non-staff refused (contract) / staff renders
+  // afterlife: non-staff get the LOCKED CARD (owner 2026-09-21: refusal is
+  // visual; the map itself stays unrendered) / staff renders the chart
   s = sock();
   await worldMap.showWorld(s, 'c1', 'u1', 'afterlife', { getLevel: () => 99, getRank: () => 'SSS' });
-  assert.ok(s.sent[0].text && s.sent[0].text.includes('dead souls'), 'afterlife: players still refused');
-  assert.strictEqual(s.sent[0].image, undefined, 'afterlife: no render for players');
+  assert.ok((s.sent[0].caption || s.sent[0].text || '').includes('dead souls'), 'afterlife: players still refused (requirement text present)');
+  assert.ok(s.sent[0].image, 'afterlife: locked refusal renders the refusal CARD (owner 2026-09-21)');
+  const __lockedCard = s.sent[0].image;
+  const __realSheet = await require('../core/rpg/worldMapRenderer').renderAfterlifeSheet();
+  assert.ok(!__lockedCard.equals(__realSheet), 'afterlife: the locked card is NOT the map sheet');
   __engineStub.isRpgMod = () => true;
   s = sock();
   await worldMap.showWorld(s, 'c1', 'u1', 'afterlife', { getLevel: () => 99, getRank: () => 'SSS' });

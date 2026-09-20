@@ -1060,4 +1060,4 @@ async function renderAllocateCard(params) {
   return canvas.toBuffer('image/png');
 }
 
-module.exports = { renderProfileCard, renderAllocateCard, renderStyleSheet, clearCaches, DEFAULT_STYLE, getDefaultStyle, RANK_COLORS, RANK_GRADIENTS, STAT_COLORS, EQUIP_RARITY, EQUIPMENT_SLOTS };
+module.exports = { renderProfileCard, renderAllocateCard, renderStyleSheet, clearCaches, DEFAULT_STYLE, getDefaultStyle, RANK_COLORS, RANK_GRADIENTS, STAT_COLORS, EQUIP_RARITY, EQUIPMENT_SLOTS, CLASS_SPRITE_SETS };
