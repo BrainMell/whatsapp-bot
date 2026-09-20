@@ -33,12 +33,21 @@ const P = () => botConfig.getPrefix();
 // touching logic (world_map.md §1 / additional_ideas/ideas.md #15).
 const ABYSS_MAP_UNLOCK = 20;
 
-// Dead-soul reading feature: NOT yet implemented in the bot (the soul-sight
-// feature is a proposed design). Until the feature ships, its map gate can
-// never open - by contract the sheet is never rendered. Flip this when the
-// feature exists (store the unlock on the user, then check it here).
-function _hasDeadSoulFeature(_userId) {
-    return false;
+// Dead-soul reading feature: the Fortune Teller went live (soulReader.js -
+// `.j kills`, the three doors, the reader's fee stored in System KV). The
+// documented contract (this file's original comment + world_map.md §1) was
+// "flip this when the feature exists, then check it here": the reading is
+// now the player-side key to the afterlife chart. A player who opened their
+// sight (all doors) - or who has settled the reader's fee - holds the key.
+// Fail-closed to false on any error (a locked map is never rendered).
+async function _hasDeadSoulFeature(userId) {
+    try {
+        const soulReader = require('./soulReader');
+        const sight = await soulReader.getSight(userId);
+        return !!(sight.open || (sight.state && sight.state.paid));
+    } catch (e) {
+        return false;
+    }
 }
 
 // 💡 TICKET #b4f71c (2026-09-21): STAFF AFTERLIFE ACCESS. Owners, global
@@ -296,9 +305,10 @@ async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
             const missing = [];
             if (!_rankAtLeast(rank, 'S')) missing.push(`rank *S* (yours: *${String(rank || 'F').toUpperCase()}*)`);
             if (level < ABYSS_MAP_UNLOCK) missing.push(`level *${ABYSS_MAP_UNLOCK}* (yours: *${Math.max(0, Math.floor(level))}*)`);
-            if (_hasDeadSoulFeature(userId) === false) {
-                // feature absent for everyone - not held against the player
-            }
+            // 💡 OWNER RULING (pinned by qa_ticket_pass): the afterlife is NOT
+            // held against atlas seekers. The gathered chart lists only the
+            // gates a player can see and earn on their own sheets; the
+            // reading's own road (`.j kills`) introduces itself in play.
             if (missing.length > 0) {
                 return sock.sendMessage(chatId, {
                     text: [
@@ -327,16 +337,20 @@ async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
     }
 
     if (norm === 'afterlife') {
-        // 💡 TICKET #b4f71c: staff (owner / global mod / RPG mod) may consult
-        // the afterlife chart without the dead-soul feature. Everyone else
-        // still gets the locked refusal - the map itself is never rendered.
+        // 💡 TICKET #b4f71c + 2026-09-21 owner report: STAFF (owner / global
+        // mod / RPG mod) and the OWNER may consult the afterlife chart without
+        // the dead-soul feature or any other requirement. Players who HAVE
+        // opened the reading (soulReader) now hold the designed key. Everyone
+        // else still gets the locked refusal - the map itself is never
+        // rendered.
         // 💡 2026-09-21 owner: the locked refusal now also renders an IMAGE
         // CARD that carries the refusal visually (the shore on its own
         // circuit, the road missing its crossing, a LOCKED seal). The chart
         // stays unrendered - the card is a refusal, not a preview. The text
         // requirement stays as the caption and as the render-failure fallback
         // (house rule: cards never dead-end).
-        if (!_hasDeadSoulFeature(userId) && !_isStaff(userId)) {
+        const reading = await _hasDeadSoulFeature(userId);
+        if (!reading && !_isStaff(userId)) {
             const txt = _refuseAfterlife();
             try {
                 const card = await renderer.renderAfterlifeLockedCard();

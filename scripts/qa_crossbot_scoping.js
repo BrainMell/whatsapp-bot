@@ -151,3 +151,7 @@ const schemaSrc = fs.readFileSync('./core/models/AbyssRun.js', 'utf8');
 assert(/botId: \{ type: String/.test(schemaSrc), 'AbyssRun schema has optional botId field');
 
 console.log('\nDone.');
+
+// QA-only: the modules above open Mongoose handles that hold the event
+// loop alive forever in sandbox runs - exit explicitly once pins are done.
+process.exit(process.exitCode || 0);

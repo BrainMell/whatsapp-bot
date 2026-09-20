@@ -7854,22 +7854,40 @@ async function executeEncounter(sock, groq, encounterType, sessionKey) {
     // 💡 DEAD WORLD (2026-09-21 owner ticket): a regular COMBAT encounter has
     // a 5% chance to spawn nothing at all. The dungeon behaves completely
     // normally until this spawn point; then no monsters are generated - the
-    // Dead World sequence plays instead (empty scene card, six separate
-    // thought boxes, a survival victory card). Bosses, elites, rests, non
-    // combat events and trials are never touched; once per run; the
-    // encounter slot is consumed exactly like a cleared fight, with no
-    // combat rewards because nothing was fought.
+    // Dead World sequence plays instead (empty scene card, ten separate
+    // thought boxes, a regular victory card with a Dead World congratulation
+    // caption). Bosses, elites, rests, non combat events and trials are never
+    // touched; once per run; no combat rewards because nothing was fought.
     if (encounterType === "COMBAT") {
       const deadWorld = require("./deadWorld");
       if (deadWorld.shouldTrigger(state)) {
         state.currentEncounter = deadWorld.marker(state.encounter);
         state.currentEncounterType = "DEAD_WORLD";
         await deadWorld.runEncounter(sock, state);
-        setTimeout(() => {
-          nextStage(sock, state.groq, sessionKey).catch((e) =>
-            console.error("[Quest] nextStage error (dead world):", e?.message || e),
-          );
-        }, state.solo ? 1000 : GAME_CONFIG.BREAK_TIME);
+        // 💡 OWNER RULING (2026-09-21): the Dead World encounter is TERMINAL.
+        // The encounter ends after the sequence and the run does NOT continue
+        // into the normal dungeon flow - the victory card is the closing
+        // beat. No QUEST COMPLETE banner, no completion rewards, no win
+        // credit (nothing was fought); the run closes out cleanly instead:
+        // persistent HP/energy are written back (same contract as every
+        // other ending) and the state is deleted.
+        try {
+          for (const dwPlayer of state.players) {
+            if (dwPlayer.jid && dwPlayer.stats && dwPlayer.stats.maxHp) {
+              const dwHP = dwPlayer.currentHP !== undefined ? dwPlayer.currentHP : dwPlayer.stats.hp;
+              economy.setPersistentHP(dwPlayer.jid, dwHP, dwPlayer.stats.maxHp);
+            }
+            if (dwPlayer.jid && dwPlayer.stats && dwPlayer.stats.maxEnergy) {
+              const dwEn = Number.isFinite(dwPlayer.stats.energy) ? dwPlayer.stats.energy : dwPlayer.stats.maxEnergy;
+              economy.setPersistentEnergy(dwPlayer.jid, dwEn, dwPlayer.stats.maxEnergy);
+            }
+          }
+        } catch (dwErr) {
+          console.error("[DeadWorld] persistent HP/energy write-back failed:", dwErr?.message || dwErr);
+        }
+        state.active = false;
+        state.phase = "IDLE";
+        deleteGameState(sessionKey);
         return;
       }
     }

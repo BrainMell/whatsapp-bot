@@ -531,15 +531,24 @@ function renderCosmologyAtlasSheet(t = Date.now()) {
         _drawFirstWorld(ctx, g);
 
         // labels: parchment pill underlay keeps them readable over dots/lines
+        // 💡 FIX #b4f5d2 rework (owner 2026-09-21: "the world all card is still
+        // mislabeled and arranged"): the old _pill centered its BOX at x but
+        // drew the TEXT via _centered, which always centers at W/2 - so
+        // AFTERLIFE and THE ABYSS floated away from their structures and the
+        // FIRST WORLD box sat offset from its own text. Text and box now
+        // share one center point, and the FIRST WORLD pill follows the live
+        // disk, not the static ring center.
         const _pill = (text, x, y, font, color) => {
             ctx.font = font;
             const w = ctx.measureText(text).width;
             ctx.fillStyle = 'rgba(234,221,196,0.85)';
             ctx.fillRect(x - w / 2 - 10, y - 15, w + 20, 22);
-            _centered(ctx, text, y, font, color);
+            ctx.fillStyle = color || PAL.ink;
+            ctx.textAlign = 'center';
+            ctx.fillText(text, x, y);
         };
         _pill('WORLD BEYOND', cx, cy - R - 16, '15px "Cinzel"', PAL.inkSoft);
-        _pill('FIRST WORLD', cx, cy + 58, '18px "Cinzel"', PAL.ink);
+        _pill('FIRST WORLD', g.fwx, g.fwy + 58, '18px "Cinzel"', PAL.ink);
 
         // Afterlife circuit (its own path, its own phase) - lower left
         const acx = 300, acy = 920, aR = 150;
@@ -558,7 +567,10 @@ function renderCosmologyAtlasSheet(t = Date.now()) {
 
         // Abyss descent (does not orbit) - lower right
         _drawAbyssDescent(ctx, 700, 810, 0.72);
-        _pill('THE ABYSS', 700, 772, '14px "Cinzel"', PAL.inkSoft);
+        // 💡 the abyss pill sits centered over its own rings; at x=700 it is
+        // far clear of the First World circle (whose edge at this x is at
+        // y=630), so it can no longer read as a label of the circle above
+        _pill('THE ABYSS', 700, 778, '14px "Cinzel"', PAL.inkSoft);
         _pill('beneath, not around', 700, 1092, 'italic 12px "IM Fell Italic"', PAL.inkSoft);
 
         // triune alignment beam when it happens to be now

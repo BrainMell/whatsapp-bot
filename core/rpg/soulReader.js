@@ -106,6 +106,22 @@ async function setReadingState(userId, value) {
     );
 }
 
+// ─── PRIVILEGE (2026-09-21 owner report: ".j kills keeps returning the
+//  requirement message") ──────────────────────────────────────────────────
+//  The OWNER reads the ledger without the three doors. Same lazy-require
+//  pattern as worldMap._isStaff (avoids the circular import trap, fail
+//  closed on any error). Global mods and RPG mods do NOT get this - the
+//  Fortune Teller's doors are a player journey, the owner stands outside it.
+function _isOwner(userId) {
+    try {
+        const engine = require('../engine');
+        return !!(engine.isBotOwner && engine.isBotOwner(userId));
+    } catch (e) {
+        try { console.error('[soulReader] owner check failed, fail-closed:', e.message); } catch (_) {}
+        return false;
+    }
+}
+
 // ─── GATES ──────────────────────────────────────────────────────────────────
 
 function getLevel(userId) {
@@ -246,7 +262,10 @@ async function viewKills(sock, chatId, userId, args = []) {
     const sight = await getSight(userId);
 
     // ── LOCKED: never render the ledger (same discipline as locked maps) ──
-    if (!sight.open) {
+    // 💡 the OWNER bypasses the three doors entirely (2026-09-21 owner
+    // report): no level door, no deep-floor door, no fee door. The reading
+    // opens straight to the ledger; nothing is recorded as paid.
+    if (!sight.open && !_isOwner(userId)) {
         let caption = `🕯️ *THE VEILWARD READING*\n\n${lockedText(sight)}\n\n${framed(todayLine(userId))}`;
         try {
             const buf = await renderer.renderLockedCard({

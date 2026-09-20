@@ -3,8 +3,9 @@
 // ═══════════════════════════════════════════════════════════════════════════
 //
 //  2026-09-21 owner ticket: a regular dungeon encounter can become a Dead
-//  World encounter. Nothing spawns. These two node-canvas cards carry the
-//  whole sequence, in the same visual family as the dungeon encounter cards:
+//  World encounter. Nothing spawns. These two node-canvas cards are the
+//  FALLBACK path only (the primary cards are rendered by the Go service,
+//  same pipeline as every regular encounter card - see deadWorld.js).
 //
 //    renderDeadWorldScene()    the player alone in the environment, no
 //                              monsters, the world visibly "off" (dimmed,
@@ -20,6 +21,13 @@
 //      dashes (owner rule for generated encounter text)
 //    - the enemy side is EMPTY on both cards, and the victory card never
 //      shows a kill count, a corpse, or an enemy silhouette
+//    - NO floor number anywhere (owner 2026-09-21): the plate carries the
+//      dungeon name and rank only
+//    - the sprite is drawn with its NATIVE facing (the way every other
+//      renderer in this codebase draws it: unmirrored, facing the enemy
+//      side), grounded on the floor line with a contact shadow directly
+//      under the feet (owner 2026-09-21: model and shadow must match how
+//      existing encounter cards render them)
 // ═══════════════════════════════════════════════════════════════════════════
 
 'use strict';
@@ -191,11 +199,11 @@ function _frame(ctx, w, h, color) {
     ctx.strokeRect(17, 17, w - 34, h - 34);
 }
 
-// Top-left plate: dungeon name + rank + floor (the only chrome both cards
-// share with the encounter family).
-function _plate(ctx, dungeonName, rank, floor, opts = {}) {
+// Top-left plate: dungeon name + rank only. NO floor number (owner
+// 2026-09-21: the floor must not appear in the Dead World UI).
+function _plate(ctx, dungeonName, rank, opts = {}) {
     const name = _safeText(dungeonName) || 'Deep Dungeon';
-    const sub = `RANK ${_safeText(rank) || 'F'}  ·  FLOOR ${Math.max(1, Math.floor(Number(floor) || 1))}`;
+    const sub = `RANK ${_safeText(rank) || 'F'}`;
     ctx.font = 'bold 17px "Dogica Pixel Bold"';
     const nameW = ctx.measureText(name.toUpperCase()).width;
     ctx.font = '13px "Dogica Pixel Bold"';
@@ -235,28 +243,46 @@ function _motes(ctx, w, h, seed, color) {
 
 async function _drawPlayer(ctx, opts) {
     const sprite = await _loadPlayerSprite(opts.playerClass, opts.spriteIndex);
-    const groundY = H * 0.88;
+    const groundY = Math.floor(H * 0.86);
     const px = Math.floor(W * (opts.playerX || 0.24));
     const targetH = Math.floor(H * 0.56);
-    // contact shadow
-    ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.34)';
-    ctx.beginPath();
-    ctx.ellipse(px, groundY + 6, 52, 11, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+    // feet land exactly on the ground line, matching how the encounter
+    // renderer grounds the model; the contact shadow sits directly under
+    // the feet (soft, wide, slightly offset toward the light) so the
+    // character never floats (owner 2026-09-21 model/shadow fix)
     if (sprite) {
         const scale = targetH / sprite.height;
         const dw = sprite.width * scale;
-        // face the empty side (right), matching the player sprite's battle facing
+        const shadowW = dw * 0.72;
+        const shadowH = Math.max(9, targetH * 0.035);
         ctx.save();
-        ctx.translate(px, groundY);
-        ctx.scale(-1, 1);
-        ctx.drawImage(sprite, -dw / 2, -targetH, dw, targetH);
+        const g = ctx.createRadialGradient(px, groundY, shadowW * 0.1, px, groundY, shadowW * 0.6);
+        g.addColorStop(0, 'rgba(0,0,0,0.42)');
+        g.addColorStop(0.6, 'rgba(0,0,0,0.22)');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.save();
+        ctx.translate(px, groundY - shadowH * 0.2);
+        ctx.scale(1, shadowH / (shadowW * 0.6));
+        ctx.beginPath();
+        ctx.arc(0, 0, shadowW * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        ctx.restore();
+        // NATIVE facing: draw the sprite unmirrored, exactly like the
+        // encounter card pipeline does - the model faces the enemy side
+        // (right) on its own. Owner 2026-09-21 facing fix: the previous
+        // horizontal mirror transform pointed the character the wrong way.
+        ctx.save();
+        ctx.drawImage(sprite, px - dw / 2, groundY - targetH, dw, targetH);
         ctx.restore();
     } else {
         // sprite failed: a standing silhouette so the card never sends empty
         ctx.save();
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.beginPath();
+        ctx.ellipse(px, groundY, 46, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
         ctx.fillStyle = 'rgba(16,18,26,0.9)';
         ctx.fillRect(px - 16, groundY - targetH, 32, targetH);
         ctx.beginPath();
@@ -272,7 +298,7 @@ function _nameTag(ctx, playerName) {
     ctx.font = 'bold 13px "Dogica Pixel Bold"';
     const tw = ctx.measureText(name.toUpperCase()).width;
     const bx = Math.floor(W * 0.24) - tw / 2 - 10;
-    const by = H * 0.88 + 14;
+    const by = H * 0.86 + 12;
     ctx.fillStyle = 'rgba(10,12,18,0.72)';
     ctx.fillRect(bx, by, tw + 20, 24);
     ctx.strokeStyle = 'rgba(210,200,170,0.4)';
@@ -373,7 +399,7 @@ async function renderDeadWorldScene(opts = {}) {
         ctx.fillStyle = cold;
         ctx.fillRect(W * 0.55, 0, W * 0.45, H);
 
-        _plate(ctx, opts.dungeonName, opts.rank, opts.floor, {
+        _plate(ctx, opts.dungeonName, opts.rank, {
             plateBg: 'rgba(8,10,16,0.78)', plateEdge: 'rgba(150,160,180,0.45)',
         });
         _frame(ctx, W, H, 'rgba(12,14,20,0.85)');
@@ -424,7 +450,7 @@ async function renderDeadWorldVictory(opts = {}) {
         _motes(ctx, W, H, 20260922, 'rgba(255,232,190,1)');
         _vignette(ctx, W, H, 0.42);
 
-        _plate(ctx, opts.dungeonName, opts.rank, opts.floor, {
+        _plate(ctx, opts.dungeonName, opts.rank, {
             plateBg: 'rgba(20,16,10,0.7)', plateEdge: 'rgba(230,200,140,0.55)',
         });
         _seal(ctx, opts.sealText || 'SURVIVED', W * 0.74, H * 0.42, 74);

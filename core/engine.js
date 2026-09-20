@@ -3269,23 +3269,58 @@ What to do:
             continue;
           }
 
+          // per-item flag shared by the try/catch below: did the race
+          // timeout drop this send while Baileys was still working on it?
+          let __droppedByTimeout = false;
           try {
-            // 💡 CRITICAL FIX: wrap rawSend in a 15s timeout.
-            // Baileys' media upload to mmg.whatsapp.net can hang
-            // INDEFINITELY - never resolves, never rejects. This blocks
-            // the entire sequential queue, so all subsequent messages
-            // (including text fallbacks) never get sent.
-            // After 15s, treat it as a permanent error and move on.
-            // 💡 FIX 2026-07-30: reduced from 20s to 15s - a 15s media upload
-            // is already broken, no point waiting longer. Also fixed the error
-            // message (was "20000s", should be "15s").
-            const SEND_TIMEOUT_MS = 15000;
+            // 💡 ROOT CAUSE FIX (owner 2026-09-21: "a command fails with
+            // rawSend timed out - fix the timeout, don't hide the error").
+            // The old race gave EVERY send 15s while Baileys' own media
+            // upload budget is 20s (mediaUploadTimeoutMs on the socket) and
+            // the relay/ACK phase adds more. Any upload needing 15-20s was
+            // GUARANTEED to be dropped mid-flight by this queue and reported
+            // as "rawSend timed out after 15s" even though Baileys was about
+            // to succeed - the queue was manufacturing the very timeout it
+            // was guarding against. Now:
+            //   · MEDIA (image/video/audio/sticker/document) gets a 60s race
+            //     budget - the same upload budget the status-post path uses
+            //     (#b4fa05), comfortably above Baileys' 20s abort + relay.
+            //   · TEXT keeps the tight 15s (it rides the WebSocket; slow
+            //     text means the connection is already broken).
+            //   · The race timer is CLEARED when the send settles (the old
+            //     code leaked one 15s timer per message forever).
+            //   · The losing promise is guarded - a late Baileys rejection
+            //     can never surface as an unhandledRejection, and a late
+            //     RESOLUTION is logged as "delivered after the drop" so the
+            //     log tells the truth instead of hiding the outcome.
+            const __isMediaSend = !!(item.content && (item.content.image || item.content.video || item.content.audio || item.content.sticker || item.content.document));
+            const SEND_TIMEOUT_MS = __isMediaSend ? 60000 : 15000;
             const tSend0 = Date.now();
             const sendPromise = rawSend(item.jid, item.content, item.options);
-            const timeoutPromise = new Promise((_, reject) =>
-              setTimeout(() => reject(new Error(`rawSend timed out after 15s (media upload hung - queue was blocked)`)), SEND_TIMEOUT_MS)
-            );
-            const res = await Promise.race([sendPromise, timeoutPromise]);
+            // the race loser must never become an unhandledRejection
+            sendPromise.catch(() => {});
+            sendPromise
+              .then(() => {
+                if (__droppedByTimeout) {
+                  console.log(`📨 [${BOT_ID}] send to ${item.jid?.split("@")[0]} completed AFTER the timeout drop - the message WAS likely delivered`);
+                }
+              })
+              .catch(() => {});
+            let __raceTimer = null;
+            let res;
+            try {
+              res = await Promise.race([
+                sendPromise,
+                new Promise((_, reject) => {
+                  __raceTimer = setTimeout(
+                    () => reject(new Error(`rawSend timed out after ${SEND_TIMEOUT_MS / 1000}s (media upload hung - queue was blocked)`)),
+                    SEND_TIMEOUT_MS,
+                  );
+                }),
+              ]);
+            } finally {
+              if (__raceTimer) clearTimeout(__raceTimer);
+            }
             queue.shift();
             item.resolve(res);
             // 💡 2026-09-15 PERF: per-send timing - makes WhatsApp media-upload
@@ -3301,9 +3336,10 @@ What to do:
             item.retries += 1;
 
             // 💡 Timeout errors are NOT connection errors - don't retry.
-            // The media upload is permanently broken. Drop the message
+            // The send is stuck beyond its race budget. Drop the message
             // so the queue can process subsequent sends.
             if (err.message?.includes('timed out')) {
+              __droppedByTimeout = true; // a late completion will be logged as delivered
               console.error(`⏰ [${BOT_ID}] Send queue: TIMEOUT for message to ${item.jid?.split('@')[0]}. Content preview: ${JSON.stringify(item.content?.text || item.content?.caption || '[non-text]').slice(0, 80)}. DROPPING to unblock queue.`);
               queue.shift();
               item.reject(err);

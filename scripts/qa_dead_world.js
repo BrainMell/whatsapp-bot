@@ -2,15 +2,21 @@
 //  QA: DEAD WORLD ENCOUNTER + REALM GATE CARDS (2026-09-21 owner ticket)
 // ═══════════════════════════════════════════════════════════════════════════
 //  Pins:
-//   1. 30 unique six-thought variations; no hyphens or dashes anywhere
+//   1. 30 unique ten-thought variations; no hyphens or dashes anywhere
 //   2. 5% trigger chance + forced flag + once-per-run guard
 //   3. FULL forced solo run (.j solo f -d equivalent): empty scene card, then
-//      SIX SEPARATE thought message boxes, then the victory card, then the
-//      run continues into the next encounter (no combat rewards, no kills)
+//      TEN SEPARATE thought message boxes, then the regular-style victory
+//      card with a Dead World congratulation caption - and the run ENDS
+//      there (owner 2026-09-21: the encounter ends after the Dead World
+//      sequence and does NOT continue into the normal dungeon flow: state
+//      deleted, no QUEST COMPLETE banner, no next encounter, no rewards)
 //   4. normal .j solo f unaffected (no flag → enemies spawn as usual)
-//   5. dead world renderers produce real PNGs; env art covers every dungeon
+//   5. dead world renderers produce real PNGs; env art covers every dungeon;
+//      the primary card path is the Go encounter pipeline (floor 0, empty
+//      enemy side), the node-canvas renderer is fallback-only
 //   6. abyss misalignment + afterlife locked cards render; afterlife refusal
-//      now sends the LOCKED CARD (never the map sheet); staff bypass intact
+//      now sends the LOCKED CARD (never the map sheet); staff + owner bypass
+//      intact; the reading (soulReader) is the player-side key
 //   7. engine dispatch pins: "-d" flag + abyss gate card wiring
 //  Run: node scripts/qa_dead_world.js
 // ═══════════════════════════════════════════════════════════════════════════
@@ -19,13 +25,15 @@ process.env.GO_IMAGE_SERVICE_URL = process.env.GO_IMAGE_SERVICE_URL || 'http://1
 const assert = require('assert');
 const fs = require('fs');
 
-// 💡 STUB ENGINE: worldMap._isStaff lazily requires ../engine - pre-seed the
-// require cache so QA never loads the real engine. Mutable staff flag.
+// 💡 STUB ENGINE: worldMap._isStaff + soulReader._isOwner lazily require
+// ../engine - pre-seed the require cache so QA never loads the real engine.
+// Mutable staff/owner flags.
 let __staff = false;
+let __owner = false;
 const __enginePath = require.resolve('../core/engine.js');
 require.cache[__enginePath] = {
     id: __enginePath, filename: __enginePath, loaded: true,
-    exports: { isBotOwner: () => false, isGlobalMod: () => false, isRpgMod: () => __staff },
+    exports: { isBotOwner: () => __owner, isGlobalMod: () => false, isRpgMod: () => __staff },
 };
 
 const botConfig = require('../botConfig');
@@ -74,15 +82,15 @@ function mockSock(log) {
 const DASH_RE = /[\u2010\u2011\u2012\u2013\u2014\u2015\u2E3A\u2E3B-]/;
 
 (async () => {
-    // ═══ 1. sequence data: 30 x 6, all unique, dash-free ═══
-    console.log('\n[1] six-thought sequence data');
+    // ═══ 1. sequence data: 30 x 10, all unique, dash-free ═══
+    console.log('\n[1] ten-thought sequence data');
     const seqs = sequences.DEAD_WORLD_SEQUENCES;
     check(Array.isArray(seqs) && seqs.length === 30, `exactly 30 variations (got ${seqs.length})`);
     const seen = new Map();
     let dup = null, dashHit = null, badLen = null;
-    seqs.forEach((six, vi) => {
-        if (!Array.isArray(six) || six.length !== 6) badLen = badLen || `variation ${vi + 1} has ${six.length} thoughts`;
-        six.forEach((thought, ti) => {
+    seqs.forEach((ten, vi) => {
+        if (!Array.isArray(ten) || ten.length !== 10) badLen = badLen || `variation ${vi + 1} has ${ten.length} thoughts`;
+        ten.forEach((thought, ti) => {
             const key = String(thought).toLowerCase().trim();
             if (seen.has(key)) dup = dup || `"${thought}" repeats (v${seen.get(key)} and v${vi + 1})`;
             seen.set(key, `${vi + 1}`);
@@ -90,11 +98,16 @@ const DASH_RE = /[\u2010\u2011\u2012\u2013\u2014\u2015\u2E3A\u2E3B-]/;
             if (!thought || thought.length > 120) badLen = badLen || `v${vi + 1} thought ${ti + 1} length ${thought.length}`;
         });
     });
-    check(!dup, 'all 180 thoughts unique across all 30 variations');
+    check(!dup, 'all 300 thoughts unique across all 30 variations');
     check(!dashHit, `no hyphens or dashes in any thought${dashHit ? ' [' + dashHit + ']' : ''}`);
-    check(!badLen, `every variation has exactly 6 thoughts, each 1..120 chars${badLen ? ' [' + badLen + ']' : ''}`);
+    check(!badLen, `every variation has exactly 10 thoughts, each 1..120 chars${badLen ? ' [' + badLen + ']' : ''}`);
     check(sequences.formatThought('test thought') === '_*「 test thought 」*_',
         'formatThought wraps in the _*「 」*_ message-box style');
+    // the victory congratulation pool: present, dash-free, no kill language
+    const vics = sequences.VICTORY_CAPTIONS;
+    check(Array.isArray(vics) && vics.length >= 3, `victory caption pool exists (${vics.length} captions)`);
+    check(vics.every((c) => !DASH_RE.test(c.card + c.text)), 'victory captions are dash-free');
+    check(vics.every((c) => !/slain|killed|defeated|victory over/i.test(c.text)), 'victory captions never imply a fight');
     // per-chat rotation avoids immediate repeats
     const picks = new Set();
     for (let i = 0; i < 8; i++) picks.add(sequences.pickSequence('qa_rot_chat'));
@@ -118,19 +131,19 @@ const DASH_RE = /[\u2010\u2011\u2012\u2013\u2014\u2015\u2E3A\u2E3B-]/;
     const mk = deadWorld.marker(2);
     check(mk.type === 'DEAD_WORLD' && mk.name && mk.encounterNumber === 2, 'marker shape is status-safe');
 
-    // ═══ 3. FULL forced solo run: the complete sequence ═══
+    // ═══ 3. FULL forced solo run: the complete sequence, then the run ENDS ═══
     console.log('\n[3] full forced run (the .j solo f -d flow)');
     deadWorld.setThoughtDelayMs(5);
     const sent3 = [];
     const sock3 = mockSock(sent3);
     const start3 = await asJoker(() => guildAdventureInit(sock3, { forceDeadWorld: true, skipShop: true }));
     check(start3 && start3.success, 'forced run accepted');
-    // reg timer fires immediately; shop skipped; nextStage ~1.2s; sequence msgs; +1s continuation
+    // reg timer fires immediately; shop skipped; nextStage ~1.2s; sequence msgs
     await sleep(6000);
-    const imgs = sent3.filter((s) => s.msg.image);
+    const imgs3 = sent3.filter((s) => s.msg.image);
     const sceneIdx = sent3.findIndex((s) => s.msg.image && !s.msg.caption);
-    check(imgs.length >= 2, `scene + victory cards delivered as images (${imgs.length} images in the run)`);
-    // locate the six consecutive thought boxes
+    check(imgs3.length >= 2, `scene + victory cards delivered as images (${imgs3.length} images in the run)`);
+    // locate the ten consecutive thought boxes
     let thoughtRun = 0, runStart = -1, bestRun = 0, bestStart = -1;
     sent3.forEach((s, i) => {
         const t = s.msg.text;
@@ -138,26 +151,28 @@ const DASH_RE = /[\u2010\u2011\u2012\u2013\u2014\u2015\u2E3A\u2E3B-]/;
         if (isThought) { if (thoughtRun === 0) runStart = i; thoughtRun++; if (thoughtRun > bestRun) { bestRun = thoughtRun; bestStart = runStart; } }
         else thoughtRun = 0;
     });
-    check(bestRun === 6, `exactly SIX consecutive thought message boxes (best run: ${bestRun})`);
-    if (bestRun === 6) {
+    check(bestRun === 10, `exactly TEN consecutive thought message boxes (best run: ${bestRun})`);
+    if (bestRun === 10) {
         check(bestStart > sceneIdx, 'the thought boxes come after the empty scene card');
-        const afterIdx = bestStart + 5;
+        const afterIdx = bestStart + 9;
         const afterMsgs = sent3.slice(afterIdx + 1);
-        check(afterMsgs.some((s) => s.msg.image), 'the victory card comes after the six thought boxes');
-        // six SEPARATE boxes: six distinct sendMessage entries
-        const six = sent3.slice(bestStart, bestStart + 6).map((s) => s.msg.text);
-        check(new Set(six).size === 6, 'each thought is its own message (no combined box)');
+        check(afterMsgs.some((s) => s.msg.image), 'the victory card comes after the ten thought boxes');
+        // ten SEPARATE boxes: ten distinct sendMessage entries
+        const ten = sent3.slice(bestStart, bestStart + 10).map((s) => s.msg.text);
+        check(new Set(ten).size === 10, 'each thought is its own message (no combined box)');
+        // 💡 TERMINAL RUN (owner 2026-09-21): the victory card is the LAST
+        // message - nothing follows it into the normal dungeon flow
+        const victoryIdx = afterIdx + 1 + afterMsgs.findIndex((s) => s.msg.image);
+        check(victoryIdx === sent3.length - 1, 'nothing is sent after the victory card (run ends)');
+        check(afterMsgs.every((s) => !(s.msg.text || '').includes('QUEST COMPLETE')),
+            'no QUEST COMPLETE banner after the sequence');
+        check(afterMsgs.every((s) => !(s.msg.text || '').includes('BATTLE COMMENCES')),
+            'no further encounter spawns after the sequence');
     }
-    // run state: consumed the encounter, continued, no combat rewards
+    // run state: the run ENDED - state deleted, nothing dangling
     const st3 = asJoker(() => ga.getGameState(CHAT, P1));
-    check(!!st3, 'run state alive after the dead world');
-    check(st3.encounter >= 2, `run continued to the next encounter (encounter ${st3.encounter})`);
-    check(st3.deadWorldDone === true, 'dead world marked done for this run');
-    check(st3.players[0].goldEarned === 0 && st3.players[0].xpEarned === 0, 'no gold or xp from an encounter that never fought');
-    check(st3.stats.monstersKilled === 0, 'no kill credit (nothing spawned)');
-    check(st3.inCombat === true || st3.encounter > st3.maxEncounters || st3.active === false,
-        'the run flowed onward after the sequence (combat or completion)');
-    // cleanup the run
+    check(!st3 || st3.active === false, 'run state is gone/inactive after the dead world (terminal run)');
+    // cleanup any leftovers for the next section
     asJoker(() => ga.deleteGameState(CHAT, P1));
 
     // ═══ 4. normal .j solo f is untouched ═══
@@ -175,12 +190,12 @@ const DASH_RE = /[\u2010\u2011\u2012\u2013\u2014\u2015\u2E3A\u2E3B-]/;
     asJoker(() => ga.deleteGameState(CHAT, P1));
 
     // ═══ 5. renderers + env art coverage ═══
-    console.log('\n[5] dead world + gate card renderers');
+    console.log('\n[5] dead world + gate card renderers (fallback path)');
     for (const [label, buf] of [
-        ['scene (FIGHTER, fire cave)', await dwRenderer.renderDeadWorldScene({ playerName: 'DwHero', playerClass: 'FIGHTER', spriteIndex: 0, dungeonName: "Dragon's Lair", rank: 'F', floor: 1, backgroundPath: 'rpgasset/environment/env1.png', environmentKey: 'env1.png' })],
-        ['victory (FIGHTER)', await dwRenderer.renderDeadWorldVictory({ playerName: 'DwHero', playerClass: 'FIGHTER', spriteIndex: 0, dungeonName: "Dragon's Lair", rank: 'F', floor: 1, backgroundPath: 'rpgasset/environment/env1.png', environmentKey: 'env1.png' })],
-        ['scene (NECROMANCER, castle)', await dwRenderer.renderDeadWorldScene({ playerName: 'DwHero', playerClass: 'NECROMANCER', spriteIndex: 0, dungeonName: 'Demon Castle', rank: 'C', floor: 4, backgroundPath: 'rpgasset/environment/spark_2.png', environmentKey: 'spark_2.png' })],
-        ['scene fallback (unknown env)', await dwRenderer.renderDeadWorldScene({ playerName: 'DwHero', playerClass: 'SCOUT', spriteIndex: 0, dungeonName: 'Nowhere', rank: 'F', floor: 1, backgroundPath: 'rpgasset/environment/not_a_file.png', environmentKey: '' })],
+        ['scene (FIGHTER, fire cave)', await dwRenderer.renderDeadWorldScene({ playerName: 'DwHero', playerClass: 'FIGHTER', spriteIndex: 0, dungeonName: "Dragon's Lair", rank: 'F', backgroundPath: 'rpgasset/environment/env1.png', environmentKey: 'env1.png' })],
+        ['victory (FIGHTER)', await dwRenderer.renderDeadWorldVictory({ playerName: 'DwHero', playerClass: 'FIGHTER', spriteIndex: 0, dungeonName: "Dragon's Lair", rank: 'F', backgroundPath: 'rpgasset/environment/env1.png', environmentKey: 'env1.png' })],
+        ['scene (NECROMANCER, castle)', await dwRenderer.renderDeadWorldScene({ playerName: 'DwHero', playerClass: 'NECROMANCER', spriteIndex: 0, dungeonName: 'Demon Castle', rank: 'C', backgroundPath: 'rpgasset/environment/spark_2.png', environmentKey: 'spark_2.png' })],
+        ['scene fallback (unknown env)', await dwRenderer.renderDeadWorldScene({ playerName: 'DwHero', playerClass: 'SCOUT', spriteIndex: 0, dungeonName: 'Nowhere', rank: 'F', backgroundPath: 'rpgasset/environment/not_a_file.png', environmentKey: '' })],
         ['abyss misaligned (closed)', await wmr.renderAbyssMisalignedCard({ mode: 'closed', opensInLabel: 'locked 2h 03m' })],
         ['abyss misaligned (unreadable)', await wmr.renderAbyssMisalignedCard({ mode: 'unreadable' })],
         ['afterlife locked', await wmr.renderAfterlifeLockedCard()],
@@ -195,6 +210,20 @@ const DASH_RE = /[\u2010\u2011\u2012\u2013\u2014\u2015\u2E3A\u2E3B-]/;
     const missing = assets.filter((a) => !dwRenderer.ENV_CARD_ART[a]);
     check(assets.length >= 10 && missing.length === 0,
         `ENV_CARD_ART covers all ${assets.length} dungeon environment assets${missing.length ? ' [missing: ' + missing.join(',') + ']' : ''}`);
+    // 💡 card path pins: the PRIMARY cards go through the Go encounter
+    // pipeline (the same generator as regular encounter cards), floor 0,
+    // empty enemy side; the canvas renderer is fallback-only
+    const dwRunSrc = fs.readFileSync(require.resolve('../core/rpg/deadWorld.js'), 'utf8');
+    check(/generateCombatImage\(\[player\], \[\]/.test(dwRunSrc),
+        'scene card uses the Go combat renderer with an EMPTY enemy side');
+    check(/generateEndScreenImage\('VICTORY'/.test(dwRunSrc),
+        'victory card uses the regular Go VICTORY end card (WriteEndCard)');
+    check((dwRunSrc.match(/floor: 0/g) || []).length >= 2,
+        'no floor number reaches either card (floor 0 in both Go payloads)');
+    check(/scale\(-1, 1\)/.test(fs.readFileSync(require.resolve('../core/rpg/deadWorldRenderer.js'), 'utf8')) === false,
+        'fallback renderer draws the sprite with its NATIVE facing (no mirror)');
+    check(!/FLOOR \$\{/.test(fs.readFileSync(require.resolve('../core/rpg/deadWorldRenderer.js'), 'utf8')),
+        'fallback plate carries no floor number');
 
     // ═══ 6. afterlife refusal: locked card, never the map ═══
     console.log('\n[6] afterlife locked card flow');
@@ -217,6 +246,48 @@ const DASH_RE = /[\u2010\u2011\u2012\u2013\u2014\u2015\u2E3A\u2E3B-]/;
     check(!!sent6b[0] && !!sent6b[0].msg.image && (sent6b[0].msg.caption || '').includes('own circuit'),
         'staff bypass still renders the real afterlife chart');
     __staff = false;
+    // 💡 OWNER BYPASS (#b4f71c extension, owner 2026-09-21: "allow me the
+    // owner to view afterlife even if I've not met the requirements"):
+    // the stubbed engine's isBotOwner recognizes the owner JID.
+    __owner = true;
+    const sent6c = [];
+    const sock6c = mockSock(sent6c);
+    await worldMap.showWorld(sock6c, CHAT, 'qa_dw_owner@s.whatsapp.net', 'afterlife', { getLevel: () => 1, getRank: () => 'F' });
+    check(!!sent6c[0] && !!sent6c[0].msg.image && (sent6c[0].msg.caption || '').includes('own circuit'),
+        'OWNER bypass renders the afterlife chart with no requirements met');
+    __owner = false;
+    // the reading is the player-side key: getSight() open => chart unlocks
+    const srSrc = fs.readFileSync(require.resolve('../core/rpg/soulReader.js'), 'utf8');
+    check(/_isOwner\(userId\)/.test(srSrc), 'soulReader has the owner bypass wired');
+    const wmSrc = fs.readFileSync(require.resolve('../core/rpg/worldMap.js'), 'utf8');
+    check(/soulReader\.getSight/.test(wmSrc), 'worldMap afterlife gate honors the dead-soul reading (soulReader)');
+
+    // ═══ 6b. .j kills: the owner reads the ledger without the doors ═══
+    console.log('\n[6b] soulReader owner bypass (.j kills)');
+    const soulReader = require('../core/rpg/soulReader');
+    const sent6d = [];
+    const sock6d = mockSock(sent6d);
+    economy.economyData.set('qa_dw_owner@s.whatsapp.net', {
+        userId: 'qa_dw_owner@s.whatsapp.net', wallet: 10, registered: true,
+        nickname: 'Owner', stats: { kills: 7 }, progression: { level: 3 },
+    });
+    __owner = true;
+    await soulReader.viewKills(sock6d, CHAT, 'qa_dw_owner@s.whatsapp.net', []);
+    check(sent6d.length >= 1, 'owner .j kills delivers a message');
+    check(!(sent6d[0].msg.caption || sent6d[0].msg.text || '').includes('VEILWARD READING'),
+        'owner does NOT get the locked requirement card');
+    check((sent6d[0].msg.caption || sent6d[0].msg.text || '').includes('SOULS BEYOND THE VEIL'),
+        'owner gets the LEDGER reading directly');
+    __owner = false;
+    const sent6e = [];
+    const sock6e = mockSock(sent6e);
+    economy.economyData.set('qa_dw_mortal2@s.whatsapp.net', {
+        userId: 'qa_dw_mortal2@s.whatsapp.net', wallet: 10, registered: true,
+        nickname: 'Mortal', stats: { kills: 2 }, progression: { level: 3 },
+    });
+    await soulReader.viewKills(sock6e, CHAT, 'qa_dw_mortal2@s.whatsapp.net', []);
+    check((sent6e[0].msg.caption || sent6e[0].msg.text || '').includes('VEILWARD READING'),
+        'non-owner still sees the requirement card (gates intact)');
 
     // ═══ 7. engine wiring pins ═══
     console.log('\n[7] engine dispatch wiring');
@@ -228,9 +299,19 @@ const DASH_RE = /[\u2010\u2011\u2012\u2013\u2014\u2015\u2E3A\u2E3B-]/;
         'both abyss gate branches render the misalignment card');
     check(/renderAfterlifeLockedCard\(/.test(fs.readFileSync(require.resolve('../core/rpg/worldMap.js'), 'utf8')),
         'afterlife refusal wired to the locked card');
+    // 💡 rawSend timeout root-cause pins (owner 2026-09-21): the queue race
+    // must NEVER be shorter than Baileys' own 20s media upload budget
+    check(/__isMediaSend \? 60000 : 15000/.test(engSrc),
+        'send queue: media race budget 60s (above Baileys 20s upload, matches #b4fa05), text 15s');
+    check(/clearTimeout\(__raceTimer\)/.test(engSrc),
+        'send queue: race timer cleared when the send settles (no leaked timers)');
+    check(/sendPromise\.catch\(\(\) => \{\}\)/.test(engSrc),
+        'send queue: late Baileys rejection can never surface as unhandledRejection');
+    check(/completed AFTER the timeout drop/.test(engSrc),
+        'send queue: late delivery is logged instead of hidden');
     // the runner's own text fallbacks are also dash-free
     const dwSrc = fs.readFileSync(require.resolve('../core/rpg/deadWorld.js'), 'utf8');
-    const fallbacks = dwSrc.match(/_\*「 [^`]*」\*_/g) || [];
+    const fallbacks = dwSrc.match(/_\*「 [^\n`]*」\*_/g) || [];
     check(fallbacks.length >= 2 && fallbacks.every((f) => !DASH_RE.test(f)),
         `runner text fallbacks exist and stay dash-free (${fallbacks.length} found)`);
 
