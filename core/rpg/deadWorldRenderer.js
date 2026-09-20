@@ -353,7 +353,13 @@ function _seal(ctx, label, cx, cy, r) {
 // ─── CARD 1: THE EMPTY ENCOUNTER ─────────────────────────────────────────────
 /**
  * The Dead World scene: the player alone in the dungeon environment, no
- * monsters, the world dimmed and desaturated and clearly wrong.
+ * monsters, and the environment's COLORS INVERTED (owner 2026-09-21: "I want
+ * the COLORS of the backgrounds/environments for the new encounter type to be
+ * inverted"). The inversion is applied to the ENVIRONMENT LAYER ONLY, before
+ * any sprite or chrome is drawn: the world reads as its own negative while
+ * the living player keeps their normal colors. The old desaturation pass is
+ * replaced by the inversion itself; a lighter cold dim keeps the negative
+ * from glowing too brightly while staying clearly "wrong".
  */
 async function renderDeadWorldScene(opts = {}) {
     try {
@@ -363,25 +369,29 @@ async function renderDeadWorldScene(opts = {}) {
         const cv = create(W, H);
         const ctx = cv.getContext('2d');
 
-        // environment, then the wrongness layered over it
+        // environment, INVERTED, then the wrongness layered over it
         const { img } = await _loadEnvArt(opts.backgroundPath, opts.environmentKey);
-        if (img) _coverFit(ctx, img, W, H);
-        else { ctx.fillStyle = '#14161f'; ctx.fillRect(0, 0, W, H); }
+        if (img) {
+            const env = create(W, H);
+            const ectx = env.getContext('2d');
+            _coverFit(ectx, img, W, H);
+            // pixel-level RGB inversion (difference against white keeps alpha)
+            ectx.globalCompositeOperation = 'difference';
+            ectx.fillStyle = '#ffffff';
+            ectx.fillRect(0, 0, W, H);
+            ectx.globalCompositeOperation = 'source-over';
+            ctx.drawImage(env, 0, 0);
+        } else {
+            ctx.fillStyle = '#14161f'; ctx.fillRect(0, 0, W, H);
+        }
 
-        // desaturation pass (blend mode if the canvas build allows it)
-        try {
-            ctx.globalCompositeOperation = 'saturation';
-            ctx.fillStyle = 'rgba(128,128,128,0.85)';
-            ctx.fillRect(0, 0, W, H);
-        } catch (e) { /* older canvas builds: the dimming alone still reads */ }
-        try { ctx.globalCompositeOperation = 'source-over'; } catch (e) {}
-
-        // cold dim + faint depth haze
-        ctx.fillStyle = 'rgba(24,28,40,0.5)';
+        // cold dim (lighter than the old pass: the inverted palette already
+        // reads unmistakably wrong; drowning it in gray would hide the effect)
+        ctx.fillStyle = 'rgba(24,28,40,0.28)';
         ctx.fillRect(0, 0, W, H);
         const haze = ctx.createLinearGradient(0, H * 0.45, 0, H);
         haze.addColorStop(0, 'rgba(20,24,34,0)');
-        haze.addColorStop(1, 'rgba(20,24,34,0.55)');
+        haze.addColorStop(1, 'rgba(20,24,34,0.42)');
         ctx.fillStyle = haze;
         ctx.fillRect(0, H * 0.45, W, H * 0.55);
 

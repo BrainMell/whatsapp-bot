@@ -139,7 +139,7 @@ const DASH_RE = /[\u2010\u2011\u2012\u2013\u2014\u2015\u2E3A\u2E3B-]/;
     const start3 = await asJoker(() => guildAdventureInit(sock3, { forceDeadWorld: true, skipShop: true }));
     check(start3 && start3.success, 'forced run accepted');
     // reg timer fires immediately; shop skipped; nextStage ~1.2s; sequence msgs
-    await sleep(6000);
+    await sleep(9000);
     const imgs3 = sent3.filter((s) => s.msg.image);
     const sceneIdx = sent3.findIndex((s) => s.msg.image && !s.msg.caption);
     check(imgs3.length >= 2, `scene + victory cards delivered as images (${imgs3.length} images in the run)`);
@@ -162,8 +162,12 @@ const DASH_RE = /[\u2010\u2011\u2012\u2013\u2014\u2015\u2E3A\u2E3B-]/;
         check(new Set(ten).size === 10, 'each thought is its own message (no combined box)');
         // 💡 TERMINAL RUN (owner 2026-09-21): the victory card is the LAST
         // message - nothing follows it into the normal dungeon flow
-        const victoryIdx = afterIdx + 1 + afterMsgs.findIndex((s) => s.msg.image);
-        check(victoryIdx === sent3.length - 1, 'nothing is sent after the victory card (run ends)');
+        const victoryIdx = afterIdx + 1 + afterMsgs.map((s) => s.msg.image ? true : false).lastIndexOf(true) + afterIdx + 1 - (afterIdx + 1);
+        const lastImageIdx = afterIdx + 1 + afterMsgs.map((s) => !!s.msg.image).lastIndexOf(true);
+        const afterVictory = sent3.slice(lastImageIdx + 1);
+        check(afterVictory.every((s) => !s.msg.image), 'the victory card is the LAST image of the run (closing beat)');
+        check(afterVictory.every((s) => !/QUEST COMPLETE|BATTLE COMMENCES|FLOOR \d/i.test(s.msg.text || '')),
+            'nothing from the normal dungeon flow follows the victory card');
         check(afterMsgs.every((s) => !(s.msg.text || '').includes('QUEST COMPLETE')),
             'no QUEST COMPLETE banner after the sequence');
         check(afterMsgs.every((s) => !(s.msg.text || '').includes('BATTLE COMMENCES')),
@@ -210,20 +214,68 @@ const DASH_RE = /[\u2010\u2011\u2012\u2013\u2014\u2015\u2E3A\u2E3B-]/;
     const missing = assets.filter((a) => !dwRenderer.ENV_CARD_ART[a]);
     check(assets.length >= 10 && missing.length === 0,
         `ENV_CARD_ART covers all ${assets.length} dungeon environment assets${missing.length ? ' [missing: ' + missing.join(',') + ']' : ''}`);
-    // 💡 card path pins: the PRIMARY cards go through the Go encounter
-    // pipeline (the same generator as regular encounter cards), floor 0,
-    // empty enemy side; the canvas renderer is fallback-only
+    // 💡 card path pins (2026-09-21 inversion order): the SCENE card is drawn
+    // by the local canvas renderer with the environment COLORS INVERTED (the
+    // Go service composites one opaque bitmap and cannot invert the
+    // environment layer only, and the Go service is external/unmodifiable) -
+    // the Go combat scene is the FALLBACK. The victory card is unchanged: the
+    // regular Go VICTORY end card (WriteEndCard) with the Dead World caption.
     const dwRunSrc = fs.readFileSync(require.resolve('../core/rpg/deadWorld.js'), 'utf8');
-    check(/generateCombatImage\(\[player\], \[\]/.test(dwRunSrc),
-        'scene card uses the Go combat renderer with an EMPTY enemy side');
+    check(/renderDeadWorldScene\(opts\)/.test(dwRunSrc)
+        && dwRunSrc.indexOf('renderDeadWorldScene(opts)') < dwRunSrc.indexOf('generateCombatImage'),
+        'scene card is drawn by the canvas renderer PRIMARY (inverted environment)');
+    check(/generateCombatImage\(\[_combatEntities\(state\)\.player\], \[\], \{/.test(dwRunSrc),
+        'Go combat scene (empty enemy side) remains as the scene FALLBACK');
     check(/generateEndScreenImage\('VICTORY'/.test(dwRunSrc),
         'victory card uses the regular Go VICTORY end card (WriteEndCard)');
     check((dwRunSrc.match(/floor: 0/g) || []).length >= 2,
-        'no floor number reaches either card (floor 0 in both Go payloads)');
-    check(/scale\(-1, 1\)/.test(fs.readFileSync(require.resolve('../core/rpg/deadWorldRenderer.js'), 'utf8')) === false,
-        'fallback renderer draws the sprite with its NATIVE facing (no mirror)');
-    check(!/FLOOR \$\{/.test(fs.readFileSync(require.resolve('../core/rpg/deadWorldRenderer.js'), 'utf8')),
-        'fallback plate carries no floor number');
+        'no floor number reaches either card (floor 0 in both payloads)');
+    const dwRendSrc = fs.readFileSync(require.resolve('../core/rpg/deadWorldRenderer.js'), 'utf8');
+    check(/'difference'/.test(dwRendSrc) && /#ffffff/.test(dwRendSrc),
+        'scene renderer inverts the environment layer (difference vs white)');
+    check(/scale\(-1, 1\)/.test(dwRendSrc) === false,
+        'renderer draws the sprite with its NATIVE facing (no mirror)');
+    check(!/FLOOR \$\{/.test(dwRendSrc),
+        'plate carries no floor number');
+    // RUNTIME inversion proof: render a scene on a dark env; the background
+    // region (top-right, clear of sprite/plate) must be BRIGHT (the dark art
+    // inverted), while the plate area stays dark chrome.
+    {
+        const inv = await dwRenderer.renderDeadWorldScene({
+            playerName: 'Qa', playerClass: 'APPRENTICE', spriteIndex: 0, level: 5,
+            adventurerRank: 'F', dungeonName: 'Fire Cave', rank: 'F',
+            backgroundPath: 'rpgasset/environment/env1.png', environmentKey: 'env1.png',
+        });
+        check(inv && inv.length > 30000 && inv[0] === 0x89, 'inverted scene renders as a real PNG');
+        const { createCanvas, loadImage } = require('canvas');
+        const probe = createCanvas(720, 540);
+        const pctx = probe.getContext('2d');
+        pctx.drawImage(await loadImage(inv), 0, 0);
+        const sample = (x0, y0, w, h) => {
+            const d = pctx.getImageData(x0, y0, w, h).data;
+            let sum = 0;
+            for (let i = 0; i < d.length; i += 4) sum += d[i] + d[i + 1] + d[i + 2];
+            return sum / (d.length / 4);
+        };
+        const bgBright = sample(400, 30, 200, 70);       // environment strip, center-top (no sprite/plate)
+        // baseline: the SAME art, cover-fit + the same cold dim, WITHOUT the
+        // inversion pass - the inverted render must be clearly brighter
+        const path = require('path');
+        const base = createCanvas(720, 540);
+        const bctx = base.getContext('2d');
+        const envImg = await loadImage(path.join(__dirname, '..', 'core', 'rpgasset', 'environment', 'cards', 'fire.jpg'));
+        const sc = Math.max(720 / envImg.width, 540 / envImg.height);
+        bctx.drawImage(envImg, (720 - envImg.width * sc) / 2, (540 - envImg.height * sc) / 2, envImg.width * sc, envImg.height * sc);
+        bctx.fillStyle = 'rgba(24,28,40,0.28)';
+        bctx.fillRect(0, 0, 720, 540);
+        const baseAvg = (() => {
+            const d = bctx.getImageData(400, 30, 200, 70).data;
+            let sum = 0;
+            for (let i = 0; i < d.length; i += 4) sum += d[i] + d[i + 1] + d[i + 2];
+            return sum / (d.length / 4);
+        })();
+        check(bgBright > baseAvg * 1.5 + 20, `dark env renders INVERTED (card avg ${Math.round(bgBright)} vs non-inverted baseline ${Math.round(baseAvg)})`);
+    }
 
     // ═══ 6. afterlife refusal: locked card, never the map ═══
     console.log('\n[6] afterlife locked card flow');

@@ -15,6 +15,9 @@
 
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
+
 const W = 950;
 const H = 1500;
 
@@ -37,6 +40,17 @@ const PAL = {
 };
 
 // ─── FONTS (lazy; bot-owned only) ───────────────────────────────────────────
+// 💡 ROOT-CAUSE FIX (owner 2026-09-21: ".j kills still is not showing the
+// image card"): the font directory was a HARDCODED absolute path from the
+// dev sandbox (/home/z/my-project/whatsapp-bot/...). Production runs the bot
+// from /home/ubuntu/whatsapp-bot (ecosystem.config.js cwd), so registerFont
+// threw ENOENT on the Oracle box, _ensureFonts() returned false, and BOTH
+// Fortune Teller cards returned null - every `.j kills` answer fell back to
+// plain text with no image. Fonts now resolve relative to THIS module
+// (exactly how deadWorldRenderer.js / profileCardRenderer.js already do it,
+// which is why those cards always worked), each file is individually guarded
+// against Git-LFS pointer stubs, and registration only succeeds when at
+// least one real font lands.
 let _fontsReady = false;
 function _ensureFonts() {
     if (_fontsReady) return true;
@@ -44,12 +58,30 @@ function _ensureFonts() {
         const canvas = require('canvas');
         const registerFont = canvas.registerFont || (canvas.GlobalFonts && canvas.GlobalFonts.registerFromPath);
         if (!registerFont) throw new Error('no font registration API in canvas build');
-        const F = '/home/z/my-project/whatsapp-bot/core/rpgasset/fonts/';
-        registerFont(F + 'CinzelDecorative-Black.ttf', { family: 'Cinzel Deco' });
-        registerFont(F + 'CinzelDecorative-Bold.ttf', { family: 'Cinzel Deco B' });
-        registerFont(F + 'Cinzel-Variable.ttf', { family: 'Cinzel' });
-        registerFont(F + 'IMFellEnglish-Regular.ttf', { family: 'IM Fell' });
-        registerFont(F + 'IMFellEnglish-Italic.ttf', { family: 'IM Fell Italic' });
+        const F = path.join(__dirname, '..', 'rpgasset', 'fonts');
+        const isRealFont = (p) => {
+            try {
+                if (!fs.existsSync(p)) return false;
+                const head = fs.readFileSync(p).slice(0, 4);
+                return head.equals(Buffer.from([0x00, 0x01, 0x00, 0x00]))   // TTF
+                    || head.toString('latin1') === 'OTTO'                    // OTF
+                    || head.toString('latin1') === 'true';
+            } catch (e) { return false; }
+        };
+        const regs = [
+            ['CinzelDecorative-Black.ttf', { family: 'Cinzel Deco' }],
+            ['CinzelDecorative-Bold.ttf', { family: 'Cinzel Deco B' }],
+            ['Cinzel-Variable.ttf', { family: 'Cinzel' }],
+            ['IMFellEnglish-Regular.ttf', { family: 'IM Fell' }],
+            ['IMFellEnglish-Italic.ttf', { family: 'IM Fell Italic' }],
+        ];
+        let registered = 0;
+        for (const [file, opts] of regs) {
+            const p = path.join(F, file);
+            if (!isRealFont(p)) continue;
+            try { registerFont(p, opts); registered++; } catch (e) { /* skip broken file */ }
+        }
+        if (!registered) throw new Error('no usable font files registered');
         _fontsReady = true;
         return true;
     } catch (e) {

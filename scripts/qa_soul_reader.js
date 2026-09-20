@@ -85,7 +85,7 @@ System.findOneAndUpdate = (q, update) => {
     const lockedBody = (out.caption || out.text || '');
     assert(!lockedBody.includes('TOTAL SOULS'), 'locked view NEVER shows the ledger');
     assert(lockedBody.includes('Level') || lockedBody.includes('level'), 'locked checklist names the level door');
-    if (out.image) assert(out.image.length > 100, 'locked card renders as PNG');
+    assert(out.image && out.image.length > 1000, 'locked card renders as PNG and is SENT (font-path fix: no more text-only fallback)');
 
     console.log('\n── 3. pay interaction ──');
     // short wallet
@@ -119,7 +119,7 @@ System.findOneAndUpdate = (q, update) => {
     assert(firstView.includes('Count with me') || firstView.includes('1,284'), 'first reading carries the ceremony voice or the real count');
     assert(firstView.includes('1,284'), 'ledger shows the REAL total kills (1,284)');
     assert(firstView.includes('340') && firstView.includes('29'), 'undead + boss rows render real stats');
-    if (out.image) assert(out.image.length > 100, 'ledger card renders as PNG');
+    assert(out.image && out.image.length > 1000, 'ledger card renders as PNG and is SENT (font-path fix: no more text-only fallback)');
     // second reading: no second ceremony, still the ledger, one teller line only
     sent.length = 0;
     await soulReader.viewKills(sock, CHAT, JID, []);
