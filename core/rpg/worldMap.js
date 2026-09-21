@@ -73,6 +73,35 @@ function _rankAtLeast(rank, min) {
     return i >= j;
 }
 
+// 💡 2026-09-21 OWNER FIX (Abyss alignment logic): the tier check used to
+// compare the helper's return value DIRECTLY - a getLevel that returned
+// undefined or NaN evaluated `NaN < 20` == false and the Abyss sheet
+// RENDERED (runtime-probed fail-open). Every level read now goes through
+// this resolver: anything that is not a finite number is treated as level 0
+// (locked). A locked map is never rendered - and now it can never LEAK.
+function _levelSafe(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+}
+
+// 💡 2026-09-21 OWNER FIX (Abyss alignment logic, part 2): the Abyss CHART
+// ignored the world-alignment window entirely - a level-20 player could read
+// the descent sheet while the worlds were locked (runtime-probed). The
+// alignment now gates the chart exactly as it gates the descent: window
+// closed = the worlds are not aligned = the sheet refuses (the alignment
+// IMAGE CARD renders instead). Owner/staff walk in regardless (the same
+// staff bypass the World Beyond and Afterlife sheets carry). The window
+// object is read through this resolver so a broken cosmology fails CLOSED.
+function _abyssWindowSafe() {
+    try {
+        const w = cosmology.abyssWindow();
+        if (!w || typeof w.open !== 'boolean') return { open: false, label: 'locked' };
+        return w;
+    } catch (e) {
+        return { open: false, label: 'locked' };
+    }
+}
+
 // ─── PER-REALM INFO CARDS (fixed text — no randomized lore baked in) ─────────
 // Owner ruling (2026-09-20): captions are SHORT and subtle. One or two lines
 // that say what the chart is - nothing more. Mechanics and secrets are
@@ -90,6 +119,9 @@ const INFO = {
     ],
     abyss: [
         'rings upon rings, shrinking as they descend, without end.',
+    ],
+    order: [
+        'it holds the center of the First World, and moves with it.',
     ],
     all: [
         'the whole of it, gathered on one page. what each map keeps quiet,',
@@ -170,6 +202,27 @@ function _asciiAfterlife(t) {
         '        o ~ ~ ~ ~ o ~ ~ ~ ~ o ~ ~ ~ ~ o',
         '                 this circuit',
         '```',
+    ];
+    for (const l of cosmology.statusLines(t)) lines.push(l);
+    return lines.join('\n');
+}
+
+function _asciiOrder(t) {
+    const lines = [
+        '*THE PRESENCE OF ORDER*',
+        '```',
+        '          WORLD BEYOND (beyond this line)',
+        '       .-----------------------------.',
+        '      /        _____________        \\',
+        '     |   II   /      I      \\       |',
+        '     |      |  ( PRESENCE )  |      |',
+        '     |  III \\_______________/  IV   |',
+        '      \\_______________  ___________/',
+        '                     \/',
+        '        the Presence rides at the center',
+        '```',
+        '_it holds the center of the First World, and moves with it._',
+        '_it is not the World Beyond\'s center._',
     ];
     for (const l of cosmology.statusLines(t)) lines.push(l);
     return lines.join('\n');
@@ -267,7 +320,8 @@ async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
         : (sub === 'beyond' || sub === 'worldbeyond' || sub === 'world beyond' ? 'world_beyond'
             : (sub === 'afterlife' ? 'afterlife'
                 : (sub === 'abyss' ? 'abyss'
-                    : (sub === 'all' || sub === 'atlas' || sub === 'cosmology' || sub === 'everything' ? 'all' : null))));
+                    : (sub === 'order' || sub === 'presence' || sub === 'presenceoforder' || sub === 'presence of order' ? 'order'
+                        : (sub === 'all' || sub === 'atlas' || sub === 'cosmology' || sub === 'everything' ? 'all' : null)))));
 
     if (norm === null) {
         return sock.sendMessage(chatId, {
@@ -275,9 +329,10 @@ async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
                 '*WORLD CHARTS*',
                 '',
                 `Usage: \`${P()} world\` - the First World`,
+                `\`${P()} world order\` - the Presence at its center`,
                 `\`${P()} world beyond\` - the outer boundary (rank S)`,
                 `\`${P()} world afterlife\` - the shore of the dead`,
-                `\`${P()} world abyss\` - the descent beneath`,
+                `\`${P()} world abyss\` - the descent beneath (aligned worlds)`,
                 `\`${P()} world all\` - every chart gathered on one page`,
             ].join('\n'),
         });
@@ -296,12 +351,13 @@ async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
         const isMod = (typeof helpers.isMod === 'function' ? !!helpers.isMod(userId) : false) || _isStaff(userId);
         if (!isMod) {
             const rank = typeof helpers.getRank === 'function' ? helpers.getRank(userId) : 'F';
-            let level = 1;
+            let levelRaw = 0;
             try {
-                level = typeof helpers.getLevel === 'function'
+                levelRaw = typeof helpers.getLevel === 'function'
                     ? helpers.getLevel(userId)
                     : (require('./progression').getLevel(userId) || 1);
             } catch (e) {}
+            const level = _levelSafe(levelRaw);
             const missing = [];
             if (!_rankAtLeast(rank, 'S')) missing.push(`rank *S* (yours: *${String(rank || 'F').toUpperCase()}*)`);
             if (level < ABYSS_MAP_UNLOCK) missing.push(`level *${ABYSS_MAP_UNLOCK}* (yours: *${Math.max(0, Math.floor(level))}*)`);
@@ -324,6 +380,12 @@ async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
         }
         const buf = await renderer.renderCosmologyAtlasSheet(t);
         return _sendSheet(sock, chatId, buf, INFO.all, _asciiAll, t);
+    }
+
+    // ── PRESENCE OF ORDER: no gate (the center of the player's own world) ──
+    if (norm === 'order') {
+        const buf = await renderer.renderPresenceOfOrderSheet(t);
+        return _sendSheet(sock, chatId, buf, INFO.order, _asciiOrder, t);
     }
 
     // ── GATES (hard contract: locked = requirement ONLY, the map never renders) ──
@@ -381,17 +443,25 @@ async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
     }
 
     if (norm === 'abyss') {
-        let level = 1;
+        let levelRaw = 0;
         try {
-            level = typeof helpers.getLevel === 'function'
+            levelRaw = typeof helpers.getLevel === 'function'
                 ? helpers.getLevel(userId)
                 : (require('./progression').getLevel(userId) || 1);
         } catch (e) {}
+        const level = _levelSafe(levelRaw);
         // 2026-09-21 owner ruling: a locked abyss request renders the IMAGE
         // CARD that explains the worlds are not aligned (with the tier named
         // in its plates), never a bare text answer. The text stays as the
         // caption and as the render-failure fallback (cards never dead-end).
-        if (level < ABYSS_MAP_UNLOCK) {
+        // 💡 2026-09-21 OWNER FIX (alignment logic): TWO gates now, both fail
+        // closed. (1) TIER - garbage/undefined levels resolve to 0 (locked);
+        // the old `NaN < 20` == false comparison let the sheet LEAK through.
+        // (2) ALIGNMENT - the window that gates the descent now gates the
+        // chart too: window closed = the worlds are not aligned = the sheet
+        // refuses with the alignment card. Owner/staff walk in regardless
+        // (the same staff bypass the World Beyond and Afterlife sheets carry).
+        if (level < ABYSS_MAP_UNLOCK && !_isStaff(userId)) {
             const txt = _refuseAbyss(level);
             try {
                 const card = await renderer.renderAbyssMisalignedCard({
@@ -404,6 +474,29 @@ async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
                 }
             } catch (e) {
                 try { console.error('[worldMap] abyss locked card failed:', e.message); } catch (_) {}
+            }
+            return sock.sendMessage(chatId, { text: txt });
+        }
+        const win = _abyssWindowSafe();
+        if (!win.open && !_isStaff(userId)) {
+            const txt = [
+                '*THE WORLDS ARE NOT ALIGNED FOR THE DESCENT.*',
+                '',
+                `the abyss gate: *${win.label}*.`,
+                'the chart of the descent refuses to render while the gate stands sealed.',
+                '',
+                '_those already below are not pulled out - only entry is gated._',
+            ].join('\n');
+            try {
+                const card = await renderer.renderAbyssMisalignedCard({
+                    mode: 'closed',
+                    opensInLabel: String(win.label || ''),
+                });
+                if (card && card.length > 100) {
+                    return sock.sendMessage(chatId, { image: card, caption: txt });
+                }
+            } catch (e) {
+                try { console.error('[worldMap] abyss alignment card failed:', e.message); } catch (_) {}
             }
             return sock.sendMessage(chatId, { text: txt });
         }
@@ -421,6 +514,7 @@ module.exports = {
     ABYSS_MAP_UNLOCK,          // CONFIRMED level 20 (owner, 2026-09-19; configurable)
     INFO,                      // 💡 exported for QA caption checks
     _rankAtLeast,
+    _levelSafe,                // 💡 fail-closed level resolver (QA pin)
     _refuseBeyond,
     _refuseAfterlife,
     _refuseAbyss,

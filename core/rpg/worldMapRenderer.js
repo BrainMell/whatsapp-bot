@@ -641,7 +641,8 @@ function _drawAbyssDescent(ctx, x, yTop, scale = 1, label = true) {
 //
 // So the sheet IS the world now: one large circle (R=400), the co-rotating
 // quadrant cross, nine charted worlds drawn as art-filled circles with their
-// surveyor names, the uncatalogued worlds still as type-colored dots, the
+// surveyor names, twenty-four uncharted worlds in four COMPANIES OF SIX
+// (rosary, taper, chain, scatter - the owner's density order), the
 // Presence at the center, the wax marker on its dashed ride, the bottom link,
 // and the World Beyond boundary arcing over the whole chart (its center rests
 // on the First World's bottom link - the exact pass-3 tangent geometry, seen
@@ -729,30 +730,90 @@ async function renderFirstWorldSheet(t = Date.now()) {
         ctx.setLineDash([4, 5]); ctx.strokeStyle = PAL.waxSoft; ctx.lineWidth = 1.5; ctx.stroke();
         ctx.setLineDash([]);
 
-        // the uncatalogued worlds: still dots (the guild has no names yet),
-        // co-rotating like the charted ones
-        for (const [rad, ang, r, type] of [[114, -1.977, 6, 'known'], [161, -1.288, 5, 'corrupted'], [155, -0.032, 6, 'known'], [115, 0.970, 7, 'dungeon'], [108, 2.279, 5, 'corrupted'], [226, -2.697, 6, 'dungeon'], [255, -0.785, 5, 'known']]) {
-            const a = ang + g.theta;
-            ctx.beginPath(); ctx.arc(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad, r, 0, Math.PI * 2);
+        // ── the uncharted worlds: THE COMPANY OF SIX (2026-09-21 owner
+        // density order: more worlds on the map, grouped in sixes, each
+        // group its own character so the chart never repeats itself).
+        // All positions are polar + co-rotating (phase-invariant, like the
+        // charted worlds above). Four companies, four tempers:
+        //   1. THE ROSARY    - six known worlds in a perfect inner ring
+        //   2. THE TAPER     - six corrupted worlds strung along the rim,
+        //                      dwindling as the arc runs
+        //   3. THE CHAIN     - six worlds marching a diagonal, alternating
+        //                      known and dungeon-world
+        //   4. THE SCATTER   - six dungeon-worlds loose near the rim
+        // ──
+        const _gDot = (gx, gy, gr, type) => {
+            ctx.beginPath(); ctx.arc(gx, gy, gr, 0, Math.PI * 2);
             ctx.fillStyle = PAL[type]; ctx.fill();
-            ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(58,42,30,0.35)'; ctx.stroke();
+            ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(58,42,30,0.4)'; ctx.stroke();
+        };
+        const gPos = (rad, ang) => [cx + Math.cos(ang + g.theta) * rad, cy + Math.sin(ang + g.theta) * rad];
+
+        // 1. THE ROSARY - six known worlds, one perfect ring, upper inner disk
+        {
+            const [gx0, gy0] = gPos(200, -1.75);
+            const rr = 26;
+            ctx.beginPath(); ctx.arc(gx0, gy0, rr, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(46,110,115,0.4)'; ctx.lineWidth = 1; ctx.stroke();
+            for (let k = 0; k < 6; k++) {
+                const a = -Math.PI / 2 + k * (Math.PI / 3);
+                _gDot(gx0 + Math.cos(a) * rr, gy0 + Math.sin(a) * rr, 8, 'known');
+            }
+        }
+        // 2. THE TAPER - six corrupted worlds along the upper-left rim, 9 -> 5
+        {
+            const a0 = -2.5, a1 = -1.7, rad = 352;
+            ctx.beginPath();
+            for (let k = 0; k <= 20; k++) {
+                const a = a0 + (a1 - a0) * (k / 20);
+                const [px, py] = gPos(rad, a);
+                if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            }
+            ctx.strokeStyle = 'rgba(156,91,35,0.4)'; ctx.lineWidth = 1; ctx.stroke();
+            for (let k = 0; k < 6; k++) {
+                const f = k / 5;
+                const [px, py] = gPos(rad + (k % 2 ? 8 : -6), a0 + (a1 - a0) * f);
+                _gDot(px, py, 9 - f * 4, 'corrupted');
+            }
+        }
+        // 3. THE CHAIN - six worlds marching a lower diagonal, alternating
+        {
+            const ang = 1.85, rads = [185, 225, 265, 300, 335, 372];
+            ctx.beginPath();
+            rads.forEach((rd, k) => {
+                const [px, py] = gPos(rd, ang);
+                if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            });
+            ctx.strokeStyle = 'rgba(58,42,30,0.35)'; ctx.lineWidth = 1; ctx.stroke();
+            rads.forEach((rd, k) => {
+                const [px, py] = gPos(rd, ang);
+                _gDot(px, py, k % 2 ? 6.5 : 8.5, k % 2 ? 'dungeon' : 'known');
+            });
+        }
+        // 4. THE SCATTER - six dungeon-worlds loose near the lower-right rim
+        {
+            const pts = [[345, 0.30, 7], [372, 0.52, 6], [336, 0.78, 8], [368, 0.98, 6], [342, 1.18, 7], [376, 1.38, 5]];
+            for (const [rad, ang, r] of pts) {
+                const [px, py] = gPos(rad, ang);
+                _gDot(px, py, r, 'dungeon');
+            }
         }
 
         ctx.beginPath(); ctx.arc(g.mi.x, g.mi.y, 7, 0, Math.PI * 2);
         ctx.fillStyle = PAL.wax; ctx.fill();
         ctx.lineWidth = 1.4; ctx.strokeStyle = PAL.parchment; ctx.stroke();
 
-        // the Presence of Order at the exact center (invariant #2); its label
-        // is polar and co-rotates with the chart, so a rotating dot can never
-        // drift behind the fixed text
+        // the Presence of Order at the exact center (invariant #2). The name
+        // is a FIXED chip drawn at the very end of the sheet: the text is
+        // horizontal, so a rotating anchor would sweep a box that the
+        // co-rotating companies pass through at other phases - the old
+        // rosary-through-the-label collision. The chip masks whatever the
+        // live cross sends beneath it.
         ctx.beginPath(); ctx.arc(cx, cy, 21, 0, Math.PI * 2);
         ctx.fillStyle = PAL.gold; ctx.fill();
         ctx.lineWidth = 2.2; ctx.strokeStyle = PAL.ink; ctx.stroke();
         ctx.beginPath(); ctx.arc(cx, cy, 8.5, 0, Math.PI * 2);
         ctx.strokeStyle = 'rgba(58,42,30,0.7)'; ctx.lineWidth = 1.3; ctx.stroke();
-        const plAng = -2.49 + g.theta;
-        ctx.font = 'italic 12px "IM Fell Italic"'; ctx.fillStyle = PAL.inkSoft; ctx.textAlign = 'right';
-        ctx.fillText('the Presence of Order', cx + Math.cos(plAng) * 66, cy + Math.sin(plAng) * 66 + 4);
 
         // the bottom / Abyss-linking point
         ctx.beginPath(); ctx.arc(cx, cy + R, 8, 0, Math.PI * 2);
@@ -763,10 +824,20 @@ async function renderFirstWorldSheet(t = Date.now()) {
             ctx.fillText('the bottom link is engaged now', cx + 16, cy + R + 5);
         }
 
+        // the Presence's name chip, FIXED, COMPACT (two lines) and LAST.
+        // Compact + hugging the medallion keeps its footprint inside the
+        // innermost sweeping band, so a passing world tag can only graze a
+        // corner instead of disappearing under a full-width chip.
+        _pillLabel(ctx, [
+            { text: 'the Presence', font: 'italic 11.5px "IM Fell Italic"', color: PAL.inkSoft },
+            { text: 'of Order', font: 'italic 11.5px "IM Fell Italic"', color: PAL.inkSoft },
+        ], cx - 58, cy - 50, '11.5px "IM Fell Italic"', PAL.inkSoft, { lh: 16 });
+
         // ── plates ──
         _plate(ctx, 55, 1088, 430, 92, 'CHARTED WORLDS', [
             'nine skies are drawn with their worlds.',
-            'the rest remain dots until an expedition names them.',
+            'the uncharted travel in company - the surveyors',
+            'chart them in sixes, each company its own temper.',
         ]);
         _plate(ctx, 515, 1088, 430, 92, 'QUADRANT LAW', [
             'divisions of the First World, not borders.',
@@ -783,12 +854,201 @@ async function renderFirstWorldSheet(t = Date.now()) {
     });
 }
 
+// ─── SHEET: THE PRESENCE OF ORDER (.j world order) — the center held ────────
+// 2026-09-21 owner order: "Create a map showing the Presence of Order portion
+// of the cosmology." The Presence's portion is the CENTER: it sits at the
+// First World's exact center (invariant #2) and moves with it - it is NOT the
+// World Beyond's center. So the sheet draws:
+//   * the First World's rim as the container, the quadrant law radiating
+//     from the center it holds (co-rotating, invariants #2 + #3);
+//   * fine order rings + tick work around the medallion - the order itself;
+//   * the live wax ride and the bottom link (the same contracts as the
+//     First World sheet);
+//   * THE RIDE inset: the Presence drawn where it actually lives - at the
+//     center of the First World riding inside the World Beyond - with the
+//     boundary's own center marked and refused ("not here").
+function renderPresenceOfOrderSheet(t = Date.now()) {
+    return _render(async (ctx) => {
+        _titleBlock(ctx,
+            'THE COSMOLOGY - THE CENTER OF THE FIRST WORLD',
+            'THE PRESENCE OF ORDER',
+            'it holds the center, and the center holds the quadrants');
+
+        const cx = W / 2, cy = 600, R = 330;
+
+        // the First World's rim: the container of the Presence (light disk)
+        ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(250,243,224,0.92)'; ctx.fill();
+        ctx.lineWidth = 2.8; ctx.strokeStyle = PAL.ink; ctx.stroke();
+
+        // the order rings: fine circles around the center + tick work on the
+        // outermost - the texture of the law it holds
+        ctx.save();
+        ctx.beginPath(); ctx.arc(cx, cy, R - 1, 0, Math.PI * 2); ctx.clip();
+        for (const [rr, al] of [[60, 0.3], [105, 0.24], [150, 0.2]]) {
+            ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(58,42,30,${al})`; ctx.lineWidth = 1; ctx.stroke();
+        }
+        ctx.strokeStyle = 'rgba(58,42,30,0.3)'; ctx.lineWidth = 1;
+        for (let k = 0; k < 24; k++) {
+            const a = (k / 24) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.moveTo(cx + Math.cos(a) * 144, cy + Math.sin(a) * 144);
+            ctx.lineTo(cx + Math.cos(a) * 150, cy + Math.sin(a) * 150);
+            ctx.stroke();
+        }
+        ctx.restore();
+
+        // quadrant cross + numerals, CO-ROTATING with the live pose (the
+        // quadrant law radiates from the center the Presence holds)
+        const g = _liveGeometry(cx, cy, R, t);
+        ctx.save();
+        ctx.beginPath(); ctx.arc(cx, cy, R - 1, 0, Math.PI * 2); ctx.clip();
+        ctx.translate(cx, cy); ctx.rotate(g.theta);
+        ctx.strokeStyle = 'rgba(58,42,30,0.5)'; ctx.lineWidth = 1.6;
+        ctx.beginPath(); ctx.moveTo(-R, 0); ctx.lineTo(R, 0); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, -R); ctx.lineTo(0, R); ctx.stroke();
+        ctx.restore();
+        ctx.font = '16px "Cinzel"'; ctx.fillStyle = 'rgba(90,70,52,0.8)'; ctx.textAlign = 'center';
+        const qr = R * 0.72;
+        const qpos = [[qr * 0.75, -qr * 0.75, 'I'], [-qr * 0.75, -qr * 0.75, 'II'], [-qr * 0.75, qr * 0.75, 'III'], [qr * 0.75, qr * 0.75, 'IV']];
+        for (const [qx, qy, label] of qpos) {
+            const rx = cx + qx * Math.cos(g.theta) - qy * Math.sin(g.theta);
+            const ry = cy + qx * Math.sin(g.theta) + qy * Math.cos(g.theta);
+            ctx.fillText(label, rx, ry + 5);
+        }
+
+        // a few of the worlds the order holds (type dots, co-rotating; the
+        // full census lives on the First World sheet)
+        const DOTS = [[195, -1.2, 7, 'known'], [238, -2.2, 6, 'corrupted'], [182, -3.4, 7, 'dungeon'],
+            [262, 0.5, 6, 'known'], [214, 1.5, 7, 'corrupted'], [268, 2.5, 6, 'dungeon'],
+            [196, 3.6, 7, 'known'], [248, 4.4, 6, 'corrupted'], [176, 5.3, 7, 'dungeon'],
+            [276, 5.9, 6, 'known'], [158, 0.15, 5, 'corrupted'], [286, -0.9, 6, 'dungeon']];
+        for (const [rad, ang, r, type] of DOTS) {
+            const a = ang + g.theta;
+            ctx.beginPath(); ctx.arc(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad, r, 0, Math.PI * 2);
+            ctx.fillStyle = PAL[type]; ctx.fill();
+            ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(58,42,30,0.35)'; ctx.stroke();
+        }
+
+        // the wax ride + live marker (the Presence's world moves)
+        ctx.beginPath(); ctx.arc(cx, cy, R * 0.55, 0, Math.PI * 2);
+        ctx.setLineDash([4, 5]); ctx.strokeStyle = PAL.waxSoft; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.setLineDash([]);
+
+        // the PRESENCE: gold medallion with rays at the exact center. Its
+        // label is a FIXED parchment chip (not a rotating anchor): the text
+        // is horizontal, so a rotating anchor would sweep a box that
+        // co-rotating worlds pass through at other phases. The chip is drawn
+        // LAST so anything the live quadrant cross sends beneath it stays
+        // masked.
+        ctx.strokeStyle = 'rgba(166,124,46,0.7)'; ctx.lineWidth = 1.2;
+        for (let k = 0; k < 8; k++) {
+            const a = (k / 8) * Math.PI * 2 + Math.PI / 8;
+            ctx.beginPath();
+            ctx.moveTo(cx + Math.cos(a) * 28, cy + Math.sin(a) * 28);
+            ctx.lineTo(cx + Math.cos(a) * 40, cy + Math.sin(a) * 40);
+            ctx.stroke();
+        }
+        ctx.beginPath(); ctx.arc(cx, cy, 24, 0, Math.PI * 2);
+        ctx.fillStyle = PAL.gold; ctx.fill();
+        ctx.lineWidth = 2.2; ctx.strokeStyle = PAL.ink; ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx, cy, 9.5, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(58,42,30,0.7)'; ctx.lineWidth = 1.3; ctx.stroke();
+
+        // the live marker on the ride
+        ctx.beginPath(); ctx.arc(g.mi.x, g.mi.y, 7, 0, Math.PI * 2);
+        ctx.fillStyle = PAL.wax; ctx.fill();
+        ctx.lineWidth = 1.4; ctx.strokeStyle = PAL.parchment; ctx.stroke();
+
+        // the bottom / Abyss-linking point of the world it holds
+        ctx.beginPath(); ctx.arc(cx, cy + R, 8, 0, Math.PI * 2);
+        ctx.fillStyle = PAL.wax; ctx.fill();
+        if (g.atBottom) {
+            ctx.font = 'italic 14px "IM Fell Italic"';
+            ctx.fillStyle = PAL.ink; ctx.textAlign = 'left';
+            ctx.fillText('the bottom link is engaged now', cx + 16, cy + R + 5);
+        }
+
+        // the Presence's name chip, FIXED, COMPACT and LAST (masks the
+        // rotating cross; small enough that a passing world dot only grazes
+        // its corner)
+        _pillLabel(ctx, [
+            { text: 'the Presence', font: 'italic 11.5px "IM Fell Italic"', color: PAL.inkSoft },
+            { text: 'of Order', font: 'italic 11.5px "IM Fell Italic"', color: PAL.inkSoft },
+        ], cx - 58, cy - 50, '11.5px "IM Fell Italic"', PAL.inkSoft, { lh: 16 });
+
+        // ── THE RIDE inset: where the Presence actually lives - at the
+        // center of the First World, riding inside the World Beyond - with
+        // the boundary's own center marked and refused ──
+        const ix = 150, iy = 935, iR = 70;
+        ctx.beginPath(); ctx.arc(ix, iy, iR, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(226,210,178,0.5)'; ctx.fill();
+        ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(58,42,30,0.8)'; ctx.stroke();
+        ctx.beginPath(); ctx.arc(ix, iy, iR / 2, 0, Math.PI * 2);
+        ctx.setLineDash([4, 5]); ctx.strokeStyle = 'rgba(58,42,30,0.45)'; ctx.lineWidth = 1.1; ctx.stroke();
+        ctx.setLineDash([]);
+        const gi = _liveGeometry(ix, iy, iR, t);
+        ctx.beginPath(); ctx.arc(gi.fwx, gi.fwy, gi.r, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(250,243,224,0.95)'; ctx.fill();
+        ctx.lineWidth = 1.4; ctx.strokeStyle = PAL.ink; ctx.stroke();
+        ctx.beginPath(); ctx.arc(gi.fwx, gi.fwy, 4.5, 0, Math.PI * 2);
+        ctx.fillStyle = PAL.gold; ctx.fill();
+        ctx.lineWidth = 1; ctx.strokeStyle = PAL.ink; ctx.stroke();
+        // the World Beyond's center: where the Presence is NOT
+        ctx.beginPath(); ctx.arc(ix, iy, 5.5, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(139,26,43,0.85)'; ctx.lineWidth = 1.3; ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ix - 3.2, iy - 3.2); ctx.lineTo(ix + 3.2, iy + 3.2); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ix + 3.2, iy - 3.2); ctx.lineTo(ix - 3.2, iy + 3.2); ctx.stroke();
+        ctx.font = '12px "Cinzel"'; ctx.fillStyle = PAL.ink; ctx.textAlign = 'center';
+        ctx.fillText('THE RIDE', ix, iy + iR + 26);
+        ctx.font = 'italic 11px "IM Fell Italic"'; ctx.fillStyle = PAL.inkSoft;
+        ctx.fillText('it moves when the world moves -', ix, iy + iR + 44);
+        ctx.fillText('one orbit: 5 real hours', ix, iy + iR + 60);
+        ctx.fillStyle = PAL.wax;
+        ctx.fillText('the crossed ring is the Beyond\u2019s center - not here', ix, iy + iR + 76);
+
+        // ── plates ──
+        _plate(ctx, 55, 1088, 430, 92, 'THE CENTER HELD', [
+            'the Presence sits at the First World\u2019s center,',
+            'not the World Beyond\u2019s. it moves when the world moves.',
+        ]);
+        _plate(ctx, 515, 1088, 430, 92, 'THE QUADRANT LAW', [
+            'four divisions radiate from the center it holds.',
+            'divisions, not borders - every quadrant holds all kinds.',
+        ]);
+
+        _legend(ctx, 1216);
+        _centered(ctx, 'timelines are not mapped. every world holds more than the guild can chart',
+            1242, 'italic 13px "IM Fell Italic"', PAL.inkSoft);
+        _liveStrip(ctx, 1272);
+        _centered(ctx, '".j world order" - the chart of the center',
+            1352, 'italic 13px "IM Fell Italic"', PAL.inkSoft);
+        _waxSeal(ctx, 80, H - 62, 'O');
+    });
+}
+
 // ─── SHEET 2: WORLD BEYOND (.j world beyond) — pass3_owner_geometry ─────────
 // The approved pass-3 render (submap_world_beyond.png) is the DECREE-DARK
 // variant: black plate, gold rim, radial rays, the First World as a dark
 // gold-lined disk riding its dashed orbit, and the big gold realm label.
-// 2026-09-21: the realm label's last line was nearly invisible (dim gold on
-// the dark pill) - brightened to the standard #C9A24B.
+//
+// 2026-09-21 OWNER DENSITY/DETAIL ORDER: "a more detailed map of the world
+// beyond, clearly showing the First World contained within it as a lower
+// dimension." The sheet now PROVES the containment instead of just stating
+// it:
+//   * the dimensional boundary - a fine double gold ring just outside the
+//     First World's rim, where the lower dimension ends;
+//   * the tangent construction - a live radial from the boundary's center
+//     through the First World: a crosshair where the near rim RESTS on the
+//     Beyond's exact center, a tick where the far rim TOUCHES the outer
+//     boundary (invariant #1, drawn, not only quoted);
+//   * a SECTION view under the plan: the Beyond as a ground line, the First
+//     World pressed into it as a shallow depression with the Presence at
+//     its bottom - a lower dimension, in elevation;
+//   * the realm label moved into the one pocket the live disk can never
+//     occupy (anti-pose, measured), so nothing crosses the disk's rim any
+//     more (the old pill rode across it at several phases).
 function renderWorldBeyondSheet(t = Date.now()) {
     return _render(async (ctx) => {
         // header (the live gate IS rank S, so the design's requirement lines
@@ -805,7 +1065,7 @@ function renderWorldBeyondSheet(t = Date.now()) {
             244, 'italic 15px "IM Fell Italic"', '#9A7D3A');
 
         // ── the great boundary: gold rim, dark interior, radial rays ──
-        const cx = W / 2, cy = 610, R = 345;
+        const cx = W / 2, cy = 570, R = 315;
         ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
         ctx.fillStyle = '#17110B'; ctx.fill();
         ctx.lineWidth = 2.6; ctx.strokeStyle = 'rgba(201,162,75,0.9)'; ctx.stroke();
@@ -826,54 +1086,144 @@ function renderWorldBeyondSheet(t = Date.now()) {
         ctx.setLineDash([6, 8]);
         ctx.strokeStyle = 'rgba(201,162,75,0.4)'; ctx.lineWidth = 1.3; ctx.stroke();
         ctx.setLineDash([]);
-        _centered(ctx, 'one orbit: 5 real hours', cy - R / 2 - 14, 'italic 13px "IM Fell Italic"', '#9A7D3A');
-        // small clockwise arrow riding the orbit just ahead of the live pose
-        const g = _liveGeometry(cx, cy, R, t);
-        const a0 = (g.theta || 0) - 0.34, a1 = (g.theta || 0) - 0.06;
-        _curveArrow(ctx,
-            cx + Math.cos(a0) * (R / 2), cy + Math.sin(a0) * (R / 2),
-            cx + Math.cos((a0 + a1) / 2) * (R / 2) * 1.14, cy + Math.sin((a0 + a1) / 2) * (R / 2) * 1.14,
-            cx + Math.cos(a1) * (R / 2), cy + Math.sin(a1) * (R / 2),
-            'rgba(201,162,75,0.75)', 1.6);
 
-        // ── the First World, dark variant (design: gold-lined disk, no dots) ──
+        // live geometry + the tangent construction (drawn under the disk)
+        const g = _liveGeometry(cx, cy, R, t);
+        const fwAng = Math.atan2(g.fwy - cy, g.fwx - cx);
+        const anti = fwAng + Math.PI;
+        // the live radial: from the boundary's center through the First
+        // World's center out to the rim - the measuring line of invariant #1
+        ctx.save();
+        ctx.setLineDash([2, 5]);
+        ctx.strokeStyle = 'rgba(201,162,75,0.35)'; ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + Math.cos(fwAng) * (R - 4), cy + Math.sin(fwAng) * (R - 4));
+        ctx.stroke();
+        ctx.restore();
+        // T2: the far-rim tick, just inside the outer boundary on the radial
+        ctx.strokeStyle = 'rgba(201,162,75,0.85)'; ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(fwAng) * (R - 13), cy + Math.sin(fwAng) * (R - 13));
+        ctx.lineTo(cx + Math.cos(fwAng) * (R - 3), cy + Math.sin(fwAng) * (R - 3));
+        ctx.stroke();
+
+        // ── the First World, dark variant (design: gold-lined disk) ──
         _drawFirstWorldDark(ctx, g);
 
-        // label travels with the disk (design: FIRST WORLD (IN ORBIT))
+        // the DIMENSIONAL BOUNDARY: fine double ring just outside the rim -
+        // where the lower dimension ends. Drawn over the rays, under the
+        // labels; travels with the disk.
+        ctx.beginPath(); ctx.arc(g.fwx, g.fwy, g.r + 9, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(201,162,75,0.5)'; ctx.lineWidth = 1.1; ctx.stroke();
+        ctx.beginPath(); ctx.arc(g.fwx, g.fwy, g.r + 13.5, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(201,162,75,0.26)'; ctx.lineWidth = 0.9; ctx.stroke();
+
+        // T1: the boundary's exact center, where the near rim RESTS -
+        // a crosshair (the 'A LOWER DIMENSION' plate names it; no floating
+        // tag - the anti ray is reserved for the travelling labels)
+        ctx.strokeStyle = 'rgba(201,162,75,0.9)'; ctx.lineWidth = 1.3;
+        ctx.beginPath(); ctx.moveTo(cx - 8, cy); ctx.lineTo(cx + 8, cy); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(cx, cy - 8); ctx.lineTo(cx, cy + 8); ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx, cy, 4.5, 0, Math.PI * 2); ctx.stroke();
+
+        // orbit annotation: one orbit, 5 real hours - on the anti-pose side
+        // of the orbit path (the arc the disk's ±60° coverage can never
+        // hide), offset perpendicular so it can never meet the travelling
+        // FIRST WORLD tag on the same ray. Clockwise arrow fully outside the
+        // covered arc.
+        const orbR = R / 2;
+        const perp = fwAng - Math.PI / 2;
+        ctx.font = 'italic 13px "IM Fell Italic"'; ctx.fillStyle = '#9A7D3A'; ctx.textAlign = 'center';
+        ctx.fillText('one orbit: 5 real hours',
+            cx + Math.cos(anti) * (orbR + 30) + Math.cos(perp) * 44,
+            cy + Math.sin(anti) * (orbR + 30) + Math.sin(perp) * 44 + 4);
+        const a0 = (g.theta || 0) + 1.12, a1 = (g.theta || 0) + 1.42;
+        _curveArrow(ctx,
+            cx + Math.cos(a0) * orbR, cy + Math.sin(a0) * orbR,
+            cx + Math.cos((a0 + a1) / 2) * (orbR * 1.16), cy + Math.sin((a0 + a1) / 2) * (orbR * 1.16),
+            cx + Math.cos(a1) * orbR, cy + Math.sin(a1) * orbR,
+            'rgba(201,162,75,0.75)', 1.6);
+
+        // FIRST WORLD tag travels with the disk, just past the dimensional
+        // boundary rings on the anti side (the pocket between the rings and
+        // the boundary's center crosshair)
         _pillLabel(ctx, [
             { text: 'FIRST WORLD (IN ORBIT)', font: '14px "Cinzel"', color: '#D9B95C' },
-        ], g.fwx, g.fwy - 54, '14px "Cinzel"', '#D9B95C',
+        ], g.fwx + Math.cos(anti) * (g.r + 36), g.fwy + Math.sin(anti) * (g.r + 36), '14px "Cinzel"', '#D9B95C',
             { bg: 'rgba(13,9,6,0.78)', edge: 'rgba(201,162,75,0.45)' });
 
-        // ── the realm label: opposite the First World's live pose, inside the
-        // boundary, so it can never collide with the disk ──
-        const wbAng = Math.atan2(g.fwy - cy, g.fwx - cx) + Math.PI;
-        const wbx = cx + Math.cos(wbAng) * R * 0.55;
-        const wby = cy + Math.sin(wbAng) * R * 0.55;
+        // ── the realm label: FIXED, outside the great circle, directly
+        // beneath it (figure-caption position). Every interior point is
+        // covered by the disk at some phase (the disk spans the whole
+        // radial), and the interior anti pocket is needed by the travelling
+        // tag - so the realm name lives where NOTHING can ever reach it,
+        // with a short leader onto the rim. ──
+        ctx.strokeStyle = 'rgba(201,162,75,0.5)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(cx, cy + R + 2); ctx.lineTo(cx, cy + R + 14); ctx.stroke();
         _pillLabel(ctx, [
-            { text: 'THE WORLD BEYOND', font: '26px "Cinzel"', color: '#D9B95C' },
-            { text: 'the space inside the boundary that the', font: 'italic 12.5px "IM Fell Italic"', color: 'rgba(217,185,92,0.85)' },
-            { text: 'First World does not occupy', font: 'italic 12.5px "IM Fell Italic"', color: 'rgba(217,185,92,0.85)' },
-            { text: 'god-rank vast · above ordinary dimensionality · it will not be named', font: 'italic 12px "IM Fell Italic"', color: '#C9A24B' },
-        ], wbx, wby + 46, '26px "Cinzel"', '#D9B95C',
-            { bg: 'rgba(13,9,6,0.9)', edge: 'rgba(201,162,75,0.4)', lh: 23 });
+            { text: 'THE WORLD BEYOND', font: '24px "Cinzel"', color: '#D9B95C' },
+            { text: 'the space it does not occupy', font: 'italic 12px "IM Fell Italic"', color: 'rgba(217,185,92,0.85)' },
+            { text: 'god-rank vast · above dimensionality · unnamed', font: 'italic 11.5px "IM Fell Italic"', color: '#C9A24B' },
+        ], cx, cy + R + 48, '24px "Cinzel"', '#D9B95C',
+            { bg: 'rgba(13,9,6,0.9)', edge: 'rgba(201,162,75,0.4)', lh: 22 });
+
+        // ── SECTION: the same containment, in elevation. The Beyond as a
+        // ground line; the First World pressed into it as a shallow
+        // depression, the Presence at its bottom. ──
+        const sbY = 1046;
+        _spaced(ctx, 'SECTION', 152, 1014, '12px "Cinzel"', '#9A7D3A', 3);
+        ctx.font = 'italic 11.5px "IM Fell Italic"'; ctx.fillStyle = '#9A7D3A'; ctx.textAlign = 'right';
+        ctx.fillText('the World Beyond, in section', 848, 1014);
+        // ground: fill the solid earth below the line, then the depression
+        ctx.fillStyle = 'rgba(201,162,75,0.07)';
+        ctx.fillRect(170, sbY, 660, 6);
+        // the sag (the First World's depression), filled darker + stroked
+        ctx.beginPath();
+        ctx.moveTo(360, sbY);
+        ctx.quadraticCurveTo(500, sbY + 88, 640, sbY);
+        ctx.closePath();
+        ctx.fillStyle = '#0B0805'; ctx.fill();
+        ctx.strokeStyle = 'rgba(201,162,75,0.75)'; ctx.lineWidth = 1.5; ctx.stroke();
+        // ground hatching on both sides of the sag
+        ctx.strokeStyle = 'rgba(201,162,75,0.4)'; ctx.lineWidth = 1;
+        for (let x = 178; x <= 344; x += 14) {
+            ctx.beginPath(); ctx.moveTo(x, sbY + 3); ctx.lineTo(x - 7, sbY + 12); ctx.stroke();
+        }
+        for (let x = 656; x <= 822; x += 14) {
+            ctx.beginPath(); ctx.moveTo(x, sbY + 3); ctx.lineTo(x - 7, sbY + 12); ctx.stroke();
+        }
+        // the First World in section: the disk resting in the depression
+        ctx.beginPath(); ctx.arc(500, sbY + 22, 24, 0, Math.PI * 2);
+        ctx.fillStyle = '#1D140C'; ctx.fill();
+        ctx.strokeStyle = 'rgba(201,162,75,0.95)'; ctx.lineWidth = 1.8; ctx.stroke();
+        ctx.beginPath(); ctx.arc(500, sbY + 22, 3.6, 0, Math.PI * 2);
+        ctx.fillStyle = '#C9A24B'; ctx.fill();
+        // depth ticks from the ground line down to the disk's shoulder
+        ctx.setLineDash([2, 4]);
+        ctx.strokeStyle = 'rgba(201,162,75,0.5)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(468, sbY + 2); ctx.lineTo(468, sbY + 30); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(532, sbY + 2); ctx.lineTo(532, sbY + 30); ctx.stroke();
+        ctx.setLineDash([]);
+        _centered(ctx, 'the First World, held as a lower dimension', sbY + 66, 'italic 12.5px "IM Fell Italic"', '#C9A24B');
 
         // ── plates (design texts, tan on dark) ──
-        _decreePlate(ctx, 64, 1046, 400, 122, 'UNLOCK - S RANK', [
-            'players below S Rank receive the',
-            'requirement, not the map;',
-            'the sheet refuses to render.',
+        _decreePlate(ctx, 64, 1160, 400, 132, 'A LOWER DIMENSION', [
+            'the near rim rests on the Beyond\u2019s',
+            'center; the far rim touches the outer',
+            'boundary - the whole of it held, the',
+            'way the sea holds a bubble.',
         ], { onDark: true });
-        _decreePlate(ctx, 536, 1046, 400, 122, 'THE NAME', [
+        _decreePlate(ctx, 536, 1160, 400, 132, 'THE NAME', [
             'no name is written for this realm.',
             '"beyond the veil" already means',
             'GOD ascension in canon. unnamed by law.',
         ], { onDark: true });
 
         // seal + footer (design: no clocks strip on this sheet)
-        _waxSealBig(ctx, W / 2, 1246, 26, 'S');
+        _waxSealBig(ctx, 80, H - 74, 26, 'S');
         _centered(ctx, '"j world beyond" own sheet, own lore card · never a crop of the First World map',
-            1330, 'italic 12px "IM Fell Italic"', 'rgba(201,162,75,0.55)');
+            1356, 'italic 12px "IM Fell Italic"', 'rgba(201,162,75,0.55)');
     }, { dark: true });
 }
 
@@ -1754,6 +2104,7 @@ async function _render(drawFn, opts = {}) {
 module.exports = {
     renderCosmologyAtlasSheet,
     renderFirstWorldSheet,
+    renderPresenceOfOrderSheet,
     renderWorldBeyondSheet,
     renderAfterlifeSheet,
     renderAbyssSheet,

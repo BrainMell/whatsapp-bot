@@ -12,6 +12,7 @@ const renderer = require('../core/rpg/worldMapRenderer');
     const sheets = [
         ['atlas_all', () => renderer.renderCosmologyAtlasSheet()],
         ['first_world', () => renderer.renderFirstWorldSheet()],
+        ['presence_of_order', () => renderer.renderPresenceOfOrderSheet()],
         ['world_beyond', () => renderer.renderWorldBeyondSheet()],
         ['afterlife', () => renderer.renderAfterlifeSheet()],
         ['abyss', () => renderer.renderAbyssSheet()],

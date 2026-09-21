@@ -98,7 +98,12 @@ function mockSock() {
     }
     {
         // abyss: below unlock -> the worlds-not-aligned IMAGE CARD (owner
-        // 2026-09-21) with the requirement as caption; at/above -> render
+        // 2026-09-21) with the requirement as caption; at/above -> render.
+        // 💡 2026-09-21 OWNER FIX (alignment logic): the tier check now fails
+        // CLOSED (garbage levels resolve to 0 - the old `NaN < 20` == false
+        // comparison let the sheet LEAK), and the ALIGNMENT WINDOW now gates
+        // the chart too: window closed + non-staff = the worlds-not-aligned
+        // card, never the sheet. Staff bypass mirrors the other sheets.
         const sock = mockSock();
         await worldMap.showWorld(sock, 'chat1', 'user1', 'abyss', { getLevel: () => 12, getRank: () => 'A' });
         const m = sock.sent[0].msg;
@@ -107,15 +112,68 @@ function mockSock() {
         const abyssSheetBuf = await worldMapRenderer.renderAbyssSheet();
         assert.ok(!m.image.equals(abyssSheetBuf), 'the locked card is NOT the abyss sheet');
 
-        const sock2 = mockSock();
-        await worldMap.showWorld(sock2, 'chat1', 'user1', 'abyss', { getLevel: () => 20, getRank: () => 'A' });
-        const m2 = sock2.sent[0].msg;
-        assert.ok(m2.image || m2.text, 'abyss sheet at unlock level');
-        if (m2.image) assert.ok(m2.caption.includes('rings upon rings'), 'caption carries the one identifying line (no command dumps per owner 2026-09-20)');
+        // fail-closed tier: undefined / NaN / garbage levels never render
+        for (const garbage of [undefined, NaN, 'x', {}]) {
+            const sockG = mockSock();
+            await worldMap.showWorld(sockG, 'chat1', 'user1', 'abyss', { getLevel: () => garbage, getRank: () => 'A' });
+            const mg = sockG.sent[0].msg;
+            const bodyG = (mg.caption || mg.text || '');
+            assert.ok(mg.image, `garbage level (${String(garbage)}) still gets the locked CARD`);
+            assert.ok(!bodyG.includes('rings upon rings'), `garbage level (${String(garbage)}) never renders the sheet`);
+        }
+        assert.strictEqual(worldMap._levelSafe(NaN), 0, '_levelSafe fails closed on NaN');
+        assert.strictEqual(worldMap._levelSafe(undefined), 0, '_levelSafe fails closed on undefined');
+        assert.strictEqual(worldMap._levelSafe(25), 25, '_levelSafe passes real levels through');
+
+        // window-closed + tier met + non-staff -> the worlds-not-aligned CARD
+        const __realWindow = cosmology.abyssWindow;
+        try {
+            cosmology.abyssWindow = () => ({ open: false, phaseInCycle: 0.5, msRemaining: 7200000, label: 'locked 2h 0m' });
+            const sockW = mockSock();
+            await worldMap.showWorld(sockW, 'chat1', 'user1', 'abyss', { getLevel: () => 30, getRank: () => 'S' });
+            const mw = sockW.sent[0].msg;
+            const bodyW = (mw.caption || mw.text || '');
+            assert.ok(mw.image, 'window-closed abyss sends the worlds-not-aligned CARD');
+            assert.ok(!bodyW.includes('rings upon rings'), 'window-closed abyss NEVER renders the sheet for players');
+            assert.ok(bodyW.includes('not aligned') || bodyW.includes('NOT ALIGNED'), 'the refusal names the misalignment');
+
+            // staff walk in while the window is closed (mirrors WB/Afterlife)
+            const __engine = require.cache[__enginePath].exports;
+            __engine.isBotOwner = () => true;
+            const sockOwner = mockSock();
+            await worldMap.showWorld(sockOwner, 'chat1', 'owner1', 'abyss', { getLevel: () => 3, getRank: () => 'F' });
+            const mo = sockOwner.sent[0].msg;
+            assert.ok((mo.caption || '').includes('rings upon rings'), 'owner bypasses the alignment window for the chart');
+            __engine.isBotOwner = () => false;
+
+            // window open -> the sheet renders (deterministic, no live flip)
+            cosmology.abyssWindow = () => ({ open: true, phaseInCycle: 0.9, msRemaining: 3600000, label: 'open 1h 0m' });
+            const sock2 = mockSock();
+            await worldMap.showWorld(sock2, 'chat1', 'user1', 'abyss', { getLevel: () => 20, getRank: () => 'A' });
+            const m2 = sock2.sent[0].msg;
+            assert.ok(m2.image || m2.text, 'abyss sheet at unlock level with the window open');
+            if (m2.image) assert.ok(m2.caption.includes('rings upon rings'), 'caption carries the one identifying line (no command dumps per owner 2026-09-20)');
+        } finally {
+            cosmology.abyssWindow = __realWindow;
+        }
     }
     {
-        // all four renders actually produce PNG buffers (renderer smoke)
-        for (const fn of [worldMapRenderer.renderCosmologyAtlasSheet, worldMapRenderer.renderFirstWorldSheet, worldMapRenderer.renderWorldBeyondSheet,
+        // presence of order: the new center chart - no gate, real render
+        const sock = mockSock();
+        await worldMap.showWorld(sock, 'chat1', 'user1', 'order', { getLevel: () => 1, getRank: () => 'F' });
+        const m = sock.sent[0].msg;
+        assert.ok(m.image || m.text, 'order sheet delivered with no gate');
+        if (m.image) {
+            assert.ok(m.image.length > 50000, 'order renders a real PNG');
+            assert.ok(m.caption.includes('holds the center'), 'order caption is the one identifying line');
+        }
+        const aliasSock = mockSock();
+        await worldMap.showWorld(aliasSock, 'chat1', 'user1', 'presence', {});
+        assert.strictEqual(aliasSock.sent.length, 1, 'presence alias routes to the same sheet');
+    }
+    {
+        // all FIVE sheets + the presence chart produce PNG buffers (renderer smoke)
+        for (const fn of [worldMapRenderer.renderCosmologyAtlasSheet, worldMapRenderer.renderFirstWorldSheet, worldMapRenderer.renderPresenceOfOrderSheet, worldMapRenderer.renderWorldBeyondSheet,
             worldMapRenderer.renderAfterlifeSheet, worldMapRenderer.renderAbyssSheet]) {
             const buf = await fn();
             assert.ok(buf && buf.length > 50000, 'sheet renders to a real PNG');

@@ -19889,9 +19889,16 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                           if (!user) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You need to register first. Use \`${botConfig.getPrefix()} register\`.` });
                           }
-                          const level = progression.getLevel(senderJid);
-                          if (level < 20) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to be at least level 20 to enter the Abyss.\n_Current level: ' + level + '_' });
+                          const levelRawEntry = progression.getLevel(senderJid);
+                          // 💡 2026-09-21 OWNER FIX (Abyss alignment logic):
+                          // this comparison used the raw return value - an
+                          // undefined/NaN level evaluated `NaN < 20` == false
+                          // and PASSED the tier check (fail-open, runtime
+                          // probed). Anything that is not a finite number is
+                          // now treated as below the tier (fail closed).
+                          const levelNum = Number(levelRawEntry);
+                          if (!Number.isFinite(levelNum) || levelNum < 20) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to be at least level 20 to enter the Abyss.\n_Current level: ' + (Number.isFinite(levelNum) ? levelNum : 0) + '_' });
                           }
                           // 💡 ABYSS UNIVERSAL ENTRY WINDOW + WORLD ALIGNMENT
                           // (cosmology pass, owner consolidated review §6;
