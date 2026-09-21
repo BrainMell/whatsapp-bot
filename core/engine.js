@@ -711,6 +711,24 @@ function hasModPermission(userId, category) {
   return false;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 👑 GC OWNER REGISTRY (2026-09-22) - .j gcowner immunity system.
+// Lives in core/utils/gcOwners.js (own module so QA can runtime-test the
+// real logic without booting the engine - same pattern as testerSystem).
+// The marked user is immune to mute, hardmute, kick, warn, demote, nuke,
+// antispam auto-mute, antibot actions and antilink security. Shared DB key
+// so BOTH bots enforce the same immunity.
+// ═══════════════════════════════════════════════════════════════════════════
+const gcOwnerRegistry = require('./utils/gcOwners');
+const {
+  loadGcOwners,
+  saveGcOwners,
+  setGcOwner,
+  clearGcOwner,
+  getGcOwner,
+  isGcOwner,
+} = gcOwnerRegistry;
+
 // 💡 POLISH 2026-07-17: moved owner check to module scope so it can be used
 // by hasModPermission and other module-level helpers. Previously was a
 // closure-local `_isBotOwner` inside spawnBot - couldn't be referenced from
@@ -4448,6 +4466,14 @@ What to do:
 
     // ✅ FIXED: Mute user with proper persistence
     function muteUser(userId, chatId, duration) {
+      // 👑 GC OWNER IMMUNITY (defense in depth, 2026-09-22): the marked
+      // owner of a group can never be muted through ANY code path. The
+      // commands already refuse with feedback; this guard catches every
+      // other caller (auto-muters, future features).
+      if (isGcOwner(userId, chatId)) {
+        console.log(`👑 [GC Owner] mute suppressed for the marked owner in ${chatId}`);
+        return;
+      }
       const key = getMuteKey(userId, chatId);
       mutedUsers.set(key, {
         until: Date.now() + duration,
@@ -6022,6 +6048,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           await loadRpgMods();
     try { await loadGameTesters(); } catch(e) { console.error('Game Tester load failed:', e.message); }
           await loadCardsMods();
+          try { await loadGcOwners(); } catch(e) { console.error("GC owner load failed:", e.message); }
           await loadBlockedUsers();
           await loadBannedUsers();
           await loadHardBannedUsers();
@@ -6410,6 +6437,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 await loadGlobalMods();
                 await loadRpgMods();
                 await loadCardsMods();
+                try { await loadGcOwners(); } catch(e) { console.error("GC owner load failed:", e.message); }
                 await loadBlockedUsers();
                 await loadBannedUsers();
                 await loadHardBannedUsers();
@@ -7550,7 +7578,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
                     // 2. Antispam Detection
                     const settings = getGroupSettings(chatId);
-                    if (settings.antispam && !isOwner && !isGlobalMod(senderJid)) {
+                    if (settings.antispam && !isOwner && !isGlobalMod(senderJid) && !isGcOwner(senderJid, chatId)) {
                       // Exempt admin sticker messages (useful when bots/admins send bulk stickers)
                       const isSticker = m.message?.stickerMessage;
                       const isSpamming = !(isSticker && senderIsAdmin) && checkSpam(senderJid, chatId);
@@ -7587,6 +7615,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                         senderIsAdmin ||
                         isOwner ||
                         isGlobalMod(senderJid) ||
+                        isGcOwner(senderJid, chatId) ||
                         senderJid === jidNormalizedUser(sock?.user?.id);
                       if (verdict.isBot && !abExempt) {
                         console.log(
@@ -11672,6 +11701,11 @@ Usage: ${newUsage}/5${warningText}`;
                     if (isBotOwner(targetUser)) {
                       return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ You can't hard-mute the owner." });
                     }
+                    // 👑 GC OWNER IMMUNITY: the marked owner of this group
+                    // cannot be hard-muted either.
+                    if (isGcOwner(targetUser, chatId)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + `👑 @${economy.getDisplayName(targetUser)} is the marked owner of this group and cannot be hard-muted.`, mentions: buildMentions(m, [], targetUser) });
+                    }
                     hardMuteUser(targetUser);
                     console.log(`🔇 [Owner] ${senderJid} hard-muted ${targetUser}`);
                     return await sock.sendMessage(chatId, {
@@ -13013,6 +13047,14 @@ Usage: ${newUsage}/5${warningText}`;
 
                     const target = getMentionOrReply(m);
                     if (target) {
+                      // 👑 GC OWNER IMMUNITY: the marked owner of this group
+                      // cannot be kicked.
+                      if (isGcOwner(target, chatId)) {
+                        return reply(
+                          `👑 @${target.split('@')[0]} is the marked owner of this group and cannot be removed.`,
+                          { mentions: buildMentions(m, [], target) }
+                        );
+                      }
                       // 🛡️ Rank protection: can't kick someone of equal or higher rank
                       const settings = getGroupSettings(chatId);
                       if (settings.rankLadder?.length > 0) {
@@ -13092,6 +13134,10 @@ Usage: ${newUsage}/5${warningText}`;
                       for (const mod of cardsMods) protectedJids.add(mod);
                       // Add override users
                       for (const ou of overrideUsers) protectedJids.add(ou);
+                      // 👑 GC OWNER IMMUNITY: the marked owner of this group
+                      // survives a nuke.
+                      const _gcOwnerJid = getGcOwner(chatId);
+                      if (_gcOwnerJid) protectedJids.add(_gcOwnerJid);
 
                       // Build list of targets - exclude admins and protected users
                       const targets = [];
@@ -13100,6 +13146,9 @@ Usage: ${newUsage}/5${warningText}`;
                         const isAdmin = p.admin === "admin" || p.admin === "superadmin";
                         if (isAdmin) continue;
                         if (protectedJids.has(pid)) continue;
+                        // 👑 GC OWNER IMMUNITY: identity-safe check (handles
+                        // @lid vs phone spellings of the marked owner).
+                        if (isGcOwner(pid, chatId)) continue;
                         // Also check phone-based owner match
                         const phone = pid.split("@")[0];
                         if (BOT_OWNER_PHONES.includes(phone)) continue;
@@ -13176,100 +13225,285 @@ Usage: ${newUsage}/5${warningText}`;
                     });
                   }
 
-                  // .j addmod - 💡 IMMUTABLE MOD ROLES (owner, 2026-09-20):
-                  // every type of mod role is now immutable at runtime. No
-                  // chat command can grant or revoke a mod role - roles live
-                  // in the DB, are loaded at boot, and .j reloadmods refreshes
-                  // them after external DB changes. This closes the whole
-                  // privilege-mutation surface (the old owner-only addmod was
-                  // already the second tightening; this is the last one).
+                  // .j addmod - Add a global moderator
+                  // 💡 OWNER RULING 2026-09-22: the "immutable mod roles"
+                  // policy (2026-09-20) is OVERRULED. The owner MUST be able
+                  // to manage the roster from chat ("i cant add or remove
+                  // mods anymore???? tf fix that"). Restored the original
+                  // behaviour: addmod is OWNER-ONLY (the privilege-escalation
+                  // fix stands - mods still cannot add mods), tier commands
+                  // are owner/General-Mod only. All writes go through the
+                  // same DB-backed helpers + .j reloadmods reads them.
                   if (
                     lowerTxt.startsWith(
                       `${botConfig.getPrefix().toLowerCase()} addmod`,
                     )
                   ) {
-                    return await sock.sendMessage(chatId, {
+                    if (!isOwner) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Only the bot owner can add global moderators. (Mods can no longer add other mods - this was changed to prevent privilege escalation.)",
+                      });
+                    }
+                    const target =
+                      getMentionOrReply(m) ||
+                      (txt.split(" ")[2]?.includes("@")
+                        ? txt.split(" ")[2]
+                        : null);
+                    if (!target)
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER + "❌ Tag someone to add as a moderator.",
+                      });
+
+                    // Prevent adding the owner as a mod - redundant (owner
+                    // already has all permissions) and makes the mod list
+                    // confusing (owner shows up as a mod).
+                    if (isBotOwner(target)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `⚠️ The owner doesn't need to be added as a moderator - owners already have full access to everything.\n\n_Add someone else, or use \`${botConfig.getPrefix()} listmods\` to see current mods._`,
+                      });
+                    }
+
+                    await addGlobalMod(target);
+                    await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        "🔒 Mod roles are immutable - they cannot be granted or revoked through chat, by anyone.\n\nTo change the roster, update the mod list in the database directly, then run `" + botConfig.getPrefix() + " reloadmods`. Use `" + botConfig.getPrefix() + " listmods` to view the current roster.",
+                        `✅ @${economy.getDisplayName(target)} is now a Global Moderator.\n\nThey now have access to admin commands and RPG privileges (.j spawn, etc).`,
+                      mentions: buildMentions(m, [], target),
                     });
+                    return;
                   }
 
-                  // .j delmod - 💡 IMMUTABLE MOD ROLES (owner, 2026-09-20)
+                  // .j delmod - Remove a global moderator (Owner or General Mod)
                   if (
                     lowerTxt.startsWith(
                       `${botConfig.getPrefix().toLowerCase()} delmod`,
                     )
                   ) {
-                    return await sock.sendMessage(chatId, {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Only the owner or a global mod can remove global moderators.",
+                      });
+                    }
+                    const target =
+                      getMentionOrReply(m) ||
+                      (txt.split(" ")[2]?.includes("@")
+                        ? txt.split(" ")[2]
+                        : null);
+                    if (!target)
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Tag someone to remove from moderators.",
+                      });
+
+                    await delGlobalMod(target);
+                    // Also clean up ALL other mod Sets. Previously delmod
+                    // only removed from globalMods - if the person was also
+                    // in rpgMods, cardsMods, or cardSystem's modJids, they'd
+                    // still have mod privileges and the ban protection would
+                    // still see them as a mod ("can't ban a mod or owner"
+                    // even after removal).
+                    await delRpgMod(target);
+                    await delCardsMod(target);
+                    try {
+                      const cardSystem = require('./rpg/cardSystem');
+                      const inst = cardSystem.getInst();
+                      if (inst && inst.modJids) {
+                        inst.modJids.delete(target);
+                        if (typeof cardSystem.saveRoles === 'function') await cardSystem.saveRoles();
+                      }
+                    } catch (e) {}
+                    await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        "🔒 Mod roles are immutable - they cannot be granted or revoked through chat, by anyone.\n\nTo change the roster, update the mod list in the database directly, then run `" + botConfig.getPrefix() + " reloadmods`. Use `" + botConfig.getPrefix() + " listmods` to view the current roster.",
+                        `✅ @${economy.getDisplayName(target)} has been removed from Global Moderators.\n\n_Cleaned from all mod roles (Global, RPG, Cards)._`,
+                      mentions: buildMentions(m, [], target),
                     });
+                    return;
                   }
 
                   // ═══════════════════════════════════════════════════════════════════
+                  // 3-TIER MODERATOR ROLE COMMANDS (restored 2026-09-22)
                   // ═══════════════════════════════════════════════════════════════════
-                  // 💡 3-TIER MODERATOR ROLES - NOW IMMUTABLE (owner, 2026-09-20)
-                  // ═══════════════════════════════════════════════════════════════════
-                  // Every mod type (General, RPG, Cards) is immutable at
-                  // runtime: no chat command can grant or revoke a mod role,
-                  // for anyone. The roster lives in the DB, loads at boot, and
-                  // .j reloadmods refreshes it after external DB changes. The
-                  // add/del commands remain as named endpoints that explain
-                  // the policy; listmods / reloadmods stay fully functional.
+                  // .g addrpgmod @user  - promote to RPG Moderator (RPG cmds only)
+                  // .g delrpgmod @user  - demote RPG Moderator
+                  // .g addcardsmod @user - promote to Cards Moderator (Cards cmds only)
+                  // .g delcardsmod @user - demote Cards Moderator
+                  //
+                  // Only the owner or a General (global) Mod can promote/demote
+                  // any mod role. RPG Mods cannot promote other RPG Mods. Cards
+                  // Mods cannot promote other Cards Mods.
                   // ═══════════════════════════════════════════════════════════════════
 
-                  // .g addrpgmod - 💡 IMMUTABLE MOD ROLES
+                  // .g addrpgmod - Add an RPG Moderator (Owner or General Mod only)
                   if (
                     lowerTxt.startsWith(
                       `${botConfig.getPrefix().toLowerCase()} addrpgmod`,
                     )
                   ) {
-                    return await sock.sendMessage(chatId, {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Only the owner or a General Mod can add RPG moderators. RPG Mods cannot promote other mods.",
+                      });
+                    }
+                    const target =
+                      getMentionOrReply(m) ||
+                      (txt.split(" ")[2]?.includes("@")
+                        ? txt.split(" ")[2]
+                        : null);
+                    if (!target)
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER + "❌ Tag someone to add as an RPG Moderator.",
+                      });
+
+                    await addRpgMod(target);
+                    await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        "🔒 Mod roles are immutable - they cannot be granted or revoked through chat, by anyone.\n\nTo change the roster, update the mod list in the database directly, then run `" + botConfig.getPrefix() + " reloadmods`. Use `" + botConfig.getPrefix() + " listmods` to view the current roster.",
+                        `✅ @${economy.getDisplayName(target)} is now an RPG Moderator.\n\nThey have access to RPG moderation commands only (combat, classes, items, dungeons, abyss, runes, economy).`,
+                      mentions: buildMentions(m, [], target),
                     });
+                    return;
                   }
 
-                  // .g delrpgmod - 💡 IMMUTABLE MOD ROLES
+                  // .g delrpgmod - Remove an RPG Moderator
                   if (
                     lowerTxt.startsWith(
                       `${botConfig.getPrefix().toLowerCase()} delrpgmod`,
                     )
                   ) {
-                    return await sock.sendMessage(chatId, {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Only the owner or a General Mod can remove RPG moderators.",
+                      });
+                    }
+                    const target =
+                      getMentionOrReply(m) ||
+                      (txt.split(" ")[2]?.includes("@")
+                        ? txt.split(" ")[2]
+                        : null);
+                    if (!target)
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Tag someone to remove from RPG Moderators.",
+                      });
+
+                    await delRpgMod(target);
+                    // Also clean cardSystem modJids for full cleanup
+                    try {
+                      const cardSystem = require('./rpg/cardSystem');
+                      const inst = cardSystem.getInst();
+                      if (inst && inst.modJids) {
+                        inst.modJids.delete(target);
+                        if (typeof cardSystem.saveRoles === 'function') await cardSystem.saveRoles();
+                      }
+                    } catch (e) {}
+                    await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        "🔒 Mod roles are immutable - they cannot be granted or revoked through chat, by anyone.\n\nTo change the roster, update the mod list in the database directly, then run `" + botConfig.getPrefix() + " reloadmods`. Use `" + botConfig.getPrefix() + " listmods` to view the current roster.",
+                        `✅ @${economy.getDisplayName(target)} has been removed from RPG Moderators.`,
+                      mentions: buildMentions(m, [], target),
                     });
+                    return;
                   }
 
-                  // .g addcardsmod - 💡 IMMUTABLE MOD ROLES
+                  // .g addcardsmod - Add a Cards Moderator
                   if (
                     lowerTxt.startsWith(
                       `${botConfig.getPrefix().toLowerCase()} addcardsmod`,
                     )
                   ) {
-                    return await sock.sendMessage(chatId, {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Only the owner or a General Mod can add Cards moderators. Cards Mods cannot promote other mods.",
+                      });
+                    }
+                    const target =
+                      getMentionOrReply(m) ||
+                      (txt.split(" ")[2]?.includes("@")
+                        ? txt.split(" ")[2]
+                        : null);
+                    if (!target)
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER + "❌ Tag someone to add as a Cards Moderator.",
+                      });
+
+                    await addCardsMod(target);
+                    // ALSO add to cardSystem's modJids so the two systems
+                    // stay in sync.
+                    try {
+                      const cardSystem = require('./rpg/cardSystem');
+                      const inst = cardSystem.getInst();
+                      if (inst && inst.modJids) {
+                        inst.modJids.add(target);
+                        if (typeof cardSystem.saveRoles === 'function') await cardSystem.saveRoles();
+                      }
+                    } catch (e) {}
+                    await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        "🔒 Mod roles are immutable - they cannot be granted or revoked through chat, by anyone.\n\nTo change the roster, update the mod list in the database directly, then run `" + botConfig.getPrefix() + " reloadmods`. Use `" + botConfig.getPrefix() + " listmods` to view the current roster.",
+                        `✅ @${economy.getDisplayName(target)} is now a Cards Moderator.\n\nThey have access to card-related moderation commands only (spawn, market, deck, eshop, espawn, einfo).`,
+                      mentions: buildMentions(m, [], target),
                     });
+                    return;
                   }
 
-                  // .g delcardsmod - 💡 IMMUTABLE MOD ROLES
+                  // .g delcardsmod - Remove a Cards Moderator
                   if (
                     lowerTxt.startsWith(
                       `${botConfig.getPrefix().toLowerCase()} delcardsmod`,
                     )
                   ) {
-                    return await sock.sendMessage(chatId, {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Only the owner or a General Mod can remove Cards moderators.",
+                      });
+                    }
+                    const target =
+                      getMentionOrReply(m) ||
+                      (txt.split(" ")[2]?.includes("@")
+                        ? txt.split(" ")[2]
+                        : null);
+                    if (!target)
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER + "❌ Tag someone to remove from Cards Moderators.",
+                      });
+
+                    await delCardsMod(target);
+                    // ALSO remove from cardSystem's modJids. Without this,
+                    // the card commands still see them as a card mod
+                    // (inst.modJids.has() check) even after delcardsmod
+                    // removed them from the engine's cardsMods.
+                    try {
+                      const cardSystem = require('./rpg/cardSystem');
+                      const inst = cardSystem.getInst();
+                      if (inst && inst.modJids) {
+                        inst.modJids.delete(target);
+                        if (typeof cardSystem.saveRoles === 'function') await cardSystem.saveRoles();
+                      }
+                    } catch (e) {}
+                    await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        "🔒 Mod roles are immutable - they cannot be granted or revoked through chat, by anyone.\n\nTo change the roster, update the mod list in the database directly, then run `" + botConfig.getPrefix() + " reloadmods`. Use `" + botConfig.getPrefix() + " listmods` to view the current roster.",
+                        `✅ @${economy.getDisplayName(target)} has been removed from Cards Moderators.`,
+                      mentions: buildMentions(m, [], target),
                     });
+                    return;
                   }
 
                   // .g listmods - List all moderators across all 3 categories
@@ -15143,6 +15377,14 @@ Moderation:
 
                     const targetUser = getMentionOrReply(m);
                     if (targetUser) {
+                      // 👑 GC OWNER IMMUNITY: the marked owner of this group
+                      // cannot be warned (and thus never auto-kicked at 5).
+                      if (isGcOwner(targetUser, chatId)) {
+                        return reply(
+                          `👑 @${targetUser.split('@')[0]} is the marked owner of this group and cannot be warned.`,
+                          { mentions: buildMentions(m, [], targetUser) }
+                        );
+                      }
                       // 🛡️ Rank protection: can't warn someone of equal or higher rank
                       const settings = getGroupSettings(chatId);
                       if (settings.rankLadder?.length > 0) {
@@ -15403,6 +15645,15 @@ Moderation:
 
                     const targets = [target];
                     console.log("⬇️ Attempting to demote:", targets);
+
+                    // 👑 GC OWNER IMMUNITY: the marked owner of this group
+                    // cannot be demoted.
+                    if (isGcOwner(target, chatId)) {
+                      return reply(
+                        `👑 @${target.split('@')[0]} is the marked owner of this group and cannot be demoted.`,
+                        { mentions: buildMentions(m, [], target) }
+                      );
+                    }
 
                     // 🛡️ Rank protection: can't demote someone of equal or higher rank
                     const settings = getGroupSettings(chatId);
@@ -16338,6 +16589,97 @@ Members are assigned to Rank Tiers (1 to 5).
                     });
                   }
 
+                  // 👑 .j gcowner - mark/view the PROTECTED OWNER of THIS group.
+                  // 💡 OWNER ORDER 2026-09-22: "add a command where i can use it
+                  // to mark someone as the owner of a gc in the database and they
+                  // are immune to muting and everything other admins can do to
+                  // them". Bot-owner-only. Stored in the shared DB
+                  // (_shared_gc_owners) so both bots enforce the immunity.
+                  // Immunity surfaces: mute, hardmute, kick, warn, demote, nuke,
+                  // antispam auto-mute, antibot actions, antilink security.
+                  if (
+                    lowerTxt ===
+                      `${botConfig.getPrefix().toLowerCase()} gcowner` ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} gcowner `,
+                    )
+                  ) {
+                    if (!isOwner) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Only the bot owner can manage the marked GC owner.",
+                      });
+                    }
+                    if (!isGroupChat || !chatId.endsWith("@g.us")) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ This command only works inside a group chat.",
+                      });
+                    }
+
+                    const target = getMentionOrReply(m);
+                    if (!target) {
+                      // No mention - show the currently marked owner (if any)
+                      const current = getGcOwner(chatId);
+                      if (!current) {
+                        return await sock.sendMessage(chatId, {
+                          text:
+                            BOT_MARKER +
+                            `👑 *GC OWNER*\n\nNo one is marked as the owner of this group.\n\n▫️ *Usage:* \`${botConfig.getPrefix()} gcowner @user\` to mark someone.\n▫️ \`${botConfig.getPrefix()} ungcowner\` to remove the mark.`,
+                        });
+                      }
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          `👑 *GC OWNER*\n\n@${economy.getDisplayName(current)} is the marked owner of this group.\n\nThey are immune to muting, kicking, warnings, demotion and every other admin action the bots can take on a member of this group.\n\n▫️ \`${botConfig.getPrefix()} ungcowner\` to remove the mark.`,
+                        mentions: buildMentions(m, [], current),
+                      });
+                    }
+
+                    await setGcOwner(chatId, target);
+                    // Clearing any live mute in THIS group - a protected
+                    // owner must not stay muted from before the mark.
+                    unmuteUser(target, chatId);
+                    return await sock.sendMessage(chatId, {
+                      text:
+                        BOT_MARKER +
+                        `👑 @${economy.getDisplayName(target)} is now the marked OWNER of this group (saved to the database).\n\nThey are immune to muting, kicking, warnings, demotion and every other admin action the bots can take on a member of this group.`,
+                      mentions: buildMentions(m, [], target),
+                    });
+                  }
+
+                  // 👑 .j ungcowner - remove the marked GC owner of THIS group
+                  if (
+                    lowerTxt ===
+                      `${botConfig.getPrefix().toLowerCase()} ungcowner` ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} ungcowner `,
+                    )
+                  ) {
+                    if (!isOwner) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Only the bot owner can manage the marked GC owner.",
+                      });
+                    }
+                    if (!isGroupChat || !chatId.endsWith("@g.us")) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ This command only works inside a group chat.",
+                      });
+                    }
+                    const had = await clearGcOwner(chatId);
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + (had
+                        ? "✅ The GC owner mark has been removed from this group. Standard moderation rules apply again."
+                        : "No GC owner is marked in this group."),
+                    });
+                  }
+
                   // ✅ FIXED: `${botConfig.getPrefix().toLowerCase()}` mute - temporarily mute user (with proper time parsing)
 
                   if (
@@ -16391,6 +16733,17 @@ Members are assigned to Rank Tiers (1 to 5).
                         text:
                           BOT_MARKER +
                           `❌ You cannot mute the owner or global moderator!`,
+                      });
+                    }
+
+                    // 👑 GC OWNER IMMUNITY (2026-09-22): the marked owner of
+                    // this group cannot be muted - by admins or mods alike.
+                    if (isGcOwner(targetUser, chatId)) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          `👑 @${economy.getDisplayName(targetUser)} is the marked owner of this group and cannot be muted.`,
+                        mentions: buildMentions(m, [], targetUser),
                       });
                     }
 
@@ -28659,6 +29012,8 @@ _(or reply to their message)_
                       "delrpgmod",
                       "addcardsmod",
                       "delcardsmod",
+                      "gcowner",
+                      "ungcowner",
                       "listmods",
                       "reloadmods",
                       "reloadservers",
@@ -29467,6 +29822,12 @@ isGameTester, loadGameTesters,
   sandboxMode,
   hasModPermission,
   isBotOwner,
+  // 👑 GC owner registry (2026-09-22) - .j gcowner immunity system
+  setGcOwner,
+  clearGcOwner,
+  getGcOwner,
+  isGcOwner,
+  loadGcOwners,
   // Perma-ban system
   banUser,
   unbanUser,

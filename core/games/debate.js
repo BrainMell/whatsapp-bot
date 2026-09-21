@@ -54,7 +54,9 @@ function updateLeaderboard(winnerJid, score) {
         debateLeaderboard[winnerJid] = { wins: 0, totalScore: 0, debates: 0 };
     }
     debateLeaderboard[winnerJid].wins += 1;
-    debateLeaderboard[winnerJid].totalScore += score;
+    // 💡 JUDGE FIX: Number() re-base - a historical string score (the old
+    // bug concatenated strings) would keep poisoning the average forever.
+    debateLeaderboard[winnerJid].totalScore = (Number(debateLeaderboard[winnerJid].totalScore) || 0) + score;
     debateLeaderboard[winnerJid].debates += 1;
     saveLeaderboard();
 }
@@ -63,7 +65,7 @@ function recordParticipation(jid, score) {
     if (!debateLeaderboard[jid]) {
         debateLeaderboard[jid] = { wins: 0, totalScore: 0, debates: 0 };
     }
-    debateLeaderboard[jid].totalScore += score;
+    debateLeaderboard[jid].totalScore = (Number(debateLeaderboard[jid].totalScore) || 0) + score;
     debateLeaderboard[jid].debates += 1;
     saveLeaderboard();
 }
@@ -104,6 +106,103 @@ function userIsGroupAdmin(groupMetadata, jid) {
     if (!groupMetadata?.participants || !groupMetadata.participants.length) return false;
     const target = _userPart(jid);
     return groupMetadata.participants.some((p) => _participantIsAdmin(p) && _userPart(p.id) === target);
+}
+
+// ═══ VERDICT PARSING HELPERS (JUDGE FIX 2026-09-22) ═════════════════
+// Owner report: ".j judge doesnt work it sends this error message that has
+// json something in it and score ...". Root causes: (a) the extractor regex
+// /\{[\s\S]*\}/ is GREEDY - it swallows prose and any later brace pairs,
+// poisoning JSON.parse; (b) the failure path sent err.message to the chat
+// VERBATIM, and modern Node embeds a snippet of the malformed input in
+// JSON.parse errors - so the group literally saw raw JSON; (c) scores and
+// winner were never validated, so string scores concatenated in the
+// leaderboard and missing scores rendered as undefined.
+
+// Extract the first COMPLETE top-level JSON object from an AI reply.
+// Order: whole-body parse (fences stripped) -> balanced-brace scan ->
+// truncated-JSON repair. Returns null when nothing parses.
+function extractVerdictJson(raw) {
+    if (!raw) return null;
+    const unfenced = String(raw).trim()
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/```\s*$/i, '')
+        .trim();
+    const attempts = [unfenced];
+    const start = unfenced.indexOf('{');
+    if (start !== -1) {
+        let depth = 0, inStr = false, esc = false, end = -1;
+        for (let i = start; i < unfenced.length; i++) {
+            const ch = unfenced[i];
+            if (inStr) {
+                if (esc) esc = false;
+                else if (ch === '\\') esc = true;
+                else if (ch === '"') inStr = false;
+                continue;
+            }
+            if (ch === '"') inStr = true;
+            else if (ch === '{') depth++;
+            else if (ch === '}') {
+                depth--;
+                if (depth === 0) { end = i; break; }
+            }
+        }
+        if (end !== -1) attempts.push(unfenced.slice(start, end + 1));
+        // Truncated reply (token cap): close an open string, then balance
+        // braces/brackets so JSON.parse gets a well-formed object.
+        if (inStr || depth > 0) {
+            let repaired = unfenced.slice(start);
+            if (inStr) repaired += '"';
+            repaired = repaired.replace(/,\s*$/, '');
+            const stack = [];
+            let s = false, e = false;
+            for (const ch of repaired) {
+                if (s) { if (e) e = false; else if (ch === '\\') e = true; else if (ch === '"') s = false; continue; }
+                if (ch === '"') s = true;
+                else if (ch === '{' || ch === '[') stack.push(ch);
+                else if (ch === '}' || ch === ']') stack.pop();
+            }
+            if (s) repaired += '"';
+            while (stack.length) repaired += stack.pop() === '{' ? '}' : ']';
+            attempts.push(repaired);
+        }
+    }
+    for (const attempt of attempts) {
+        try {
+            const parsed = JSON.parse(attempt);
+            if (parsed && typeof parsed === 'object') return parsed;
+        } catch (e) { /* try the next strategy */ }
+    }
+    return null;
+}
+
+// Validate + coerce the parsed verdict so downstream code can never see
+// string scores (leaderboard concatenation), missing scores (undefined
+// rendered into the card) or an unrecognized winner (wrong JID crowned).
+function coerceVerdict(verdict) {
+    const toScore = (v) => {
+        const n = Number(v);
+        if (!Number.isFinite(n)) return 0;
+        return Math.max(0, Math.min(100, Math.round(n)));
+    };
+    const out = {
+        debater1_score: toScore(verdict.debater1_score),
+        debater2_score: toScore(verdict.debater2_score),
+        reasoning: typeof verdict.reasoning === 'string' ? verdict.reasoning : '',
+        fallacies: verdict.fallacies && typeof verdict.fallacies === 'object' ? verdict.fallacies : { d1: '', d2: '' },
+        best_arg_d1: verdict.best_arg_d1 && typeof verdict.best_arg_d1 === 'object' ? verdict.best_arg_d1 : { text: '', impact: '' },
+        best_arg_d2: verdict.best_arg_d2 && typeof verdict.best_arg_d2 === 'object' ? verdict.best_arg_d2 : { text: '', impact: '' },
+    };
+    // Winner normalization: accept "Debater 1"/"Debater 2" in any casing or
+    // spacing, bare 1/2, d1/d2, first/second - even glued into a sentence.
+    const wNorm = String(verdict.winner || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const saysOne = /^(1|d1|debater1|debaterone|first)/.test(wNorm);
+    const saysTwo = /^(2|d2|debater2|debatertwo|second)/.test(wNorm);
+    if (saysOne && !saysTwo) out.winner = 'Debater 1';
+    else if (saysTwo && !saysOne) out.winner = 'Debater 2';
+    // Missing/unrecognizable winner: the higher coerced score decides; a
+    // dead tie defaults to Debater 1 so the debate can always close.
+    else out.winner = out.debater1_score >= out.debater2_score ? 'Debater 1' : 'Debater 2';
+    return out;
 }
 
 module.exports = {
@@ -307,26 +406,42 @@ Respond ONLY in this JSON format:
 }`;
 
         try {
-            // Get AI judgment
-            const completion = await smartGroqCall({
-                model: MODELS.SMART,
-                messages: [
-                    { role: "system", content: "You are a professional debate judge. Respond only in valid JSON format." },
-                    { role: "user", content: judgePrompt }
-                ]
-            });
+            // Get AI judgment (ONE strict retry when the first reply is malformed)
+            const runJudgeCall = async (systemNote) => {
+                const completion = await smartGroqCall({
+                    model: MODELS.SMART,
+                    messages: [
+                        { role: "system", content: systemNote },
+                        { role: "user", content: judgePrompt }
+                    ]
+                });
+                return completion?.choices?.[0]?.message?.content || '';
+            };
 
-            let judgeResponse = completion.choices[0].message.content.trim();
-            
-            // Robust JSON extraction
-            const jsonMatch = judgeResponse.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                judgeResponse = jsonMatch[0];
-            } else {
-                judgeResponse = judgeResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            // 💡 JUDGE FIX 2026-09-22: parse via extractVerdictJson (fence-
+            // strip -> balanced-brace scan -> truncated repair) instead of
+            // the old greedy regex + bare JSON.parse, then coerceVerdict so
+            // scores are always numbers and the winner always resolvable.
+            const firstRaw = String(await runJudgeCall("You are a professional debate judge. Respond only in valid JSON format.")).trim();
+            let verdict = extractVerdictJson(firstRaw);
+            if (!verdict) {
+                const retryRaw = String(await runJudgeCall("You are a professional debate judge. Your ENTIRE reply must be ONE valid JSON object and nothing else: no prose, no markdown fences, no trailing commas.")).trim();
+                verdict = extractVerdictJson(retryRaw);
             }
-            
-            const verdict = JSON.parse(judgeResponse);
+            if (!verdict) {
+                // NEVER leak the raw AI reply into the chat - the old
+                // `"Failed to judge debate: " + err.message` embedded a
+                // snippet of the malformed JSON (that is the JSON the owner
+                // kept seeing). Log server-side; keep the debate OPEN so the
+                // group can simply run .j judge again.
+                console.error('Judging error: unparseable AI verdict. First 400 chars:', firstRaw.slice(0, 400));
+                return {
+                    success: false,
+                    message: BOT_MARKER + `❌ The judge could not read its own verdict sheet (malformed AI reply). The debate is still open - run \`${botConfig.getPrefix()} judge\` again in a moment.`
+                };
+            }
+
+            verdict = coerceVerdict(verdict);
 
             // Determine winner JID
             const winnerJid = verdict.winner === "Debater 1" ? debate.debater1 : debate.debater2;
@@ -385,9 +500,15 @@ _the group is unlocked. debate again anytime._`;
 
         } catch (err) {
             console.error('Judging error:', err);
+            // 💡 JUDGE FIX: strip any JSON-looking blob from the error before
+            // it reaches the chat (Node embeds input snippets in JSON.parse
+            // errors - that was the raw JSON the owner saw).
+            const safeMsg = String(err?.message || 'unexpected judge failure')
+                .replace(/\{[\s\S]*\}/g, '')
+                .trim() || 'unexpected judge failure';
             return {
                 success: false,
-                message: BOT_MARKER + "❌ Failed to judge debate: " + err.message
+                message: BOT_MARKER + "❌ Failed to judge debate: " + safeMsg
             };
         }
     },

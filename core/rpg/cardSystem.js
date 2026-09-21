@@ -3825,14 +3825,42 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
 
   switch (cmd) {
     case 'cardmod':
-      // 💡 IMMUTABLE MOD ROLES (owner, 2026-09-20): card mod roles can no
-      // longer be granted or revoked through chat - matching the engine's
-      // addmod/delmod/addrpgmod/delrpgmod/addcardsmod/delcardsmod policy.
-      // The roster is DB-managed; .j reloadmods refreshes it. `list` stays.
-      if (!isOwner && !isMod) return reply('❌ Only the bot owner or a global mod can view card moderator info.'), true;
+      // 💡 OWNER RULING 2026-09-22: the "immutable mod roles" policy is
+      // OVERRULED. cardmod add/del restored (owner/global mod only) -
+      // matching the engine's restored addmod/delmod/addrpgmod/delrpgmod/
+      // addcardsmod/delcardsmod. Roster writes still saveRoles() + sync
+      // the engine's cardsMods Set so both systems agree.
+      if (!isOwner && !isMod) return reply('❌ Only the bot owner or a global mod can manage card moderators.'), true;
       const sub = args[0]?.toLowerCase();
-      if (sub === 'add' || sub === 'del' || sub === 'remove') {
-        return reply('🔒 Mod roles are immutable - they cannot be granted or revoked through chat, by anyone.\n\nTo change the roster, update the mod list in the database directly, then run `.j reloadmods`. Use `cardmod list` to view the current roster.'), true;
+      if (sub === 'add') {
+        const target = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || (args[1]?.includes('@') ? args[1] : null);
+        if (!target) return reply(`❌ Tag someone to add as card mod.`), true;
+        inst.modJids.add(target);
+        await saveRoles();
+        // ALSO add to engine's cardsMods Set so the two systems stay in
+        // sync. Previously cardmod add only added to the card system's
+        // modJids - the engine's isCardsMod() didn't see them, causing
+        // inconsistent permission checks.
+        try {
+          const engine = require('../engine');
+          if (typeof engine.addCardsMod === 'function') engine.addCardsMod(target);
+        } catch (e) {}
+        return reply(`✅ @${economy.getDisplayName(target)} is now a Card Moderator.`, { mentions: [target] }), true;
+      }
+      if (sub === 'del' || sub === 'remove') {
+        const target = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || (args[1]?.includes('@') ? args[1] : null);
+        if (!target) return reply(`❌ Tag someone to remove.`), true;
+        inst.modJids.delete(target);
+        await saveRoles();
+        // ALSO remove from engine's cardsMods Set. Without this, the ban
+        // protection (isCardsMod check) still sees them as a mod even
+        // after cardmod del - causing "can't ban a mod" for someone who
+        // was already removed.
+        try {
+          const engine = require('../engine');
+          if (typeof engine.delCardsMod === 'function') engine.delCardsMod(target);
+        } catch (e) {}
+        return reply(`✅ @${economy.getDisplayName(target)} is no longer a Card Moderator.`, { mentions: [target] }), true;
       }
       if (sub === 'list') {
         if (inst.modJids.size === 0) return reply('🃏 No card moderators currently assigned.'), true;
@@ -3841,7 +3869,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         modsArr.forEach((m, i) => modMsg += `${i+1}. @${economy.getDisplayName(m)}\n`);
         return reply(modMsg, { mentions: modsArr }), true;
       }
-      return reply(`🃏 *Card Moderator System*\n\nMod roles are immutable - roster changes happen in the database, then \`.j reloadmods\` refreshes them.\n\n➥ \`${p} cardmod list\``), true;
+      return reply(`🃏 *Card Moderator System*\n\n➥ \`${p} cardmod add @user\`\n➥ \`${p} cardmod del @user\`\n➥ \`${p} cardmod list\``), true;
 
     case 'cards':
       // 💡 FIX 2026-08-08: Only card mods, global mods, and owner can toggle.

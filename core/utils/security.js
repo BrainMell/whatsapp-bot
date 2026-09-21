@@ -155,6 +155,16 @@ module.exports = {
             // Admins are exempt
             if (senderIsAdmin) return;
 
+            // 👑 GC OWNER IMMUNITY (2026-09-22): the marked GC owner
+            // (`.j gcowner @user`, stored in _shared_gc_owners) is exempt
+            // from the antilink warn/kick actions as well. Lazy require -
+            // engine.js loads this module, so a top-level require would be
+            // circular (same pattern cardSystem.js uses).
+            try {
+                const engine = require('../engine');
+                if (typeof engine.isGcOwner === 'function' && engine.isGcOwner(normalizedSender, chatId)) return;
+            } catch (e) { /* engine not ready - proceed as normal */ }
+
             // ============================================
             // ACTION PHASE
             // ============================================
