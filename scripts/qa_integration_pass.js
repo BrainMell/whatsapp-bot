@@ -42,13 +42,16 @@ function mockSock() {
         }
     }
     {
-        // beyond: rank A -> refusal text ONLY (never a render)
+        // beyond: rank A -> LOCKED CARD (owner 2026-09-21: refusals are
+        // visual; the map itself is never rendered). Caption = requirement.
         const sock = mockSock();
         await worldMap.showWorld(sock, 'chat1', 'user1', 'beyond', { getLevel: () => 50, getRank: () => 'A' });
         assert.strictEqual(sock.sent.length, 1);
-        assert.ok(sock.sent[0].msg.text, 'locked beyond = text');
-        assert.ok(sock.sent[0].msg.text.includes('S'), 'names the requirement');
-        assert.strictEqual(sock.sent[0].msg.image, undefined, 'LOCKED = ZERO image bytes');
+        const mb = sock.sent[0].msg;
+        assert.ok((mb.caption || mb.text || '').includes('S'), 'names the requirement');
+        assert.ok(mb.image, 'locked beyond sends the refusal CARD (owner 2026-09-21)');
+        const wbBuf = await worldMapRenderer.renderWorldBeyondSheet();
+        assert.ok(!mb.image.equals(wbBuf), 'locked card is not the WB sheet');
     }
     {
         // beyond: rank S -> render
@@ -72,12 +75,37 @@ function mockSock() {
         assert.ok(!m.image.equals(sheetBuf), 'the refusal card is NOT the afterlife map sheet');
     }
     {
-        // abyss: below unlock -> refusal; at/above -> render
+        // world beyond: below S rank -> LOCKED CARD (owner 2026-09-21: locked
+        // for everyone except the owner until the conditions are met); the
+        // OWNER bypasses the rank gate entirely
+        const engineStub = require.cache[__enginePath].exports;
+        const sock = mockSock();
+        engineStub.isBotOwner = () => false;
+        await worldMap.showWorld(sock, 'chat1', 'user1', 'world beyond', { getLevel: () => 99, getRank: () => 'A' });
+        const mwb = sock.sent[0].msg;
+        assert.ok((mwb.caption || mwb.text || '').includes('rank *S*'), 'world beyond refusal names the rank requirement');
+        assert.ok(mwb.image, 'locked world beyond sends the refusal CARD');
+        const wbSheetBuf = await worldMapRenderer.renderWorldBeyondSheet();
+        assert.ok(!mwb.image.equals(wbSheetBuf), 'the locked card is NOT the world beyond sheet');
+
+        const sockO = mockSock();
+        engineStub.isBotOwner = () => true;
+        await worldMap.showWorld(sockO, 'chat1', 'owner1', 'world beyond', { getLevel: () => 3, getRank: () => 'F' });
+        const mo = sockO.sent[0].msg;
+        assert.ok(mo.image || mo.text, 'owner bypass renders the world beyond sheet below S rank');
+        assert.ok(!mo.caption || !mo.caption.includes('rank *S*'), 'owner does not get the refusal');
+        engineStub.isBotOwner = () => false;
+    }
+    {
+        // abyss: below unlock -> the worlds-not-aligned IMAGE CARD (owner
+        // 2026-09-21) with the requirement as caption; at/above -> render
         const sock = mockSock();
         await worldMap.showWorld(sock, 'chat1', 'user1', 'abyss', { getLevel: () => 12, getRank: () => 'A' });
         const m = sock.sent[0].msg;
-        assert.ok(m.text && m.text.includes('level *20*'));
-        assert.strictEqual(m.image, undefined);
+        assert.ok((m.caption || m.text || '').includes('level *20*'), 'abyss lock names the level requirement (caption or text)');
+        assert.ok(m.image, 'locked abyss sends the worlds-not-aligned CARD (owner 2026-09-21)');
+        const abyssSheetBuf = await worldMapRenderer.renderAbyssSheet();
+        assert.ok(!m.image.equals(abyssSheetBuf), 'the locked card is NOT the abyss sheet');
 
         const sock2 = mockSock();
         await worldMap.showWorld(sock2, 'chat1', 'user1', 'abyss', { getLevel: () => 20, getRank: () => 'A' });

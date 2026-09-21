@@ -23,11 +23,14 @@ function assert(cond, label) {
     const chatId = 'qa@c.us';
     const user = 'qa_user@s.whatsapp.net';
 
-    // 1. locked abyss map at level 12 → refusal text, NO image bytes
+    // 1. locked abyss map at level 12 → the worlds-not-aligned IMAGE CARD
+    // (owner 2026-09-21), the requirement as caption; the sheet never renders
     sent.length = 0;
     await worldMap.showWorld(mockSock, chatId, user, 'abyss', { getLevel: () => 12 });
-    assert(sent.length === 1 && !sent[0].image, 'locked abyss (lvl 12): refusal only, zero image bytes');
-    assert(/level \*20\*/.test(sent[0].text), 'refusal names the CONFIRMED requirement (level 20)');
+    assert(sent.length === 1 && !!sent[0].image, 'locked abyss (lvl 12): refusal CARD sent (owner 2026-09-21)');
+    assert(/level \*20\*/.test(sent[0].caption || sent[0].text || ''), 'refusal names the CONFIRMED requirement (level 20)');
+    const abyssSheetBuf0 = await require('../core/rpg/worldMapRenderer').renderAbyssSheet();
+    assert(!sent[0].image.equals(abyssSheetBuf0), 'locked abyss: the card is NOT the abyss sheet');
 
     // 2. unlocked abyss map at level 20 → image + SHORT subtle caption
     sent.length = 0;
@@ -52,10 +55,15 @@ function assert(cond, label) {
     assert(!capFW.includes('five hours'), 'FW caption: no orbit equation leak');
     assert(capFW.length <= 400, 'FW caption is SHORT (' + capFW.length + ' chars)');
 
-    // 4. world beyond locked at rank A → refusal, no render
+    // 4. world beyond locked at rank A → LOCKED CARD + requirement caption
+    // (owner 2026-09-21: the World Beyond is locked for everyone except the
+    // owner until the conditions are met; refusals are visual)
     sent.length = 0;
     await worldMap.showWorld(mockSock, chatId, user, 'beyond', { getRank: () => 'A' });
-    assert(sent.length === 1 && !sent[0].image && /rank \*S\*/.test(sent[0].text), 'beyond locked at rank A: refusal only');
+    assert(sent.length === 1 && !!sent[0].image, 'beyond locked at rank A: refusal CARD sent (owner 2026-09-21)');
+    assert(/rank \*S\*/.test(sent[0].caption || sent[0].text || ''), 'beyond refusal names the rank requirement');
+    const wbSheetBuf0 = await require('../core/rpg/worldMapRenderer').renderWorldBeyondSheet();
+    assert(!sent[0].image.equals(wbSheetBuf0), 'locked beyond: the card is NOT the WB sheet');
 
     // 4b. afterlife locked (dead-soul feature absent) → LOCKED CARD + requirement
     // caption (owner 2026-09-21: access failures get a visual refusal card; the

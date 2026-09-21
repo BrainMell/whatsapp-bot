@@ -326,11 +326,25 @@ async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
         return _sendSheet(sock, chatId, buf, INFO.all, _asciiAll, t);
     }
 
-    // ── GATES (hard contract: locked = requirement text ONLY, no render) ──
+    // ── GATES (hard contract: locked = requirement ONLY, the map never renders) ──
+    // 2026-09-21 owner ruling: the World Beyond is locked for EVERYONE except
+    // the owner until the required conditions are met (rank S). The owner (and
+    // staff) walk in regardless; everyone below S rank now receives the locked
+    // IMAGE CARD (the boundary as an empty gold circle, the rank road dying
+    // mid air) with the text requirement as caption + render-failure fallback.
     if (norm === 'world_beyond') {
         const rank = typeof helpers.getRank === 'function' ? helpers.getRank(userId) : 'F';
-        if (!_rankAtLeast(rank, 'S')) {
-            return sock.sendMessage(chatId, { text: _refuseBeyond(rank) });
+        if (!_rankAtLeast(rank, 'S') && !_isStaff(userId)) {
+            const txt = _refuseBeyond(rank);
+            try {
+                const card = await renderer.renderWorldBeyondLockedCard();
+                if (card && card.length > 100) {
+                    return sock.sendMessage(chatId, { image: card, caption: txt });
+                }
+            } catch (e) {
+                try { console.error('[worldMap] world beyond locked card failed:', e.message); } catch (_) {}
+            }
+            return sock.sendMessage(chatId, { text: txt });
         }
         const buf = await renderer.renderWorldBeyondSheet(t);
         return _sendSheet(sock, chatId, buf, INFO.world_beyond, _asciiWorldBeyond, t);
@@ -373,8 +387,25 @@ async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
                 ? helpers.getLevel(userId)
                 : (require('./progression').getLevel(userId) || 1);
         } catch (e) {}
+        // 2026-09-21 owner ruling: a locked abyss request renders the IMAGE
+        // CARD that explains the worlds are not aligned (with the tier named
+        // in its plates), never a bare text answer. The text stays as the
+        // caption and as the render-failure fallback (cards never dead-end).
         if (level < ABYSS_MAP_UNLOCK) {
-            return sock.sendMessage(chatId, { text: _refuseAbyss(level) });
+            const txt = _refuseAbyss(level);
+            try {
+                const card = await renderer.renderAbyssMisalignedCard({
+                    mode: 'level',
+                    level,
+                    unlock: ABYSS_MAP_UNLOCK,
+                });
+                if (card && card.length > 100) {
+                    return sock.sendMessage(chatId, { image: card, caption: txt });
+                }
+            } catch (e) {
+                try { console.error('[worldMap] abyss locked card failed:', e.message); } catch (_) {}
+            }
+            return sock.sendMessage(chatId, { text: txt });
         }
         const buf = await renderer.renderAbyssSheet(t);
         return _sendSheet(sock, chatId, buf, INFO.abyss, _asciiAbyss, t);
