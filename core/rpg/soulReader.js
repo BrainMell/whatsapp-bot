@@ -37,7 +37,7 @@ const P = () => botConfig.getPrefix();
 
 // ─── THE TELLER'S VOICE (verbatim pools from the approved spec) ─────────────
 const POOL_A = [
-    'Cross my palm— no. Not that one. The other. That hand has thrown dice at fate too recently.',
+    'Cross my palm... no. Not that one. The other. That hand has thrown dice at fate too recently.',
     'Your cards came up the Tower, the Road, and the Mirror. Relax. Half my decks are just furniture.',
     'I see a tall dark stranger. …No, I see a short rude one. The cards are arguing. Come back Tuesday.',
     'The stars say you\'ll live. The stars haven\'t been wrong. They\'ve been VAGUE.',
@@ -60,9 +60,9 @@ const POOL_B = [
 ];
 const POOL_C = [
     'You\'ve sent quite a few souls my way lately. Business is good. I\'d rather it weren\'t.',
-    'Some souls don\'t stay where they\'re supposed to. If you meet a wanderer who feels like a place more than a person — be polite. And keep walking.',
+    'Some souls don\'t stay where they\'re supposed to. If you meet a wanderer who feels like a place more than a person, be polite. And keep walking.',
     'I\'ve seen warriors arrive here from worlds you\'ve never heard of. They tell the same stories with different names. Every time.',
-    'It\'s becoming rather crowded beyond the veil. Whatever is stirring down deep in the Abyss — it isn\'t only your world doing the sending.',
+    'It\'s becoming rather crowded beyond the veil. Whatever is stirring down deep in the Abyss, it isn\'t only your world doing the sending.',
     'Souls keep their favorite year, you know. Most pick something small. A kitchen. A rain. Nobody picks the treasure.',
     'The newly dead always ask the same three questions: did it matter, who won, and who\'s watching my dog. In that order, always.',
     'I can tell a monster\'s soul from a person\'s by the weight. You\'d be surprised how often the monster\'s is lighter.',
@@ -158,7 +158,7 @@ function ledgerRows(user, bestFloor) {
         ],
         accent: {
             label: 'DEEPEST DESCENT',
-            value: bestFloor ? `FLOOR ${bestFloor}` : '—',
+            value: bestFloor ? `FLOOR ${bestFloor}` : 'UNRECORDED',
         },
     };
 }
@@ -167,22 +167,26 @@ function ledgerRows(user, bestFloor) {
 
 function lockedText(s) {
     const P_ = P();
-    let t = `🕯️ *THE VEILWARD READING* — the soul reader\n`;
+    let t = `🕯️ *THE VEILWARD READING* · the soul reader\n`;
     t += `━━━━━━━━━━━━━━━\n`;
-    t += `${s.levelOk ? '✅' : '⭕'} Reach level *${SIGHT_LEVEL}* — you: *${s.level}*\n`;
-    t += `${s.floorOk ? '✅' : '⭕'} Face the deep floors — deepest: *${s.bestFloor ? 'floor ' + s.bestFloor : 'none yet'}* (need floor ${SIGHT_DEEP_FLOOR})\n`;
-    t += `${s.feeOk ? '✅' : '⭕'} Pay the reader's fee — *${READER_FEE.toLocaleString()} Zeni*\n`;
+    t += `${s.levelOk ? '✅' : '⭕'} Reach level *${SIGHT_LEVEL}* · yours: *${s.level}*\n`;
+    t += `${s.floorOk ? '✅' : '⭕'} Face the deep floors · deepest: *${s.bestFloor ? 'floor ' + s.bestFloor : 'none yet'}* (need floor ${SIGHT_DEEP_FLOOR})\n`;
+    t += `${s.feeOk ? '✅' : '⭕'} Pay the reader's fee · *${READER_FEE.toLocaleString()} Zeni*\n`;
     t += `━━━━━━━━━━━━━━━\n`;
     if (!s.feeOk && s.levelOk && s.floorOk) {
-        t += `\n💰 Only the coins remain. \`${P_} kills pay\` — the reader accepts.`;
+        t += `\n💰 Only the coins remain. \`${P_} kills pay\` and the reader accepts.`;
     } else {
-        t += `\n_Locked — requirements unmet. The count waits._`;
+        t += `\n_Locked. Requirements unmet. The count waits._`;
     }
     return t;
 }
 
+// 💡 2026-09-21 owner ruling: the card image already carries the ledger
+// (every row, the accent and the reading). The caption must NOT repeat what
+// the picture shows - it only states what the picture is. The full text
+// ladder below remains the render-failure fallback (cards never dead-end).
 function ledgerText(rows, accent) {
-    let t = `👁️ *SOULS BEYOND THE VEIL* — reader · the count\n`;
+    let t = `*SOULS BEYOND THE VEIL* · reader · the count\n`;
     t += `━━━━━━━━━━━━━━━\n`;
     for (const r of rows) t += `${r.label}: *${r.value.toLocaleString()}*\n`;
     t += `${accent.label}: *${accent.value}*\n`;
@@ -237,11 +241,11 @@ async function payFee(sock, chatId, userId) {
             try { await setReadingState(userId, state); } catch (e) { /* non-monetary, tolerable */ }
         }
         await sock.sendMessage(chatId, {
-            text: `🪙 Paid — three coins, counted and kept.\n\n${framed(CEREMONY_LINE)}\n\n👁️ \`${P()} kills\` — the reading waits.`,
+            text: `🪙 Paid. Three coins, counted and kept.\n\n${framed(CEREMONY_LINE)}\n\n\`${P()} kills\` · the reading waits.`,
         });
     } else {
         await sock.sendMessage(chatId, {
-            text: `🪙 Paid — the reader's fee is settled. The coins stay counted.\n\n${framed('The veil parts for no one\'s schedule, dear. But for three coins it\'ll peek.')}\n\n_The sight still needs: ${!sight.levelOk ? `level ${SIGHT_LEVEL}` : ''}${!sight.levelOk && !sight.floorOk ? ' and ' : ''}${!sight.floorOk ? `abyss floor ${SIGHT_DEEP_FLOOR}` : ''}._`,
+            text: `🪙 Paid. The reader's fee is settled. The coins stay counted.\n\n${framed('The veil parts for no one\'s schedule, dear. But for three coins it\'ll peek.')}\n\n_The sight still needs: ${!sight.levelOk ? `level ${SIGHT_LEVEL}` : ''}${!sight.levelOk && !sight.floorOk ? ' and ' : ''}${!sight.floorOk ? `abyss floor ${SIGHT_DEEP_FLOOR}` : ''}._`,
         });
     }
 }
@@ -266,7 +270,12 @@ async function viewKills(sock, chatId, userId, args = []) {
     // report): no level door, no deep-floor door, no fee door. The reading
     // opens straight to the ledger; nothing is recorded as paid.
     if (!sight.open && !_isOwner(userId)) {
-        let caption = `🕯️ *THE VEILWARD READING*\n\n${lockedText(sight)}\n\n${framed(todayLine(userId))}`;
+        // 💡 2026-09-21 owner ruling: the locked card image already shows the
+        // whole checklist, so the image caption is ONE identifying line (no
+        // eye icon, no repeated requirements). The full requirement ladder
+        // stays as the text fallback when the card cannot render.
+        const imgCaption = `🕯️ *The Veilward Reading* · the sight has three doors`;
+        const txtFallback = `🕯️ *THE VEILWARD READING*\n\n${lockedText(sight)}\n\n${framed(todayLine(userId))}`;
         try {
             const buf = await renderer.renderLockedCard({
                 level: sight.level,
@@ -278,12 +287,12 @@ async function viewKills(sock, chatId, userId, args = []) {
                 feeAmount: READER_FEE,
             });
             if (buf && buf.length > 100) {
-                return await sock.sendMessage(chatId, { image: buf, caption });
+                return await sock.sendMessage(chatId, { image: buf, caption: imgCaption });
             }
         } catch (e) {
             try { console.error('[soulReader] locked card render failed:', e.message); } catch (_) {}
         }
-        return await sock.sendMessage(chatId, { text: caption });
+        return await sock.sendMessage(chatId, { text: txtFallback });
     }
 
     // ── OPEN: the ledger, with the ceremony on the first reading ──
@@ -294,19 +303,23 @@ async function viewKills(sock, chatId, userId, args = []) {
         try { await setReadingState(userId, sight.state); } catch (e) {}
     }
     const tellerLine = firstReading ? CEREMONY_LINE : todayLine(userId);
-    const caption = firstReading
+    // 💡 2026-09-21 owner ruling: the ledger image already carries every
+    // count, the accent and the reading - the caption must not repeat them.
+    // One line, no eye icon. The full ledger text stays as the fallback.
+    const imgCaption = `🕯️ *Souls Beyond the Veil* · the count is on the card`;
+    const txtFallback = firstReading
         ? `${framed(tellerLine)}\n\n${ledgerText(rows, accent)}`
-        : `👁️ *SOULS BEYOND THE VEIL*\n\n${ledgerText(rows, accent)}\n\n${framed(tellerLine)}`;
+        : `*SOULS BEYOND THE VEIL*\n\n${ledgerText(rows, accent)}\n\n${framed(tellerLine)}`;
 
     try {
         const buf = await renderer.renderLedgerCard({ rows, accent, tellerLine });
         if (buf && buf.length > 100) {
-            return await sock.sendMessage(chatId, { image: buf, caption });
+            return await sock.sendMessage(chatId, { image: buf, caption: imgCaption });
         }
     } catch (e) {
         try { console.error('[soulReader] ledger card render failed:', e.message); } catch (_) {}
     }
-    return await sock.sendMessage(chatId, { text: caption });
+    return await sock.sendMessage(chatId, { text: txtFallback });
 }
 
 module.exports = { viewKills, payFee, getSight, READER_FEE, SIGHT_LEVEL, SIGHT_DEEP_FLOOR };

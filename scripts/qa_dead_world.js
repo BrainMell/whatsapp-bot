@@ -326,10 +326,14 @@ const DASH_RE = /[\u2010\u2011\u2012\u2013\u2014\u2015\u2E3A\u2E3B-]/;
     __owner = true;
     await soulReader.viewKills(sock6d, CHAT, 'qa_dw_owner@s.whatsapp.net', []);
     check(sent6d.length >= 1, 'owner .j kills delivers a message');
-    check(!(sent6d[0].msg.caption || sent6d[0].msg.text || '').includes('VEILWARD READING'),
+    check(!/veilward reading/i.test(sent6d[0].msg.caption || sent6d[0].msg.text || ''),
         'owner does NOT get the locked requirement card');
-    check((sent6d[0].msg.caption || sent6d[0].msg.text || '').includes('SOULS BEYOND THE VEIL'),
+    // 💡 2026-09-21 owner ruling: the ledger image carries the counts, the
+    // caption is one short line (no eye icon, no repeated stats)
+    check(/souls beyond the veil/i.test(sent6d[0].msg.caption || sent6d[0].msg.text || ''),
         'owner gets the LEDGER reading directly');
+    check(!/👁/.test(sent6d[0].msg.caption || ''), 'owner caption carries NO eye icon');
+    check(!!sent6d[0].msg.image && sent6d[0].msg.image.length > 1000, 'owner ledger card is sent as an image');
     __owner = false;
     const sent6e = [];
     const sock6e = mockSock(sent6e);
@@ -338,7 +342,7 @@ const DASH_RE = /[\u2010\u2011\u2012\u2013\u2014\u2015\u2E3A\u2E3B-]/;
         nickname: 'Mortal', stats: { kills: 2 }, progression: { level: 3 },
     });
     await soulReader.viewKills(sock6e, CHAT, 'qa_dw_mortal2@s.whatsapp.net', []);
-    check((sent6e[0].msg.caption || sent6e[0].msg.text || '').includes('VEILWARD READING'),
+    check(/veilward reading/i.test(sent6e[0].msg.caption || sent6e[0].msg.text || ''),
         'non-owner still sees the requirement card (gates intact)');
 
     // ═══ 7. engine wiring pins ═══

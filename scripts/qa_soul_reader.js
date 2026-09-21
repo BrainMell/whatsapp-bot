@@ -17,6 +17,7 @@ process.env.GO_IMAGE_SERVICE_URL = process.env.GO_IMAGE_SERVICE_URL || 'http://1
 
 const economy = require('../core/rpg/economy');
 const soulReader = require('../core/rpg/soulReader');
+const soulReaderRenderer = require('../core/rpg/soulReaderRenderer');
 
 function assert(cond, label) {
     if (!cond) { console.error('✗ FAIL:', label); process.exitCode = 1; }
@@ -80,12 +81,30 @@ System.findOneAndUpdate = (q, update) => {
     sent.length = 0;
     await soulReader.viewKills(sock, CHAT, JID, []);
     let out = last();
-    assert((out.text || '').includes('VEILWARD READING') || (out.caption || '').includes('VEILWARD READING'),
+    assert(/veilward reading/i.test((out.text || '') + (out.caption || '')),
         'locked view shows THE VEILWARD READING');
     const lockedBody = (out.caption || out.text || '');
     assert(!lockedBody.includes('TOTAL SOULS'), 'locked view NEVER shows the ledger');
-    assert(lockedBody.includes('Level') || lockedBody.includes('level'), 'locked checklist names the level door');
     assert(out.image && out.image.length > 1000, 'locked card renders as PNG and is SENT (font-path fix: no more text-only fallback)');
+    // 💡 2026-09-21 owner ruling: the caption must NOT repeat what the image
+    // shows. The locked card's checklist lives ON the card; the caption is a
+    // single identifying line (no eye icon, no requirement ladder).
+    assert(!/👁/.test(lockedBody), 'locked caption carries NO eye icon');
+    assert(!lockedBody.includes('Reach level'), 'locked caption does NOT repeat the image checklist');
+    assert(lockedBody.length < 200, 'locked caption stays short');
+    // the full requirement ladder survives as the RENDER-FAILURE fallback
+    const realRenderLocked = soulReaderRenderer.renderLockedCard;
+    soulReaderRenderer.renderLockedCard = async () => null;
+    try {
+        sent.length = 0;
+        await soulReader.viewKills(sock, CHAT, JID, []);
+        const fb = (last().text || '');
+        assert(fb.includes('VEILWARD READING'), 'text fallback keeps the full reading header');
+        assert(fb.includes('Reach level'), 'text fallback still names the level door');
+        assert((last().image || null) === null, 'fallback path sends no image');
+    } finally {
+        soulReaderRenderer.renderLockedCard = realRenderLocked;
+    }
 
     console.log('\n── 3. pay interaction ──');
     // short wallet
@@ -115,17 +134,35 @@ System.findOneAndUpdate = (q, update) => {
     await soulReader.viewKills(sock, CHAT, JID, []);
     out = last();
     const firstView = (out.caption || out.text || '');
-    assert(firstView.includes('SOULS BEYOND THE VEIL'), 'unlocked view shows the ledger card');
-    assert(firstView.includes('Count with me') || firstView.includes('1,284'), 'first reading carries the ceremony voice or the real count');
-    assert(firstView.includes('1,284'), 'ledger shows the REAL total kills (1,284)');
-    assert(firstView.includes('340') && firstView.includes('29'), 'undead + boss rows render real stats');
+    assert(/souls beyond the veil/i.test(firstView), 'unlocked view shows the ledger card');
     assert(out.image && out.image.length > 1000, 'ledger card renders as PNG and is SENT (font-path fix: no more text-only fallback)');
+    // 💡 2026-09-21 owner ruling: the ledger image already carries the counts,
+    // the accent AND the reading - the caption must NOT repeat any of it.
+    assert(!/👁/.test(firstView), 'ledger caption carries NO eye icon');
+    assert(!firstView.includes('1,284') && !firstView.includes('340') && !firstView.includes('29'),
+        'ledger caption does NOT repeat the image counts');
+    assert(!firstView.includes('Count with me'), 'ledger caption does NOT repeat the image reading');
+    assert(firstView.length < 200, 'ledger caption stays short');
+    // the full ledger (real stats + ceremony voice) survives as the fallback
+    const realRenderLedger = soulReaderRenderer.renderLedgerCard;
+    soulReaderRenderer.renderLedgerCard = async () => null;
+    try {
+        sent.length = 0;
+        await soulReader.viewKills(sock, CHAT, JID, []);
+        const fb = (last().text || '');
+        assert(fb.includes('SOULS BEYOND THE VEIL'), 'fallback keeps the ledger header');
+        assert(fb.includes('1,284'), 'fallback shows the REAL total kills (1,284)');
+        assert(fb.includes('340') && fb.includes('29'), 'fallback renders real undead + boss rows');
+        assert(fb.includes('╒'), 'fallback keeps a teller line (framed)');
+    } finally {
+        soulReaderRenderer.renderLedgerCard = realRenderLedger;
+    }
     // second reading: no second ceremony, still the ledger, one teller line only
     sent.length = 0;
     await soulReader.viewKills(sock, CHAT, JID, []);
     out = last();
     const secondView = (out.caption || out.text || '');
-    assert(secondView.includes('SOULS BEYOND THE VEIL'), 'second reading still the ledger');
+    assert(/souls beyond the veil/i.test(secondView), 'second reading still the ledger');
     assert(!secondView.includes('Count with me'), 'ceremony does not repeat');
     const frameCount = (secondView.match(/╒/g) || []).length;
     assert(frameCount <= 1, `never two teller lines in one reply (found ${frameCount})`);
