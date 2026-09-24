@@ -225,8 +225,8 @@ const COMMAND_REGISTRY = {
     { cmd: 'record', desc: 'Toggle message recording for summaries.', usage: 'record on/off' },
     { cmd: 'summary', desc: 'Generate an AI summary of recent messages.', usage: 'summary' },
     { cmd: 'recap', desc: 'Alias for summary.', usage: 'recap' },
-    { cmd: 'activity', desc: 'View total message count this session.', usage: 'activity' },
-    { cmd: 'active', desc: 'List most active members. Add a time period: 1m, 1h, 1d, 1w.', usage: 'active [1m/1h/1d/1w]' },
+    { cmd: 'activity', desc: 'Daily GC breakdown: messages, media, links deleted, joins/leaves. Bare = today since midnight.', usage: 'activity [yesterday|2026-09-21|21/09|21]' },
+    { cmd: 'active', desc: 'List most active members. Default = today since midnight; or 1m, 1h, 1d, 1w.', usage: 'active [1m/1h/1d/1w]' },
     { cmd: 'inactive', desc: 'List members who have not spoken in a time period. Admins only.', usage: 'inactive [1m/1h/1d/1w]' },
     { cmd: 'tagactive', desc: 'Mention all active members in the group. Admins only.', usage: 'tagactive [1m/1h/1d/1w] [message]' },
     { cmd: 'taginactive', desc: 'Mention all inactive members to get their attention. Admins only.', usage: 'taginactive [1m/1h/1d/1w] [message]' }

@@ -175,6 +175,20 @@ module.exports = {
             // Delete first
             try { await sock.sendMessage(chatId, { delete: msg.key }); } catch {}
 
+            // 📊 DAILY GC ACTIVITY (2026-09-22): count this deletion so
+            // `.j activity [day]` can report links deleted in this GC.
+            // chatId is normalized to match the engine's ActivityLog keys.
+            try {
+                const ActivityLog = require('../models/ActivityLog');
+                const { jidNormalizedUser: _jnu } = require('@whiskeysockets/baileys');
+                ActivityLog.create({
+                    chatId: _jnu(chatId),
+                    userId: resolvedSender || normalizedSender,
+                    type: 'link_deleted',
+                    timestamp: new Date()
+                }).catch(() => {});
+            } catch (e) { /* logging never blocks moderation */ }
+
                 const participantJid = groupMetadata.participants.find(
                     p => lidResolver.resolveToPhone(jidNormalizedUser(p.id), authPath) === senderPhone
                 )?.id || normalizedSender;

@@ -2987,7 +2987,44 @@ async function startBot(configInstance) {
       return userWarnings.has(key) ? userWarnings.get(key).length : 0;
     }
 
-    function trackActivity(chatId, userId) {
+    // 📊 DAILY GC ACTIVITY (2026-09-22): classify a message by WHAT it is so
+    // `.j activity [day]` can break a day down (messages/images/videos/
+    // stickers/audio/documents/contacts/locations/polls). Deep-unwraps the
+    // ephemeral / view-once / doc-with-caption wrappers first (same layer
+    // convention as the reply-targeting unwrap at ~line 4219), so media sent
+    // in disappearing-message chats is still counted as media.
+    function detectActivityType(message) {
+      try {
+        let cur = message && message.message;
+        for (let i = 0; cur && i < 5; i++) {
+          const inner =
+            cur.ephemeralMessage?.message ||
+            cur.viewOnceMessage?.message ||
+            cur.viewOnceMessageV2?.message ||
+            cur.viewOnceMessageV2Extension?.message ||
+            cur.documentWithCaptionMessage?.message;
+          if (!inner) break;
+          cur = inner;
+        }
+        if (!cur) return "message";
+        if (cur.imageMessage) return "image";
+        if (cur.videoMessage) return "video";
+        if (cur.audioMessage) return "audio";
+        if (cur.stickerMessage) return "sticker";
+        if (cur.documentMessage) return "document";
+        if (cur.contactMessage || cur.contactsArrayMessage) return "contact";
+        if (cur.locationMessage || cur.liveLocationMessage) return "location";
+        if (
+          cur.pollCreationMessage || cur.pollCreationMessageV2 ||
+          cur.pollCreationMessageV3
+        ) return "poll";
+        return "message";
+      } catch {
+        return "message";
+      }
+    }
+
+    function trackActivity(chatId, userId, type) {
       const key = `${chatId}_${userId}`;
       const now = Date.now();
       const ChatActivity = require('./models/ChatActivity');
@@ -3001,11 +3038,13 @@ async function startBot(configInstance) {
         { upsert: true }
       ).catch((err) => console.error(`Error saving activity for ${key}:`, err.message));
 
-      // Also log in ActivityLog for time-windowed active queries
+      // Also log in ActivityLog for time-windowed active queries - now with
+      // the message type so the daily GC breakdown has real media/event data.
       const ActivityLog = require('./models/ActivityLog');
       ActivityLog.create({
         chatId,
         userId,
+        type: type || "message",
         timestamp: new Date()
       }).catch((err) => console.error(`Error saving ActivityLog for ${chatId}/${userId}:`, err.message));
     }
@@ -3044,24 +3083,35 @@ async function startBot(configInstance) {
     }
 
     async function getChatActivityForPeriod(chatId, periodMs) {
+      // Kept for compatibility - delegates to the explicit-range variant.
+      return getChatActivityBetween(
+        chatId,
+        periodMs !== null && periodMs !== undefined ? new Date(Date.now() - periodMs) : null,
+        new Date(),
+      );
+    }
+
+    // 📊 DAILY GC ACTIVITY: explicit [start, end) window over ActivityLog.
+    // Powers `.j activity [day]` (midnight-based days) and the midnight
+    // defaults the owner ordered for `.j active/inactive/tagactive`.
+    async function getChatActivityBetween(chatId, start, end) {
       const ActivityLog = require('./models/ActivityLog');
       try {
-        const query = { chatId };
-        if (periodMs !== null) {
-          query.timestamp = { $gte: new Date(Date.now() - periodMs) };
+        const match = { chatId };
+        if (start) {
+          match.timestamp = { $gte: start };
+          if (end) match.timestamp.$lt = end;
         }
-
         const results = await ActivityLog.aggregate([
-          { $match: query },
+          { $match: match },
           { $group: { _id: '$userId', count: { $sum: 1 } } }
         ]);
-
         return results.map(r => ({
           userId: r._id,
           count: r.count
         }));
       } catch (err) {
-        console.error(`Error getting chat activity for period in ${chatId}:`, err.message);
+        console.error(`Error getting chat activity window for ${chatId}:`, err.message);
         return [];
       }
     }
@@ -6873,6 +6923,35 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
             let groupMetadata = await getGroupMetadata(id, false);
             if (!groupMetadata) return;
 
+            // 📊 DAILY GC ACTIVITY (2026-09-22): log membership events so
+            // `.j activity [day]` can report who joined / left / was kicked
+            // (and promotions/demotions). A self-removal is a 'left', an
+            // admin action is a 'kicked'. Best-effort - never blocks the
+            // participant handling below.
+            try {
+              const _actLogModel = require('./models/ActivityLog');
+              const _actVoluntary = action === "remove" && participants.some(p => {
+                const pNorm = jidNormalizedUser(normalizeParticipantJid(p) || '');
+                return author && pNorm === jidNormalizedUser(author);
+              });
+              const _actType =
+                action === "add" ? "join"
+                  : action === "leave" ? "left"
+                    : action === "remove" ? (_actVoluntary ? "left" : "kicked")
+                      : action === "promote" ? "promote"
+                        : action === "demote" ? "demote" : null;
+              if (_actType) {
+                const _actChatId = jidNormalizedUser(id);
+                const _actDocs = participants
+                  .map((p) => jidNormalizedUser(normalizeParticipantJid(p) || "") || String(p))
+                  .filter(Boolean)
+                  .map((pj) => ({ chatId: _actChatId, userId: pj, type: _actType, timestamp: new Date() }));
+                if (_actDocs.length) {
+                  _actLogModel.create(_actDocs).catch(() => {});
+                }
+              }
+            } catch (_actLogErr) { /* logging must never break participant handling */ }
+
             // AUTO-UNDO MANUAL ACTIONS
             if (author && typeof author === 'string' && (action === "promote" || action === "demote" || action === "remove")) {
               const authorNormalized = jidNormalizedUser(author);
@@ -7640,6 +7719,14 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   // is auto-deleted, warned, and the member is removed at 3 strikes
                   // (shares the standard addWarning pool, same as antilink).
                   let gsLockViolated = false;
+                  // 💡 FIX 2026-09-22 (owner: "gstatus STILL can't do images and
+                  // videos"): GS_UNSUPPORTED used to be declared INSIDE
+                  // __gsEnsureHelpers but referenced in the pending-post catch AND
+                  // the command-media catch - both OUTSIDE its scope. Every
+                  // unsupported-media rejection then crashed the catch itself with
+                  // "ReferenceError: GS_UNSUPPORTED is not defined" instead of
+                  // telling the user what was wrong. Hoisted to per-message scope.
+                  const GS_UNSUPPORTED = '__gs_unsupported_media__';
                   if (isGroupChat && !m.key.fromMe && getGroupSettings(chatId).gstatusLock === true) {
                     try {
                       const gslWrap =
@@ -7838,8 +7925,8 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                     // which testers reported as "gstatus cannot upload media".
                     // Now: normalize/verify the mimetype, set it explicitly on
                     // the payload (so Baileys doesn't guess), and throw a clear
-                    // typed error for unsupported types.
-                    const GS_UNSUPPORTED = '__gs_unsupported_media__';
+                    // typed error for unsupported types. (GS_UNSUPPORTED now
+                    // lives at per-message scope - see the 2026-09-22 hoist note.)
                     const gsCheckMediaType = (kind, msg) => {
                       const mt = String((msg && msg.mimetype) || '').toLowerCase();
                       if (kind === 'image') {
@@ -7918,10 +8005,27 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                       // generateWAMessageFromContent layers made WhatsApp ACCEPT the
                       // relay (no error) while never RENDERING media statuses; text
                       // survived only because clients are lenient for plain text.
+                      // 💡 FIX 2026-09-22 (owner: media statuses still not showing):
+                      // the [GStatusIn] ground-truth logger records official group
+                      // statuses as secret=y - the INNER message carries
+                      // messageContextInfo.messageSecret. generateWAMessageContent
+                      // never sets one, so our media relays lacked a field every
+                      // official status has. Only MEDIA payloads get it (text
+                      // statuses render fine and are left untouched - no regression
+                      // surface for the path that already works).
+                      const __gsInner = inner.message || inner;
+                      if (isMedia) {
+                        // `crypto` here is the module itself (same require the
+                        // gsMsgId fallback below uses).
+                        __gsInner.messageContextInfo = {
+                          ...( __gsInner.messageContextInfo || {}),
+                          messageSecret: crypto.randomBytes(32),
+                        };
+                      }
                       const __gsId = gsMsgId();
                       await sock2.relayMessage(
                         chatId2,
-                        { groupStatusMessageV2: { message: inner.message || inner } },
+                        { groupStatusMessageV2: { message: __gsInner } },
                         { messageId: __gsId },
                       );
                       // remember our last posts per (instance, chat) for `.gstatus delete`
@@ -7955,6 +8059,38 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                     map.delete(key);
                     if (Date.now() - entry.ts > 60000) return null; // expired
                     return entry;
+                  };
+
+                  // 💡 FIX 2026-09-22 (owner: "gstatus STILL can't do images and
+                  // videos, IT EVEN LAGS THE BOT NOW"): media posts used to be
+                  // fully AWAITED inside the message run - media download +
+                  // thumbnail + a 60s upload budget inside a pipeline that is
+                  // raced by the 45s command timeout. Big media therefore
+                  // (a) reported "Command timed out after 45s" while the upload
+                  // was still running - every video, every time - and (b) kept
+                  // large buffers and upload/encryption work churning through
+                  // the event loop, which the whole chat felt as lag. Media
+                  // posts now run DETACHED: the message run returns at once,
+                  // the ⏳ react shows instantly, and the ✅/❌ react plus a
+                  // final text report the outcome when the upload settles.
+                  const __gsDetachPost = (sock2, chatId2, key2, buildFn, okText) => {
+                    sock2.sendMessage(chatId2, { react: { text: "⏳", key: key2 } }).catch(() => {});
+                    const done = (async () => {
+                      const payload = await buildFn();
+                      await __gsPost(sock2, chatId2, key2, payload);
+                      await sock2.sendMessage(chatId2, { text: BOT_MARKER + okText }).catch(() => {});
+                    })();
+                    done.catch(async (gsErr) => {
+                      console.log("[GStatus] detached post failed:", gsErr?.message || gsErr);
+                      const __gsReason = gsErr?.code === GS_UNSUPPORTED
+                        ? gsErr.message
+                        : String(gsErr?.message || gsErr).slice(0, 120);
+                      try { await sock2.sendMessage(chatId2, { react: { text: "❌", key: key2 } }); } catch {}
+                      await sock2.sendMessage(chatId2, {
+                        text: BOT_MARKER + `❌ Could not post the group status: ${__gsReason}`,
+                      }).catch(() => {});
+                    });
+                    return done;
                   };
 
                   // 3.75 📌 GROUP STATUS MEDIA PIPELINE (2026-09-15 fix).
@@ -7994,29 +8130,22 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                         m.message.extendedTextMessage?.text || ""
                       ).trim();
                       if (!_gsCap.startsWith(PREFIX) && __gsPendingTake(BOT_ID, chatId, senderJid)) {
-                        try {
-                          const _gsPayload = await __gsBuildPayload(
+                        // DETACHED (2026-09-22): build + upload run in the
+                        // background - the message run returns immediately.
+                        __gsDetachPost(
+                          sock,
+                          chatId,
+                          m.key,
+                          () => __gsBuildPayload(
                             _gsKind,
                             _gsKind === "sticker" ? m.message.stickerMessage
                               : _gsKind === "audio" ? m.message.audioMessage
                                 : m.message[_gsKind + "Message"],
                             null,
                             _gsCap || undefined,
-                          );
-                          await __gsPost(sock, chatId, m.key, _gsPayload);
-                          await sock.sendMessage(chatId, {
-                            text: BOT_MARKER + `📌 Posted to this group's status! (visible for 24h in the Status tab)`,
-                          });
-                        } catch (gsPendErr) {
-                          console.log("[GStatus] pending post failed:", gsPendErr?.message || gsPendErr);
-                          // 💡 TICKET #b4fa05: name unsupported media explicitly.
-                          const __pendReason = gsPendErr?.code === GS_UNSUPPORTED
-                            ? gsPendErr.message
-                            : String(gsPendErr?.message || gsPendErr).slice(0, 120);
-                          await sock.sendMessage(chatId, {
-                            text: BOT_MARKER + `❌ Could not post the group status: ${__pendReason}`,
-                          });
-                        }
+                          ),
+                          `📌 Posted to this group's status! (visible for 24h in the Status tab)`,
+                        );
                         return; // handled - do not run the rest of the pipeline
                       }
                     }
@@ -11153,9 +11282,9 @@ _💡 Reply with another number from your search list!_`.trim();
                   const quoted =
                     m.message?.extendedTextMessage?.contextInfo?.quotedMessage;
 
-                  // track activity in groups
+                  // track activity in groups (type-tagged for the daily breakdown)
                   if (isGroupChat) {
-                    trackActivity(chatId, senderJid);
+                    trackActivity(chatId, senderJid, detectActivityType(m));
                   }
 
                   // Track message for group summaries (after isGroupChat is defined)
@@ -15135,6 +15264,12 @@ Commands:
                             : m.message.stickerMessage ? "sticker" : null;
                     let payload = null;
                     let __gsMediaError = null;
+                    // 💡 FIX 2026-09-22: media builds no longer run inline (the
+                    // build downloads the file and computes thumbnails - exactly
+                    // the work that used to stall the 45s-raced message run).
+                    // Media stores a buildFn instead; the post runs detached
+                    // below, and the user gets ⏳ -> ✅/❌ feedback.
+                    let __gsMediaBuild = null;
                     try {
                       const qKind =
                         qm?.imageMessage ? "image"
@@ -15143,19 +15278,11 @@ Commands:
                               : qm?.stickerMessage ? "sticker" : null;
                       if (qm && qKind) {
                         const qMsg = qm.imageMessage || qm.videoMessage || qm.audioMessage || qm.stickerMessage;
-                        payload = await __gsBuildPayload(
-                          qKind,
-                          qMsg,
-                          null,
-                          (qKind === "image" || qKind === "video") && typedText ? typedText : undefined,
-                        );
+                        const __capK = (qKind === "image" || qKind === "video") && typedText ? typedText : undefined;
+                        __gsMediaBuild = () => __gsBuildPayload(qKind, qMsg, null, __capK);
                       } else if (dmKind) {
-                        payload = await __gsBuildPayload(
-                          dmKind,
-                          m.message[dmKind + "Message"],
-                          null,
-                          (dmKind === "image" || dmKind === "video") && typedText ? typedText : undefined,
-                        );
+                        const __capK = (dmKind === "image" || dmKind === "video") && typedText ? typedText : undefined;
+                        __gsMediaBuild = () => __gsBuildPayload(dmKind, m.message[dmKind + "Message"], null, __capK);
                       } else if (qm && (qm.conversation || qm.extendedTextMessage?.text)) {
                         payload = { text: qm.conversation || qm.extendedTextMessage.text };
                       } else if (typedText) {
@@ -15172,6 +15299,19 @@ Commands:
                       return await sock.sendMessage(chatId, {
                         text: BOT_MARKER + `❌ ${__gsMediaError.message}\n_Text and JPG/PNG/WEBP images, MP4 videos, audio and stickers all post fine._`,
                       });
+                    }
+
+                    if (__gsMediaBuild) {
+                      // DETACHED (2026-09-22): never block the command run on a
+                      // status upload - ⏳ shows now, ✅/❌ lands with the result.
+                      __gsDetachPost(
+                        sock,
+                        chatId,
+                        m.key,
+                        __gsMediaBuild,
+                        `📌 Posted to this group's status! (visible for 24h in the Status tab)`,
+                      );
+                      return;
                     }
 
                     if (!payload) {
@@ -21424,7 +21564,7 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                     }
 
                     function formatPeriodLabel(arg) {
-                      if (!arg) return "today";
+                      if (!arg) return "today (since midnight)";
                       const match = arg.trim().match(/^(\d+)([mhdw])$/);
                       if (!match) return arg;
                       const n = match[1];
@@ -21433,19 +21573,76 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                       return `last ${n} ${label}${n > 1 ? "s" : ""}`;
                     }
 
-                    // `${botConfig.getPrefix().toLowerCase()}` activity - show total messages today
+                    // 📊 DAILY GC ACTIVITY (2026-09-22, owner order): "today"
+                    // means SINCE MIDNIGHT (Africa/Accra), never "last 24h".
+                    const gcActivity = require('./utils/gcActivity');
+                    const gcActivityWindow = (periodArg) => {
+                      if (periodArg !== null && parseTimePeriod(periodArg) !== null) {
+                        const ms = parseTimePeriod(periodArg);
+                        return { start: new Date(Date.now() - ms), end: new Date(), label: formatPeriodLabel(periodArg) };
+                      }
+                      const range = gcActivity.dayRangeFromArg(periodArg || "today");
+                      if (range && !range.error) {
+                        return { start: range.start, end: periodArg ? range.end : new Date(), label: range.label };
+                      }
+                      // Unparseable arg - fall back to today
+                      const today = gcActivity.dayRangeFromArg("today");
+                      return { start: today.start, end: new Date(), label: today.label };
+                    };
+
+                    // `.j activity [day]` - the REAL daily GC breakdown:
+                    // messages / images / videos / stickers / audio / documents /
+                    // contacts / locations / polls / links deleted / joined /
+                    // left / kicked + top posters, for THIS group on THAT day.
+                    // Bare = today since midnight (never "last 24 hours").
                     if (
-                      lowerTxt ===
-                      `${botConfig.getPrefix().toLowerCase()} activity`
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} activity` ||
+                      lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} activity `)
                     ) {
-                      const activity = await getChatActivity(chatId);
-                      const total = activity.reduce(
-                        (sum, user) => sum + user.count,
-                        0,
-                      );
-                      await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + `📊 Total messages this session: *${total}*`,
-                      });
+                      if (!isGroupChat) {
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + "This command only works in groups." });
+                      }
+                      const argAct = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} activity`, "").trim();
+                      const rangeAct = gcActivity.dayRangeFromArg(argAct || "today");
+                      if (rangeAct.error) {
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER +
+                            `📊 *Daily GC Activity* - usage:\n\n` +
+                            `\`${botConfig.getPrefix().toLowerCase()} activity\` - today (since midnight)\n` +
+                            `\`${botConfig.getPrefix().toLowerCase()} activity yesterday\`\n` +
+                            `\`${botConfig.getPrefix().toLowerCase()} activity 2026-09-21\` (or 21/09, 21-09, 21)\n\n` +
+                            `_Shows messages, images, videos, stickers, audio, documents, links deleted, joins/leaves/kicks and the day's top posters for this group._`,
+                        });
+                      }
+                      if (rangeAct.end < Date.now() - 31 * 86400000) {
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `📭 ${rangeAct.label} is beyond the 30-day activity window - detailed daily activity is auto-purged after 30 days.`,
+                        });
+                      }
+                      if (rangeAct.start > Date.now()) {
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `📭 ${rangeAct.label} hasn't happened yet - I can't count the future.`,
+                        });
+                      }
+                      try {
+                        const ActivityLogModel = require('./models/ActivityLog');
+                        const bd = await gcActivity.getDailyBreakdown(ActivityLogModel, chatId, rangeAct.start, rangeAct.end);
+                        if (!bd.totalEvents) {
+                          return await sock.sendMessage(chatId, {
+                            text: BOT_MARKER + `📭 No activity recorded here on ${rangeAct.label}.`,
+                          });
+                        }
+                        const card = gcActivity.formatCard(bd, rangeAct.label, (jid) => economy.getDisplayName(jid));
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + card,
+                          mentions: gcActivity.collectMentions(bd),
+                        });
+                      } catch (actErr) {
+                        console.error("[Activity] daily breakdown failed:", actErr?.message);
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `❌ Couldn't build the daily activity card: ${String(actErr?.message || actErr).slice(0, 120)}`,
+                        });
+                      }
                       return;
                     }
 
@@ -21467,8 +21664,9 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                       const periodMs = parseTimePeriod(periodArg);
                       const periodLabel = formatPeriodLabel(periodArg);
 
-                      // Use windowed activity tracking (defaults to last 24 hours if no period is specified)
-                      const activity = await getChatActivityForPeriod(chatId, periodMs !== null ? periodMs : 24 * 60 * 60 * 1000);
+                      // 📊 Windowed activity (default = today since midnight, per owner order)
+                      const _winAct = gcActivityWindow(periodArg);
+                      const activity = await getChatActivityBetween(chatId, _winAct.start, _winAct.end);
                       const sorted = activity.sort((a, b) => b.count - a.count).slice(0, 15);
 
                       if (sorted.length === 0) {
@@ -21507,7 +21705,8 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                       const periodMs = parseTimePeriod(periodArg);
                       const periodLabel = formatPeriodLabel(periodArg);
 
-                      const activity = await getChatActivityForPeriod(chatId, periodMs !== null ? periodMs : 24 * 60 * 60 * 1000);
+                      const _winAct = gcActivityWindow(periodArg);
+                      const activity = await getChatActivityBetween(chatId, _winAct.start, _winAct.end);
                       const activeUserSet = new Set(activity.map((u) => u.userId));
 
                       const botJidNorm = jidNormalizedUser(sock.user.id);
@@ -21563,7 +21762,8 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                       const periodMs = parseTimePeriod(periodArg);
                       const periodLabel = formatPeriodLabel(periodArg);
 
-                      const activity = await getChatActivityForPeriod(chatId, periodMs !== null ? periodMs : 24 * 60 * 60 * 1000);
+                      const _winAct = gcActivityWindow(periodArg);
+                      const activity = await getChatActivityBetween(chatId, _winAct.start, _winAct.end);
 
                       if (activity.length === 0) {
                         await sock.sendMessage(chatId, {
@@ -21604,7 +21804,8 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                       const periodMs = parseTimePeriod(periodArg);
                       const periodLabel = formatPeriodLabel(periodArg);
 
-                      const activity = await getChatActivityForPeriod(chatId, periodMs !== null ? periodMs : 24 * 60 * 60 * 1000);
+                      const _winAct = gcActivityWindow(periodArg);
+                      const activity = await getChatActivityBetween(chatId, _winAct.start, _winAct.end);
                       const activeUserSet = new Set(activity.map((u) => u.userId));
 
                       const botJidNorm2 = jidNormalizedUser(sock.user.id);
