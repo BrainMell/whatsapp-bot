@@ -359,13 +359,23 @@ function _buildOut(ck, keywords, rangeKey, tl) {
     }),
   }));
   const max = Math.max(...points.flatMap((p) => p.values));
+  // 💡 AUDIT FIX 2026-09-26 (quiz audit P5/trends): all-zero is not the only
+  // "no data" shape. Google Trends emits spurious isolated spikes (e.g. 3
+  // nonzero points out of 169) even for pure-garbage keywords, so a max==0
+  // check alone rendered "fake graphs" for nonsense queries. Treat a series
+  // as no-data when interest is effectively absent: <5% of points nonzero
+  // (real sustained interest clears this easily) or a near-zero mean.
+  const allVals = points.flatMap((p) => p.values);
+  const nonzero = allVals.filter((v) => v > 0).length;
+  const mean = allVals.length ? allVals.reduce((a, b) => a + b, 0) / allVals.length : 0;
+  const effectivelyEmpty = max === 0 || (nonzero / Math.max(1, allVals.length)) < 0.05 || mean < 0.5;
   const out = {
     keywords: [...keywords],
     rangeKey,
     label: (RANGES[rangeKey] || RANGES["30d"]).label,
     points,
     max,
-    allZero: max === 0,
+    allZero: effectivelyEmpty,
   };
   if (out.allZero) {
     // don't cache zero-results long - the keyword may just be too niche

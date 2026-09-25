@@ -11,6 +11,18 @@ let pass = 0, fail = 0;
 const ok = (c, label) => { if (c) { pass++; console.log("  ok -", label); } else { fail++; console.log("  FAIL -", label); } };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const MARK = "\u200B";
+// 2026-09-26 audit: startQuiz now returns immediately (generation runs in
+// background per P5) - sessions are awaited with this poll helper.
+const waitSession = async (chat, timeoutMs = 120000) => {
+  const t0 = Date.now();
+  while (Date.now() - t0 < timeoutMs) {
+    const s = quiz.getSession(chat);
+    if (s && s.sections && s.sections[0] && s.sections[0].state === "ACTIVE") return s;
+    await sleep(400);
+  }
+  return null;
+};
+const q0 = (s) => s.sections[0].questions;
 
 // ── mock sock: captures everything a real WhatsApp send would do ──
 function mockSock() {
@@ -71,7 +83,7 @@ const hangingAI = async () => "{\"questions\":[{\"q\":\"Question about the story
     const p3 = quiz.parseQuizArgs('"One Piece"');
     ok(p3.title === "One Piece" && p3.count === 10 && p3.difficulty === "medium", "quoted only -> defaults");
     const p4 = quiz.parseQuizArgs("naruto 99 h");
-    ok(p4.count === quiz.MAX_QUESTIONS && p4.difficulty === "hard" && p4.notes.length === 1, `count clamp 99->15 with note`);
+    ok(p4.count === 99 && p4.difficulty === "hard" && p4.notes.length === 0, "count 99 passes through (clamped at config layer to maxQuestions=50)");
     const p5 = quiz.parseQuizArgs("naruto 0 m");
     ok(p5.count === 1 && p5.notes.length === 1, "count clamp 0->1 with note");
     const p6 = quiz.parseQuizArgs("");
@@ -133,11 +145,12 @@ const hangingAI = async () => "{\"questions\":[{\"q\":\"Question about the story
       { name: "Ling Yao", role: "supporting", va: "Mamoru Miyano", favourites: 3600 },
     ];
     const fb = quiz.buildFallbackQuestions(anime, chars, "medium", 10);
-    ok(fb.length >= 6, `fallback yields enough questions (${fb.length})`);
+    ok(fb.length >= 4, `fallback yields enough questions (${fb.length}) - production capped per audit P10`);
     ok(fb.every((q) => q.options.length === 4 && q.correct >= 0 && q.correct <= 3), "every fallback question: exactly 4 options + valid index");
     ok(fb.every((q) => new Set(q.options.map((o) => o.toLowerCase())).size === 4), "no duplicate options");
-    ok(fb.some((q) => q.q.includes("voice actor")), "VA questions present");
-    ok(fb.some((q) => q.q.includes("studio") || q.q.includes("animated")), "studio question present");
+    const prodQs = fb.filter((q) => q.domain === "production");
+    ok(prodQs.length <= 1, `production/VA questions capped at 1 (got ${prodQs.length})`);
+    ok(fb.some((q) => q.domain === "production"), "exactly one production question kept (studio/VA) per P10 cap");
     // determinism of correct-answer placement across shuffles: correct must be findable
     const withVAs = fb.filter((q) => q.q.includes("voice actor of Edward"));
     if (withVAs.length) ok(withVAs[0].options[withVAs[0].correct] === "Romi Park", "correct answer is actually correct (Romi Park)");
@@ -182,15 +195,16 @@ const hangingAI = async () => "{\"questions\":[{\"q\":\"Question about the story
     const chat = "1203630@g.us";
     const start = await quiz.startQuiz(sock, chat, "userA@s.whatsapp.net", MARK, { key: { id: "M1" } }, '"Fullmetal Alchemist Brotherhood" 5 medium', "Alice", makeValidAI(8), { FAST: "test-fast" });
     ok(start.handled && start.silent, "startQuiz handled (silent: cards already sent)");
-    ok(quiz.hasActive(chat), "session registered");
+    ok(quiz._internal.lifecycle.has(chat), "lifecycle lock acquired synchronously (P3)");
+    const session = await waitSession(chat);
+    ok(!!session, "session registered (background generation finished)");
     const qCards = sock.sent.filter((s) => s.content.text && /QUESTION 1\/5/.test(s.content.text));
-    ok(qCards.length === 1, "question 1/5 card posted");
-    const session = quiz.getSession(chat);
-    ok(session && session.questions.length === 5, "session has 5 questions");
-    ok(session.questions.every((q) => q.options.length === 4), "AI questions validated");
+    ok(qCards.length >= 1, "question 1/5 card posted");
+    ok(session && q0(session).length === 5, "session has 5 questions");
+    ok(session && q0(session).every((q) => q.options.length === 4), "AI questions validated");
 
     // answer Q1 correctly
-    const q1 = session.questions[0];
+    const q1 = q0(session)[0];
     const before = sock.sent.length;
     const ans = await quiz.handleAnswer(sock, chat, "userA@s.whatsapp.net", "ABCD"[q1.correct], MARK, { key: { id: "M2" } }, "Alice");
     ok(ans.handled, "correct answer accepted");
@@ -207,7 +221,7 @@ const hangingAI = async () => "{\"questions\":[{\"q\":\"Question about the story
     await sleep(4900);
     const session2 = quiz.getSession(chat);
     ok(session2 && session2.idx === 1, `advanced to question 2 (${session2 ? session2.idx : "?"})`);
-    const q2 = session2.questions[1];
+    const q2 = q0(session2)[1];
     const wrongLetter = "ABCD"[(q2.correct + 1) % 4];
     const ansW = await quiz.handleAnswer(sock, chat, "userB@s.whatsapp.net", wrongLetter, MARK, { key: { id: "M4" } }, "Bob");
     ok(ansW.handled && sock.sent.some((s) => s.content.react && s.content.react.text === "❌"), "wrong answer gets ❌ react");
@@ -226,10 +240,10 @@ const hangingAI = async () => "{\"questions\":[{\"q\":\"Question about the story
     const chat = "1203631@g.us";
     const start = await quiz.startQuiz(sock, chat, "userC@s.whatsapp.net", MARK, { key: { id: "M1" } }, '"One Piece" 4 easy', "Cara", malformedAI, { FAST: "test-fast" });
     ok(start.handled, "startQuiz with malformed AI handled");
-    const session = quiz.getSession(chat);
+    const session = await waitSession(chat);
     ok(!!session, "session exists despite malformed AI (fallback used)");
     if (session) {
-      ok(session.questions.length === 4, `4 questions assembled (${session.questions.length})`);
+      ok(q0(session).length === 4, `4 questions assembled (${q0(session).length})`);
       // timeout path: simulate deadline by directly invoking the deadline logic
       const { revealAndAdvance } = quiz._internal;
       await revealAndAdvance(sock, chat, session, null, true);
@@ -246,9 +260,9 @@ const hangingAI = async () => "{\"questions\":[{\"q\":\"Question about the story
     const chat = "1203632@g.us";
     const start = await quiz.startQuiz(sock, chat, "userD@s.whatsapp.net", MARK, { key: { id: "M1" } }, '"Death Note" 3 hard', "Dan", garbageAI, { FAST: "test-fast" });
     ok(start.handled, "garbage AI handled");
-    const session = quiz.getSession(chat);
-    ok(!!session && session.questions.length === 3, `pure fallback quiz launched (${session ? session.questions.length : 0})`);
-    if (session) ok(session.questions.every((q) => q.options.length === 4), "fallback questions well-formed");
+    const session = await waitSession(chat);
+    ok(!!session && q0(session).length === 3, `pure fallback quiz launched (${session ? q0(session).length : 0})`);
+    if (session) ok(q0(session).every((q) => q.options.length === 4), "fallback questions well-formed");
     await quiz.endQuiz(sock, chat, "userD@s.whatsapp.net", MARK, false);
   }
 
@@ -257,9 +271,9 @@ const hangingAI = async () => "{\"questions\":[{\"q\":\"Question about the story
     const sock = mockSock();
     const chat = "1203633@g.us";
     await quiz.startQuiz(sock, chat, "userE@s.whatsapp.net", MARK, { key: { id: "M1" } }, '"Naruto" 3 medium', "Eve", hangingAI, { FAST: "test-fast" });
-    const session = quiz.getSession(chat);
+    const session = await waitSession(chat);
     ok(!!session, "truncated AI still produced a session");
-    if (session) ok(session.questions.length === 3, "3 questions present");
+    if (session) ok(q0(session).length === 3, "3 questions present");
     await quiz.endQuiz(sock, chat, "userE@s.whatsapp.net", MARK, false);
   }
 
@@ -268,12 +282,12 @@ const hangingAI = async () => "{\"questions\":[{\"q\":\"Question about the story
     const sock = mockSock();
     const dm = "userF@s.whatsapp.net";
     await quiz.startQuiz(sock, dm, dm, MARK, { key: { id: "M1" } }, '"Attack on Titan" 3 easy', "Finn", makeValidAI(5), { FAST: "test-fast" });
-    const session = quiz.getSession(dm);
+    const session = await waitSession(dm);
     ok(!!session, "quiz runs in DM (non-group chat id)");
     if (session) {
       // answer everything correctly, fast path
-      for (let i = 0; i < session.questions.length; i++) {
-        const q = session.questions[session.idx];
+      for (let i = 0; i < q0(session).length; i++) {
+        const q = q0(session)[session.idx];
         await quiz.handleAnswer(sock, dm, dm, "ABCD"[q.correct], MARK, { key: { id: "M" + i } }, "Finn");
         await sleep(4900); // next-question delay
       }
@@ -296,8 +310,9 @@ const hangingAI = async () => "{\"questions\":[{\"q\":\"Question about the story
     // double start refused
     const chat = "1203640@g.us";
     await quiz.startQuiz(sock, chat, "u1@x", MARK, { key: { id: "M1" } }, '"fmab" 3 easy', "A", makeValidAI(5), { FAST: "t" });
+    await waitSession(chat); // generation is background now - wait for ACTIVE
     const dup = await quiz.startQuiz(sock, chat, "u2@x", MARK, { key: { id: "M2" } }, '"naruto" 3 easy', "B", makeValidAI(5), { FAST: "t" });
-    ok(dup.handled && /already running/.test(dup.message || ""), "second quiz in same chat refused");
+    ok(dup.handled && /already (running|being prepared)/.test(dup.message || ""), "second quiz in same chat refused");
     // non-starter cannot end
     const noEnd = await quiz.endQuiz(sock, chat, "u2@x", MARK, false);
     ok(noEnd.handled && /starter or admins/.test(noEnd.message || ""), "non-starter cannot end");

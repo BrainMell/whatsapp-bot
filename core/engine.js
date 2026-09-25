@@ -776,6 +776,13 @@ const ludo = require('./games/ludo');
 const wordle = require('./games/wordle');
 const murderMystery = require('./games/murdermystery'); // 🔪 Blackvale Manor - isolated social deduction module
 const quizGame = require('./games/quiz'); // 🎯 anime quiz - AniList/Jikan data + AI questions (2026-09-25)
+// 💡 AUDIT FIX 2026-09-26 (quiz P11): inject shared infra into the quiz module
+// (theme songs reuse the SAME goService.getAudioInfo retrieval the .j audio
+// command uses - no parallel song-fetch system; clipAudio reuses audioclip's
+// ffmpeg helper for the 30s preview trim).
+try {
+  quizGame.setDeps({ goService: require('./utils/goImageService'), ffmpegPath: process.env.FFMPEG_PATH || 'ffmpeg' });
+} catch (e) { console.log('[Quiz] deps injection failed:', e.message); }
 const stockChart = require('./utils/stockChart'); // 📈 real-world market charts - Yahoo Finance (2026-09-25)
 const trendsChart = require('./utils/trendsChart'); // 📊 Google Trends comparisons - got-scraping dance (2026-09-25)
 const news = require('./utils/news'); // ✅ Added news module
@@ -7335,28 +7342,52 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 // Legitimate commands: card grid = 15s, combat = 5s, anime = 10s.
                 // Card grid hybrid MP4 can take 30s - 45s gives headroom.
                 // Anything over 45s is hung and should be killed.
-                // 💡 NOTE: audio command gets extra time (see _cmdEffectiveTimeout below)
+              // 💡 AUDIT FIX 2026-09-26 (quiz P5): per-command timeout overrides.
+              // The old 45s ceiling applied to EVERY command except audio's
+              // special-cased 180s, so legitimately slow commands (trends
+              // browser fallback ~60-90s, quiz generation, stock charts on a
+              // cold Yahoo roundtrip, media uploads) tripped the generic
+              // "⏱️ Command timed out after 45.0s" error. One shared map at
+              // THIS layer covers every current and future slow command -
+              // quiz no longer patches this in isolation and trends is fixed
+              // by the same mechanism. Commands NOT in the map keep 45s.
+              const CMD_TIMEOUT_OVERRIDES = {
+                audio: 180000,   // download + convert + send (unchanged behavior)
+                clip: 150000,    // ffmpeg trim of a replied audio (FFMPEG_TIMEOUT_MS = 120s)
+                trends: 150000,  // got-scraping + browser fallback + chart render
+                quiz: 90000,     // generation is async, but section prep + media validation can stall a tick
+                quizmod: 20000,  // DB persistence roundtrip
+                stock: 90000,    // Yahoo quote + chart render (cold cache)
+                gstatus: 150000, // media upload to status (internal 120s guard)
+                img: 90000,      // pinterest search + up to 5 image downloads
+                video: 120000,   // video search + download + upload
+                sticker: 90000,  // media download + webp convert + send
+                ai: 120000,      // LLM reply (long completions)
+                imagine: 150000, // image generation services
+              };
               // 💡 FIX 2026-07-29: Capture context for the timeout catch handler.
-              const _cmdContext = { primaryCmd: null, senderJid: null, chatId: null, txt: null };
+              const _cmdContext = { primaryCmd: null, senderJid: null, chatId: null, txt: null, timeoutMs: null };
+              // A running command may extend its own window mid-flight by
+              // setting _cmdContext.timeoutMs (checked every tick below).
               // 💡 FIX 2026-07-31: Audio command needs more time (download + send = 60-90s).
               // We can't know the command yet (it's parsed inside storage.run), so we
-              // use a generous 120s timeout. The _cmdContext is populated with the
-              // primaryCmd inside storage.run, but the timeout is already set here.
-              // Solution: use a dynamic timeout that checks _cmdContext.primaryCmd.
+              // use a dynamic timeout that checks _cmdContext.primaryCmd.
               let _cmdEffectiveTimeout = _cmdTimeoutMs;
               const _cmdTimeoutPromise = new Promise((_, reject) => {
-                // Check every 5s if we should extend the timeout for audio commands
+                // Check every 5s if we should extend the timeout for slow commands
                 const checkInterval = setInterval(() => {
                   const elapsed = Date.now() - _cmdStartTime;
-                  // Audio commands get up to 180s (3 min) - download + convert + send
-                  if (_cmdContext.primaryCmd === 'audio' && elapsed < 180000) {
+                  const cmdLimit = _cmdContext.primaryCmd
+                    ? (CMD_TIMEOUT_OVERRIDES[_cmdContext.primaryCmd] || _cmdTimeoutMs)
+                    : _cmdTimeoutMs;
+                  // a command that set _cmdContext.timeoutMs wins over the map
+                  const limit = _cmdContext.timeoutMs || cmdLimit;
+                  if (elapsed < limit) {
                     return; // keep waiting
                   }
-                  if (elapsed >= _cmdTimeoutMs || (_cmdContext.primaryCmd === 'audio' && elapsed >= 180000)) {
-                    clearInterval(checkInterval);
-                    const elapsedSec = (elapsed / 1000).toFixed(1);
-                    reject(new Error(`Command timed out after ${elapsedSec}s (possible Go service hang or network stall)`));
-                  }
+                  clearInterval(checkInterval);
+                  const elapsedSec = (elapsed / 1000).toFixed(1);
+                  reject(new Error(`Command timed out after ${elapsedSec}s (possible Go service hang or network stall)`));
                 }, 5000);
               });
 
@@ -8959,7 +8990,10 @@ _💡 Reply with another number from your search list!_`.trim();
                         await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ This command is for moderators and above only.' });
                         return;
                       }
-                      await opsCheckCommands.handleOpsCheck(sock, chatId);
+                      // 💡 AUDIT FIX 2026-09-26 (quiz P18): pass args so
+                      // `.j opscheck -info` can render command documentation
+                      // (incl. the group's live quizmod values).
+                      await opsCheckCommands.handleOpsCheck(sock, chatId, cmdArgs.slice(1).join(" "));
                       return;
                     }
 
@@ -11189,7 +11223,15 @@ _💡 Reply with another number from your search list!_`.trim();
                   }
 
                   // SPAM PREVENTION: Intelligent Cooldowns
-                  if (isBotCommand && !isOwner && !isGlobalMod(senderJid)) {
+                  // 💡 AUDIT FIX 2026-09-26 (quiz P4): quiz ANSWERS are gameplay
+                  // input, not commands. With a quiz running, ".j a <letter>"
+                  // (and .j b/.j c/.j d) must neither CHECK nor SET the global
+                  // 5s cooldown - otherwise players got "⚠️ SLOW DOWN!" mid-game
+                  // and answering locked the group's other commands for 5s.
+                  // Quiz-internal pacing is handled inside quiz.js separately.
+                  const _isQuizAnswerMsg =
+                    quizGame.hasActive(chatId) && quizGame.isQuizAnswerText(lowerTxt);
+                  if (isBotCommand && !_isQuizAnswerMsg && !isOwner && !isGlobalMod(senderJid)) {
                     const now = Date.now();
                     const gamblingCommands = [
                       "cf",
@@ -28987,6 +29029,30 @@ _(or reply to their message)_
                     return;
                   }
 
+                  // 💡 AUDIT FIX 2026-09-26 (quiz P17): mod-only quiz config.
+                  // ".j quizmod" alone shows settings; "<setting> <value>" tunes.
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} quizmod` ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} quizmod `,
+                    )
+                  ) {
+                    const resultM = await quizGame.handleQuizMod(
+                      sock,
+                      chatId,
+                      senderJid,
+                      BOT_MARKER,
+                      cleanTxt
+                        .substring(`${botConfig.getPrefix().toLowerCase()} quizmod`.length)
+                        .trim(),
+                      canUseAdminCommands,
+                    );
+                    if (resultM.message) {
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + resultM.message }, { quoted: m });
+                    }
+                    return;
+                  }
+
                   // quiz ["title"] [count] [difficulty] - start an anime quiz
                   if (
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} quiz` ||
@@ -29016,35 +29082,32 @@ _(or reply to their message)_
                     return;
                   }
 
-                  // a <letter|option> - answer the running quiz (falls through
-                  // when no quiz is active so unknown-command can still fire)
-                  if (
-                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} a` ||
-                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} a `) ||
-                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} answer` ||
-                    lowerTxt.startsWith(
-                      `${botConfig.getPrefix().toLowerCase()} answer `,
-                    )
-                  ) {
-                    if (quizGame.hasActive(chatId)) {
-                      const ansRaw = cleanTxt
-                        .substring(
-                          `${botConfig.getPrefix().toLowerCase()} ${lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} a `) ? "a" : "answer"}`.length,
-                        )
-                        .trim();
-                      const resultQ = await quizGame.handleAnswer(
-                        sock,
-                        chatId,
-                        senderJid,
-                        ansRaw,
-                        BOT_MARKER,
-                        m,
-                        senderName,
-                      );
-                      if (resultQ.handled) return;
-                    }
-                    // no active quiz -> fall through
+                  // 💡 AUDIT FIX 2026-09-26 (quiz P1): a/b/c/d/answer all route
+                  // to the quiz answer handler when a quiz is active - before
+                  // this fix only ".j a"/".j answer" were routed and ".j b B"
+                  // fell through to unknown-command. Falls through when no
+                  // quiz is active so unknown-command can still fire.
+                  const _pfx = `${botConfig.getPrefix().toLowerCase()}`;
+                  const _firstTok = lowerTxt.slice(_pfx.length).trim().split(/\s+/)[0] || "";
+                  const _isLetterAns = /^[abcd]$/.test(_firstTok) &&
+                    (lowerTxt === `${_pfx} ${_firstTok}` || lowerTxt.startsWith(`${_pfx} ${_firstTok} `));
+                  const _isWordAns = lowerTxt === `${_pfx} answer` || lowerTxt.startsWith(`${_pfx} answer `);
+                  if ((_isLetterAns || _isWordAns) && quizGame.hasActive(chatId)) {
+                    const ansRaw = _isWordAns
+                      ? cleanTxt.substring(_pfx.length + 7).trim()   // strip "<prefix> answer"
+                      : cleanTxt.substring(_pfx.length + 2).trim();  // strip "<prefix> a"
+                    const resultQ = await quizGame.handleAnswer(
+                      sock,
+                      chatId,
+                      senderJid,
+                      ansRaw,
+                      BOT_MARKER,
+                      m,
+                      senderName,
+                    );
+                    if (resultQ.handled) return;
                   }
+                  // no active quiz -> fall through
 
                   // ============================================
                   // REAL-WORLD MARKET + GOOGLE TRENDS

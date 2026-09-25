@@ -84,6 +84,18 @@ const KNOWN_WIKIS = {
   "neon genesis evangelion": "evangelion", "cowboy bebop": "cowboybebop", "cyberpunk": "cyberpunk",
   "the witcher": "witcher", witcher: "witcher", "cyberpunk 2077": "cyberpunk",
   "hajime no ippo": "hajimenoippo", "kaiju no 8": "kaiju-no-8", "dandadan": "dandadan",
+  // western cartoons / TV / movies (P22): multi-series continuities must
+  // resolve to ONE wiki so reboots don't blend (ben10 wiki covers all series)
+  "ben 10": "ben10", ben10: "ben10", "ben ten": "ben10", "ben 10 alien force": "ben10", "ben 10 omniverse": "ben10",
+  "spongebob": "spongebob", "spongebob squarepants": "spongebob",
+  "avatar": "avatar", "avatar the last airbender": "avatar", "korra": "avatar",
+  "teen titans": "teentitans", "adventure time": "adventuretime", "regular show": "regularshow",
+  "gravity falls": "gravityfalls", "steven universe": "steven-universe", "amphibia": "amphibia",
+  "the owl house": "the-owl-house", "phineas and ferb": "phineasandferb", "kim possible": "kimpossible",
+  "danny phantom": "dannyphantom", "fairly oddparents": "fairlyoddparents", "jimmy neutron": "jimmyneutron",
+  "star wars": "starwars", "marvel cinematic universe": "marvelcinematicuniverse", "mcu": "marvelcinematicuniverse",
+  "inception": "inception", "interstellar": "interstellar", "the dark knight": "batman", "oppenheimer": "oppenheimer",
+  "stranger things": "strangerthings", "breaking bad": "breakingbad", "game of thrones": "gameofthrones",
 };
 
 // pages/sections that are never lore (spec section 3 list + common wiki noise)
@@ -96,9 +108,12 @@ const LORE_SECTION_HINTS = /^(history|plot|story|synopsis|biography|background|p
 // ════════════════════════════════════════════
 
 const _wikiCache = new Map(); // url -> { ts, data }
+let _wikiApiOverride = null; // test/QA hook
 const WIKI_CACHE_TTL = 10 * 60 * 1000;
 
 async function wikiApi(slug, params) {
+  // test hook: QA harnesses stub the network layer here (null = real path)
+  if (_wikiApiOverride) return _wikiApiOverride(slug, params);
   const qs = new URLSearchParams({ format: "json", ...params }).toString();
   const url = `https://${slug}.fandom.com/api.php?${qs}`;
   const hit = _wikiCache.get(url);
@@ -499,6 +514,124 @@ async function resolveFileUrl(slug, fileTitle, thumbwidth = 800) {
   }
 }
 
+// ════════════════════════════════════════════
+// MEDIA TYPE DETECTION + MULTI-SOURCE POOL (2026-09-26 audit - P22)
+// The anime pipeline used to assume anime-shaped sources for everything.
+// Movies, TV shows (incl. western cartoons like Ben 10) and games must go
+// through the SAME validation pipeline with sources appropriate to the
+// media type. Wikipedia is added to the source pool as a CROSS-CHECK
+// source (never blindly trusted - its facts pass the same fact checks).
+// ════════════════════════════════════════════
+
+const _mediaTypeCache = new Map(); // query -> { ts, mediaType, meta }
+
+// Best-effort media classification for a user query.
+// Order of evidence: TMDb-free path -> TVMaze (TV, free) -> Wikipedia
+// (film/TV/comics disambiguation) -> wiki existence + AniList format.
+// Returns { mediaType, meta? } - mediaType in
+// anime | manga | movie | tv | game | comic | franchise.
+async function detectMediaType(query) {
+  const q = String(query || "").trim();
+  if (!q) return { mediaType: "franchise" };
+  const hit = _mediaTypeCache.get(q.toLowerCase());
+  if (hit && Date.now() - hit.ts < 60 * 60 * 1000) return { mediaType: hit.mediaType, meta: hit.meta };
+
+  const result = { mediaType: "franchise", meta: null };
+  // 1) TVMaze singlesearch - strong signal for live-action/animated TV
+  try {
+    const r = await _http.get("https://api.tvmaze.com/singlesearch/shows", { params: { q }, timeout: 8000 });
+    if (r.data && r.data.name && String(r.data.name).toLowerCase().replace(/[^a-z0-9]/g, "").includes(q.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 6))) {
+      result.mediaType = "tv";
+      result.meta = { source: "tvmaze", id: r.data.id, title: r.data.name, premiered: r.data.premiered, genres: r.data.genres || [], summary: String(r.data.summary || "").replace(/<[^>]+>/g, "").slice(0, 500) };
+    }
+  } catch { /* not a TV show (or unreachable) */ }
+  // 2) Wikipedia REST summary - film / comic / game signal from the lead sentence
+  if (result.mediaType === "franchise") {
+    const wiki = await wikipediaSummary(q).catch(() => null);
+    if (wiki && wiki.extract) {
+      const lead = wiki.extract.toLowerCase();
+      if (/:\s*.*\b(film|movie)\b/.test(lead.slice(0, 300)) || /\b\d{4} (film|animated film)\b/.test(lead.slice(0, 300))) {
+        result.mediaType = "movie";
+        result.meta = { source: "wikipedia", title: wiki.title, extract: wiki.extract.slice(0, 500) };
+      } else if (/\btelevision series\b|\btv series\b|\banimated series\b|\bweb series\b/.test(lead.slice(0, 300))) {
+        result.mediaType = "tv";
+        result.meta = { source: "wikipedia", title: wiki.title, extract: wiki.extract.slice(0, 500) };
+      } else if (/\bmanga\b|\blight novel\b/.test(lead.slice(0, 300))) {
+        result.mediaType = "manga";
+      } else if (/\bvideo game\b|\brpg\b|\baction-adventure game\b/.test(lead.slice(0, 300))) {
+        result.mediaType = "game";
+      } else if (/\bcomic\b|\bgraphic novel\b|\bsuperhero\b/.test(lead.slice(0, 300))) {
+        result.mediaType = "comic";
+      }
+    }
+  }
+  _mediaTypeCache.set(q.toLowerCase(), { ts: Date.now(), ...result });
+  return result;
+}
+
+// Wikipedia REST API (action=query JSON, browserless). Used for:
+//  - movie/TV lead facts when no Fandom wiki exists
+//  - cross-referencing a generated answer during fact validation (P12/P22)
+const _wpCache = new Map();
+async function wikipediaSummary(title, lang = "en") {
+  const key = `${lang}:${String(title || "").toLowerCase()}`;
+  const hit = _wpCache.get(key);
+  if (hit && Date.now() - hit.ts < 30 * 60 * 1000) return hit.data;
+  try {
+    const r = await _http.get(`https://${lang}.wikipedia.org/w/api.php`, {
+      params: {
+        action: "query", format: "json", formatversion: 2,
+        titles: title, prop: "extracts", exintro: 1, explaintext: 1, redirects: 1,
+      },
+      timeout: 10000,
+    });
+    const page = (r.data?.query?.pages || [])[0];
+    if (!page || page.missing) return null;
+    const entry = { ts: Date.now(), data: { title: page.title, extract: String(page.extract || "").slice(0, 2000) } };
+    _wpCache.set(key, entry);
+    if (_wpCache.size > 150) _wpCache.delete(_wpCache.keys().next().value);
+    return entry.data;
+  } catch {
+    return null;
+  }
+}
+
+// TVMaze "show" lookup (free, no key) - TV show fact fallback (P22)
+async function tvmazeLookup(title) {
+  try {
+    const r = await _http.get("https://api.tvmaze.com/singlesearch/shows", { params: { q: title }, timeout: 8000 });
+    if (!r.data || !r.data.name) return null;
+    return {
+      source: "tvmaze", id: r.data.id, title: r.data.name,
+      premiered: r.data.premiered || null, ended: r.data.ended || null,
+      genres: (r.data.genres || []).slice(0, 5),
+      network: r.data.network?.name || r.data.webChannel?.name || null,
+      summary: String(r.data.summary || "").replace(/<[^>]+>/g, "").slice(0, 600),
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Theme/OP/ED song names for a media (P11). Anime: Jikan /anime/{id}/full
+// exposes theme.openings / theme.endings straight from MAL. Non-anime media
+// returns [] (theme-song questions then skip gracefully).
+async function getThemeSongs(mediaType, animeId) {
+  try {
+    if (mediaType === "anime" && animeId) {
+      const idMal = parseInt(animeId, 10);
+      if (Number.isInteger(idMal) && idMal > 0) {
+        const r = await _http.get(`https://api.jikan.moe/v4/anime/${idMal}/full`, { timeout: 10000 });
+        const th = r.data?.data?.theme || {};
+        const openings = (th.openings || []).map((s) => String(s).replace(/^"\s*/, "").replace(/"\s*$/, "").replace(/\s*by\s+.+$/i, "").trim());
+        const endings = (th.endings || []).map((s) => String(s).replace(/^"\s*/, "").replace(/"\s*$/, "").replace(/\s*by\s+.+$/i, "").trim());
+        return { openings, endings };
+      }
+    }
+  } catch { /* fall through */ }
+  return { openings: [], endings: [] };
+}
+
 // infobox/main image of a page (very relevant for character questions)
 async function getPageImage(slug, page) {
   try {
@@ -517,7 +650,8 @@ async function getPageImage(slug, page) {
 
 // download + verify a media asset (magic-byte check, size cap)
 async function downloadMedia(url, kind = "image") {
-  if (!url || !/^https:\/\//.test(url)) return null;
+  // https required; plain http only for loopback (local dev/QA media server)
+  if (!url || (!/^https:\/\//.test(url) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(url))) return null;
   try {
     const r = await _http.get(url, { responseType: "arraybuffer", timeout: 20000, maxContentLength: 6 * 1024 * 1024 });
     const buf = Buffer.from(r.data);
@@ -635,18 +769,29 @@ function coerceOne(obj, difficulty, domain) {
 
 // generate ONE lore question. callLLM = injected (engine smartGroqCall / tests).
 // lore = { text, page, section, tok }. Returns { question, promptTok } or null.
-async function generateLoreQuestion(callLLM, franchiseTitle, lore, domain, difficulty) {
+async function generateLoreQuestion(callLLM, franchiseTitle, lore, domain, difficulty, warn = null, attempt = 0) {
   if (typeof callLLM !== "function" || !lore || !lore.text) return null;
   const sourceLabel = `${franchiseTitle}${lore.page ? ` - wiki: ${lore.page}` : ""}${lore.section && lore.section !== "intro" ? ` / section: ${lore.section}` : ""}`;
   const system = "You write multiple-choice quiz questions from a SUPPLIED source. You output ONLY valid JSON. Never invent facts.";
+  // varied framing per retry: identical retries reproduce identical priors;
+  // rotating the angle (event -> place/object -> number/name) keeps retries
+  // diverse and steers the model back into the supplied source
+  const ANGLES = [
+    "Ask about an EVENT, action or outcome that is explicitly described in the SOURCE.",
+    "Ask about a PLACE, object or concept that is named in the SOURCE.",
+    "Ask about a NUMBER, duration, name or relationship that is stated in the SOURCE.",
+  ];
   const user = [
     `Write ONE ${difficulty} multiple-choice quiz question about "${franchiseTitle}".`,
     `Domain: ${DOMAIN_LABELS[domain] || domain}.`,
     DIFF_INSTRUCTIONS[difficulty] || DIFF_INSTRUCTIONS.medium,
+    ANGLES[attempt % ANGLES.length],
     domain === "production"
       ? "Production domain: ask about studios, voice cast, dates or production facts found in the source."
       : "Do NOT ask about voice actors, studios, release dates or other production trivia.",
+    ...(warn ? [`WARNING - your previous answer was REJECTED: ${warn}. Ask about a DIFFERENT fact that appears word-for-word in the SOURCE below, and make sure the correct answer text appears in the SOURCE.`] : []),
     "The question and the correct answer MUST be directly supported by the SOURCE below. Distractors must be plausible but clearly wrong to someone who knows the source.",
+    "CRITICAL: use ONLY facts written in the SOURCE text - never rely on your own knowledge of the franchise. If the SOURCE does not clearly contain the answer to a question you could ask, reply {\"skip\":true} instead of inventing anything.",
     "Answer options must be short (under 80 characters). Do not use \"all of the above\" or trick wording.",
     "",
     `SOURCE (${sourceLabel}):`,
@@ -671,7 +816,13 @@ async function generateLoreQuestion(callLLM, franchiseTitle, lore, domain, diffi
         response_format: { type: "json_object" },
       });
       const text = normalizeLLMReply(raw);
-      const q = coerceOne(extractJson(text), difficulty, domain);
+      const parsed = extractJson(text);
+      // model may honour the source-only instruction by skipping
+      if (parsed && parsed.skip) {
+        console.log("[QuizLore] model skipped (source lacked a questionable fact)");
+        return null;
+      }
+      const q = coerceOne(parsed, difficulty, domain);
       if (q) return { question: q, promptTok };
       console.log(`[QuizLore] malformed model reply (attempt ${attempt + 1}):`, String(text || "").slice(0, 80));
     } catch (e) {
@@ -721,7 +872,9 @@ module.exports = {
   buildCharacterIndex, pickCharacterPage, retrieveCharacterLore, retrieveCosmologyLore,
   getPageImage, resolveFileUrl, downloadMedia, findAudioForPage,
   generateLoreQuestion, buildQuestionPlan,
+  // media-type + multi-source pool (P22)
+  detectMediaType, wikipediaSummary, tvmazeLookup, getThemeSongs,
   // helpers exposed for tests
   normalizeLLMReply, extractJson, coerceOne,
-  _internal: { _wikiCache, KNOWN_WIKIS, JUNK_SECTION_RE, _charIndexCache },
+  _internal: { _wikiCache, KNOWN_WIKIS, JUNK_SECTION_RE, _charIndexCache, setWikiApiOverride(fn) { _wikiApiOverride = fn; }, },
 };

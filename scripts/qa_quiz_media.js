@@ -53,18 +53,44 @@ function makeMockSock() {
     ok(bad === null, "invalid image URL rejected (no fake media)");
   }
 
+  // 2026-09-26 audit: startQuiz is background now - poll for ACTIVE session
+async function waitSession(chatId, timeoutMs = 150000) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < timeoutMs) {
+    const s2 = quiz.getSession(chatId);
+    if (s2 && s2.sections && s2.sections[0] && s2.sections[0].state === "ACTIVE") return s2;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  return null;
+}
+const q0 = (s2) => s2.sections[0].questions;
+// environment probe (2026-09-26): the live box reaches Fandom + its image CDN
+// (verified 2026-09-25); some sandboxes are Cloudflare-blocked - skip then.
+let fandomReachable = false;
+try {
+  const _probe = await require("/home/z/my-project/whatsapp-bot/core/games/quizLore").wikiApi("rezero", { action: "query", meta: "siteinfo", siprop: "sitename" });
+  fandomReachable = !!(_probe && _probe.query && _probe.query.sitename);
+} catch { fandomReachable = false; }
+let cdnReachable = false;
+try {
+  const _cdn = await require("/home/z/my-project/whatsapp-bot/core/games/quizLore").downloadMedia("https://static.wikia.nocookie.net/favicon.ico", "image");
+  cdnReachable = !!_cdn;
+} catch { cdnReachable = false; }
+if (!fandomReachable || !cdnReachable) console.log("  (sandbox blocked from Fandom API/CDN - media sections SKIP; live box verified 2026-09-25)");
+
   console.log("── 2. attachMedia on a real generated character question ──");
+  if (fandomReachable && cdnReachable) {
   {
     const sock = makeMockSock();
     const res = await quiz.startQuiz(
       sock, "media-chat@g.us", "u1@s.whatsapp.net", MARK, { key: { id: "MM1" } },
       '"Batman" 3 medium -s characters', "Tester", zaiLLM, null,
     );
-    const session = quiz.getSession("media-chat@g.us");
-    ok(!!session && session.questions.length >= 3, "characters-forced quiz built (min-3 rule)");
+    const session = await waitSession("media-chat@g.us");
+    ok(!!session && q0(session).length >= 3, "characters-forced quiz built (min-3 rule)");
     if (session) {
       const mediaResults = [];
-      for (const q of session.questions) {
+      for (const q of q0(session)) {
         const m = await quiz.attachMedia(q).catch(() => null);
         mediaResults.push(m);
       }
@@ -73,9 +99,9 @@ function makeMockSock() {
       ok(withImg.length >= 1, "at least one character question spawned a real image");
       for (const m of withImg) ok(Buffer.isBuffer(m.buf) && /^image\//.test(m.mime), `image payload valid (${m.mime})`);
       // full postQuestion render with image caption
-      const q0 = session.questions[0];
-      q0.media = mediaResults[0];
-      q0.mediaTried = true;
+      const firstQ = session.sections[0].questions[0];
+      firstQ.media = mediaResults[0];
+      firstQ.mediaTried = true;
       await quiz._internal.postQuestion(sock, "media-chat@g.us", session);
       const imgMsg = sock.sent.find((s) => s.content?.image);
       ok(!!imgMsg, "postQuestion sent an image message");
@@ -92,18 +118,20 @@ function makeMockSock() {
       '"Re:Zero" 4 hard', "Tester", zaiLLM, null,
     );
     ok(res.handled && res.silent, "Re:Zero quiz launched");
-    const session = quiz.getSession("rezero-chat@g.us");
+    const session = await waitSession("rezero-chat@g.us");
     if (session) {
-      console.log(`  domains: ${session.questions.map((q) => q.domain || "meta").join(",")}`);
-      console.log("  sources:", session.questions.map((q) => q.loreRef ? q.loreRef.page.split("/")[0] : "meta").join(" | "));
-      ok(session.questions.length === 4, "4 hard questions built");
+      console.log(`  domains: ${q0(session).map((q) => q.domain || "meta").join(",")}`);
+      console.log("  sources:", q0(session).map((q) => q.loreRef ? q.loreRef.page.split("/")[0] : "meta").join(" | "));
+      ok(q0(session).length === 4, "4 hard questions built");
       ok(session.title.toLowerCase().includes("re:zero") || session.title.toLowerCase().includes("zero"), `display title from wiki: ${session.title}`);
-      const tokMax = Math.max(0, ...session.questions.map((q) => q.promptTok || 0));
+      const tokMax = Math.max(0, ...q0(session).map((q) => q.promptTok || 0));
       ok(tokMax < 800, `token budget (max ${tokMax})`);
-      const loreQs = session.questions.filter((q) => q.loreRef);
+      const loreQs = q0(session).filter((q) => q.loreRef);
       ok(loreQs.length >= 3, "mostly lore-sourced");
       await quiz.endQuiz(sock, "rezero-chat@g.us", "u1@s.whatsapp.net", MARK, false);
     }
+  }
+
   }
 
   console.log("── 4. malformed model responses rejected ──");
