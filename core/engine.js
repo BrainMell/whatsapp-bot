@@ -775,6 +775,9 @@ const debate = require('./games/debate');
 const ludo = require('./games/ludo');
 const wordle = require('./games/wordle');
 const murderMystery = require('./games/murdermystery'); // 🔪 Blackvale Manor - isolated social deduction module
+const quizGame = require('./games/quiz'); // 🎯 anime quiz - AniList/Jikan data + AI questions (2026-09-25)
+const stockChart = require('./utils/stockChart'); // 📈 real-world market charts - Yahoo Finance (2026-09-25)
+const trendsChart = require('./utils/trendsChart'); // 📊 Google Trends comparisons - got-scraping dance (2026-09-25)
 const news = require('./utils/news'); // ✅ Added news module
 const stockMarket = require('./rpg/stockMarket'); // ✅ Added stock market module
 const P = require("pino");
@@ -28880,6 +28883,190 @@ _(or reply to their message)_
                   }
 
                   // ============================================
+                  // ANIME QUIZ (.j quiz / .j a / .j quizboard)
+                  // ============================================
+
+                  // quizboard - persistent per-chat leaderboard
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} quizboard` ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} quiz top` ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} quiz leaderboard`
+                  ) {
+                    const resultQ = await quizGame.showLeaderboard(
+                      sock,
+                      chatId,
+                      senderJid,
+                      BOT_MARKER,
+                      m,
+                    );
+                    if (resultQ.message) {
+                      await sock.sendMessage(chatId, { text: resultQ.message }, { quoted: m });
+                    }
+                    return;
+                  }
+
+                  // quiz pick <n> - resolve an ambiguous title selection
+                  if (
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} quiz pick `,
+                    )
+                  ) {
+                    const pickNum = txt
+                      .substring(
+                        `${botConfig.getPrefix().toLowerCase()} quiz pick `.length,
+                      )
+                      .trim();
+                    const resultQ = await quizGame.pickCandidate(
+                      sock,
+                      chatId,
+                      senderJid,
+                      BOT_MARKER,
+                      m,
+                      pickNum,
+                      senderName,
+                      smartGroqCall,
+                      MODELS,
+                    );
+                    if (resultQ.message) {
+                      await sock.sendMessage(chatId, { text: resultQ.message }, { quoted: m });
+                    }
+                    return;
+                  }
+
+                  // quiz end - cancel the running quiz (starter or admins)
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} quiz end` ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} quiz stop`
+                  ) {
+                    const resultQ = await quizGame.endQuiz(
+                      sock,
+                      chatId,
+                      senderJid,
+                      BOT_MARKER,
+                      canUseAdminCommands,
+                    );
+                    if (resultQ.message) {
+                      await sock.sendMessage(chatId, { text: resultQ.message }, { quoted: m });
+                    }
+                    return;
+                  }
+
+                  // quiz ["title"] [count] [difficulty] - start an anime quiz
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} quiz` ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} quiz `,
+                    )
+                  ) {
+                    const quizArgs = cleanTxt
+                      .substring(
+                        `${botConfig.getPrefix().toLowerCase()} quiz`.length,
+                      )
+                      .trim();
+                    const resultQ = await quizGame.startQuiz(
+                      sock,
+                      chatId,
+                      senderJid,
+                      BOT_MARKER,
+                      m,
+                      quizArgs,
+                      senderName,
+                      smartGroqCall,
+                      MODELS,
+                    );
+                    if (resultQ.message) {
+                      await sock.sendMessage(chatId, { text: resultQ.message }, { quoted: m });
+                    }
+                    return;
+                  }
+
+                  // a <letter|option> - answer the running quiz (falls through
+                  // when no quiz is active so unknown-command can still fire)
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} a` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} a `) ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} answer` ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} answer `,
+                    )
+                  ) {
+                    if (quizGame.hasActive(chatId)) {
+                      const ansRaw = cleanTxt
+                        .substring(
+                          `${botConfig.getPrefix().toLowerCase()} ${lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} a `) ? "a" : "answer"}`.length,
+                        )
+                        .trim();
+                      const resultQ = await quizGame.handleAnswer(
+                        sock,
+                        chatId,
+                        senderJid,
+                        ansRaw,
+                        BOT_MARKER,
+                        m,
+                        senderName,
+                      );
+                      if (resultQ.handled) return;
+                    }
+                    // no active quiz -> fall through
+                  }
+
+                  // ============================================
+                  // REAL-WORLD MARKET + GOOGLE TRENDS
+                  // ============================================
+
+                  // stock <ticker> [1d|5d|1m|6m|1y|5y] - real market chart
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} stock` ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} stock `,
+                    )
+                  ) {
+                    const stockArgs = txt
+                      .substring(
+                        `${botConfig.getPrefix().toLowerCase()} stock`.length,
+                      )
+                      .trim();
+                    const resultS = await stockChart.handleStock(
+                      sock,
+                      chatId,
+                      senderJid,
+                      BOT_MARKER,
+                      m,
+                      stockArgs,
+                    );
+                    if (resultS.message) {
+                      await sock.sendMessage(chatId, { text: resultS.message }, { quoted: m });
+                    }
+                    return;
+                  }
+
+                  // trends <"kw"...> [range] - Google Trends comparison graph
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} trends` ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} trends `,
+                    )
+                  ) {
+                    const trendsArgs = cleanTxt
+                      .substring(
+                        `${botConfig.getPrefix().toLowerCase()} trends`.length,
+                      )
+                      .trim();
+                    const resultT = await trendsChart.handleTrends(
+                      sock,
+                      chatId,
+                      senderJid,
+                      BOT_MARKER,
+                      m,
+                      trendsArgs,
+                    );
+                    if (resultT.message) {
+                      await sock.sendMessage(chatId, { text: resultT.message }, { quoted: m });
+                    }
+                    return;
+                  }
+
+                  // ============================================
                   // PROGRESSION COMMANDS
                   // ============================================
 
@@ -29233,6 +29420,10 @@ _(or reply to their message)_
                       "chess",
                       "resign",
                       "ludo",
+                      "quiz",
+                      "quizboard",
+                      "stock",
+                      "trends",
                     ];
                     if (
                       validPrefixes.some((p) =>
@@ -29468,6 +29659,13 @@ _(or reply to their message)_
                       "wordle end",
                       "wordle stats",
                       "wordle top",
+                      "quiz",
+                      "quiz pick",
+                      "quiz end",
+                      "quizboard",
+                      "answer",
+                      "stock",
+                      "trends",
                       "murder",
                       "mm",
                       "murder create",

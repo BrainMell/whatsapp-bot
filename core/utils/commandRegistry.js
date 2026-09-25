@@ -383,7 +383,12 @@ const COMMAND_REGISTRY = {
     { cmd: 'murder investigate', desc: 'INVESTIGATOR only, in DM at night: study one guest.', usage: 'murder investigate <n|name>' },
     { cmd: 'murder end', desc: 'Host/moderator closes the case early (refunded before the first dawn).', usage: 'murder end' },
     { cmd: 'murder lb', desc: 'Hall of Shadows - the all-time Blackvale ledger: wins, kills, saves, sharp votes.', usage: 'murder lb' },
-    { cmd: 'murder help', desc: 'How to survive Blackvale Manor.', usage: 'murder help' }
+    { cmd: 'murder help', desc: 'How to survive Blackvale Manor.', usage: 'murder help' },
+    { cmd: 'quiz', desc: 'Start an anime quiz on any title - AI questions from real AniList data.', usage: 'quiz "<anime>" [count 1-15] [easy/medium/hard]' },
+    { cmd: 'quiz pick', desc: 'Choose the anime when your quiz title is ambiguous.', usage: 'quiz pick <number>' },
+    { cmd: 'quiz end', desc: 'End the running quiz early (starter or admins).', usage: 'quiz end' },
+    { cmd: 'a', desc: 'Answer the running quiz question (A/B/C/D or full option).', usage: 'a <letter>' },
+    { cmd: 'quizboard', desc: 'Quiz leaderboard for this chat - Zeni, correct answers, wins.', usage: 'quizboard' }
   ],
   PowerScaling: [
     { cmd: 'powerscale', desc: 'Get character power stats.', usage: 'powerscale <char>' },
@@ -406,6 +411,8 @@ const COMMAND_REGISTRY = {
   INFO: [
     { cmd: 'menu', desc: 'Show the bot command menu and categories.', usage: 'menu [category]' },
     { cmd: 'help', desc: 'Alias for menu. Shows help information.', usage: 'help [category]' },
+    { cmd: 'stock', desc: 'Real-world market chart + quote (Yahoo Finance): stocks, ETFs, crypto, FX.', usage: 'stock <ticker|name> [1d|5d|1m|6m|1y|5y]' },
+    { cmd: 'trends', desc: 'Google Trends comparison graph (relative search interest).', usage: 'trends "<kw>" ["<kw2>"] [1h|4h|1d|7d|30d|90d|12m|5y]' },
     { cmd: 'reset', desc: 'Reset the bot connection/session.', usage: 'reset' },
     { cmd: 'on', desc: 'Turn the bot ON for this chat.', usage: 'on' },
     { cmd: 'off', desc: 'Turn the bot OFF for this chat.', usage: 'off' }
