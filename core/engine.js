@@ -6194,6 +6194,34 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           // If undefined, the spread throws "undefined is not iterable".
           // Default to empty array - Baileys will use WhatsApp's hosts.
           customUploadHosts: [],
+
+          // 💡 FIX 2026-09-25 (gstatus media root cause): relayMessage() derives
+          // the stanza `mediatype` attribute from the TOP-LEVEL message BEFORE
+          // this hook runs, but group statuses must travel wrapped in
+          // groupStatusMessageV2. gsPost therefore relays media TOP-LEVEL (so
+          // mediatype lands on the <enc> node and the server can process it)
+          // and marks it; this hook re-wraps ONLY marked messages into the
+          // official status envelope right before encoding. Every unmarked
+          // message passes through untouched - zero regression surface for
+          // normal messages, reactions, polls, etc.
+          patchMessageBeforeSending: async (message) => {
+            try {
+              const mark = globalThis.__gsWrapMark;
+              if (mark && mark.has(message)) {
+                mark.delete(message);
+                const secret = require("crypto").randomBytes(32);
+                return {
+                  messageContextInfo: { messageSecret: secret },
+                  groupStatusMessageV2: {
+                    message: { ...message, messageContextInfo: { messageSecret: secret } },
+                  },
+                };
+              }
+            } catch (gsWrapErr) {
+              console.log("[GStatus] wrap hook failed (sending unwrapped):", gsWrapErr?.message);
+            }
+            return message;
+          },
         });
         _moduleSock = sock; // 💡 FIX: module-level ref so getSock() works from outside startBot()
 
@@ -8008,29 +8036,37 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                       // generateWAMessageFromContent layers made WhatsApp ACCEPT the
                       // relay (no error) while never RENDERING media statuses; text
                       // survived only because clients are lenient for plain text.
-                      // 💡 FIX 2026-09-22 (owner: media statuses still not showing):
-                      // the [GStatusIn] ground-truth logger records official group
-                      // statuses as secret=y - the INNER message carries
-                      // messageContextInfo.messageSecret. generateWAMessageContent
-                      // never sets one, so our media relays lacked a field every
-                      // official status has. Only MEDIA payloads get it (text
-                      // statuses render fine and are left untouched - no regression
-                      // surface for the path that already works).
+                      // 💡 FIX 2026-09-25 (owner: image group statuses STILL not
+                      // rendering after 10 attempts) - ROOT CAUSE FOUND: Baileys'
+                      // relayMessage() computes the stanza's `mediatype` attribute
+                      // from the TOP-LEVEL message (getMediaType) BEFORE the patch
+                      // hook runs. Our old relay wrapped the media inside
+                      // { groupStatusMessageV2 } first, so getMediaType() saw only
+                      // the wrapper, `mediatype` never landed on the <enc> node,
+                      // and WhatsApp's server silently dropped the media status
+                      // while accepting text ones (text needs no mediatype - hence
+                      // "text works, images never do"). Fix (mirrors the zaileys
+                      // library's proven design): relay MEDIA TOP-LEVEL so
+                      // mediatype is set, and wrap into the official
+                      // groupStatusMessageV2 envelope inside the socket's
+                      // patchMessageBeforeSending hook (see makeWASocket config)
+                      // right before encoding - the wire format keeps the official
+                      // shape (outer + inner messageContextInfo.messageSecret).
                       const __gsInner = inner.message || inner;
-                      if (isMedia) {
-                        // `crypto` here is the module itself (same require the
-                        // gsMsgId fallback below uses).
-                        __gsInner.messageContextInfo = {
-                          ...( __gsInner.messageContextInfo || {}),
-                          messageSecret: crypto.randomBytes(32),
-                        };
-                      }
                       const __gsId = gsMsgId();
-                      await sock2.relayMessage(
-                        chatId2,
-                        { groupStatusMessageV2: { message: __gsInner } },
-                        { messageId: __gsId },
-                      );
+                      if (isMedia) {
+                        const __gsMark = (globalThis.__gsWrapMark = globalThis.__gsWrapMark || new WeakSet());
+                        __gsMark.add(__gsInner);
+                        await sock2.relayMessage(chatId2, __gsInner, { messageId: __gsId });
+                      } else {
+                        // text statuses render fine with the direct wrap (proven in
+                        // production) - this path is intentionally untouched.
+                        await sock2.relayMessage(
+                          chatId2,
+                          { groupStatusMessageV2: { message: __gsInner } },
+                          { messageId: __gsId },
+                        );
+                      }
                       // remember our last posts per (instance, chat) for `.gstatus delete`
                       globalThis.__gsMine = globalThis.__gsMine || new Map();
                       const __gsMineK = `${jidNormalizedUser(sock2?.user?.id || "")}:${chatId2}`;

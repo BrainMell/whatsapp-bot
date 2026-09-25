@@ -95,15 +95,22 @@ async function newSession() {
 
 // ── shared session + pacing (Google throttles rapid dances on one IP) ──
 // The cookie jar is reused for 30 min (one preflight instead of one per
-// lookup) and explores are globally spaced >= 1.3s apart. 429s trigger
-// progressive cool-down backoff before giving up.
+// lookup) and explores are globally spaced >= 1.3s apart.
+// 💡 FIX 2026-09-25 (owner: ".j trends keeps saying try again in a couple of
+// minutes"): datacenter IPs are 429-blocked by Google's TLS fingerprinting for
+// HOURS, so the old flow burned the command budget on tier-1 retries + cooldowns
+// before even starting the browser, and the browser fallback itself failed
+// whenever the host had no Playwright browsers installed - which made the bot
+// answer "try again" on EVERY call. Now: tier-1 is one fast attempt that gets
+// disabled adaptively once this IP is known-burned; the real-browser fallback
+// resolves bundled chromium -> system chrome candidates -> one background
+// self-heal install; and errors tell the operator exactly what is missing.
 let _jar = null;
 let _jarTs = 0;
 let _lastExplore = 0;
-let _cooldownUntil = 0;
 const JAR_TTL_MS = 30 * 60 * 1000;
 
-async function _spaced(n = 0) {
+async function _spaced() {
   const wait = _lastExplore + 1300 - Date.now();
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   _lastExplore = Date.now();
@@ -124,6 +131,11 @@ const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
 // cookies). Launched lazily, closed after 5 idle minutes.
 let _bp = null; // { browser, page, ts }
 let _bpIdleTimer = null;
+// adaptive tier-1 circuit breaker: after 2 consecutive throttles this IP is
+// burned for ~30 min - go straight to the browser instead of wasting time
+let _tier1Fails = 0;
+let _tier1DisabledUntil = 0;
+const TIER1_SKIP_MS = 30 * 60 * 1000;
 
 function _scheduleBrowserIdleClose() {
   if (_bpIdleTimer) clearTimeout(_bpIdleTimer);
@@ -133,6 +145,82 @@ function _scheduleBrowserIdleClose() {
   if (_bpIdleTimer.unref) _bpIdleTimer.unref();
 }
 
+// one background `playwright install chromium` attempt per process when the
+// bundled browser binary is missing (self-heal for fresh deploys)
+let _selfHealStarted = false;
+function _scheduleBrowserSelfHeal(reason) {
+  if (_selfHealStarted) return;
+  _selfHealStarted = true;
+  try {
+    const { spawn } = require("child_process");
+    const child = spawn("npx", ["playwright", "install", "chromium"], {
+      detached: true, stdio: "ignore", cwd: process.cwd(),
+    });
+    child.on("error", () => {});
+    if (child.unref) child.unref();
+    console.log(`[Trends] bundled Chromium unavailable (${reason}) - background self-heal started: npx playwright install chromium`);
+  } catch (e) {
+    console.log("[Trends] self-heal spawn failed:", e?.message);
+  }
+}
+
+// system chrome candidates for hosts without the playwright download
+const _SYSTEM_CHROMES = [
+  "/usr/bin/chromium-browser",
+  "/usr/bin/chromium",
+  "/usr/bin/google-chrome",
+  "/usr/bin/google-chrome-stable",
+  "/snap/bin/chromium",
+];
+
+let _launchOptsCache = null;
+async function _resolveLaunchOpts() {
+  if (_launchOptsCache) return _launchOptsCache;
+  const gfs = require("fs");
+  const optsList = [];
+  let bundledMissing = false;
+  try {
+    const { chromium } = require("playwright");
+    const p = chromium.executablePath();
+    if (p && gfs.existsSync(p)) optsList.push({});
+    else bundledMissing = true;
+  } catch (e) {
+    bundledMissing = true;
+  }
+  for (const p of _SYSTEM_CHROMES) {
+    if (gfs.existsSync(p)) optsList.push({ executablePath: p });
+  }
+  if (!optsList.length) {
+    // let playwright attempt anyway (its error message is actionable)
+    optsList.push({});
+    if (bundledMissing) _scheduleBrowserSelfHeal("not downloaded on this host");
+  }
+  _launchOptsCache = optsList;
+  return optsList;
+}
+
+async function _launchBrowser() {
+  const { chromium } = require("playwright");
+  const optsList = await _resolveLaunchOpts();
+  let lastErr = null;
+  for (const opts of optsList) {
+    try {
+      return await chromium.launch({
+        headless: true,
+        args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+        ...opts,
+      });
+    } catch (e) {
+      lastErr = e;
+      console.log("[Trends] browser launch failed", Object.keys(opts).length ? `(${opts.executablePath})` : "(bundled)", e?.message?.split("\n")[0]);
+    }
+  }
+  throw Object.assign(
+    new Error(`no usable Chromium on this host (${(lastErr?.message || "launch failed").split("\n")[0]}). Fix with: npx playwright install chromium`),
+    { code: "TRENDS_NO_BROWSER" },
+  );
+}
+
 async function _browserPage() {
   if (_bp && Date.now() - _bp.ts < 5 * 60 * 1000) {
     _bp.ts = Date.now();
@@ -140,11 +228,19 @@ async function _browserPage() {
     return _bp.page;
   }
   if (_bp) { try { await _bp.browser.close(); } catch {} _bp = null; }
-  const { chromium } = require("playwright");
-  const browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
+  const browser = await _launchBrowser();
   const page = await browser.newPage();
   await page.goto(`${TRENDS}/trends/explore?hl=en-US`, { waitUntil: "domcontentloaded", timeout: 45000 });
   await page.waitForTimeout(1800); // let consent/cookie bootstrapping settle
+  // EU hosts may land on consent.google.com - accept once so /trends/api/*
+  // same-origin fetches carry consent cookies (best-effort, no-op elsewhere)
+  try {
+    if (/consent\./.test(page.url() || "")) {
+      await page.click('button:has-text("Accept all"), button:has-text("I agree"), button[jsname="bWV0Yg"]', { timeout: 5000 });
+      await page.waitForTimeout(1500);
+      console.log("[Trends] consent page accepted");
+    }
+  } catch { /* no consent wall - fine */ }
   _bp = { browser, page, ts: Date.now() };
   _scheduleBrowserIdleClose();
   return page;
@@ -163,21 +259,32 @@ async function _browserTrends(keywords, timeToken, geo) {
     category: 0,
     property: "",
   };
+  const exploreUrl = `/trends/api/explore?hl=en-US&tz=0&req=${encodeURIComponent(JSON.stringify(req))}`;
   let page = await _browserPage();
   let ex;
   try {
-    ex = await _inPageJson(page, `/trends/api/explore?hl=en-US&tz=0&req=${encodeURIComponent(JSON.stringify(req))}`);
+    ex = await _inPageJson(page, exploreUrl);
   } catch (e) {
     // dead page (navigated away / crashed): rebuild once
     _bp = null;
     page = await _browserPage();
-    ex = await _inPageJson(page, `/trends/api/explore?hl=en-US&tz=0&req=${encodeURIComponent(JSON.stringify(req))}`);
+    ex = await _inPageJson(page, exploreUrl);
+  }
+  if (ex.status === 429 || ex.status === 403) {
+    // one gentle in-page retry (fresh page cookies, never hammer Google)
+    await page.waitForTimeout(2500);
+    ex = await _inPageJson(page, exploreUrl);
   }
   if (ex.status !== 200) throw Object.assign(new Error(`browser explore ${ex.status}`), { code: "TRENDS_HTTP", status: ex.status });
   const exploreData = parseTrendsBody(ex.body);
   const tsWidget = (exploreData.widgets || []).find((w) => w.id === "TIMESERIES");
   if (!tsWidget) throw Object.assign(new Error("no timeseries widget"), { code: "TRENDS_SHAPE" });
-  const ml = await _inPageJson(page, `/trends/api/widgetdata/multiline?hl=en-US&tz=0&req=${encodeURIComponent(JSON.stringify(tsWidget.request))}&token=${encodeURIComponent(tsWidget.token)}`);
+  const mlUrl = `/trends/api/widgetdata/multiline?hl=en-US&tz=0&req=${encodeURIComponent(JSON.stringify(tsWidget.request))}&token=${encodeURIComponent(tsWidget.token)}`;
+  let ml = await _inPageJson(page, mlUrl);
+  if (ml.status === 429 || ml.status === 403) {
+    await page.waitForTimeout(2500);
+    ml = await _inPageJson(page, mlUrl);
+  }
   if (ml.status !== 200) throw Object.assign(new Error(`browser multiline ${ml.status}`), { code: "TRENDS_HTTP", status: ml.status });
   return parseTrendsBody(ml.body);
 }
@@ -190,11 +297,12 @@ async function getTrends(keywords, rangeKey = "30d", geo = GEO_DEFAULT) {
   if (hit) return hit;
 
   const timeToken = (RANGES[rangeKey] || RANGES["30d"]).token;
-  const delays = [0, 2000]; // tier-1: keep snappy; tier-2 carries throttled IPs
   let lastErr = null;
-  for (let attempt = 0; attempt < delays.length; attempt++) {
-    if (delays[attempt]) await sleepMs(delays[attempt]);
-    if (Date.now() < _cooldownUntil) await sleepMs(_cooldownUntil - Date.now());
+
+  // TIER 1: got-scraping (cheap path) - ONE attempt, skipped entirely while
+  // this IP is in the adaptive cool-down. 429s no longer burn the command
+  // budget: the browser fallback is the production path for burned IPs.
+  if (Date.now() >= _tier1DisabledUntil) {
     try {
       const jar = await _getJar();
       await _spaced();
@@ -204,35 +312,36 @@ async function getTrends(keywords, rangeKey = "30d", geo = GEO_DEFAULT) {
       const ml = await _multiline(jar, tsWidget);
       const tl = ml?.default?.timelineData || [];
       if (!tl.length) throw Object.assign(new Error("empty timeline"), { code: "TRENDS_EMPTY" });
+      _tier1Fails = 0;
       return _buildOut(ck, keywords, rangeKey, tl);
     } catch (e) {
       lastErr = e;
-      if (e.code === "TRENDS_EMPTY") break; // genuinely empty, don't retry
-      if (e.status === 429 || e.status === 403) {
-        // throttled: drop the shared jar (may be poisoned) and cool down
-        _jar = null;
-        _cooldownUntil = Date.now() + 8000 * (attempt + 1);
-        continue;
+      if (e.code === "TRENDS_EMPTY") throw e; // genuinely empty - no fallback needed
+      if (e.status === 429 || e.status === 403 || e.code === "TRENDS_SHAPE") {
+        _jar = null; // jar may be poisoned
+        if (e.status === 429 || e.status === 403) {
+          _tier1Fails++;
+          if (_tier1Fails >= 2) _tier1DisabledUntil = Date.now() + TIER1_SKIP_MS;
+        }
       }
-      if (e.code === "TRENDS_SHAPE") continue; // widget shape flake: retry
-      break; // other errors are unlikely to heal within the command window
+      // other tier-1 errors fall through to the browser too
     }
   }
+
   // TIER 2: real browser (survives IP-level TLS throttling)
-  if (lastErr && lastErr.code !== "TRENDS_EMPTY") {
-    for (let bAttempt = 0; bAttempt < 2; bAttempt++) {
-      try {
-        const ml = await _browserTrends(keywords, timeToken, geo);
-        const tl = ml?.default?.timelineData || [];
-        if (!tl.length) throw Object.assign(new Error("empty timeline"), { code: "TRENDS_EMPTY" });
-        console.log("[Trends] served via browser fallback (tier-1 throttled)");
-        return _buildOut(ck, keywords, rangeKey, tl);
-      } catch (e2) {
-        lastErr = e2;
-        if (e2.code === "TRENDS_EMPTY") break;
-        _bp = null; // rebuild browser on next attempt
-        await sleepMs(1500);
-      }
+  for (let bAttempt = 0; bAttempt < 2; bAttempt++) {
+    try {
+      const ml = await _browserTrends(keywords, timeToken, geo);
+      const tl = ml?.default?.timelineData || [];
+      if (!tl.length) throw Object.assign(new Error("empty timeline"), { code: "TRENDS_EMPTY" });
+      console.log("[Trends] served via browser fallback (tier-1 throttled)");
+      return _buildOut(ck, keywords, rangeKey, tl);
+    } catch (e2) {
+      lastErr = e2;
+      if (e2.code === "TRENDS_EMPTY") throw e2;
+      if (e2.code === "TRENDS_NO_BROWSER") break; // nothing to retry with
+      _bp = null; // rebuild browser on next attempt
+      await sleepMs(1500);
     }
   }
   throw lastErr || new Error("Trends lookup failed");
@@ -515,7 +624,12 @@ _Google Trends values are RELATIVE search interest, not absolute search counts._
     if (e.code === "TRENDS_EMPTY") {
       return { handled: true, message: botMarker + `🤷 No meaningful search interest found for ${parsed.keywords.map((k) => `"${k}"`).join(", ")} in the ${(RANGES[parsed.range] || RANGES["30d"]).label.toLowerCase()}. Try a broader spelling or a longer range.` };
     }
-    return { handled: true, message: botMarker + `⚠️ Google Trends is refusing requests right now (${e.code || "error"}). It usually recovers in a few minutes - try again soon.` };
+    const reason = e.code === "TRENDS_NO_BROWSER"
+      ? "the browser fallback is unavailable on the bot host - the operator needs to run `npx playwright install chromium` once"
+      : e.code === "TRENDS_HTTP"
+        ? `Google is throttling this server (HTTP ${e.status || "?"})`
+        : `unexpected error (${e.code || e.message?.slice(0, 60) || "unknown"})`;
+    return { handled: true, message: botMarker + `⚠️ Google Trends could not be reached right now - ${reason}. Try again in a few minutes.` };
   }
 }
 
@@ -526,5 +640,5 @@ module.exports = {
   renderTrendsChart,
   formatTrendsCaption,
   RANGES,
-  _internal: { parseTrendsBody, _cache, SERIES_COLORS, MAX_KEYWORDS },
+  _internal: { parseTrendsBody, _cache, SERIES_COLORS, MAX_KEYWORDS, _browserTrends, _launchBrowser, _resolveLaunchOpts, getTier1State: () => ({ fails: _tier1Fails, disabledUntil: _tier1DisabledUntil }) },
 };

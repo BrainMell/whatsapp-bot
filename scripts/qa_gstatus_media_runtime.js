@@ -147,10 +147,25 @@ ok(typeof gsMsgId === "function", "helpers extracted: gsMsgId (baileys id genera
   if (relays.length === 1) {
     const r = relays[0];
     ok(r.jid === "222-333@g.us", "relay targets the group jid");
-    ok(!!r.msg.groupStatusMessageV2 && !r.msg.groupStatusMessage, "single groupStatusMessageV2 wrap (v3 shape)");
-    const inner = r.msg.groupStatusMessageV2.message;
-    ok(!!inner.imageMessage, "inner message is the image payload");
-    ok(inner.messageContextInfo && Buffer.isBuffer(inner.messageContextInfo.messageSecret) && inner.messageContextInfo.messageSecret.length === 32, "inner media message carries 32-byte messageSecret (official GStatusIn shape)");
+    // 💡 FIX 2026-09-25 (root cause): media is relayed TOP-LEVEL so Baileys'
+    // getMediaType() can set the stanza `mediatype` attribute (a wrapped
+    // groupStatusMessageV2 hid the media node, mediatype never landed on the
+    // <enc> node, and the server silently dropped the status). The envelope is
+    // applied by the socket's patchMessageBeforeSending hook right before
+    // encoding (asserted below against the relayed object).
+    ok(!r.msg.groupStatusMessageV2 && !r.msg.groupStatusMessage, "media relays TOP-LEVEL (no wrapper - mediatype must be derivable)");
+    ok(!!r.msg.imageMessage, "top-level message is the image payload");
+    // the relayed object must be MARKED so the real socket hook wraps it
+    const mark = globalThis.__gsWrapMark;
+    ok(!!mark && mark.has(r.msg), "relayed media is marked for the groupStatusMessageV2 wrap hook");
+    // simulate the hook: consume the mark and assert the official envelope
+    const secret = require("crypto").randomBytes(32);
+    const envelope = {
+      messageContextInfo: { messageSecret: secret },
+      groupStatusMessageV2: { message: { ...r.msg, messageContextInfo: { messageSecret: secret } } },
+    };
+    ok(!!envelope.groupStatusMessageV2.message.imageMessage, "hook envelope preserves the media payload");
+    ok(Buffer.isBuffer(envelope.messageContextInfo.messageSecret) && envelope.messageContextInfo.messageSecret.length === 32, "hook envelope carries 32-byte messageSecret (outer + inner, official GStatusIn shape)");
     ok(/^[A-Z0-9]/.test(r.opts.messageId) && r.opts.messageId.length >= 8, "bare messageId passed to relay");
   }
   const mineArr = globalThis.__gsMine && globalThis.__gsMine.get(`${scope.jidNormalizedUser(mockSock.user.id)}:222-333@g.us`);
@@ -169,6 +184,33 @@ ok(typeof gsMsgId === "function", "helpers extracted: gsMsgId (baileys id genera
   console.log("── gsPost: upload timeout budget ──");
   ok(engineSrc.includes("mediaUploadTimeoutMs: 60000"), "explicit 60s upload budget passed to generateWAMessageContent");
   ok(engineSrc.includes('new Error("media upload timed out after 120s - try a smaller file")'), "120s race backstop with actionable message");
+
+  console.log("── patchMessageBeforeSending hook (the 2026-09-25 root-cause fix) ──");
+  {
+    const hookStart = engineSrc.indexOf("patchMessageBeforeSending: async (message) => {");
+    if (hookStart < 0) {
+      ok(false, "hook present in engine socket config");
+    } else {
+      const hookReturn = engineSrc.indexOf("return message;\n          }", hookStart);
+      const hookSrc = engineSrc.slice(hookStart, hookReturn + "return message;\n          }".length)
+        .replace("patchMessageBeforeSending: async (message) => {", "async (message) => {");
+      // eslint-disable-next-line no-new-func
+      const hook = new Function("require", "globalThis", "console", `"use strict"; return (${hookSrc});`)(require, globalThis, console);
+      ok(typeof hook === "function", "hook present in engine socket config");
+      const fakeInner = { imageMessage: { url: "https://mmg.whatsapp.net/x", mimetype: "image/jpeg" } };
+      const gmark = (globalThis.__gsWrapMark = globalThis.__gsWrapMark || new WeakSet());
+      gmark.add(fakeInner);
+      const env = await hook(fakeInner);
+      ok(!!env?.groupStatusMessageV2?.message?.imageMessage, "hook wraps marked media into groupStatusMessageV2 (official envelope)");
+      ok(!!env?.messageContextInfo?.messageSecret && !!env?.groupStatusMessageV2?.message?.messageContextInfo?.messageSecret, "hook envelope carries outer+inner messageSecret");
+      ok(!gmark.has(fakeInner), "hook consumes the mark (no double-wrap on retries)");
+      const untouched = { extendedTextMessage: { text: "hello" } };
+      const passed = await hook(untouched);
+      ok(passed === untouched, "unmarked messages pass through untouched (zero regression surface)");
+      // media paths that must keep working: video / audio / sticker all flow top-level too
+      ok(engineSrc.includes("globalThis.__gsWrapMark"), "gsPost marks media for the hook");
+    }
+  }
 
   console.log("── gsMsgId fallback ──");
   const id1 = gsMsgId();

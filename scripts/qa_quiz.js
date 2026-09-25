@@ -307,7 +307,7 @@ const hangingAI = async () => "{\"questions\":[{\"q\":\"Question about the story
     ok(/No pending/.test(noPick.message || ""), "pick with no pending -> clean error");
     // empty quiz args -> usage card
     const usage = await quiz.startQuiz(sock, "1203642@g.us", "u@x", MARK, null, "", "A", makeValidAI(5), { FAST: "t" });
-    ok(usage.message && /Anime Quiz/.test(usage.message), "bare .j quiz -> usage card");
+    ok(usage.message && /(Lore|Anime) Quiz/.test(usage.message), "bare .j quiz -> usage card");
     // dedup machinery
     const key = "anilist:999888";
     const before = quiz.loadSeen(key).length;

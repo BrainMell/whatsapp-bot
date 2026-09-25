@@ -1,9 +1,14 @@
 // ============================================
-// QUIZ GAME - ANIME EDITION (.j quiz)
-// Real anime data (AniList primary / Jikan fallback) + AI question generation
-// (groq via injected smartGroqCall) with a deterministic fallback generator,
-// per-question timing, first-correct scoring, Zeni rewards and persistent
-// per-chat leaderboards (System KV).
+// QUIZ GAME - LORE EDITION (.j quiz)
+// 2026-09-25 OVERHAUL: questions are generated from the franchise's FANDOM
+// WIKI (MediaWiki API, targeted section retrieval) via RAG - they test the
+// show/game/comic's STORY, CHARACTERS, COSMOLOGY and WORLD-building, not
+// production metadata. Weighted domains: 45% plot, 35% characters,
+// 15% cosmology/powerscaling, 5% production. -s/--section forces a domain.
+// Images/audio spawn dynamically from the chosen lore when a REAL asset
+// exists. Groq provides the LLM step (injected smartGroqCall) with a
+// deterministic fallback. Sessions, answers, rewards, dedup and the
+// persistent per-chat leaderboard are unchanged.
 // ============================================
 
 const axios = require("axios");
@@ -11,6 +16,7 @@ const crypto = require("crypto");
 const botConfig = require("../../botConfig");
 const economy = require("../rpg/economy");
 const system = require("../utils/system");
+const quizLore = require("./quizLore"); // 📖 Fandom lore retrieval + RAG helpers (2026-09-25)
 
 // ── state ──
 // One active quiz per chat (Map keyed by chatId). Sessions are in-memory,
@@ -361,54 +367,104 @@ function buildFallbackQuestions(anime, characters, difficulty, count) {
 }
 
 async function generateQuestionsWithAI(anime, characters, difficulty, count, smartGroqCall, MODELS) {
-  if (typeof smartGroqCall !== "function") return [];
-  const facts = {
-    title: anime.title,
-    romaji: anime.titleRomaji,
-    type: anime.type,
-    episodes: anime.episodes,
-    year: anime.year,
-    studio: anime.studio,
-    genres: anime.genres,
-    score: anime.score,
-    synopsis: anime.synopsis,
-    characters: characters.slice(0, 10).map((c) => ({ name: c.name, role: c.role, va: c.va })),
+  // legacy entry point kept for compatibility/tests - wraps the lore pipeline
+  // with the anime's own title. New code calls generateLoreQuestions directly.
+  const wiki = await quizLore.resolveWiki(anime.titleRomaji || anime.title || "").catch(() => null);
+  if (!wiki) return [];
+  return generateLoreQuestions(
+    wiki, anime.title, difficulty, count, null, characters,
+    normalizeSmartGroq(smartGroqCall),
+  );
+}
+
+// ── LLM adapter: engine's smartGroqCall returns the RAW Groq response object
+// (a long-standing bug made quiz.js feed that object straight into JSON
+// parsing, so the AI path silently NEVER worked and every quiz fell back to
+// the VA/studio generator). normalizeSmartGroq accepts a response object,
+// a string, or {content} and always yields text.
+function normalizeSmartGroq(smartGroqCall) {
+  if (typeof smartGroqCall !== "function") return null;
+  return async (opts) => {
+    const r = await smartGroqCall(opts);
+    return quizLore.normalizeLLMReply(r);
   };
-  const prompt = `You are writing a multiple-choice anime quiz about ONE specific anime. Use ONLY the facts provided - do not invent facts you are not sure about.
+}
 
-ANIME FACTS (ground truth):
-${JSON.stringify(facts, null, 1)}
+// ════════════════════════════════════════════
+// LORE QUESTION PIPELINE (2026-09-25)
+// per-question: plan domain -> retrieve Fandom section -> RAG (Groq) ->
+// strict JSON -> attach to the session. Media attaches lazily at post time.
+// ════════════════════════════════════════════
 
-Write ${count} ${difficulty}-difficulty multiple-choice questions about this anime.
-Difficulty guide: easy = very famous basics any casual fan knows; medium = well-known plot/characters/production; hard = details (dates, names, minor characters, production specifics).
-Rules:
-- EVERY question must be answerable from the ground-truth facts above (or be universally known canon about this exact anime).
-- Exactly 4 options each, exactly 1 correct, options short (under 60 chars), no "all of the above".
-- Vary the topics: characters, voice actors, plot, production, numbers.
-- No trick or opinion questions.
-
-Reply with ONE JSON object ONLY: {"questions":[{"q":"...","options":["...","...","...","..."],"answer":"A"|"B"|"C"|"D","topic":"Characters"}]}`;
-
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const reply = await smartGroqCall({
-        model: (MODELS && MODELS.FAST) || "openai/gpt-oss-20b",
-        messages: [
-          { role: "system", content: "You output ONLY valid JSON. No markdown, no commentary." },
-          { role: "user", content: prompt },
-        ],
-        temperature: attempt === 0 ? 0.7 : 0.4,
-        max_tokens: 2600,
-        response_format: { type: "json_object" },
-      });
-      const parsed = extractJsonObject(reply);
-      const qs = coerceQuestions(parsed, difficulty);
-      if (qs.length >= Math.min(count, 3)) return qs.slice(0, count);
-    } catch (e) {
-      console.log("[Quiz] AI generation attempt", attempt + 1, "failed:", e?.message);
-    }
+async function generateLoreQuestions(wiki, franchiseTitle, difficulty, count, sectionOverride, animeCharacters, callLLM) {
+  const plan = quizLore.buildQuestionPlan(count, difficulty, sectionOverride);
+  const usedKeys = new Set();
+  let buckets = null;
+  if (plan.includes("characters")) {
+    try { buckets = await quizLore.buildCharacterIndex(wiki, franchiseTitle, animeCharacters || []); } catch { buckets = null; }
   }
-  return [];
+  const questions = [];
+  for (let i = 0; i < plan.length; i++) {
+    const domain = plan[i];
+    let generated = null;
+    for (let attempt = 0; attempt < 4 && !generated; attempt++) {
+      let lore = null;
+      try {
+        if (domain === "characters") {
+          const charPage = buckets ? quizLore.pickCharacterPage(buckets, difficulty) : null;
+          lore = await quizLore.retrieveCharacterLore(wiki, charPage, difficulty, usedKeys);
+          if (!lore && charPage) lore = await quizLore.retrieveLore(wiki, charPage, "characters", difficulty, usedKeys);
+        } else if (domain === "cosmology" || domain === "powerscaling") {
+          lore = await quizLore.retrieveCosmologyLore(wiki, franchiseTitle, difficulty, usedKeys, domain);
+          if (!lore) lore = await quizLore.retrieveLore(wiki, franchiseTitle, domain, difficulty, usedKeys);
+        } else {
+          lore = await quizLore.retrieveLore(wiki, franchiseTitle, domain, difficulty, usedKeys);
+        }
+      } catch (e) {
+        console.log("[Quiz] lore retrieval failed:", e?.message);
+        continue;
+      }
+      if (!lore) continue;
+      const out = await quizLore.generateLoreQuestion(callLLM, franchiseTitle, lore, domain, difficulty);
+      if (out) {
+        generated = out.question;
+        generated.promptTok = out.promptTok;
+        generated.loreRef = { wiki, page: lore.page, section: lore.section };
+        console.log(`[Quiz] Q${questions.length + 1} ${domain}/${difficulty} ctx=${out.promptTok}tok src=${lore.page}/${lore.section}`);
+      }
+    }
+    if (generated) questions.push(generated);
+  }
+  return questions;
+}
+
+// ── lazy media attachment (spec: media spawns from ANY domain when a real
+// asset exists; image = question in the caption, audio = played before the
+// question). Cached per wiki-page so a session never re-downloads.
+const _mediaCache = new Map();
+
+async function attachMedia(q) {
+  if (!q || !q.loreRef || !q.loreRef.wiki || !q.loreRef.page) return null;
+  const key = `${q.loreRef.wiki}:${q.loreRef.page}`;
+  let entry = _mediaCache.get(key);
+  if (!entry) {
+    entry = { triedAt: 0, image: null, audio: null };
+    const [img, audio] = await Promise.all([
+      quizLore.getPageImage(q.loreRef.wiki, q.loreRef.page).catch(() => null),
+      // audio is rare on Fandom - hunt only for character pages, cheap guard
+      q.domain === "characters" && Math.random() < 0.5
+        ? quizLore.findAudioForPage(q.loreRef.wiki, q.loreRef.page).catch(() => null)
+        : Promise.resolve(null),
+    ]);
+    if (img) entry.image = await quizLore.downloadMedia(img.url, "image").catch(() => null);
+    entry.audio = audio; // already verified bytes inside findAudioForPage
+    entry.triedAt = Date.now();
+    _mediaCache.set(key, entry);
+    if (_mediaCache.size > 120) _mediaCache.delete(_mediaCache.keys().next().value);
+  }
+  if (entry.audio) return { kind: "audio", buf: entry.audio.buf, mime: entry.audio.mime };
+  if (entry.image) return { kind: "image", buf: entry.image.buf, mime: entry.image.mime };
+  return null;
 }
 
 // ════════════════════════════════════════════
@@ -501,6 +557,47 @@ function formatQuestionCard(session, idx, q) {
   return s;
 }
 
+// audio questions: the clip plays first, then the question card (spec §7)
+async function postQuestion(sock, chatId, session) {
+  const q = session.questions[session.idx];
+  session.qStartedAt = Date.now();
+  session.claimedBy = null;
+  const card = formatQuestionCard(session, session.idx, q);
+  // lazy media attach (only when a REAL verified asset exists - else text)
+  if (!q.mediaTried) {
+    q.mediaTried = true;
+    try { q.media = await attachMedia(q); } catch { q.media = null; }
+  }
+  if (q.media && q.media.kind === "image") {
+    // question lives in the image caption (spec §6)
+    await sock.sendMessage(chatId, {
+      image: q.media.buf,
+      mimetype: q.media.mime,
+      caption: BOT_SAFE(card),
+    }).catch(async () => {
+      // broken media must never kill the question - text fallback
+      await sock.sendMessage(chatId, { text: BOT_SAFE(card) }).catch(() => {});
+    });
+  } else {
+    if (q.media && q.media.kind === "audio") {
+      await sock.sendMessage(chatId, {
+        audio: q.media.buf,
+        mimetype: q.media.mime,
+        ptt: false,
+      }).catch(() => {}); // clip fails -> card still carries the question
+    }
+    await sock.sendMessage(chatId, { text: BOT_SAFE(card) }).catch(() => {});
+  }
+  // deadline timer (invalidated by session.token on end)
+  session.timerId = setTimeout(async () => {
+    try {
+      const cur = activeQuizzes.get(chatId);
+      if (!cur || cur.token !== session.token) return;
+      await revealAndAdvance(sock, chatId, session, null, true);
+    } catch (e) { console.log("[Quiz] deadline tick failed:", e?.message); }
+  }, QUESTION_SECONDS * 1000);
+}
+
 function formatStandings(session) {
   const entries = [...session.scores.entries()]
     .map(([jid, s]) => ({ jid, ...s }))
@@ -514,23 +611,6 @@ function formatStandings(session) {
 
 async function safeAddMoney(jid, amount, reason) {
   try { await economy.addMoney(jid, amount, reason); return true; } catch (e) { console.log("[Quiz] addMoney failed:", e?.message); return false; }
-}
-
-async function postQuestion(sock, chatId, session) {
-  const q = session.questions[session.idx];
-  session.qStartedAt = Date.now();
-  session.claimedBy = null;
-  await sock.sendMessage(chatId, {
-    text: BOT_SAFE(formatQuestionCard(session, session.idx, q)),
-  }).catch(() => {});
-  // deadline timer (invalidated by session.token on end)
-  session.timerId = setTimeout(async () => {
-    try {
-      const cur = activeQuizzes.get(chatId);
-      if (!cur || cur.token !== session.token) return;
-      await revealAndAdvance(sock, chatId, session, null, true);
-    } catch (e) { console.log("[Quiz] deadline tick failed:", e?.message); }
-  }, QUESTION_SECONDS * 1000);
 }
 
 // BOT_MARKER comes from the engine as a zero-width prefix; keep a module
@@ -588,7 +668,7 @@ async function finishQuiz(sock, chatId, session) {
     .sort((a, b) => b.points - a.points || b.correct - a.correct);
   const winner = entries[0] || null;
 
-  let out = `🏁 *QUIZ FINISHED - ${session.anime.title.toUpperCase()}*\n\n`;
+  let out = `🏁 *QUIZ FINISHED - ${String(session.title || session.anime?.title || "QUIZ").toUpperCase()}*\n\n`;
   out += formatStandings(session) + "\n\n";
   const totalAnswered = session.revealed.filter((r) => r.winner).length;
   out += `📊 ${totalAnswered}/${session.questions.length} questions claimed\n`;
@@ -597,14 +677,14 @@ async function finishQuiz(sock, chatId, session) {
   // Zeni rewards: per-correct points were already computed on the fly;
   // award those plus the winner bonus.
   for (const e of entries) {
-    await safeAddMoney(e.jid, e.points, `Quiz reward (${session.anime.title})`);
+    await safeAddMoney(e.jid, e.points, `Quiz reward (${session.title || session.anime?.title || "quiz"})`);
   }
   if (winner) {
     await safeAddMoney(winner.jid, WINNER_BONUS, "Quiz winner bonus");
     out += `\n👑 Winner: *${winner.name}* (+${WINNER_BONUS} bonus)\n`;
     out += `💰 All points paid out in Zeni!\n`;
   }
-  out += `\nPlay again: \`${botConfig.getPrefix()} quiz "<anime>"\``;
+  out += `\nPlay again: \`${botConfig.getPrefix()} quiz "<title>"\``;
 
   recordSessionResults(chatId, entries, winner ? winner.jid : null);
   await sock.sendMessage(chatId, { text: out }).catch(() => {});
@@ -619,7 +699,9 @@ function parseQuizArgs(raw) {
   //   quiz "Fullmetal Alchemist Brotherhood" 10 hard
   //   quiz fmab 5 easy
   //   quiz "One Piece"
-  const out = { title: "", count: 10, difficulty: "medium", notes: [] };
+  //   quiz "Dragon Ball" 3 hard -s cosmology
+  //   quiz "Re:Zero" 5 medium --section characters
+  const out = { title: "", count: 10, difficulty: "medium", section: null, notes: [] };
   let rest = String(raw || "").trim();
   if (!rest) return out;
   const quoted = rest.match(/"([^"]{2,})"/);
@@ -629,6 +711,18 @@ function parseQuizArgs(raw) {
   }
   const tokens = rest.split(/\s+/).filter(Boolean);
   const diffTokens = { easy: "easy", e: "easy", medium: "medium", m: "medium", normal: "medium", hard: "hard", h: "hard", insane: "hard" };
+  // pop -s/--section <domain> first (may sit anywhere after the title)
+  for (let i = 0; i < tokens.length - 0; i++) {
+    const t = tokens[i].toLowerCase();
+    if ((t === "-s" || t === "--section" || t === "--topic") && tokens[i + 1]) {
+      const dom = tokens[i + 1].toLowerCase();
+      const mapped = quizLore.SECTION_ALIASES[dom];
+      if (mapped) out.section = mapped;
+      else out.notes.push(`Unknown section "${tokens[i + 1]}" - valid: plot, characters, cosmology, powerscaling, production.`);
+      tokens.splice(i, 2);
+      i--;
+    }
+  }
   // pop trailing difficulty/count tokens
   while (tokens.length) {
     const last = tokens[tokens.length - 1].toLowerCase();
@@ -658,12 +752,56 @@ function parseQuizArgs(raw) {
   return out;
 }
 
+// resolve a user-typed title to a franchise: Fandom wiki FIRST (lore source),
+// AniList for anime display metadata + character popularity. Wiki relevance is
+// validated so "Unknown Franchise XYZ" never resolves to a wrong wiki.
+async function resolveFranchise(query) {
+  let wiki = null;
+  let wikiValidated = false;
+  try { wiki = await quizLore.resolveWiki(query); } catch { wiki = null; }
+  if (wiki) {
+    // relevance check: the wiki must have content matching the title
+    try {
+      const d = await quizLore.wikiApi(wiki, { action: "query", list: "search", srsearch: query, srlimit: 5, srnamespace: 0 });
+      const hits = (d?.query?.search || []).map((h) => h.title);
+      const needle = String(query).toLowerCase().replace(/[^a-z0-9]+/g, "");
+      const relevant = hits.some((t) => {
+        const hay = t.toLowerCase().replace(/[^a-z0-9]+/g, "");
+        return hay.includes(needle) || needle.includes(hay) || (needle.length >= 4 && hay.includes(needle.slice(0, 4)));
+      });
+      wikiValidated = relevant || hits.length > 0;
+      if (!relevant && hits.length > 0) {
+        // sitename contains the title? ("Re:Zero Wiki")
+        const si = await quizLore.wikiApi(wiki, { action: "query", meta: "siteinfo", siprop: "sitename" }).catch(() => null);
+        const site = String(si?.query?.sitename || "").toLowerCase();
+        wikiValidated = needle.length >= 4 && (site.includes(needle.slice(0, Math.min(needle.length, 12))) || needle.includes(site.replace(/[^a-z0-9]/g, "").slice(0, 6)));
+      }
+    } catch { wikiValidated = false; }
+    if (!wikiValidated) wiki = null;
+  }
+  if (wiki) {
+    return { wiki };
+  }
+  // no wiki: fall back to the anime pick flow (resolves + disambiguates)
+  const res = await resolveAnime(query);
+  if (res.error) return res;
+  const top = res.anime;
+  // try the wiki by the anime's canonical titles/synonyms
+  for (const t of [top.titleRomaji, top.title, ...(top.synonyms || [])]) {
+    if (!t) continue;
+    const s = await quizLore.resolveWiki(t).catch(() => null);
+    if (s) return { wiki: s, anime: top, candidates: res.candidates };
+  }
+  // anime with no wiki at all: metadata-only quiz (fallback questions)
+  return { anime: top, candidates: res.candidates, wiki: null };
+}
+
 async function startQuiz(sock, chatId, senderJid, botMarker, m, rawArgs, senderName, smartGroqCall, MODELS) {
   if (activeQuizzes.has(chatId)) {
     const s = activeQuizzes.get(chatId);
     return {
       handled: true,
-      message: botMarker + `🎯 A quiz is already running here: *${s.anime.title}* (question ${s.idx + 1}/${s.questions.length}).\nFinish it, or use \`${botConfig.getPrefix()} quiz end\` to cancel.`,
+      message: botMarker + `🎯 A quiz is already running here: *${s.title}* (question ${s.idx + 1}/${s.questions.length}).\nFinish it, or use \`${botConfig.getPrefix()} quiz end\` to cancel.`,
     };
   }
 
@@ -672,16 +810,19 @@ async function startQuiz(sock, chatId, senderJid, botMarker, m, rawArgs, senderN
     const prefix = botConfig.getPrefix();
     return {
       handled: true,
-      message: botMarker + `🎯 *Anime Quiz*
+      message: botMarker + `🎯 *Lore Quiz*
+
+Test your knowledge of a show, game or comic - its story, characters, cosmology and world-building.
 
 Start one:
 \`${prefix} quiz "Fullmetal Alchemist Brotherhood"\`
 \`${prefix} quiz "One Piece" 5 hard\`
-\`${prefix} quiz fmab 10\`
+\`${prefix} quiz "Elden Ring" 5 hard -s cosmology\`
 
 Options:
 • count: 1-${MAX_QUESTIONS} questions (default 10)
 • difficulty: easy / medium / hard (default medium)
+• section (optional): \`-s plot\` / \`-s characters\` / \`-s cosmology\` / \`-s powerscaling\` / \`-s production\` forces all questions into that topic
 
 During the quiz, answer with \`${prefix} a <letter>\`. First correct answer wins the points!
 Leaderboard: \`${prefix} quizboard\` • Cancel: \`${prefix} quiz end\``,
@@ -693,56 +834,97 @@ Leaderboard: \`${prefix} quizboard\` • Cancel: \`${prefix} quiz end\``,
     text: botMarker + `🔍 Searching for *"${parsed.title}"*…${notes}`,
   }, { quoted: m }).catch(() => {});
 
-  const res = await resolveAnime(parsed.title);
+  const res = await resolveFranchise(parsed.title);
   if (res.error) {
-    return { handled: true, message: botMarker + `❌ ${res.error}` };
+    const friendly = res.error.includes("No anime found")
+      ? `Couldn't find a Fandom wiki or anime entry for "${parsed.title}". Check the spelling, or try the franchise's common name.`
+      : res.error;
+    return { handled: true, message: botMarker + `❌ ${friendly}` };
   }
 
-  // Ambiguous title -> numbered pick list (self-contained, no engine state)
-  const top = res.anime;
-  const second = res.candidates[1];
-  const strongAuto =
-    !second ||
-    (top.popularity >= 100000 && second.popularity < top.popularity / 3) ||
-    (top.synonyms || []).some((s) => s.toLowerCase() === parsed.title.toLowerCase()) ||
-    (top.title || "").toLowerCase() === parsed.title.toLowerCase() ||
-    (top.titleRomaji || "").toLowerCase() === parsed.title.toLowerCase();
-  if (!strongAuto) {
-    pendingPicks.set(chatId, { choices: res.candidates, ts: Date.now(), opts: { count: parsed.count, difficulty: parsed.difficulty } });
-    let msg = botMarker + `🤔 *"${parsed.title}"* is ambiguous. Which one?\n\n`;
-    res.candidates.forEach((c, i) => {
-      msg += `*${i + 1}.* ${c.title} (${c.type}${c.year ? `, ${c.year}` : ""}) - ${c.popularity.toLocaleString()} members\n`;
-    });
-    msg += `\nReply: \`${botConfig.getPrefix()} quiz pick <number>\` (5 min)`;
-    return { handled: true, message: msg };
+  // Anime pick flow only when the franchise could not be resolved directly
+  if (res.candidates && res.candidates.length > 1 && !res.wiki) {
+    const top = res.anime;
+    const second = res.candidates[1];
+    const strongAuto =
+      !second ||
+      (top.popularity >= 100000 && second.popularity < top.popularity / 3) ||
+      (top.synonyms || []).some((s) => s.toLowerCase() === parsed.title.toLowerCase()) ||
+      (top.title || "").toLowerCase() === parsed.title.toLowerCase() ||
+      (top.titleRomaji || "").toLowerCase() === parsed.title.toLowerCase();
+    if (!strongAuto) {
+      pendingPicks.set(chatId, { choices: res.candidates, ts: Date.now(), opts: { count: parsed.count, difficulty: parsed.difficulty, section: parsed.section } });
+      let msg = botMarker + `🤔 *"${parsed.title}"* is ambiguous. Which one?\n\n`;
+      res.candidates.forEach((c, i) => {
+        msg += `*${i + 1}.* ${c.title} (${c.type}${c.year ? `, ${c.year}` : ""}) - ${c.popularity.toLocaleString()} members\n`;
+      });
+      msg += `\nReply: \`${botConfig.getPrefix()} quiz pick <number>\` (5 min)`;
+      return { handled: true, message: msg };
+    }
   }
 
-  return await launchWith(sock, chatId, senderJid, botMarker, m, top, parsed, senderName, smartGroqCall, MODELS);
+  return await launchWith(sock, chatId, senderJid, botMarker, m, res, parsed, senderName, smartGroqCall, MODELS);
 }
 
-async function launchWith(sock, chatId, senderJid, botMarker, m, anime, parsed, senderName, smartGroqCall, MODELS) {
+async function launchWith(sock, chatId, senderJid, botMarker, m, franchise, parsed, senderName, smartGroqCall, MODELS) {
   pendingPicks.delete(chatId);
   const prefix = botConfig.getPrefix();
-  await sock.sendMessage(chatId, {
-    text: botMarker + `✅ *${anime.title}* (${anime.type}${anime.year ? `, ${anime.year}` : ""})\n🧠 Generating ${parsed.count} ${parsed.difficulty} questions…`,
-  }, { quoted: m }).catch(() => {});
+  const callLLM = normalizeSmartGroq(smartGroqCall);
 
-  const characters = await fetchCharacters(anime);
-  let questions = [];
-  try {
-    questions = await generateQuestionsWithAI(anime, characters, parsed.difficulty, parsed.count, smartGroqCall, MODELS);
-  } catch (e) {
-    console.log("[Quiz] AI path crashed:", e?.message);
-    questions = [];
+  // anime metadata (display title + character popularity) is optional but we
+  // try it even for wiki-resolved franchises (powers fallback questions +
+  // AniList favourites for the character popularity index)
+  let anime = franchise.anime || null;
+  if (!anime) {
+    try {
+      const r2 = await resolveAnime(parsed.title);
+      if (r2.anime) { anime = r2.anime; franchise.anime = anime; franchise.candidates = r2.candidates; }
+    } catch { /* metadata is optional */ }
+  }
+  let title = anime?.title || parsed.title;
+  if (!anime && franchise.wiki) {
+    // derive a clean display title from the wiki's sitename
+    try {
+      const si = await quizLore.wikiApi(franchise.wiki, { action: "query", meta: "siteinfo", siprop: "sitename" });
+      const site = String(si?.query?.sitename || "").replace(/\s*wiki$/i, "").trim();
+      if (site) title = site;
+    } catch { /* keep parsed title */ }
   }
 
-  const animeKey = `${anime.source}:${anime.id}`;
-  const { fresh, repeat } = partitionFresh(questions, animeKey);
+  await sock.sendMessage(chatId, {
+    text: botMarker + `✅ *${title}*${parsed.section ? `\n📚 Section locked: *${parsed.section}*` : ""}\n🧠 Generating ${parsed.count} ${parsed.difficulty} lore questions…`,
+  }, { quoted: m }).catch(() => {});
+
+  // character popularity data (AniList favourites when it's an anime)
+  const characters = anime ? await fetchCharacters(anime) : [];
+
+  let questions = [];
+  if (franchise.wiki) {
+    try {
+      questions = await generateLoreQuestions(
+        franchise.wiki, title, parsed.difficulty, parsed.count, parsed.section,
+        characters, callLLM,
+      );
+    } catch (e) {
+      console.log("[Quiz] lore pipeline crashed:", e?.message);
+      questions = [];
+    }
+  }
+
+  const seenKey = franchise.wiki
+    ? `wiki:${franchise.wiki}`
+    : `${anime?.source || "x"}:${anime?.id || parsed.title}`;
+  if (!anime && franchise.wiki) {
+    // non-anime franchise: synthesize minimal metadata for the fallback generator
+    anime = { title, titleRomaji: title, type: "Franchise", episodes: null, year: null, studio: null, genres: [], synopsis: "", source: "wiki", id: franchise.wiki };
+  }
+
+  const { fresh, repeat } = partitionFresh(questions, seenKey);
   let chosen = shuffleQuestions(fresh);
   if (chosen.length < Math.min(parsed.count, 3)) {
-    // not enough fresh AI questions -> top up with fallback, then repeats
+    // not enough fresh lore questions -> top up with fallback, then repeats
     const fb = shuffleQuestions(buildFallbackQuestions(anime, characters, parsed.difficulty, parsed.count));
-    const fbFresh = partitionFresh(fb, animeKey).fresh;
+    const fbFresh = partitionFresh(fb, seenKey).fresh;
     chosen = [...chosen, ...fbFresh];
     if (chosen.length < Math.min(parsed.count, 3)) chosen = [...chosen, ...repeat];
     if (chosen.length < Math.min(parsed.count, 3)) chosen = [...chosen, ...fb];
@@ -751,14 +933,17 @@ async function launchWith(sock, chatId, senderJid, botMarker, m, anime, parsed, 
   if (chosen.length < 3) {
     return {
       handled: true,
-      message: botMarker + `❌ Could not build a quiz for *${anime.title}* (not enough ground-truth data). Try a better-known anime.`,
+      message: botMarker + `❌ Could not build a quiz for *${title}* (not enough lore data found). Try a better-known franchise.`,
     };
   }
-  saveSeen(animeKey, chosen.map((q) => qhash(q.q)));
+  saveSeen(seenKey, chosen.map((q) => qhash(q.q)));
 
   const session = {
+    title,
+    wiki: franchise.wiki || null,
     anime,
     difficulty: parsed.difficulty,
+    section: parsed.section || null,
     questions: chosen,
     idx: 0,
     scores: new Map(),
@@ -774,8 +959,9 @@ async function launchWith(sock, chatId, senderJid, botMarker, m, anime, parsed, 
   };
   activeQuizzes.set(chatId, session);
 
-  let head = botMarker + `🎯 *QUIZ STARTED - ${anime.title.toUpperCase()}* 🎯\n\n`;
+  let head = botMarker + `🎯 *QUIZ STARTED - ${String(title).toUpperCase()}* 🎯\n\n`;
   head += `📚 ${chosen.length} questions • ${parsed.difficulty.toUpperCase()} • ${POINTS[parsed.difficulty]} Zeni per correct (+20 speed bonus)\n`;
+  if (parsed.section) head += `📚 Topic locked: ${parsed.section}\n`;
   head += `✍️ Answer with \`${prefix} a <letter>\` (A/B/C/D) - first correct answer wins\n`;
   head += `⏱ ${QUESTION_SECONDS}s per question\n`;
   head += `🛑 Cancel: \`${prefix} quiz end\`\n\n`;
@@ -798,7 +984,15 @@ async function pickCandidate(sock, chatId, senderJid, botMarker, m, numStr, send
   if (!Number.isInteger(n) || n < 1 || n > pending.choices.length) {
     return { handled: true, message: botMarker + `❌ Pick a number between 1 and ${pending.choices.length}.` };
   }
-  return await launchWith(sock, chatId, senderJid, botMarker, m, pending.choices[n - 1], { count: pending.opts.count, difficulty: pending.opts.difficulty, notes: [] }, senderName, smartGroqCall, MODELS);
+  const chosen = pending.choices[n - 1];
+  // re-resolve the wiki for the picked anime (launchWith is franchise-shaped now)
+  const franchise = { anime: chosen, candidates: pending.choices, wiki: null };
+  for (const t of [chosen.titleRomaji, chosen.title, ...(chosen.synonyms || [])]) {
+    if (!t) continue;
+    const s = await quizLore.resolveWiki(t).catch(() => null);
+    if (s) { franchise.wiki = s; break; }
+  }
+  return await launchWith(sock, chatId, senderJid, botMarker, m, franchise, { count: pending.opts.count, difficulty: pending.opts.difficulty, section: pending.opts.section || null, notes: [] }, senderName, smartGroqCall, MODELS);
 }
 
 async function endQuiz(sock, chatId, senderJid, botMarker, canUseAdminCommands) {
@@ -842,7 +1036,7 @@ async function showLeaderboard(sock, chatId, senderJid, botMarker, m) {
   const chat = loadScores(chatId) || {};
   const topPoints = topOf(chat, "points", 10);
   if (!topPoints.length) {
-    return { handled: true, message: botMarker + `🏆 No quiz scores here yet! Start one: \`${botConfig.getPrefix()} quiz "<anime>"\`` };
+    return { handled: true, message: botMarker + `🏆 No quiz scores here yet! Start one: \`${botConfig.getPrefix()} quiz "<title>"\`` };
   }
   let out = `🏆 *QUIZ LEADERBOARD (this chat)*\n\n`;
   topPoints.forEach((e, i) => {
@@ -867,6 +1061,7 @@ module.exports = {
   buildFallbackQuestions,
   qhash,
   resolveAnime,
+  resolveFranchise,
   anilistSearch,
   fetchCharacters,
   loadSeen,
@@ -874,6 +1069,9 @@ module.exports = {
   saveSeen,
   loadScores,
   recordSessionResults,
+  generateLoreQuestions,
+  attachMedia,
+  normalizeSmartGroq,
   POINTS,
   QUESTION_SECONDS,
   MAX_QUESTIONS,

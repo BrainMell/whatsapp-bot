@@ -219,13 +219,19 @@ const U3 = '251111000003@s.whatsapp.net';
     // the 45s race is intact and must not see any long media await anymore
     assert(engineSrc.includes('Command timed out after'), '45s command timeout still in place');
 
-    console.log('\n── 8. gstatus: media relay carries the official messageSecret ──');
-    assert(engineSrc.includes('messageSecret: crypto.randomBytes(32)'), 'media inner message gets messageSecret (official GStatusIn shape)');
+    console.log('\n── 8. gstatus: media relays TOP-LEVEL + patch-hook envelope (2026-09-25 root-cause fix) ──');
+    // getMediaType() reads the TOP-LEVEL message; the old wrapped relay hid the
+    // media node so the stanza never got `mediatype` and the server dropped it.
+    assert(engineSrc.includes('patchMessageBeforeSending: async (message) => {'), 'socket config carries the wrap hook');
+    assert(engineSrc.includes('messageSecret: secret'), 'hook envelope carries messageSecret (official GStatusIn shape, outer+inner)');
+    assert(engineSrc.includes('groupStatusMessageV2: {'), 'hook applies the groupStatusMessageV2 envelope');
+    assert(engineSrc.includes('globalThis.__gsWrapMark'), 'gsPost marks media for the hook');
     assert(/const __gsInner = inner\.message \|\| inner;/.test(engineSrc), 'relay unwraps the generated message once');
-    assert(engineSrc.includes('{ groupStatusMessageV2: { message: __gsInner } }'), 'single groupStatusMessageV2 wrap kept (v3 shape intact)');
     const relayIdx = engineSrc.indexOf('const __gsInner = inner.message || inner;');
-    const relayBlock = engineSrc.slice(relayIdx, relayIdx + 900);
-    assert(/if \(isMedia\) \{[\s\S]*messageSecret/.test(relayBlock), 'messageSecret applied to MEDIA ONLY - text path untouched');
+    const relayBlock = engineSrc.slice(relayIdx, relayIdx + 1200);
+    assert(/if \(isMedia\) \{[\s\S]*?__gsMark\.add\(__gsInner\)[\s\S]*?relayMessage\(chatId2, __gsInner/.test(relayBlock), 'media relays TOP-LEVEL (marked) - mediatype derivable');
+    assert(relayBlock.includes('{ groupStatusMessageV2: { message: __gsInner } }'), 'TEXT path keeps the proven direct wrap');
+    assert(/if \(isMedia\)[\s\S]*?\} else \{[\s\S]*?groupStatusMessageV2/.test(relayBlock), 'media/text paths strictly separated');
 
     console.log(`\n${pass} passed, ${fail} failed`);
     if (fail > 0) process.exit(1);
