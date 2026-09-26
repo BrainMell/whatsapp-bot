@@ -1113,6 +1113,14 @@ async function generateSectionQuestions(session, section, sock, chatId) {
     return section.questions;
   }
 
+  // P24: theme-song retrieval starts IN PARALLEL with text generation (the
+  // audio-service chain can take seconds-to-minutes; the text LLM path does
+  // not depend on it). The result is still INSERTED at the same position
+  // (after text questions), so ordering and content are unchanged.
+  const tsPromise = (cfg.audioQuestionCount > 0 && section.canCarryAudio && cfg.themeSongQuestionCount > 0 && session.franchise)
+    ? buildThemeSongQuestion(session.franchise, session.otherTitles, usedKeys).catch(() => null)
+    : null;
+
   // text lore questions (with P12 validation inside generateLoreQuestions)
   let textQs = [];
   try {
@@ -1131,7 +1139,7 @@ async function generateSectionQuestions(session, section, sock, chatId) {
   if (cfg.audioQuestionCount > 0 && section.canCarryAudio) {
     let audioLeft = cfg.audioQuestionCount;
     if (cfg.themeSongQuestionCount > 0 && session.franchise) {
-      const ts = await buildThemeSongQuestion(session.franchise, session.otherTitles, usedKeys).catch(() => null);
+      const ts = tsPromise ? await tsPromise : null; // P24: started above, ran alongside text gen
       if (ts) { questions.push(ts); audioLeft--; }
     }
     if (audioLeft > 0 && session.charIndex && questions.length) {
@@ -1654,13 +1662,18 @@ async function resolveFranchise(query) {
 }
 
 // P9: verified franchise image for the intro card (page-anchored download)
+// P24: bytes go through the shared asset cache - repeat quizzes for the same
+// franchise skip the network entirely (same image, same bytes).
 async function getFranchiseIntroImage(wiki, title) {
   if (!wiki) return null;
   try {
     const img = await quizLore.getPageImage(wiki, title);
     if (!img || !img.url) return null;
-    const dl = await quizLore.downloadMedia(img.url, "image").catch(() => null);
-    if (!dl) return null;
+    const dl = await quizBank.getCachedAsset(img.url, async (u) => {
+      const d = await quizLore.downloadMedia(u, "image").catch(() => null);
+      return d ? { buf: d.buf, mime: d.mime, kind: "image" } : null;
+    });
+    if (!dl || !dl.buf) return null;
     return { buf: dl.buf, mime: dl.mime, url: img.url };
   } catch { return null; }
 }
@@ -1824,6 +1837,9 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
 
     cfg.mediaType = franchise.mediaType || cfg.mediaType;
     cfg.imageQuestionCount = Math.max(0, Math.min(cfg.imageQuestionCount, franchise.hasImages ? cfg.imageQuestionCount : 0));
+    // P24: intro-image fetch starts NOW (in parallel with section-1 generation)
+    // instead of blocking the start card after generation completes.
+    const introImagePromise = getFranchiseIntroImage(franchise.wiki, franchise.title).catch(() => null);
     const totalQuestions = cfg.questionCount;
     await sock.sendMessage(chatId, {
       text: botMarker + `✅ *${franchise.title}*${parsed.section ? `\n📚 Section locked: *${parsed.section}*` : ""}\n🧠 Building ${totalQuestions} ${cfg.difficulty} lore questions…`,
@@ -1900,8 +1916,9 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       return;
     }
 
-    // P9: intro card with verified franchise image (graceful without)
-    const introImage = await getFranchiseIntroImage(franchise.wiki, franchise.title).catch(() => null);
+    // P9: intro card with verified franchise image (graceful without).
+    // P24: image was already downloading in parallel - just collect it.
+    const introImage = await introImagePromise;
     // checkpoint 4 / FINAL GATE: cancelled while fetching the intro image, or
     // the chat was re-locked by a newer launch while this worker was paused -
     // a stale worker must NEVER post QUIZ STARTED over a newer prep.
@@ -2016,12 +2033,21 @@ async function buildFranchiseContext(sock, chatId, botMarker, m, parsed) {
     }
   }
 
-  // P22: media type detection ONCE, stored in the config context
-  const mediaDetect = await quizLore.detectMediaType(parsed.title).catch(() => ({ mediaType: "franchise" }));
+  // P22: media type detection ONCE, stored in the config context.
+  // P24: media-type detection and character metadata are INDEPENDENT lookups -
+  // run them concurrently (saves one serial API round-trip per quiz start).
+  let mediaDetect, characters;
+  if (anime) {
+    const mdP = quizLore.detectMediaType(parsed.title).catch(() => ({ mediaType: "franchise" }));
+    const chP = fetchCharacters(anime).catch(() => []);
+    mediaDetect = await mdP;
+    characters = await chP;
+  } else {
+    mediaDetect = await quizLore.detectMediaType(parsed.title).catch(() => ({ mediaType: "franchise" }));
+    characters = [];
+  }
   const mediaType = anime ? "anime" : (mediaDetect.mediaType === "franchise" ? (wiki ? "franchise" : "anime") : mediaDetect.mediaType);
 
-  // anime metadata (character popularity for the bucket index) - optional
-  const characters = anime ? await fetchCharacters(anime).catch(() => []) : [];
   const otherTitles = (res.candidates || []).map((c) => c.title).filter(Boolean).slice(0, 5);
 
   return {
