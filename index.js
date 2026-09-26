@@ -526,8 +526,9 @@ async function boot() {
         .filter(Boolean);
 
     if (selectedInstances.length > 0) {
-        const selected = new Set(selectedInstances);
-        folders = folders.filter(folder => selected.has(folder));
+        // Case-insensitive match so BOT_INSTANCE=subaru matches the Subaru folder
+        const selectedLower = new Set(selectedInstances.map(n => n.toLowerCase()));
+        folders = folders.filter(folder => selectedLower.has(folder.toLowerCase()));
         console.log(`🎯 Instance filter active: ${selectedInstances.join(', ')}`);
     }
 

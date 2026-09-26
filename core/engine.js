@@ -6141,7 +6141,13 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           console.log(`🔑 [${BOT_ID}] No existing session - showing QR immediately. Data will load after login.`);
         }
 
-        const { version } = await fetchLatestBaileysVersion();
+        // 💡 FIX: skip the fetchLatestBaileysVersion() network round-trip on
+        // every boot. That call hits WhatsApp's servers and takes 15-30s on
+        // slow or congested connections - causing the notorious "why is it
+        // taking so long to give the pairing code?" delay.
+        // The version tuple is pinned to the last known-good value; update it
+        // manually if Baileys starts rejecting the session.
+        const version = [2, 3000, 1043857760];
         sock = makeWASocket({
           version,
           auth: {
