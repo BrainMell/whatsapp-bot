@@ -42,6 +42,11 @@ const quizBank = require("./quizBank");        // P15 stable-identity bank
 // ── state ──
 const activeQuizzes = new Map(); // chatId -> session (one live quiz per chat)
 const pendingPicks = new Map();  // chatId -> { choices, ts, opts }
+// chatId -> { cancelled, session, reassureTimerId, lockSince, askedBy } for a
+// launch still generating in the background. Without this handle, `.quiz end`
+// during prep could only drop the lock - the worker kept running and posted
+// QUIZ STARTED minutes after the group was told it was cleaned up.
+const pendingPrep = new Map();
 
 // P3: lifecycle lock. chatId -> { state: "generating"|"active", since }.
 // "generating" is acquired SYNCHRONOUSLY on .j quiz (before any await) so
@@ -1159,10 +1164,18 @@ function hasActive(chatId) {
   return activeQuizzes.has(chatId);
 }
 
+// One total everywhere (start header, question cards, already-running msg):
+// generated sections count their ACTUAL questions (validation may drop some),
+// not-yet-generated sections use the plan estimate. Mixing the two formulas
+// is what produced "8 questions" headers on "QUESTION 1/10" cards.
+function plannedTotal(session) {
+  return (session.sections || []).reduce((a, s) => a + (s.questions.length ? s.questions.length : (s.perSection || 0)), 0);
+}
+
 function formatQuestionCard(session, idx, q) {
   const prefix = botConfig.getPrefix();
   const secs = session.cfg.timePerQuestion;
-  const total = session.sections.reduce((a, s) => a + (s.perSection || s.questions.length), 0);
+  const total = plannedTotal(session);
   const section = session.sections[session.activeSection];
   const sectionLabel = session.sections.length > 1 && section && section.name ? `${section.name} • ` : "";
   let s = `🎯 *QUESTION ${session.questionNo}/${total}*  •  ${sectionLabel}${q.topic}  •  ${q.difficulty.toUpperCase()}\n\n`;
@@ -1605,7 +1618,7 @@ async function startQuiz(sock, chatId, senderJid, botMarker, m, rawArgs, senderN
     if (s) {
       return {
         handled: true,
-        message: botMarker + `🎯 A quiz is already running here: *${s.title}* (question ${s.questionNo}/${s.sections.reduce((a, x) => a + x.questions.length, 0)}).\nFinish it, or use \`${botConfig.getPrefix()} quiz end\` to cancel.`,
+        message: botMarker + `🎯 A quiz is already running here: *${s.title}* (question ${s.questionNo}/${plannedTotal(s)}).\nFinish it, or use \`${botConfig.getPrefix()} quiz end\` to cancel.`,
       };
     }
     return {
@@ -1651,23 +1664,56 @@ Leaderboard: \`${prefix} quizboard\` • Cancel: \`${prefix} quiz end\` • Mods
     };
   }
 
+  // P3b: prep handle registered in the SAME synchronous frame as the lock -
+  // from this instant `.quiz end` can abort the launch (no unkillable window)
+  const prep = createPrepHandle(chatId, senderJid);
+
   // P5: immediate loading message so nobody thinks the command failed
   await sock.sendMessage(chatId, {
     text: botMarker + `🎯 Gathering questions for your quiz... Please hold on.`,
   }, { quoted: m }).catch(() => {});
 
   // background launch - never block the command promise (45s timeout bypass)
-  launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, senderName, smartGroqCall).catch((e) => {
+  launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, senderName, smartGroqCall, prep).catch((e) => {
     console.log("[Quiz] launch crashed:", e?.message);
+    pendingPrep.delete(chatId);
     releaseLifecycle(chatId);
     sock.sendMessage(chatId, { text: botMarker + `❌ Quiz preparation failed unexpectedly. Please try again.` }).catch(() => {});
   });
   return { handled: true, silent: true };
 }
 
-async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, senderName, smartGroqCall) {
+// P3b: factory for the cancellable prep handle. Callers (startQuiz /
+// pickCandidate) create it in the same synchronous frame as acquireLifecycle
+// so there is no window where the lock exists but cancellation is impossible.
+function createPrepHandle(chatId, senderJid) {
+  const prep = {
+    cancelled: false,
+    session: null,
+    reassureTimerId: null,
+    lockSince: lifecycle.get(chatId)?.since ?? null,
+    askedBy: senderJid,
+  };
+  pendingPrep.set(chatId, prep);
+  return prep;
+}
+
+async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, senderName, smartGroqCall, prepArg = null) {
   const prefix = botConfig.getPrefix();
   let reassured = false;
+  // P3b: cancellable prep handle. `.quiz end` during prep must ABORT the
+  // background worker, not just drop the lock - otherwise generation finishes
+  // later and posts QUIZ STARTED into a group that was told it was cleaned up.
+  // startQuiz/pickCandidate pass theirs in (created with the lock); a direct
+  // call (tests) creates one here as a fallback.
+  const prep = prepArg || createPrepHandle(chatId, senderJid);
+  // this launch still owns the chat lock (endQuiz/TTL-reclaim may have freed it)
+  const ownsLock = () => !prep.lockSince || lifecycle.get(chatId)?.since === prep.lockSince;
+  const abortPrep = () => {
+    clearTimeout(reassureTimerId);
+    pendingPrep.delete(chatId);
+    if (ownsLock()) releaseLifecycle(chatId); // never kill a NEWER launch's lock
+  };
   // reassurance if generation runs long (P5: no spam - one nudge)
   const reassureTimerId = setTimeout(() => {
     if (!activeQuizzes.has(chatId) && lifecycle.get(chatId)?.state === "generating") {
@@ -1675,6 +1721,8 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       sock.sendMessage(chatId, { text: botMarker + `🧠 Still researching the lore for *${parsed.randomMode ? "random mode" : parsed.title}* - good questions take a moment...` }).catch(() => {});
     }
   }, GEN_REASSURE_MS);
+  prep.reassureTimerId = reassureTimerId;
+  prep.session = null;
 
   try {
     const cfg = await quizConfigMod.buildQuizConfig(chatId, {
@@ -1686,11 +1734,16 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       randomMode: parsed.randomMode,
       requestedBy: senderJid,
     });
+    // checkpoint 1: cancelled while building config
+    if (prep.cancelled) { abortPrep(); return; }
 
     const callLLM = normalizeSmartGroq(smartGroqCall);
     const franchise = await buildFranchiseContext(sock, chatId, botMarker, m, parsed);
+    // checkpoint 2: cancelled during wiki/anime resolution (the slow network phase)
+    if (prep.cancelled) { abortPrep(); return; }
     if (!franchise) {
       clearTimeout(reassureTimerId);
+      pendingPrep.delete(chatId);
       releaseLifecycle(chatId);
       return; // error already messaged
     }
@@ -1736,6 +1789,9 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       charIndex: franchise.charIndex || null,
       otherTitles: franchise.otherTitles || [],
     };
+    prep.session = session; // cancellation now reaches the session too
+    // if endQuiz fired while the session object was being built, honour it now
+    if (prep.cancelled) { session.cancelled = true; abortPrep(); return; }
 
     // P7: section plan from real availability
     const availability = franchise.availability || await probeAvailability(franchise.wiki, franchise.title, franchise.characters || []);
@@ -1757,10 +1813,12 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     await job;
 
     clearTimeout(reassureTimerId);
-    if (session.cancelled) { releaseLifecycle(chatId); return; }
+    // checkpoint 3: cancelled while section 1 was generating (the minutes-long phase)
+    if (prep.cancelled || session.cancelled) { abortPrep(); return; }
 
     if (first.state !== SECTION_STATES.READY || first.questions.length < Math.min(3, first.perSection)) {
       // generation failed - release the lock, tell the group, never leave a zombie
+      pendingPrep.delete(chatId);
       releaseLifecycle(chatId);
       await sock.sendMessage(chatId, {
         text: botMarker + `❌ Could not build a quiz for *${franchise.title}* (not enough lore data found). Try a better-known franchise.`,
@@ -1770,7 +1828,11 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
 
     // P9: intro card with verified franchise image (graceful without)
     const introImage = await getFranchiseIntroImage(franchise.wiki, franchise.title).catch(() => null);
-    const totalQs = session.sections.reduce((a, s) => a + s.questions.length, 0);
+    // checkpoint 4 / FINAL GATE: cancelled while fetching the intro image, or
+    // the chat was re-locked by a newer launch while this worker was paused -
+    // a stale worker must NEVER post QUIZ STARTED over a newer prep.
+    if (prep.cancelled || session.cancelled || !ownsLock()) { abortPrep(); return; }
+    const totalQs = plannedTotal(session);
     let head = botMarker + `🎯 *QUIZ STARTED - ${String(franchise.title).toUpperCase()}* 🎯\n\n`;
     head += `📚 ${totalQs} questions • ${cfg.difficulty.toUpperCase()} • ${POINTS[cfg.difficulty]} Zeni per correct (+20 speed bonus)\n`;
     if (session.sections.length > 1) head += `📖 ${session.sections.length} sections\n`;
@@ -1791,12 +1853,16 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     // bounce off the session check with a friendly message
     activeQuizzes.set(chatId, session);
     promoteLifecycle(chatId);
+    pendingPrep.delete(chatId); // prep phase over - handle no longer needed
     startSection(sock, chatId, session, 0);
   } catch (e) {
     clearTimeout(reassureTimerId);
-    releaseLifecycle(chatId);
+    pendingPrep.delete(chatId);
+    if (!activeQuizzes.has(chatId) && ownsLock()) releaseLifecycle(chatId);
     console.log("[Quiz] launch failed:", e?.message);
-    await sock.sendMessage(chatId, { text: botMarker + `❌ Quiz preparation failed (${String(e?.message || "error").slice(0, 80)}). Please try again.` }).catch(() => {});
+    if (!prep.cancelled) {
+      await sock.sendMessage(chatId, { text: botMarker + `❌ Quiz preparation failed (${String(e?.message || "error").slice(0, 80)}). Please try again.` }).catch(() => {});
+    }
   }
 }
 
@@ -1908,11 +1974,13 @@ async function pickCandidate(sock, chatId, senderJid, botMarker, m, numStr, send
   if (!acquireLifecycle(chatId)) {
     return { handled: true, message: botMarker + `⏳ A quiz is already being prepared here - hang on a few seconds! 🎯` };
   }
+  const prep = createPrepHandle(chatId, senderJid);
   await sock.sendMessage(chatId, { text: botMarker + `🎯 Gathering questions for your quiz... Please hold on.` }, { quoted: m }).catch(() => {});
   const parsed = { title: chosen.title, count: pending.opts.count, difficulty: pending.opts.difficulty, section: pending.opts.section || null, images: pending.opts.images || null, audio: pending.opts.audio || null, randomMode: false, notes: [] };
   // shortcut: we already know the anime - seed the resolution
-  launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, senderName, smartGroqCall).catch((e) => {
+  launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, senderName, smartGroqCall, prep).catch((e) => {
     console.log("[Quiz] pick launch crashed:", e?.message);
+    pendingPrep.delete(chatId);
     releaseLifecycle(chatId);
   });
   return { handled: true, silent: true };
@@ -1921,6 +1989,23 @@ async function pickCandidate(sock, chatId, senderJid, botMarker, m, numStr, send
 async function endQuiz(sock, chatId, senderJid, botMarker, canUseAdminCommands) {
   const session = activeQuizzes.get(chatId);
   if (!session) {
+    // P3b: a launch may still be generating in the background (no session yet,
+    // only the lifecycle lock). Mark its prep handle cancelled so the worker
+    // aborts at its next checkpoint - previously this branch only dropped the
+    // lock and the worker went on to post QUIZ STARTED minutes later.
+    const prep = pendingPrep.get(chatId);
+    if (prep && !prep.cancelled) {
+      if (prep.askedBy !== senderJid && !canUseAdminCommands) {
+        return { handled: true, message: botMarker + `🛑 Only the quiz starter or admins can cancel the preparation.` };
+      }
+      prep.cancelled = true;
+      if (prep.session) prep.session.cancelled = true;
+      if (prep.reassureTimerId) clearTimeout(prep.reassureTimerId);
+      pendingPrep.delete(chatId);
+      if (!prep.lockSince || lifecycle.get(chatId)?.since === prep.lockSince) releaseLifecycle(chatId);
+      console.log("[Quiz] prep cancelled via .quiz end");
+      return { handled: true, message: botMarker + `🧹 Quiz preparation cancelled - nothing will start. You can begin a new one now.` };
+    }
     // also release a stale "generating" lock so the group is never stuck
     if (lifecycle.has(chatId)) {
       releaseLifecycle(chatId);
@@ -1932,6 +2017,7 @@ async function endQuiz(sock, chatId, senderJid, botMarker, canUseAdminCommands) 
     return { handled: true, message: botMarker + `🛑 Only the quiz starter or admins can end it early.` };
   }
   session.cancelled = true;
+  pendingPrep.delete(chatId); // hygiene: a live session never has a prep handle
   if (session.nextTimerId) clearTimeout(session.nextTimerId);
   await finishQuiz(sock, chatId, session);
   return { handled: true, silent: true };
