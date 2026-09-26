@@ -71,7 +71,7 @@ async function handleOpsCheck(sock, chatId, args) {
             '   `.j quizmod` — show config • `.j quizmod reset` — restore defaults',
             '',
             '🚀 *QUIZ PERFORMANCE (2026-09-26 speed pass)*',
-            '   • generation pipeline: lore retrieval + LLM calls run in parallel rounds — a 10-question section builds in ~1 LLM round-trip instead of 10 sequential ones',
+            '   • generation pipeline: lore retrieval + LLM calls run in parallel rounds (bounded burst, `QUIZ_LLM_BURST`=3) — a 10-question section builds in ~2-4 LLM round-trips instead of 10+ sequential ones',
             '   • theme-song audio: the Go audio service hands back the clipped 30s/96k mp3 directly (no full-track re-download, no local ffmpeg); clips cached server-side per track',
             '   • theme-song fetch overlaps text generation; intro image downloads while section 1 generates; franchise intro images are memory-cached',
             '   • image questions download their image exactly once (generation-time bytes are reused at send time)',

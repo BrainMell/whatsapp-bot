@@ -653,6 +653,37 @@ async function generateLoreQuestions(wiki, franchiseTitle, difficulty, count, se
   };
 
   const MAX_ATTEMPTS = 4; // unchanged sequential attempt cap
+  // P24b: LLM burst cap - firing all N round calls at once trips Groq org
+  // rate limits (measured: 429 storms + lost yield). A small worker pool
+  // keeps the parallel win while pacing the request stream.
+  const LLM_BURST = Math.max(1, parseInt(process.env.QUIZ_LLM_BURST, 10) || 3);
+
+  const handleSlot = async ({ slot, lore }, attempt) => {
+    try {
+      const out = await quizLore.generateLoreQuestion(callLLM, franchiseTitle, lore, slot.domain, difficulty, slot.lastReject, attempt);
+      if (!out) return;
+      // P12 validation before acceptance
+      const err = validateGeneratedQuestion(out.question, {
+        franchiseTitle, wiki,
+        loreText: lore.text || "",
+        domain: slot.domain, mediaType: opts.mediaType || "anime",
+        subjectNames: [lore.page, lore.section].filter(Boolean),
+      });
+      if (err) {
+        console.log(`[Quiz] Q rejected (${slot.domain}): ${err}`);
+        slot.lastReject = err;
+        // retire this lore chunk so the retry sources DIFFERENT lore
+        // (same-source retries just re-roll the same broken question)
+        usedKeys.add(`${wiki}:${lore.page}:${lore.section}`);
+        return;
+      }
+      const q = out.question;
+      q.promptTok = out.promptTok;
+      q.loreRef = { wiki, page: lore.page, section: lore.section };
+      slot.question = q;
+    } catch { /* slot retries in the next round */ }
+  };
+
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const pending = slots.filter((s) => !s.question);
     if (!pending.length) break;
@@ -665,31 +696,13 @@ async function generateLoreQuestions(wiki, franchiseTitle, difficulty, count, se
     }
     if (!withLore.length) continue;
 
-    // parallel LLM + validation for the whole round
-    await Promise.all(withLore.map(async ({ slot, lore }) => {
-      try {
-        const out = await quizLore.generateLoreQuestion(callLLM, franchiseTitle, lore, slot.domain, difficulty, slot.lastReject, attempt);
-        if (!out) return;
-        // P12 validation before acceptance
-        const err = validateGeneratedQuestion(out.question, {
-          franchiseTitle, wiki,
-          loreText: lore.text || "",
-          domain: slot.domain, mediaType: opts.mediaType || "anime",
-          subjectNames: [lore.page, lore.section].filter(Boolean),
-        });
-        if (err) {
-          console.log(`[Quiz] Q rejected (${slot.domain}): ${err}`);
-          slot.lastReject = err;
-          // retire this lore chunk so the retry sources DIFFERENT lore
-          // (same-source retries just re-roll the same broken question)
-          usedKeys.add(`${wiki}:${lore.page}:${lore.section}`);
-          return;
-        }
-        const q = out.question;
-        q.promptTok = out.promptTok;
-        q.loreRef = { wiki, page: lore.page, section: lore.section };
-        slot.question = q;
-      } catch { /* slot retries in the next round */ }
+    // bounded-parallel LLM + validation for the whole round
+    const queue = [...withLore];
+    await Promise.all(Array.from({ length: Math.min(LLM_BURST, queue.length) }, async () => {
+      while (queue.length) {
+        const item = queue.shift();
+        await handleSlot(item, attempt);
+      }
     }));
   }
 
