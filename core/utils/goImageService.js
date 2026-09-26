@@ -756,16 +756,25 @@ class GoImageService {
   /*
    * YouTube Audio Info & direct URL (Go Service)
    */
-  async getAudioInfo(query) {
+  async getAudioInfo(query, opts = {}) {
     // 💡 FIX (tester issue 5268cb): every failure (service down, timeout,
     // empty search) collapsed to null, so the bot always said "No results
     // found or service unavailable" and testers could not tell whether the
     // query or the service was at fault. Now: one retry for transient
     // network errors, and the failure REASON is surfaced to the caller.
     const base = process.env.GO_AUDIO_SERVICE_URL || this.baseUrl;
+    // P25 (quiz box-offload): optional server-side clip. When the caller passes
+    // { clipSeconds, clipBitrate }, the service trims the mp3 itself and points
+    // audioURL at the clip (response gains clipped/clipSeconds/fullBytes).
+    // Callers WITHOUT opts get the exact legacy response shape.
+    const params = { query };
+    if (opts && Number.isInteger(opts.clipSeconds) && opts.clipSeconds > 0) {
+      params.clip_seconds = String(opts.clipSeconds);
+      if (opts.clipBitrate) params.clip_bitrate = String(opts.clipBitrate);
+    }
     const attempt = async () => {
       const response = await axios.get(base + "/api/scrape/audio", {
-        params: { query },
+        params,
         timeout: 180000,
       });
       return response.data;

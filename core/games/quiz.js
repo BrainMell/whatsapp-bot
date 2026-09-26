@@ -802,8 +802,13 @@ async function buildThemeSongQuestion(franchise, otherTitles, usedKeys) {
   const song = pool.sort(() => Math.random() - 0.5)[0];
   if (usedKeys && usedKeys.has(`song:${_normText(song)}`)) return null;
 
-  // retrieval through the EXISTING audio infra (P11: no parallel fetch system)
-  const info = await deps.goService.getAudioInfo(`${song} ${franchise.title} opening`).catch(() => null);
+  // retrieval through the EXISTING audio infra (P11: no parallel fetch system).
+  // P25: ask the service to hand back the clipped 30s/96k bytes directly - it
+  // already downloaded + converted the track, so this kills the full-file
+  // re-download AND the local ffmpeg spawn on this box. Same ffmpeg binary +
+  // same args = same clip bytes/audio as the old local trim (1-byte LAME
+  // metadata difference, zero effect: audio clips are never content-hashed).
+  const info = await deps.goService.getAudioInfo(`${song} ${franchise.title} opening`, { clipSeconds: 30, clipBitrate: "96k" }).catch(() => null);
   if (!info || info.error || !info.audioURL || !info.metadata) return null;
   // P14 verification: the hit must actually belong to this media. A search
   // API hit alone is NOT verification - require title overlap with the song
@@ -815,10 +820,24 @@ async function buildThemeSongQuestion(franchise, otherTitles, usedKeys) {
     || (franN.length >= 5 && metaTitle.includes(franN.split(" ")[0]));
   if (!overlap) return null;
 
-  // download + 30s clip + byte verification BEFORE the question is playable
-  const dl = await axios.get(info.audioURL, { responseType: "arraybuffer", timeout: 60000, maxContentLength: 20 * 1024 * 1024 }).catch(() => null);
-  if (!dl || !dl.data || dl.data.length < 50 * 1024) return null;
-  const clip = await _clipAudioBuffer(Buffer.from(dl.data), deps.ffmpegPath, 30);
+  // download + byte verification BEFORE the question is playable.
+  // Acceptance gates match the legacy pipeline exactly: full file >= 50KB,
+  // final clip > 20KB.
+  let clip = null;
+  if (info.clipped) {
+    // P25 fast path: the service already trimmed (fullBytes gate mirrors the
+    // old >=50KB check on the full file we used to download)
+    const fullOk = !Number.isFinite(info.fullBytes) || info.fullBytes >= 50 * 1024;
+    const dl = await axios.get(info.audioURL, { responseType: "arraybuffer", timeout: 60000, maxContentLength: 20 * 1024 * 1024 }).catch(() => null);
+    if (fullOk && dl && dl.data && dl.data.length > 20 * 1024) clip = Buffer.from(dl.data);
+  }
+  if (!clip) {
+    // legacy path: full file download + local ffmpeg trim (older Go build or
+    // server-side clip failed) - unchanged behavior
+    const dl = await axios.get(info.audioURL, { responseType: "arraybuffer", timeout: 60000, maxContentLength: 20 * 1024 * 1024 }).catch(() => null);
+    if (!dl || !dl.data || dl.data.length < 50 * 1024) return null;
+    clip = await _clipAudioBuffer(Buffer.from(dl.data), deps.ffmpegPath, 30);
+  }
   if (!clip) return null;
 
   // options: correct media + 3 other well-known titles (structural question)
