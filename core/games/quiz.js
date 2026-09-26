@@ -844,6 +844,64 @@ function releaseLifecycle(chatId) {
 }
 
 // ════════════════════════════════════════════
+// P20: BOT-WIDE GENERATION GATE (prep-phase concurrency cap)
+// Caps how many quizzes GENERATE at the same time across the whole bot
+// (all instances share this one node process). Playing is never gated -
+// only the initial prep phase (franchise resolution + section-1 build).
+// Over the cap, launches WAIT in FIFO order (never dropped); if the wait
+// exceeds GEN_QUEUE_TIMEOUT_MS they are deferred with a clear message.
+// Normal traffic (1 group generating) never touches the queue.
+// ════════════════════════════════════════════
+
+const GEN_SLOTS = Math.max(1, parseInt(process.env.QUIZ_GEN_SLOTS, 10) || 2);
+const GEN_QUEUE_TIMEOUT_MS = Math.max(30000, parseInt(process.env.QUIZ_GEN_QUEUE_TIMEOUT_MS, 10) || 10 * 60 * 1000);
+const genGate = { active: 0, waiters: [] };
+
+function acquireGenSlot(prep) {
+  return new Promise((resolve) => {
+    if (genGate.active < GEN_SLOTS && genGate.waiters.length === 0) {
+      genGate.active += 1;
+      resolve(true);
+      return;
+    }
+    const waiter = { prep, resolve, timer: null };
+    waiter.timer = setTimeout(() => {
+      const i = genGate.waiters.indexOf(waiter);
+      if (i >= 0) {
+        genGate.waiters.splice(i, 1);
+        resolve(false); // queue wait expired -> caller defers clearly
+      }
+    }, GEN_QUEUE_TIMEOUT_MS);
+    genGate.waiters.push(waiter);
+  });
+}
+
+function pumpGenGate() {
+  // P20: purge cancelled waiters FIRST - they need no slot and must not sit
+  // until their timeout ticks (endQuiz cancels can happen at zero free slots)
+  for (let i = genGate.waiters.length - 1; i >= 0; i--) {
+    const w = genGate.waiters[i];
+    if (w.prep && w.prep.cancelled) {
+      genGate.waiters.splice(i, 1);
+      clearTimeout(w.timer);
+      w.resolve(false);
+    }
+  }
+  while (genGate.active < GEN_SLOTS && genGate.waiters.length) {
+    const w = genGate.waiters.shift();
+    clearTimeout(w.timer);
+    if (w.prep && w.prep.cancelled) { w.resolve(false); continue; } // cancelled while queued
+    genGate.active += 1;
+    w.resolve(true);
+  }
+}
+
+function releaseGenSlot() {
+  genGate.active = Math.max(0, genGate.active - 1);
+  pumpGenGate();
+}
+
+// ════════════════════════════════════════════
 // P15: SEEN + BANK GLUE
 // ════════════════════════════════════════════
 
@@ -1723,8 +1781,24 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
   }, GEN_REASSURE_MS);
   prep.reassureTimerId = reassureTimerId;
   prep.session = null;
+  let ownsSlot = false; // P20: true only while this launch holds a generation slot
 
   try {
+    // P20: bot-wide generation gate - FIFO wait when at cap, clear deferral
+    // on queue timeout, never a silent drop. Released on EVERY exit below -
+    // but ONLY if this launch actually received a slot (queued launches that
+    // time out or are cancelled must not decrement someone else's slot).
+    const gotSlot = await acquireGenSlot(prep);
+    if (!gotSlot) {
+      abortPrep();
+      if (!prep.cancelled) {
+        console.log("[Quiz] generation queue timeout - deferring launch");
+        await sock.sendMessage(chatId, { text: botMarker + `⏳ The quiz generation queue is full right now - please try again in a few minutes.` }).catch(() => {});
+      }
+      return;
+    }
+    ownsSlot = true;
+
     const cfg = await quizConfigMod.buildQuizConfig(chatId, {
       count: parsed.count,
       difficulty: parsed.difficulty,
@@ -1863,6 +1937,8 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     if (!prep.cancelled) {
       await sock.sendMessage(chatId, { text: botMarker + `❌ Quiz preparation failed (${String(e?.message || "error").slice(0, 80)}). Please try again.` }).catch(() => {});
     }
+  } finally {
+    if (ownsSlot) releaseGenSlot(); // P20: only a granted launch returns its slot
   }
 }
 
@@ -2003,6 +2079,7 @@ async function endQuiz(sock, chatId, senderJid, botMarker, canUseAdminCommands) 
       if (prep.reassureTimerId) clearTimeout(prep.reassureTimerId);
       pendingPrep.delete(chatId);
       if (!prep.lockSince || lifecycle.get(chatId)?.since === prep.lockSince) releaseLifecycle(chatId);
+      pumpGenGate(); // P20: wake a queued waiter if this prep was queued behind one
       console.log("[Quiz] prep cancelled via .quiz end");
       return { handled: true, message: botMarker + `🧹 Quiz preparation cancelled - nothing will start. You can begin a new one now.` };
     }
@@ -2101,5 +2178,5 @@ module.exports = {
   SECTION_STATES,
   FOREIGN_MEDIA_BLOCKLIST,
   RANDOM_POOL,
-  _internal: { activeQuizzes, pendingPicks, lifecycle, revealAndAdvance, finishQuiz, postQuestion, startSection, ensureSectionGenerating, generateSectionQuestions, advanceToNextSection, mediaKeyFor, probeAvailability, launchQuizAsync, buildFranchiseContext },
+  _internal: { activeQuizzes, pendingPicks, lifecycle, revealAndAdvance, finishQuiz, postQuestion, startSection, ensureSectionGenerating, generateSectionQuestions, advanceToNextSection, mediaKeyFor, probeAvailability, launchQuizAsync, buildFranchiseContext, genGate: { acquireGenSlot, releaseGenSlot, pumpGenGate, state: () => genGate, slots: () => GEN_SLOTS } },
 };
