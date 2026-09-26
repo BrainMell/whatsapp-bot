@@ -619,55 +619,86 @@ async function generateLoreQuestions(wiki, franchiseTitle, difficulty, count, se
   if (adjustedPlan.includes("characters")) {
     try { buckets = await quizLore.buildCharacterIndex(wiki, franchiseTitle, animeCharacters || []); } catch { buckets = null; }
   }
-  const questions = [];
-  for (let i = 0; i < adjustedPlan.length; i++) {
-    const domain = adjustedPlan[i];
-    let generated = null;
-    let lastReject = null; // fed back into the retry prompt (source-grounding nudge)
-    for (let attempt = 0; attempt < 4 && !generated; attempt++) {
-      let lore = null;
-      try {
-        if (domain === "characters") {
-          const charPage = buckets ? quizLore.pickCharacterPage(buckets, difficulty) : null;
-          lore = await quizLore.retrieveCharacterLore(wiki, charPage, difficulty, usedKeys);
-          if (!lore && charPage) lore = await quizLore.retrieveLore(wiki, charPage, "characters", difficulty, usedKeys);
-        } else if (domain === "cosmology" || domain === "powerscaling") {
-          lore = await quizLore.retrieveCosmologyLore(wiki, franchiseTitle, difficulty, usedKeys, domain);
-          if (!lore) lore = await quizLore.retrieveLore(wiki, franchiseTitle, domain, difficulty, usedKeys);
-        } else {
-          lore = await quizLore.retrieveLore(wiki, franchiseTitle, domain, difficulty, usedKeys);
-        }
-      } catch (e) {
-        console.log("[Quiz] lore retrieval failed:", e?.message);
-        continue;
+
+  // P24b: PARALLEL ROUNDS. The sequential pipeline spent sum(N x LLM-latency)
+  // wall clock: each slot's retrieve -> LLM -> validate ran strictly after the
+  // previous slot finished. Same guarantees, new schedule:
+  //   - lore RETRIEVAL stays serial (usedKeys claims must keep their order ->
+  //     P15 no-chunk-twice invariant is decided here, exactly as before)
+  //   - every LLM call + P12 validation of one round fires CONCURRENTLY
+  //   - rejected/failed slots retry in later rounds: same lastReject feedback,
+  //     same attempt index passed to the prompt, same 4-attempt cap
+  // Acceptance criteria, retire-on-reject, plan order and final numbering are
+  // byte-identical to the sequential pipeline.
+  const slots = adjustedPlan.map((domain) => ({ domain, question: null, lastReject: null }));
+
+  const retrieveForSlot = async (slot) => {
+    const domain = slot.domain;
+    try {
+      if (domain === "characters") {
+        const charPage = buckets ? quizLore.pickCharacterPage(buckets, difficulty) : null;
+        let lore = await quizLore.retrieveCharacterLore(wiki, charPage, difficulty, usedKeys);
+        if (!lore && charPage) lore = await quizLore.retrieveLore(wiki, charPage, "characters", difficulty, usedKeys);
+        return lore;
+      } else if (domain === "cosmology" || domain === "powerscaling") {
+        let lore = await quizLore.retrieveCosmologyLore(wiki, franchiseTitle, difficulty, usedKeys, domain);
+        if (!lore) lore = await quizLore.retrieveLore(wiki, franchiseTitle, domain, difficulty, usedKeys);
+        return lore;
       }
-      if (!lore) continue;
-      const out = await quizLore.generateLoreQuestion(callLLM, franchiseTitle, lore, domain, difficulty, lastReject, attempt);
-      if (out) {
+      return await quizLore.retrieveLore(wiki, franchiseTitle, domain, difficulty, usedKeys);
+    } catch (e) {
+      console.log("[Quiz] lore retrieval failed:", e?.message);
+      return null;
+    }
+  };
+
+  const MAX_ATTEMPTS = 4; // unchanged sequential attempt cap
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const pending = slots.filter((s) => !s.question);
+    if (!pending.length) break;
+
+    // serial retrieval round - ordered usedKeys claims, wiki cache does the rest
+    const withLore = [];
+    for (const slot of pending) {
+      const lore = await retrieveForSlot(slot);
+      if (lore) withLore.push({ slot, lore });
+    }
+    if (!withLore.length) continue;
+
+    // parallel LLM + validation for the whole round
+    await Promise.all(withLore.map(async ({ slot, lore }) => {
+      try {
+        const out = await quizLore.generateLoreQuestion(callLLM, franchiseTitle, lore, slot.domain, difficulty, slot.lastReject, attempt);
+        if (!out) return;
         // P12 validation before acceptance
         const err = validateGeneratedQuestion(out.question, {
           franchiseTitle, wiki,
           loreText: lore.text || "",
-          domain, mediaType: opts.mediaType || "anime",
+          domain: slot.domain, mediaType: opts.mediaType || "anime",
           subjectNames: [lore.page, lore.section].filter(Boolean),
         });
         if (err) {
-          console.log(`[Quiz] Q rejected (${domain}): ${err}`);
-          lastReject = err;
+          console.log(`[Quiz] Q rejected (${slot.domain}): ${err}`);
+          slot.lastReject = err;
           // retire this lore chunk so the retry sources DIFFERENT lore
           // (same-source retries just re-roll the same broken question)
           usedKeys.add(`${wiki}:${lore.page}:${lore.section}`);
-          continue;
+          return;
         }
         const q = out.question;
         q.promptTok = out.promptTok;
         q.loreRef = { wiki, page: lore.page, section: lore.section };
-        console.log(`[Quiz] Q${questions.length + 1} ${domain}/${difficulty} ctx=${out.promptTok}tok src=${lore.page}/${lore.section}`);
-        generated = q;
-      }
-    }
-    if (generated) questions.push(generated);
+        slot.question = q;
+      } catch { /* slot retries in the next round */ }
+    }));
   }
+
+  const questions = slots.filter((s) => s.question).map((s) => s.question);
+  slots.forEach((s, i) => {
+    if (!s.question) return;
+    const q = s.question;
+    console.log(`[Quiz] Q${i + 1} ${s.domain}/${difficulty} ctx=${q.promptTok || "?"}tok src=${q.loreRef ? `${q.loreRef.page}/${q.loreRef.section}` : "?"}`);
+  });
   return questions;
 }
 
