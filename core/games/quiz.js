@@ -816,66 +816,91 @@ async function buildThemeSongQuestion(franchise, otherTitles, usedKeys) {
   try { songs = await quizLore.getThemeSongs(mediaType, animeId, { goService: deps.goService }); } catch { return null; }
   const pool = [...songs.openings, ...songs.endings].filter((s) => s && s.length >= 3);
   if (!pool.length) return null;
-  const song = pool.sort(() => Math.random() - 0.5)[0];
-  if (usedKeys && usedKeys.has(`song:${_normText(song)}`)) return null;
 
-  // retrieval through the EXISTING audio infra (P11: no parallel fetch system).
-  // P25: ask the service to hand back the clipped 30s/96k bytes directly - it
-  // already downloaded + converted the track, so this kills the full-file
-  // re-download AND the local ffmpeg spawn on this box. Same ffmpeg binary +
-  // same args = same clip bytes/audio as the old local trim (1-byte LAME
-  // metadata difference, zero effect: audio clips are never content-hashed).
-  const info = await deps.goService.getAudioInfo(`${song} ${franchise.title} opening`, { clipSeconds: 30, clipBitrate: "96k" }).catch(() => null);
-  if (!info || info.error || !info.audioURL || !info.metadata) return null;
-  // P14 verification: the hit must actually belong to this media. A search
-  // API hit alone is NOT verification - require title overlap with the song
-  // name or the franchise title.
-  const metaTitle = _normText(info.metadata.title);
-  const songN = _normText(song);
-  const franN = _normText(franchise.title || "");
-  const overlap = (metaTitle.includes(songN.slice(0, Math.max(6, Math.floor(songN.length * 0.6)))) && songN.length >= 6)
-    || (franN.length >= 5 && metaTitle.includes(franN.split(" ")[0]));
-  if (!overlap) return null;
-
-  // download + byte verification BEFORE the question is playable.
-  // Acceptance gates match the legacy pipeline exactly: full file >= 50KB,
-  // final clip > 20KB.
-  let clip = null;
-  if (info.clipped) {
-    // P25 fast path: the service already trimmed (fullBytes gate mirrors the
-    // old >=50KB check on the full file we used to download)
-    const fullOk = !Number.isFinite(info.fullBytes) || info.fullBytes >= 50 * 1024;
-    const dl = await axios.get(info.audioURL, { responseType: "arraybuffer", timeout: 60000, maxContentLength: 20 * 1024 * 1024 }).catch(() => null);
-    if (fullOk && dl && dl.data && dl.data.length > 20 * 1024) clip = Buffer.from(dl.data);
+  // P29: options = correct media + 3 other well-known titles. Franchises
+  // resolved wiki-first have empty otherTitles (candidates only populate on
+  // the anime-pick path), which silently killed EVERY theme-song question -
+  // fill the shortfall from the well-known franchise pool (P11 spec intent).
+  const franchiseLower = String(franchise.title).toLowerCase();
+  let others = (otherTitles || [])
+    .filter((t) => String(t).toLowerCase() !== franchiseLower)
+    .sort(() => Math.random() - 0.5).slice(0, 3);
+  if (others.length < 3) {
+    const pretty = (slug) => RANDOM_TITLES[slug] || slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    const extra = RANDOM_POOL
+      .filter((slug) => pretty(slug).toLowerCase() !== franchiseLower && !others.some((o) => String(o).toLowerCase() === pretty(slug).toLowerCase()))
+      .sort(() => Math.random() - 0.5)
+      .map(pretty);
+    for (const t of extra) {
+      if (others.length >= 3) break;
+      others.push(t);
+    }
   }
-  if (!clip) {
-    // legacy path: full file download + local ffmpeg trim (older Go build or
-    // server-side clip failed) - unchanged behavior
-    const dl = await axios.get(info.audioURL, { responseType: "arraybuffer", timeout: 60000, maxContentLength: 20 * 1024 * 1024 }).catch(() => null);
-    if (!dl || !dl.data || dl.data.length < 50 * 1024) return null;
-    clip = await _clipAudioBuffer(Buffer.from(dl.data), deps.ffmpegPath, 30);
-  }
-  if (!clip) return null;
-
-  // options: correct media + 3 other well-known titles (structural question)
-  const others = (otherTitles || []).filter((t) => String(t).toLowerCase() !== String(franchise.title).toLowerCase()).sort(() => Math.random() - 0.5).slice(0, 3);
   if (others.length < 3) return null;
   const optionsPool = [franchise.title, ...others];
   const order = optionsPool.map((_, i) => i).sort(() => Math.random() - 0.5);
-  if (usedKeys) usedKeys.add(`song:${_normText(song)}`);
-  return {
-    q: `🔊 Which anime is this opening from?`,
-    options: order.map((i) => optionsPool[i]),
-    correct: order.indexOf(0),
-    difficulty: "easy",
-    topic: "Theme Song",
-    domain: "production",
-    type: "theme",
-    assetKey: `song:${_normText(song)}:${_normText(franchise.title)}`,
-    asset: { kind: "audio", buf: clip, mime: "audio/mpeg", subject: song },
-    song,
-    loreRef: { wiki: franchise.wiki || null, page: franchise.title, section: "theme-song" },
-  };
+
+  // P29: try up to 3 candidate songs - audio retrieval hits that fail P14
+  // verification used to kill the whole question; every candidate still goes
+  // through the exact same verification gates, only the pick is retried.
+  const candidates = pool.sort(() => Math.random() - 0.5).slice(0, 3);
+  for (const song of candidates) {
+    if (usedKeys && usedKeys.has(`song:${_normText(song)}`)) continue;
+
+    // retrieval through the EXISTING audio infra (P11: no parallel fetch system).
+    // P25: ask the service to hand back the clipped 30s/96k bytes directly - it
+    // already downloaded + converted the track, so this kills the full-file
+    // re-download AND the local ffmpeg spawn on this box. Same ffmpeg binary +
+    // same args = same clip bytes/audio as the old local trim (1-byte LAME
+    // metadata difference, zero effect: audio clips are never content-hashed).
+    const info = await deps.goService.getAudioInfo(`${song} ${franchise.title} opening`, { clipSeconds: 30, clipBitrate: "96k" }).catch(() => null);
+    if (!info || info.error || !info.audioURL || !info.metadata) continue;
+    // P14 verification: the hit must actually belong to this media. A search
+    // API hit alone is NOT verification - require title overlap with the song
+    // name or the franchise title.
+    const metaTitle = _normText(info.metadata.title);
+    const songN = _normText(song);
+    const franN = _normText(franchise.title || "");
+    const overlap = (metaTitle.includes(songN.slice(0, Math.max(6, Math.floor(songN.length * 0.6)))) && songN.length >= 6)
+      || (franN.length >= 5 && metaTitle.includes(franN.split(" ")[0]));
+    if (!overlap) continue;
+
+    // download + byte verification BEFORE the question is playable.
+    // Acceptance gates match the legacy pipeline exactly: full file >= 50KB,
+    // final clip > 20KB.
+    let clip = null;
+    if (info.clipped) {
+      // P25 fast path: the service already trimmed (fullBytes gate mirrors the
+      // old >=50KB check on the full file we used to download)
+      const fullOk = !Number.isFinite(info.fullBytes) || info.fullBytes >= 50 * 1024;
+      const dl = await axios.get(info.audioURL, { responseType: "arraybuffer", timeout: 60000, maxContentLength: 20 * 1024 * 1024 }).catch(() => null);
+      if (fullOk && dl && dl.data && dl.data.length > 20 * 1024) clip = Buffer.from(dl.data);
+    }
+    if (!clip) {
+      // legacy path: full file download + local ffmpeg trim (older Go build or
+      // server-side clip failed) - unchanged behavior
+      const dl = await axios.get(info.audioURL, { responseType: "arraybuffer", timeout: 60000, maxContentLength: 20 * 1024 * 1024 }).catch(() => null);
+      if (!dl || !dl.data || dl.data.length < 50 * 1024) continue;
+      clip = await _clipAudioBuffer(Buffer.from(dl.data), deps.ffmpegPath, 30);
+    }
+    if (!clip) continue;
+
+    if (usedKeys) usedKeys.add(`song:${_normText(song)}`);
+    return {
+      q: `🔊 Which anime is this opening from?`,
+      options: order.map((i) => optionsPool[i]),
+      correct: order.indexOf(0),
+      difficulty: "easy",
+      topic: "Theme Song",
+      domain: "production",
+      type: "theme",
+      assetKey: `song:${_normText(song)}:${_normText(franchise.title)}`,
+      asset: { kind: "audio", buf: clip, mime: "audio/mpeg", subject: song },
+      song,
+      loreRef: { wiki: franchise.wiki || null, page: franchise.title, section: "theme-song" },
+    };
+  }
+  return null;
 }
 
 // ════════════════════════════════════════════
