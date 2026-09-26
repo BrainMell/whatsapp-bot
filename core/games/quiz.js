@@ -813,7 +813,7 @@ async function buildThemeSongQuestion(franchise, otherTitles, usedKeys) {
   const mediaType = franchise.mediaType || "anime";
   const animeId = franchise.anime?.idMal || franchise.anime?.id;
   let songs = { openings: [], endings: [] };
-  try { songs = await quizLore.getThemeSongs(mediaType, animeId); } catch { return null; }
+  try { songs = await quizLore.getThemeSongs(mediaType, animeId, { goService: deps.goService }); } catch { return null; }
   const pool = [...songs.openings, ...songs.endings].filter((s) => s && s.length >= 3);
   if (!pool.length) return null;
   const song = pool.sort(() => Math.random() - 0.5)[0];

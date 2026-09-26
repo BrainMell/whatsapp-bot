@@ -753,6 +753,25 @@ class GoImageService {
     }
   }
 
+  // P28 (quiz box-offload): Jikan theme-song lists via the Go service.
+  // Node->Jikan is CDN-blocked on some networks (measured 504 x5 on Box 1
+  // while curl and Go pass); the service also caches lists for 24h.
+  async getThemeSongs(animeId) {
+    const base = process.env.GO_AUDIO_SERVICE_URL || this.baseUrl;
+    try {
+      const r = await axios.get(base + "/api/scrape/themes", {
+        params: { mal_id: String(animeId) },
+        timeout: 20000,
+      });
+      if (r.data && Array.isArray(r.data.openings)) {
+        return { openings: r.data.openings, endings: r.data.endings || [] };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   /*
    * YouTube Audio Info & direct URL (Go Service)
    */

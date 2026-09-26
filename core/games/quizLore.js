@@ -622,29 +622,39 @@ async function tvmazeLookup(title) {
 const _themeCache = new Map(); // idMal -> { ts, songs }
 const THEME_CACHE_TTL = 24 * 60 * 60 * 1000;
 
-async function getThemeSongs(mediaType, animeId) {
+// shared parser (Go service + direct Jikan payloads share the shape)
+function parseThemePayload(data) {
+  const th = data?.data?.theme || {};
+  const openings = (th.openings || []).map((s) => String(s).replace(/^"\s*/, "").replace(/"\s*$/, "").replace(/\s*by\s+.+$/i, "").trim()).filter(Boolean);
+  const endings = (th.endings || []).map((s) => String(s).replace(/^"\s*/, "").replace(/"\s*$/, "").replace(/\s*by\s+.+$/i, "").trim()).filter(Boolean);
+  return { openings, endings };
+}
+
+async function getThemeSongs(mediaType, animeId, opts = {}) {
   try {
     if (mediaType === "anime" && animeId) {
       const idMal = parseInt(animeId, 10);
       if (Number.isInteger(idMal) && idMal > 0) {
         const hit = _themeCache.get(idMal);
         if (hit && Date.now() - hit.ts < THEME_CACHE_TTL) return hit.songs;
-        const parse = (data) => {
-          const th = data?.data?.theme || {};
-          const openings = (th.openings || []).map((s) => String(s).replace(/^"\s*/, "").replace(/"\s*$/, "").replace(/\s*by\s+.+$/i, "").trim());
-          const endings = (th.endings || []).map((s) => String(s).replace(/^"\s*/, "").replace(/"\s*$/, "").replace(/\s*by\s+.+$/i, "").trim());
-          return { openings, endings };
-        };
         let songs = { openings: [], endings: [] };
-        for (let attempt = 0; attempt < 2; attempt++) {
-          try {
-            const r = await _http.get(`https://api.jikan.moe/v4/anime/${idMal}/full`, { timeout: 10000 });
-            songs = parse(r.data);
-            if (songs.openings.length || songs.endings.length) break;
-          } catch (e) {
-            if (attempt === 1) break;
+        // P28: prefer the Go service (Node->Jikan is CDN-blocked on some
+        // networks: measured 504 x5 while curl/Go pass); direct axios is the
+        // fallback so the quiz still works without the Go service.
+        if (opts.goService && typeof opts.goService.getThemeSongs === "function") {
+          songs = await opts.goService.getThemeSongs(idMal).catch(() => null) || { openings: [], endings: [] };
+        }
+        if (!songs.openings.length && !songs.endings.length) {
+          for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+              const r = await _http.get(`https://api.jikan.moe/v4/anime/${idMal}/full`, { timeout: 10000 });
+              songs = parseThemePayload(r.data);
+              if (songs.openings.length || songs.endings.length) break;
+            } catch (e) {
+              if (attempt === 1) break;
+            }
+            await new Promise((res) => setTimeout(res, 1500)); // gentle Jikan pacing
           }
-          await new Promise((res) => setTimeout(res, 1500)); // gentle Jikan pacing
         }
         if (songs.openings.length || songs.endings.length) {
           _themeCache.set(idMal, { ts: Date.now(), songs });
