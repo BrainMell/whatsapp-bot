@@ -616,16 +616,40 @@ async function tvmazeLookup(title) {
 // Theme/OP/ED song names for a media (P11). Anime: Jikan /anime/{id}/full
 // exposes theme.openings / theme.endings straight from MAL. Non-anime media
 // returns [] (theme-song questions then skip gracefully).
+// P27: song lists are STATIC per anime - cached 24h per id (Jikan allows
+// ~3 req/min per IP and the whole box shares it; uncached calls 429-storm and
+// silently yield no theme songs). One gentle retry covers transient 429s.
+const _themeCache = new Map(); // idMal -> { ts, songs }
+const THEME_CACHE_TTL = 24 * 60 * 60 * 1000;
+
 async function getThemeSongs(mediaType, animeId) {
   try {
     if (mediaType === "anime" && animeId) {
       const idMal = parseInt(animeId, 10);
       if (Number.isInteger(idMal) && idMal > 0) {
-        const r = await _http.get(`https://api.jikan.moe/v4/anime/${idMal}/full`, { timeout: 10000 });
-        const th = r.data?.data?.theme || {};
-        const openings = (th.openings || []).map((s) => String(s).replace(/^"\s*/, "").replace(/"\s*$/, "").replace(/\s*by\s+.+$/i, "").trim());
-        const endings = (th.endings || []).map((s) => String(s).replace(/^"\s*/, "").replace(/"\s*$/, "").replace(/\s*by\s+.+$/i, "").trim());
-        return { openings, endings };
+        const hit = _themeCache.get(idMal);
+        if (hit && Date.now() - hit.ts < THEME_CACHE_TTL) return hit.songs;
+        const parse = (data) => {
+          const th = data?.data?.theme || {};
+          const openings = (th.openings || []).map((s) => String(s).replace(/^"\s*/, "").replace(/"\s*$/, "").replace(/\s*by\s+.+$/i, "").trim());
+          const endings = (th.endings || []).map((s) => String(s).replace(/^"\s*/, "").replace(/"\s*$/, "").replace(/\s*by\s+.+$/i, "").trim());
+          return { openings, endings };
+        };
+        let songs = { openings: [], endings: [] };
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const r = await _http.get(`https://api.jikan.moe/v4/anime/${idMal}/full`, { timeout: 10000 });
+            songs = parse(r.data);
+            if (songs.openings.length || songs.endings.length) break;
+          } catch (e) {
+            if (attempt === 1) break;
+          }
+          await new Promise((res) => setTimeout(res, 1500)); // gentle Jikan pacing
+        }
+        if (songs.openings.length || songs.endings.length) {
+          _themeCache.set(idMal, { ts: Date.now(), songs });
+        }
+        return songs;
       }
     }
   } catch { /* fall through */ }
