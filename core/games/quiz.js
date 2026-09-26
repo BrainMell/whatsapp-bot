@@ -736,6 +736,10 @@ async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, d
     // P13 verification: download + magic bytes NOW (a URL alone is not proof)
     const dl = await quizLore.downloadMedia(img.url, "image").catch(() => null);
     if (!dl) continue;
+    // P26: seed the shared asset cache with these verified bytes so the
+    // post-time send reuses them - fresh image questions download their
+    // image exactly ONCE (was: once at generation, again at post time).
+    quizBank.putCachedAsset(img.url, { buf: dl.buf, mime: dl.mime, kind: "image" });
     // options: correct + 3 same-franchise names (no cross-franchise options)
     const others = uniq
       .filter((x) => String(x.name).toLowerCase() !== String(ch.name).toLowerCase())

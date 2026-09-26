@@ -136,11 +136,22 @@ async function getCachedAsset(url, downloader) {
   return entry;
 }
 
+// P26: seed the cache with bytes we already downloaded and verified during
+// generation, so the post-time send reuses them instead of re-fetching the
+// same URL (2 CDN fetches per fresh image question -> 1).
+function putCachedAsset(url, dl) {
+  if (!url || !dl || !dl.buf) return false;
+  _assetCache.set(url, { ts: Date.now(), ...dl });
+  if (_assetCache.size > 200) _assetCache.delete(_assetCache.keys().next().value);
+  return true;
+}
+
 module.exports = {
   factKey,
   bankPut,
   bankLookup,
   loadBank,
   getCachedAsset,
+  putCachedAsset,
   _internal: { _KEY, _assetCache, _sha, BANK_CAP_PER_MEDIA },
 };
