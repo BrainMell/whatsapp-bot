@@ -41,13 +41,15 @@ let nsfwSession = null;  // Falconsai ViT int8 (lazy)
 let nudeSession = null;  // NudeNet 320n detector (lazy)
 const startedAt = Date.now();
 
-// NudeNet v3 class names (output0 = [1, 4+18, 2100], class order fixed by model)
+// NudeNet v3 class names - EXACT model output order (from nudenet.py __labels).
+// output0 = [1, 4+18, 2100]; do NOT reorder these.
 const NUDE_CLASSES = [
-  "FEMALE_GENITALIA_EXPOSED", "FEMALE_BREAST_EXPOSED", "FEMALE_GENITALIA_COVERED",
-  "MALE_GENITALIA_EXPOSED", "ANUS_EXPOSED", "FEMALE_BREAST_COVERED",
-  "BUTTOCKS_EXPOSED", "FACE_FEMALE", "MALE_BREAST_EXPOSED", "MALE_GENITALIA_COVERED",
-  "BUTTOCKS_COVERED", "FACE_MALE", "BELLY_COVERED", "FEET_COVERED",
-  "BELLY_EXPOSED", "ARMPITS_COVERED", "ARMPITS_EXPOSED", "FEET_EXPOSED",
+  "FEMALE_GENITALIA_COVERED", "FACE_FEMALE", "BUTTOCKS_EXPOSED",
+  "FEMALE_BREAST_EXPOSED", "FEMALE_GENITALIA_EXPOSED", "MALE_BREAST_EXPOSED",
+  "ANUS_EXPOSED", "FEET_EXPOSED", "BELLY_COVERED", "FEET_COVERED",
+  "ARMPITS_COVERED", "ARMPITS_EXPOSED", "FACE_MALE", "BELLY_EXPOSED",
+  "MALE_GENITALIA_EXPOSED", "ANUS_COVERED", "FEMALE_BREAST_COVERED",
+  "BUTTOCKS_COVERED",
 ];
 // parts that constitute a nudity violation when exposed (score >= NUDE_PART_THRESHOLD)
 const NUDE_VIOLATION_CLASSES = new Set([
@@ -77,14 +79,20 @@ async function getNudeSession() {
 }
 
 // ── NudeNet (YOLOv8n @ 320) ─────────────────────────────────────────
-// Preprocess: letterbox to 320x320 (contain, gray-114 pad), /255.
+// Preprocess (python-parity with nudenet.py): pad to square RIGHT/BOTTOM
+// with gray-114, then resize to 320x320 (no distortion), /255, RGB.
 // Postprocess: output [1, 4+18, 2100]; boxes are absolute 320-space xywh,
-// class scores already sigmoided. Confidence filter + NMS (IoU 0.45).
+// class scores already sigmoided. Confidence 0.2 + NMS (IoU 0.45).
 async function detectNudeParts(buf) {
   const s = await getNudeSession();
+  const meta = await sharp(buf, { failOn: "none" }).metadata();
+  const maxSide = Math.max(meta.width || 320, meta.height || 320);
+  const xPad = maxSide - (meta.width || 320);
+  const yPad = maxSide - (meta.height || 320);
   const raw = await sharp(buf, { failOn: "none" })
     .removeAlpha()
-    .resize(320, 320, { fit: "contain", background: { r: 114, g: 114, b: 114 } })
+    .extend({ right: xPad, bottom: yPad, background: { r: 114, g: 114, b: 114 } })
+    .resize(320, 320, { fit: "fill" })
     .raw().toBuffer();
   const f = new Float32Array(3 * 320 * 320);
   for (let i = 0; i < 320 * 320; i++) {
@@ -102,7 +110,7 @@ async function detectNudeParts(buf) {
       const v = out[(4 + c) * N_ANCHORS + a];
       if (v > best) { best = v; bestIdx = c; }
     }
-    if (best >= 0.25) {
+    if (best >= 0.2) {
       const cx = out[0 * N_ANCHORS + a], cy = out[1 * N_ANCHORS + a];
       const w = out[2 * N_ANCHORS + a], h = out[3 * N_ANCHORS + a];
       cands.push({ cls: bestIdx, score: best,
