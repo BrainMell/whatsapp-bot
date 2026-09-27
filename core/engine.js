@@ -9677,6 +9677,11 @@ _💡 Reply with another number from your search list!_`.trim();
                               } else {
                                 icon = '🔴'; status = String(selfStatus); deadCount++;
                               }
+                            } else if (hb.status === 'needs_pairing') {
+                              // 🔑 Pairing instance: surface the LIVE pairing code so
+                              // mods can link the phone straight from WhatsApp
+                              // (codes rotate ~60s - this always shows the current one).
+                              icon = '🔑'; status = 'needs pairing'; staleCount++;
                             } else if (hb.status === 'disconnected' || hb.status === 'logged_out') {
                               icon = '🔴'; status = 'offline'; deadCount++;
                             } else if (ageMs < STALE_THRESHOLD) {
@@ -9698,6 +9703,10 @@ _💡 Reply with another number from your search list!_`.trim();
                           if (ram) detailLine += `  💾 ${ram}`;
                           if (prefix) detailLine += `  ▸ ${prefix}`;
                           out += `${detailLine}\n`;
+                          if (hb && hb.status === 'needs_pairing' && hb.error) {
+                            const m = String(hb.error).match(/code:?\s*([A-Z0-9]{4,8})/i);
+                            if (m) out += `│     🔑 *PAIRING CODE: ${m[1]}*  (Settings › Linked Devices › Link with phone number)\n`;
+                          }
                         }
 
                         out += `│\n`;
