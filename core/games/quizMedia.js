@@ -356,8 +356,8 @@ async function buildSpotSongQuestions({ count, usedKeys, difficulty, goService, 
     bumpUsage(usage, "song", entry);
     out.push(q);
   };
-  for (let i = 0; i < candidates.length && out.length < n; i += 3) {
-    await Promise.all(candidates.slice(i, i + 3).map(buildOne));
+  for (let i = 0; i < candidates.length && out.length < n; i += 2) {
+    await Promise.all(candidates.slice(i, i + 2).map(buildOne));
   }
   if (out.length) saveUsage("song", usage);
   return out;
@@ -439,8 +439,8 @@ async function buildThemeSongQuestions({ count, usedKeys, difficulty, goService,
     bumpUsage(usage, "theme", entry);
     out.push(q);
   };
-  for (let i = 0; i < candidates.length && out.length < n; i += 3) {
-    await Promise.all(candidates.slice(i, i + 3).map(buildOne));
+  for (let i = 0; i < candidates.length && out.length < n; i += 2) {
+    await Promise.all(candidates.slice(i, i + 2).map(buildOne));
   }
   if (out.length) saveUsage("theme", usage);
   return out;
