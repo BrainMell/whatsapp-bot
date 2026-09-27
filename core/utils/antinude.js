@@ -264,7 +264,7 @@ async function handleAntinude(sock, m, settings, addWarning, getWarningCount, ct
     }
 
     let buf;
-    try { buf = await _downloadMediaBuffer(media.node, media.type, media.dlType); }
+    try { buf = await (_internal.downloadImpl || _downloadMediaBuffer)(media.node, media.type, media.dlType); }
     catch (e) { console.log(`[Antinude] ${media.type} download failed: ${String(e.message).slice(0, 50)}`); return false; }
     if (!buf || buf.length < 800) { console.log(`[Antinude] ${media.type} skipped: ${buf ? buf.length + "B too small" : "oversize/empty"}`); return false; }
 
@@ -335,5 +335,9 @@ module.exports = {
   stats,
   _internal: {
     _classifyFrame, // test hook (real service or stub)
+    // downloadImpl: on-box E2E hook - inject a real buffer so the FULL
+    // enforcement path (download -> classify -> delete+warn) is testable
+    // without a live WhatsApp media session.
+    downloadImpl: null,
   },
 };
