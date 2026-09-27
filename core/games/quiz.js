@@ -2515,13 +2515,14 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       const bits = [];
       if (mixedRandom) {
         // mirror buildRandomMixedPlan's math so the announcement is true
-        const availChars = franchise ? !!franchise.characters?.length : true;
+        // (estimate only - the authoritative plan recomputes with real
+        // availability after franchise resolution; the ready card shows
+        // the actual sections)
         let logosN = Math.min(6, Math.max(3, Math.round(cfg.questionCount * 0.2)));
         let songN = Math.min(5, Math.max(3, Math.round(cfg.questionCount * 0.15)));
         let imgN = cfg.imageQuestionCount > 0
           ? cfg.imageQuestionCount
           : Math.min(3, Math.max(2, Math.round(cfg.questionCount * 0.1)));
-        if (!availChars) imgN = 0;
         const loreMin = Math.max(6, Math.ceil(cfg.questionCount * 0.4));
         while (cfg.questionCount - (logosN + songN + imgN) < loreMin) {
           if (logosN > 3) logosN--;
