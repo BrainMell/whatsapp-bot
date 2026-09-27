@@ -260,7 +260,11 @@ const SONGS_POOL = songsPoolV2.SONGS;
 
 // audio-search result quality gate: covers/karaoke/nightcore variants sound
 // different from the real track and would make the question unfair.
-const _SONG_VARIANT_RE = /(cover|karaoke|nightcore|slowed|sped\s*up|reverb|8d\s*audio|reaction|remix|instrumental|tribute|lullaby|birthday|ringtone)/i;
+// 2026-09-27: + regional-cover markers (JioSaavn pollution: albums like
+// "Bohemian-Rhapsody-Haryanvi-2025" credit the original artist and pass the
+// title-overlap gate; the Go service now rejects these at the source - this
+// regex is the Node-side defense in depth).
+const _SONG_VARIANT_RE = /(cover|karaoke|nightcore|slowed|sped\s*up|reverb|8d\s*audio|reaction|remix|instrumental|tribute|lullaby|birthday|ringtone|haryanvi|bhojpuri|desi\s*(version|mix|cover)?|hindi\s*(version|cover|mix)|whatsapp\s*status|tiktok|sad\s*(version|lofi))/i;
 
 // One song question. goService = the shared Go audio service client.
 // trimFn = optional (buf) => Promise<clipBuf|null> local ffmpeg trimmer for
