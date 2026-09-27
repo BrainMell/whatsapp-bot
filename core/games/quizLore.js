@@ -996,6 +996,11 @@ async function generateLoreQuestion(callLLM, franchiseTitle, lore, domain, diffi
         // ~300 tokens; 700 covers the longest lore terms with margin while
         // staying far below the model ceiling.
         max_tokens: 700,
+        // 💡 2026-09-27: gpt-oss reasoning tokens count against max_tokens -
+        // medium effort burns 300+ tokens thinking about a multiple-choice
+        // question and triggers "max completion tokens reached" 400s. Low
+        // effort verified on the box: 21 completion tokens total, 7 reasoning.
+        reasoning_effort: "low",
         response_format: { type: "json_object" },
       });
       const text = normalizeLLMReply(raw);
