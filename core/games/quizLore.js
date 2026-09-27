@@ -793,33 +793,68 @@ async function wikipediaLogoImage(brand, thumbwidth = 480, altName = null) {
     // 💡 2026-09-27: search BOTH the entity form and the display name -
     // Wikimedia's file search chokes on corporate suffixes ("Nike, Inc.
     // logo" returns unrelated files while "Nike logo" finds the wordmark).
+    // 💡 v3 (2026-09-27): WORDMARK FIX - the pool surfaced far too many
+    // spelled-out text logos. Candidates from the entity + display-name
+    // "logo" searches are MERGED, then ranked by:
+    //   - wordmark-ish title words  -> heavy penalty (the file IS spelled text)
+    //   - aspect ratio (imageinfo w/h): squarish = icon-like, very wide = text-like
+    //   - product/sub-brand demotion: extra non-generic words ("classroom",
+    //     "maps", "life", "academy"...) hurt; years/colors/generic words don't
+    //   - exact "<brand> logo" title gets a bonus; mime + length tiebreak
     const queries = [`${b} logo`];
     if (alt && norm0(alt) !== norm0(b)) queries.push(`${alt} logo`);
+    const seen = new Set();
     let candidates = [];
     for (const gsrsearch of queries) {
       const d = await _wpApi({
         generator: "search", gsrsearch, gsrlimit: 10, gsrnamespace: 6,
         prop: "imageinfo", iiprop: "url|mime|size", iiurlwidth: thumbwidth,
-      });
+      }).catch(() => null);
+      if (!d) continue;
       const pages = d?.query?.pages || [];
-      candidates = pages
+      for (const c of pages
         .filter((p) => p.imageinfo && p.imageinfo[0])
         .map((p) => ({ title: p.title.replace(/^file:/i, ""), ii: p.imageinfo[0] }))
         .filter(({ title, ii }) => {
           const t = norm(title);
           if (!bNs.some((bN) => t.startsWith(bN))) return false;
-          if (!/(logo|wordmark|symbol|icon)/.test(t)) return false;
+          if (!/(logo|wordmark|word mark|symbol|icon|emblem|monogram)/.test(t)) return false;
           return !!(ii.thumburl || ii.url);
         })
-        .map(({ title, ii }) => ({
-          title, ii,
-          mimeScore: /^image\/(svg\+xml|png|webp)$/.test(ii.mime || "") ? 2 : (/^image\/jpeg$/.test(ii.mime || "") ? 0 : 1),
-          wordCount: Math.min(...bNs.map((bN) => norm(title).replace(bN, "").trim().split(/\s+/).filter(Boolean).length)),
-        }))
+        .map(({ title, ii }) => {
+          const t = norm(title);
+          const isWordmark = /(wordmark|word mark|word-mark|logotype|logogram|lettering|typography|spelled)/.test(t);
+          const isIcon = /(icon|symbol|emblem|monogram)/.test(t);
+          const w = Number(ii.width) || 0, h = Number(ii.height) || 0;
+          const ratio = w > 0 && h > 0 ? w / h : 1;
+          let aspectScore = 0;
+          if (ratio >= 0.6 && ratio <= 1.9) aspectScore = 20;       // squarish -> icon-like
+          else if (ratio > 1.9 && ratio <= 2.8) aspectScore = 0;    // mild
+          else if (ratio > 2.8) aspectScore = -15;                  // wide -> wordmark-like
+          else aspectScore = -10;                                   // very tall -> suspicious
+          const mimeScore = /^image\/(svg\+xml|png|webp)$/.test(ii.mime || "") ? 2 : (/^image\/jpeg$/.test(ii.mime || "") ? 0 : 1);
+          // product/sub-brand demotion: words left over after the brand that are
+          // not years/colors/generic-file words are probably a product name
+          const genericWords = /^(logo|icon|symbol|emblem|mark|wordmark|text|without|old|new|alt|app|vertical|horizontal|stacked|print|svg|gray|grey|black|white|blue|red|green|gold|silver|orange|pink|purple|yellow|20\d\d|19\d\d)$/;
+          const nonGeneric = Math.min(...bNs.map((bN) =>
+            norm(title).replace(bN, "").trim().split(/\s+/).filter(Boolean).filter((wd) => !genericWords.test(wd.replace(/[^a-z0-9]/g, ""))).length
+          ));
+          const wordCount = Math.min(...bNs.map((bN) => norm(title).replace(bN, "").trim().split(/\s+/).filter(Boolean).length));
+          const isExact = bNs.some((bN) => t === `${bN} logo` || t === `${bN}-logo` || t === `${bN} logo.svg`);
+          return {
+            title, ii, mimeScore, wordCount,
+            score: (isWordmark ? -100 : 0) + (isIcon ? 30 : 0) + aspectScore + mimeScore * 10
+              - nonGeneric * 25 + (isExact ? 25 : 0),
+          };
+        })
         .filter((c) => c.mimeScore > 0)
-        .sort((a, b) => (b.mimeScore - a.mimeScore) || (a.wordCount - b.wordCount));
-      if (candidates.length) break;
+      ) {
+        if (seen.has(norm(c.title))) continue;
+        seen.add(norm(c.title));
+        candidates.push(c);
+      }
     }
+    candidates.sort((a, b) => b.score - a.score || a.wordCount - b.wordCount);
     if (candidates.length) {
       const best = candidates[0];
       img = { url: best.ii.thumburl || best.ii.url, mime: best.ii.mime, source: "wikipedia-logo", page: best.title };
