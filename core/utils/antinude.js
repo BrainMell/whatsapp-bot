@@ -109,13 +109,15 @@ async function _videoFrameBuffers(buf) {
   fs.writeFileSync(tmp, buf);
   try {
     const run = (cmd, args, timeout) => new Promise((resolve) => {
-      execFile(cmd, args, { timeout, maxBuffer: 32 * 1024 * 1024 }, (err, stdout) => resolve(err ? null : stdout));
+      // encoding "buffer" is CRITICAL for ffmpeg PNG frames - the default utf8
+      // encoding corrupts binary output (this exact bug made every video 400)
+      execFile(cmd, args, { timeout, maxBuffer: 32 * 1024 * 1024, encoding: "buffer" }, (err, stdout) => resolve(err ? null : stdout));
     });
     // duration via ffprobe
     let dur = 0;
     try {
       const probe = await run("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "json", tmp], 8000);
-      dur = parseFloat(JSON.parse(probe || "{}")?.format?.duration) || 0;
+      dur = parseFloat(JSON.parse(String(probe || "{}") || "{}")?.format?.duration) || 0;
     } catch { /* fall through to fixed positions */ }
     const positions = dur > 1
       ? [0.1, 0.3, 0.5, 0.7, 0.9].map((p) => Math.min(dur - 0.05, Math.max(0, dur * p)))
