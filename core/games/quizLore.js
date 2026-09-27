@@ -788,29 +788,38 @@ async function wikipediaLogoImage(brand, thumbwidth = 480, altName = null) {
   if (hit && Date.now() - hit.ts < WP_IMG_TTL) return hit.img || null;
   let img = null;
   try {
-    const d = await _wpApi({
-      generator: "search", gsrsearch: `${b} logo`, gsrlimit: 10, gsrnamespace: 6,
-      prop: "imageinfo", iiprop: "url|mime|size", iiurlwidth: thumbwidth,
-    });
-    const pages = d?.query?.pages || [];
     const norm = (s) => String(s).toLowerCase().replace(/\s+/g, " ").trim();
     const bNs = anchors.map((a) => norm(a));
-    const candidates = pages
-      .filter((p) => p.imageinfo && p.imageinfo[0])
-      .map((p) => ({ title: p.title.replace(/^file:/i, ""), ii: p.imageinfo[0] }))
-      .filter(({ title, ii }) => {
-        const t = norm(title);
-        if (!bNs.some((bN) => t.startsWith(bN))) return false;
-        if (!/(logo|wordmark|symbol|icon)/.test(t)) return false;
-        return !!(ii.thumburl || ii.url);
-      })
-      .map(({ title, ii }) => ({
-        title, ii,
-        mimeScore: /^image\/(svg\+xml|png|webp)$/.test(ii.mime || "") ? 2 : (/^image\/jpeg$/.test(ii.mime || "") ? 0 : 1),
-        wordCount: Math.min(...bNs.map((bN) => norm(title).replace(bN, "").trim().split(/\s+/).filter(Boolean).length)),
-      }))
-      .filter((c) => c.mimeScore > 0)
-      .sort((a, b) => (b.mimeScore - a.mimeScore) || (a.wordCount - b.wordCount));
+    // 💡 2026-09-27: search BOTH the entity form and the display name -
+    // Wikimedia's file search chokes on corporate suffixes ("Nike, Inc.
+    // logo" returns unrelated files while "Nike logo" finds the wordmark).
+    const queries = [`${b} logo`];
+    if (alt && norm0(alt) !== norm0(b)) queries.push(`${alt} logo`);
+    let candidates = [];
+    for (const gsrsearch of queries) {
+      const d = await _wpApi({
+        generator: "search", gsrsearch, gsrlimit: 10, gsrnamespace: 6,
+        prop: "imageinfo", iiprop: "url|mime|size", iiurlwidth: thumbwidth,
+      });
+      const pages = d?.query?.pages || [];
+      candidates = pages
+        .filter((p) => p.imageinfo && p.imageinfo[0])
+        .map((p) => ({ title: p.title.replace(/^file:/i, ""), ii: p.imageinfo[0] }))
+        .filter(({ title, ii }) => {
+          const t = norm(title);
+          if (!bNs.some((bN) => t.startsWith(bN))) return false;
+          if (!/(logo|wordmark|symbol|icon)/.test(t)) return false;
+          return !!(ii.thumburl || ii.url);
+        })
+        .map(({ title, ii }) => ({
+          title, ii,
+          mimeScore: /^image\/(svg\+xml|png|webp)$/.test(ii.mime || "") ? 2 : (/^image\/jpeg$/.test(ii.mime || "") ? 0 : 1),
+          wordCount: Math.min(...bNs.map((bN) => norm(title).replace(bN, "").trim().split(/\s+/).filter(Boolean).length)),
+        }))
+        .filter((c) => c.mimeScore > 0)
+        .sort((a, b) => (b.mimeScore - a.mimeScore) || (a.wordCount - b.wordCount));
+      if (candidates.length) break;
+    }
     if (candidates.length) {
       const best = candidates[0];
       img = { url: best.ii.thumburl || best.ii.url, mime: best.ii.mime, source: "wikipedia-logo", page: best.title };
