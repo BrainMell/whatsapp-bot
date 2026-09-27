@@ -16,9 +16,14 @@
 //   GET  /health  -> { ok, model, uptimeS }
 //   POST /embed   { image_b64 }            -> { vector: number[1280] }
 //   POST /verify  { image_b64, reference_b64 } -> { similarity, decision, threshold }
+//   POST /nsfw    { image_b64 }            -> { nsfw: 0..1, decision, tookMs }
+//     (Falconsai ViT binary classifier, int8 ONNX - model loads LAZILY on
+//      first /nsfw call so the default footprint stays at ~120MB)
 //
 // Deploy (Box 2): pm2 start vision-worker.js --name vision-worker
-// Env: VISION_PORT (default 7870), VISION_THRESHOLD (default 0.50)
+// Env: VISION_PORT (default 7870), VISION_THRESHOLD (default 0.50),
+//      NSFW_DELETE_THRESHOLD (default 0.70 - calibrated: safe anime/memes/
+//      swimsuits/classical art all scored <= 0.03)
 // ============================================
 
 const http = require("http");
@@ -28,10 +33,40 @@ const sharp = require("sharp");
 
 const PORT = parseInt(process.env.VISION_PORT, 10) || 7870;
 const THRESHOLD = parseFloat(process.env.VISION_THRESHOLD) || 0.5;
+const NSFW_DELETE_THRESHOLD = parseFloat(process.env.NSFW_DELETE_THRESHOLD) || 0.7;
 const MAX_BYTES = 8 * 1024 * 1024;
 
-let session = null;
+let session = null;      // mobilenet features (embeddings)
+let nsfwSession = null;  // Falconsai ViT int8 (lazy)
 const startedAt = Date.now();
+
+async function getNsfwSession() {
+  if (!nsfwSession) {
+    nsfwSession = await ort.InferenceSession.create(path.join(__dirname, "nsfw_int8.onnx"), {
+      executionProviders: ["cpu"], graphOptimizationLevel: "all",
+    });
+    console.log("[vision-worker] nsfw model loaded");
+  }
+  return nsfwSession;
+}
+
+// Falconsai ViT preprocessing: resize 224x224 (bilinear), /255, normalize 0.5/0.5
+async function classifyNsfw(buf) {
+  const s = await getNsfwSession();
+  const raw = await sharp(buf, { failOn: "none" })
+    .removeAlpha()
+    .resize(224, 224, { fit: "cover" })
+    .raw().toBuffer();
+  const f = new Float32Array(3 * 224 * 224);
+  for (let i = 0; i < 224 * 224; i++) {
+    for (let c = 0; c < 3; c++) f[c * 224 * 224 + i] = ((raw[i * 3 + c] / 255) - 0.5) / 0.5;
+  }
+  const r = await s.run({ [s.inputNames[0]]: new ort.Tensor("float32", f, [1, 3, 224, 224]) });
+  const d = r[s.outputNames[0]].data;
+  const m = Math.max(d[0], d[1]);
+  const e0 = Math.exp(d[0] - m), e1 = Math.exp(d[1] - m);
+  return e1 / (e0 + e1); // P(nsfw)
+}
 
 async function embedBuffer(buf) {
   const raw = await sharp(buf)
@@ -79,6 +114,23 @@ const server = http.createServer(async (req, res) => {
       const t0 = Date.now();
       const vector = await embedBuffer(imgBuf);
       return send(200, { vector, tookMs: Date.now() - t0 });
+    }
+    if (req.method === "POST" && req.url === "/nsfw") {
+      if (!body.image_b64) return send(400, { error: "image_b64 required" });
+      const imgBuf = Buffer.from(body.image_b64, "base64");
+      if (imgBuf.length < 500) return send(400, { error: "image too small" });
+      const t0 = Date.now();
+      try {
+        const nsfw = await classifyNsfw(imgBuf);
+        return send(200, {
+          nsfw: Number(nsfw.toFixed(4)),
+          decision: nsfw >= NSFW_DELETE_THRESHOLD ? "delete" : nsfw >= 0.45 ? "review" : "ok",
+          threshold: NSFW_DELETE_THRESHOLD,
+          tookMs: Date.now() - t0,
+        });
+      } catch (e) {
+        return send(500, { error: String(e.message || e).slice(0, 120) });
+      }
     }
     if (req.url === "/verify") {
       if (!body.reference_b64) return send(400, { error: "reference_b64 required" });

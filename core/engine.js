@@ -2507,6 +2507,11 @@ async function startBot(configInstance) {
           ranksEnabled: false,    // rank system off by default
           antispam: false,
           recording: false,
+          // 💡 ANTINUDE (2026-09-27): NSFW/gore image+sticker moderation.
+          // Classification runs on the Box 2 vision-worker - fail-open.
+          antinude: false,
+          antinudeAction: "delete", // delete | warn | kick
+          antinudeThreshold: 0.7,   // calibrated: safe content scores <= 0.03
           blacklist: [],
           rankLadder: [],
           memberRanks: {},
@@ -2527,6 +2532,10 @@ async function startBot(configInstance) {
       if (settings.gstatusLock === undefined) settings.gstatusLock = false;
       if (settings.announceAdmins === undefined) settings.announceAdmins = false;
       if (settings.ranksEnabled === undefined) settings.ranksEnabled = false;
+      // 💡 ANTINUDE lazy upgrade for pre-existing group settings
+      if (settings.antinude === undefined) settings.antinude = false;
+      if (settings.antinudeAction === undefined) settings.antinudeAction = "delete";
+      if (settings.antinudeThreshold === undefined) settings.antinudeThreshold = 0.7;
       return settings;
     }
 
@@ -7857,6 +7866,26 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                       groupMetadata,
                       cachedAdminSet, // pre-built Set - skips O(n) scan inside security
                     );
+
+                    // 💡 1b. ANTINUDE (2026-09-27): NSFW image/sticker
+                    // moderation - runs ASYNC in its own bounded queue on the
+                    // Box 2 vision-worker, never blocks the command path.
+                    // Fire-and-forget: deletes/warns/kicks when the verdict
+                    // clears the group's threshold.
+                    try {
+                      const _antinude = require('./utils/antinude');
+                      const _anSettings = getGroupSettings(chatId);
+                      if (_anSettings.antinude) {
+                        _antinude.handleAntinude(sock, m, _anSettings, addWarning, getWarningCount, {
+                          chatId,
+                          senderJid,
+                          senderIsAdmin,
+                          isOwner,
+                          isGlobalMod,
+                          isGcOwner: (jid, cid) => isGcOwner(jid, cid),
+                        }).catch(() => {});
+                      }
+                    } catch (_ane) { /* fail-open - moderation never breaks the bot */ }
 
                     // 2. Antispam Detection
                     const settings = getGroupSettings(chatId);
@@ -15264,6 +15293,97 @@ Usage: ${newUsage}/5${warningText}`;
                         `\`${botConfig.getPrefix()} bye on/off\`\n` +
                         `\`${botConfig.getPrefix()} setbye <text>\``,
                     });
+                  }
+
+                  // 💡 ANTINUDE (2026-09-27) - NSFW image/sticker moderation
+                  // .s antinude [on|off|status|action <delete|warn|kick>|threshold <0.5-0.95>]
+                  if (
+                    lowerTxt ===
+                      `${botConfig.getPrefix().toLowerCase()} antinude` ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} antinude `,
+                    )
+                  ) {
+                    if (!canUseAdminCommands) {
+                      await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          `you need to be an admin to use this command.`,
+                      });
+                      return;
+                    }
+
+                    const args = lowerTxt.split(" ");
+                    const settings = getGroupSettings(chatId);
+
+                    if (args[2] === "on") {
+                      settings.antinude = true;
+                      saveGroupSettings();
+                      await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          `🔞 *Antinude Protection Enabled*
+
+Scans every image and sticker posted in this group for NSFW / sexual content.
+Prohibited media is removed automatically.
+
+Current action: *${settings.antinudeAction || "delete"}*
+Current threshold: *${Math.round((settings.antinudeThreshold || 0.7) * 100)}%*
+
+Tune it:
+• \`${botConfig.getPrefix()} antinude action <delete/warn/kick>\`
+• \`${botConfig.getPrefix()} antinude threshold <50-95>\` (strictness)
+\`${botConfig.getPrefix()} antinude off\` to disable.
+
+⚡ Admins and mods are exempt. Analysis runs on a separate worker - it never slows the bot.`,
+                      });
+                    } else if (args[2] === "off") {
+                      settings.antinude = false;
+                      saveGroupSettings();
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `🔞 Antinude protection disabled.`,
+                      });
+                    } else if (args[2] === "action" && args[3]) {
+                      if (["delete", "warn", "kick"].includes(args[3])) {
+                        settings.antinudeAction = args[3];
+                        saveGroupSettings();
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `✅ Antinude action set to *${args[3]}*.`,
+                        });
+                      } else {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `❌ Unknown action. Use: delete / warn / kick`,
+                        });
+                      }
+                    } else if (args[2] === "threshold" && args[3]) {
+                      const t = parseInt(args[3], 10);
+                      if (!Number.isFinite(t) || t < 50 || t > 95) {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `❌ Threshold must be 50-95 (percent confidence).`,
+                        });
+                      } else {
+                        settings.antinudeThreshold = t / 100;
+                        saveGroupSettings();
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `✅ Antinude threshold set to *${t}%*. Lower = stricter (more false positives).`,
+                        });
+                      }
+                    } else {
+                      // status (also the no-arg default)
+                      const st = require('./utils/antinude').stats();
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `🔞 *ANTINUDE STATUS*
+
+Protection: *${settings.antinude ? "ENABLED" : "disabled"}*
+Action: *${settings.antinudeAction || "delete"}*
+Threshold: *${Math.round((settings.antinudeThreshold || 0.7) * 100)}%*
+Media scanned: ${st.checked} (cache hits: ${st.cacheHits})
+Flagged: ${st.flagged} • Errors: ${st.errors}
+
+Toggle: \`${botConfig.getPrefix()} antinude on|off\` • Action: \`${botConfig.getPrefix()} antinude action <delete/warn/kick>\``,
+                      });
+                    }
+                    return;
                   }
 
                   // antilink - toggle link detection
