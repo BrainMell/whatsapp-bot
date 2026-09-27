@@ -2511,7 +2511,7 @@ async function startBot(configInstance) {
           // Classification runs on the Box 2 vision-worker - fail-open.
           antinude: false,
           antinudeAction: "delete", // delete | warn | kick
-          antinudeThreshold: 0.7,   // calibrated: safe content scores <= 0.03
+          antinudeThreshold: 0.45,  // recalibrated v2: NudeNet part scores (safe ~0, real nudity 0.44-0.9)
           blacklist: [],
           rankLadder: [],
           memberRanks: {},
@@ -2535,7 +2535,12 @@ async function startBot(configInstance) {
       // 💡 ANTINUDE lazy upgrade for pre-existing group settings
       if (settings.antinude === undefined) settings.antinude = false;
       if (settings.antinudeAction === undefined) settings.antinudeAction = "delete";
-      if (settings.antinudeThreshold === undefined) settings.antinudeThreshold = 0.7;
+      if (settings.antinudeThreshold === undefined) settings.antinudeThreshold = 0.45;
+      // 💡 v2 MIGRATION (2026-09-27): 0.7 was the default of the broken Falconsai-only
+      // pipeline (real nudity scored 0.000-0.003 there, so 0.7 meant "never fire").
+      // The threshold command itself was also broken (parseInt rejected its own
+      // documented 0.5-0.95 format) - nobody could ever have set 0.7 deliberately.
+      if (settings.antinudeThreshold === 0.7) settings.antinudeThreshold = 0.45;
       return settings;
     }
 
@@ -15345,15 +15350,17 @@ Usage: ${newUsage}/5${warningText}`;
                           BOT_MARKER +
                           `🔞 *Antinude Protection Enabled*
 
-Scans every image and sticker posted in this group for NSFW / sexual content.
+Scans every image, sticker (incl. animated) and video posted in this group for NSFW / sexual content.
+Videos and animated stickers are checked on 5 frames sampled from start to finish.
 Prohibited media is removed automatically.
 
 Current action: *${settings.antinudeAction || "delete"}*
-Current threshold: *${Math.round((settings.antinudeThreshold || 0.7) * 100)}%*
+Current threshold: *${Math.round((settings.antinudeThreshold || 0.45) * 100)}%*
 
 Tune it:
 • \`${botConfig.getPrefix()} antinude action <delete/warn/kick>\`
-• \`${botConfig.getPrefix()} antinude threshold <50-95>\` (strictness)
+• \`${botConfig.getPrefix()} antinude threshold <30-95>\` (or 0.30-0.95) - lower = catches more
+• \`${botConfig.getPrefix()} nsfwcheck\` (reply to media) - see exactly what it scores
 \`${botConfig.getPrefix()} antinude off\` to disable.
 
 ⚡ Admins and mods are exempt. Analysis runs on a separate worker - it never slows the bot.`,
@@ -15377,16 +15384,20 @@ Tune it:
                         });
                       }
                     } else if (args[2] === "threshold" && args[3]) {
-                      const t = parseInt(args[3], 10);
-                      if (!Number.isFinite(t) || t < 50 || t > 95) {
+                      // v2 FIX: the old parser used parseInt and rejected its own
+                      // documented "0.5-0.95" format (parseInt("0.5") === 0 → error).
+                      // Now accepts BOTH "0.6" and "60" forms.
+                      const rawT = parseFloat(args[3]);
+                      const tFrac = Number.isFinite(rawT) && rawT > 0 && rawT <= 1 ? rawT : rawT / 100;
+                      if (!Number.isFinite(tFrac) || tFrac < 0.3 || tFrac > 0.95) {
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + `❌ Threshold must be 50-95 (percent confidence).`,
+                          text: BOT_MARKER + `❌ Threshold must be 30-95 (percent) or 0.30-0.95.`,
                         });
                       } else {
-                        settings.antinudeThreshold = t / 100;
+                        settings.antinudeThreshold = Math.round(tFrac * 100) / 100;
                         saveGroupSettings();
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + `✅ Antinude threshold set to *${t}%*. Lower = stricter (more false positives).`,
+                          text: BOT_MARKER + `✅ Antinude threshold set to *${Math.round(settings.antinudeThreshold * 100)}%*. Lower = catches more (more false positives).`,
                         });
                       }
                     } else {
@@ -15397,12 +15408,73 @@ Tune it:
 
 Protection: *${settings.antinude ? "ENABLED" : "disabled"}*
 Action: *${settings.antinudeAction || "delete"}*
-Threshold: *${Math.round((settings.antinudeThreshold || 0.7) * 100)}%*
-Media scanned: ${st.checked} (cache hits: ${st.cacheHits})
+Threshold: *${Math.round((settings.antinudeThreshold || 0.45) * 100)}%*
+Media scanned: ${st.checked} (videos: ${st.videos || 0}, anim. stickers: ${st.astickers || 0}, cache hits: ${st.cacheHits})
 Flagged: ${st.flagged} • Errors: ${st.errors}
 
-Toggle: \`${botConfig.getPrefix()} antinude on|off\` • Action: \`${botConfig.getPrefix()} antinude action <delete/warn/kick>\``,
+Toggle: \`${botConfig.getPrefix()} antinude on|off\` • Action: \`${botConfig.getPrefix()} antinude action <delete/warn/kick>\`
+Test media: \`${botConfig.getPrefix()} nsfwcheck\` (reply to an image/sticker/video)`,
                       });
+                    }
+                    return;
+                  }
+
+                  // 💡 NSFWCHECK (2026-09-27 v2) - test the antinude pipeline on any
+                  // media: reply to an image/sticker/animated-sticker/video with
+                  // `.s nsfwcheck` and get the exact scores the moderation would see.
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} nsfwcheck` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} nsfwcheck `)
+                  ) {
+                    if (!canUseAdminCommands) {
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `you need to be an admin to use this command.`,
+                      });
+                      return;
+                    }
+                    const _an = require('./utils/antinude');
+                    // find the quoted message (contextInfo can sit on any message node)
+                    const qInfo = Object.values(m.message || {}).find(
+                      (v) => v && typeof v === "object" && v.contextInfo
+                    )?.contextInfo;
+                    const quotedMsg = qInfo?.quotedMessage;
+                    const qMedia = quotedMsg ? _an.extractImageMedia({ message: quotedMsg }) : null;
+                    if (!qMedia) {
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `🔞 *NSFW Check*\n\nReply to an image, sticker or video with \`${botConfig.getPrefix()} nsfwcheck\` to see exactly how the moderation scores it.`,
+                      }, { quoted: m });
+                      return;
+                    }
+                    await sock.sendMessage(chatId, { react: { text: "🔍", key: m.key } }).catch(() => {});
+                    try {
+                      const buf = await _an.downloadMedia(qMedia.node, qMedia.type);
+                      if (!buf || buf.length < 800) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Could not download the quoted media (too large or expired).` }, { quoted: m });
+                        return;
+                      }
+                      const r = await _an.analyzeMediaBuffer(qMedia.type, buf, `nsfwcheck ${buf.length}B `);
+                      if (!r) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Analysis failed (download, decode or worker error). See bot logs.` }, { quoted: m });
+                        return;
+                      }
+                      const settings = getGroupSettings(chatId);
+                      const threshold = Number.isFinite(settings.antinudeThreshold) ? settings.antinudeThreshold : 0.45;
+                      const verdict = r.nsfw >= threshold ? "🚨 WOULD BE DELETED" : "✅ allowed";
+                      const frameStr = r.frames.map((f) => `#${f.pos}${r.frames.length > 1 ? "s" : ""} ${(f.nsfw * 100).toFixed(0)}%`).join(" • ");
+                      const partsStr = (r.parts && r.parts.length)
+                        ? r.parts.map((p) => `• ${p.label} — ${(p.score * 100).toFixed(0)}%`).join("\n")
+                        : "• none detected";
+                      const what = { image: "Image", sticker: "Sticker", asticker: "Animated sticker", video: "Video" }[r.kind] || r.kind;
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `🔞 *NSFW CHECK — ${what}* (${(buf.length / 1024).toFixed(0)} KB)\n\n` +
+                          `Final score: *${(r.nsfw * 100).toFixed(1)}%* (threshold ${(threshold * 100).toFixed(0)}%)\n` +
+                          `Verdict: *${verdict}*\n\n` +
+                          `Frames (${r.frames.length}${r.kind === "video" ? " sampled start→finish" : ""}):\n${frameStr}\n\n` +
+                          `Detected parts:\n${partsStr}\n\n` +
+                          `⏱ ${r.ms}ms${r.cached ? " (cached)" : ""}`,
+                      }, { quoted: m });
+                    } catch (e) {
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ nsfwcheck failed: ${String(e.message).slice(0, 80)}` }, { quoted: m });
                     }
                     return;
                   }

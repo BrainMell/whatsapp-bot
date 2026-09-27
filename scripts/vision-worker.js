@@ -38,7 +38,23 @@ const MAX_BYTES = 8 * 1024 * 1024;
 
 let session = null;      // mobilenet features (embeddings)
 let nsfwSession = null;  // Falconsai ViT int8 (lazy)
+let nudeSession = null;  // NudeNet 320n detector (lazy)
 const startedAt = Date.now();
+
+// NudeNet v3 class names (output0 = [1, 4+18, 2100], class order fixed by model)
+const NUDE_CLASSES = [
+  "FEMALE_GENITALIA_EXPOSED", "FEMALE_BREAST_EXPOSED", "FEMALE_GENITALIA_COVERED",
+  "MALE_GENITALIA_EXPOSED", "ANUS_EXPOSED", "FEMALE_BREAST_COVERED",
+  "BUTTOCKS_EXPOSED", "FACE_FEMALE", "MALE_BREAST_EXPOSED", "MALE_GENITALIA_COVERED",
+  "BUTTOCKS_COVERED", "FACE_MALE", "BELLY_COVERED", "FEET_COVERED",
+  "BELLY_EXPOSED", "ARMPITS_COVERED", "ARMPITS_EXPOSED", "FEET_EXPOSED",
+];
+// parts that constitute a nudity violation when exposed (score >= NUDE_PART_THRESHOLD)
+const NUDE_VIOLATION_CLASSES = new Set([
+  "FEMALE_GENITALIA_EXPOSED", "MALE_GENITALIA_EXPOSED", "FEMALE_BREAST_EXPOSED",
+  "BUTTOCKS_EXPOSED", "ANUS_EXPOSED",
+]);
+const NUDE_PART_THRESHOLD = parseFloat(process.env.NSFW_PART_THRESHOLD) || 0.45;
 
 async function getNsfwSession() {
   if (!nsfwSession) {
@@ -48,6 +64,65 @@ async function getNsfwSession() {
     console.log("[vision-worker] nsfw model loaded");
   }
   return nsfwSession;
+}
+
+async function getNudeSession() {
+  if (!nudeSession) {
+    nudeSession = await ort.InferenceSession.create(path.join(__dirname, "nudenet_320n.onnx"), {
+      executionProviders: ["cpu"], graphOptimizationLevel: "all",
+    });
+    console.log("[vision-worker] nudenet model loaded");
+  }
+  return nudeSession;
+}
+
+// ── NudeNet (YOLOv8n @ 320) ─────────────────────────────────────────
+// Preprocess: letterbox to 320x320 (contain, gray-114 pad), /255.
+// Postprocess: output [1, 4+18, 2100]; boxes are absolute 320-space xywh,
+// class scores already sigmoided. Confidence filter + NMS (IoU 0.45).
+async function detectNudeParts(buf) {
+  const s = await getNudeSession();
+  const raw = await sharp(buf, { failOn: "none" })
+    .removeAlpha()
+    .resize(320, 320, { fit: "contain", background: { r: 114, g: 114, b: 114 } })
+    .raw().toBuffer();
+  const f = new Float32Array(3 * 320 * 320);
+  for (let i = 0; i < 320 * 320; i++) {
+    f[i] = raw[i * 3] / 255;                 // R
+    f[320 * 320 + i] = raw[i * 3 + 1] / 255; // G
+    f[2 * 320 * 320 + i] = raw[i * 3 + 2] / 255; // B
+  }
+  const r = await s.run({ [s.inputNames[0]]: new ort.Tensor("float32", f, [1, 3, 320, 320]) });
+  const out = r[s.outputNames[0]].data; // [1, 22, 2100]
+  const N_ANCHORS = 2100, N_CLS = NUDE_CLASSES.length;
+  const cands = [];
+  for (let a = 0; a < N_ANCHORS; a++) {
+    let best = 0, bestIdx = -1;
+    for (let c = 0; c < N_CLS; c++) {
+      const v = out[(4 + c) * N_ANCHORS + a];
+      if (v > best) { best = v; bestIdx = c; }
+    }
+    if (best >= 0.25) {
+      const cx = out[0 * N_ANCHORS + a], cy = out[1 * N_ANCHORS + a];
+      const w = out[2 * N_ANCHORS + a], h = out[3 * N_ANCHORS + a];
+      cands.push({ cls: bestIdx, score: best,
+        x1: cx - w / 2, y1: cy - h / 2, x2: cx + w / 2, y2: cy + h / 2 });
+    }
+  }
+  cands.sort((p, q) => q.score - p.score);
+  const kept = [];
+  for (const c of cands) {
+    let ok = true;
+    for (const k of kept) {
+      const ix = Math.max(0, Math.min(c.x2, k.x2) - Math.max(c.x1, k.x1));
+      const iy = Math.max(0, Math.min(c.y2, k.y2) - Math.max(c.y1, k.y1));
+      const inter = ix * iy;
+      const union = (c.x2 - c.x1) * (c.y2 - c.y1) + (k.x2 - k.x1) * (k.y2 - k.y1) - inter;
+      if (inter / (union || 1) > 0.45) { ok = false; break; }
+    }
+    if (ok) kept.push(c);
+  }
+  return kept.map((c) => ({ label: NUDE_CLASSES[c.cls], score: Number(c.score.toFixed(3)) }));
 }
 
 // Falconsai ViT preprocessing: resize 224x224 (bilinear), /255, normalize 0.5/0.5
@@ -121,11 +196,24 @@ const server = http.createServer(async (req, res) => {
       if (imgBuf.length < 500) return send(400, { error: "image too small" });
       const t0 = Date.now();
       try {
-        const nsfw = await classifyNsfw(imgBuf);
+        // PRIMARY: NudeNet part detector (calibrated 2026-09-27: real public-nudity
+        // photos 0.44-0.9 exposed parts, safe/borderline matrix empty; the old
+        // Falconsai-only path scored real nudity 0.000-0.003 and was blind).
+        // SECONDARY: Falconsai whole-image classifier (catches pose/softcore
+        // signals the part detector may miss).
+        const [parts, falconsai] = await Promise.all([
+          detectNudeParts(imgBuf).catch((e) => { console.error("[vision-worker] nudenet failed:", String(e.message).slice(0, 80)); return []; }),
+          classifyNsfw(imgBuf).catch(() => 0),
+        ]);
+        const violations = parts.filter((p) => NUDE_VIOLATION_CLASSES.has(p.label) && p.score >= NUDE_PART_THRESHOLD);
+        const partScore = violations.reduce((m, p) => Math.max(m, p.score), 0);
+        const nsfw = Math.max(partScore, falconsai);
         return send(200, {
           nsfw: Number(nsfw.toFixed(4)),
-          decision: nsfw >= NSFW_DELETE_THRESHOLD ? "delete" : nsfw >= 0.45 ? "review" : "ok",
+          decision: nsfw >= NSFW_DELETE_THRESHOLD ? "delete" : nsfw >= 0.35 ? "review" : "ok",
           threshold: NSFW_DELETE_THRESHOLD,
+          parts: parts.filter((p) => NUDE_VIOLATION_CLASSES.has(p.label) || p.score >= 0.45).slice(0, 6),
+          falconsai: Number(falconsai.toFixed(4)),
           tookMs: Date.now() - t0,
         });
       } catch (e) {

@@ -1,28 +1,31 @@
 // ============================================
-// ANTINUDE (2026-09-27) - NSFW / sexual-content image+sticker moderation
+// ANTINUDE v2 (2026-09-27) - NSFW image/sticker/video moderation
 // ============================================
 // Owner brief §7 - a SEPARATE group-moderation feature (like .s antilink),
 // NOT part of the quiz system.
 //
-// ARCHITECTURE (sized for a 1GB Box 1):
-//   - classification runs on BOX 2's vision-worker via the Go facade
-//     (NSFW_SERVICE_URL, default http://10.0.1.56:7860/vision/nsfw) so the
-//     bot's own RAM/CPU is untouched. Model: Falconsai nsfw_image_detection
-//     (ViT-224, int8 ONNX) - benchmarked: safe anime/memes/swimwear/classical
-//     art all <= 0.03 nsfw; ~600ms per image on Box 2; zero Box 1 model RAM.
-//   - fully ASYNC: the moderation queue runs concurrently-capped in the
-//     background; normal commands are never blocked.
-//   - verdict cache by media sha256 (media re-sent/forwarded is NOT re-analyzed)
-//   - size/time limits: skip > 8MB, 15s service timeout, fail-open on errors
-//   - exemptions: bot itself, group admins, General Mods, bot owner, GC owner
+// v2 CHANGES (after production failure report: "spammed with porn, nothing
+// happened" + "check 5 frames across the video from start to finish"):
+//   1. ROOT CAUSE FOUND: the Falconsai ViT int8 classifier is functionally
+//      blind - real public-nudity PHOTOS scored 0.000-0.003 (validated on 8
+//      Wikimedia nudity photos + classical art). Every "safe <= 0.03"
+//      calibration number was meaningless because EVERYTHING scored <= 0.03.
+//   2. The Box 2 vision-worker /nsfw now runs NudeNet 320n (YOLOv8 part
+//      detector, 12MB) as PRIMARY - exposed genitals/breast/buttocks boxes
+//      are the violation signal (calibrated: real nudity 0.44-0.9, safe
+//      matrix empty, ~40ms/img) - and keeps Falconsai as SECONDARY signal.
+//      Combined score = max(partScore, falconsai).
+//   3. VIDEO + ANIMATED STICKER scanning (was completely missing - typical
+//      WA porn spam is videos): 5 frames sampled start->finish (10/30/50/70/
+//      90% via ffmpeg on Box 1; 5 webp pages for animated stickers), every
+//      frame classified, MAX frame score decides.
+//   4. Every scan now LOGS a one-line verdict - silent failures were
+//      impossible to diagnose before. Download/extract skips are logged too.
 //
-// KNOWN LIMITS (documented honestly):
-//   - the model detects SEXUAL content (nudity/porn). Graphic gore is NOT
-//     covered by this binary classifier - a VLM-based gore pass can plug into
-//     the same queue later (visionVerify.js interface exists).
-//   - true-positive validation against explicit material was not performed
-//     here for content-policy reasons; false-positive matrix WAS validated
-//     (13 real images). The 0.70 delete threshold is deliberately high.
+// Architecture unchanged: classification on Box 2 via the Go facade
+// (NSFW_SERVICE_URL, default http://10.0.1.56:7860/vision/nsfw); fully
+// async bounded-concurrency queue; sha256 verdict cache; fail-open.
+// Exemptions: bot itself, group admins, General Mods, bot owner, GC owner.
 // ============================================
 
 const crypto = require("crypto");
@@ -30,24 +33,25 @@ const botConfig = require("../../botConfig");
 
 const SERVICE_URL = process.env.NSFW_SERVICE_URL || "http://10.0.1.56:7860/vision/nsfw";
 const SERVICE_TIMEOUT_MS = Math.min(30000, parseInt(process.env.NSFW_TIMEOUT_MS, 10) || 15000);
-const MAX_BYTES = 8 * 1024 * 1024;
+const MAX_BYTES_IMAGE = 8 * 1024 * 1024;
+const MAX_BYTES_VIDEO = 16 * 1024 * 1024;
 const CONCURRENCY = Math.max(1, parseInt(process.env.NSFW_CONCURRENCY, 10) || 2);
 const CACHE_MAX = 2000;
+const FRAMES_PER_MEDIA = 5;
 
-// verdict cache: sha256 -> { nsfw, at }
+// verdict cache: sha256 -> { nsfw, parts, at }
 const _cache = new Map();
 let _inFlight = 0;
-const _queue = [];
-let _stats = { checked: 0, flagged: 0, errors: 0, cacheHits: 0 };
+let _stats = { checked: 0, flagged: 0, errors: 0, cacheHits: 0, videos: 0, astickers: 0 };
 
 function _cacheGet(key) {
   const hit = _cache.get(key);
   if (!hit) return null;
   if (Date.now() - hit.at > 6 * 3600 * 1000) { _cache.delete(key); return null; }
-  return hit.nsfw;
+  return hit;
 }
-function _cachePut(key, nsfw) {
-  _cache.set(key, { nsfw, at: Date.now() });
+function _cachePut(key, val) {
+  _cache.set(key, { ...val, at: Date.now() });
   if (_cache.size > CACHE_MAX) _cache.delete(_cache.keys().next().value);
 }
 
@@ -59,7 +63,12 @@ function extractImageMedia(m) {
     if (node.imageMessage && node.imageMessage.mimetype && /image\//.test(node.imageMessage.mimetype)) {
       return { node: node.imageMessage, type: "image" };
     }
-    if (node.stickerMessage) return { node: node.stickerMessage, type: "sticker" };
+    if (node.stickerMessage) {
+      return { node: node.stickerMessage, type: node.stickerMessage.isAnimated ? "asticker" : "sticker" };
+    }
+    if (node.videoMessage && node.videoMessage.mimetype && /video\//.test(node.videoMessage.mimetype)) {
+      return { node: node.videoMessage, type: "video" };
+    }
     return null;
   };
   let hit = unwrap(m.message);
@@ -70,28 +79,80 @@ function extractImageMedia(m) {
     hit = unwrap(inner.message || {});
     if (hit) return hit;
   }
-  // quoted media is NOT scanned - only what a user directly posts
+  // quoted media is NOT scanned by the auto path - only what a user directly posts
   return null;
 }
 
 async function _downloadMediaBuffer(node, type) {
   const { downloadContentFromMessage } = require("@whiskeysockets/baileys");
-  const stream = await downloadContentFromMessage(node, type);
+  const stream = await downloadContentFromMessage(node, type === "video" ? "video" : type === "asticker" ? "sticker" : type);
+  const cap = type === "video" ? MAX_BYTES_VIDEO : MAX_BYTES_IMAGE;
   const chunks = [];
   let size = 0;
   for await (const chunk of stream) {
     size += chunk.length;
-    if (size > MAX_BYTES) return null; // oversize -> skip
+    if (size > cap) return null; // oversize -> skip (logged by caller)
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
 }
 
-async function _classify(buf) {
+// ── frame extraction ────────────────────────────────────────────────
+// Videos: 5 frames at 10/30/50/70/90% of duration via ffmpeg (Box 1).
+// Animated stickers: 5 evenly-spaced webp pages via sharp.
+async function _videoFrameBuffers(buf) {
+  const fs = require("fs");
+  const os = require("os");
+  const path = require("path");
+  const { execFile } = require("child_process");
+  const tmp = path.join(os.tmpdir(), `antinude_${Date.now()}_${Math.random().toString(36).slice(2)}.mp4`);
+  fs.writeFileSync(tmp, buf);
+  try {
+    const run = (cmd, args, timeout) => new Promise((resolve) => {
+      execFile(cmd, args, { timeout, maxBuffer: 32 * 1024 * 1024 }, (err, stdout) => resolve(err ? null : stdout));
+    });
+    // duration via ffprobe
+    let dur = 0;
+    try {
+      const probe = await run("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "json", tmp], 8000);
+      dur = parseFloat(JSON.parse(probe || "{}")?.format?.duration) || 0;
+    } catch { /* fall through to fixed positions */ }
+    const positions = dur > 1
+      ? [0.1, 0.3, 0.5, 0.7, 0.9].map((p) => Math.min(dur - 0.05, Math.max(0, dur * p)))
+      : [0.2, 0.8, 1.5, 2.5, 3.5];
+    const frames = [];
+    for (const pos of positions) {
+      const out = await run("ffmpeg", ["-ss", String(pos), "-i", tmp, "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "pipe:1"], 10000);
+      if (out && out.length > 500) frames.push({ pos: Number(pos.toFixed(2)), buf: out });
+    }
+    return frames;
+  } finally {
+    try { fs.unlinkSync(tmp); } catch { /* best effort */ }
+  }
+}
+
+async function _astickerFrameBuffers(buf) {
+  const sharp = require("sharp");
+  let pages = 1;
+  try { pages = Math.max(1, (await sharp(buf, { pages: -1 }).metadata()).pages || 1); } catch { /* single */ }
+  const positions = pages <= FRAMES_PER_MEDIA
+    ? Array.from({ length: pages }, (_, i) => i)
+    : [0, 0.25, 0.5, 0.75, 0.9].map((p) => Math.min(pages - 1, Math.floor(pages * p)));
+  const frames = [];
+  for (const page of positions) {
+    try {
+      const png = await sharp(Buffer.from(buf), { page, pages: 1 }).png().toBuffer();
+      if (png.length > 500) frames.push({ pos: page, buf: png });
+    } catch { /* skip page */ }
+  }
+  return frames;
+}
+
+// ── classification (worker call, cached) ────────────────────────────
+async function _classifyFrame(buf) {
   const key = crypto.createHash("sha256").update(buf).digest("hex");
   const cached = _cacheGet(key);
-  if (cached !== null) { _stats.cacheHits++; return { nsfw: cached, cached: true }; }
-  // bounded concurrency: excess requests wait in the queue (never dropped)
+  if (cached) { _stats.cacheHits++; return { ...cached, cached: true }; }
   while (_inFlight >= CONCURRENCY) {
     await new Promise((r) => setTimeout(r, 120));
   }
@@ -101,12 +162,48 @@ async function _classify(buf) {
     const r = await axios.post(SERVICE_URL, { image_b64: buf.toString("base64") }, { timeout: SERVICE_TIMEOUT_MS });
     const nsfw = Number(r.data?.nsfw);
     if (!Number.isFinite(nsfw)) throw new Error("bad service response");
-    _cachePut(key, nsfw);
+    const val = { nsfw, parts: Array.isArray(r.data?.parts) ? r.data.parts : [], falconsai: Number(r.data?.falconsai ?? nsfw) };
+    _cachePut(key, val);
     _stats.checked++;
-    return { nsfw, cached: false };
+    return val;
   } finally {
     _inFlight--;
   }
+}
+
+// ── main analyzer (shared by auto-moderation and .s nsfwcheck) ──────
+// kind: "image" | "sticker" | "asticker" | "video"
+// Returns { kind, nsfw, parts, frames, ms, cached } or null on skip/error.
+async function analyzeMediaBuffer(kind, buf, label = "") {
+  const t0 = Date.now();
+  let frameList;
+  if (kind === "video") {
+    _stats.videos++;
+    frameList = await _videoFrameBuffers(buf);
+    if (!frameList.length) { console.log(`[Antinude] ${label}video: no frames extracted (${buf.length}B) - skipping (fail-open)`); return null; }
+  } else if (kind === "asticker") {
+    _stats.astickers++;
+    frameList = await _astickerFrameBuffers(buf);
+    if (!frameList.length) { console.log(`[Antinude] ${label}animated sticker: no pages decoded (${buf.length}B) - skipping`); return null; }
+  } else {
+    frameList = [{ pos: 0, buf }];
+  }
+
+  let nsfw = 0, parts = [], anyError = false;
+  const frameScores = [];
+  for (const f of frameList) {
+    try {
+      const v = await _classifyFrame(f.buf);
+      frameScores.push({ pos: f.pos, nsfw: v.nsfw, cached: !!v.cached });
+      if (v.nsfw > nsfw) { nsfw = v.nsfw; parts = v.parts || []; }
+      else if (v.nsfw === nsfw && (v.parts || []).length) parts = v.parts;
+    } catch (e) {
+      anyError = true;
+      console.log(`[Antinude] ${label}frame ${f.pos} classify failed: ${String(e.message).slice(0, 60)}`);
+    }
+  }
+  if (anyError && nsfw === 0) { _stats.errors++; return null; } // fail-open only when nothing scored
+  return { kind, nsfw, parts, frames: frameScores, ms: Date.now() - t0, cached: frameScores.some((f) => f.cached) };
 }
 
 // main entry. ctx: { senderIsAdmin, isOwner, isGlobalMod, isGcOwner, senderJid, chatId }
@@ -122,16 +219,18 @@ async function handleAntinude(sock, m, settings, addWarning, getWarningCount, ct
     if (!media) return false;
 
     let buf;
-    try { buf = await _downloadMediaBuffer(media.node, media.type === "sticker" ? "sticker" : "image"); }
-    catch { return false; }
-    if (!buf || buf.length < 800) return false;
+    try { buf = await _downloadMediaBuffer(media.node, media.type); }
+    catch (e) { console.log(`[Antinude] ${media.type} download failed: ${String(e.message).slice(0, 50)}`); return false; }
+    if (!buf || buf.length < 800) { console.log(`[Antinude] ${media.type} skipped: ${buf ? buf.length + "B too small" : "oversize/empty"}`); return false; }
 
-    let nsfw;
-    try { ({ nsfw } = await _classify(buf)); }
-    catch (e) { _stats.errors++; console.log("[Antinude] classify failed (fail-open):", String(e.message).slice(0, 60)); return false; }
+    const result = await analyzeMediaBuffer(media.type, buf, `${media.type} ${buf.length}B `);
+    if (!result) return false;
 
-    const threshold = Number.isFinite(settings.antinudeThreshold) ? settings.antinudeThreshold : 0.7;
-    if (nsfw < threshold) return false;
+    const threshold = Number.isFinite(settings.antinudeThreshold) ? settings.antinudeThreshold : 0.45;
+    const partsStr = (result.parts || []).map((p) => `${p.label}:${p.score}`).join(", ") || "none";
+    console.log(`[Antinude] scanned ${media.type} (${buf.length}B) chat=${ctx.chatId.slice(0, 20)} nsfw=${result.nsfw.toFixed(3)} thr=${threshold} parts=[${partsStr}] frames=${result.frames.map((f) => f.nsfw.toFixed(2)).join("/")} ${result.ms}ms${result.cached ? " cached" : ""}`);
+
+    if (result.nsfw < threshold) return false;
 
     // ── VIOLATION ──
     _stats.flagged++;
@@ -140,10 +239,11 @@ async function handleAntinude(sock, m, settings, addWarning, getWarningCount, ct
     try { await sock.sendMessage(ctx.chatId, { delete: m.key }); } catch { /* not admin */ }
 
     const name = String(sender || "").split("@")[0];
-    const pct = Math.round(nsfw * 100);
+    const pct = Math.round(result.nsfw * 100);
+    const what = media.type === "video" ? "video" : media.type === "asticker" ? "animated sticker" : media.type;
     if (action === "kick") {
       await sock.sendMessage(ctx.chatId, {
-        text: `🚨 *ANTINUDE* 🚨\n@${name} posted prohibited content (confidence ${pct}%). Removed.`,
+        text: `🚨 *ANTINUDE* 🚨\n@${name} posted prohibited content (${what}, confidence ${pct}%). Removed.`,
         mentions: [sender],
       }).catch(() => {});
       setTimeout(() => sock.groupParticipantsUpdate(ctx.chatId, [sender], "remove").catch(() => {}), 1000);
@@ -152,7 +252,7 @@ async function handleAntinude(sock, m, settings, addWarning, getWarningCount, ct
       try { warningCount = addWarning(sender, ctx.chatId, `Antinude violation (nsfw ${pct}%)`); } catch { /* no warning pool */ }
       const strike = "⚠️".repeat(Math.min(warningCount, 3));
       await sock.sendMessage(ctx.chatId, {
-        text: `${strike} *ANTINUDE WARNING* ${strike}\n@${name}: prohibited content removed (confidence ${pct}%).\nCount: ${warningCount}/3`,
+        text: `${strike} *ANTINUDE WARNING* ${strike}\n@${name}: prohibited ${what} removed (confidence ${pct}%).\nCount: ${warningCount}/3`,
         mentions: [sender],
       }).catch(() => {});
       if (warningCount >= 3) {
@@ -160,7 +260,7 @@ async function handleAntinude(sock, m, settings, addWarning, getWarningCount, ct
       }
     } else {
       await sock.sendMessage(ctx.chatId, {
-        text: `🚨 *ANTINUDE* 🚨\n@${name}'s prohibited content was removed (confidence ${pct}%).`,
+        text: `🚨 *ANTINUDE* 🚨\n@${name}'s prohibited ${what} was removed (confidence ${pct}%).`,
         mentions: [sender],
       }).catch(() => {});
     }
@@ -176,8 +276,10 @@ function stats() { return { ..._stats, cacheSize: _cache.size, inFlight: _inFlig
 module.exports = {
   handleAntinude,
   extractImageMedia,
+  analyzeMediaBuffer,
+  downloadMedia: _downloadMediaBuffer,
   stats,
   _internal: {
-    _classify: (buf) => _classify(buf), // test hook (real service or stub)
+    _classifyFrame, // test hook (real service or stub)
   },
 };
