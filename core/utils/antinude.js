@@ -122,11 +122,15 @@ async function _videoFrameBuffers(buf) {
     const positions = dur > 1
       ? [0.1, 0.3, 0.5, 0.7, 0.9].map((p) => Math.min(dur - 0.05, Math.max(0, dur * p)))
       : [0.2, 0.8, 1.5, 2.5, 3.5];
+    // parallel extraction - small videos, quick seeks, ~2 cores can take 5 at once
+    const outs = await Promise.all(positions.map((pos) =>
+      run("ffmpeg", ["-ss", String(pos), "-i", tmp, "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "pipe:1"], 10000)
+    ));
     const frames = [];
-    for (const pos of positions) {
-      const out = await run("ffmpeg", ["-ss", String(pos), "-i", tmp, "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "pipe:1"], 10000);
+    positions.forEach((pos, i) => {
+      const out = outs[i];
       if (out && out.length > 500) frames.push({ pos: Number(pos.toFixed(2)), buf: out });
-    }
+    });
     return frames;
   } finally {
     try { fs.unlinkSync(tmp); } catch { /* best effort */ }
@@ -192,17 +196,20 @@ async function analyzeMediaBuffer(kind, buf, label = "") {
   }
 
   let nsfw = 0, parts = [], anyError = false;
-  const frameScores = [];
-  for (const f of frameList) {
-    try {
-      const v = await _classifyFrame(f.buf);
-      frameScores.push({ pos: f.pos, nsfw: v.nsfw, cached: !!v.cached });
-      if (v.nsfw > nsfw) { nsfw = v.nsfw; parts = v.parts || []; }
-      else if (v.nsfw === nsfw && (v.parts || []).length) parts = v.parts;
-    } catch (e) {
+  // classify frames through the bounded-concurrency queue in parallel
+  const results = await Promise.all(frameList.map((f) =>
+    _classifyFrame(f.buf).then((v) => ({ pos: f.pos, ok: true, v })).catch((e) => {
       anyError = true;
       console.log(`[Antinude] ${label}frame ${f.pos} classify failed: ${String(e.message).slice(0, 60)}`);
-    }
+      return { pos: f.pos, ok: false };
+    })
+  ));
+  const frameScores = [];
+  for (const rres of results) {
+    if (!rres.ok) continue;
+    frameScores.push({ pos: rres.pos, nsfw: rres.v.nsfw, cached: !!rres.v.cached });
+    if (rres.v.nsfw > nsfw) { nsfw = rres.v.nsfw; parts = rres.v.parts || []; }
+    else if (rres.v.nsfw === nsfw && (rres.v.parts || []).length) parts = rres.v.parts;
   }
   if (anyError && nsfw === 0) { _stats.errors++; return null; } // fail-open only when nothing scored
   return { kind, nsfw, parts, frames: frameScores, ms: Date.now() - t0, cached: frameScores.some((f) => f.cached) };
