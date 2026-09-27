@@ -43,6 +43,8 @@ const FRAMES_PER_MEDIA = 5;
 const _cache = new Map();
 let _inFlight = 0;
 let _stats = { checked: 0, flagged: 0, errors: 0, cacheHits: 0, videos: 0, astickers: 0 };
+// test hooks (see module.exports._internal)
+const _internal = { _classifyFrame, downloadImpl: null };
 
 function _cacheGet(key) {
   const hit = _cache.get(key);
@@ -333,11 +335,5 @@ module.exports = {
   analyzeMediaBuffer,
   downloadMedia: _downloadMediaBuffer,
   stats,
-  _internal: {
-    _classifyFrame, // test hook (real service or stub)
-    // downloadImpl: on-box E2E hook - inject a real buffer so the FULL
-    // enforcement path (download -> classify -> delete+warn) is testable
-    // without a live WhatsApp media session.
-    downloadImpl: null,
-  },
+  _internal, // { _classifyFrame (real service or stub), downloadImpl (on-box E2E hook) }
 };
