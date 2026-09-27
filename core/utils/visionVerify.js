@@ -80,7 +80,12 @@ async function verifySubject(buf, mime, subject, context = "") {
           { type: "image_url", image_url: { url: `data:${sendMime};base64,${b64}` } },
         ],
       }],
-    }, { timeout: timeoutMs });
+    }, {
+      timeout: timeoutMs,
+      // 💡 2026-09-28: VISION_KEY was read but NEVER SENT - every provider
+      // call 401'd (found live on Box 1 against Groq). Send it.
+      headers: key ? { Authorization: `Bearer ${key}` } : undefined,
+    });
     const txt = String(r.data?.choices?.[0]?.message?.content || "");
     const m = txt.match(/\{[\s\S]*\}/);
     if (!m) { _noteResult(false); return { decision: "unknown", reason: "unparseable" }; }
