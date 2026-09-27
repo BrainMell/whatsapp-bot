@@ -123,7 +123,32 @@ function bankLookup(mediaKey, seenHashes, count, filter = {}) {
 
 // Media asset cache shared with the live quiz: verified download keyed by
 // URL, so a banked image/audio question re-fetches once per process.
+// 2026-09-27 OOM fix: the cache is capped by TOTAL BYTES, not just entries.
+// The entry cap alone allowed 200 x up-to-6MB images = 1.2GB of heap on a
+// 1GB box - the exact profile of the 2026-09-26 heap OOM crash. Entry TTL
+// is unchanged (30 min); evicting oldest-first keeps hot quiz assets warm.
 const _assetCache = new Map(); // url -> { ts, buf, mime, kind }
+const ASSET_CACHE_MAX_BYTES = 48 * 1024 * 1024; // 48MB across all cached media
+let _assetCacheBytes = 0;
+
+function _assetCacheEvict() {
+  while (_assetCacheBytes > ASSET_CACHE_MAX_BYTES && _assetCache.size > 1) {
+    const oldest = _assetCache.keys().next().value;
+    const gone = _assetCache.get(oldest);
+    if (gone && gone.buf) _assetCacheBytes -= gone.buf.length;
+    _assetCache.delete(oldest);
+  }
+}
+
+function _assetCachePut(url, entry) {
+  const prev = _assetCache.get(url);
+  if (prev && prev.buf) _assetCacheBytes -= prev.buf.length;
+  _assetCache.set(url, entry);
+  _assetCacheBytes += entry.buf ? entry.buf.length : 0;
+  // legacy entry-count guard kept as a secondary bound
+  if (_assetCache.size > 200) _assetCacheEvict();
+  _assetCacheEvict();
+}
 
 async function getCachedAsset(url, downloader) {
   const hit = _assetCache.get(url);
@@ -131,8 +156,7 @@ async function getCachedAsset(url, downloader) {
   const dl = await downloader(url);
   if (!dl) return null;
   const entry = { ts: Date.now(), ...dl };
-  _assetCache.set(url, entry);
-  if (_assetCache.size > 200) _assetCache.delete(_assetCache.keys().next().value);
+  _assetCachePut(url, entry);
   return entry;
 }
 
@@ -141,8 +165,7 @@ async function getCachedAsset(url, downloader) {
 // same URL (2 CDN fetches per fresh image question -> 1).
 function putCachedAsset(url, dl) {
   if (!url || !dl || !dl.buf) return false;
-  _assetCache.set(url, { ts: Date.now(), ...dl });
-  if (_assetCache.size > 200) _assetCache.delete(_assetCache.keys().next().value);
+  _assetCachePut(url, { ts: Date.now(), ...dl });
   return true;
 }
 
@@ -153,5 +176,6 @@ module.exports = {
   loadBank,
   getCachedAsset,
   putCachedAsset,
+  assetCacheStats: () => ({ entries: _assetCache.size, bytes: _assetCacheBytes }),
   _internal: { _KEY, _assetCache, _sha, BANK_CAP_PER_MEDIA },
 };

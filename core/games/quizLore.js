@@ -846,7 +846,12 @@ async function generateLoreQuestion(callLLM, franchiseTitle, lore, domain, diffi
           { role: "user", content: user },
         ],
         temperature: attempt === 0 ? 0.55 : 0.3,
-        max_tokens: 420,
+        // 2026-09-27 reliability: 420 tokens truncated valid JSON docs before
+        // the closing brace ("max completion tokens reached" 400s -> the whole
+        // slot failed deterministically). A single MC question never exceeds
+        // ~300 tokens; 700 covers the longest lore terms with margin while
+        // staying far below the model ceiling.
+        max_tokens: 700,
         response_format: { type: "json_object" },
       });
       const text = normalizeLLMReply(raw);

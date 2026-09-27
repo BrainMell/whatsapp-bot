@@ -3494,6 +3494,25 @@ What to do:
       } catch (e) {}
     });
 
+    // 💡 OOM FORENSICS 2026-09-27: this box has 1GB RAM and Node sizes its
+    // heap accordingly (~408MB) - the 2026-09-26 crash was a heap OOM with
+    // zero breadcrumb trail. One line every 5 minutes makes the growth curve
+    // visible in the pm2 log, and the quiz media cache size is included so a
+    // leaky asset cache is caught in the act.
+    const __heapTick = setInterval(() => {
+      try {
+        const m = process.memoryUsage();
+        const mb = (n) => Math.round(n / 1024 / 1024);
+        let qAssets = "";
+        try {
+          const qs = require("./games/quizBank").assetCacheStats();
+          qAssets = ` quizAssets=${qs.entries}/${mb(qs.bytes)}MB`;
+        } catch { /* quiz module optional for telemetry */ }
+        console.log(`🧠 [mem] rss=${mb(m.rss)}MB heap=${mb(m.heapUsed)}/${mb(m.heapTotal)}MB external=${mb(m.external)}MB${qAssets}`);
+      } catch { /* telemetry must never throw */ }
+    }, 5 * 60 * 1000);
+    __heapTick.unref?.();
+
     // --- DYNAMIC TITLE LOGIC ---
     function getDynamicTitle(userId) {
       const user = economy.getUser(userId);
@@ -3859,7 +3878,23 @@ What to do:
         } catch (error) {
           markKeyFailure();
           console.error(`⚠️️ Groq API error on Key #${currentKeyIndex + 1} (attempt ${attempt + 1}/${retries + 1}):`, error.message);
-          
+
+          // 💡 RELIABILITY FIX 2026-09-27: deterministic request errors can
+          // never succeed on retry, but the old loop still rotated ALL keys
+          // x ALL attempts against the identical doomed payload (measured:
+          // json_validate_failed storms = 5 keys x 3 attempts of 400s per
+          // slot, minutes of dead latency per quiz). Non-retryable classes:
+          //   - 400 invalid_request_error (json_validate_failed, bad params)
+          //   - 401/403 (auth) - other keys share the org, they cannot help
+          // Transient classes (429 rate limit, 5xx, network) keep the
+          // existing key-rotation + backoff behavior unchanged.
+          const __status = error.status || error.response?.status || 0;
+          const __nonRetryable =
+            __status === 400 || __status === 401 || __status === 403 ||
+            error.message?.includes("json_validate_failed") ||
+            error.message?.includes("invalid_request_error");
+          if (__nonRetryable) throw error;
+
           if (attempt < retries) {
             if (GROQ_API_KEYS.length > 1) {
               currentKeyIndex = (currentKeyIndex + 1) % GROQ_API_KEYS.length;
