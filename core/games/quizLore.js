@@ -682,12 +682,97 @@ async function getPageImage(slug, page) {
   }
 }
 
+// ════════════════════════════════════════════
+// WIKIPEDIA IMAGE SOURCE (2026-09-27 image reliability pass)
+// Fandom pageimages 403s/misses were leaving image questions without an
+// asset (owner: "images don't even spawn half the time"). Wikipedia is a
+// second, independent, hotlink-friendly source for the SAME subject.
+//
+// TWO lookup modes:
+//   "article" - generator=search + prop=pageimages: best-matching article
+//               thumbnail. Clean and article-anchored (works for brands,
+//               franchises, games, movies; often absent for fictional
+//               characters because their key art is non-free).
+//   "files"   - File-namespace search + imageinfo: surfaces fair-use
+//               character art. Filtered hard: bitmaps only, junk filenames
+//               (cosplay/stat/chart/map/diagram/svg...) rejected.
+//
+// UA POLICY (measured 2026-09-27): Wikimedia 403s generic browser UAs and
+// the bare "WhatsAppQuizBot" UA; it accepts the documented bot-UA format
+// "<Tool>/<version> (<what> ; contact)" - so these calls carry their own
+// header and the shared Fandom client stays untouched.
+// Every caller still verifies real bytes (magic numbers) before use (P13).
+// ════════════════════════════════════════════
+const _WP_UA = { "User-Agent": "ZenithQuizBot/1.0 (WhatsApp trivia bot; contact: ops@zenithbot.dev) axios" };
+const _wpImgCache = new Map(); // key -> { ts, img }
+const WP_IMG_TTL = 30 * 60 * 1000;
+const _WP_FILE_JUNK = /(cosplay|cosplay(er)?s|stat[s]?\b|chart|map|diagram|graph|svg|flag|coat_of_arms|signature|autograph|screenshot|magazine|dvd|bluray|box.?art|logo)/i;
+
+async function _wpApi(params) {
+  const r = await _http.get("https://en.wikipedia.org/w/api.php", {
+    params: { action: "query", format: "json", formatversion: 2, redirects: 1, ...params },
+    timeout: 10000, headers: _WP_UA,
+  });
+  return r.data;
+}
+
+async function wikipediaImage(query, thumbwidth = 700, mode = "article") {
+  const q = String(query || "").trim();
+  if (!q) return null;
+  const key = `${mode}|${q}|${thumbwidth}`;
+  const hit = _wpImgCache.get(key);
+  if (hit && Date.now() - hit.ts < WP_IMG_TTL) return hit.img || null;
+  let img = null;
+  try {
+    if (mode === "files") {
+      const d = await _wpApi({
+        generator: "search", gsrsearch: q, gsrlimit: 8, gsrnamespace: 6,
+        prop: "imageinfo", iiprop: "url|mime|size", iiurlwidth: thumbwidth,
+      });
+      const pages = d?.query?.pages || [];
+      const ok = pages
+        .filter((p) => p.imageinfo && p.imageinfo[0])
+        .map((p) => ({ p, ii: p.imageinfo[0] }))
+        .filter(({ p, ii }) => !_WP_FILE_JUNK.test(p.title || "")
+          && /^image\/(jpeg|png|webp)$/.test(ii.mime || "")
+          && (ii.width || 0) >= 200 && (ii.height || 0) >= 200
+          && (ii.thumburl || ii.url));
+      if (ok.length) {
+        const { p, ii } = ok[0];
+        img = { url: ii.thumburl || ii.url, mime: ii.mime, source: "wikipedia-files", page: p.title };
+      }
+    } else {
+      const d = await _wpApi({
+        generator: "search", gsrsearch: q, gsrlimit: 3, gsrnamespace: 0,
+        prop: "pageimages", piprop: "thumbnail", pithumbsize: thumbwidth,
+      });
+      const pages = d?.query?.pages || [];
+      const withThumb = pages
+        .filter((p) => p.thumbnail && p.thumbnail.source)
+        .sort((a, b) => (a.index || 99) - (b.index || 99));
+      if (withThumb.length) {
+        const p = withThumb[0];
+        img = { url: p.thumbnail.source, mime: /\.png/i.test(p.thumbnail.source) ? "image/png" : "image/jpeg", source: "wikipedia", page: p.title };
+      }
+    }
+  } catch { img = null; }
+  _wpImgCache.set(key, { ts: Date.now(), img });
+  if (_wpImgCache.size > 300) _wpImgCache.delete(_wpImgCache.keys().next().value);
+  return img;
+}
+
 // download + verify a media asset (magic-byte check, size cap)
+// 2026-09-27: Wikimedia hosts (wikipedia.org / wikimedia.org) enforce the
+// bot-UA policy on FILE downloads too - the shared Fandom client's UA gets
+// 403'd there. Wikimedia URLs carry the compliant UA; every other host is
+// untouched.
 async function downloadMedia(url, kind = "image") {
   // https required; plain http only for loopback (local dev/QA media server)
   if (!url || (!/^https:\/\//.test(url) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(url))) return null;
   try {
-    const r = await _http.get(url, { responseType: "arraybuffer", timeout: 20000, maxContentLength: 6 * 1024 * 1024 });
+    const isWikimedia = /(^|\.)wikipedia\.org$|(^|\.)wikimedia\.org$/i.test(new URL(url).hostname);
+    const headers = isWikimedia ? _WP_UA : undefined;
+    const r = await _http.get(url, { responseType: "arraybuffer", timeout: 20000, maxContentLength: 6 * 1024 * 1024, headers });
     const buf = Buffer.from(r.data);
     if (buf.length < 1024) return null;
     const b = buf;
@@ -909,7 +994,7 @@ module.exports = {
   cleanWikitext, fitContext, estTokens, filterSections, retrieveLore, findPageForDomain,
   // characters + media + generation
   buildCharacterIndex, pickCharacterPage, retrieveCharacterLore, retrieveCosmologyLore,
-  getPageImage, resolveFileUrl, downloadMedia, findAudioForPage,
+  getPageImage, resolveFileUrl, downloadMedia, findAudioForPage, wikipediaImage,
   generateLoreQuestion, buildQuestionPlan,
   // media-type + multi-source pool (P22)
   detectMediaType, wikipediaSummary, tvmazeLookup, getThemeSongs,

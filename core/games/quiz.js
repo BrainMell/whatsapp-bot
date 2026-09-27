@@ -38,6 +38,7 @@ const system = require("../utils/system");
 const quizLore = require("./quizLore");
 const quizConfigMod = require("./quizConfig"); // P16 central config + quizmod
 const quizBank = require("./quizBank");        // P15 stable-identity bank
+const mediaWorker = require("../utils/mediaWorker"); // 2026-09-27 shared media job runner
 
 // ── state ──
 const activeQuizzes = new Map(); // chatId -> session (one live quiz per chat)
@@ -739,20 +740,48 @@ async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, d
   if (uniq.length < 4) return null;
   const order = difficulty === "hard" ? ["hard", "medium", "easy"] : difficulty === "easy" ? ["easy", "medium", "hard"] : ["medium", "easy", "hard"];
   const bandRank = (band) => order.indexOf(band);
-  const candidates = [...uniq].sort((a, b) => (Math.random() - 0.7) + (bandRank(a.band) - bandRank(b.band)) * 0.4).slice(0, 8);
+  // 2026-09-27: candidate pool 8 -> 14. Fandom thumbnails are missing/403 for
+  // many subjects ("images don't even spawn half the time"); each extra
+  // candidate is one more chance to land a verified asset.
+  const candidates = [...uniq].sort((a, b) => (Math.random() - 0.7) + (bandRank(a.band) - bandRank(b.band)) * 0.4).slice(0, 14);
+
+  // fetch + VERIFY an image for one candidate. Sources, in order:
+  //   1. the franchise wiki's own pageimage (page-anchored, cannot cross subjects)
+  //   2. Wikipedia article image for "<character> <franchise>" (independent,
+  //      hotlink-friendly; search-anchored so disambiguation works out)
+  //   3. Wikipedia File-namespace search (fair-use character art; junk-
+  //      filtered: cosplay/stat/chart/svg filenames rejected)
+  // Every byte goes through the same magic-number verification - a URL alone
+  // has never been enough (P13). Jobs run through the shared mediaWorker so
+  // a burst of image questions can never flood the event loop / network.
+  const fetchVerifiedImage = async (subject) => {
+    return mediaWorker.run(async () => {
+      let img = null;
+      try { img = await quizLore.getPageImage(wiki, subject); } catch { img = null; }
+      if (img && img.url) {
+        const dl = await quizLore.downloadMedia(img.url, "image").catch(() => null);
+        if (dl) return { ...dl, url: img.url, source: "fandom" };
+      }
+      for (const mode of ["article", "files"]) {
+        const wp = await quizLore.wikipediaImage(`${subject} ${franchiseTitle}`, 700, mode).catch(() => null);
+        if (wp && wp.url) {
+          const dl = await quizLore.downloadMedia(wp.url, "image").catch(() => null);
+          if (dl) return { ...dl, url: wp.url, source: wp.source || `wikipedia-${mode}` };
+        }
+      }
+      return null;
+    }, { label: `imgq:${subject}`.slice(0, 60), timeoutMs: 45000 }).catch(() => null);
+  };
+
   for (const ch of candidates) {
     const page = ch.name;
     if (usedKeys && usedKeys.has(`img:${page}`)) continue;
-    let img = null;
-    try { img = await quizLore.getPageImage(wiki, page); } catch { img = null; }
-    if (!img || !img.url) continue;
-    // P13 verification: download + magic bytes NOW (a URL alone is not proof)
-    const dl = await quizLore.downloadMedia(img.url, "image").catch(() => null);
-    if (!dl) continue;
+    const hit = await fetchVerifiedImage(page);
+    if (!hit) continue;
     // P26: seed the shared asset cache with these verified bytes so the
     // post-time send reuses them - fresh image questions download their
     // image exactly ONCE (was: once at generation, again at post time).
-    quizBank.putCachedAsset(img.url, { buf: dl.buf, mime: dl.mime, kind: "image" });
+    quizBank.putCachedAsset(hit.url, { buf: hit.buf, mime: hit.mime, kind: "image" });
     // options: correct + 3 same-franchise names (no cross-franchise options)
     const others = uniq
       .filter((x) => String(x.name).toLowerCase() !== String(ch.name).toLowerCase())
@@ -768,8 +797,8 @@ async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, d
       topic: "Character ID",
       domain: "characters",
       type: "image",
-      assetKey: img.url,
-      asset: { kind: "image", url: img.url, mime: dl.mime, subject: page, bytesHash: crypto.createHash("sha1").update(dl.buf).digest("hex").slice(0, 16) },
+      assetKey: hit.url,
+      asset: { kind: "image", url: hit.url, mime: hit.mime, subject: page, source: hit.source, bytesHash: crypto.createHash("sha1").update(hit.buf).digest("hex").slice(0, 16) },
       loreRef: { wiki, page, section: "page-image" },
     };
     if (usedKeys) usedKeys.add(`img:${page}`);
@@ -873,7 +902,10 @@ async function buildThemeSongQuestion(franchise, otherTitles, usedKeys) {
       // P25 fast path: the service already trimmed (fullBytes gate mirrors the
       // old >=50KB check on the full file we used to download)
       const fullOk = !Number.isFinite(info.fullBytes) || info.fullBytes >= 50 * 1024;
-      const dl = await axios.get(info.audioURL, { responseType: "arraybuffer", timeout: 60000, maxContentLength: 20 * 1024 * 1024 }).catch(() => null);
+      const dl = await mediaWorker.run(
+        () => axios.get(info.audioURL, { responseType: "arraybuffer", timeout: 60000, maxContentLength: 20 * 1024 * 1024 }).catch(() => null),
+        { label: `songclip:${_normText(song).slice(0, 40)}`, timeoutMs: 70000 },
+      ).catch(() => null);
       if (fullOk && dl && dl.data && dl.data.length > 20 * 1024) clip = Buffer.from(dl.data);
     }
     if (!clip) {
@@ -1351,7 +1383,14 @@ async function resolveQuestionMedia(session, q) {
   if (q.asset.buf) return { kind: q.asset.kind === "audio" ? "audio" : "image", buf: q.asset.buf, mime: q.asset.mime };
   if (q.asset.kind === "image" && q.asset.url) {
     const dl = await quizBank.getCachedAsset(q.asset.url, async (u) => {
-      const d = await quizLore.downloadMedia(u, "image").catch(() => null);
+      // 2026-09-27: post-time re-fetch goes through the shared media worker
+      // (capped concurrency + hard timeout) and retries once on a transient
+      // failure before the question is skipped.
+      const fetchOnce = () => mediaWorker.run(
+        () => quizLore.downloadMedia(u, "image").catch(() => null),
+        { label: `resolve:${String(u).slice(0, 48)}`, timeoutMs: 30000 },
+      );
+      const d = await fetchOnce().catch(() => null) || await fetchOnce().catch(() => null);
       return d ? { buf: d.buf, mime: d.mime, kind: "image" } : null;
     }).catch(() => null);
     if (dl) return { kind: "image", buf: dl.buf, mime: dl.mime };
