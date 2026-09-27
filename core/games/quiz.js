@@ -83,21 +83,42 @@ const LONG_SECTION_TEMPLATES = [
 // P11/P19 random mode: diverse curated pool (anime/game/comic/cartoon/movie).
 // Each random SECTION draws one franchise from here (validated before use).
 const RANDOM_POOL = [
+  // anime
   "rezero", "naruto", "onepiece", "attackontitan", "jujutsu-kaisen", "dragonball",
   "fma", "deathnote", "onepunchman", "kimetsu-no-yaiba", "hunterxhunter", "bleach",
-  "eldenring", "darksouls", "zelda", "minecraft", "witcher", "godofwar",
-  "batman", "marvel", "dc", "ben10", "avatar", "starwars", "harrypotter", "lotr",
+  "myheroacademia", "spyxfamily", "chainsawman", "swordartonline", "steins-gate",
+  "codegeass", "tokyoghoul", "vinlandsaga", "solo-leveling", "blackclover",
+  "dandadan", "fairytail", "berserk", "evangelion", "cowboybebop", "konosuba",
+  // games
+  "eldenring", "darksouls", "sekiro", "bloodborne", "zelda", "minecraft", "gta",
+  "godofwar", "witcher", "finalfantasy", "pokemon", "gensin-impact", "leagueoflegends",
+  "cyberpunk", "fortnite", "among-us",
+  // tv / movies / comics / cartoons
+  "batman", "marvel", "dc", "starwars", "startrek", "harrypotter", "lotr",
+  "avatar", "ben10", "spongebob", "strangerthings", "breakingbad", "gameofthrones",
+  "gravityfalls", "adventuretime", "steven-universe", "teentitans",
 ];
 // display names for option lists (theme-song "which anime is this from?")
 const RANDOM_TITLES = {
   rezero: "Re:Zero", naruto: "Naruto", onepiece: "One Piece", attackontitan: "Attack on Titan",
   "jujutsu-kaisen": "Jujutsu Kaisen", dragonball: "Dragon Ball", fma: "Fullmetal Alchemist",
   deathnote: "Death Note", onepunchman: "One Punch Man", "kimetsu-no-yaiba": "Demon Slayer",
-  hunterxhunter: "Hunter x Hunter", bleach: "Bleach", eldenring: "Elden Ring",
-  darksouls: "Dark Souls", zelda: "The Legend of Zelda", minecraft: "Minecraft",
-  witcher: "The Witcher", godofwar: "God of War", batman: "Batman", marvel: "Marvel",
-  dc: "DC Comics", ben10: "Ben 10", avatar: "Avatar: The Last Airbender",
-  starwars: "Star Wars", harrypotter: "Harry Potter", lotr: "Lord of the Rings",
+  hunterxhunter: "Hunter x Hunter", bleach: "Bleach", myheroacademia: "My Hero Academia",
+  spyxfamily: "Spy x Family", chainsawman: "Chainsaw Man", swordartonline: "Sword Art Online",
+  "steins-gate": "Steins;Gate", codegeass: "Code Geass", tokyoghoul: "Tokyo Ghoul",
+  vinlandsaga: "Vinland Saga", "solo-leveling": "Solo Leveling", blackclover: "Black Clover",
+  dandadan: "Dandadan", fairytail: "Fairy Tail", berserk: "Berserk", evangelion: "Evangelion",
+  cowboybebop: "Cowboy Bebop", konosuba: "Konosuba",
+  eldenring: "Elden Ring", darksouls: "Dark Souls", sekiro: "Sekiro", bloodborne: "Bloodborne",
+  zelda: "The Legend of Zelda", minecraft: "Minecraft", gta: "GTA",
+  godofwar: "God of War", witcher: "The Witcher", finalfantasy: "Final Fantasy",
+  pokemon: "Pokémon", "gensin-impact": "Genshin Impact", leagueoflegends: "League of Legends",
+  cyberpunk: "Cyberpunk 2077", fortnite: "Fortnite", "among-us": "Among Us",
+  batman: "Batman", marvel: "Marvel", dc: "DC Comics", starwars: "Star Wars", startrek: "Star Trek",
+  harrypotter: "Harry Potter", lotr: "Lord of the Rings", avatar: "Avatar: The Last Airbender",
+  ben10: "Ben 10", spongebob: "SpongeBob", strangerthings: "Stranger Things",
+  breakingbad: "Breaking Bad", gameofthrones: "Game of Thrones", gravityfalls: "Gravity Falls",
+  adventuretime: "Adventure Time", "steven-universe": "Steven Universe", teentitans: "Teen Titans",
 };
 
 // injected shared infra (P11): engine calls quizGame.setDeps once at boot
@@ -1305,14 +1326,21 @@ async function generateSectionQuestions(session, section, sock, chatId) {
     section.questions = questions.slice(0, sectionCount);
     return section.questions;
   }
-  if (section.domain === "song") {
+  if (section.domain === "song" || section.domain === "audio") {
+    const isTheme = section.domain === "audio";
     const fresh = await mediaWorker.run(
-      () => quizMediaMod.buildSpotSongQuestions({
-        count: sectionCount, usedKeys, difficulty: cfg.difficulty,
-        goService: deps.goService,
-        trimFn: (buf, secs) => _clipAudioBuffer(buf, deps.ffmpegPath, secs || 25),
-      }),
-      { label: "song:build", timeoutMs: 300000 },
+      () => isTheme
+        ? quizMediaMod.buildThemeSongQuestions({
+            count: sectionCount, usedKeys, difficulty: cfg.difficulty,
+            goService: deps.goService,
+            trimFn: (buf, secs) => _clipAudioBuffer(buf, deps.ffmpegPath, secs || 25),
+          })
+        : quizMediaMod.buildSpotSongQuestions({
+            count: sectionCount, usedKeys, difficulty: cfg.difficulty,
+            goService: deps.goService,
+            trimFn: (buf, secs) => _clipAudioBuffer(buf, deps.ffmpegPath, secs || 25),
+          }),
+      { label: `${section.domain}:build`, timeoutMs: 300000 },
     ).catch(() => []);
     for (const q of fresh || []) {
       if (questions.length >= sectionCount) break;
@@ -1323,9 +1351,34 @@ async function generateSectionQuestions(session, section, sock, chatId) {
     return section.questions;
   }
 
-  // lazy character index (built once per session, reused everywhere - P21)
-  if (!session.charIndex && session.wiki) {
-    try { session.charIndex = await quizLore.buildCharacterIndex(session.wiki, session.title, session.animeCharacters || []); } catch { session.charIndex = null; }
+  // 💡 RANDOM ACROSS FICTION (owner brief §2): in random mode every lore
+  // section draws its OWN franchise. First section's context came from the
+  // launch; sections 2+ resolve a fresh world here (network, cached per wiki).
+  if (session.mode === "random" && !section.franchise) {
+    const drawn = await drawSectionFranchise(session).catch(() => null);
+    if (drawn) {
+      section.franchise = drawn;
+      section.name = drawn.title; // section card shows the new world
+    }
+  }
+  const F = section.franchise || null; // null -> franchise-mode: session carries everything
+  const fWiki = F?.wiki || session.wiki;
+  const fTitle = F?.title || session.title;
+  const fAnime = F?.anime || session.anime;
+  const fChars = F?.characters || session.animeCharacters || [];
+  const fMk = F ? `wiki:${F.wiki}` : mk;
+  const fFranchise = F ? { title: F.title, wiki: F.wiki, anime: F.anime, mediaType: F.mediaType } : session.franchise;
+  const fOther = F?.otherTitles || session.otherTitles || [];
+  const fMediaType = F?.mediaType || cfg.mediaType;
+
+  // lazy character index (per franchise wiki, cached once per session - P21)
+  session.charIndexByWiki = session.charIndexByWiki || new Map();
+  let charIdx = fWiki ? (session.charIndexByWiki.get(fWiki) || null) : null;
+  if (fWiki && !charIdx) {
+    try {
+      charIdx = await quizLore.buildCharacterIndex(fWiki, fTitle, fChars);
+      session.charIndexByWiki.set(fWiki, charIdx);
+    } catch { charIdx = null; }
   }
 
   const wantsImages = cfg.imageQuestionCount > 0 && section.domain === "images";
@@ -1334,8 +1387,8 @@ async function generateSectionQuestions(session, section, sock, chatId) {
 
   // P21: no wiki -> straight to domain-aware metadata fallbacks (no wasted
   // network retries against a nonexistent wiki)
-  if (!session.wiki) {
-    const fbAll = buildFallbackQuestions(session.anime, session.animeCharacters || [], cfg.difficulty, sectionCount + 6);
+  if (!fWiki) {
+    const fbAll = buildFallbackQuestions(fAnime, fChars, cfg.difficulty, sectionCount + 6);
     const allowedDomains = cfg.categories ? new Set(cfg.categories) : null;
     let prodBudget = cfg.voiceActorQuestionLimit;
     for (const f of fbAll) {
@@ -1356,19 +1409,19 @@ async function generateSectionQuestions(session, section, sock, chatId) {
   if (needImages > 0) {
     let served = 0;
     // bank-served image questions (asset re-verified at post time)
-    const banked = quizBank.bankLookup(mk, loadSeen(mk).map((h) => h), needImages, { type: "image" });
+    const banked = quizBank.bankLookup(fMk, loadSeen(fMk).map((h) => h), needImages, { type: "image" });
     for (const b of banked) { questions.push(b); served++; }
     while (served < needImages) {
-      const q = await buildImageQuestion(session.wiki, session.title, session.charIndex, usedKeys, cfg.difficulty, session).catch(() => null);
+      const q = await buildImageQuestion(fWiki, fTitle, charIdx, usedKeys, cfg.difficulty, { franchise: fFranchise, mediaType: fMediaType }).catch(() => null);
       if (!q) break; // no verified images - graceful (text takes over below)
       // P15 dedup: skip if this asset already in bank
-      if (quizBank.bankPut(mk, q)) questions.push(q);
+      if (quizBank.bankPut(fMk, q)) questions.push(q);
       else if (!questions.some((x) => x.assetKey === q.assetKey)) questions.push(q);
       served++;
     }
     // fill any image shortfall with text lore (never fake an image)
     while (questions.length < sectionCount) {
-      const extra = await generateLoreQuestions(session.wiki, session.title, cfg.difficulty, sectionCount - questions.length, "characters", session.animeCharacters || [], session.callLLM, { vaCap: 0, mediaType: cfg.mediaType });
+      const extra = await generateLoreQuestions(fWiki, fTitle, cfg.difficulty, sectionCount - questions.length, "characters", fChars, session.callLLM, { vaCap: 0, mediaType: fMediaType });
       if (!extra.length) break;
       questions.push(...extra.slice(0, sectionCount - questions.length));
     }
@@ -1381,8 +1434,8 @@ async function generateSectionQuestions(session, section, sock, chatId) {
   // audio-service chain can take seconds-to-minutes; the text LLM path does
   // not depend on it). The result is still INSERTED at the same position
   // (after text questions), so ordering and content are unchanged.
-  const tsPromise = (cfg.audioQuestionCount > 0 && section.canCarryAudio && cfg.themeSongQuestionCount > 0 && session.franchise)
-    ? buildThemeSongQuestion(session.franchise, session.otherTitles, usedKeys).catch(() => null)
+  const tsPromise = (cfg.audioQuestionCount > 0 && section.canCarryAudio && cfg.themeSongQuestionCount > 0 && fFranchise)
+    ? buildThemeSongQuestion(fFranchise, fOther, usedKeys).catch(() => null)
     : null;
 
   // text lore questions (with P12 validation inside generateLoreQuestions)
@@ -1390,7 +1443,7 @@ async function generateSectionQuestions(session, section, sock, chatId) {
   try {
     // forced section domain (non-mixed) -> 100% that domain inside the section
     const forcedDomain = cfg.categories ? cfg.categories[0] : (section.domain && section.domain !== "mixed" && section.domain !== "images" ? section.domain : null);
-    textQs = await generateLoreQuestions(session.wiki, session.title, cfg.difficulty, needText, forcedDomain, session.animeCharacters || [], session.callLLM, { vaCap: cfg.voiceActorQuestionLimit, mediaType: cfg.mediaType, usedKeys: session.usedKeys });
+    textQs = await generateLoreQuestions(fWiki, fTitle, cfg.difficulty, needText, forcedDomain, fChars, session.callLLM, { vaCap: cfg.voiceActorQuestionLimit, mediaType: fMediaType, usedKeys: session.usedKeys });
   } catch (e) {
     console.log("[Quiz] section generation error:", e?.message);
   }
@@ -1402,15 +1455,15 @@ async function generateSectionQuestions(session, section, sock, chatId) {
   // audio questions (theme song / voice) when this section should carry them
   if (cfg.audioQuestionCount > 0 && section.canCarryAudio) {
     let audioLeft = cfg.audioQuestionCount;
-    if (cfg.themeSongQuestionCount > 0 && session.franchise) {
+    if (cfg.themeSongQuestionCount > 0 && fFranchise) {
       const ts = tsPromise ? await tsPromise : null; // P24: started above, ran alongside text gen
       if (ts) { questions.push(ts); audioLeft--; }
     }
-    if (audioLeft > 0 && session.charIndex && questions.length) {
+    if (audioLeft > 0 && charIdx && questions.length) {
       // character voice audio: hunt on one of the section's character subjects
       const subj = questions.find((q) => q.loreRef && q.loreRef.page && q.domain === "characters");
       if (subj) {
-        const audio = await quizLore.findAudioForPage(session.wiki, subj.loreRef.page).catch(() => null);
+        const audio = await quizLore.findAudioForPage(fWiki, subj.loreRef.page).catch(() => null);
         if (audio && audio.buf) {
           // attach to the EXISTING lore question (audio cue plays, then card)
           subj.type = "audio";
@@ -1425,7 +1478,7 @@ async function generateSectionQuestions(session, section, sock, chatId) {
   if (questions.length < sectionCount) {
     const shortfall = sectionCount - questions.length;
     const altDomain = cfg.categories ? cfg.categories[0] : (section.domain && section.domain !== "mixed" ? section.domain : null);
-    const fb = buildFallbackQuestions(session.anime, session.animeCharacters || [], cfg.difficulty, shortfall + 4)
+    const fb = buildFallbackQuestions(fAnime, fChars, cfg.difficulty, shortfall + 4)
       .filter((q) => !allowedDomains || allowedDomains.has(q.domain));
     // production fallback respects the VA cap
     const prodCount = questions.filter((q) => q.domain === "production").length;
@@ -1438,8 +1491,8 @@ async function generateSectionQuestions(session, section, sock, chatId) {
       }
       questions.push(f);
     }
-    if (questions.length < sectionCount && session.wiki) {
-      const extra = await generateLoreQuestions(session.wiki, session.title, cfg.difficulty, sectionCount - questions.length + 2, altDomain && altDomain !== "mixed" ? altDomain : null, session.animeCharacters || [], session.callLLM, { vaCap: 0, mediaType: cfg.mediaType, usedKeys: session.usedKeys }).catch(() => []);
+    if (questions.length < sectionCount && fWiki) {
+      const extra = await generateLoreQuestions(fWiki, fTitle, cfg.difficulty, sectionCount - questions.length + 2, altDomain && altDomain !== "mixed" ? altDomain : null, fChars, session.callLLM, { vaCap: 0, mediaType: fMediaType, usedKeys: session.usedKeys }).catch(() => []);
       questions.push(...extra.slice(0, sectionCount - questions.length));
     }
   }
@@ -1452,7 +1505,7 @@ async function generateSectionQuestions(session, section, sock, chatId) {
   // into MongoDB per question (hundreds of KB per doc, pure bloat).
   for (const q of section.questions) {
     if (q && q.q && !q.fromBank && q.type !== "theme" && q.type !== "audio") {
-      try { quizBank.bankPut(mk, q); } catch { /* non-fatal */ }
+      try { quizBank.bankPut(fMk, q); } catch { /* non-fatal */ }
     }
   }
   return section.questions;
@@ -1865,15 +1918,29 @@ function parseQuizArgs(raw) {
   // standalone media modes (before random/quoted handling; "spot the song" is multi-word)
   const MODE_ALIASES = { logos: "logos", logo: "logos", brands: "logos", brand: "logos", company: "logos", companies: "logos" };
   const SONG_ALIASES = { song: "song", songs: "song", music: "song" };
+  // 💡 FIX (owner brief §2): ".j quiz audio N" was never a registered alias -
+  // "audio" fell through as a franchise TITLE and the mode errored out. Now:
+  // audio = theme songs across shows / movies / games (different from
+  // "song" = spot-the-song pop tracks).
+  const AUDIO_ALIASES = { audio: "audio", audios: "audio", sound: "audio", sounds: "audio", themes: "audio" };
   const spotSong = rest.match(/^spot\s+the\s+song\b/i);
+  const themeSong = rest.match(/^theme\s+songs?\b/i);
   const firstWord = rest.split(/\s+/)[0].toLowerCase();
   if (spotSong) {
     out.mode = "song";
     out.title = "__song__";
     rest = rest.replace(/^spot\s+the\s+song\b/i, "").trim();
+  } else if (themeSong) {
+    out.mode = "audio";
+    out.title = "__audio__";
+    rest = rest.replace(/^theme\s+songs?\b/i, "").trim();
   } else if (SONG_ALIASES[firstWord]) {
     out.mode = "song";
     out.title = "__song__";
+    rest = rest.slice(firstWord.length).trim();
+  } else if (AUDIO_ALIASES[firstWord]) {
+    out.mode = "audio";
+    out.title = "__audio__";
     rest = rest.slice(firstWord.length).trim();
   } else if (MODE_ALIASES[firstWord]) {
     out.mode = "logos";
@@ -2267,11 +2334,11 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     // checkpoint 1: cancelled while building config
     if (prep.cancelled) { abortPrep(); return; }
 
-    // ── 2026-09-27: standalone media modes (logos / song) ──
+    // ── 2026-09-27: standalone media modes (logos / song / audio) ──
     // No franchise resolution, no LLM: one media section is generated and
     // the normal READY/STARTED flow takes over.
-    if (parsed.mode === "logos" || parsed.mode === "song") {
-      const modeTitle = parsed.mode === "logos" ? "Logo Challenge" : "Spot the Song";
+    if (parsed.mode === "logos" || parsed.mode === "song" || parsed.mode === "audio") {
+      const modeTitle = parsed.mode === "logos" ? "Logo Challenge" : parsed.mode === "song" ? "Spot the Song" : "Theme Song Challenge";
       const session = {
         cfg,
         title: modeTitle,
@@ -2288,7 +2355,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
           perSection: cfg.questionCount,
           state: SECTION_STATES.GENERATING,
           questions: [],
-          canCarryAudio: parsed.mode === "song",
+          canCarryAudio: parsed.mode !== "logos",
         }],
         sectionJobs: {},
         activeSection: 0,
@@ -2331,7 +2398,9 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       let head = botMarker + `🎯 *QUIZ STARTED - ${modeTitle.toUpperCase()}* 🎯\n\n`;
       head += parsed.mode === "logos"
         ? `🏢 ${totalQs} logos • name the brand behind each one\n`
-        : `🎵 ${totalQs} song clips • name the track behind each one\n`;
+        : parsed.mode === "song"
+          ? `🎵 ${totalQs} song clips • name the track behind each one\n`
+          : `📺 ${totalQs} theme songs • name the show or movie behind each one\n`;
       head += `📚 ${cfg.difficulty.toUpperCase()} • ${POINTS[cfg.difficulty]} Zeni per correct (+20 speed bonus)\n`;
       head += `✍️ Answer with \`${prefix} <letter>\` or the option text - one answer per player per question\n`;
       head += `⏱ ${cfg.timePerQuestion}s per question\n`;
@@ -2426,6 +2495,17 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       questions: [],
       canCarryAudio: i === 0 || parsed.randomMode, // audio spawns early in the quiz
     }));
+    // 💡 RANDOM ACROSS FICTION: section 1 plays the franchise that was just
+    // announced (drawn by buildFranchiseContext); sections 2+ each draw their
+    // own world inside generateSectionQuestions.
+    if (parsed.randomMode) {
+      session.sections[0].franchise = {
+        slug: franchise.slug, wiki: franchise.wiki, title: franchise.title,
+        anime: franchise.anime, mediaType: franchise.mediaType,
+        characters: franchise.characters || [], otherTitles: franchise.otherTitles || [],
+      };
+      if (franchise.slug && session.randomUsed) session.randomUsed.add(franchise.slug);
+    }
 
     // P19: generate section 1 synchronously in the background worker (this
     // whole function IS the background), then stream the rest during play.
@@ -2456,7 +2536,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     // a stale worker must NEVER post QUIZ STARTED over a newer prep.
     if (prep.cancelled || session.cancelled || !ownsLock()) { abortPrep(); return; }
     const totalQs = plannedTotal(session);
-    let head = botMarker + `🎯 *QUIZ STARTED - ${String(franchise.title).toUpperCase()}* 🎯\n\n`;
+    let head = botMarker + `🎯 *QUIZ STARTED - ${parsed.randomMode ? "RANDOM • ACROSS FICTION" : String(franchise.title).toUpperCase()}* 🎯\n\n`;
     head += `📚 ${totalQs} questions • ${cfg.difficulty.toUpperCase()} • ${POINTS[cfg.difficulty]} Zeni per correct (+20 speed bonus)\n`;
     if (session.sections.length > 1) head += `📖 ${session.sections.length} sections\n`;
     if (parsed.section) head += `📚 Topic locked: ${parsed.section}\n`;
@@ -2501,27 +2581,50 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
 }
 
 // resolve the quiz's franchise context (title/wiki/anime/mediaType/characters)
+// 💡 RANDOM ACROSS FICTION (owner brief §2): resolve ONE slug from the
+// random pool into a full franchise context. Used for the quiz's first
+// section AND for every further random section, so a multi-section random
+// quiz spans many different worlds instead of one.
+async function drawSectionFranchise(session) {
+  const pool = session.randomPool && session.randomPool.length ? session.randomPool : [...RANDOM_POOL].sort(() => Math.random() - 0.5);
+  if (!session.randomPool) session.randomPool = pool;
+  if (!session.randomUsed) session.randomUsed = new Set();
+  while (pool.length) {
+    const slug = pool.shift();
+    if (session.randomUsed.has(slug)) continue;
+    session.randomUsed.add(slug);
+    const wiki = await quizLore.resolveWiki(slug).catch(() => null);
+    if (!wiki) continue;
+    const titleGuess = slug.replace(/-/g, " ");
+    const si = await quizLore.wikiApi(wiki, { action: "query", meta: "siteinfo", siprop: "sitename" }).catch(() => null);
+    const site = String(si?.query?.sitename || "").replace(/\s*wiki$/i, "").trim() || (RANDOM_TITLES[slug] || titleGuess);
+    const mediaDetect = await quizLore.detectMediaType(titleGuess).catch(() => ({ mediaType: "franchise" }));
+    const anime = mediaDetect.mediaType === "anime" ? (await resolveAnime(titleGuess).catch(() => ({}))).anime : null;
+    const characters = anime ? await fetchCharacters(anime).catch(() => []) : [];
+    const otherTitles = RANDOM_POOL.filter((s) => s !== slug).sort(() => Math.random() - 0.5).slice(0, 6)
+      .map((s) => RANDOM_TITLES[s] || s.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()));
+    return {
+      slug, usedAt: Date.now(),
+      title: site, wiki, anime,
+      mediaType: anime ? "anime" : mediaDetect.mediaType,
+      characters,
+      otherTitles,
+      randomUsed: session.randomUsed,
+    };
+  }
+  return null;
+}
+
 async function buildFranchiseContext(sock, chatId, botMarker, m, parsed) {
-  // random mode: draw a random franchise per quiz start (full randomization)
+  // random mode: the FIRST section's franchise is drawn here; further sections
+  // each draw their own via drawSectionFranchise (owner brief §2: "random
+  // questions across all of fiction, not pick a random world and stay inside
+  // it")
   if (parsed.randomMode) {
-    const pool = [...RANDOM_POOL].sort(() => Math.random() - 0.5);
-    for (const slug of pool) {
-      const wiki = await quizLore.resolveWiki(slug).catch(() => null);
-      if (!wiki) continue;
-      const titleGuess = slug.replace(/-/g, " ");
-      const si = await quizLore.wikiApi(wiki, { action: "query", meta: "siteinfo", siprop: "sitename" }).catch(() => null);
-      const site = String(si?.query?.sitename || "").replace(/\s*wiki$/i, "").trim() || titleGuess;
-      const mediaDetect = await quizLore.detectMediaType(titleGuess).catch(() => ({ mediaType: "franchise" }));
-      const anime = mediaDetect.mediaType === "anime" ? (await resolveAnime(titleGuess).catch(() => ({}))).anime : null;
-      const characters = anime ? await fetchCharacters(anime).catch(() => []) : [];
-      return {
-        title: site, wiki, anime, mediaType: anime ? "anime" : mediaDetect.mediaType,
-        characters, charIndex: null,
-        otherTitles: RANDOM_POOL.filter((s) => s !== slug).sort(() => Math.random() - 0.5).slice(0, 6).map((s) => RANDOM_TITLES[s] || s.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())),
-        hasImages: true, availability: null,
-      };
-    }
-    return null;
+    const fctx = await drawSectionFranchise({ randomPool: [...RANDOM_POOL].sort(() => Math.random() - 0.5), randomUsed: new Set() }).catch(() => null);
+    if (!fctx) return null;
+    fctx.slug && fctx.randomUsed.add(fctx.slug);
+    return { ...fctx, charIndex: null, hasImages: true, availability: null };
   }
 
   const res = await resolveFranchise(parsed.title);

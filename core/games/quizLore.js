@@ -771,10 +771,19 @@ async function wikipediaImage(query, thumbwidth = 700, mode = "article") {
 //   - canonical-logo heuristic: fewest extra words in the title wins
 //     ("Nike logo" beats "Nike logo at Stamford Bridge 2026")
 // Bytes still verified by the caller (magic numbers, P13).
-async function wikipediaLogoImage(brand, thumbwidth = 480) {
+async function wikipediaLogoImage(brand, thumbwidth = 480, altName = null) {
   const b = String(brand || "").trim();
   if (!b) return null;
-  const key = `logo|${b}|${thumbwidth}`;
+  const norm0 = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
+  // 💡 2026-09-27: anchor on EITHER the wiki title ("Apple Inc.") OR the
+  // display name ("Apple") - logo files are named after the common brand
+  // wordmark far more often than the legal entity. Raises the hit rate for
+  // the 500-logo pool (~27% of brands' files don't start with the entity
+  // form).
+  const anchors = [b];
+  const alt = String(altName || "").trim();
+  if (alt && norm0(alt) !== norm0(b)) anchors.push(alt);
+  const key = `logo|${anchors.join("|")}|${thumbwidth}`;
   const hit = _wpImgCache.get(key);
   if (hit && Date.now() - hit.ts < WP_IMG_TTL) return hit.img || null;
   let img = null;
@@ -785,20 +794,20 @@ async function wikipediaLogoImage(brand, thumbwidth = 480) {
     });
     const pages = d?.query?.pages || [];
     const norm = (s) => String(s).toLowerCase().replace(/\s+/g, " ").trim();
-    const bN = norm(b);
+    const bNs = anchors.map((a) => norm(a));
     const candidates = pages
       .filter((p) => p.imageinfo && p.imageinfo[0])
       .map((p) => ({ title: p.title.replace(/^file:/i, ""), ii: p.imageinfo[0] }))
       .filter(({ title, ii }) => {
         const t = norm(title);
-        if (!t.startsWith(bN)) return false;
+        if (!bNs.some((bN) => t.startsWith(bN))) return false;
         if (!/(logo|wordmark|symbol|icon)/.test(t)) return false;
         return !!(ii.thumburl || ii.url);
       })
       .map(({ title, ii }) => ({
         title, ii,
         mimeScore: /^image\/(svg\+xml|png|webp)$/.test(ii.mime || "") ? 2 : (/^image\/jpeg$/.test(ii.mime || "") ? 0 : 1),
-        wordCount: norm(title).replace(bN, "").trim().split(/\s+/).filter(Boolean).length,
+        wordCount: Math.min(...bNs.map((bN) => norm(title).replace(bN, "").trim().split(/\s+/).filter(Boolean).length)),
       }))
       .filter((c) => c.mimeScore > 0)
       .sort((a, b) => (b.mimeScore - a.mimeScore) || (a.wordCount - b.wordCount));

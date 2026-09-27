@@ -25,6 +25,7 @@ const imageGate = require("../utils/imageGate"); // 2026-09-27: pixel gates on e
 const system = require("../utils/system");       // 2026-09-27: usage-fairness persistence
 const logoPoolsV2 = require("./quizLogosPool");  // 2026-09-27: 500+ curated pool (owner brief §1)
 const songsPoolV2 = require("./quizSongsPool");  // 2026-09-27: 280-track pool (owner brief §3)
+const themesPool = require("./quizThemesPool");   // 2026-09-27: theme songs across fiction (§2)
 // 2026-09-27 owner brief §8: visual-similarity decoys (offline embeddings)
 let logoEmbeddings = null;
 try { logoEmbeddings = require("../../data/logoEmbeddings.json"); } catch { logoEmbeddings = null; }
@@ -54,7 +55,7 @@ function _shuffle(arr) {
 // zero and the cycle restarts. Counts persist in the system KV store.
 // ════════════════════════════════════════════
 const USAGE_BENCH_USES = 4;
-const USAGE_KEY = { logos: "quiz_usage:logos", song: "quiz_usage:songs" };
+const USAGE_KEY = { logos: "quiz_usage:logos", song: "quiz_usage:songs", theme: "quiz_usage:themes" };
 
 function loadUsage(mode) {
   try {
@@ -67,7 +68,9 @@ function saveUsage(mode, usage) {
   try { system.set(USAGE_KEY[mode], usage).catch(() => {}); } catch { /* non-fatal */ }
 }
 function _entryKey(mode, entry) {
-  return mode === "logos" ? _norm(entry.name) : `${_norm(entry.song)}|${_norm(entry.artist)}`;
+  if (mode === "logos") return _norm(entry.name);
+  if (mode === "theme") return _norm(entry.show);
+  return `${_norm(entry.song)}|${_norm(entry.artist)}`;
 }
 function weightOf(uses) { return 1 / Math.pow(1 + (uses || 0), 2); }
 
@@ -129,29 +132,25 @@ function _cosine(a, b) {
   for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
   return dot / (Math.sqrt(na) * Math.sqrt(nb) || 1);
 }
-// Returns up to 3 visually-similar LOGOS_POOL entries (never the brand itself,
-// never duplicates). Empty array = no embedding data -> caller falls back.
+// Returns up to 3 visually-similar LOGOS_POOL entries for a brand. Ranking
+// is restricted to the brand's OWN CATEGORY first: MobileNet embeddings
+// capture low-level visual stats (colors/gradients/shapes), so unrestricted
+// cosine would pair Pepsi with colorful tech marks - "looks similar" is only
+// a GOOD decoy when the category already matches (Pepsi vs Coca-Cola, BMW vs
+// Mercedes). Falls back to plain same-category picks when a brand has no
+// embedding. Never returns the brand itself.
 function visuallySimilarDecoys(brand, k = 3) {
   const idx = embeddingsIndex();
-  if (!idx || !logoEmbeddings.dim) return [];
-  const vec = idx.get(brand.name);
-  if (!vec) return [];
-  const sims = [];
-  for (const name of idx.names) {
-    if (name === brand.name) continue;
-    const v = idx.get(name);
-    if (!v) continue;
-    sims.push({ name, sim: _cosine(vec, v) });
+  const vec = idx ? idx.get(brand.name) : null;
+  const sameCat = LOGOS_POOL.filter((b) => b.cat === brand.cat && b.name !== brand.name);
+  if (vec && idx) {
+    const scored = sameCat
+      .map((b) => ({ b, sim: (() => { const v = idx.get(b.name); return v ? _cosine(vec, v) : -1; })() }))
+      .filter((s) => s.sim >= 0)
+      .sort((a, b) => b.sim - a.sim);
+    if (scored.length >= k) return scored.slice(0, k).map((s) => s.b);
   }
-  sims.sort((a, b) => b.sim - a.sim);
-  const byName = new Map(LOGOS_POOL.map((b) => [_norm(b.name), b]));
-  const out = [];
-  for (const s of sims) {
-    if (out.length >= k) break;
-    const e = byName.get(_norm(s.name));
-    if (e && !out.some((o) => o.name === e.name)) out.push(e);
-  }
-  return out;
+  return _shuffle(sameCat).slice(0, k);
 }
 
 // ════════════════════════════════════════════
@@ -185,7 +184,7 @@ const LOGO_JPEG_FALLBACK_OK = true; // jpeg logos allowed only if nothing better
 
 // One logo question. Returns null when no verified logo asset is found.
 async function buildLogosQuestion(brand, others, difficulty) {
-  const img = await quizLore.wikipediaLogoImage(brand.wiki, 480).catch(() => null);
+  const img = await quizLore.wikipediaLogoImage(brand.wiki, 480, brand.name).catch(() => null);
   if (!img || !img.url) return null;
   const dl = await quizLore.downloadMedia(img.url, "image").catch(() => null);
   if (!dl || !dl.buf || dl.buf.length < 1500) return null; // tiny = placeholder/blank
@@ -360,6 +359,89 @@ async function buildSpotSongQuestions({ count, usedKeys, difficulty, goService, 
   return out;
 }
 
+// ════════════════════════════════════════════
+// THEME SONG MODE (2026-09-27, owner brief §2): ".j quiz audio 10" -
+// theme songs from shows / movies / games ACROSS ALL OF FICTION. Same
+// verification gates as Spot the Song (title overlap, variant filter, byte
+// gates, server-side clip). Options = shows (same type preferred).
+// ════════════════════════════════════════════
+const THEMES_POOL = themesPool.THEMES;
+
+async function buildThemeSongQuestionEntry(entry, others, difficulty, goService, trimFn = null) {
+  if (!goService || typeof goService.getAudioInfo !== "function") return null;
+  const info = await goService.getAudioInfo(entry.search, { clipSeconds: 25, clipBitrate: "96k" }).catch(() => null);
+  if (!info || info.error || !info.audioURL || !info.metadata) return null;
+  const metaTitle = _norm(info.metadata.title);
+  const showN = _norm(entry.show);
+  const searchN = _norm(entry.search);
+  if (_SONG_VARIANT_RE.test(metaTitle)) return null;
+  // the hit must overlap the search phrase OR the show name
+  const searchWords = searchN.split(" ").filter((w) => w.length > 3);
+  const overlapWords = searchWords.filter((w) => metaTitle.includes(w)).length;
+  const overlap = metaTitle.includes(showN) || (searchWords.length && overlapWords >= Math.min(2, searchWords.length));
+  if (!overlap) return null;
+  const fullOk = !Number.isFinite(info.fullBytes) || info.fullBytes >= 50 * 1024;
+  let clip = null;
+  if (info.clipped) {
+    const dl = await axiosGetBuffer(info.audioURL, 60000).catch(() => null);
+    if (fullOk && dl && dl.length > 20 * 1024) clip = dl;
+  }
+  if (!clip && trimFn) {
+    const dl = await axiosGetBuffer(info.audioURL, 60000).catch(() => null);
+    if (dl && dl.length >= 50 * 1024) clip = await trimFn(dl, 25).catch(() => null);
+  }
+  if (!clip) return null;
+  const optionsPool = [entry.show, ...others.map((o) => o.show)];
+  const optOrder = _shuffle(optionsPool.map((_, i) => i));
+  return {
+    q: `🎵 Which show or movie is this theme song from?`,
+    options: optOrder.map((i) => optionsPool[i]),
+    correct: optOrder.indexOf(0),
+    difficulty: difficulty || "medium",
+    topic: "Theme Song",
+    domain: "audio",
+    type: "theme",
+    assetKey: `theme:${_norm(entry.show)}`,
+    asset: { kind: "audio", buf: clip, mime: "audio/mpeg", subject: entry.show, source: "go-audio-theme" },
+    song: entry.show,
+    loreRef: { wiki: null, page: entry.show, section: "theme-song" },
+  };
+}
+
+async function buildThemeSongQuestions({ count, usedKeys, difficulty, goService, trimFn = null }) {
+  const n = Math.max(1, Math.min(parseInt(count, 10) || 10, THEMES_POOL.length - 4));
+  const out = [];
+  const claimed = new Set();
+  const usage = loadUsage("theme");
+  const order = weightedOrder(THEMES_POOL, usage, "theme");
+  const budget = Math.min(order.length, Math.max(n * 8, 24));
+  const candidates = order.slice(0, budget);
+  const buildOne = async (entry) => {
+    const key = `theme:${_norm(entry.show)}`;
+    if (out.length >= n || usedKeys.has(key) || claimed.has(key)) return;
+    // distractors: same type first (anime vs anime...), pad from the rest
+    let others = _shuffle(THEMES_POOL.filter((t) => t.type === entry.type && t.show !== entry.show)).slice(0, 3);
+    if (others.length < 3) {
+      for (const t of _shuffle(THEMES_POOL)) {
+        if (others.length >= 3) break;
+        if (t.show !== entry.show && !others.some((o) => o.show === t.show)) others.push(t);
+      }
+    }
+    if (others.length < 3) return;
+    const q = await buildThemeSongQuestionEntry(entry, others, difficulty, goService, trimFn).catch(() => null);
+    if (!q) return;
+    claimed.add(key);
+    if (usedKeys) usedKeys.add(key);
+    bumpUsage(usage, "theme", entry);
+    out.push(q);
+  };
+  for (let i = 0; i < candidates.length && out.length < n; i += 3) {
+    await Promise.all(candidates.slice(i, i + 3).map(buildOne));
+  }
+  if (out.length) saveUsage("theme", usage);
+  return out;
+}
+
 module.exports = {
   LOGOS_POOL,
   SONGS_POOL,
@@ -367,6 +449,9 @@ module.exports = {
   buildLogosQuestion,
   buildSpotSongQuestions,
   buildSpotSongQuestion,
+  buildThemeSongQuestions,
+  buildThemeSongQuestionEntry,
+  THEMES_POOL,
   _internal: {
     _norm, _sha, _shuffle, _SONG_VARIANT_RE,
     // usage-fairness internals (QA + opscheck)
