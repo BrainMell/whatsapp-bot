@@ -3618,7 +3618,12 @@ What to do:
           const qs = require("./games/quizBank").assetCacheStats();
           qAssets = ` quizAssets=${qs.entries}/${mb(qs.bytes)}MB`;
         } catch { /* quiz module optional for telemetry */ }
-        console.log(`🧠 [mem] rss=${mb(m.rss)}MB heap=${mb(m.heapUsed)}/${mb(m.heapTotal)}MB external=${mb(m.external)}MB${qAssets}`);
+        let sChild = "";
+        try {
+          const ss = require("./utils/sharpChild").stats();
+          sChild = ` sharp[up=${ss.up ? 1 : 0} jobs=${ss.jobs} done=${ss.done} respawns=${ss.respawns} poison=${ss.poisonedCached}${ss.circuitOpen ? " CB!" : ""}]`;
+        } catch { /* sharpChild optional for telemetry */ }
+        console.log(`🧠 [mem] rss=${mb(m.rss)}MB heap=${mb(m.heapUsed)}/${mb(m.heapTotal)}MB external=${mb(m.external)}MB${qAssets}${sChild}`);
       } catch { /* telemetry must never throw */ }
     }, 5 * 60 * 1000);
     __heapTick.unref?.();

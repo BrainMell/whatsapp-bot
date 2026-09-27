@@ -138,20 +138,15 @@ async function _videoFrameBuffers(buf) {
 }
 
 async function _astickerFrameBuffers(buf) {
-  const sharp = require("sharp");
-  let pages = 1;
-  try { pages = Math.max(1, (await sharp(buf, { pages: -1 }).metadata()).pages || 1); } catch { /* single */ }
-  const positions = pages <= FRAMES_PER_MEDIA
-    ? Array.from({ length: pages }, (_, i) => i)
-    : [0, 0.25, 0.5, 0.75, 0.9].map((p) => Math.min(pages - 1, Math.floor(pages * p)));
-  const frames = [];
-  for (const page of positions) {
-    try {
-      const png = await sharp(Buffer.from(buf), { page, pages: 1 }).png().toBuffer();
-      if (png.length > 500) frames.push({ pos: page, buf: png });
-    } catch { /* skip page */ }
+  // v2.1 (2026-09-28): sharp runs in the crash-isolated worker now. An
+  // animated sticker that used to SIGSEGV the whole bot mid-scan (native
+  // libvips crash) now costs at most one failed job - fail-open, logged.
+  try {
+    return await require("./sharpChild").runJob("asticker-frames", buf);
+  } catch (e) {
+    console.log(`[Antinude] asticker decode failed (isolated): ${String(e.message).slice(0, 70)}`);
+    return [];
   }
-  return frames;
 }
 
 // ── classification (worker call, cached) ────────────────────────────
@@ -222,10 +217,16 @@ async function handleAntinude(sock, m, settings, addWarning, getWarningCount, ct
     if (!settings || !settings.antinude) return false;
     if (!ctx || !ctx.chatId || !ctx.chatId.endsWith("@g.us")) return false;
     if (m.key?.fromMe) return false;
-    if (ctx.senderIsAdmin || ctx.isOwner || ctx.isGlobalMod || ctx.isGcOwner) return false;
 
     const media = extractImageMedia(m);
     if (!media) return false;
+
+    // exemptions AFTER media detection so every skip is visible in logs
+    // (the "isnt deleting" report was undiagnosable while skips were silent)
+    if (ctx.senderIsAdmin || ctx.isOwner || ctx.isGlobalMod || ctx.isGcOwner) {
+      console.log(`[Antinude] skip ${media.type} from ${String(ctx.senderJid || "?").split("@")[0]}: sender exempt (admin/mod/owner)`);
+      return false;
+    }
 
     let buf;
     try { buf = await _downloadMediaBuffer(media.node, media.type); }
@@ -245,7 +246,14 @@ async function handleAntinude(sock, m, settings, addWarning, getWarningCount, ct
     _stats.flagged++;
     const sender = m.key.participant || ctx.senderJid;
     const action = settings.antinudeAction || "delete";
-    try { await sock.sendMessage(ctx.chatId, { delete: m.key }); } catch { /* not admin */ }
+    let deleted = true;
+    try { await sock.sendMessage(ctx.chatId, { delete: m.key }); }
+    catch (e) {
+      // bot lacks admin rights - DO NOT fail silently (that was the whole
+      // "antinude isnt deleting" confusion). Log + tell the group what to do.
+      deleted = false;
+      console.log(`[Antinude] DELETE FAILED in ${ctx.chatId.slice(0, 20)}: ${String(e.message).slice(0, 60)} - bot needs to be a group admin`);
+    }
 
     const name = String(sender || "").split("@")[0];
     const pct = Math.round(result.nsfw * 100);
@@ -269,7 +277,9 @@ async function handleAntinude(sock, m, settings, addWarning, getWarningCount, ct
       }
     } else {
       await sock.sendMessage(ctx.chatId, {
-        text: `🚨 *ANTINUDE* 🚨\n@${name}'s prohibited ${what} was removed (confidence ${pct}%).`,
+        text: deleted
+          ? `🚨 *ANTINUDE* 🚨\n@${name}'s prohibited ${what} was removed (confidence ${pct}%).`
+          : `⚠️ *ANTINUDE* ⚠️\n@${name} posted prohibited content (${what}, confidence ${pct}%) but I couldn't remove it - make me a *group admin* so I can delete messages.`,
         mentions: [sender],
       }).catch(() => {});
     }
