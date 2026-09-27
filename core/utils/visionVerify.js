@@ -25,7 +25,24 @@ const _http = (() => {
 })();
 
 function providerConfigured() {
-  return !!(process.env.VISION_ENDPOINT && _http);
+  return !!(process.env.VISION_ENDPOINT && _http) && Date.now() >= _breakerOpenUntil;
+}
+
+// 💡 CIRCUIT BREAKER (2026-09-28): the provider shares a per-minute token
+// budget with the quiz LLM (Groq free tier). Three consecutive transport/
+// rate-limit failures open the breaker for 5 minutes so verification fails
+// FAST ("unknown" -> source anchoring decides) instead of stalling every
+// image question against a doomed endpoint.
+let _consecFails = 0;
+let _breakerOpenUntil = 0;
+function _noteResult(ok) {
+  if (ok) { _consecFails = 0; return; }
+  _consecFails++;
+  if (_consecFails >= 3) {
+    _breakerOpenUntil = Date.now() + 5 * 60 * 1000;
+    _consecFails = 0;
+    try { console.log("[VisionVerify] breaker OPEN for 5min after 3 consecutive provider failures"); } catch { }
+  }
 }
 
 async function verifySubject(buf, mime, subject, context = "") {
@@ -35,7 +52,15 @@ async function verifySubject(buf, mime, subject, context = "") {
   const key = process.env.VISION_KEY || "";
   const model = process.env.VISION_MODEL || "vision";
   const timeoutMs = Math.min(30000, parseInt(process.env.VISION_TIMEOUT_MS, 10) || 8000);
-  const b64 = Buffer.from(buf).toString("base64");
+  // 2026-09-28: downscale in the crash-isolated sharp worker before upload -
+  // fewer vision tokens per call (960px ~13k -> 384px ~3k), protects TPM.
+  let b64 = Buffer.from(buf).toString("base64");
+  let sendMime = mime || "image/jpeg";
+  try {
+    const sh = require("./sharpChild");
+    const shr = await sh.runJob("shrink", buf, { max: 384 }, 8000);
+    if (shr && shr.buf && shr.buf.length) { b64 = Buffer.from(shr.buf).toString("base64"); sendMime = "image/jpeg"; }
+  } catch { /* send original on any shrink failure */ }
   const prompt = [
     `You are verifying a quiz image. The question expects: "${subject}".`,
     context ? `Franchise/topic context: "${context}".` : "",
@@ -52,20 +77,22 @@ async function verifySubject(buf, mime, subject, context = "") {
         role: "user",
         content: [
           { type: "text", text: prompt },
-          { type: "image_url", image_url: { url: `data:${mime || "image/jpeg"};base64,${b64}` } },
+          { type: "image_url", image_url: { url: `data:${sendMime};base64,${b64}` } },
         ],
       }],
     }, { timeout: timeoutMs });
     const txt = String(r.data?.choices?.[0]?.message?.content || "");
     const m = txt.match(/\{[\s\S]*\}/);
-    if (!m) return { decision: "unknown", reason: "unparseable" };
+    if (!m) { _noteResult(false); return { decision: "unknown", reason: "unparseable" }; }
     const j = JSON.parse(m[0]);
+    _noteResult(true);
     if (j.nsfw === true) return { decision: "reject", reason: "nsfw" };
     const conf = Number(j.confidence);
     if (j.match === true && (Number.isFinite(conf) ? conf >= 0.5 : true)) return { decision: "accept", confidence: conf };
     if (j.match === false) return { decision: "reject", reason: "subject-mismatch", confidence: conf };
     return { decision: "unknown", reason: "ambiguous" };
   } catch (e) {
+    _noteResult(false);
     return { decision: "unknown", reason: `error(${String(e.message).slice(0, 40)})` };
   }
 }

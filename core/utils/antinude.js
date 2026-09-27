@@ -66,8 +66,16 @@ function extractImageMedia(m) {
     if (node.stickerMessage) {
       return { node: node.stickerMessage, type: node.stickerMessage.isAnimated ? "asticker" : "sticker" };
     }
-    if (node.videoMessage && node.videoMessage.mimetype && /video\//.test(node.videoMessage.mimetype)) {
-      return { node: node.videoMessage, type: "video" };
+    if (node.videoMessage && node.videoMessage.mimetype) {
+      const vm = node.videoMessage;
+      // GIFs and animated webps arrive as videoMessage on many clients -
+      // they were silently IGNORED before (not video/, not image/), which
+      // is exactly the hole porn-spam GIFs slipped through.
+      if (/^image\/(gif|webp)$/i.test(vm.mimetype)) {
+        // node is a videoMessage -> Baileys downloads it with type "video"
+        return { node: vm, type: "asticker", dlType: "video" };
+      }
+      if (/video\//.test(vm.mimetype)) return { node: vm, type: "video" };
     }
     return null;
   };
@@ -83,9 +91,12 @@ function extractImageMedia(m) {
   return null;
 }
 
-async function _downloadMediaBuffer(node, type) {
+async function _downloadMediaBuffer(node, type, dlType) {
   const { downloadContentFromMessage } = require("@whiskeysockets/baileys");
-  const stream = await downloadContentFromMessage(node, type === "video" ? "video" : type === "asticker" ? "sticker" : type);
+  // dlType = the BAILEYS store type of the node ("video" for a videoMessage
+  // even when we decode it as an animated sticker); type = how we analyze it.
+  const store = dlType || type;
+  const stream = await downloadContentFromMessage(node, store === "video" ? "video" : store === "asticker" ? "sticker" : store);
   const cap = type === "video" ? MAX_BYTES_VIDEO : MAX_BYTES_IMAGE;
   const chunks = [];
   let size = 0;
@@ -131,6 +142,13 @@ async function _videoFrameBuffers(buf) {
       const out = outs[i];
       if (out && out.length > 500) frames.push({ pos: Number(pos.toFixed(2)), buf: out });
     });
+    if (frames.length) return frames;
+    // ffmpeg produced nothing (webp/gif input hits "unsupported chunk ANIM"
+    // and writes zero packets) - fall back to the sharp page decoder, which
+    // reads animated webp/gif natively.
+    if (/^RIFF/.test(buf.toString("latin1", 0, 4).toString()) || /^GIF8/.test(buf.toString("latin1", 0, 4).toString())) {
+      return _astickerFrameBuffers(buf);
+    }
     return frames;
   } finally {
     try { fs.unlinkSync(tmp); } catch { /* best effort */ }
@@ -211,7 +229,24 @@ async function analyzeMediaBuffer(kind, buf, label = "") {
 }
 
 // main entry. ctx: { senderIsAdmin, isOwner, isGlobalMod, isGcOwner, senderJid, chatId }
+// isGlobalMod/isGcOwner may be passed as FUNCTIONS (engine injects them) - a
+// function is truthy, so checking them as booleans exempted EVERY sender
+// ("sender exempt (admin/mod/owner)" on every scan - the whole "antinude
+// isnt checking/warning anyone" report). Resolve each check properly here.
 // Returns true if a violation was handled (engine should not double-act).
+function _isExempt(ctx) {
+  if (!ctx) return false;
+  if (ctx.senderIsAdmin === true) return true;
+  if (ctx.isOwner === true) return true;
+  if (typeof ctx.isGlobalMod === "function") {
+    try { if (ctx.isGlobalMod(ctx.senderJid)) return true; } catch { /* treat as non-exempt */ }
+  } else if (ctx.isGlobalMod === true) return true;
+  if (typeof ctx.isGcOwner === "function") {
+    try { if (ctx.isGcOwner(ctx.senderJid, ctx.chatId)) return true; } catch { /* treat as non-exempt */ }
+  } else if (ctx.isGcOwner === true) return true;
+  return false;
+}
+
 async function handleAntinude(sock, m, settings, addWarning, getWarningCount, ctx) {
   try {
     if (!settings || !settings.antinude) return false;
@@ -223,13 +258,13 @@ async function handleAntinude(sock, m, settings, addWarning, getWarningCount, ct
 
     // exemptions AFTER media detection so every skip is visible in logs
     // (the "isnt deleting" report was undiagnosable while skips were silent)
-    if (ctx.senderIsAdmin || ctx.isOwner || ctx.isGlobalMod || ctx.isGcOwner) {
+    if (_isExempt(ctx)) {
       console.log(`[Antinude] skip ${media.type} from ${String(ctx.senderJid || "?").split("@")[0]}: sender exempt (admin/mod/owner)`);
       return false;
     }
 
     let buf;
-    try { buf = await _downloadMediaBuffer(media.node, media.type); }
+    try { buf = await _downloadMediaBuffer(media.node, media.type, media.dlType); }
     catch (e) { console.log(`[Antinude] ${media.type} download failed: ${String(e.message).slice(0, 50)}`); return false; }
     if (!buf || buf.length < 800) { console.log(`[Antinude] ${media.type} skipped: ${buf ? buf.length + "B too small" : "oversize/empty"}`); return false; }
 

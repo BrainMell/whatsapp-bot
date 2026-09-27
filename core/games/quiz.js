@@ -133,6 +133,14 @@ function _canStartQuiz(senderJid) {
   try { if (typeof deps.canStartQuiz === "function") return !!deps.canStartQuiz(senderJid); } catch { /* fail open */ }
   return true;
 }
+// 2026-09-28: denial bounces owners/mods confusingly (seen live: added on
+// Joker, denied on Subaru 20s later, inside the 45s Set-refresh window).
+// Before denying, refresh the shared mod Sets from MongoDB once and recheck.
+async function _canStartQuizFresh(senderJid) {
+  if (_canStartQuiz(senderJid)) return true;
+  try { if (typeof deps.refreshModSets === "function") await deps.refreshModSets(); } catch { /* keep cached verdict */ }
+  return _canStartQuiz(senderJid);
+}
 // Manage gate FAILS CLOSED when the hook is absent: legacy behaviour (starter
 // or admins only) must keep holding in tests/direct-require contexts, and a
 // missing hook in production must never widen permissions.
@@ -1210,9 +1218,74 @@ function topOf(chatScores, field, n) {
 // not filler). The last section is always the Mixed Challenge.
 // ════════════════════════════════════════════
 
+// 💡 RANDOM MODE = MIXED PLAYLIST (owner brief 2026-09-28): "random mode
+// mixing different things" - a random quiz no longer draws ONLY lore
+// sections. It now interleaves question TYPES: a Logo Round, a Spot the
+// Song section, a Picture section (when the franchise has characters) and
+// lore sections across random franchises. Standalone modes (.j quiz logos/
+// song/audio) keep working exactly as before; this is about what `random`
+// itself means.
+function buildRandomMixedPlan(cfg, availability = {}) {
+  const count = cfg.questionCount;
+  const size = Math.max(3, cfg.sectionSize);
+  // media share of the quiz (logos ~20%, songs ~15%, images ~10%)
+  let logosN = Math.min(6, Math.max(3, Math.round(count * 0.2)));
+  let songN = Math.min(5, Math.max(3, Math.round(count * 0.15)));
+  let imgN = cfg.imageQuestionCount > 0
+    ? cfg.imageQuestionCount
+    : Math.min(3, Math.max(2, Math.round(count * 0.1)));
+  if (!availability.characters) imgN = 0; // no character art source - skip pictures
+  // lore keeps at least 40% and never drops below 6 questions
+  const loreMin = Math.max(6, Math.ceil(count * 0.4));
+  while (count - (logosN + songN + imgN) < loreMin) {
+    if (logosN > 3) logosN--;
+    else if (songN > 3) songN--;
+    else if (imgN > 2) imgN--;
+    else break;
+  }
+  const loreN = count - (logosN + songN + imgN);
+  if (loreN < 6) return null; // too small for a real mix - caller falls back
+
+  // lore blocks split into section-size chunks
+  const loreChunks = [];
+  let left = loreN;
+  while (left > 0) { const give = Math.min(size, left); loreChunks.push(give); left -= give; }
+
+  const plan = [];
+  plan.push({ name: "Logo Round", domain: "logos", perSection: logosN, fixed: true });
+  // first lore chunk right after logos (fast start: logos build in seconds)
+  const loreDomains = () => ["plot", "characters", "cosmology", "mixed"];
+  let li = 0;
+  const pushLore = (n) => {
+    // a chunk may exceed one section only via the size cap - split it
+    let rem = n;
+    while (rem > 0) {
+      const give = Math.min(size, rem);
+      const dom = loreDomains()[li % loreDomains().length];
+      const tpl = LONG_SECTION_TEMPLATES.find((t) => t.domain === dom);
+      plan.push({ name: tpl ? tpl.name : "Mixed Challenge", domain: dom, perSection: give, fixed: true });
+      li++;
+      rem -= give;
+    }
+  };
+  pushLore(loreChunks.shift() || 0);
+  // Spot the Song in the middle (audio retrieval is slow - it streams while
+  // earlier sections play), then pictures, then the remaining lore.
+  plan.push({ name: "Spot the Song", domain: "song", perSection: songN, fixed: true });
+  if (imgN > 0) plan.push({ name: "Picture Round", domain: "images", perSection: imgN, fixed: true });
+  pushLore(loreChunks.shift() || 0);
+  while (loreChunks.length) pushLore(loreChunks.shift());
+  return plan;
+}
+
 function buildSectionPlan(cfg, availability = {}) {
   const count = cfg.questionCount;
   const size = Math.max(3, cfg.sectionSize);
+  // 2026-09-28: random mode mixes question types (see buildRandomMixedPlan)
+  if (cfg.randomMode && count >= 9) {
+    const mixed = buildRandomMixedPlan(cfg, availability);
+    if (mixed) return mixed;
+  }
   if (count <= size) {
     return [{ name: null, domain: cfg.categories ? cfg.categories[0] : "mixed", perSection: count }];
   }
@@ -1244,11 +1317,14 @@ function buildSectionPlan(cfg, availability = {}) {
     }
   }
   // distribute the real count: first sections get full size, last absorbs remainder
-  let left = count;
-  for (let i = 0; i < plan.length; i++) {
-    const give = i === plan.length - 1 ? left : Math.min(size, left - Math.max(0, nSections - i - 1) * 3);
-    plan[i].perSection = Math.max(3, give);
-    left -= plan[i].perSection;
+  // (mixed random plans set exact perSection sizes - never redistributed)
+  if (!plan.some((p) => p.fixed)) {
+    let left = count;
+    for (let i = 0; i < plan.length; i++) {
+      const give = i === plan.length - 1 ? left : Math.min(size, left - Math.max(0, nSections - i - 1) * 3);
+      plan[i].perSection = Math.max(3, give);
+      left -= plan[i].perSection;
+    }
   }
   return plan;
 }
@@ -1381,8 +1457,13 @@ async function generateSectionQuestions(session, section, sock, chatId) {
     } catch { charIdx = null; }
   }
 
-  const wantsImages = cfg.imageQuestionCount > 0 && section.domain === "images";
-  const needImages = wantsImages ? Math.min(cfg.imageQuestionCount, sectionCount) : 0;
+  // 💡 random-mode Picture Round: an "images" section ALWAYS wants image
+  // questions (cfg.imageQuestionCount is only set by the -images flag; the
+  // auto-mixed plan adds picture sections without it)
+  const wantsImages = section.domain === "images"
+    ? (cfg.imageQuestionCount > 0 || session.mode === "random")
+    : false;
+  const needImages = wantsImages ? Math.min(cfg.imageQuestionCount > 0 ? cfg.imageQuestionCount : sectionCount, sectionCount) : 0;
   const needText = sectionCount - needImages;
 
   // P21: no wiki -> straight to domain-aware metadata fallbacks (no wasted
@@ -2125,7 +2206,7 @@ Leaderboard: \`${prefix} quizboard\` • Cancel: \`${prefix} quiz end\` • Mods
   }
 
   // 💡 START GATE (2026-09-27): only Quiz Mods / Global Mods / bot owner.
-  if (!_canStartQuiz(senderJid)) {
+  if (!(await _canStartQuizFresh(senderJid))) {
     return {
       handled: true,
       message: botMarker + `🔒 Starting quizzes is limited to *Quiz Mods*, *Global Mods* and the bot owner.\nAsk a General Mod to grant it: \`${botConfig.getPrefix()} addquizmod @user\``,
@@ -2266,7 +2347,7 @@ async function confirmStart(sock, chatId, senderJid, botMarker, canUseAdminComma
     }
     return { handled: true, message: botMarker + `❌ No quiz is waiting to start here. Prepare one with \`${prefix} quiz ...\`` };
   }
-  if (session.askedBy !== senderJid && !_canStartQuiz(senderJid)) {
+  if (session.askedBy !== senderJid && !(await _canStartQuizFresh(senderJid))) {
     return { handled: true, message: botMarker + `🛑 Only ${mentionOf(session.askedBy)} - or a Quiz Mod / Global Mod - can start this quiz.`, mentions: [session.askedBy] };
   }
   if (session.readyTimerId) { clearTimeout(session.readyTimerId); session.readyTimerId = null; }
@@ -2416,13 +2497,37 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     // 2026-09-27 PLANNING MODE: media quizzes announce themselves up front
     // ("make that known instead of just silently taking forever") and park
     // for `.j quiz go` once fully prepared (ready-gate below).
-    const mediaGate = cfg.imageQuestionCount > 0 || cfg.audioQuestionCount > 0;
+    // 2026-09-28: mixed random plans carry logo/song/picture sections -
+    // announce + park them like every other media quiz.
+    const mixedRandom = parsed.randomMode && cfg.questionCount >= 9;
+    const mediaGate = cfg.imageQuestionCount > 0 || cfg.audioQuestionCount > 0 || mixedRandom;
     if (mediaGate) {
       const bits = [];
-      if (cfg.imageQuestionCount > 0) bits.push(`🖼 ${cfg.imageQuestionCount} image question${cfg.imageQuestionCount > 1 ? "s" : ""}`);
-      if (cfg.audioQuestionCount > 0) bits.push(`🎵 ${cfg.audioQuestionCount} audio question${cfg.audioQuestionCount > 1 ? "s" : ""}`);
+      if (mixedRandom) {
+        // mirror buildRandomMixedPlan's math so the announcement is true
+        const availChars = franchise ? !!franchise.characters?.length : true;
+        let logosN = Math.min(6, Math.max(3, Math.round(cfg.questionCount * 0.2)));
+        let songN = Math.min(5, Math.max(3, Math.round(cfg.questionCount * 0.15)));
+        let imgN = cfg.imageQuestionCount > 0
+          ? cfg.imageQuestionCount
+          : Math.min(3, Math.max(2, Math.round(cfg.questionCount * 0.1)));
+        if (!availChars) imgN = 0;
+        const loreMin = Math.max(6, Math.ceil(cfg.questionCount * 0.4));
+        while (cfg.questionCount - (logosN + songN + imgN) < loreMin) {
+          if (logosN > 3) logosN--;
+          else if (songN > 3) songN--;
+          else if (imgN > 2) imgN--;
+          else break;
+        }
+        bits.push(`🏢 ${logosN} logos`, `🎵 ${songN} song clips`);
+        if (imgN > 0) bits.push(`🖼 ${imgN} pictures`);
+        bits.push(`📚 lore from different worlds`);
+      } else {
+        if (cfg.imageQuestionCount > 0) bits.push(`🖼 ${cfg.imageQuestionCount} image question${cfg.imageQuestionCount > 1 ? "s" : ""}`);
+        if (cfg.audioQuestionCount > 0) bits.push(`🎵 ${cfg.audioQuestionCount} audio question${cfg.audioQuestionCount > 1 ? "s" : ""}`);
+      }
       await sock.sendMessage(chatId, {
-        text: botMarker + `🛠 *QUIZ PLANNING* ${mentionOf(senderJid)}\nBuilding a ${cfg.questionCount}-question quiz with media: ${bits.join(" • ")}.\nI'll tag you here the moment it's ready to start - the bot stays fully usable meanwhile.`,
+        text: botMarker + `🛠 *QUIZ PLANNING* ${mentionOf(senderJid)}\nBuilding a ${cfg.questionCount}-question mixed quiz: ${bits.join(" • ")}.\nI'll tag you here the moment it's ready to start - the bot stays fully usable meanwhile.`,
         mentions: [senderJid],
       }, { quoted: m }).catch(() => {});
     }
@@ -2495,11 +2600,14 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       questions: [],
       canCarryAudio: i === 0 || parsed.randomMode, // audio spawns early in the quiz
     }));
-    // 💡 RANDOM ACROSS FICTION: section 1 plays the franchise that was just
-    // announced (drawn by buildFranchiseContext); sections 2+ each draw their
-    // own world inside generateSectionQuestions.
+    // 💡 RANDOM ACROSS FICTION: the announced franchise plays the FIRST
+    // LORE section (2026-09-28 mixed plans put the Logo Round first, and
+    // logo/song sections never consume a franchise). Sections 2+ each draw
+    // their own world inside generateSectionQuestions.
     if (parsed.randomMode) {
-      session.sections[0].franchise = {
+      const LORE_DOMAINS = new Set(["plot", "characters", "cosmology", "mixed", "production"]);
+      const firstLore = session.sections.find((s) => LORE_DOMAINS.has(s.domain)) || session.sections[0];
+      firstLore.franchise = {
         slug: franchise.slug, wiki: franchise.wiki, title: franchise.title,
         anime: franchise.anime, mediaType: franchise.mediaType,
         characters: franchise.characters || [], otherTitles: franchise.otherTitles || [],
@@ -2548,7 +2656,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     // 2026-09-27 PLANNING MODE ready-gate: media quizzes (images/audio/
     // logos/song) park here instead of auto-starting - the tagged initiator
     // fires the starting gun with `.j quiz go` when the group is ready.
-    if (cfg.imageQuestionCount > 0 || cfg.audioQuestionCount > 0 || parsed.mode) {
+    if (cfg.imageQuestionCount > 0 || cfg.audioQuestionCount > 0 || parsed.mode || mixedRandom) {
       await parkReadySession(sock, chatId, session, { head, introImage, botMarker, m, senderJid, prefix });
       return;
     }
@@ -2716,7 +2824,7 @@ async function pickCandidate(sock, chatId, senderJid, botMarker, m, numStr, send
   }
   // 💡 START GATE (2026-09-27): the pick resolves into a quiz START - the
   // initiator or an authorized quiz starter must fire it.
-  if (pending.askedBy && pending.askedBy !== senderJid && !_canStartQuiz(senderJid)) {
+  if (pending.askedBy && pending.askedBy !== senderJid && !(await _canStartQuizFresh(senderJid))) {
     return { handled: true, message: botMarker + `🛑 Only ${mentionOf(pending.askedBy)} - or a Quiz Mod / Global Mod - can pick and start this quiz.`, mentions: [pending.askedBy] };
   }
   const chosen = pending.choices[n - 1];

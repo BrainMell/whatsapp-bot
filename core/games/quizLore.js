@@ -716,6 +716,33 @@ async function _wpApi(params) {
   return r.data;
 }
 
+// 💡 RELEVANCE ANCHOR (2026-09-28): a Wikipedia file/article result must
+// actually mention the subject in its TITLE - search matches descriptions
+// and associated article text ("Dogman" hits the KXM band collage via the
+// album name; "Aldo (The Crystal Trap)" hit a greyhound dog-show photo).
+// Requires most significant subject tokens in the file/article title,
+// rejects collages/montages outright.
+function _subjectTokens(q) {
+  return String(q || "").toLowerCase()
+    .replace(/\([^)]*\)/g, " ")
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 2 && !["the", "of", "and", "in", "a", "an", "from", "part", "series"].includes(t));
+}
+function _titleMentionsSubject(title, q, mode = "files") {
+  const toks = _subjectTokens(q);
+  if (!toks.length) return true; // nothing to anchor on - don't make things worse
+  const t = String(title || "").toLowerCase();
+  const hits = toks.filter((tok) => t.includes(tok)).length;
+  if (mode === "article") {
+    // article TITLES are the subject alone ("Goku" for "Goku Dragon Ball"),
+    // so anchor on the subject token, not 60% of the whole query. Still kills
+    // greyhound/band collisions (no token overlap at all).
+    return t.includes(toks[0]);
+  }
+  return hits >= Math.max(1, Math.ceil(toks.length * 0.6));
+}
+const _WP_TITLE_JUNK = /collage|montage|composite|screenshot|map\b|flag\b|coat of arms|seal\b/i;
+
 async function wikipediaImage(query, thumbwidth = 700, mode = "article") {
   const q = String(query || "").trim();
   if (!q) return null;
@@ -733,8 +760,11 @@ async function wikipediaImage(query, thumbwidth = 700, mode = "article") {
       const ok = pages
         .filter((p) => p.imageinfo && p.imageinfo[0])
         .map((p) => ({ p, ii: p.imageinfo[0] }))
-        .filter(({ p, ii }) => !_WP_FILE_JUNK.test(p.title || "")
-          && /^image\/(jpeg|png|webp)$/.test(ii.mime || "")
+        // 2026-09-28: title must mention the subject (see _titleMentionsSubject)
+        .filter(({ p }) => !_WP_FILE_JUNK.test(p.title || "")
+          && !_WP_TITLE_JUNK.test(p.title || "")
+          && _titleMentionsSubject(p.title, q))
+        .filter(({ p, ii }) => /^image\/(jpeg|png|webp)$/.test(ii.mime || "")
           && (ii.width || 0) >= 200 && (ii.height || 0) >= 200
           && (ii.thumburl || ii.url));
       if (ok.length) {
@@ -745,10 +775,20 @@ async function wikipediaImage(query, thumbwidth = 700, mode = "article") {
       const d = await _wpApi({
         generator: "search", gsrsearch: q, gsrlimit: 3, gsrnamespace: 0,
         prop: "pageimages", piprop: "thumbnail", pithumbsize: thumbwidth,
+        // 💡 2026-09-28: default pilicense=free EXCLUDES fair-use character
+        // art - nearly every anime/game character page returned NO thumbnail
+        // at all, silently pushing every image question to the junky file
+        // search. "any" restores character art (same fair-use class Fandom
+        // already serves in production).
+        pilicense: "any",
       });
       const pages = d?.query?.pages || [];
       const withThumb = pages
         .filter((p) => p.thumbnail && p.thumbnail.source)
+        // 2026-09-28: the ARTICLE ITSELF must be about the subject - a search
+        // hit for "<char> <franchise>" returning an unrelated article (dog
+        // breeding, a band) gets filtered here before its pageimage is used.
+        .filter((p) => _titleMentionsSubject(p.title, q, "article"))
         .sort((a, b) => (a.index || 99) - (b.index || 99));
       if (withThumb.length) {
         const p = withThumb[0];

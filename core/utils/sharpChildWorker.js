@@ -116,6 +116,19 @@ async function opGate(buf, opts = {}) {
   return { ok: true, width: meta.width, height: meta.height, format: meta.format };
 }
 
+// shrink - downscale for vision-verify uploads (a 960px image burns ~13k
+// vision tokens on the provider; 384px is plenty for "does this depict X"
+// and keeps the provider's per-minute token budget intact).
+async function opShrink(buf, opts = {}) {
+  const max = Math.max(96, Math.min(1024, opts.max || 384));
+  const out = await sharp(Buffer.from(buf), { ...LIMITS })
+    .rotate()
+    .resize({ width: max, height: max, fit: 'inside', withoutEnlargement: true })
+    .jpeg({ quality: 80 })
+    .toBuffer();
+  return { buf: out, mime: 'image/jpeg' };
+}
+
 async function opAstickerFrames(buf) {
   let pages = 1;
   try { pages = Math.max(1, (await sharp(buf, { pages: -1, ...LIMITS }).metadata()).pages || 1); } catch { /* single */ }
@@ -142,6 +155,7 @@ process.on('message', async (msg) => {
   try {
     let result;
     if (msg.op === 'gate') result = await opGate(msg.buf, msg.opts || {});
+    else if (msg.op === 'shrink') result = await opShrink(msg.buf, msg.opts || {});
     else if (msg.op === 'asticker-frames') result = await opAstickerFrames(msg.buf);
     else throw new Error('unknown-op:' + msg.op);
     clearTimeout(watchdog);

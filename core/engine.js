@@ -877,6 +877,11 @@ try {
     // hook is absent (tests/sandbox).
     canStartQuiz: (jid) => isBotOwner(jid) || isGlobalMod(jid) || isQuizMod(jid),
     canManageQuiz: (jid) => isBotOwner(jid) || isGlobalMod(jid) || isQuizMod(jid),
+    // 2026-09-28: one-shot fresh re-check before the gate denies - a mod
+    // added on a sibling instance lands in MongoDB instantly but this
+    // instance's Set refreshes on the 45s timer; without this the user gets
+    // a bogus "you are not a Quiz Mod" for up to 45s (seen live 22:08).
+    refreshModSets: () => refreshSharedModSets(botConfig.getBotId()),
   });
 } catch (e) { console.log('[Quiz] deps injection failed:', e.message); }
 const stockChart = require('./utils/stockChart'); // 📈 real-world market charts - Yahoo Finance (2026-09-25)
@@ -15452,7 +15457,7 @@ Test media: \`${botConfig.getPrefix()} nsfwcheck\` (reply to an image/sticker/vi
                     }
                     await sock.sendMessage(chatId, { react: { text: "🔍", key: m.key } }).catch(() => {});
                     try {
-                      const buf = await _an.downloadMedia(qMedia.node, qMedia.type);
+                      const buf = await _an.downloadMedia(qMedia.node, qMedia.type, qMedia.dlType);
                       if (!buf || buf.length < 800) {
                         await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Could not download the quoted media (too large or expired).` }, { quoted: m });
                         return;
