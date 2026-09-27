@@ -11,7 +11,7 @@ function ok(cond, label) { if (cond) { pass++; console.log("  ok -", label); } e
   const quizMedia = require("../core/games/quizMedia");
   const quizLore = require("../core/games/quizLore");
   const imageGate = require("../core/utils/imageGate");
-  const goService = require("../utils/goImageService");
+  const goService = require("../core/utils/goImageService");
 
   console.log("════ 1. LOGOS: real Wikipedia fetch + pixel gate + embeddings decoys ════");
   const brand = quizMedia.LOGOS_POOL.find((b) => b.name === "Nike") || quizMedia.LOGOS_POOL[0];
