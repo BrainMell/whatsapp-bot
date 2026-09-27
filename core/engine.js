@@ -6442,10 +6442,50 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
             }
           }
 
+          let pairingCodeRequested = false;
+          const pairingPhoneConfig = configInstance.pairingPhone || null;
+
+          const requestAndDisplayPairingCode = async (phone) => {
+            if (pairingCodeRequested) return;
+            pairingCodeRequested = true;
+            try {
+              console.log(`\n📱 [${BOT_ID}] Requesting pairing code for ${phone}...`);
+              const code = await sock.requestPairingCode(phone);
+              console.log(`\n╔══════════════════════════════════════╗`);
+              console.log(`║  🔑 PAIRING CODE: ${code}              ║`);
+              console.log(`╚══════════════════════════════════════╝`);
+              console.log(`\n📱 On your phone:`);
+              console.log(`   WhatsApp → Settings → Linked Devices`);
+              console.log(`   → Link a Device`);
+              console.log(`   → "Link with phone number instead"`);
+              console.log(`   → Enter: ${code}\n`);
+
+              botInstancesHealth.set(BOT_ID, {
+                name: BOT_NAME,
+                status: "needs_pairing",
+                lastUpdated: Date.now(),
+                error: `Pairing code: ${code}`,
+              });
+            } catch (pairErr) {
+              pairingCodeRequested = false;
+              console.error(`❌ [${BOT_ID}] Fast pairing code failed:`, pairErr.message);
+            }
+          };
+
+          // ⚡ FAST PAIRING: If pairingPhone is configured and device not registered,
+          // request pairing code directly after socket opens without waiting 60-90s for QR cycle!
+          if (pairingPhoneConfig && !state.creds?.registered) {
+            setTimeout(() => {
+              if (!pairingCodeRequested && !state.creds?.registered) {
+                requestAndDisplayPairingCode(pairingPhoneConfig).catch(() => {});
+              }
+            }, 3500);
+          }
+
           sock.ev.on("connection.update", async (update) => {
             const { connection, lastDisconnect, qr } = update;
 
-            if (qr && !qrShown) {
+            if (qr && !qrShown && !pairingCodeRequested) {
               qrShown = true;
 
               // 💡 FIX 2026-07-26: Pairing code is now the DEFAULT login
@@ -6520,35 +6560,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               }
 
               if (usePairing && phoneForPairing) {
-                try {
-                  console.log(`\n📱 [${BOT_ID}] Requesting pairing code for ${phoneForPairing}...`);
-                  const code = await sock.requestPairingCode(phoneForPairing);
-                  console.log(`\n╔══════════════════════════════════════╗`);
-                  console.log(`║  🔑 PAIRING CODE: ${code}              ║`);
-                  console.log(`╚══════════════════════════════════════╝`);
-                  console.log(`\n📱 On your phone:`);
-                  console.log(`   WhatsApp → Settings → Linked Devices`);
-                  console.log(`   → Link a Device`);
-                  console.log(`   → "Link with phone number instead"`);
-                  console.log(`   → Enter: ${code}\n`);
-
-                  botInstancesHealth.set(BOT_ID, {
-                    name: BOT_NAME,
-                    status: "needs_pairing",
-                    lastUpdated: Date.now(),
-                    error: `Pairing code: ${code}`,
-                  });
-                } catch (pairErr) {
-                  console.error(`❌ [${BOT_ID}] Pairing code failed:`, pairErr.message);
-                  console.log(`📱 Falling back to QR code:\n`);
-                  qrcode.generate(qr, { small: true });
-                  botInstancesHealth.set(BOT_ID, {
-                    name: BOT_NAME,
-                    status: "needs_qr",
-                    lastUpdated: Date.now(),
-                    error: "Authentication QR code generated. Scan to login.",
-                  });
-                }
+                await requestAndDisplayPairingCode(phoneForPairing);
               } else {
                 botInstancesHealth.set(BOT_ID, {
                   name: BOT_NAME,

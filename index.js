@@ -1,5 +1,9 @@
 require("dotenv").config();
 
+// Force IPv4 first to eliminate 60-90s IPv6 connection hangs on WhatsApp servers
+const dns = require('dns');
+try { dns.setDefaultResultOrder('ipv4first'); } catch (e) {}
+
 /*
  * GLOBAL RAM TRAP - ULTRA AGGRESSIVE
  * Intercepts hardcoded library logs that serialize large Buffer objects.
