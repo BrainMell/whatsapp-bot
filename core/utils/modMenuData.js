@@ -118,6 +118,24 @@ const MOD_MENU = {
     ],
   },
 
+  QUIZ: {
+    name: "Quiz Tools",
+    emoji: "🎯",
+    tier: "quiz",
+    commands: [
+      { cmd: "quiz", usage: "quiz \"<title>\" [count] [difficulty]", desc: "Start a lore quiz (Quiz Mods / Global Mods / owner only).", eg: "quiz \"One Piece\" 10 hard" },
+      { cmd: "quiz logos", usage: "quiz logos <count>", desc: "Logo Challenge - name the brand behind real logos.", eg: "quiz logos 15" },
+      { cmd: "quiz song", usage: "quiz song <count>", desc: "Spot the Song - name the track from a real clip.", eg: "quiz song 10" },
+      { cmd: "quiz audio", usage: "quiz audio <count>", desc: "Theme songs across shows / movies / games.", eg: "quiz audio 10" },
+      { cmd: "quiz random", usage: "quiz random <count> [-images n] [-audio n]", desc: "Random across ALL of fiction - one franchise per section.", eg: "quiz random 20 -images 5" },
+      { cmd: "quiz go", usage: "quiz go", desc: "Fire the starting gun on a prepared (ready-gate) quiz." },
+      { cmd: "quiz pick", usage: "quiz pick <n>", desc: "Resolve an ambiguous title selection." },
+      { cmd: "quiz end", usage: "quiz end", desc: "End/cancel the running quiz (starter / admins / Quiz Mods)." },
+      { cmd: "quizboard", usage: "quizboard", desc: "Per-chat quiz leaderboard." },
+      { cmd: "quizmod", usage: "quizmod <setting> <value>", desc: "Tune quiz config per group (timer, sections, VA cap...)." },
+    ],
+  },
+
   MANAGEMENT: {
     name: "Management",
     emoji: "🛡️",
@@ -129,6 +147,8 @@ const MOD_MENU = {
       { cmd: "delrpgmod", usage: "delrpgmod @user", desc: "Remove an RPG Moderator (owner/gmod)." },
       { cmd: "addcardsmod", usage: "addcardsmod @user", desc: "Add a Cards Moderator (owner/gmod)." },
       { cmd: "delcardsmod", usage: "delcardsmod @user", desc: "Remove a Cards Moderator (owner/gmod)." },
+      { cmd: "addquizmod", usage: "addquizmod @user", desc: "Add a Quiz Moderator (owner/gmod) - quiz start/manage only." },
+      { cmd: "delquizmod", usage: "delquizmod @user", desc: "Remove a Quiz Moderator (owner/gmod)." },
       { cmd: "gcowner", usage: "gcowner @user", desc: "Mark the protected owner of this GC (bot owner only). Immune to mute/kick/warn/demote." },
       { cmd: "ungcowner", usage: "ungcowner", desc: "Remove this GC's protected-owner mark (bot owner only)." },
       { cmd: "mods", usage: "mods", desc: "List global mods." },

@@ -315,7 +315,7 @@ const hangingAI = async () => "{\"questions\":[{\"q\":\"Question about the story
     ok(dup.handled && /already (running|being prepared)/.test(dup.message || ""), "second quiz in same chat refused");
     // non-starter cannot end
     const noEnd = await quiz.endQuiz(sock, chat, "u2@x", MARK, false);
-    ok(noEnd.handled && /starter or admins/.test(noEnd.message || ""), "non-starter cannot end");
+    ok(noEnd.handled && /starter, admins or Quiz Mods/.test(noEnd.message || ""), "non-starter cannot end");
     await quiz.endQuiz(sock, chat, "u1@x", MARK, false);
     // pick without pending
     const noPick = await quiz.pickCandidate(sock, "1203641@g.us", "u@x", MARK, null, "1", "A", makeValidAI(5), { FAST: "t" });

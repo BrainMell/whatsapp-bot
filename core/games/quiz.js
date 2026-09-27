@@ -99,7 +99,24 @@ const RANDOM_TITLES = {
 };
 
 // injected shared infra (P11): engine calls quizGame.setDeps once at boot
-const deps = { goService: null, ffmpegPath: process.env.FFMPEG_PATH || "ffmpeg" };
+const deps = { goService: null, ffmpegPath: process.env.FFMPEG_PATH || "ffmpeg", canStartQuiz: null, canManageQuiz: null };
+
+// 💡 START PERMISSION GATE (2026-09-27 owner spec): only Quiz Mods, Global
+// Mods and the bot owner may START quizzes. The engine injects the check via
+// setDeps (module-level fns there - no circular require). When the hook is
+// absent (sandbox tests, direct requires) the gate stays OPEN so the QA
+// suites keep exercising the generation pipeline.
+function _canStartQuiz(senderJid) {
+  try { if (typeof deps.canStartQuiz === "function") return !!deps.canStartQuiz(senderJid); } catch { /* fail open */ }
+  return true;
+}
+// Manage gate FAILS CLOSED when the hook is absent: legacy behaviour (starter
+// or admins only) must keep holding in tests/direct-require contexts, and a
+// missing hook in production must never widen permissions.
+function _canManageQuiz(senderJid) {
+  try { if (typeof deps.canManageQuiz === "function") return !!deps.canManageQuiz(senderJid); } catch { /* deny */ }
+  return false;
+}
 
 // 2026-09-27 fairness fix: `arr.sort(() => Math.random() - 0.5)` is a biased
 // shuffle (measured: option A carried the correct answer far above 25%).
@@ -1433,7 +1450,7 @@ function formatQuestionCard(session, idx, q) {
   s += `*${q.q}*\n\n`;
   q.options.forEach((o, i) => { s += `${LETTERS[i]}. ${o}\n`; });
   s += `\n⏱ ${secs}s  •  ${POINTS[q.difficulty]} Zeni (+20 speed bonus)  •  one answer each\n`;
-  s += `Answer with: \`${prefix} a <letter>\` (or b/c/d)`;
+  s += `Answer with: \`${prefix} b\` (letter) or type the option text`;
   return s;
 }
 
@@ -1714,10 +1731,26 @@ async function handleAnswer(sock, chatId, senderJid, answerText, botMarker, m, s
 
   const raw = String(answerText || "").trim();
   if (!raw) return { handled: true, silent: true };
-  let idx = LETTERS.indexOf(raw.toUpperCase().slice(0, 1));
-  if (raw.length > 1 && LETTERS.indexOf(raw.toUpperCase()) < 0) {
-    // full option text is accepted too ("Subaru Natsuki")
-    idx = q.options.findIndex((o) => o.toLowerCase() === raw.toLowerCase());
+  // 💡 SIMPLIFIED ANSWER FORMAT (2026-09-27): ".j b" (single letter) OR the
+  // option TEXT (".j Subaru Natsuki"). The legacy ".j a b" form still works
+  // because the engine strips the leading trigger letter before this runs.
+  let idx = -1;
+  if (/^[abcd]$/i.test(raw)) {
+    idx = LETTERS.indexOf(raw.toUpperCase());
+  } else {
+    const norm = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").replace(/\b(the|a|an)\b/g, " ").trim();
+    const guess = norm(raw);
+    if (guess) {
+      idx = q.options.findIndex((o) => norm(o) === guess);
+      if (idx < 0 && guess.length >= 4) {
+        // tolerant full-text: exact words only, never a bare prefix -
+        // "subaru natsuki" matches, "sub" does not
+        idx = q.options.findIndex((o) => {
+          const on = norm(o);
+          return on.length && (on === guess || (guess.split(" ").length > 1 && on.split(" ").join("") === guess.split(" ").join("")));
+        });
+      }
+    }
   }
   if (idx < 0) {
     await sock.sendMessage(chatId, { react: { text: "🤔", key: m.key } }).catch(() => {});
@@ -1732,7 +1765,14 @@ async function handleAnswer(sock, chatId, senderJid, answerText, botMarker, m, s
 
   if (idx === q.correct) {
     await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } }).catch(() => {});
-    await revealAndAdvance(sock, chatId, session, { jid: senderJid, name: senderName || "Player" }, false);
+    // 💡 45s COMMAND TIMEOUT FIX (2026-09-27): reveal -> next question ->
+    // section transition can LEGALLY take minutes (streaming section waits,
+    // section breaks). Awaiting it inside the answer command used to hit the
+    // engine's 45s generic command timeout (logged live: cmd="a" blocked
+    // through a section change). The chain is fully self-contained - run it
+    // detached so the command returns instantly.
+    revealAndAdvance(sock, chatId, session, { jid: senderJid, name: senderName || "Player" }, false)
+      .catch((e) => console.log("[Quiz] reveal chain failed:", e?.message));
   } else {
     // wrong first answer = out for this question; others keep playing
     await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } }).catch(() => {});
@@ -1937,6 +1977,7 @@ Start one:
 Media modes (no LLM - fast!):
 \`${prefix} quiz logos 15\` - 🏢 name the brand behind Wikipedia logos
 \`${prefix} quiz song 10\` - 🎵 spot the song from a real audio clip
+\`${prefix} quiz audio 10\` - 📺 theme songs from shows/movies/games
 
 Options:
 • count: up to 50 questions (default 10) - 40+ quizzes play in named sections
@@ -1944,10 +1985,18 @@ Options:
 • section (optional): \`-s plot\` / \`-s characters\` / \`-s cosmology\` / \`-s powerscaling\` / \`-s production\` forces that topic
 • \`-images <n>\` adds n picture questions (character ID)
 • \`-audio <n>\` adds n audio questions (theme songs / voices)
-• \`random\` mixes random franchises, images and audio
+• \`random\` mixes franchises across ALL of fiction, one per section
 
-During the quiz, answer with \`${prefix} a <letter>\` (or b/c/d). One answer per player per question!
+During the quiz, answer with \`${prefix} <letter>\` (e.g. \`${prefix} b\`) or type the option text. One answer per player per question!
 Leaderboard: \`${prefix} quizboard\` • Cancel: \`${prefix} quiz end\` • Mods: \`${prefix} quizmod\``,
+    };
+  }
+
+  // 💡 START GATE (2026-09-27): only Quiz Mods / Global Mods / bot owner.
+  if (!_canStartQuiz(senderJid)) {
+    return {
+      handled: true,
+      message: botMarker + `🔒 Starting quizzes is limited to *Quiz Mods*, *Global Mods* and the bot owner.\nAsk a General Mod to grant it: \`${botConfig.getPrefix()} addquizmod @user\``,
     };
   }
 
@@ -2085,8 +2134,8 @@ async function confirmStart(sock, chatId, senderJid, botMarker, canUseAdminComma
     }
     return { handled: true, message: botMarker + `❌ No quiz is waiting to start here. Prepare one with \`${prefix} quiz ...\`` };
   }
-  if (session.askedBy !== senderJid && !canUseAdminCommands) {
-    return { handled: true, message: botMarker + `🛑 Only ${mentionOf(session.askedBy)} (or admins) can start this quiz.` , mentions: [session.askedBy] };
+  if (session.askedBy !== senderJid && !_canStartQuiz(senderJid)) {
+    return { handled: true, message: botMarker + `🛑 Only ${mentionOf(session.askedBy)} - or a Quiz Mod / Global Mod - can start this quiz.`, mentions: [session.askedBy] };
   }
   if (session.readyTimerId) { clearTimeout(session.readyTimerId); session.readyTimerId = null; }
   session.awaitingGo = false;
@@ -2219,7 +2268,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
         ? `🏢 ${totalQs} logos • name the brand behind each one\n`
         : `🎵 ${totalQs} song clips • name the track behind each one\n`;
       head += `📚 ${cfg.difficulty.toUpperCase()} • ${POINTS[cfg.difficulty]} Zeni per correct (+20 speed bonus)\n`;
-      head += `✍️ Answer with \`${prefix} a <letter>\` (A/B/C/D) - one answer per player per question\n`;
+      head += `✍️ Answer with \`${prefix} <letter>\` or the option text - one answer per player per question\n`;
       head += `⏱ ${cfg.timePerQuestion}s per question\n`;
       head += `🛑 Cancel: \`${prefix} quiz end\`\n\n`;
       head += `Let's go! 🚀`;
@@ -2346,7 +2395,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     head += `📚 ${totalQs} questions • ${cfg.difficulty.toUpperCase()} • ${POINTS[cfg.difficulty]} Zeni per correct (+20 speed bonus)\n`;
     if (session.sections.length > 1) head += `📖 ${session.sections.length} sections\n`;
     if (parsed.section) head += `📚 Topic locked: ${parsed.section}\n`;
-    head += `✍️ Answer with \`${prefix} a <letter>\` (A/B/C/D) - one answer per player per question\n`;
+    head += `✍️ Answer with \`${prefix} <letter>\` or the option text - one answer per player per question\n`;
     head += `⏱ ${cfg.timePerQuestion}s per question\n`;
     head += `🛑 Cancel: \`${prefix} quiz end\`\n\n`;
     head += `Let's go! 🚀`;
@@ -2431,7 +2480,7 @@ async function buildFranchiseContext(sock, chatId, botMarker, m, parsed) {
       (top.titleRomaji || "").toLowerCase() === parsed.title.toLowerCase();
     if (!strongAuto) {
       // store the pick and ask - the user replies ".j quiz pick <n>"
-      pendingPicks.set(chatId, { choices: res.candidates, ts: Date.now(), opts: { count: parsed.count, difficulty: parsed.difficulty, section: parsed.section, images: parsed.images, audio: parsed.audio, randomMode: false } });
+      pendingPicks.set(chatId, { choices: res.candidates, ts: Date.now(), askedBy: senderJid, opts: { count: parsed.count, difficulty: parsed.difficulty, section: parsed.section, images: parsed.images, audio: parsed.audio, randomMode: false } });
       let msg = botMarker + `🤔 *"${parsed.title}"* is ambiguous. Which one?\n\n`;
       res.candidates.forEach((c, i) => {
         msg += `*${i + 1}.* ${c.title} (${c.type}${c.year ? `, ${c.year}` : ""}) - ${c.popularity.toLocaleString()} members\n`;
@@ -2497,6 +2546,11 @@ async function pickCandidate(sock, chatId, senderJid, botMarker, m, numStr, send
   if (!Number.isInteger(n) || n < 1 || n > pending.choices.length) {
     return { handled: true, message: botMarker + `❌ Pick a number between 1 and ${pending.choices.length}.` };
   }
+  // 💡 START GATE (2026-09-27): the pick resolves into a quiz START - the
+  // initiator or an authorized quiz starter must fire it.
+  if (pending.askedBy && pending.askedBy !== senderJid && !_canStartQuiz(senderJid)) {
+    return { handled: true, message: botMarker + `🛑 Only ${mentionOf(pending.askedBy)} - or a Quiz Mod / Global Mod - can pick and start this quiz.`, mentions: [pending.askedBy] };
+  }
   const chosen = pending.choices[n - 1];
   pendingPicks.delete(chatId);
   // P3: pick now follows the same background/locked path as startQuiz
@@ -2524,8 +2578,8 @@ async function endQuiz(sock, chatId, senderJid, botMarker, canUseAdminCommands) 
     // lock and the worker went on to post QUIZ STARTED minutes later.
     const prep = pendingPrep.get(chatId);
     if (prep && !prep.cancelled) {
-      if (prep.askedBy !== senderJid && !canUseAdminCommands) {
-        return { handled: true, message: botMarker + `🛑 Only the quiz starter or admins can cancel the preparation.` };
+      if (prep.askedBy !== senderJid && !canUseAdminCommands && !_canManageQuiz(senderJid)) {
+        return { handled: true, message: botMarker + `🛑 Only the quiz starter, admins or Quiz Mods can cancel the preparation.` };
       }
       prep.cancelled = true;
       if (prep.session) prep.session.cancelled = true;
@@ -2543,8 +2597,8 @@ async function endQuiz(sock, chatId, senderJid, botMarker, canUseAdminCommands) 
     }
     return { handled: true, message: botMarker + `❌ No quiz running here.` };
   }
-  if (session.askedBy !== senderJid && !canUseAdminCommands) {
-    return { handled: true, message: botMarker + `🛑 Only the quiz starter or admins can end it early.` };
+  if (session.askedBy !== senderJid && !canUseAdminCommands && !_canManageQuiz(senderJid)) {
+    return { handled: true, message: botMarker + `🛑 Only the quiz starter, admins or Quiz Mods can end it early.` };
   }
   // 2026-09-27: a parked (ready-gate) quiz ends quietly - no finish card, no
   // scores, it never actually started.
@@ -2579,9 +2633,11 @@ async function showLeaderboard(sock, chatId, senderJid, botMarker, m) {
   return { handled: true, message: out };
 }
 
-// P17: quizmod passthrough (permission enforced inside)
+// P17: quizmod passthrough. Permission (2026-09-27): admins (legacy) OR
+// Quiz Mods / Global Mods / owner via the engine-injected manage hook.
 async function handleQuizMod(sock, chatId, senderJid, botMarker, args, canUseAdminCommands) {
-  return quizConfigMod.handleQuizMod(chatId, args, canUseAdminCommands, botConfig.getPrefix());
+  const allowed = canUseAdminCommands || _canManageQuiz(senderJid);
+  return quizConfigMod.handleQuizMod(chatId, args, allowed, botConfig.getPrefix());
 }
 
 // ── back-compat exports (old QA harnesses / external pinning) ──

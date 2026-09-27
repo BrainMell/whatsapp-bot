@@ -481,7 +481,7 @@ async function makeMedia() {
     ok(!!session, "second quiz started");
     // stranger cannot end
     const deny = await quiz.endQuiz(sock, CHAT2, CAROL, MARK, false);
-    ok(deny.message && deny.message.includes("starter or admins"), "non-starter/non-mod cannot end");
+    ok(deny.message && deny.message.includes("starter, admins or Quiz Mods"), "non-starter/non-mod cannot end");
     // starter ends
     const end = await quiz.endQuiz(sock, CHAT2, ALICE, MARK, false);
     ok(end.handled && !quiz.hasActive(CHAT2), "starter ends quiz; session + lock released");

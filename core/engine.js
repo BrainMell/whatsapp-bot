@@ -69,6 +69,9 @@ const busyUsersByBot = new Map();
 // Each Set is instance-bound (per botId) just like globalMods.
 const rpgModsByBot = new Map();
 const cardsModsByBot = new Map();
+// 💡 QUIZ MODS (2026-09-27): dedicated quiz-system moderator class. Quiz Mods
+// can start/manage/configure quizzes without unrelated global mod powers.
+const quizModsByBot = new Map();
 
 function createInstanceBoundSet(map) {
   return {
@@ -128,6 +131,8 @@ const busyUsers = createInstanceBoundSet(busyUsersByBot);
 // 💡 POLISH 2026-07-17: 3-tier mod role sets
 const rpgMods = createInstanceBoundSet(rpgModsByBot);
 const cardsMods = createInstanceBoundSet(cardsModsByBot);
+// 💡 QUIZ MODS (2026-09-27): 4th role set (quiz start/manage/config only)
+const quizMods = createInstanceBoundSet(quizModsByBot);
 // 💡 PHASE 7 2026-08-29: Game Tester role
 const gameTestersByBot = new Map();
 const gameTesters = createInstanceBoundSet(gameTestersByBot);
@@ -563,11 +568,12 @@ async function refreshSharedModSets(botId) {
       return s;
     };
     try {
-      const [g, r, c, t] = await Promise.all([
+      const [g, r, c, t, q] = await Promise.all([
         system.getFresh('_shared_global_mods'),
         system.getFresh('_shared_rpg_mods'),
         system.getFresh('_shared_cards_mods'),
         system.getFresh('_shared_game_testers'),
+        system.getFresh('_shared_quiz_mods'),
       ]);
       const changed = [];
       if (g !== null) {
@@ -596,6 +602,13 @@ async function refreshSharedModSets(botId) {
         if (JSON.stringify([...next].sort()) !== JSON.stringify([...(gameTestersByBot.get(botId) || [])].sort())) {
           gameTestersByBot.set(botId, next);
           changed.push(`testers=${next.size}`);
+        }
+      }
+      if (q !== null) {
+        const next = toSet(q);
+        if (JSON.stringify([...next].sort()) !== JSON.stringify([...(quizModsByBot.get(botId) || [])].sort())) {
+          quizModsByBot.set(botId, next);
+          changed.push(`quiz=${next.size}`);
         }
       }
       if (changed.length) {
@@ -693,12 +706,85 @@ function isCardsMod(userId) {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 💡 QUIZ MODS (2026-09-27) - mirrors the RPG/Cards mod pattern exactly.
+// Storage: _shared_quiz_mods KV (instance-bound Set per botId).
+// Powers: start quizzes (.j quiz .../.j quiz go), manage (end/pick/config).
+// NOT included: global moderation, RPG, cards, economy or admin tools.
+// Owner + General Mods keep full access (hasModPermission shortcut below).
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadQuizMods() {
+  const system = require('./utils/system');
+  try {
+    const data = system.get("_shared_quiz_mods", null);
+    if (data) {
+      data.forEach((userId) => quizMods.add(userId));
+    } else {
+      const oldData = system.get(botConfig.getBotId() + "_quiz_mods", []);
+      oldData.forEach((userId) => quizMods.add(userId));
+      if (oldData.length > 0) system.set("_shared_quiz_mods", oldData);
+    }
+    console.log(`🎯 [${botConfig.getBotId()}] Loaded ${quizMods.size} Quiz moderators`);
+  } catch (err) {
+    console.error("Error loading Quiz mods:", err.message);
+  }
+}
+
+async function saveQuizMods() {
+  const system = require('./utils/system');
+  await system.set("_shared_quiz_mods", Array.from(quizMods));
+}
+
+async function addQuizMod(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  quizMods.add(normalized);
+  await saveQuizMods();
+}
+
+async function delQuizMod(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  quizMods.delete(normalized);
+  await saveQuizMods();
+}
+
+function isQuizMod(userId) {
+  if (!userId || typeof userId !== "string") return false;
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  try {
+    const realJid = userId.startsWith('sandbox_') ? userId.substring(8) : userId;
+    const normalized = jidNormalizedUser(realJid);
+    if (quizMods.has(normalized)) return true;
+    // LID ↔ phone resolution (same dual-representation problem cardsMods has)
+    try {
+      const lidResolver = require('./utils/lidResolver');
+      const numberPart = normalized.split('@')[0];
+      const colonIdx = numberPart.indexOf(':');
+      const cleanNumber = colonIdx > 0 ? numberPart.substring(0, colonIdx) : numberPart;
+      if (normalized.endsWith('@lid')) {
+        const phone = lidResolver.lidCache.get(cleanNumber);
+        if (phone && quizMods.has(`${phone}@s.whatsapp.net`)) return true;
+      } else if (normalized.endsWith('@s.whatsapp.net')) {
+        const lid = lidResolver.phoneCache.get(cleanNumber);
+        if (lid && quizMods.has(`${lid}@lid`)) return true;
+      }
+      const resolved = lidResolver.resolveJid(normalized);
+      if (resolved && resolved !== normalized && quizMods.has(resolved)) return true;
+    } catch (e) {}
+    return false;
+  } catch (err) {
+    return false;
+  }
+}
+
 // Unified permission check. Returns true if the user has the requested category
 // of mod permission. General Mods and the owner always pass.
 //
 // @param userId - the JID to check
-// @param category - 'rpg' | 'cards' | 'general' (any other value defaults to
-//                   'general' which means only General Mods / owner can use it)
+// @param category - 'rpg' | 'cards' | 'quiz' | 'general' (any other value
+//                   defaults to 'general' which means only General Mods / owner
+//                   can use it)
 //
 // 💡 NOTE: owner check uses the module-level isBotOwner() helper below.
 function hasModPermission(userId, category) {
@@ -707,6 +793,7 @@ function hasModPermission(userId, category) {
   if (isGlobalMod(userId)) return true;  // General Mod = unrestricted
   if (category === 'rpg') return isRpgMod(userId);
   if (category === 'cards') return isCardsMod(userId);
+  if (category === 'quiz') return isQuizMod(userId);
   // 'general' or unknown category - General Mods only (already checked above)
   return false;
 }
@@ -781,7 +868,16 @@ const quizGame = require('./games/quiz'); // 🎯 anime quiz - AniList/Jikan dat
 // command uses - no parallel song-fetch system; clipAudio reuses audioclip's
 // ffmpeg helper for the 30s preview trim).
 try {
-  quizGame.setDeps({ goService: require('./utils/goImageService'), ffmpegPath: process.env.FFMPEG_PATH || 'ffmpeg' });
+  quizGame.setDeps({
+    goService: require('./utils/goImageService'),
+    ffmpegPath: process.env.FFMPEG_PATH || 'ffmpeg',
+    // 💡 QUIZ MODS + start gate (2026-09-27): only Quiz Mods / Global Mods /
+    // the bot owner may START quizzes. Group admins no longer start quizzes
+    // (they can still END one). Quiz.js falls back to permissive when this
+    // hook is absent (tests/sandbox).
+    canStartQuiz: (jid) => isBotOwner(jid) || isGlobalMod(jid) || isQuizMod(jid),
+    canManageQuiz: (jid) => isBotOwner(jid) || isGlobalMod(jid) || isQuizMod(jid),
+  });
 } catch (e) { console.log('[Quiz] deps injection failed:', e.message); }
 const stockChart = require('./utils/stockChart'); // 📈 real-world market charts - Yahoo Finance (2026-09-25)
 const trendsChart = require('./utils/trendsChart'); // 📊 Google Trends comparisons - got-scraping dance (2026-09-25)
@@ -5749,6 +5845,8 @@ ${targetCategory}`;
           isGlobalMod(senderJid) ||
           isCardsMod(senderJid) ||
           (cardSystem && cardSystem.getInst && cardSystem.getInst().modJids && cardSystem.getInst().modJids.has(senderJid)),
+        // 💡 QUIZ MODS (2026-09-27): Quiz Mods see the Quiz Tools category
+        quiz: senderIsOwner || isGlobalMod(senderJid) || isQuizMod(senderJid),
       };
       tier.any = tier.owner || tier.gmod || tier.rpg || tier.card;
 
@@ -6143,6 +6241,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           await loadRpgMods();
     try { await loadGameTesters(); } catch(e) { console.error('Game Tester load failed:', e.message); }
           await loadCardsMods();
+          try { await loadQuizMods(); } catch(e) { console.error('Quiz Mods load failed:', e.message); }
           try { await loadGcOwners(); } catch(e) { console.error("GC owner load failed:", e.message); }
           await loadBlockedUsers();
           await loadBannedUsers();
@@ -6566,6 +6665,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 await loadGlobalMods();
                 await loadRpgMods();
                 await loadCardsMods();
+                try { await loadQuizMods(); } catch(e) { console.error("Quiz Mods load failed:", e.message); }
                 try { await loadGcOwners(); } catch(e) { console.error("GC owner load failed:", e.message); }
                 await loadBlockedUsers();
                 await loadBannedUsers();
@@ -13757,6 +13857,76 @@ Usage: ${newUsage}/5${warningText}`;
                     return;
                   }
 
+                  // .j addquizmod @user - promote to QUIZ Moderator (2026-09-27)
+                  // Owner or General Mod only. Quiz Mods can start/manage/configure
+                  // quizzes - nothing else.
+                  if (
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} addquizmod`,
+                    )
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Only the owner or a General Mod can add Quiz moderators.",
+                      });
+                    }
+                    const target =
+                      getMentionOrReply(m) ||
+                      (txt.split(" ")[2]?.includes("@")
+                        ? txt.split(" ")[2]
+                        : null);
+                    if (!target)
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER + "❌ Tag someone to add as a Quiz Moderator.",
+                      });
+
+                    await addQuizMod(target);
+                    await sock.sendMessage(chatId, {
+                      text:
+                        BOT_MARKER +
+                        `✅ @${economy.getDisplayName(target)} is now a Quiz Moderator.\n\nThey can start and manage quizzes (start, go, end, pick, quizmod config) - without unrelated global mod powers.`,
+                      mentions: buildMentions(m, [], target),
+                    });
+                    return;
+                  }
+
+                  // .j delquizmod @user - demote QUIZ Moderator
+                  if (
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} delquizmod`,
+                    )
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Only the owner or a General Mod can remove Quiz moderators.",
+                      });
+                    }
+                    const target =
+                      getMentionOrReply(m) ||
+                      (txt.split(" ")[2]?.includes("@")
+                        ? txt.split(" ")[2]
+                        : null);
+                    if (!target)
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER + "❌ Tag someone to remove from Quiz Moderators.",
+                      });
+
+                    await delQuizMod(target);
+                    await sock.sendMessage(chatId, {
+                      text:
+                        BOT_MARKER +
+                        `✅ @${economy.getDisplayName(target)} has been removed from Quiz Moderators.`,
+                      mentions: buildMentions(m, [], target),
+                    });
+                    return;
+                  }
+
                   // .g listmods - List all moderators across all 3 categories
                   if (
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} listmods` ||
@@ -13770,6 +13940,7 @@ Usage: ${newUsage}/5${warningText}`;
                       ...rpgMods,
                       ...cardsMods,
                       ...gameTesters,
+                      ...quizMods,
                     ]);
 
                     let listMsg = `🛡️ *MODERATOR ROSTER*\n\n`;
@@ -13797,7 +13968,13 @@ Usage: ${newUsage}/5${warningText}`;
                       listMsg += `  • @${economy.getDisplayName(jid)}\n`;
                     }
 
-                    listMsg += `\n_Commands:_ \`${botConfig.getPrefix()} addmod/delmod\` (General), \`${botConfig.getPrefix()} addrpgmod/delrpgmod\` (RPG), \`${botConfig.getPrefix()} addcardsmod/delcardsmod\` (Cards), \`${botConfig.getPrefix()} addgtester/delgtester\` (Game Testers)\n\n\`${botConfig.getPrefix()} reloadmods\` - refresh mod lists from DB (after external DB changes)\n\`${botConfig.getPrefix()} reloadservers\` - manually reload bot caches + BOTH Go image servers`;
+                    listMsg += `\n*Quiz Mods* (${quizMods.size}):\n`;
+                    if (quizMods.size === 0) listMsg += `  _none_\n`;
+                    for (const jid of quizMods) {
+                      listMsg += `  • @${economy.getDisplayName(jid)}\n`;
+                    }
+
+                    listMsg += `\n_Commands:_ \`${botConfig.getPrefix()} addmod/delmod\` (General), \`${botConfig.getPrefix()} addrpgmod/delrpgmod\` (RPG), \`${botConfig.getPrefix()} addcardsmod/delcardsmod\` (Cards), \`${botConfig.getPrefix()} addquizmod/delquizmod\` (Quiz), \`${botConfig.getPrefix()} addgtester/delgtester\` (Game Testers)\n\n\`${botConfig.getPrefix()} reloadmods\` - refresh mod lists from DB (after external DB changes)\n\`${botConfig.getPrefix()} reloadservers\` - manually reload bot caches + BOTH Go image servers`;
                     await sock.sendMessage(chatId, {
                       text: BOT_MARKER + listMsg,
                       mentions: Array.from(allModJids).filter(j => j && j.includes('@')),
@@ -29354,6 +29531,34 @@ _(or reply to their message)_
                   //
                   // ============================================
 
+                  // 💡 SIMPLIFIED ANSWER FORMAT (2026-09-27): when a quiz is
+                  // active and a question is OPEN, ANY ".j <text>" that reached
+                  // this point (i.e. matched no other command) is treated as a
+                  // quiz answer attempt. ".j b" picks option B; ".j Subaru
+                  // Natsuki" matches option text; unknown junk gets the 🤔
+                  // react and is ignored. Normal commands still work - this
+                  // sits AFTER every real command handler and BEFORE the
+                  // unknown-command fallback, so only genuinely unmatched
+                  // input during a live question is intercepted.
+                  if (quizGame.hasActive(chatId)) {
+                    const _ans = cleanTxt
+                      .substring(botConfig.getPrefix().length)
+                      .trim();
+                    if (_ans) {
+                      const resultQ = await quizGame.handleAnswer(
+                        sock,
+                        chatId,
+                        senderJid,
+                        _ans,
+                        BOT_MARKER,
+                        m,
+                        senderName,
+                      );
+                      if (resultQ.handled) return;
+                    }
+                  }
+                  // no active quiz -> fall through to unknown-command
+
                   // ❓ unknown joker command - MUST be LAST
                   // We add checks here to ensure valid sub-commands like 'ttt' and 'move' don't trigger this
                   if (
@@ -29570,6 +29775,8 @@ _(or reply to their message)_
                       "delrpgmod",
                       "addcardsmod",
                       "delcardsmod",
+                      "addquizmod",
+                      "delquizmod",
                       "gcowner",
                       "ungcowner",
                       "listmods",
@@ -30381,6 +30588,11 @@ isGameTester, loadGameTesters,
   delCardsMod,
   isCardsMod,
   loadCardsMods,
+  // 💡 Quiz Mods (2026-09-27)
+  addQuizMod,
+  delQuizMod,
+  isQuizMod,
+  loadQuizMods,
   // 💡 Sandbox mode exports
   getSandboxJid,
   enableSandbox,
