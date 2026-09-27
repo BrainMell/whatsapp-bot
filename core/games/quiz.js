@@ -207,9 +207,9 @@ query ($id: Int) {
 // "asked for Zelda, got a man with his dog" class of bug was unanchored
 // search results, which this eliminates for anime/manga franchises.
 const ANILIST_CHAR_IMG_Q = `
-query ($id: Int, $search: String) {
+query ($id: Int) {
   Media(id: $id, type: ANIME) {
-    characters(perPage: 3, search: $search) {
+    characters(perPage: 40, sort: [ROLE, FAVOURITES_DESC]) {
       edges { node { name { full } image { large } } }
     }
   }
@@ -217,13 +217,23 @@ query ($id: Int, $search: String) {
 
 async function anilistCharacterImage(anilistId, charName) {
   if (!anilistId || !charName) return null;
+  // 2026-09-28 FIX: the old query used Media.characters(search:) which is NOT
+  // a valid GraphQL argument - every call 400'd and AniList art (source 2,
+  // the strongest canonical anchor for anime) silently NEVER rendered. Fetch
+  // the media's main characters once and match the name client-side.
   const r = await _http.post("https://graphql.anilist.co", {
     query: ANILIST_CHAR_IMG_Q,
-    variables: { id: anilistId, search: charName },
+    variables: { id: anilistId },
   });
   const edges = r.data?.data?.Media?.characters?.edges || [];
-  const hit = edges.map((e) => e.node).find((n) => n && n.image && n.image.large);
-  return hit ? { url: hit.image.large, source: "anilist-character" } : null;
+  const nodes = edges.map((e) => e.node).filter((n) => n && n.image && n.image.large);
+  if (!nodes.length) return null;
+  const norm = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const want = norm(charName);
+  const hit =
+    nodes.find((n) => norm(n.name.full) === want) ||
+    nodes.find((n) => norm(n.name.full).includes(want) || want.includes(norm(n.name.full)));
+  return hit ? { url: hit.image.large, source: "anilist-character", name: hit.name.full } : null;
 }
 
 const _http = axios.create({ timeout: 15000, family: 4, headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", Accept: "application/json" } });
