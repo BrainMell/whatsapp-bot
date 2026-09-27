@@ -21,6 +21,7 @@
 
 const crypto = require("crypto");
 const quizLore = require("./quizLore");
+const imageGate = require("../utils/imageGate"); // 2026-09-27: pixel gates on every logo/audio-cover image
 
 const _norm = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
 const _sha = (s) => crypto.createHash("sha1").update(_norm(s)).digest("hex").slice(0, 16);
@@ -213,6 +214,11 @@ async function buildLogosQuestion(brand, others, difficulty) {
   if (!img || !img.url) return null;
   const dl = await quizLore.downloadMedia(img.url, "image").catch(() => null);
   if (!dl || !dl.buf || dl.buf.length < 1500) return null; // tiny = placeholder/blank
+  // 💡 2026-09-27 pixel gate: logos are 64px+ allowed (wordmarks are wide),
+  // but blank/black/corrupt/undecodable bytes are rejected here - a broken
+  // logo must never become the clue of a question.
+  const gate = await imageGate.inspectImageBuffer(dl.buf, { minW: 64, minH: 40, label: `logo:${brand.name}`.slice(0, 50) }).catch(() => ({ ok: false, reason: "gate-crash" }));
+  if (!gate.ok) return null;
   const optionsPool = [brand.name, ...others.map((o) => o.name)];
   const optOrder = _shuffle(optionsPool.map((_, i) => i)); // fair option order (Fisher-Yates)
   return {

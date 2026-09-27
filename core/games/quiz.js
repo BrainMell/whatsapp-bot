@@ -40,6 +40,8 @@ const quizConfigMod = require("./quizConfig"); // P16 central config + quizmod
 const quizBank = require("./quizBank");        // P15 stable-identity bank
 const quizMediaMod = require("./quizMedia");   // 2026-09-27 logos + spot-the-song modes
 const mediaWorker = require("../utils/mediaWorker"); // 2026-09-27 shared media job runner
+const imageGate = require("../utils/imageGate");         // 2026-09-27 pixel-level gates
+const visionVerify = require("../utils/visionVerify");   // 2026-09-27 subject-match verify (Box 2 provider)
 
 // ── state ──
 const activeQuizzes = new Map(); // chatId -> session (one live quiz per chat)
@@ -167,6 +169,33 @@ query ($id: Int) {
     }
   }
 }`;
+
+// 💡 IMAGE RELIABILITY (2026-09-27 owner brief §4): media-SCOPED character
+// image lookup. Searching AniList globally by name would return same-named
+// characters from OTHER shows; scoping by Media id pins the result to THIS
+// franchise, so the returned image is the official art of exactly that
+// character. This is a database lookup, not a web search - the source of the
+// "asked for Zelda, got a man with his dog" class of bug was unanchored
+// search results, which this eliminates for anime/manga franchises.
+const ANILIST_CHAR_IMG_Q = `
+query ($id: Int, $search: String) {
+  Media(id: $id, type: ANIME) {
+    characters(perPage: 3, search: $search) {
+      edges { node { name { full } image { large } } }
+    }
+  }
+}`;
+
+async function anilistCharacterImage(anilistId, charName) {
+  if (!anilistId || !charName) return null;
+  const r = await _http.post("https://graphql.anilist.co", {
+    query: ANILIST_CHAR_IMG_Q,
+    variables: { id: anilistId, search: charName },
+  });
+  const edges = r.data?.data?.Media?.characters?.edges || [];
+  const hit = edges.map((e) => e.node).find((n) => n && n.image && n.image.large);
+  return hit ? { url: hit.image.large, source: "anilist-character" } : null;
+}
 
 const _http = axios.create({ timeout: 15000, family: 4, headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", Accept: "application/json" } });
 
@@ -758,7 +787,7 @@ async function generateLoreQuestions(wiki, franchiseTitle, difficulty, count, se
 // Bytes are fetched lazily at post time (bank stores the verified URL).
 // ════════════════════════════════════════════
 
-async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, difficulty = "easy") {
+async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, difficulty = "easy", sessionRef = null) {
   if (!wiki || !charBuckets) return null;
   // flatten the popularity buckets (easy=top10% famous ... hard=obscure) and
   // prefer the band matching the quiz difficulty, falling back outwards
@@ -776,28 +805,51 @@ async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, d
   // candidate is one more chance to land a verified asset.
   const candidates = [...uniq].sort((a, b) => (Math.random() - 0.7) + (bandRank(a.band) - bandRank(b.band)) * 0.4).slice(0, 14);
 
-  // fetch + VERIFY an image for one candidate. Sources, in order:
-  //   1. the franchise wiki's own pageimage (page-anchored, cannot cross subjects)
-  //   2. Wikipedia article image for "<character> <franchise>" (independent,
-  //      hotlink-friendly; search-anchored so disambiguation works out)
-  //   3. Wikipedia File-namespace search (fair-use character art; junk-
-  //      filtered: cosplay/stat/chart/svg filenames rejected)
-  // Every byte goes through the same magic-number verification - a URL alone
-  // has never been enough (P13). Jobs run through the shared mediaWorker so
-  // a burst of image questions can never flood the event loop / network.
+  // fetch + VERIFY an image for one candidate. 2026-09-27 owner brief §4:
+  // every byte passes FOUR checks before it may enter a question:
+  //   1. download succeeded (magic bytes, P13 - unchanged)
+  //   2. pixel gate: decodes via sharp, big enough, not black/blank/flat/
+  //      transparent-dominant, jpeg/png/webp only (imageGate)
+  //   3. subject verification via the vision provider when one is configured
+  //      (Box 2 CLIP verifier through VISION_ENDPOINT; absent -> skip)
+  //   4. WhatsApp sendability = (1)+(2)+format whitelist
+  // SOURCES, in order (canonical/anchored first - "Don't just search the web
+  // and grab the first vaguely related image"):
+  //   1. the franchise wiki's own pageimage (page-anchored)
+  //   2. AniList MEDIA-SCOPED character art (anime/manga - database-anchored
+  //      to this exact show, the strongest anchor there is)
+  //   3. Wikipedia article image for "<character> <franchise>"
+  //   4. Wikipedia File-namespace search (junk-filtered) - last resort
+  const anilistId = sessionRef?.franchise?.anime?.id || null;
   const fetchVerifiedImage = async (subject) => {
     return mediaWorker.run(async () => {
+      const trySource = async (tag, url) => {
+        if (!url) return null;
+        const dl = await quizLore.downloadMedia(url, "image").catch(() => null);
+        if (!dl) return null;
+        const gate = await imageGate.inspectImageBuffer(dl.buf, { label: `${tag}:${subject}`.slice(0, 60) }).catch(() => ({ ok: false, reason: "gate-crash" }));
+        if (!gate.ok) return null; // black/blank/corrupt/tiny -> next source
+        return { ...dl, url, source: tag };
+      };
+      // 1. Fandom pageimage (page-anchored, cannot cross subjects)
       let img = null;
       try { img = await quizLore.getPageImage(wiki, subject); } catch { img = null; }
-      if (img && img.url) {
-        const dl = await quizLore.downloadMedia(img.url, "image").catch(() => null);
-        if (dl) return { ...dl, url: img.url, source: "fandom" };
+      let hit = img && img.url ? await trySource("fandom", img.url) : null;
+      if (hit) return hit;
+      // 2. AniList media-scoped official character art (franchise-anchored)
+      if (anilistId) {
+        const al = await anilistCharacterImage(anilistId, subject).catch(() => null);
+        if (al && al.url) {
+          hit = await trySource("anilist-character", al.url);
+          if (hit) return hit;
+        }
       }
+      // 3+4. Wikipedia (search-anchored, independent)
       for (const mode of ["article", "files"]) {
         const wp = await quizLore.wikipediaImage(`${subject} ${franchiseTitle}`, 700, mode).catch(() => null);
         if (wp && wp.url) {
-          const dl = await quizLore.downloadMedia(wp.url, "image").catch(() => null);
-          if (dl) return { ...dl, url: wp.url, source: wp.source || `wikipedia-${mode}` };
+          hit = await trySource(wp.source || `wikipedia-${mode}`, wp.url);
+          if (hit) return hit;
         }
       }
       return null;
@@ -807,7 +859,20 @@ async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, d
   for (const ch of candidates) {
     const page = ch.name;
     if (usedKeys && usedKeys.has(`img:${page}`)) continue;
-    const hit = await fetchVerifiedImage(page);
+    let hit = await fetchVerifiedImage(page);
+    // 💡 VISION VERIFY (owner brief §4): when a vision provider is configured
+    // the accepted image must actually depict the requested subject; a
+    // mismatch/NSFW verdict discards it and the loop moves to the next
+    // candidate. "unknown" (no provider / flake) NEVER rejects - canonical
+    // anchoring above remains the primary correctness lever.
+    if (hit && visionVerify.providerConfigured()) {
+      const v = await visionVerify.verifySubject(hit.buf, hit.mime, page, franchiseTitle).catch(() => ({ decision: "unknown" }));
+      if (v.decision === "reject") {
+        console.log(`[Quiz] vision rejected image for ${page} (${v.reason}) - trying next candidate`);
+        if (usedKeys) usedKeys.add(`img:${page}`); // don't retry the same bad asset
+        continue;
+      }
+    }
     if (!hit) continue;
     // P26: seed the shared asset cache with these verified bytes so the
     // post-time send reuses them - fresh image questions download their
@@ -1294,7 +1359,7 @@ async function generateSectionQuestions(session, section, sock, chatId) {
     const banked = quizBank.bankLookup(mk, loadSeen(mk).map((h) => h), needImages, { type: "image" });
     for (const b of banked) { questions.push(b); served++; }
     while (served < needImages) {
-      const q = await buildImageQuestion(session.wiki, session.title, session.charIndex, usedKeys, cfg.difficulty).catch(() => null);
+      const q = await buildImageQuestion(session.wiki, session.title, session.charIndex, usedKeys, cfg.difficulty, session).catch(() => null);
       if (!q) break; // no verified images - graceful (text takes over below)
       // P15 dedup: skip if this asset already in bank
       if (quizBank.bankPut(mk, q)) questions.push(q);
