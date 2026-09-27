@@ -912,31 +912,50 @@ async function wikipediaLogoImage(brand, thumbwidth = 480, altName = null) {
 async function downloadMedia(url, kind = "image") {
   // https required; plain http only for loopback (local dev/QA media server)
   if (!url || (!/^https:\/\//.test(url) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(url))) return null;
+  const _magicOk = (b) => {
+    if (kind === "image") {
+      return (b[0] === 0xff && b[1] === 0xd8)                    // jpeg
+        || (b[0] === 0x89 && b[1] === 0x50)                      // png
+        || (b.slice(0, 4).toString() === "RIFF" && b.slice(8, 12).toString() === "WEBP"); // webp
+    }
+    if (kind === "audio") {
+      return (b.slice(0, 4).toString() === "OggS")               // ogg
+        || (b.slice(0, 3).toString() === "ID3")                  // mp3
+        || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0);            // mp3 raw
+    }
+    return false;
+  };
+  const _mimeOf = (b) => kind === "image"
+    ? (b[0] === 0x89 ? "image/png" : (b.slice(8, 12).toString() === "WEBP" ? "image/webp" : "image/jpeg"))
+    : (b.slice(0, 4).toString() === "OggS" ? "audio/ogg" : "audio/mpeg");
+  let buf = null;
   try {
     const isWikimedia = /(^|\.)wikipedia\.org$|(^|\.)wikimedia\.org$/i.test(new URL(url).hostname);
     const headers = isWikimedia ? _WP_UA : undefined;
     const r = await _http.get(url, { responseType: "arraybuffer", timeout: 20000, maxContentLength: 6 * 1024 * 1024, headers });
-    const buf = Buffer.from(r.data);
-    if (buf.length < 1024) return null;
-    const b = buf;
-    let ok = false;
-    if (kind === "image") {
-      ok = (b[0] === 0xff && b[1] === 0xd8)                    // jpeg
-        || (b[0] === 0x89 && b[1] === 0x50)                    // png
-        || (b.slice(0, 4).toString() === "RIFF" && b.slice(8, 12).toString() === "WEBP"); // webp
-    } else if (kind === "audio") {
-      ok = (b.slice(0, 4).toString() === "OggS")               // ogg
-        || (b.slice(0, 3).toString() === "ID3")                // mp3
-        || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0);          // mp3 raw
-    }
-    if (!ok) return null;
-    const mime = kind === "image"
-      ? (b[0] === 0x89 ? "image/png" : (b.slice(8, 12).toString() === "WEBP" ? "image/webp" : "image/jpeg"))
-      : (b.slice(0, 4).toString() === "OggS" ? "audio/ogg" : "audio/mpeg");
-    return { buf, mime };
-  } catch {
-    return null;
+    const b = Buffer.from(r.data);
+    if (b.length >= 1024 && _magicOk(b)) buf = b;
+  } catch { /* fall through to got-scraping */ }
+  // 💡 2026-09-28: Fandom's CDN (static.wikia.nocookie.net) Cloudflare-challenges
+  // plain axios - EVERY Fandom pageimage download silently failed and every
+  // image question fell through to the junky Wikipedia file search. Retry with
+  // got-scraping (browser TLS fingerprint + header generator) and keep the
+  // magic-byte gate as the last line of defense.
+  if (!buf) {
+    try {
+      const { gotScraping } = await import("got-scraping");
+      const r2 = await gotScraping({
+        url, responseType: "buffer",
+        timeout: { request: 20000 },
+        maxRedirects: 4,
+        http2: true,
+      });
+      const b2 = Buffer.from(r2.body || []);
+      if (b2.length >= 1024 && _magicOk(b2)) buf = b2;
+    } catch { /* both failed - caller skips gracefully */ }
   }
+  if (!buf) return null;
+  return { buf, mime: _mimeOf(buf) };
 }
 
 // opportunistic audio hunt for a character/page (rare on Fandom - optional)
