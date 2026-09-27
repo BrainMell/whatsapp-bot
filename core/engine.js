@@ -29094,6 +29094,32 @@ _(or reply to their message)_
                     return;
                   }
 
+                  // 💡 PLANNING MODE 2026-09-27: "quiz go" / "quiz start" /
+                  // "quiz begin" fires the starting gun for a PREPARED
+                  // (ready-gate) quiz. Routed BEFORE the generic "quiz ..."
+                  // handler - otherwise the generic parser would treat "go"
+                  // as a franchise title.
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} quiz go` ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} quiz start` ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} quiz begin`
+                  ) {
+                    const resultGo = await quizGame.confirmStart(
+                      sock,
+                      chatId,
+                      senderJid,
+                      BOT_MARKER,
+                      canUseAdminCommands,
+                    );
+                    if (resultGo.message) {
+                      await sock.sendMessage(chatId, {
+                        text: resultGo.message,
+                        ...(resultGo.mentions ? { mentions: resultGo.mentions } : {}),
+                      }, { quoted: m });
+                    }
+                    return;
+                  }
+
                   // quiz ["title"] [count] [difficulty] - start an anime quiz
                   if (
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} quiz` ||
@@ -29118,7 +29144,11 @@ _(or reply to their message)_
                       MODELS,
                     );
                     if (resultQ.message) {
-                      await sock.sendMessage(chatId, { text: resultQ.message }, { quoted: m });
+                      // 2026-09-27: parked-quiz bounce tags the initiator
+                      await sock.sendMessage(chatId, {
+                        text: resultQ.message,
+                        ...(resultQ.mentions ? { mentions: resultQ.mentions } : {}),
+                      }, { quoted: m });
                     }
                     return;
                   }

@@ -1899,6 +1899,14 @@ async function startQuiz(sock, chatId, senderJid, botMarker, m, rawArgs, senderN
   if (activeQuizzes.has(chatId) || (lifecycleNow && lifecycleNow.state === "generating")) {
     const s = activeQuizzes.get(chatId);
     if (s) {
+      // 2026-09-27: a parked (ready) quiz gets its own bounce text
+      if (s.awaitingGo) {
+        return {
+          handled: true,
+          message: botMarker + `✅ A *${s.title}* quiz is prepared here and waiting for ${mentionOf(s.askedBy)}.\n▶️ Start it: \`${botConfig.getPrefix()} quiz go\`  •  Cancel: \`${botConfig.getPrefix()} quiz end\``,
+          mentions: s.askedBy ? [s.askedBy] : [],
+        };
+      }
       return {
         handled: true,
         message: botMarker + `🎯 A quiz is already running here: *${s.title}* (question ${s.questionNo}/${plannedTotal(s)}).\nFinish it, or use \`${botConfig.getPrefix()} quiz end\` to cancel.`,
@@ -1978,6 +1986,7 @@ function createPrepHandle(chatId, senderJid) {
     cancelled: false,
     session: null,
     reassureTimerId: null,
+    heartbeatId: null, // 2026-09-27 planning mode: 60s "still preparing" pulse
     lockSince: lifecycle.get(chatId)?.since ?? null,
     askedBy: senderJid,
   };
@@ -1985,9 +1994,119 @@ function createPrepHandle(chatId, senderJid) {
   return prep;
 }
 
+// ── 2026-09-27 PLANNING MODE (owner spec) ──
+// "When I start a quiz with images, audio, logos, etc. and it's going to
+// take a while to prepare everything, make that known instead of just
+// silently taking forever. Send a message every minute to remind them that
+// it's still preparing and hasn't frozen. Tag the person who initiated the
+// quiz and make them use a command when they're ready to actually start it."
+const READY_TTL_MS = 10 * 60 * 1000;   // parked quizzes expire after 10 min
+const HEARTBEAT_MS = 60 * 1000;        // "still preparing" pulse interval
+
+function mentionOf(jid) { return jid ? `@${String(jid).split("@")[0]}` : ""; }
+
+// heartbeat = one 25s nudge (lore research feels instant-failed without it)
+// then a 60s pulse until prep resolves. Every pulse re-checks live state so
+// a finished/cancelled prep never emits a ghost heartbeat.
+function startPrepHeartbeat(prep, sock, chatId, botMarker, label) {
+  const alive = () => !prep.cancelled
+    && lifecycle.get(chatId)?.state === "generating"
+    && !activeQuizzes.has(chatId);
+  prep.reassureTimerId = setTimeout(() => {
+    if (!alive()) return;
+    sock.sendMessage(chatId, {
+      text: botMarker + `🧠 Still researching the lore for *${label}* - good questions take a moment...`,
+    }).catch(() => {});
+    const startedAt = Date.now();
+    prep.heartbeatId = setInterval(() => {
+      if (!alive()) { clearInterval(prep.heartbeatId); prep.heartbeatId = null; return; }
+      const mins = Math.max(1, Math.round((Date.now() - startedAt) / 60000));
+      sock.sendMessage(chatId, {
+        text: botMarker + `⏳ Still preparing *${label}*... (${mins} min elapsed) - the bot is working, not frozen.`,
+      }).catch(() => {});
+    }, HEARTBEAT_MS);
+    prep.heartbeatId.unref?.();
+  }, GEN_REASSURE_MS);
+}
+
+function stopPrepTimers(prep) {
+  if (prep.reassureTimerId) { clearTimeout(prep.reassureTimerId); prep.reassureTimerId = null; }
+  if (prep.heartbeatId) { clearInterval(prep.heartbeatId); prep.heartbeatId = null; }
+}
+
+// ── 2026-09-27 READY GATE ──
+// A fully prepared media quiz parks here: the group sees "ready" + a tagged
+// initiator, and the quiz only actually starts when the initiator (or a
+// mod/admin) fires `.j quiz go`. Unclaimed preps expire after 10 minutes so
+// a group is never blocked by an abandoned prep.
+async function parkReadySession(sock, chatId, session, { head, introImage, botMarker, m, senderJid, prefix }) {
+  session.awaitingGo = true;
+  session.readyHead = head;
+  session.readyIntroImage = introImage || null;
+  session.readyAt = Date.now();
+  activeQuizzes.set(chatId, session); // occupied chat: new .j quiz bounces
+  promoteLifecycle(chatId);           // lock now mirrors the parked session
+  const prep = pendingPrep.get(chatId);
+  if (prep) stopPrepTimers(prep);
+  pendingPrep.delete(chatId);         // prep phase over
+  const mins = Math.round(READY_TTL_MS / 60000);
+  const readyMsg = botMarker
+    + `✅ *${session.title} quiz is ready!* ${mentionOf(session.askedBy)}\n\n`
+    + `🎯 ${plannedTotal(session)} questions prepared${session.mode === "song" ? " with audio clips" : session.mode === "logos" ? " with logo images" : " (media included)"}.\n`
+    + `▶️ Start it whenever your group is ready:\n\`${prefix} quiz go\`\n`
+    + `(starter or mods - expires in ${mins} minutes)`;
+  await sock.sendMessage(chatId, { text: readyMsg, mentions: session.askedBy ? [session.askedBy] : [] }, { quoted: m }).catch(() => {});
+  session.readyTimerId = setTimeout(async () => {
+    try {
+      const cur = activeQuizzes.get(chatId);
+      if (!cur || cur !== session || !cur.awaitingGo) return;
+      cur.cancelled = true;
+      activeQuizzes.delete(chatId);
+      releaseLifecycle(chatId);
+      await sock.sendMessage(chatId, {
+        text: botMarker + `⌛ The prepared *${cur.title}* quiz expired without \`${prefix} quiz go\` - cleaned up. Start a fresh one any time: \`${prefix} quiz ...\``,
+      }).catch(() => {});
+      console.log(`[Quiz] ready-gate expired for ${chatId}`);
+    } catch (e) {
+      console.log("[Quiz] ready-gate expiry failed:", e?.message);
+    }
+  }, READY_TTL_MS);
+  session.readyTimerId.unref?.();
+}
+
+// `.j quiz go` / `.j quiz start` - the initiator's starting gun for a parked
+// (ready) quiz. Same permission rule as .quiz end: starter or admins.
+async function confirmStart(sock, chatId, senderJid, botMarker, canUseAdminCommands) {
+  const prefix = botConfig.getPrefix();
+  const session = activeQuizzes.get(chatId);
+  if (!session || !session.awaitingGo) {
+    if (session) {
+      return { handled: true, message: botMarker + `🎯 A quiz is already running here: *${session.title}* (question ${session.questionNo}/${plannedTotal(session)}).` };
+    }
+    return { handled: true, message: botMarker + `❌ No quiz is waiting to start here. Prepare one with \`${prefix} quiz ...\`` };
+  }
+  if (session.askedBy !== senderJid && !canUseAdminCommands) {
+    return { handled: true, message: botMarker + `🛑 Only ${mentionOf(session.askedBy)} (or admins) can start this quiz.` , mentions: [session.askedBy] };
+  }
+  if (session.readyTimerId) { clearTimeout(session.readyTimerId); session.readyTimerId = null; }
+  session.awaitingGo = false;
+  const head = session.readyHead || "";
+  const introImage = session.readyIntroImage;
+  session.readyHead = null;
+  session.readyIntroImage = null;
+  if (introImage && introImage.buf) {
+    await sock.sendMessage(chatId, { image: introImage.buf, mimetype: introImage.mime, caption: BOT_SAFE(head) }).catch(async () => {
+      await sock.sendMessage(chatId, { text: head }).catch(() => {});
+    });
+  } else {
+    await sock.sendMessage(chatId, { text: head }).catch(() => {});
+  }
+  startSection(sock, chatId, session, 0);
+  return { handled: true, silent: true };
+}
+
 async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, senderName, smartGroqCall, prepArg = null) {
   const prefix = botConfig.getPrefix();
-  let reassured = false;
   // P3b: cancellable prep handle. `.quiz end` during prep must ABORT the
   // background worker, not just drop the lock - otherwise generation finishes
   // later and posts QUIZ STARTED into a group that was told it was cleaned up.
@@ -1997,18 +2116,12 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
   // this launch still owns the chat lock (endQuiz/TTL-reclaim may have freed it)
   const ownsLock = () => !prep.lockSince || lifecycle.get(chatId)?.since === prep.lockSince;
   const abortPrep = () => {
-    clearTimeout(reassureTimerId);
+    stopPrepTimers(prep); // 2026-09-27: clears the 25s nudge AND the 60s heartbeat
     pendingPrep.delete(chatId);
     if (ownsLock()) releaseLifecycle(chatId); // never kill a NEWER launch's lock
   };
-  // reassurance if generation runs long (P5: no spam - one nudge)
-  const reassureTimerId = setTimeout(() => {
-    if (!activeQuizzes.has(chatId) && lifecycle.get(chatId)?.state === "generating") {
-      reassured = true;
-      sock.sendMessage(chatId, { text: botMarker + `🧠 Still researching the lore for *${parsed.randomMode ? "random mode" : parsed.title}* - good questions take a moment...` }).catch(() => {});
-    }
-  }, GEN_REASSURE_MS);
-  prep.reassureTimerId = reassureTimerId;
+  // planning-mode pulse: one nudge at 25s, then every 60s until resolved
+  startPrepHeartbeat(prep, sock, chatId, botMarker, parsed.randomMode ? "random mode" : parsed.title);
   prep.session = null;
   let ownsSlot = false; // P20: true only while this launch holds a generation slot
 
@@ -2090,7 +2203,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       if (prep.cancelled) { session.cancelled = true; abortPrep(); return; }
       const firstJob = ensureSectionGenerating(session, 0, sock, chatId);
       await firstJob;
-      clearTimeout(reassureTimerId);
+      stopPrepTimers(prep);
       if (prep.cancelled || session.cancelled) { abortPrep(); return; }
       if (session.sections[0].state !== SECTION_STATES.READY || session.sections[0].questions.length < Math.min(3, session.sections[0].perSection)) {
         pendingPrep.delete(chatId);
@@ -2110,20 +2223,31 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       head += `⏱ ${cfg.timePerQuestion}s per question\n`;
       head += `🛑 Cancel: \`${prefix} quiz end\`\n\n`;
       head += `Let's go! 🚀`;
-      await sock.sendMessage(chatId, { text: BOT_SAFE(head) }, { quoted: m }).catch(() => {});
-      activeQuizzes.set(chatId, session);
-      promoteLifecycle(chatId);
-      pendingPrep.delete(chatId);
-      startSection(sock, chatId, session, 0);
+
+      // 2026-09-27 planning mode: media modes ALWAYS park for the go command
+      await parkReadySession(sock, chatId, session, { head, introImage: null, botMarker, m, senderJid, prefix });
       return;
     }
 
     const callLLM = normalizeSmartGroq(smartGroqCall);
+    // 2026-09-27 PLANNING MODE: media quizzes announce themselves up front
+    // ("make that known instead of just silently taking forever") and park
+    // for `.j quiz go` once fully prepared (ready-gate below).
+    const mediaGate = cfg.imageQuestionCount > 0 || cfg.audioQuestionCount > 0;
+    if (mediaGate) {
+      const bits = [];
+      if (cfg.imageQuestionCount > 0) bits.push(`🖼 ${cfg.imageQuestionCount} image question${cfg.imageQuestionCount > 1 ? "s" : ""}`);
+      if (cfg.audioQuestionCount > 0) bits.push(`🎵 ${cfg.audioQuestionCount} audio question${cfg.audioQuestionCount > 1 ? "s" : ""}`);
+      await sock.sendMessage(chatId, {
+        text: botMarker + `🛠 *QUIZ PLANNING* ${mentionOf(senderJid)}\nBuilding a ${cfg.questionCount}-question quiz with media: ${bits.join(" • ")}.\nI'll tag you here the moment it's ready to start - the bot stays fully usable meanwhile.`,
+        mentions: [senderJid],
+      }, { quoted: m }).catch(() => {});
+    }
     const franchise = await buildFranchiseContext(sock, chatId, botMarker, m, parsed);
     // checkpoint 2: cancelled during wiki/anime resolution (the slow network phase)
     if (prep.cancelled) { abortPrep(); return; }
     if (!franchise) {
-      clearTimeout(reassureTimerId);
+      stopPrepTimers(prep);
       pendingPrep.delete(chatId);
       releaseLifecycle(chatId);
       return; // error already messaged
@@ -2196,7 +2320,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     const job = ensureSectionGenerating(session, 0, sock, chatId);
     await job;
 
-    clearTimeout(reassureTimerId);
+    stopPrepTimers(prep);
     // checkpoint 3: cancelled while section 1 was generating (the minutes-long phase)
     if (prep.cancelled || session.cancelled) { abortPrep(); return; }
 
@@ -2226,6 +2350,15 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     head += `⏱ ${cfg.timePerQuestion}s per question\n`;
     head += `🛑 Cancel: \`${prefix} quiz end\`\n\n`;
     head += `Let's go! 🚀`;
+
+    // 2026-09-27 PLANNING MODE ready-gate: media quizzes (images/audio/
+    // logos/song) park here instead of auto-starting - the tagged initiator
+    // fires the starting gun with `.j quiz go` when the group is ready.
+    if (cfg.imageQuestionCount > 0 || cfg.audioQuestionCount > 0 || parsed.mode) {
+      await parkReadySession(sock, chatId, session, { head, introImage, botMarker, m, senderJid, prefix });
+      return;
+    }
+
     if (introImage) {
       await sock.sendMessage(chatId, { image: introImage.buf, mimetype: introImage.mime, caption: BOT_SAFE(head) }).catch(async () => {
         await sock.sendMessage(chatId, { text: head }).catch(() => {});
@@ -2241,7 +2374,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     pendingPrep.delete(chatId); // prep phase over - handle no longer needed
     startSection(sock, chatId, session, 0);
   } catch (e) {
-    clearTimeout(reassureTimerId);
+    stopPrepTimers(prep);
     pendingPrep.delete(chatId);
     if (!activeQuizzes.has(chatId) && ownsLock()) releaseLifecycle(chatId);
     console.log("[Quiz] launch failed:", e?.message);
@@ -2396,7 +2529,7 @@ async function endQuiz(sock, chatId, senderJid, botMarker, canUseAdminCommands) 
       }
       prep.cancelled = true;
       if (prep.session) prep.session.cancelled = true;
-      if (prep.reassureTimerId) clearTimeout(prep.reassureTimerId);
+      stopPrepTimers(prep);
       pendingPrep.delete(chatId);
       if (!prep.lockSince || lifecycle.get(chatId)?.since === prep.lockSince) releaseLifecycle(chatId);
       pumpGenGate(); // P20: wake a queued waiter if this prep was queued behind one
@@ -2412,6 +2545,18 @@ async function endQuiz(sock, chatId, senderJid, botMarker, canUseAdminCommands) 
   }
   if (session.askedBy !== senderJid && !canUseAdminCommands) {
     return { handled: true, message: botMarker + `🛑 Only the quiz starter or admins can end it early.` };
+  }
+  // 2026-09-27: a parked (ready-gate) quiz ends quietly - no finish card, no
+  // scores, it never actually started.
+  if (session.awaitingGo) {
+    session.cancelled = true;
+    if (session.readyTimerId) { clearTimeout(session.readyTimerId); session.readyTimerId = null; }
+    session.awaitingGo = false;
+    activeQuizzes.delete(chatId);
+    releaseLifecycle(chatId);
+    pendingPrep.delete(chatId);
+    console.log("[Quiz] parked quiz cancelled via .quiz end");
+    return { handled: true, message: botMarker + `🧹 The prepared *${session.title}* quiz was cancelled before starting. You can begin a new one now.` };
   }
   session.cancelled = true;
   pendingPrep.delete(chatId); // hygiene: a live session never has a prep handle
@@ -2461,6 +2606,7 @@ module.exports = {
   getSession,
   startQuiz,
   pickCandidate,
+  confirmStart,
   endQuiz,
   handleAnswer,
   handleQuizMod,
@@ -2498,5 +2644,5 @@ module.exports = {
   SECTION_STATES,
   FOREIGN_MEDIA_BLOCKLIST,
   RANDOM_POOL,
-  _internal: { activeQuizzes, pendingPicks, lifecycle, revealAndAdvance, finishQuiz, postQuestion, startSection, ensureSectionGenerating, generateSectionQuestions, advanceToNextSection, mediaKeyFor, probeAvailability, launchQuizAsync, buildFranchiseContext, genGate: { acquireGenSlot, releaseGenSlot, pumpGenGate, state: () => genGate, slots: () => GEN_SLOTS } },
+  _internal: { activeQuizzes, pendingPicks, lifecycle, revealAndAdvance, finishQuiz, postQuestion, startSection, ensureSectionGenerating, generateSectionQuestions, advanceToNextSection, mediaKeyFor, probeAvailability, launchQuizAsync, buildFranchiseContext, parkReadySession, READY_TTL_MS, genGate: { acquireGenSlot, releaseGenSlot, pumpGenGate, state: () => genGate, slots: () => GEN_SLOTS } },
 };
