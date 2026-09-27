@@ -22,6 +22,12 @@
 const crypto = require("crypto");
 const quizLore = require("./quizLore");
 const imageGate = require("../utils/imageGate"); // 2026-09-27: pixel gates on every logo/audio-cover image
+const system = require("../utils/system");       // 2026-09-27: usage-fairness persistence
+const logoPoolsV2 = require("./quizLogosPool");  // 2026-09-27: 500+ curated pool (owner brief §1)
+const songsPoolV2 = require("./quizSongsPool");  // 2026-09-27: 280-track pool (owner brief §3)
+// 2026-09-27 owner brief §8: visual-similarity decoys (offline embeddings)
+let logoEmbeddings = null;
+try { logoEmbeddings = require("../../data/logoEmbeddings.json"); } catch { logoEmbeddings = null; }
 
 const _norm = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
 const _sha = (s) => crypto.createHash("sha1").update(_norm(s)).digest("hex").slice(0, 16);
@@ -37,174 +43,143 @@ function _shuffle(arr) {
 }
 
 // ════════════════════════════════════════════
+// USAGE FAIRNESS (2026-09-27, owner brief §1 & §3)
+// "Track how many times each item has been used. The more it is used, the
+// lower its chance of being selected again. Once roughly half of the items
+// have stopped being selected because of the weighting, reset the counts."
+//
+// weight(entry) = 1 / (1 + uses)^2  - a fresh item weighs 1.0, once-used
+// 0.25, twice-used 0.11, 4+-used < 0.04 (effectively benched).
+// Reset rule: when >= 50% of the pool is benched (BENCH_USES), all counts
+// zero and the cycle restarts. Counts persist in the system KV store.
+// ════════════════════════════════════════════
+const USAGE_BENCH_USES = 4;
+const USAGE_KEY = { logos: "quiz_usage:logos", song: "quiz_usage:songs" };
+
+function loadUsage(mode) {
+  try {
+    const d = system.get(USAGE_KEY[mode], null);
+    if (d && typeof d === "object" && d.counts) return { counts: { ...d.counts }, resets: d.resets | 0 };
+  } catch { /* KV unavailable (tests) - in-memory only */ }
+  return { counts: {}, resets: 0 };
+}
+function saveUsage(mode, usage) {
+  try { system.set(USAGE_KEY[mode], usage).catch(() => {}); } catch { /* non-fatal */ }
+}
+function _entryKey(mode, entry) {
+  return mode === "logos" ? _norm(entry.name) : `${_norm(entry.song)}|${_norm(entry.artist)}`;
+}
+function weightOf(uses) { return 1 / Math.pow(1 + (uses || 0), 2); }
+
+// Weighted random draw WITHOUT replacement. Returns a candidate order with
+// frequently-used items pushed to the tail (they still act as spare
+// candidates when the pool is exhausted).
+function weightedOrder(pool, usage, mode) {
+  const scored = pool.map((e) => {
+    const key = _entryKey(mode, e);
+    return { e, key, w: weightOf(usage.counts[key]) };
+  });
+  const fresh = scored.filter((s) => s.w >= 0.04);
+  const benched = scored.filter((s) => s.w < 0.04);
+  // owner reset rule: half the pool benched -> zero everything
+  if (benched.length >= Math.floor(pool.length / 2) && pool.length > 20) {
+    usage.counts = {};
+    usage.resets += 1;
+    console.log(`[QuizMedia] usage fairness reset #${usage.resets} for ${mode} (${benched.length}/${pool.length} benched)`);
+    return _shuffle(scored.map((s) => s.e));
+  }
+  const pick = [];
+  const rest = [...fresh];
+  while (rest.length) {
+    const total = rest.reduce((a, s) => a + s.w, 0);
+    let roll = Math.random() * total;
+    let idx = rest.length - 1;
+    for (let i = 0; i < rest.length; i++) {
+      roll -= rest[i].w;
+      if (roll <= 0) { idx = i; break; }
+    }
+    pick.push(rest.splice(idx, 1)[0]);
+  }
+  return [...pick.map((s) => s.e), ..._shuffle(benched.map((s) => s.e))];
+}
+function bumpUsage(usage, mode, entry) {
+  const key = _entryKey(mode, entry);
+  usage.counts[key] = (usage.counts[key] || 0) + 1;
+}
+
+// ════════════════════════════════════════════
+// VISUAL-SIMILARITY DECOYS (owner brief §8)
+// Embeddings are generated OFFLINE (scripts/embed_logos.js, MobileNetV2) and
+// shipped as data/logoEmbeddings.json - the live quiz path is a cosine
+// top-k over floats, no model, no network. Falls back to same-category
+// decoys when the file is absent or a name has no embedding.
+// ════════════════════════════════════════════
+let _embIndex = null;
+function embeddingsIndex() {
+  if (_embIndex !== null) return _embIndex;
+  try {
+    if (!logoEmbeddings || !logoEmbeddings.model) { _embIndex = false; return _embIndex; }
+    const names = Object.keys(logoEmbeddings.vectors || {});
+    _embIndex = { names, get: (n) => logoEmbeddings.vectors[n] || null };
+  } catch { _embIndex = false; }
+  return _embIndex;
+}
+function _cosine(a, b) {
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+  return dot / (Math.sqrt(na) * Math.sqrt(nb) || 1);
+}
+// Returns up to 3 visually-similar LOGOS_POOL entries (never the brand itself,
+// never duplicates). Empty array = no embedding data -> caller falls back.
+function visuallySimilarDecoys(brand, k = 3) {
+  const idx = embeddingsIndex();
+  if (!idx || !logoEmbeddings.dim) return [];
+  const vec = idx.get(brand.name);
+  if (!vec) return [];
+  const sims = [];
+  for (const name of idx.names) {
+    if (name === brand.name) continue;
+    const v = idx.get(name);
+    if (!v) continue;
+    sims.push({ name, sim: _cosine(vec, v) });
+  }
+  sims.sort((a, b) => b.sim - a.sim);
+  const byName = new Map(LOGOS_POOL.map((b) => [_norm(b.name), b]));
+  const out = [];
+  for (const s of sims) {
+    if (out.length >= k) break;
+    const e = byName.get(_norm(s.name));
+    if (e && !out.some((o) => o.name === e.name)) out.push(e);
+  }
+  return out;
+}
+
+// ════════════════════════════════════════════
 // LOGOS POOL - famous brands / apps / companies.
 // name = display name, wiki = exact Wikipedia article title (the logo file
 // search anchors on it), cat = category for fair distractors.
 // ════════════════════════════════════════════
-const LOGOS_POOL = [
-  // Tech
-  { name: "Apple", wiki: "Apple Inc.", cat: "Tech" },
-  { name: "Microsoft", wiki: "Microsoft", cat: "Tech" },
-  { name: "Google", wiki: "Google", cat: "Tech" },
-  { name: "Amazon", wiki: "Amazon (company)", cat: "Tech" },
-  { name: "Meta", wiki: "Meta Platforms", cat: "Tech" },
-  { name: "IBM", wiki: "IBM", cat: "Tech" },
-  { name: "Intel", wiki: "Intel", cat: "Tech" },
-  { name: "AMD", wiki: "AMD", cat: "Tech" },
-  { name: "Nvidia", wiki: "Nvidia", cat: "Tech" },
-  { name: "Samsung", wiki: "Samsung Electronics", cat: "Tech" },
-  { name: "Sony", wiki: "Sony", cat: "Tech" },
-  { name: "Panasonic", wiki: "Panasonic", cat: "Tech" },
-  { name: "Lenovo", wiki: "Lenovo", cat: "Tech" },
-  { name: "Dell", wiki: "Dell", cat: "Tech" },
-  { name: "Adobe", wiki: "Adobe Inc.", cat: "Tech" },
-  { name: "Oracle", wiki: "Oracle Corporation", cat: "Tech" },
-  { name: "Cisco", wiki: "Cisco", cat: "Tech" },
-  { name: "HP", wiki: "HP Inc.", cat: "Tech" },
-  { name: "Xiaomi", wiki: "Xiaomi", cat: "Tech" },
-  { name: "Huawei", wiki: "Huawei", cat: "Tech" },
-  // Apps & Social
-  { name: "Instagram", wiki: "Instagram", cat: "Apps & Social" },
-  { name: "WhatsApp", wiki: "WhatsApp", cat: "Apps & Social" },
-  { name: "TikTok", wiki: "TikTok", cat: "Apps & Social" },
-  { name: "Snapchat", wiki: "Snapchat", cat: "Apps & Social" },
-  { name: "Twitter", wiki: "Twitter", cat: "Apps & Social" },
-  { name: "YouTube", wiki: "YouTube", cat: "Apps & Social" },
-  { name: "Netflix", wiki: "Netflix", cat: "Apps & Social" },
-  { name: "Spotify", wiki: "Spotify", cat: "Apps & Social" },
-  { name: "Discord", wiki: "Discord", cat: "Apps & Social" },
-  { name: "Twitch", wiki: "Twitch (service)", cat: "Apps & Social" },
-  { name: "Telegram", wiki: "Telegram (software)", cat: "Apps & Social" },
-  { name: "Pinterest", wiki: "Pinterest", cat: "Apps & Social" },
-  { name: "LinkedIn", wiki: "LinkedIn", cat: "Apps & Social" },
-  { name: "Reddit", wiki: "Reddit", cat: "Apps & Social" },
-  { name: "Skype", wiki: "Skype", cat: "Apps & Social" },
-  { name: "Shazam", wiki: "Shazam (application)", cat: "Apps & Social" },
-  { name: "PayPal", wiki: "PayPal", cat: "Apps & Social" },
-  { name: "eBay", wiki: "eBay", cat: "Apps & Social" },
-  { name: "Duolingo", wiki: "Duolingo", cat: "Apps & Social" },
-  { name: "Shopee", wiki: "Shopee", cat: "Apps & Social" },
-  // Food & Drink
-  { name: "McDonald's", wiki: "McDonald's", cat: "Food & Drink" },
-  { name: "Burger King", wiki: "Burger King", cat: "Food & Drink" },
-  { name: "KFC", wiki: "KFC", cat: "Food & Drink" },
-  { name: "Subway", wiki: "Subway (restaurant)", cat: "Food & Drink" },
-  { name: "Starbucks", wiki: "Starbucks", cat: "Food & Drink" },
-  { name: "Coca-Cola", wiki: "Coca-Cola", cat: "Food & Drink" },
-  { name: "Pepsi", wiki: "Pepsi", cat: "Food & Drink" },
-  { name: "Red Bull", wiki: "Red Bull", cat: "Food & Drink" },
-  { name: "Monster Energy", wiki: "Monster Energy", cat: "Food & Drink" },
-  { name: "Heineken", wiki: "Heineken", cat: "Food & Drink" },
-  { name: "Oreo", wiki: "Oreo", cat: "Food & Drink" },
-  { name: "Pringles", wiki: "Pringles", cat: "Food & Drink" },
-  { name: "Nutella", wiki: "Nutella", cat: "Food & Drink" },
-  { name: "Pizza Hut", wiki: "Pizza Hut", cat: "Food & Drink" },
-  { name: "Domino's", wiki: "Domino's Pizza", cat: "Food & Drink" },
-  { name: "Krispy Kreme", wiki: "Krispy Kreme", cat: "Food & Drink" },
-  { name: "Lay's", wiki: "Lay's", cat: "Food & Drink" },
-  { name: "Kit Kat", wiki: "Kit Kat", cat: "Food & Drink" },
-  { name: "Snickers", wiki: "Snickers (chocolate bar)", cat: "Food & Drink" },
-  { name: "Nespresso", wiki: "Nespresso", cat: "Food & Drink" },
-  // Cars
-  { name: "Tesla", wiki: "Tesla, Inc.", cat: "Cars" },
-  { name: "Toyota", wiki: "Toyota", cat: "Cars" },
-  { name: "Honda", wiki: "Honda", cat: "Cars" },
-  { name: "Ford", wiki: "Ford Motor Company", cat: "Cars" },
-  { name: "BMW", wiki: "BMW", cat: "Cars" },
-  { name: "Mercedes-Benz", wiki: "Mercedes-Benz", cat: "Cars" },
-  { name: "Audi", wiki: "Audi", cat: "Cars" },
-  { name: "Volkswagen", wiki: "Volkswagen", cat: "Cars" },
-  { name: "Porsche", wiki: "Porsche", cat: "Cars" },
-  { name: "Ferrari", wiki: "Ferrari", cat: "Cars" },
-  { name: "Lamborghini", wiki: "Lamborghini", cat: "Cars" },
-  { name: "Mazda", wiki: "Mazda", cat: "Cars" },
-  { name: "Nissan", wiki: "Nissan", cat: "Cars" },
-  { name: "Hyundai", wiki: "Hyundai Motor Company", cat: "Cars" },
-  { name: "Kia", wiki: "Kia", cat: "Cars" },
-  { name: "Chevrolet", wiki: "Chevrolet", cat: "Cars" },
-  { name: "Jeep", wiki: "Jeep", cat: "Cars" },
-  { name: "Bugatti", wiki: "Bugatti", cat: "Cars" },
-  { name: "Rolls-Royce", wiki: "Rolls-Royce Motor Cars", cat: "Cars" },
-  { name: "Volvo", wiki: "Volvo Cars", cat: "Cars" },
-  // Fashion & Sportswear
-  { name: "Nike", wiki: "Nike, Inc.", cat: "Fashion" },
-  { name: "Adidas", wiki: "Adidas", cat: "Fashion" },
-  { name: "Puma", wiki: "Puma (brand)", cat: "Fashion" },
-  { name: "Reebok", wiki: "Reebok", cat: "Fashion" },
-  { name: "New Balance", wiki: "New Balance", cat: "Fashion" },
-  { name: "Under Armour", wiki: "Under Armour", cat: "Fashion" },
-  { name: "Gucci", wiki: "Gucci", cat: "Fashion" },
-  { name: "Louis Vuitton", wiki: "Louis Vuitton", cat: "Fashion" },
-  { name: "Chanel", wiki: "Chanel", cat: "Fashion" },
-  { name: "Prada", wiki: "Prada", cat: "Fashion" },
-  { name: "Zara", wiki: "Zara (retailer)", cat: "Fashion" },
-  { name: "H&M", wiki: "H&M", cat: "Fashion" },
-  { name: "Uniqlo", wiki: "Uniqlo", cat: "Fashion" },
-  { name: "Levi's", wiki: "Levi Strauss & Co.", cat: "Fashion" },
-  { name: "Converse", wiki: "Converse (brand)", cat: "Fashion" },
-  { name: "Vans", wiki: "Vans", cat: "Fashion" },
-  { name: "The North Face", wiki: "The North Face", cat: "Fashion" },
-  { name: "Lacoste", wiki: "Lacoste", cat: "Fashion" },
-  { name: "Burberry", wiki: "Burberry", cat: "Fashion" },
-  { name: "Tommy Hilfiger", wiki: "Tommy Hilfiger (brand)", cat: "Fashion" },
-  // Sports & Clubs
-  { name: "FIFA", wiki: "FIFA", cat: "Sports" },
-  { name: "UEFA Champions League", wiki: "UEFA Champions League", cat: "Sports" },
-  { name: "NBA", wiki: "National Basketball Association", cat: "Sports" },
-  { name: "NFL", wiki: "National Football League", cat: "Sports" },
-  { name: "Formula 1", wiki: "Formula One", cat: "Sports" },
-  { name: "FC Barcelona", wiki: "FC Barcelona", cat: "Sports" },
-  { name: "Real Madrid", wiki: "Real Madrid CF", cat: "Sports" },
-  { name: "Manchester United", wiki: "Manchester United F.C.", cat: "Sports" },
-  { name: "Liverpool FC", wiki: "Liverpool F.C.", cat: "Sports" },
-  { name: "Arsenal", wiki: "Arsenal F.C.", cat: "Sports" },
-  { name: "Chelsea FC", wiki: "Chelsea F.C.", cat: "Sports" },
-  { name: "Bayern Munich", wiki: "FC Bayern Munich", cat: "Sports" },
-  { name: "Juventus", wiki: "Juventus FC", cat: "Sports" },
-  { name: "Paris Saint-Germain", wiki: "Paris Saint-Germain F.C.", cat: "Sports" },
-  // Entertainment & Gaming
-  { name: "Disney", wiki: "The Walt Disney Company", cat: "Entertainment & Gaming" },
-  { name: "Pixar", wiki: "Pixar", cat: "Entertainment & Gaming" },
-  { name: "Marvel", wiki: "Marvel Entertainment", cat: "Entertainment & Gaming" },
-  { name: "DC Comics", wiki: "DC Comics", cat: "Entertainment & Gaming" },
-  { name: "Warner Bros.", wiki: "Warner Bros.", cat: "Entertainment & Gaming" },
-  { name: "Universal Pictures", wiki: "Universal Pictures", cat: "Entertainment & Gaming" },
-  { name: "Paramount", wiki: "Paramount Pictures", cat: "Entertainment & Gaming" },
-  { name: "HBO", wiki: "HBO", cat: "Entertainment & Gaming" },
-  { name: "MTV", wiki: "MTV", cat: "Entertainment & Gaming" },
-  { name: "Cartoon Network", wiki: "Cartoon Network", cat: "Entertainment & Gaming" },
-  { name: "Nickelodeon", wiki: "Nickelodeon", cat: "Entertainment & Gaming" },
-  { name: "Lego", wiki: "Lego", cat: "Entertainment & Gaming" },
-  { name: "Nintendo", wiki: "Nintendo", cat: "Entertainment & Gaming" },
-  { name: "PlayStation", wiki: "PlayStation", cat: "Entertainment & Gaming" },
-  { name: "Xbox", wiki: "Xbox", cat: "Entertainment & Gaming" },
-  { name: "Sega", wiki: "Sega", cat: "Entertainment & Gaming" },
-  { name: "Atari", wiki: "Atari, Inc.", cat: "Entertainment & Gaming" },
-  { name: "Rockstar Games", wiki: "Rockstar Games", cat: "Entertainment & Gaming" },
-  { name: "Minecraft", wiki: "Minecraft", cat: "Entertainment & Gaming" },
-  { name: "Roblox", wiki: "Roblox", cat: "Entertainment & Gaming" },
-  { name: "Pokémon", wiki: "Pokémon", cat: "Entertainment & Gaming" },
-  { name: "Ubisoft", wiki: "Ubisoft", cat: "Entertainment & Gaming" },
-  // Airlines & Travel
-  { name: "Emirates", wiki: "Emirates (airline)", cat: "Airlines & Travel" },
-  { name: "Qatar Airways", wiki: "Qatar Airways", cat: "Airlines & Travel" },
-  { name: "Lufthansa", wiki: "Lufthansa", cat: "Airlines & Travel" },
-  { name: "British Airways", wiki: "British Airways", cat: "Airlines & Travel" },
-  { name: "Ryanair", wiki: "Ryanair", cat: "Airlines & Travel" },
-  { name: "Turkish Airlines", wiki: "Turkish Airlines", cat: "Airlines & Travel" },
-  { name: "Singapore Airlines", wiki: "Singapore Airlines", cat: "Airlines & Travel" },
-  // Retail & Banking
-  { name: "Walmart", wiki: "Walmart", cat: "Retail & Banking" },
-  { name: "IKEA", wiki: "IKEA", cat: "Retail & Banking" },
-  { name: "Target", wiki: "Target Corporation", cat: "Retail & Banking" },
-  { name: "Costco", wiki: "Costco", cat: "Retail & Banking" },
-  { name: "Tesco", wiki: "Tesco", cat: "Retail & Banking" },
-  { name: "7-Eleven", wiki: "7-Eleven", cat: "Retail & Banking" },
-  { name: "Visa", wiki: "Visa Inc.", cat: "Retail & Banking" },
-  { name: "Mastercard", wiki: "Mastercard", cat: "Retail & Banking" },
-  { name: "American Express", wiki: "American Express", cat: "Retail & Banking" },
-  { name: "HSBC", wiki: "HSBC", cat: "Retail & Banking" },
-];
+// ── LOGOS POOL v2 (2026-09-27, owner brief §1) ──
+// 500+ hand-curated recognizable brands across 14 categories: modern apps,
+// platforms, companies, games + iconic classics. Previously a 153-entry
+// literal. Junk/variant entries (product lines, regional duplicates) are
+// excluded by curation; dedupe by display name guarantees a distractor can
+// never be the correct answer's twin.
+const LOGOS_POOL = (() => {
+  const all = [
+    ...logoPoolsV2.TECH, ...logoPoolsV2.APPS, ...logoPoolsV2.FOOD, ...logoPoolsV2.CARS,
+    ...logoPoolsV2.FASHION, ...logoPoolsV2.SPORTS, ...logoPoolsV2.GAMING, ...logoPoolsV2.RETAIL,
+    ...logoPoolsV2.TRAVEL, ...logoPoolsV2.MEDIA, ...logoPoolsV2.FINTECH, ...logoPoolsV2.HEALTH,
+    ...logoPoolsV2.INDUSTRY, ...logoPoolsV2.TELECOM,
+  ];
+  const seen = new Set();
+  return all.filter((b) => {
+    const k = _norm(b.name);
+    if (!k || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+})();
 
 const LOGO_JPEG_FALLBACK_OK = true; // jpeg logos allowed only if nothing better exists (handled by mimeScore)
 
@@ -243,13 +218,18 @@ async function buildLogosQuestions({ count, usedKeys, difficulty, bytesCapWarn =
   const n = Math.max(1, Math.min(parseInt(count, 10) || 10, LOGOS_POOL.length - 4));
   const out = [];
   const claimed = new Set();
-  const order = _shuffle(LOGOS_POOL);
+  const usage = loadUsage("logos");
+  const order = weightedOrder(LOGOS_POOL, usage, "logos");
   for (const brand of order) {
     if (out.length >= n) break;
     const key = `logo:${_norm(brand.name)}`;
     if (usedKeys.has(key) || claimed.has(key)) continue;
-    // distractors: same category first (fair), pad from other categories
-    let others = _shuffle(LOGOS_POOL.filter((b) => b.cat === brand.cat && b.name !== brand.name)).slice(0, 3);
+    // 💡 decoys (owner brief §8): visually-similar logos when embeddings are
+    // available (challenging, plausible options), else same-category brands.
+    let others = visuallySimilarDecoys(brand, 3);
+    if (others.length < 3) {
+      others = _shuffle(LOGOS_POOL.filter((b) => b.cat === brand.cat && b.name !== brand.name)).slice(0, 3);
+    }
     if (others.length < 3) {
       for (const b of _shuffle(LOGOS_POOL)) {
         if (others.length >= 3) break;
@@ -261,8 +241,10 @@ async function buildLogosQuestions({ count, usedKeys, difficulty, bytesCapWarn =
     if (!q) continue;
     claimed.add(key);
     if (usedKeys) usedKeys.add(key);
+    bumpUsage(usage, "logos", brand); // selection counts toward fairness
     out.push(q);
   }
+  if (out.length) saveUsage("logos", usage);
   if (bytesCapWarn) bytesCapWarn(out.length);
   return out;
 }
@@ -272,117 +254,10 @@ async function buildLogosQuestions({ count, usedKeys, difficulty, bytesCapWarn =
 // song = title shown in options, artist = search + option label, era =
 // decade bucket for fair same-era distractors.
 // ════════════════════════════════════════════
-const SONGS_POOL = [
-  { song: "Bohemian Rhapsody", artist: "Queen", era: "1970s" },
-  { song: "We Will Rock You", artist: "Queen", era: "1970s" },
-  { song: "Don't Stop Me Now", artist: "Queen", era: "1970s" },
-  { song: "Hey Jude", artist: "The Beatles", era: "1960s" },
-  { song: "Let It Be", artist: "The Beatles", era: "1960s" },
-  { song: "Yesterday", artist: "The Beatles", era: "1960s" },
-  { song: "Come Together", artist: "The Beatles", era: "1960s" },
-  { song: "Imagine", artist: "John Lennon", era: "1970s" },
-  { song: "Stairway to Heaven", artist: "Led Zeppelin", era: "1970s" },
-  { song: "Hotel California", artist: "Eagles", era: "1970s" },
-  { song: "Dancing Queen", artist: "ABBA", era: "1970s" },
-  { song: "Mamma Mia", artist: "ABBA", era: "1970s" },
-  { song: "Rocket Man", artist: "Elton John", era: "1970s" },
-  { song: "Stayin' Alive", artist: "Bee Gees", era: "1970s" },
-  { song: "Another Brick in the Wall", artist: "Pink Floyd", era: "1970s" },
-  { song: "Back In Black", artist: "AC/DC", era: "1980s" },
-  { song: "Billie Jean", artist: "Michael Jackson", era: "1980s" },
-  { song: "Thriller", artist: "Michael Jackson", era: "1980s" },
-  { song: "Beat It", artist: "Michael Jackson", era: "1980s" },
-  { song: "Sweet Child O' Mine", artist: "Guns N' Roses", era: "1980s" },
-  { song: "November Rain", artist: "Guns N' Roses", era: "1980s" },
-  { song: "Livin' on a Prayer", artist: "Bon Jovi", era: "1980s" },
-  { song: "Take On Me", artist: "a-ha", era: "1980s" },
-  { song: "Like a Prayer", artist: "Madonna", era: "1980s" },
-  { song: "I Wanna Dance with Somebody", artist: "Whitney Houston", era: "1980s" },
-  { song: "Enter Sandman", artist: "Metallica", era: "1990s" },
-  { song: "Smells Like Teen Spirit", artist: "Nirvana", era: "1990s" },
-  { song: "Creep", artist: "Radiohead", era: "1990s" },
-  { song: "Wonderwall", artist: "Oasis", era: "1990s" },
-  { song: "Lose Yourself", artist: "Eminem", era: "2000s" },
-  { song: "Without Me", artist: "Eminem", era: "2000s" },
-  { song: "In Da Club", artist: "50 Cent", era: "2000s" },
-  { song: "Hey Ya!", artist: "OutKast", era: "2000s" },
-  { song: "Crazy in Love", artist: "Beyonce", era: "2000s" },
-  { song: "Halo", artist: "Beyonce", era: "2000s" },
-  { song: "Umbrella", artist: "Rihanna", era: "2000s" },
-  { song: "I Gotta Feeling", artist: "Black Eyed Peas", era: "2000s" },
-  { song: "Poker Face", artist: "Lady Gaga", era: "2000s" },
-  { song: "Bad Romance", artist: "Lady Gaga", era: "2000s" },
-  { song: "...Baby One More Time", artist: "Britney Spears", era: "2000s" },
-  { song: "Wannabe", artist: "Spice Girls", era: "1990s" },
-  { song: "No Scrubs", artist: "TLC", era: "1990s" },
-  { song: "Say My Name", artist: "Destiny's Child", era: "1990s" },
-  { song: "I Will Always Love You", artist: "Whitney Houston", era: "1990s" },
-  { song: "Rolling in the Deep", artist: "Adele", era: "2010s" },
-  { song: "Someone Like You", artist: "Adele", era: "2010s" },
-  { song: "Set Fire to the Rain", artist: "Adele", era: "2010s" },
-  { song: "Shape of You", artist: "Ed Sheeran", era: "2010s" },
-  { song: "Perfect", artist: "Ed Sheeran", era: "2010s" },
-  { song: "Thinking Out Loud", artist: "Ed Sheeran", era: "2010s" },
-  { song: "Photograph", artist: "Ed Sheeran", era: "2010s" },
-  { song: "Uptown Funk", artist: "Mark Ronson", era: "2010s" },
-  { song: "Happy", artist: "Pharrell Williams", era: "2010s" },
-  { song: "Get Lucky", artist: "Daft Punk", era: "2010s" },
-  { song: "Viva la Vida", artist: "Coldplay", era: "2000s" },
-  { song: "Clocks", artist: "Coldplay", era: "2000s" },
-  { song: "Fix You", artist: "Coldplay", era: "2000s" },
-  { song: "Counting Stars", artist: "OneRepublic", era: "2010s" },
-  { song: "Believer", artist: "Imagine Dragons", era: "2010s" },
-  { song: "Radioactive", artist: "Imagine Dragons", era: "2010s" },
-  { song: "Demons", artist: "Imagine Dragons", era: "2010s" },
-  { song: "Roar", artist: "Katy Perry", era: "2010s" },
-  { song: "Firework", artist: "Katy Perry", era: "2010s" },
-  { song: "Dark Horse", artist: "Katy Perry", era: "2010s" },
-  { song: "Blank Space", artist: "Taylor Swift", era: "2010s" },
-  { song: "Shake It Off", artist: "Taylor Swift", era: "2010s" },
-  { song: "Love Story", artist: "Taylor Swift", era: "2000s" },
-  { song: "You Belong With Me", artist: "Taylor Swift", era: "2000s" },
-  { song: "All of Me", artist: "John Legend", era: "2010s" },
-  { song: "Stay With Me", artist: "Sam Smith", era: "2010s" },
-  { song: "Take Me to Church", artist: "Hozier", era: "2010s" },
-  { song: "Pompeii", artist: "Bastille", era: "2010s" },
-  { song: "Rather Be", artist: "Clean Bandit", era: "2010s" },
-  { song: "Lean On", artist: "Major Lazer", era: "2010s" },
-  { song: "Faded", artist: "Alan Walker", era: "2010s" },
-  { song: "Wake Me Up", artist: "Avicii", era: "2010s" },
-  { song: "Titanium", artist: "David Guetta", era: "2010s" },
-  { song: "Despacito", artist: "Luis Fonsi", era: "2010s" },
-  { song: "Gangnam Style", artist: "PSY", era: "2010s" },
-  { song: "Sorry", artist: "Justin Bieber", era: "2010s" },
-  { song: "Baby", artist: "Justin Bieber", era: "2010s" },
-  { song: "See You Again", artist: "Wiz Khalifa", era: "2010s" },
-  { song: "Attention", artist: "Charlie Puth", era: "2010s" },
-  { song: "Sugar", artist: "Maroon 5", era: "2010s" },
-  { song: "Memories", artist: "Maroon 5", era: "2010s" },
-  { song: "Payphone", artist: "Maroon 5", era: "2010s" },
-  { song: "Señorita", artist: "Shawn Mendes", era: "2010s" },
-  { song: "Treat You Better", artist: "Shawn Mendes", era: "2010s" },
-  { song: "Levitating", artist: "Dua Lipa", era: "2020s" },
-  { song: "Don't Start Now", artist: "Dua Lipa", era: "2010s" },
-  { song: "One Kiss", artist: "Dua Lipa", era: "2010s" },
-  { song: "Blinding Lights", artist: "The Weeknd", era: "2020s" },
-  { song: "Starboy", artist: "The Weeknd", era: "2010s" },
-  { song: "Save Your Tears", artist: "The Weeknd", era: "2020s" },
-  { song: "Bad Guy", artist: "Billie Eilish", era: "2010s" },
-  { song: "Everything I Wanted", artist: "Billie Eilish", era: "2020s" },
-  { song: "Old Town Road", artist: "Lil Nas X", era: "2010s" },
-  { song: "Sweet but Psycho", artist: "Ava Max", era: "2010s" },
-  { song: "Happier", artist: "Marshmello", era: "2010s" },
-  { song: "God's Plan", artist: "Drake", era: "2010s" },
-  { song: "Hotline Bling", artist: "Drake", era: "2010s" },
-  { song: "Dynamite", artist: "BTS", era: "2020s" },
-  { song: "Closer", artist: "The Chainsmokers", era: "2010s" },
-  { song: "Stay", artist: "The Kid LAROI", era: "2020s" },
-  { song: "Flowers", artist: "Miley Cyrus", era: "2020s" },
-  { song: "As It Was", artist: "Harry Styles", era: "2020s" },
-  { song: "Watermelon Sugar", artist: "Harry Styles", era: "2020s" },
-  { song: "Drivers License", artist: "Olivia Rodrigo", era: "2020s" },
-  { song: "Good 4 U", artist: "Olivia Rodrigo", era: "2020s" },
-];
+// ── SPOT THE SONG POOL v2 (2026-09-27, owner brief §3) ──
+// 280 globally recognizable tracks, 1960s-2020s: pop staples, rock classics,
+// old-school icons, viral-era hits. Previously 109 entries.
+const SONGS_POOL = songsPoolV2.SONGS;
 
 // audio-search result quality gate: covers/karaoke/nightcore variants sound
 // different from the real track and would make the question unfair.
@@ -452,12 +327,16 @@ async function buildSpotSongQuestions({ count, usedKeys, difficulty, goService, 
   const n = Math.max(1, Math.min(parseInt(count, 10) || 10, SONGS_POOL.length - 4));
   const out = [];
   const claimed = new Set();
-  const order = _shuffle(SONGS_POOL);
-  const budget = Math.min(order.length, n * 4);
-  for (const entry of order.slice(0, budget)) {
-    if (out.length >= n) break;
+  const usage = loadUsage("song");
+  const order = weightedOrder(SONGS_POOL, usage, "song");
+  // candidate budget: retry-heavy (availability varies per track). Batched
+  // concurrency 3 keeps the Go service warm without hammering it (the shared
+  // mediaWorker additionally caps global concurrency).
+  const budget = Math.min(order.length, Math.max(n * 8, 24));
+  const candidates = order.slice(0, budget);
+  const buildOne = async (entry) => {
     const key = `song:${_norm(entry.song)}`;
-    if (usedKeys.has(key) || claimed.has(key)) continue;
+    if (out.length >= n || usedKeys.has(key) || claimed.has(key)) return;
     // distractors: same era first (fair), pad from the rest
     let others = _shuffle(SONGS_POOL.filter((s) => s.era === entry.era && s.song !== entry.song)).slice(0, 3);
     if (others.length < 3) {
@@ -466,13 +345,18 @@ async function buildSpotSongQuestions({ count, usedKeys, difficulty, goService, 
         if (s.song !== entry.song && !others.some((o) => o.song === s.song)) others.push(s);
       }
     }
-    if (others.length < 3) continue;
+    if (others.length < 3) return;
     const q = await buildSpotSongQuestion(entry, others, difficulty, goService, trimFn).catch(() => null);
-    if (!q) continue;
+    if (!q) return;
     claimed.add(key);
     if (usedKeys) usedKeys.add(key);
+    bumpUsage(usage, "song", entry);
     out.push(q);
+  };
+  for (let i = 0; i < candidates.length && out.length < n; i += 3) {
+    await Promise.all(candidates.slice(i, i + 3).map(buildOne));
   }
+  if (out.length) saveUsage("song", usage);
   return out;
 }
 
@@ -483,5 +367,11 @@ module.exports = {
   buildLogosQuestion,
   buildSpotSongQuestions,
   buildSpotSongQuestion,
-  _internal: { _norm, _sha, _shuffle, _SONG_VARIANT_RE },
+  _internal: {
+    _norm, _sha, _shuffle, _SONG_VARIANT_RE,
+    // usage-fairness internals (QA + opscheck)
+    loadUsage, saveUsage, bumpUsage, weightOf, weightedOrder, _entryKey,
+    USAGE_BENCH_USES, USAGE_KEY,
+    visuallySimilarDecoys, embeddingsIndex,
+  },
 };
