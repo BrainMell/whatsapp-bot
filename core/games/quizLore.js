@@ -761,6 +761,56 @@ async function wikipediaImage(query, thumbwidth = 700, mode = "article") {
   return img;
 }
 
+// LOGO lookup for the Logos quiz mode (2026-09-27). File-namespace search
+// "<brand> logo" with strict anchoring:
+//   - file title must START with the brand name (kills "Ligue 1 McDonald's
+//     logo" style sponsored-entity collisions)
+//   - logo-ish word required in the title
+//   - vector/flat formats preferred (svg thumbs render as bitmaps via
+//     iiurlwidth; jpeg = usually a photo OF a logo, last resort only)
+//   - canonical-logo heuristic: fewest extra words in the title wins
+//     ("Nike logo" beats "Nike logo at Stamford Bridge 2026")
+// Bytes still verified by the caller (magic numbers, P13).
+async function wikipediaLogoImage(brand, thumbwidth = 480) {
+  const b = String(brand || "").trim();
+  if (!b) return null;
+  const key = `logo|${b}|${thumbwidth}`;
+  const hit = _wpImgCache.get(key);
+  if (hit && Date.now() - hit.ts < WP_IMG_TTL) return hit.img || null;
+  let img = null;
+  try {
+    const d = await _wpApi({
+      generator: "search", gsrsearch: `${b} logo`, gsrlimit: 10, gsrnamespace: 6,
+      prop: "imageinfo", iiprop: "url|mime|size", iiurlwidth: thumbwidth,
+    });
+    const pages = d?.query?.pages || [];
+    const norm = (s) => String(s).toLowerCase().replace(/\s+/g, " ").trim();
+    const bN = norm(b);
+    const candidates = pages
+      .filter((p) => p.imageinfo && p.imageinfo[0])
+      .map((p) => ({ title: p.title.replace(/^file:/i, ""), ii: p.imageinfo[0] }))
+      .filter(({ title, ii }) => {
+        const t = norm(title);
+        if (!t.startsWith(bN)) return false;
+        if (!/(logo|wordmark|symbol|icon)/.test(t)) return false;
+        return !!(ii.thumburl || ii.url);
+      })
+      .map(({ title, ii }) => ({
+        title, ii,
+        mimeScore: /^image\/(svg\+xml|png|webp)$/.test(ii.mime || "") ? 2 : (/^image\/jpeg$/.test(ii.mime || "") ? 0 : 1),
+        wordCount: norm(title).replace(bN, "").trim().split(/\s+/).filter(Boolean).length,
+      }))
+      .filter((c) => c.mimeScore > 0)
+      .sort((a, b) => (b.mimeScore - a.mimeScore) || (a.wordCount - b.wordCount));
+    if (candidates.length) {
+      const best = candidates[0];
+      img = { url: best.ii.thumburl || best.ii.url, mime: best.ii.mime, source: "wikipedia-logo", page: best.title };
+    }
+  } catch { img = null; }
+  _wpImgCache.set(key, { ts: Date.now(), img });
+  return img;
+}
+
 // download + verify a media asset (magic-byte check, size cap)
 // 2026-09-27: Wikimedia hosts (wikipedia.org / wikimedia.org) enforce the
 // bot-UA policy on FILE downloads too - the shared Fandom client's UA gets
@@ -994,7 +1044,7 @@ module.exports = {
   cleanWikitext, fitContext, estTokens, filterSections, retrieveLore, findPageForDomain,
   // characters + media + generation
   buildCharacterIndex, pickCharacterPage, retrieveCharacterLore, retrieveCosmologyLore,
-  getPageImage, resolveFileUrl, downloadMedia, findAudioForPage, wikipediaImage,
+  getPageImage, resolveFileUrl, downloadMedia, findAudioForPage, wikipediaImage, wikipediaLogoImage,
   generateLoreQuestion, buildQuestionPlan,
   // media-type + multi-source pool (P22)
   detectMediaType, wikipediaSummary, tvmazeLookup, getThemeSongs,

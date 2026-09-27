@@ -38,6 +38,7 @@ const system = require("../utils/system");
 const quizLore = require("./quizLore");
 const quizConfigMod = require("./quizConfig"); // P16 central config + quizmod
 const quizBank = require("./quizBank");        // P15 stable-identity bank
+const quizMediaMod = require("./quizMedia");   // 2026-09-27 logos + spot-the-song modes
 const mediaWorker = require("../utils/mediaWorker"); // 2026-09-27 shared media job runner
 
 // ── state ──
@@ -99,6 +100,19 @@ const RANDOM_TITLES = {
 
 // injected shared infra (P11): engine calls quizGame.setDeps once at boot
 const deps = { goService: null, ffmpegPath: process.env.FFMPEG_PATH || "ffmpeg" };
+
+// 2026-09-27 fairness fix: `arr.sort(() => Math.random() - 0.5)` is a biased
+// shuffle (measured: option A carried the correct answer far above 25%).
+// Every OPTION-ORDER shuffle in the media builders uses a real Fisher-Yates
+// now; the correct index is still derived from the shuffled order.
+function _fyShuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 function setDeps(d) { Object.assign(deps, d || {}); }
 
 // BOT_MARKER comes from the engine as a zero-width prefix; keep a module
@@ -363,7 +377,7 @@ function buildFallbackQuestions(anime, characters, difficulty, count) {
   const push = (stem, correct, distractors, topic, domain) => {
     if (!correct || distractors.length < 3) return;
     const options = [String(correct), ...distractors.map(String)];
-    const order = options.map((_, i) => i).sort(() => Math.random() - 0.5);
+    const order = _fyShuffle(options.map((_, i) => i)); // fair option order
     qs.push({
       q: stem,
       options: order.map((i) => options[i]),
@@ -788,7 +802,7 @@ async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, d
       .sort(() => Math.random() - 0.5).slice(0, 3);
     if (others.length < 3) continue;
     const optionsPool = [ch.name, ...others.map((o) => o.name)];
-    const optOrder = optionsPool.map((_, i) => i).sort(() => Math.random() - 0.5);
+    const optOrder = _fyShuffle(optionsPool.map((_, i) => i)); // fair option order
     const q = {
       q: `Who is this character from ${franchiseTitle}?`,
       options: optOrder.map((i) => optionsPool[i]),
@@ -867,7 +881,7 @@ async function buildThemeSongQuestion(franchise, otherTitles, usedKeys) {
   }
   if (others.length < 3) return null;
   const optionsPool = [franchise.title, ...others];
-  const order = optionsPool.map((_, i) => i).sort(() => Math.random() - 0.5);
+  const order = _fyShuffle(optionsPool.map((_, i) => i)); // fair option order
 
   // P29: try up to 3 candidate songs - audio retrieval hits that fail P14
   // verification used to kill the whole question; every candidate still goes
@@ -1159,6 +1173,10 @@ async function probeAvailability(wiki, franchiseTitle, animeCharacters) {
 // ════════════════════════════════════════════
 
 function mediaKeyFor(session) {
+  // 2026-09-27: standalone media modes bank under their own key so logo and
+  // song questions reuse across sessions like lore questions do.
+  if (session.mode === "logos") return "mode:logos";
+  if (session.mode === "song") return "mode:songs";
   return session.wiki
     ? `wiki:${session.wiki}`
     : `${session.anime?.source || "x"}:${session.anime?.id || session.title}`;
@@ -1181,13 +1199,53 @@ async function generateSectionQuestions(session, section, sock, chatId) {
   const sectionCount = section.perSection;
   const questions = [];
   const usedKeys = session.usedKeys;
+  const mk = mediaKeyFor(session);
+
+  // ── 2026-09-27: standalone media modes (logos / song) ──
+  // LLM-free deterministic generation with real verified assets. Everything
+  // downstream (READY state, banking, postQuestion) is shared with lore.
+  if (section.domain === "logos") {
+    const banked = quizBank.bankLookup(mk, loadSeen(mk).map((h) => h), sectionCount, { type: "image" });
+    for (const b of banked) questions.push(b);
+    if (questions.length < sectionCount) {
+      const fresh = await mediaWorker.run(
+        () => quizMediaMod.buildLogosQuestions({ count: sectionCount - questions.length, usedKeys, difficulty: cfg.difficulty }),
+        { label: "logos:build", timeoutMs: 180000 },
+      ).catch(() => []);
+      for (const q of fresh || []) {
+        if (questions.length >= sectionCount) break;
+        if (q._cachedAsset) quizBank.putCachedAsset(q._cachedAsset.url, q._cachedAsset);
+        delete q._cachedAsset;
+        if (quizBank.bankPut(mk, q) || !questions.some((x) => x.assetKey === q.assetKey)) questions.push(q);
+      }
+    }
+    section.state = SECTION_STATES.READY;
+    section.questions = questions.slice(0, sectionCount);
+    return section.questions;
+  }
+  if (section.domain === "song") {
+    const fresh = await mediaWorker.run(
+      () => quizMediaMod.buildSpotSongQuestions({
+        count: sectionCount, usedKeys, difficulty: cfg.difficulty,
+        goService: deps.goService,
+        trimFn: (buf, secs) => _clipAudioBuffer(buf, deps.ffmpegPath, secs || 25),
+      }),
+      { label: "song:build", timeoutMs: 300000 },
+    ).catch(() => []);
+    for (const q of fresh || []) {
+      if (questions.length >= sectionCount) break;
+      questions.push(q); // audio carries live bytes; banking stores the URL-less asset minus buf
+    }
+    section.state = SECTION_STATES.READY;
+    section.questions = questions.slice(0, sectionCount);
+    return section.questions;
+  }
 
   // lazy character index (built once per session, reused everywhere - P21)
   if (!session.charIndex && session.wiki) {
     try { session.charIndex = await quizLore.buildCharacterIndex(session.wiki, session.title, session.animeCharacters || []); } catch { session.charIndex = null; }
   }
 
-  const mk = mediaKeyFor(session);
   const wantsImages = cfg.imageQuestionCount > 0 && section.domain === "images";
   const needImages = wantsImages ? Math.min(cfg.imageQuestionCount, sectionCount) : 0;
   const needText = sectionCount - needImages;
@@ -1306,9 +1364,12 @@ async function generateSectionQuestions(session, section, sock, chatId) {
 
   section.state = SECTION_STATES.READY;
   section.questions = questions.slice(0, sectionCount);
-  // bank every validated text question (P15: reuse before regen next time)
+  // bank every validated TEXT question (P15: reuse before regen next time).
+  // 2026-09-27 fix: audio questions (theme/song/voice) carry LIVE BYTES in
+  // asset.buf and are no longer banked - the old loop stored the full clip
+  // into MongoDB per question (hundreds of KB per doc, pure bloat).
   for (const q of section.questions) {
-    if (q && q.q && !q.fromBank) {
+    if (q && q.q && !q.fromBank && q.type !== "theme" && q.type !== "audio") {
       try { quizBank.bankPut(mk, q); } catch { /* non-fatal */ }
     }
   }
@@ -1691,9 +1752,29 @@ function parseQuizArgs(raw) {
   //   quiz "Dragon Ball" 3 hard -s cosmology
   //   quiz "Re:Zero" 20 hard -images 5
   //   quiz random 20 -images 5 -audio 3
-  const out = { title: "", count: 10, difficulty: "medium", section: null, images: null, audio: null, randomMode: false, notes: [] };
+  //   quiz logos 15            (2026-09-27: standalone media modes)
+  //   quiz song 10             ("spot the song" alias)
+  const out = { title: "", count: 10, difficulty: "medium", section: null, images: null, audio: null, randomMode: false, mode: null, notes: [] };
   let rest = String(raw || "").trim();
   if (!rest) return out;
+  // standalone media modes (before random/quoted handling; "spot the song" is multi-word)
+  const MODE_ALIASES = { logos: "logos", logo: "logos", brands: "logos", brand: "logos", company: "logos", companies: "logos" };
+  const SONG_ALIASES = { song: "song", songs: "song", music: "song" };
+  const spotSong = rest.match(/^spot\s+the\s+song\b/i);
+  const firstWord = rest.split(/\s+/)[0].toLowerCase();
+  if (spotSong) {
+    out.mode = "song";
+    out.title = "__song__";
+    rest = rest.replace(/^spot\s+the\s+song\b/i, "").trim();
+  } else if (SONG_ALIASES[firstWord]) {
+    out.mode = "song";
+    out.title = "__song__";
+    rest = rest.slice(firstWord.length).trim();
+  } else if (MODE_ALIASES[firstWord]) {
+    out.mode = "logos";
+    out.title = "__logos__";
+    rest = rest.slice(firstWord.length).trim();
+  }
   // random mode?
   if (/^random\b/i.test(rest)) {
     out.randomMode = true;
@@ -1845,6 +1926,10 @@ Start one:
 \`${prefix} quiz "Re:Zero" 20 hard -images 5\`
 \`${prefix} quiz random 20 -images 5 -audio 3\`
 
+Media modes (no LLM - fast!):
+\`${prefix} quiz logos 15\` - 🏢 name the brand behind Wikipedia logos
+\`${prefix} quiz song 10\` - 🎵 spot the song from a real audio clip
+
 Options:
 • count: up to 50 questions (default 10) - 40+ quizzes play in named sections
 • difficulty: easy / medium / hard (default medium)
@@ -1954,6 +2039,84 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     });
     // checkpoint 1: cancelled while building config
     if (prep.cancelled) { abortPrep(); return; }
+
+    // ── 2026-09-27: standalone media modes (logos / song) ──
+    // No franchise resolution, no LLM: one media section is generated and
+    // the normal READY/STARTED flow takes over.
+    if (parsed.mode === "logos" || parsed.mode === "song") {
+      const modeTitle = parsed.mode === "logos" ? "Logo Challenge" : "Spot the Song";
+      const session = {
+        cfg,
+        title: modeTitle,
+        wiki: null,
+        anime: null,
+        franchise: null,
+        mediaType: parsed.mode,
+        difficulty: cfg.difficulty,
+        section: null,
+        mode: parsed.mode,
+        sections: [{
+          name: modeTitle,
+          domain: parsed.mode,
+          perSection: cfg.questionCount,
+          state: SECTION_STATES.GENERATING,
+          questions: [],
+          canCarryAudio: parsed.mode === "song",
+        }],
+        sectionJobs: {},
+        activeSection: 0,
+        idx: 0,
+        questionNo: 0,
+        scores: new Map(),
+        revealed: [],
+        answeredBy: new Map(),
+        usedKeys: new Set(),
+        askedBy: senderJid,
+        askedByName: senderName,
+        startedAt: Date.now(),
+        token: 0,
+        cancelled: false,
+        timerId: null,
+        nextTimerId: null,
+        reassureTimerId: null,
+        qStartedAt: Date.now(),
+        qOpenUntil: 0,
+        callLLM: null,
+        animeCharacters: [],
+        charIndex: null,
+        otherTitles: [],
+      };
+      prep.session = session;
+      if (prep.cancelled) { session.cancelled = true; abortPrep(); return; }
+      const firstJob = ensureSectionGenerating(session, 0, sock, chatId);
+      await firstJob;
+      clearTimeout(reassureTimerId);
+      if (prep.cancelled || session.cancelled) { abortPrep(); return; }
+      if (session.sections[0].state !== SECTION_STATES.READY || session.sections[0].questions.length < Math.min(3, session.sections[0].perSection)) {
+        pendingPrep.delete(chatId);
+        releaseLifecycle(chatId);
+        await sock.sendMessage(chatId, {
+          text: botMarker + `❌ Could not build a *${modeTitle}* quiz right now (not enough verified media). Try again in a minute.`,
+        }, { quoted: m }).catch(() => {});
+        return;
+      }
+      const totalQs = plannedTotal(session);
+      let head = botMarker + `🎯 *QUIZ STARTED - ${modeTitle.toUpperCase()}* 🎯\n\n`;
+      head += parsed.mode === "logos"
+        ? `🏢 ${totalQs} logos • name the brand behind each one\n`
+        : `🎵 ${totalQs} song clips • name the track behind each one\n`;
+      head += `📚 ${cfg.difficulty.toUpperCase()} • ${POINTS[cfg.difficulty]} Zeni per correct (+20 speed bonus)\n`;
+      head += `✍️ Answer with \`${prefix} a <letter>\` (A/B/C/D) - one answer per player per question\n`;
+      head += `⏱ ${cfg.timePerQuestion}s per question\n`;
+      head += `🛑 Cancel: \`${prefix} quiz end\`\n\n`;
+      head += `Let's go! 🚀`;
+      await sock.sendMessage(chatId, { text: BOT_SAFE(head) }, { quoted: m }).catch(() => {});
+      activeQuizzes.set(chatId, session);
+      promoteLifecycle(chatId);
+      pendingPrep.delete(chatId);
+      startSection(sock, chatId, session, 0);
+      return;
+    }
 
     const callLLM = normalizeSmartGroq(smartGroqCall);
     const franchise = await buildFranchiseContext(sock, chatId, botMarker, m, parsed);
