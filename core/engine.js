@@ -2212,6 +2212,15 @@ async function startBot(configInstance) {
     if (!global.sharedGroupSettings) global.sharedGroupSettings = new Map();
     const groupSettings = global.sharedGroupSettings;
     const enabledChats = new Set();
+    // 🚫 MASTER GC GATE (2026-09-28): shared whitelist of group chats where
+    // the bot is allowed to operate AT ALL. Every GC is blacklisted by
+    // default - the bot does nothing in a group until the owner runs
+    // `.j bot on` inside that group. Shared across all sibling instances
+    // in this process (same global Set) + persisted to the system KV so it
+    // survives restarts. Keyed "_shared_" because the toggle from any one
+    // instance (Jake/Joker/...) enables the bot family in that group.
+    if (!global.sharedEnabledGcs) global.sharedEnabledGcs = new Set();
+    const enabledGcs = global.sharedEnabledGcs;
     const returnByDeathCounters = new Map();
     const returnByDeathCooldowns = new Map();
     const supportUsage = new Map();
@@ -2270,6 +2279,43 @@ async function startBot(configInstance) {
     function saveEnabledChats() {
       system.set(BOT_ID + "_enabled_chats", Array.from(enabledChats));
     }
+
+    // 🚫 MASTER GC GATE - load/save for the shared group whitelist.
+    // Only @g.us IDs are ever stored (defense against DM pollution like the
+    // enabledChats purge had to fix). All instances read the same KV key.
+    function loadEnabledGcs() {
+      try {
+        const data = system.get("_shared_enabled_gcs", []);
+        enabledGcs.clear();
+        let _bad = 0;
+        for (const chatId of Array.isArray(data) ? data : []) {
+          if (typeof chatId === "string" && chatId.endsWith("@g.us")) {
+            enabledGcs.add(chatId);
+          } else {
+            _bad++;
+          }
+        }
+        if (_bad > 0) saveEnabledGcs(); // self-heal: drop malformed entries once
+        console.log(
+          `🚦 [${BOT_ID}] Master GC gate: ${enabledGcs.size} group(s) enabled, all other GCs blacklisted`,
+        );
+      } catch (err) {
+        console.error("Error loading enabled GCs:", err.message);
+      }
+    }
+
+    function saveEnabledGcs() {
+      system.set("_shared_enabled_gcs", Array.from(enabledGcs));
+    }
+
+    // Cross-process freshness: if a toggle happens in another process (or
+    // the KV is edited directly), pick it up within 30s. Cheap sync KV read.
+    // In-process siblings share the same Set object, so they see toggles
+    // instantly with zero extra reads.
+    const _enabledGcsRefresh = setInterval(() => {
+      try { loadEnabledGcs(); } catch (e) {}
+    }, 30000);
+    if (typeof _enabledGcsRefresh.unref === "function") _enabledGcsRefresh.unref();
 
     function loadGroupSettings() {
       try {
@@ -6169,7 +6215,8 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         let sentCount = 0;
 
         for (const [chatId, config] of groupSettings.entries()) {
-          if (config.animeNews) {
+          // 🚫 MASTER GC GATE: never proactively message a blacklisted group
+          if (config.animeNews && enabledGcs.has(chatId)) {
             const success = await sendNewsToGroup(sock, chatId, articles);
             if (success) sentCount++;
             await new Promise((r) => setTimeout(r, 2000));
@@ -6294,6 +6341,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           chess.loadActiveGames();
 
           loadEnabledChats();
+          loadEnabledGcs();
           loadGroupSettings();
           loadSupportUsage();
           loadMutedUsers();
@@ -6737,6 +6785,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
                 chess.loadActiveGames();
                 loadEnabledChats();
+                loadEnabledGcs();
                 loadGroupSettings();
                 loadSupportUsage();
                 loadMutedUsers();
@@ -7424,7 +7473,8 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               const chatId = key.remoteJid;
 
               // Only care about reactions during a debate
-              if (!chatId.endsWith("@g.us") || !debate.isDebateActive(chatId))
+              // 🚫 MASTER GC GATE: reactions are ignored in blacklisted GCs
+              if (!chatId.endsWith("@g.us") || !enabledGcs.has(chatId) || !debate.isDebateActive(chatId))
                 continue;
 
               // Reacting user
@@ -7748,6 +7798,108 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     try { await sock.sendMessage(chatId, { delete: m.key }); } catch (e) {}
                     try { console.log(`🔪 [MurderMystery] deleted message from the dead: ${senderJid} in ${chatId}`); } catch (e) {}
                     return; // the dead do not speak in the manor
+                  }
+
+                  // ============================================
+                  // 🚫 MASTER GC GATE (2026-09-28) - DEFAULT BLACKLIST EVERY GROUP
+                  // ============================================
+                  // Every group chat is blacklisted by default. The bot does
+                  // ABSOLUTELY NOTHING in a group until the bot owner (or a
+                  // global mod) runs `.j bot on` INSIDE that group:
+                  //   - no commands, no AI, no games, no quiz, no leveling
+                  //   - nothing is persisted to MongoDB
+                  //   - no group metadata fetches (perf win on big groups)
+                  //   - no reactions processing (separate guard below)
+                  //   - no proactive news feeds (guard in broadcastNews)
+                  // DMs are intentionally NOT affected.
+                  //
+                  // The ONLY messages that pass through a disabled GC are the
+                  // master toggle commands from an authorized sender - they
+                  // are handled inline right here and never reach the main
+                  // dispatcher, so the gate has zero coupling to command
+                  // parsing and cannot be bypassed by aliases, prefixed
+                  // variants or media captions.
+                  //
+                  // ⚠️ Placement: BEFORE MongoDB persist, BEFORE group
+                  // metadata fetch, BEFORE spam detection, BEFORE command
+                  // parsing, BEFORE the AI layer. If you add an early-return
+                  // feature above this gate, make sure it cannot be abused to
+                  // wake the bot in a blacklisted GC.
+                  // ============================================
+                  if (isGroupChat) {
+                    const _gateText = (
+                      m.message?.conversation ||
+                      m.message?.extendedTextMessage?.text ||
+                      m.message?.imageMessage?.caption ||
+                      m.message?.videoMessage?.caption || ""
+                    ).trim();
+                    const _pfx = (botConfig.getPrefix() || ".j").toLowerCase();
+                    const _gateLower = _gateText.toLowerCase();
+                    const _isToggleCmd =
+                      _gateLower === `${_pfx} bot on` ||
+                      _gateLower === `${_pfx} bot enable` ||
+                      _gateLower === `${_pfx} bot off` ||
+                      _gateLower === `${_pfx} bot disable` ||
+                      _gateLower === `${_pfx} bot status`;
+
+                    if (_isToggleCmd) {
+                      // Toggle commands are handled HERE in both enabled and
+                      // disabled GCs (single source of truth - the off switch
+                      // must work in an enabled group too). Unauthorized
+                      // senders get silence in a blacklisted GC (never bait a
+                      // reply) and a short denial in an enabled one.
+                      const _canToggle = isBotOwner(realSenderJid) ||
+                        (typeof isGlobalMod === "function" && isGlobalMod(realSenderJid));
+                      if (!_canToggle) {
+                        if (enabledGcs.has(chatId)) {
+                          try {
+                            await sock.sendMessage(chatId, {
+                              text: BOT_MARKER + "⛔ Only the bot owner can toggle the bot in this group.",
+                            }, { quoted: m });
+                          } catch (e) {}
+                        }
+                        console.log(`🚫 [${BOT_ID}] Master GC gate: unauthorized toggle attempt by ${senderJid} in ${chatId}`);
+                        return;
+                      }
+                      try {
+                        if (_gateLower === `${_pfx} bot status`) {
+                          const _on = enabledGcs.has(chatId);
+                          await sock.sendMessage(chatId, {
+                            text: BOT_MARKER +
+                              `🤖 Bot status in this group: *${_on ? "✅ ENABLED" : "❌ DISABLED (blacklisted)"}*\n\n` +
+                              `All groups are blacklisted by default.\n` +
+                              `Use \`${_pfx} bot on\` to enable me here, \`${_pfx} bot off\` to disable me again.\n` +
+                              `(Bot owner / global mods only)`,
+                          }, { quoted: m });
+                        } else if (_gateLower === `${_pfx} bot on` || _gateLower === `${_pfx} bot enable`) {
+                          enabledGcs.add(chatId);
+                          saveEnabledGcs();
+                          console.log(`🟢 [${BOT_ID}] Master GC gate ENABLED for ${chatId} by ${realSenderJid}`);
+                          await sock.sendMessage(chatId, {
+                            text: BOT_MARKER +
+                              `🤖 Bot is now *ENABLED* in this group. All systems online.\n` +
+                              `_Note: AI chatbot still needs its own \`${_pfx} on\` if you want it. Use \`${_pfx} bot off\` to silence everything again._`,
+                          }, { quoted: m });
+                        } else {
+                          enabledGcs.delete(chatId);
+                          saveEnabledGcs();
+                          console.log(`🔴 [${BOT_ID}] Master GC gate DISABLED for ${chatId} by ${realSenderJid}`);
+                          await sock.sendMessage(chatId, {
+                            text: BOT_MARKER +
+                              `🤖 Bot is now *DISABLED* in this group. I won't respond here until re-enabled with \`${_pfx} bot on\`.`,
+                          }, { quoted: m });
+                        }
+                      } catch (_gateErr) {
+                        console.error(`Master GC gate toggle error in ${chatId}:`, _gateErr.message);
+                      }
+                      return; // toggle handled - never enter the main pipeline
+                    }
+
+                    if (!enabledGcs.has(chatId)) {
+                      // Silent blacklist: drop without logging per-message (a
+                      // busy blacklisted GC must not spam the logs or the DB).
+                      return;
+                    }
                   }
 
                   // Persist message to MongoDB (1-hour TTL)
