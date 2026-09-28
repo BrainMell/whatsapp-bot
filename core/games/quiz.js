@@ -1741,7 +1741,16 @@ async function resolveQuestionMedia(session, q) {
       const d = await fetchOnce().catch(() => null) || await fetchOnce().catch(() => null);
       return d ? { buf: d.buf, mime: d.mime, kind: "image" } : null;
     }).catch(() => null);
-    if (dl) return { kind: "image", buf: dl.buf, mime: dl.mime };
+    if (dl) {
+      // 💡 2026-09-28 OWNER AUDIT §4/§12: LAST-LINE pixel gate before any
+      // quiz image reaches a group - banked/cached bytes, re-downloads and
+      // dataset entries all pass the same blank/black/corrupt check here
+      // (the live audit found black SVG renders that slipped bake gates).
+      const gate = await imageGate.inspectImageBuffer(dl.buf, { minW: 64, minH: 40, label: `qimg:${String(q.asset.subject || q.assetKey || "x").slice(0, 40)}` }).catch(() => ({ ok: false, reason: "gate-crash" }));
+      if (gate.ok) return { kind: "image", buf: dl.buf, mime: dl.mime };
+      console.log(`[Quiz] post-time image gate rejected asset (${gate.reason}) - question will be skipped`);
+      return null;
+    }
   }
   return null; // missing media -> graceful text fallback (never fake)
 }
@@ -1815,12 +1824,28 @@ async function postQuestion(sock, chatId, session) {
   session.qStartedAt = Date.now();
   let q = section.questions[session.idx];
   while (q) {
-    if (q.type === "image" && !q.mediaTried) {
+    // 💡 2026-09-28 OWNER AUDIT FIX: media resolution ran ONLY for image
+    // questions - song / theme-song questions (type "theme") and character
+    // voice cues (type "audio") carried live bytes in q.asset that were never
+    // copied to q.media, so postCard's audio branch was UNREACHABLE and every
+    // "Which song is this clip from?" posted as an unanswerable text-only card.
+    const needsMedia = q.type === "image" || q.type === "theme" || q.type === "audio";
+    if (needsMedia && !q.mediaTried) {
       q.mediaTried = true;
       try { q.media = await resolveQuestionMedia(session, q); } catch { q.media = null; }
     }
     if (q.type === "image" && !(q.media && q.media.buf)) {
       console.log("[Quiz] image asset unavailable pre-post - skipping question");
+      session.idx += 1;
+      q = section.questions[session.idx];
+      continue;
+    }
+    // theme/song questions ARE the audio - without the clip they cannot be
+    // answered, so skip them like undeliverable images. Audio-CUE lore
+    // questions (character voice) degrade to plain text instead.
+    const cueRequired = q.type === "theme" || q.domain === "song";
+    if (cueRequired && !(q.media && q.media.buf)) {
+      console.log("[Quiz] audio cue unavailable pre-post - skipping unanswerable audio question");
       session.idx += 1;
       q = section.questions[session.idx];
       continue;
