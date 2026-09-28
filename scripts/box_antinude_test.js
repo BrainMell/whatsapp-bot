@@ -85,14 +85,15 @@ function t(name, cond) { if (cond) { pass++; console.log(`  ✅ ${name}`); } els
   t("admin + violation: STILL enforced (deleted)", handled === true && sock.calls.deleted === 1);
   t("admin + violation: group notified", sock.calls.texts.some((x) => x.includes("ANTINUDE")));
 
-  // 4b. General Mod / GC owner functions -> also NOT exempt (full enforcement)
-  antinude._internal.downloadImpl = async () => Buffer.concat([Buffer.from(`case-mod-${Date.now()}:`), fakeBuf]);
+  // 4b. General Mod / GC owner functions -> STILL EXEMPT (owner correction
+  //     2026-09-28: "I meant ONLY admins minus mods and GC owner") -> skipped
+  antinude._internal.downloadImpl = async () => { throw new Error("should not download for exempt senders"); };
   verdict = { nsfw: 0.9, parts: [], falconsai: 0.9 };
   sock = mkSock();
   handled = await antinude.handleAntinude(sock, mkMsg(), { antinude: true, antinudeThreshold: 0.45, antinudeAction: "delete" }, addWarning, () => 1, mkCtx({ isGlobalMod: () => true, isGcOwner: () => true }));
-  t("global mod + gc owner + violation: STILL enforced", handled === true && sock.calls.deleted === 1);
+  t("global mod / gc owner: exempt (mods keep immunity)", handled === false && sock.calls.deleted === 0);
 
-  // 4c. bot OWNER remains the ONLY exempt role -> skipped, no download
+  // 4c. bot OWNER is exempt (alongside mods + GC owner) -> skipped, no download
   antinude._internal.downloadImpl = async () => { throw new Error("should not download for exempt senders"); };
   verdict = { nsfw: 0.99, parts: [], falconsai: 0.99 };
   sock = mkSock();

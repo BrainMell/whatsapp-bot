@@ -15389,7 +15389,7 @@ Tune it:
 • \`${botConfig.getPrefix()} nsfwcheck\` (reply to media) - see exactly what it scores
 \`${botConfig.getPrefix()} antinude off\` to disable.
 
-⚡ Only the bot owner is exempt - admins and mods are moderated too. Analysis runs on a separate worker - it never slows the bot.`,
+⚡ General Mods, the GC owner and the bot owner are exempt - group admins are NOT. Analysis runs on a separate worker - it never slows the bot.`,
                       });
                     } else if (args[2] === "off") {
                       settings.antinude = false;

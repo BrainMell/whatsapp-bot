@@ -2,8 +2,8 @@
 //   1. buildRandomMixedPlan: random mode mixes logos/songs/images/lore
 //   2. wikipediaImage relevance anchor (title-token overlap + collage reject)
 //   3. antinude exemption: functions are CALLED, not truthiness-checked;
-//      2026-09-28 owner directive - ONLY the bot owner is exempt
-//      (admins / General Mods / GC owners are subject to antinude)
+//      2026-09-28 owner directive (refined): group ADMINS are subject to
+//      antinude; General Mods, GC owner and the bot owner remain exempt
 //   4. visionVerify: breaker + shrink fail-open behavior (no provider in sandbox)
 process.chdir(__dirname + "/..");
 
@@ -93,17 +93,17 @@ function t(name, cond) {
   console.log = (...a) => { lines.push(a.join(" ")); };
   await antinude.handleAntinude(fakeSock, msgWithImage, fakeSettings, () => 0, () => 0, baseCtx({ isGlobalMod: () => true }));
   console.log = origLog;
-  t("isGlobalMod FUNCTION returning true is NOT exempt anymore", !lines.some((l) => l.includes("sender exempt")));
+  t("isGlobalMod FUNCTION returning true exempts (mods keep immunity)", lines.some((l) => l.includes("sender exempt")));
   lines.length = 0;
   console.log = (...a) => { lines.push(a.join(" ")); };
   await antinude.handleAntinude(fakeSock, msgWithImage, fakeSettings, () => 0, () => 0, baseCtx({ isGcOwner: () => true }));
   console.log = origLog;
-  t("isGcOwner FUNCTION returning true is NOT exempt anymore", !lines.some((l) => l.includes("sender exempt")));
+  t("isGcOwner FUNCTION returning true exempts (GC owner keeps immunity)", lines.some((l) => l.includes("sender exempt")));
   lines.length = 0;
   console.log = (...a) => { lines.push(a.join(" ")); };
   await antinude.handleAntinude(fakeSock, msgWithImage, fakeSettings, () => 0, () => 0, baseCtx({ isOwner: true }));
   console.log = origLog;
-  t("bot OWNER is exempt (skipped before download)", lines.some((l) => l.includes("sender exempt (owner)")));
+  t("bot OWNER is exempt (skipped before download)", lines.some((l) => l.includes("sender exempt (mod/owner)")));
   lines.length = 0;
   console.log = (...a) => { lines.push(a.join(" ")); };
   await antinude.handleAntinude(fakeSock, msgWithImage, fakeSettings, () => 0, () => 0, baseCtx({ isGlobalMod: () => false, isGcOwner: () => false }));
