@@ -87,7 +87,14 @@ async function main() {
       // exists and get silently dropped (deadline would only fire ~25s later)
       const win = await waitFor(() => { const s = quiz.getSession(CHAT); return s && s.qOpenUntil && s.qOpenUntil > Date.now() ? true : null; }, 8000, `window Q${i + 1}`);
       if (!win) break;
-      await quiz.handleAnswer(sock, CHAT, "bob@s.whatsapp.net", "B", MARK, { key: { id: `a${i}` } }, "Bob");
+      // answer CORRECTLY (read from session state): a blind "B" is usually
+      // wrong, wrong answers don't reveal early, and deadline+gap then
+      // overruns the Q2 waitFor - the flow must exercise the scoring path,
+      // not gamble on option letters
+      const sess = quiz.getSession(CHAT);
+      const cq = sess && sess.sections[sess.activeSection] && sess.sections[sess.activeSection].questions[sess.idx];
+      const correctText = cq && Array.isArray(cq.options) ? cq.options[cq.correct] : "B";
+      await quiz.handleAnswer(sock, CHAT, "bob@s.whatsapp.net", correctText, MARK, { key: { id: `a${i}` } }, "Bob");
       answered++;
       await waitFor(() => texts(sock).some((t) => t.toLowerCase().includes("correct") || t.includes("wrong") || t.includes("⏱ Time")) || cards(sock).some((t) => t.includes(`QUESTION ${i + 2}/3`)), 25000, "reveal");
     }
