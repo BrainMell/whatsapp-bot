@@ -1260,6 +1260,11 @@ function buildRandomMixedPlan(cfg, availability = {}) {
   const loreChunks = [];
   let left = loreN;
   while (left > 0) { const give = Math.min(size, left); loreChunks.push(give); left -= give; }
+  // no orphan mini-sections: fold a <3-question tail into the previous chunk
+  if (loreChunks.length > 1 && loreChunks[loreChunks.length - 1] < 3) {
+    const last = loreChunks.pop();
+    loreChunks[loreChunks.length - 1] += last;
+  }
 
   const plan = [];
   plan.push({ name: "Logo Round", domain: "logos", perSection: logosN, fixed: true });
