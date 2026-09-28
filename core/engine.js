@@ -6297,6 +6297,22 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           loadUserWarnings();
         } else {
           console.log(`🔑 [${BOT_ID}] No existing session - showing QR immediately. Data will load after login.`);
+          // 🛡️ AUTH PRESERVATION GUARD (2026-09-28): if a creds.json exists on
+          // disk but has no `me`, the fresh-pair flow below is about to overwrite
+          // it. That exact overwrite is how a live Subaru session was lost during
+          // a deploy (creds loaded me-less -> re-pair -> old file unrecoverable).
+          // Preserve the old file so any session loss is a rename away from a fix.
+          try {
+            const __fs = require("fs");
+            const __legacyCreds = `${authPath}/creds.json`.replace(/\/+/g, "/");
+            if (__fs.existsSync(__legacyCreds)) {
+              const __stamp = new Date().toISOString().replace(/[:.]/g, "-");
+              __fs.renameSync(__legacyCreds, `${__legacyCreds}.preserve-${__stamp}`);
+              console.log(`🛡️ [${BOT_ID}] existing creds.json (no 'me') preserved as creds.json.preserve-${__stamp}`);
+            }
+          } catch (e) {
+            console.log(`[${BOT_ID}] creds preservation check failed (non-fatal): ${e?.message?.slice(0, 60)}`);
+          }
         }
 
         // 💡 FIX: skip the fetchLatestBaileysVersion() network round-trip on
