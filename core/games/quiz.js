@@ -60,7 +60,8 @@ const lifecycle = new Map();
 const GENERATING_LOCK_TTL_MS = 8 * 60 * 1000; // crashed generation can't lock forever
 
 // ── constants ──
-const NEXT_DELAY_MS = 4500;
+// (between-questions pacing moved to quizConfig.questionGapSeconds - the
+// owner spec is a randomized 10-30s pause, quizmod-tunable per group)
 const PICK_TTL_MS = 5 * 60 * 1000;
 const POINTS = { easy: 50, medium: 100, hard: 150 };
 const WINNER_BONUS = 250;
@@ -1661,7 +1662,11 @@ function formatQuestionCard(session, idx, q) {
   s += `*${q.q}*\n\n`;
   q.options.forEach((o, i) => { s += `${LETTERS[i]}. ${o}\n`; });
   s += `\n⏱ ${secs}s  •  ${POINTS[q.difficulty]} Zeni (+20 speed bonus)  •  one answer each\n`;
-  s += `Answer with: \`${prefix} b\` (letter) or type the option text`;
+  // 💡 2026-09-28: instructions MATCH the receiver exactly - both accepted
+  // forms are prefix-led (".j b" / ".j <answer text>"). The old wording
+  // ("type the option text") made people send bare text the bot ignores.
+  // (Placeholder is deliberately generic - never echo a real option here.)
+  s += `Answer with: \`${prefix} b\` (letter) or \`${prefix} <answer text>\``;
   return s;
 }
 
@@ -1687,59 +1692,120 @@ async function resolveQuestionMedia(session, q) {
   return null; // missing media -> graceful text fallback (never fake)
 }
 
+// ── 2026-09-28 OWNER AUDIT: question state machine hardening ──
+// Every question now has a strict open->resolve lifecycle:
+//   postQuestion     resolves media BEFORE the question opens (early
+//                    answers can no longer register against an unposted
+//                    card), then arms a deadline timer stamped with
+//                    session.qEpoch.
+//   revealAndAdvance takes a process-wide-per-session reveal lock: the
+//                    deadline timer and a correct-answer handler CAN fire
+//                    in the same tick (clearTimeout cannot stop a callback
+//                    that is already running) - without the lock both
+//                    chains completed, revealing the question twice,
+//                    advancing idx twice (silently skipping a question)
+//                    and racing two postQuestion calls into duplicate
+//                    next-question cards. This was the root cause of the
+//                    "same question twice / instant time's up / answers
+//                    counted wrong" cluster in the live group.
+//   qEpoch           monotonic per-session counter; every timer captures
+//                    the epoch it was armed for and a stale timer is a
+//                    no-op. Token alone was too coarse (it only changes
+//                    when the whole quiz ends).
 async function postQuestion(sock, chatId, session) {
   const section = session.sections[session.activeSection];
-  const q = section.questions[session.idx];
-  if (!q) { await advanceToNextSection(sock, chatId, session); return; }
+  if (!section) { await finishQuiz(sock, chatId, session); return; }
+  if (session.cancelled) return;
+  // STATE LOCK: only one question may ever be open. If any path reaches
+  // postQuestion while a question is still open, that is a bug elsewhere -
+  // refuse to double-post instead of corrupting the session.
+  if (session.qOpenUntil && session.qOpenUntil > Date.now()) {
+    console.log("[Quiz] postQuestion blocked - a question is still open (state guard)");
+    return;
+  }
+
+  // card sender (image = clue in caption; audio cue before card; text else)
+  const postCard = async (qq) => {
+    const card = formatQuestionCard(session, session.idx, qq);
+    if (qq.media && qq.media.kind === "image" && qq.type === "image") {
+      await sock.sendMessage(chatId, {
+        image: qq.media.buf,
+        mimetype: qq.media.mime,
+        caption: BOT_SAFE(card),
+      });
+    } else {
+      if (qq.media && qq.media.kind === "audio" && (qq.type === "audio" || qq.type === "theme")) {
+        await sock.sendMessage(chatId, {
+          audio: qq.media.buf,
+          mimetype: qq.media.mime,
+          ptt: false,
+        }).catch(() => {}); // clip fails -> card still carries the question
+      }
+      await sock.sendMessage(chatId, { text: BOT_SAFE(card) });
+    }
+  };
+
+  // media resolution + delivery happen BEFORE the question opens. A fatal
+  // image failure (unfetchable after the built-in retry, or undeliverable
+  // after one same-bytes resend) SKIPS the question here - the old code
+  // recursed into postQuestion while the outer frame went on to arm its own
+  // deadline timer, overwriting session.timerId and leaving an ORPHANED
+  // timer that fired revealAndAdvance in the middle of the NEXT question
+  // (instant "time's up" + skipped question, seen live).
   session.questionNo += 1;
   session.qStartedAt = Date.now();
-  session.qOpenUntil = Date.now() + session.cfg.timePerQuestion * 1000;
-  session.answeredBy = new Map(); // P1: fresh attempt map per question
-  const card = formatQuestionCard(session, session.idx, q);
-
-  // lazy media resolution (image = clue in caption; audio cue before card)
-  if (!q.mediaTried) {
-    q.mediaTried = true;
-    try { q.media = await resolveQuestionMedia(session, q); } catch { q.media = null; }
-  }
-  if (q.media && q.media.kind === "image" && q.type === "image") {
-    // image IS the clue: question lives in the caption (audit P8)
-    await sock.sendMessage(chatId, {
-      image: q.media.buf,
-      mimetype: q.media.mime,
-      caption: BOT_SAFE(card),
-    }).catch(async () => {
-      // P8: without the image the question is unanswerable - one retry, then
-      // SKIP it (never attach an unrelated image, never fake it)
-      const retry = await resolveQuestionMedia(session, q).catch(() => null);
-      if (retry && retry.buf) {
-        q.media = retry;
-        await sock.sendMessage(chatId, { image: retry.buf, mimetype: retry.mime, caption: BOT_SAFE(card) }).catch(() => {});
-      } else {
-        console.log("[Quiz] image asset failed at post time - skipping question");
-        session.idx += 1;
-        if (session.idx < section.questions.length && session.questionNo < session.cfg.questionCount) {
-          return postQuestion(sock, chatId, session);
-        }
-        section.state = SECTION_STATES.COMPLETED;
-        return advanceToNextSection(sock, chatId, session);
-      }
-    });
-  } else {
-    if (q.media && q.media.kind === "audio" && (q.type === "audio" || q.type === "theme")) {
-      await sock.sendMessage(chatId, {
-        audio: q.media.buf,
-        mimetype: q.media.mime,
-        ptt: false,
-      }).catch(() => {}); // clip fails -> card still carries the question
+  let q = section.questions[session.idx];
+  while (q) {
+    if (q.type === "image" && !q.mediaTried) {
+      q.mediaTried = true;
+      try { q.media = await resolveQuestionMedia(session, q); } catch { q.media = null; }
     }
-    await sock.sendMessage(chatId, { text: BOT_SAFE(card) }).catch(() => {});
+    if (q.type === "image" && !(q.media && q.media.buf)) {
+      console.log("[Quiz] image asset unavailable pre-post - skipping question");
+      session.idx += 1;
+      q = section.questions[session.idx];
+      continue;
+    }
+    try {
+      await postCard(q);
+      break; // delivered
+    } catch {
+      if (q.type === "image") {
+        // one resend of the same verified bytes; then skip (an image-clue
+        // question without the image is unanswerable - never fake it)
+        try { await postCard(q); break; } catch {
+          console.log("[Quiz] image undeliverable after resend - skipping question");
+          q.media = null;
+          session.idx += 1;
+          q = section.questions[session.idx];
+          continue;
+        }
+      }
+      // text card failed too - open the question anyway so the quiz can
+      // never stall silently (players will see the reveal at least)
+      console.log("[Quiz] text card send failed - opening question regardless");
+      break;
+    }
   }
-  // P2: deadline timer driven by config; invalidated by session.token
+  if (!q) {
+    section.state = SECTION_STATES.COMPLETED;
+    await advanceToNextSection(sock, chatId, session);
+    return;
+  }
+
+  // the question opens NOW - card is out (or every channel failed)
+  session.answeredBy = new Map(); // P1: fresh attempt map per question
+  session.qOpenUntil = Date.now() + session.cfg.timePerQuestion * 1000;
+  session.qEpoch = (session.qEpoch || 0) + 1;
+  const myEpoch = session.qEpoch;
+  // P2: deadline timer driven by config; invalidated by session.token AND
+  // by the per-question epoch (a timer from a previous question must never
+  // resolve the current one).
   session.timerId = setTimeout(async () => {
     try {
       const cur = activeQuizzes.get(chatId);
-      if (!cur || cur.token !== session.token) return;
+      if (!cur || cur !== session || cur.token !== session.token) return;
+      if (cur.qEpoch !== myEpoch || cur.revealLock) return;
       await revealAndAdvance(sock, chatId, session, null, true);
     } catch (e) { console.log("[Quiz] deadline tick failed:", e?.message); }
   }, session.cfg.timePerQuestion * 1000);
@@ -1761,48 +1827,67 @@ async function safeAddMoney(jid, amount, reason) {
 }
 
 async function revealAndAdvance(sock, chatId, session, winner, timedOut) {
-  if (session.timerId) { clearTimeout(session.timerId); session.timerId = null; }
-  const section = session.sections[session.activeSection];
-  const q = section.questions[session.idx];
-  const correctText = `${LETTERS[q.correct]}. ${q.options[q.correct]}`;
-  session.qOpenUntil = 0; // question closed - late answers ignored
+  // 💡 SINGLE-RESOLVER LOCK (2026-09-28 owner audit): the deadline timer and
+  // a correct-answer handler can fire for the SAME question in the same tick
+  // (clearTimeout cannot stop an already-running callback). Both chains used
+  // to run to completion: the question revealed twice, idx advanced twice
+  // (a question silently skipped), two postQuestion calls raced for the next
+  // question -> duplicate cards + "time's up" right after a question. One
+  // synchronous gate closes the whole class.
+  if (session.revealLock) return;
+  session.revealLock = true;
+  try {
+    if (session.timerId) { clearTimeout(session.timerId); session.timerId = null; }
+    const section = session.sections[session.activeSection];
+    const q = section && section.questions[session.idx];
+    if (!q) return; // defensive: section transition already owns the session
+    const correctText = `${LETTERS[q.correct]}. ${q.options[q.correct]}`;
+    session.qOpenUntil = 0; // question closed - late answers ignored (sync: before any await)
 
-  if (winner) {
-    const elapsed = (Date.now() - session.qStartedAt) / 1000;
-    const pts = POINTS[q.difficulty] + (elapsed <= 10 ? 20 : 0);
-    const sc = session.scores.get(winner.jid) || { name: winner.name, points: 0, correct: 0 };
-    sc.points += pts;
-    sc.correct += 1;
-    session.scores.set(winner.jid, sc);
-    session.revealed.push({ q: q.q, correct: correctText, winner: winner.name, timedOut: false });
-    await sock.sendMessage(chatId, {
-      text: BOT_SAFE(`✅ *Correct!* ${winner.name} answered ${LETTERS[q.correct]} (+${pts} Zeni)\nThe answer was: *${correctText}*`),
-    }).catch(() => {});
-  } else if (timedOut) {
-    session.revealed.push({ q: q.q, correct: correctText, winner: null, timedOut: true });
-    const tried = session.answeredBy ? session.answeredBy.size : 0;
-    await sock.sendMessage(chatId, {
-      text: BOT_SAFE(`⏰ *Time's up!*${tried ? ` (${tried} tried)` : ""}\nThe answer was: *${correctText}*`),
-    }).catch(() => {});
+    if (winner) {
+      const elapsed = (Date.now() - session.qStartedAt) / 1000;
+      const pts = POINTS[q.difficulty] + (elapsed <= 10 ? 20 : 0);
+      const sc = session.scores.get(winner.jid) || { name: winner.name, points: 0, correct: 0 };
+      sc.points += pts;
+      sc.correct += 1;
+      session.scores.set(winner.jid, sc);
+      session.revealed.push({ q: q.q, correct: correctText, winner: winner.name, timedOut: false });
+      await sock.sendMessage(chatId, {
+        text: BOT_SAFE(`✅ *Correct!* ${winner.name} answered ${LETTERS[q.correct]} (+${pts} Zeni)\nThe answer was: *${correctText}*`),
+      }).catch(() => {});
+    } else if (timedOut) {
+      session.revealed.push({ q: q.q, correct: correctText, winner: null, timedOut: true });
+      const tried = session.answeredBy ? session.answeredBy.size : 0;
+      await sock.sendMessage(chatId, {
+        text: BOT_SAFE(`⏰ *Time's up!*${tried ? ` (${tried} tried)` : ""}\nThe answer was: *${correctText}*`),
+      }).catch(() => {});
+    }
+
+    // persist seen hashes (dedup across sessions) + idx advance
+    const mk = mediaKeyFor(session);
+    saveSeen(mk, [qhash(q.q)]);
+
+    session.idx += 1;
+    if (session.idx >= section.questions.length) {
+      section.state = SECTION_STATES.COMPLETED;
+      await advanceToNextSection(sock, chatId, session);
+      return;
+    }
+    // 💡 PACING (owner spec): randomized 10-30s pause between questions
+    // (quizmod-tunable via gapmin/gapmax) instead of the old flat 4.5s that
+    // made active groups unable to keep up. The timer re-checks the session
+    // identity + token; postQuestion's own state guard backstops it.
+    const gapS = quizConfigMod.questionGapSeconds(session.cfg);
+    session.nextTimerId = setTimeout(async () => {
+      try {
+        const cur = activeQuizzes.get(chatId);
+        if (!cur || cur !== session || cur.token !== session.token) return;
+        await postQuestion(sock, chatId, session);
+      } catch (e) { console.log("[Quiz] next tick failed:", e?.message); }
+    }, gapS * 1000);
+  } finally {
+    session.revealLock = false;
   }
-
-  // persist seen hashes (dedup across sessions) + idx advance
-  const mk = mediaKeyFor(session);
-  saveSeen(mk, [qhash(q.q)]);
-
-  session.idx += 1;
-  if (session.idx >= section.questions.length) {
-    section.state = SECTION_STATES.COMPLETED;
-    await advanceToNextSection(sock, chatId, session);
-    return;
-  }
-  session.nextTimerId = setTimeout(async () => {
-    try {
-      const cur = activeQuizzes.get(chatId);
-      if (!cur || cur.token !== session.token) return;
-      await postQuestion(sock, chatId, session);
-    } catch (e) { console.log("[Quiz] next tick failed:", e?.message); }
-  }, NEXT_DELAY_MS);
 }
 
 // P19: section transitions - next ready -> start immediately; still
@@ -1975,6 +2060,13 @@ async function handleAnswer(sock, chatId, senderJid, answerText, botMarker, m, s
   session.answeredBy.set(senderJid, { letter: idx, correct: idx === q.correct, at: Date.now() });
 
   if (idx === q.correct) {
+    // 💡 single-resolver gate: if the deadline timer already claimed the
+    // reveal (revealLock) or the question just closed, the answer arrived
+    // at the wire - it counts as registered but must NOT fire a second
+    // reveal chain (that used to double-advance the session).
+    if (session.revealLock || !session.qOpenUntil || Date.now() > session.qOpenUntil) {
+      return { handled: true, silent: true };
+    }
     await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } }).catch(() => {});
     // 💡 45s COMMAND TIMEOUT FIX (2026-09-27): reveal -> next question ->
     // section transition can LEGALLY take minutes (streaming section waits,
@@ -2212,7 +2304,7 @@ Options:
 • \`-audio <n>\` adds n audio questions (theme songs / voices)
 • \`random\` mixes franchises across ALL of fiction, one per section
 
-During the quiz, answer with \`${prefix} <letter>\` (e.g. \`${prefix} b\`) or type the option text. One answer per player per question!
+During the quiz, answer with \`${prefix} <letter>\` (e.g. \`${prefix} b\`) or \`${prefix} <answer text>\`. One answer per player per question!
 Leaderboard: \`${prefix} quizboard\` • Cancel: \`${prefix} quiz end\` • Mods: \`${prefix} quizmod\``,
     };
   }
@@ -2237,10 +2329,9 @@ Leaderboard: \`${prefix} quizboard\` • Cancel: \`${prefix} quiz end\` • Mods
   // from this instant `.quiz end` can abort the launch (no unkillable window)
   const prep = createPrepHandle(chatId, senderJid);
 
-  // P5: immediate loading message so nobody thinks the command failed
-  await sock.sendMessage(chatId, {
-    text: botMarker + `🎯 Gathering questions for your quiz... Please hold on.`,
-  }, { quoted: m }).catch(() => {});
+  // P5: immediate feedback = the tagged "QUIZ PLANNING" announce (sent at
+  // the top of launchQuizAsync). The old untagged "Gathering questions..."
+  // card was removed - it arrived alongside the announce and said less.
 
   // background launch - never block the command promise (45s timeout bypass)
   launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, senderName, smartGroqCall, prep).catch((e) => {
@@ -2324,9 +2415,14 @@ async function parkReadySession(sock, chatId, session, { head, introImage, botMa
   if (prep) stopPrepTimers(prep);
   pendingPrep.delete(chatId);         // prep phase over
   const mins = Math.round(READY_TTL_MS / 60000);
+  const mediaNote = session.mode === "song" ? " with song clips"
+    : session.mode === "logos" ? " with logo images"
+    : session.mode === "audio" ? " with theme-song clips"
+    : (session.cfg.imageQuestionCount > 0 || session.cfg.audioQuestionCount > 0) ? " (media included)"
+    : "";
   const readyMsg = botMarker
     + `✅ *${session.title} quiz is ready!* ${mentionOf(session.askedBy)}\n\n`
-    + `🎯 ${plannedTotal(session)} questions prepared${session.mode === "song" ? " with audio clips" : session.mode === "logos" ? " with logo images" : " (media included)"}.\n`
+    + `🎯 ${plannedTotal(session)} questions prepared${mediaNote}.\n`
     + `▶️ Start it whenever your group is ready:\n\`${prefix} quiz go\`\n`
     + `(starter or mods - expires in ${mins} minutes)`;
   await sock.sendMessage(chatId, { text: readyMsg, mentions: session.askedBy ? [session.askedBy] : [] }, { quoted: m }).catch(() => {});
@@ -2359,11 +2455,17 @@ async function confirmStart(sock, chatId, senderJid, botMarker, canUseAdminComma
     }
     return { handled: true, message: botMarker + `❌ No quiz is waiting to start here. Prepare one with \`${prefix} quiz ...\`` };
   }
+  // 💡 SYNC START CLAIM (2026-09-28 owner audit): awaitingGo is cleared
+  // SYNCHRONOUSLY before the permission await. Previously two people firing
+  // `.j quiz go` in the same second could both pass the awaitingGo check
+  // (the mod permission check awaited in between) and both reach
+  // startSection -> the first section's questions posted TWICE.
+  session.awaitingGo = false;
   if (session.askedBy !== senderJid && !(await _canStartQuizFresh(senderJid))) {
+    session.awaitingGo = true; // not allowed - give the gate back
     return { handled: true, message: botMarker + `🛑 Only ${mentionOf(session.askedBy)} - or a Quiz Mod / Global Mod - can start this quiz.`, mentions: [session.askedBy] };
   }
   if (session.readyTimerId) { clearTimeout(session.readyTimerId); session.readyTimerId = null; }
-  session.awaitingGo = false;
   const head = session.readyHead || "";
   const introImage = session.readyIntroImage;
   session.readyHead = null;
@@ -2427,6 +2529,48 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     // checkpoint 1: cancelled while building config
     if (prep.cancelled) { abortPrep(); return; }
 
+    // 💡 2026-09-28 OWNER SPEC §1 - UNIFORM PLANNING PHASE: every quiz type
+    // (lore, images, audio, logos, songs, random) now announces itself up
+    // front with the same "QUIZ PLANNING" card tagged at the initiator, and
+    // parks behind the same `.j quiz go` ready-gate once prepared. Media
+    // quizzes list their media mix; lore quizzes name the franchise.
+    const mixedRandom = parsed.randomMode && cfg.questionCount >= 9;
+    {
+      const bits = [];
+      if (mixedRandom) {
+        // mirror buildRandomMixedPlan's math so the announcement is true
+        // (estimate only - the authoritative plan recomputes with real
+        // availability after franchise resolution; the ready card shows
+        // the actual sections)
+        let logosN = Math.min(6, Math.max(3, Math.round(cfg.questionCount * 0.2)));
+        let songN = Math.min(5, Math.max(3, Math.round(cfg.questionCount * 0.15)));
+        let imgN = cfg.imageQuestionCount > 0
+          ? cfg.imageQuestionCount
+          : Math.min(3, Math.max(2, Math.round(cfg.questionCount * 0.1)));
+        const loreMin = Math.max(6, Math.ceil(cfg.questionCount * 0.4));
+        while (cfg.questionCount - (logosN + songN + imgN) < loreMin) {
+          if (logosN > 3) logosN--;
+          else if (songN > 3) songN--;
+          else if (imgN > 2) imgN--;
+          else break;
+        }
+        bits.push(`🏢 ${logosN} logos`, `🎵 ${songN} song clips`);
+        if (imgN > 0) bits.push(`🖼 ${imgN} pictures`);
+        bits.push(`📚 lore from different worlds`);
+      } else {
+        if (cfg.imageQuestionCount > 0) bits.push(`🖼 ${cfg.imageQuestionCount} image question${cfg.imageQuestionCount > 1 ? "s" : ""}`);
+        if (cfg.audioQuestionCount > 0) bits.push(`🎵 ${cfg.audioQuestionCount} audio question${cfg.audioQuestionCount > 1 ? "s" : ""}`);
+        if (parsed.mode === "logos") bits.push(`🏢 brand logos`);
+        else if (parsed.mode === "song") bits.push(`🎵 song clips`);
+        else if (parsed.mode === "audio") bits.push(`📺 theme songs`);
+        else if (parsed.randomMode) bits.push(`📚 lore across fiction`);
+        else if (parsed.title) bits.push(`📚 lore from "${String(parsed.title).slice(0, 40)}"`);
+      }
+      await sock.sendMessage(chatId, {
+        text: botMarker + `🛠 *QUIZ PLANNING* ${mentionOf(senderJid)}\nBuilding a ${cfg.questionCount}-question ${cfg.difficulty} quiz: ${bits.join(" • ")}.\nI'll tag you here the moment it's ready to start - the bot stays fully usable meanwhile.`,
+        mentions: [senderJid],
+      }, { quoted: m }).catch(() => {});
+    }
     // ── 2026-09-27: standalone media modes (logos / song / audio) ──
     // No franchise resolution, no LLM: one media section is generated and
     // the normal READY/STARTED flow takes over.
@@ -2468,6 +2612,8 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
         reassureTimerId: null,
         qStartedAt: Date.now(),
         qOpenUntil: 0,
+        qEpoch: 0,        // 2026-09-28: per-question timer epoch (stale-timer guard)
+        revealLock: false, // 2026-09-28: single-resolver gate (timer vs answer race)
         callLLM: null,
         animeCharacters: [],
         charIndex: null,
@@ -2495,7 +2641,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
           ? `🎵 ${totalQs} song clips • name the track behind each one\n`
           : `📺 ${totalQs} theme songs • name the show or movie behind each one\n`;
       head += `📚 ${cfg.difficulty.toUpperCase()} • ${POINTS[cfg.difficulty]} Zeni per correct (+20 speed bonus)\n`;
-      head += `✍️ Answer with \`${prefix} <letter>\` or the option text - one answer per player per question\n`;
+      head += `✍️ Answer with \`${prefix} <letter>\` or \`${prefix} <answer text>\` - one answer per player per question\n`;
       head += `⏱ ${cfg.timePerQuestion}s per question\n`;
       head += `🛑 Cancel: \`${prefix} quiz end\`\n\n`;
       head += `Let's go! 🚀`;
@@ -2506,44 +2652,6 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     }
 
     const callLLM = normalizeSmartGroq(smartGroqCall);
-    // 2026-09-27 PLANNING MODE: media quizzes announce themselves up front
-    // ("make that known instead of just silently taking forever") and park
-    // for `.j quiz go` once fully prepared (ready-gate below).
-    // 2026-09-28: mixed random plans carry logo/song/picture sections -
-    // announce + park them like every other media quiz.
-    const mixedRandom = parsed.randomMode && cfg.questionCount >= 9;
-    const mediaGate = cfg.imageQuestionCount > 0 || cfg.audioQuestionCount > 0 || mixedRandom;
-    if (mediaGate) {
-      const bits = [];
-      if (mixedRandom) {
-        // mirror buildRandomMixedPlan's math so the announcement is true
-        // (estimate only - the authoritative plan recomputes with real
-        // availability after franchise resolution; the ready card shows
-        // the actual sections)
-        let logosN = Math.min(6, Math.max(3, Math.round(cfg.questionCount * 0.2)));
-        let songN = Math.min(5, Math.max(3, Math.round(cfg.questionCount * 0.15)));
-        let imgN = cfg.imageQuestionCount > 0
-          ? cfg.imageQuestionCount
-          : Math.min(3, Math.max(2, Math.round(cfg.questionCount * 0.1)));
-        const loreMin = Math.max(6, Math.ceil(cfg.questionCount * 0.4));
-        while (cfg.questionCount - (logosN + songN + imgN) < loreMin) {
-          if (logosN > 3) logosN--;
-          else if (songN > 3) songN--;
-          else if (imgN > 2) imgN--;
-          else break;
-        }
-        bits.push(`🏢 ${logosN} logos`, `🎵 ${songN} song clips`);
-        if (imgN > 0) bits.push(`🖼 ${imgN} pictures`);
-        bits.push(`📚 lore from different worlds`);
-      } else {
-        if (cfg.imageQuestionCount > 0) bits.push(`🖼 ${cfg.imageQuestionCount} image question${cfg.imageQuestionCount > 1 ? "s" : ""}`);
-        if (cfg.audioQuestionCount > 0) bits.push(`🎵 ${cfg.audioQuestionCount} audio question${cfg.audioQuestionCount > 1 ? "s" : ""}`);
-      }
-      await sock.sendMessage(chatId, {
-        text: botMarker + `🛠 *QUIZ PLANNING* ${mentionOf(senderJid)}\nBuilding a ${cfg.questionCount}-question mixed quiz: ${bits.join(" • ")}.\nI'll tag you here the moment it's ready to start - the bot stays fully usable meanwhile.`,
-        mentions: [senderJid],
-      }, { quoted: m }).catch(() => {});
-    }
     const franchise = await buildFranchiseContext(sock, chatId, botMarker, m, parsed);
     // checkpoint 2: cancelled during wiki/anime resolution (the slow network phase)
     if (prep.cancelled) { abortPrep(); return; }
@@ -2593,6 +2701,8 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       reassureTimerId: null,
       qStartedAt: Date.now(),
       qOpenUntil: 0,
+      qEpoch: 0,        // 2026-09-28: per-question timer epoch (stale-timer guard)
+      revealLock: false, // 2026-09-28: single-resolver gate (timer vs answer race)
       callLLM,
       animeCharacters: franchise.characters || [],
       charIndex: franchise.charIndex || null,
@@ -2661,33 +2771,18 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     head += `📚 ${totalQs} questions • ${cfg.difficulty.toUpperCase()} • ${POINTS[cfg.difficulty]} Zeni per correct (+20 speed bonus)\n`;
     if (session.sections.length > 1) head += `📖 ${session.sections.length} sections\n`;
     if (parsed.section) head += `📚 Topic locked: ${parsed.section}\n`;
-    head += `✍️ Answer with \`${prefix} <letter>\` or the option text - one answer per player per question\n`;
+    head += `✍️ Answer with \`${prefix} <letter>\` or \`${prefix} <answer text>\` - one answer per player per question\n`;
     head += `⏱ ${cfg.timePerQuestion}s per question\n`;
     head += `🛑 Cancel: \`${prefix} quiz end\`\n\n`;
     head += `Let's go! 🚀`;
 
-    // 2026-09-27 PLANNING MODE ready-gate: media quizzes (images/audio/
-    // logos/song) park here instead of auto-starting - the tagged initiator
-    // fires the starting gun with `.j quiz go` when the group is ready.
-    if (cfg.imageQuestionCount > 0 || cfg.audioQuestionCount > 0 || parsed.mode || mixedRandom) {
-      await parkReadySession(sock, chatId, session, { head, introImage, botMarker, m, senderJid, prefix });
-      return;
-    }
-
-    if (introImage) {
-      await sock.sendMessage(chatId, { image: introImage.buf, mimetype: introImage.mime, caption: BOT_SAFE(head) }).catch(async () => {
-        await sock.sendMessage(chatId, { text: head }).catch(() => {});
-      });
-    } else {
-      await sock.sendMessage(chatId, { text: head }, { quoted: m }).catch(() => {});
-    }
-
-    // register + promote - the group is now "active", other .j quiz calls
-    // bounce off the session check with a friendly message
-    activeQuizzes.set(chatId, session);
-    promoteLifecycle(chatId);
-    pendingPrep.delete(chatId); // prep phase over - handle no longer needed
-    startSection(sock, chatId, session, 0);
+    // 💡 2026-09-28 OWNER SPEC §1 - UNIFORM READY GATE: every quiz parks
+    // here instead of auto-starting. The tagged initiator fires the starting
+    // gun with `.j quiz go` when the group is actually ready - same flow for
+    // lore quizzes and media quizzes alike. (Fixes "regular quizzes do not
+    // follow the planning phase".)
+    await parkReadySession(sock, chatId, session, { head, introImage, botMarker, m, senderJid, prefix });
+    return;
   } catch (e) {
     stopPrepTimers(prep);
     pendingPrep.delete(chatId);

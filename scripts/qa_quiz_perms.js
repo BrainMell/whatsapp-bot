@@ -33,11 +33,18 @@ function makeValidAI(n) {
     return { choices: [{ message: { content: body } }] };
   };
 }
-function waitSession(chatId, timeoutMs = 30000) {
+function waitSession(chatId, timeoutMs = 30000, sock = null) {
+  // 2026-09-28: parked quizzes need confirmStart to go ACTIVE
   const t0 = Date.now();
   return new Promise((resolve) => {
-    const iv = setInterval(() => {
+    const iv = setInterval(async () => {
       const s = quiz.getSession(chatId);
+      if (s && s.awaitingGo) {
+        s.cfg.questionGapMin = 1;
+        s.cfg.questionGapMax = 1;
+        await quiz.confirmStart(sock || mockSock(), chatId, s.askedBy, MARK, false);
+        return; // re-poll; ACTIVE is checked next tick
+      }
       if (s && !s.awaitingGo && s.sections && s.sections[0].state === "ACTIVE") { clearInterval(iv); resolve(s); }
       else if (Date.now() - t0 > timeoutMs) { clearInterval(iv); resolve(null); }
     }, 300);
@@ -65,7 +72,7 @@ function ok(cond, label) { if (cond) { pass += 1; console.log("  ok -", label); 
     const sock = mockSock();
     const allowed = await quiz.startQuiz(sock, "gate2@g.us", "mod1@x", MARK, { key: { id: "G2" } }, '"fmab" 3 easy', "M", makeValidAI(5), { FAST: "t" });
     ok(allowed.handled && allowed.silent === true, "quiz mod passes the start gate");
-    const s = await waitSession("gate2@g.us");
+    const s = await waitSession("gate2@g.us", 30000, sock);
     ok(!!s, "quiz mod's quiz reaches ACTIVE");
     // confirmStart: starter may fire; a random user may not
     const foreign = await quiz.confirmStart(mockSock(), "gate2@g.us", "rando@x", MARK, false);
@@ -84,7 +91,7 @@ function ok(cond, label) { if (cond) { pass += 1; console.log("  ok -", label); 
     const sock = mockSock();
     // manage: hook absent -> legacy behaviour (canUseAdminCommands decides)
     await quiz.startQuiz(sock, "gate3@g.us", "u1@x", MARK, { key: { id: "G3" } }, '"fmab" 3 easy', "A", makeValidAI(5), { FAST: "t" });
-    await waitSession("gate3@g.us");
+    await waitSession("gate3@g.us", 30000, sock);
     const noEnd = await quiz.endQuiz(sock, "gate3@g.us", "u2@x", MARK, false);
     ok(noEnd.handled && /starter, admins or Quiz Mods/.test(noEnd.message || ""), "hook absent -> non-starter still bounced");
     await quiz.endQuiz(sock, "gate3@g.us", "u1@x", MARK, false);
@@ -96,7 +103,7 @@ function ok(cond, label) { if (cond) { pass += 1; console.log("  ok -", label); 
     const chat = "ans1@g.us";
     const sock = mockSock();
     await quiz.startQuiz(sock, chat, "u1@x", MARK, { key: { id: "A1" } }, '"fmab" 3 easy', "A", makeValidAI(5), { FAST: "t" });
-    const s = await waitSession(chat);
+    const s = await waitSession(chat, 30000, sock);
     ok(!!s, "quiz active for answer tests");
     // force a known question shape. Probes answer WRONG options on purpose:
     // wrong answers never trigger the (now detached) reveal chain, keeping
@@ -145,7 +152,7 @@ function ok(cond, label) { if (cond) { pass += 1; console.log("  ok -", label); 
     const chat = "ans2@g.us";
     const sock = mockSock();
     await quiz.startQuiz(sock, chat, "u1@x", MARK, { key: { id: "A2" } }, '"fmab" 3 easy', "A", makeValidAI(5), { FAST: "t" });
-    const s = await waitSession(chat);
+    const s = await waitSession(chat, 30000, sock);
     const section = s.sections[s.activeSection];
     const q = section.questions[s.idx];
     q.options = ["Edward Elric", "Alphonse Elric", "Roy Mustang", "Winry Rockbell"];

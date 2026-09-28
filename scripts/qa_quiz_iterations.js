@@ -83,6 +83,14 @@ function makeMockSock() {
       const tw = Date.now();
       while (Date.now() - tw < 150000) {
         const s2 = quiz.getSession(chatId);
+        if (s2 && s2.awaitingGo) {
+          // 2026-09-28: park->go lifecycle - fire the starting gun with 1s gaps
+          s2.cfg.questionGapMin = 1;
+          s2.cfg.questionGapMax = 1;
+          await quiz.confirmStart(sock, chatId, s2.askedBy, MARK, false);
+          await sleep(400);
+          continue;
+        }
         if (s2 && s2.sections && s2.sections[0] && s2.sections[0].state === "ACTIVE") { session = s2; break; }
         await sleep(500);
       }

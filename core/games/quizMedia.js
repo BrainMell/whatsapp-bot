@@ -182,17 +182,27 @@ const LOGOS_POOL = (() => {
 
 const LOGO_JPEG_FALLBACK_OK = true; // jpeg logos allowed only if nothing better exists (handled by mimeScore)
 
-// One logo question. Returns null when no verified logo asset is found.
-async function buildLogosQuestion(brand, others, difficulty) {
-  const img = await quizLore.wikipediaLogoImage(brand.wiki, 480, brand.name).catch(() => null);
-  if (!img || !img.url) return null;
-  const dl = await quizLore.downloadMedia(img.url, "image").catch(() => null);
-  if (!dl || !dl.buf || dl.buf.length < 1500) return null; // tiny = placeholder/blank
-  // 💡 2026-09-27 pixel gate: logos are 64px+ allowed (wordmarks are wide),
-  // but blank/black/corrupt/undecodable bytes are rejected here - a broken
-  // logo must never become the clue of a question.
-  const gate = await imageGate.inspectImageBuffer(dl.buf, { minW: 64, minH: 40, label: `logo:${brand.name}`.slice(0, 50) }).catch(() => ({ ok: false, reason: "gate-crash" }));
-  if (!gate.ok) return null;
+// ── 2026-09-28 OWNER BRIEF §3: BAKED VERIFIED LOGO DATASET ──
+// data/logoDataset.json is built by scripts/build_logo_dataset.js +
+// scripts/refine_logo_dataset.js: Wikidata P154 CURRENT-logo statements
+// (end-time qualified = outdated, skipped) + an audited enwiki file-search
+// stage. Every entry passed bake-time gates: wordmark-filename reject,
+// outdated-year reject, photo/trademark reject, aspect 0.25-2.6, render,
+// >=1.5KB, imageGate 64x40 non-blank. Matching is by wiki ITEM, so the
+// image provably belongs to the company being asked about.
+// The dataset is the PRIMARY source; the live per-brand Wikipedia search
+// (wikipediaLogoImage) remains the fallback for brands without a verified
+// entry or when a baked URL dies.
+let logoDataset = null;
+try { logoDataset = require("../../data/logoDataset.json"); } catch { logoDataset = null; }
+const DATASET_BY_NAME = new Map(((logoDataset && logoDataset.brands) || []).map((b) => [_norm(b.name), b]));
+
+function logoDatasetInfo() {
+  return { available: !!logoDataset, count: DATASET_BY_NAME.size, generatedAt: logoDataset?.generatedAt || null, refinedAt: logoDataset?.refinedAt || null };
+}
+
+// shared question assembler (dataset path + live-search path)
+function assembleLogoQuestion(brand, others, difficulty, url, buf, mime, sourceTag) {
   const optionsPool = [brand.name, ...others.map((o) => o.name)];
   const optOrder = _shuffle(optionsPool.map((_, i) => i)); // fair option order (Fisher-Yates)
   return {
@@ -203,11 +213,45 @@ async function buildLogosQuestion(brand, others, difficulty) {
     topic: "Logo",
     domain: "logos",
     type: "image",
-    assetKey: img.url,
-    asset: { kind: "image", url: img.url, mime: dl.mime, subject: brand.name, source: "wikipedia-logo", bytesHash: crypto.createHash("sha1").update(dl.buf).digest("hex").slice(0, 16) },
+    assetKey: url,
+    asset: { kind: "image", url, mime, subject: brand.name, source: sourceTag, bytesHash: crypto.createHash("sha1").update(buf).digest("hex").slice(0, 16) },
     loreRef: { wiki: "wikipedia", page: brand.wiki, section: "logo" },
-    _cachedAsset: { url: img.url, buf: dl.buf, mime: dl.mime, kind: "image" },
+    _cachedAsset: { url, buf, mime, kind: "image" },
   };
+}
+
+// One logo question. Returns null when no verified logo asset is found.
+async function buildLogosQuestion(brand, others, difficulty) {
+  // PRIMARY: baked verified dataset entry (audited at bake time). The baked
+  // URL points at Commons - files that live enwiki-local render 404 there,
+  // so try the SAME verified filename on the other host before giving up.
+  // A total fetch failure falls through to the live search below.
+  const dsEntry = DATASET_BY_NAME.get(_norm(brand.name));
+  if (dsEntry && dsEntry.file) {
+    const enc = encodeURIComponent(dsEntry.file.replace(/\s/g, " "));
+    const hosts = [
+      "https://commons.wikimedia.org/wiki/Special:FilePath/",
+      "https://en.wikipedia.org/wiki/Special:FilePath/",
+    ];
+    for (const h of hosts) {
+      const dsDl = await quizLore.downloadMedia(`${h}${enc}?width=480`, "image").catch(() => null);
+      if (dsDl && dsDl.buf && dsDl.buf.length >= 1500) {
+        return assembleLogoQuestion(brand, others, difficulty, `${h}${enc}?width=480`, dsDl.buf, dsDl.mime || dsEntry.mime || "image/png", `logo-dataset:${dsEntry.source || "baked"}`);
+      }
+    }
+  }
+  // FALLBACK: live per-brand Wikipedia file search (quizLore heuristic)
+  const img = await quizLore.wikipediaLogoImage(brand.wiki, 480, brand.name).catch(() => null);
+  if (!img || !img.url) return null;
+  const dl = await quizLore.downloadMedia(img.url, "image").catch(() => null);
+  if (!dl || !dl.buf || dl.buf.length < 1500) return null; // tiny = placeholder/blank
+  // 💡 2026-09-27 pixel gate: logos are 64px+ allowed (wordmarks are wide),
+  // but blank/black/corrupt/undecodable bytes are rejected here - a broken
+  // logo must never become the clue of a question. (Dataset entries were
+  // already gated at bake time; this live path is gated here, every time.)
+  const gate = await imageGate.inspectImageBuffer(dl.buf, { minW: 64, minH: 40, label: `logo:${brand.name}`.slice(0, 50) }).catch(() => ({ ok: false, reason: "gate-crash" }));
+  if (!gate.ok) return null;
+  return assembleLogoQuestion(brand, others, difficulty, img.url, dl.buf, dl.mime, "wikipedia-logo");
 }
 
 // build `count` verified logo questions. Tries many brands (each candidate
@@ -449,6 +493,7 @@ async function buildThemeSongQuestions({ count, usedKeys, difficulty, goService,
 module.exports = {
   LOGOS_POOL,
   SONGS_POOL,
+  logoDatasetInfo,
   buildLogosQuestions,
   buildLogosQuestion,
   buildSpotSongQuestions,

@@ -39,6 +39,11 @@ const DEFAULTS = {
   voiceActorQuestionLimit: 1,   // HARD CAP on production/VA questions per quiz (P10)
   themeSongQuestionLimit: 1,    // max theme-song audio questions per quiz
   streamingGeneration: true,    // background-generate the next section while one plays (P19)
+  // 2026-09-28 owner pacing spec: "a randomized 10-30 second gap between
+  // questions". questionGapMin/Max bound the randomized pause the bot takes
+  // between a reveal and the next question card. quizmod-tunable per group.
+  questionGapMin: 10,           // seconds - lower bound of the between-questions pause
+  questionGapMax: 30,           // seconds - upper bound of the between-questions pause
 };
 
 // ── setting registry: validation + docs in one place (P17) ──
@@ -53,6 +58,8 @@ const SETTING_DEFS = {
   voiceactorcap:           { key: "voiceActorQuestionLimit", label: "voice-actor cap",       type: "int",  min: 0,    max: 5,   scope: "group",  unit: "questions" },
   themesong:               { key: "themeSongQuestionLimit",  label: "theme-song questions",  type: "int",  min: 0,    max: 5,   scope: "group",  unit: "questions" },
   streaming:               { key: "streamingGeneration",     label: "streaming generation",  type: "bool",                            scope: "global", unit: "on/off" },
+  gapmin:                  { key: "questionGapMin",          label: "min gap between questions", type: "int", min: 3, max: 60, scope: "group", unit: "seconds" },
+  gapmax:                  { key: "questionGapMax",          label: "max gap between questions", type: "int", min: 3, max: 120, scope: "group", unit: "seconds" },
 };
 
 // aliases so ".j quizmod timer 10" and ".j quizmod time 10" both work
@@ -66,7 +73,22 @@ const SETTING_ALIASES = {
   va: "voiceactorcap", voiceactor: "voiceactorcap", voiceactors: "voiceactorcap",
   theme: "themesong", themesongaudio: "themesong", songs: "themesong",
   stream: "streaming", background: "streaming",
+  gap: "gapmin", gap_min: "gapmin", gapmin: "gapmin",
+  gap_max: "gapmax", gapmax: "gapmax",
 };
+
+// ── randomized between-questions pause (owner pacing spec) ──
+// Returns whole seconds in [min, max]; max is clamped to >= min so a mis-
+// configured group (gapmax < gapmin) still produces a sane pause instead of
+// a zero/negative delay that would fire the next question instantly.
+function questionGapSeconds(cfg) {
+  let lo = Number(cfg?.questionGapMin);
+  let hi = Number(cfg?.questionGapMax);
+  if (!Number.isFinite(lo) || lo < 1) lo = DEFAULTS.questionGapMin;
+  if (!Number.isFinite(hi) || hi < 1) hi = DEFAULTS.questionGapMax;
+  if (hi < lo) hi = lo;
+  return lo + Math.floor(Math.random() * (hi - lo + 1));
+}
 
 // ── group override persistence ──
 // Cached in memory (reads happen on question timers - must not await DB);
@@ -212,6 +234,7 @@ module.exports = {
   DEFAULTS,
   SETTING_DEFS,
   SETTING_ALIASES,
+  questionGapSeconds,
   buildQuizConfig,
   handleQuizMod,
   loadGroupOverrides,

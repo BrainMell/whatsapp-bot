@@ -37,7 +37,7 @@ ok(ops.includes("require('../games/quizConfig')"), "opscheck -info renders LIVE 
 ok(ops.includes(".j quiz random"), "opscheck -info documents quiz random + flags");
 
 console.log("── P11: shared audio infra injected into quiz (no parallel system) ──");
-ok(src.includes("quizGame.setDeps({ goService: require('./utils/goImageService')"), "goService injected via quizGame.setDeps");
+ok(/quizGame\.setDeps\(\{\s*goService:\s*require\('\.\/utils\/goImageService'\)/.test(src), "goService injected via quizGame.setDeps");
 
 console.log("── regression pins: quiz routing intact ──");
 ok(src.includes("quizGame.showLeaderboard("), "quizboard routed");

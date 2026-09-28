@@ -385,10 +385,20 @@ async function makeMedia() {
   // ══════════════════════════════════════════════════════════════
   // E2E: full quiz through startQuiz with fixtures + z-ai LLM
   // ══════════════════════════════════════════════════════════════
-  async function waitSession(chatId, timeoutMs = 150000) {
+  async function waitSession(sock, chatId, timeoutMs = 150000) {
+    // 2026-09-28: every quiz parks behind the ready gate (uniform planning
+    // phase). Wait for the parked session, shrink the between-question gaps
+    // for test speed, fire the starting gun as the asker, then wait ACTIVE.
     const t0 = Date.now();
     while (Date.now() - t0 < timeoutMs) {
       const s = quiz.getSession(chatId);
+      if (s && s.awaitingGo) {
+        s.cfg.questionGapMin = 1;
+        s.cfg.questionGapMax = 1;
+        await quiz.confirmStart(sock, chatId, s.askedBy, MARK, false);
+        await new Promise((r) => setTimeout(r, 300));
+        continue;
+      }
       if (s && s.sections[0] && s.sections[0].state === "ACTIVE") return s;
       await new Promise((r) => setTimeout(r, 500));
     }
@@ -411,12 +421,12 @@ async function makeMedia() {
     const sock = makeMockSock();
     const r = await quiz.startQuiz(sock, CHAT, ALICE, MARK, { key: { id: "k1" } }, '"Re:Zero" 5 easy', "Alice", zaiLLM, null);
     ok(r.handled && r.silent, "startQuiz returns fast (background generation)");
-    const loading = sock.sent.find((s) => s.content?.text?.includes("Gathering questions"));
-    ok(!!loading, "immediate loading message sent (P5)");
+    const loading = await waitText(sock, "QUIZ PLANNING", 15000);
+    ok(!!loading, "immediate QUIZ PLANNING announce (uniform planning phase, P5)");
     const bounce = await quiz.startQuiz(sock, CHAT, BOB, MARK, { key: { id: "k2" } }, '"Re:Zero" 5 easy', "Bob", zaiLLM, null);
     ok(bounce.message && bounce.message.includes("already being prepared"), "second .j quiz while generating DENIED (P3)");
 
-    const session = await waitSession(CHAT);
+    const session = await waitSession(sock, CHAT);
     ok(!!session, "quiz session went ACTIVE (section 1 playing)");
     ok(session.title.toLowerCase().includes("re") || session.title.includes("Zero"), "title resolved: " + session.title);
     ok(session.sections.length === 1 && session.sections[0].questions.length >= 3 && session.sections[0].questions.length <= 5, `section 1 has ${session.sections[0].questions.length} questions`);
@@ -477,7 +487,7 @@ async function makeMedia() {
     const CHAT2 = "e2e2@g.us";
     const sock = makeMockSock();
     await quiz.startQuiz(sock, CHAT2, ALICE, MARK, { key: { id: "k1" } }, '"Re:Zero" 3 easy', "Alice", zaiLLM, null);
-    const session = await waitSession(CHAT2);
+    const session = await waitSession(sock, CHAT2);
     ok(!!session, "second quiz started");
     // stranger cannot end
     const deny = await quiz.endQuiz(sock, CHAT2, CAROL, MARK, false);
@@ -495,7 +505,7 @@ async function makeMedia() {
     const sock = makeMockSock();
     await quizConfigMod.handleQuizMod(CHAT3, "timer 7", true, ".j");
     await quiz.startQuiz(sock, CHAT3, ALICE, MARK, { key: { id: "k1" } }, '"Re:Zero" 3 easy', "Alice", zaiLLM, null);
-    const session = await waitSession(CHAT3);
+    const session = await waitSession(sock, CHAT3);
     ok(!!session && session.cfg.timePerQuestion === 7, "session built with mod-configured 7s timer");
     const card = sock.sent.find((s) => s.content?.text?.includes("QUESTION"));
     ok(!!card && card.content.text.includes("⏱ 7s"), "question card shows the configured timer");
@@ -584,7 +594,7 @@ async function makeMedia() {
       try {
         const rStart = await quiz.startQuiz(sock, CHATI, ALICE, MARK, { key: { id: `i${i}` } }, '"Re:Zero" 3 medium -s plot', "Alice", zaiLLM, null);
         if (!rStart.handled) throw new Error("start failed");
-        const s = await waitSession(CHATI, 150000);
+        const s = await waitSession(sock, CHATI, 150000);
         if (!s) throw new Error("session never went ACTIVE");
         const qs = s.sections[0].questions;
         if (qs.length < 3) throw new Error(`only ${qs.length} questions`);
@@ -617,7 +627,7 @@ async function makeMedia() {
     await quizConfigMod.handleQuizMod(CHATS, "sectionbreak 2", true, ".j"); // tiny break for test speed
     await quizConfigMod.handleQuizMod(CHATS, "sectionsize 3", true, ".j");  // 6q -> 2x3 sections (fixture lore pool is small by design)
     await quiz.startQuiz(sock, CHATS, ALICE, MARK, { key: { id: "s1" } }, '"Re:Zero" 6 medium -s plot', "Alice", zaiLLM, null);
-    const session = await waitSession(CHATS);
+    const session = await waitSession(sock, CHATS);
     ok(!!session && session.sections.length === 2, `6-question quiz split into ${session ? session.sections.length : 0} sections`);
     ok(session && session.sections[0].perSection + session.sections[1].perSection === 6, "section sizes sum to 6");
     // while section 1 plays, section 2 should be generating (streaming).
@@ -646,6 +656,16 @@ async function makeMedia() {
     // then complete short or die after its one recovery attempt (graceful
     // design, exercised by the mock suites). Skip the streaming assertions
     // with an explicit env note in that case, exactly like the Fandom skips.
+    // 2026-09-28: under a throttled sandbox LLM the section-2 RECOVERY
+    // generation can outlast the assertion window (state still GENERATING).
+    // Settle: wait (bounded) for the section to leave GENERATING before the
+    // env-gate verdict, so the skip logic sees the final state.
+    {
+      const settleT0 = Date.now();
+      while (Date.now() - settleT0 < 45000 && session.sections[1].state === "GENERATING") {
+        await new Promise((r2) => setTimeout(r2, 1000));
+      }
+    }
     const sec2Short = !session.sections[1].questions.length || session.sections[1].questions.length < session.sections[1].perSection;
     if (sec2Short && session.sections[1].state === "FAILED") {
       console.log(`  SKIP - section 2 yield short under live z-ai degradation (got ${session.sections[1].questions.length}/${session.sections[1].perSection}; graceful end verified). Streaming transitions covered by mock suites.`);
@@ -680,7 +700,7 @@ async function makeMedia() {
     const CHATR = "e2erand@g.us";
     const sock = makeMockSock();
     await quiz.startQuiz(sock, CHATR, CAROL, MARK, { key: { id: "r1" } }, "random 4", "Carol", zaiLLM, null);
-    const session = await waitSession(CHATR, 150000);
+    const session = await waitSession(sock, CHATR, 150000);
     ok(!!session && session.mode === "random", "random quiz launched");
     if (session) {
       const qs = session.sections[0].questions;

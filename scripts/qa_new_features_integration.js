@@ -48,14 +48,18 @@ const registrySrc = fs.readFileSync(path.join(__dirname, "..", "core", "utils", 
   // `.j stock` must not collide with the RPG `.j stocks` block (which sits earlier)
   const rpgStocks = engineSrc.indexOf("} stocks` ||");
   ok(rpgStocks > 0 && rpgStocks < marketBlock, "RPG stocks handled earlier; singular .j stock free");
-  // answer fall-through: block body must NOT return when no quiz is active
-  const ansIdx = engineSrc.indexOf("a <letter|option> - answer the running quiz");
-  ok(ansIdx > 0, "answer block found");
+  // answer fall-through (2026-09-28 pin refresh): the letter/word routing
+  // gate + the free-text fallback must both sit behind hasActive(chatId)
+  const ansIdx = engineSrc.indexOf("const _isLetterAns");
+  ok(ansIdx > 0, "answer routing block found");
   {
-    const seg = engineSrc.slice(ansIdx, ansIdx + 1200);
-    ok(/if \(quizGame\.hasActive\(chatId\)\)/.test(seg), "answers only consumed with an active quiz");
-    ok(!/no active quiz -> fall through[\s\S]{0,200}?return;/.test(seg), "no premature return in the idle path");
+    const seg = engineSrc.slice(ansIdx, ansIdx + 1600);
+    ok(/quizGame\.hasActive\(chatId\)/.test(seg), "answers only consumed with an active quiz");
+    ok(seg.includes("quizGame.handleAnswer("), "answers route to the quiz handler");
   }
+  const fbIdx = engineSrc.indexOf("quizGame.handleAnswer(\n");
+  const fbAlt = fbIdx > 0 ? fbIdx : engineSrc.lastIndexOf("quizGame.handleAnswer(");
+  ok(fbAlt > ansIdx, "free-text answer fallback sits after real commands");
 
   console.log("════ 4. unknown-command surfaces ════");
   const allowIdx = engineSrc.indexOf('"quizboard",\n                      "stock",\n                      "trends",');
@@ -79,7 +83,14 @@ const registrySrc = fs.readFileSync(path.join(__dirname, "..", "core", "utils", 
   const trends = require("../core/utils/trendsChart");
   ok(typeof trends.handleTrends === "function" && trends.RANGES && Object.keys(trends.RANGES).length === 8, "trends.handleTrends + 8 ranges");
   // engine requires must not break boot (fresh require of all three)
-  ok(quiz.POINTS.medium === 100 && quiz.QUESTION_SECONDS === 30, "quiz constants sane");
+  // 2026-09-28 pin refresh: QUESTION_SECONDS is config-driven now (P2) and
+  // the pacing defaults live in quizConfig (owner spec: 10-30s gap)
+  const quizConfigPin = require("../core/games/quizConfig");
+  ok(quiz.POINTS.medium === 100
+    && quiz.QUESTION_SECONDS === quizConfigPin.DEFAULTS.timePerQuestion
+    && quizConfigPin.DEFAULTS.questionGapMin === 10
+    && quizConfigPin.DEFAULTS.questionGapMax === 30,
+    "quiz constants sane (points, config-driven timer, 10-30s gap defaults)");
 
   console.log("════ 7. no collateral damage to pinned systems ════");
   ok(engineSrc.includes("gstatusAnnounce"), "gstatus surface untouched");

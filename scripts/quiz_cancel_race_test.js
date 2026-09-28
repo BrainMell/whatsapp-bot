@@ -33,9 +33,18 @@ function makeValidAI(n) {
   };
 }
 async function waitActive(chatId, timeoutMs = 30000) {
+  // 2026-09-28: quizzes park behind the ready gate - fire the starting gun
+  // (the asker always passes confirmStart) with 1s test gaps, then wait ACTIVE
   const t0 = Date.now();
   while (Date.now() - t0 < timeoutMs) {
     const s = quiz.getSession(chatId);
+    if (s && s.awaitingGo) {
+      s.cfg.questionGapMin = 1;
+      s.cfg.questionGapMax = 1;
+      await quiz.confirmStart(mockSock(), chatId, s.askedBy, MARK, false);
+      await wait(200);
+      continue;
+    }
     if (s && !s.awaitingGo && s.sections?.[0]?.state === "ACTIVE") return s;
     await wait(250);
   }
