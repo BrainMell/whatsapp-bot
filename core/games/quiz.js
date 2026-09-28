@@ -1272,16 +1272,13 @@ function buildRandomMixedPlan(cfg, availability = {}) {
   const loreDomains = () => ["plot", "characters", "cosmology", "mixed"];
   let li = 0;
   const pushLore = (n) => {
-    // a chunk may exceed one section only via the size cap - split it
-    let rem = n;
-    while (rem > 0) {
-      const give = Math.min(size, rem);
-      const dom = loreDomains()[li % loreDomains().length];
-      const tpl = LONG_SECTION_TEMPLATES.find((t) => t.domain === dom);
-      plan.push({ name: tpl ? tpl.name : "Mixed Challenge", domain: dom, perSection: give, fixed: true });
-      li++;
-      rem -= give;
-    }
+    // chunks are pre-sized (and folded away from tiny tails) - one section
+    // per chunk, even if it slightly exceeds sectionSize
+    if (n <= 0) return;
+    const dom = loreDomains()[li % loreDomains().length];
+    const tpl = LONG_SECTION_TEMPLATES.find((t) => t.domain === dom);
+    plan.push({ name: tpl ? tpl.name : "Mixed Challenge", domain: dom, perSection: n, fixed: true });
+    li++;
   };
   pushLore(loreChunks.shift() || 0);
   // Spot the Song in the middle (audio retrieval is slow - it streams while
