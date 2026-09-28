@@ -51,11 +51,16 @@ async function waitParked(chatId, timeoutMs = 40000) {
   return null;
 }
 async function waitActive(chatId, timeoutMs = 40000) {
+  // 2026-09-28: also wait for qOpenUntil — the card is out AND the answer
+  // window armed. This mirrors the real-world invariant (a player can only
+  // answer after SEEING the card; safeSend's adoption chain now arms the
+  // window a few microtasks after the mock send resolves - mock answers
+  // fired earlier are pre-card and correctly ignored).
   const t0 = Date.now();
   while (Date.now() - t0 < timeoutMs) {
     const s = quiz.getSession(chatId);
-    if (s && !s.awaitingGo && s.sections?.[0]?.state === "ACTIVE") return s;
-    await wait(200);
+    if (s && !s.awaitingGo && s.sections?.[0]?.state === "ACTIVE" && s.qOpenUntil > Date.now()) return s;
+    await wait(100);
   }
   return null;
 }
@@ -167,7 +172,7 @@ function burst(fns) { return Promise.allSettled(fns.map((f) => f())); }
     s.cfg.questionGapMin = 1; s.cfg.questionGapMax = 1;
     await quiz.confirmStart(sock, chat, s.askedBy, MARK, false);
     const live = await waitActive(chat);
-    ok(!!live && live.qOpenUntil > Date.now(), "Q1 open");
+    ok(!!live, "Q1 open (armed via waitActive)");
     const qNoBefore = live.questionNo;
     // poke postQuestion through the session machinery: a second section start
     // attempt must not double-post. Use the exported startSection-equivalent:

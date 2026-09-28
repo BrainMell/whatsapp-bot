@@ -149,6 +149,21 @@ async function buildQuizConfig(chatId, perQuiz = {}) {
       }
     }
   }
+  // 💡 2026-09-28 OWNER AUDIT (timer-consistency fix): SETTING_DEFS ranges are
+  // validated when a mod SETS a value, but stored overrides were merged into
+  // the live config with NO re-validation. A stale/corrupt/manual KV value
+  // (timePerQuestion 0 or "abc" from an older version) produced NaN/0ms
+  // timers - "question posts then instantly time's up", seen in live groups.
+  // Every merged numeric is now clamped to its registry range at BUILD time.
+  for (const def of Object.values(SETTING_DEFS)) {
+    if (def.type !== "int") continue;
+    const n = Number(merged[def.key]);
+    if (!Number.isFinite(n)) {
+      merged[def.key] = DEFAULTS[def.key];
+    } else {
+      merged[def.key] = Math.min(def.max, Math.max(def.min, Math.round(n)));
+    }
+  }
   // per-quiz overrides (command line): count/difficulty/images/audio/section.
   // Each clamped against the group ceiling so a user command can never
   // exceed what the mods configured (P17).

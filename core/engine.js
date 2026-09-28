@@ -11451,9 +11451,21 @@ _💡 Reply with another number from your search list!_`.trim();
                   // 5s cooldown - otherwise players got "⚠️ SLOW DOWN!" mid-game
                   // and answering locked the group's other commands for 5s.
                   // Quiz-internal pacing is handled inside quiz.js separately.
+                  // 💡 2026-09-28 OWNER AUDIT §2/§7: while a quiz question is
+                  // OPEN, the whole 5s cooldown (check AND set) is bypassed for
+                  // this chat. Word answers (".j <answer text>" - the format the
+                  // question cards advertise) are indistinguishable from
+                  // commands at this point, so the letter-only exemption still
+                  // let "⚠️ SLOW DOWN!" DROP answers mid-question (return below
+                  // = the message never reached the quiz receiver). The quiz
+                  // one-attempt-locks players itself; the hard gambling spam
+                  // lock and the 20s same-game cooldown still guard abuse in
+                  // normal (closed-question) traffic.
                   const _isQuizAnswerMsg =
                     quizGame.hasActive(chatId) && quizGame.isQuizAnswerText(lowerTxt);
-                  if (isBotCommand && !_isQuizAnswerMsg && !isOwner && !isGlobalMod(senderJid)) {
+                  const _quizQuestionOpen =
+                    quizGame.hasActive(chatId) && quizGame.isQuestionOpen(chatId);
+                  if (isBotCommand && !_isQuizAnswerMsg && !_quizQuestionOpen && !isOwner && !isGlobalMod(senderJid)) {
                     const now = Date.now();
                     const gamblingCommands = [
                       "cf",

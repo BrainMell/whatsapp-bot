@@ -169,6 +169,40 @@ function setDeps(d) { Object.assign(deps, d || {}); }
 const MARKER = "\u200B";
 function BOT_SAFE(text) { return MARKER + text; }
 
+// ── 2026-09-28 OWNER AUDIT §2/§9: RESILIENT CRITICAL SENDS ──
+// Live evidence (2026-09-28 05:22, Joker, chat 120363408369953090): a routine
+// WhatsApp connection churn turned an entire quiz INVISIBLE - the planning
+// card, the ready card AND the response to `.j quiz go` all died behind
+// `.catch(() => {})` while the state machine kept running: no question ever
+// reached the group, incoming answers were dropped by rekeying, and the
+// deadline timer "time's up"-ed questions nobody saw. WhatsApp rejects sends
+// while the socket is down and reconnects typically complete within
+// seconds-to-minutes, so every CRITICAL quiz message (planning announce,
+// ready card, question cards, reveals, section cards, final scoreboard) now
+// goes through safeSend: bounded backoff retries + a per-attempt timeout so
+// a hung send can never stall the quiz. Cosmetic messages (reactions,
+// heartbeat nudges) stay fire-and-forget by design.
+const SEND_RETRY_DELAYS_MS = [1500, 4000, 9000, 15000, 25000]; // ~54s worst case
+const SEND_ATTEMPT_TIMEOUT_MS = 20000;
+async function safeSend(sock, chatId, content, opts = {}) {
+  const label = String(opts.label || "send").slice(0, 40);
+  let lastErr = null;
+  for (let attempt = 0; attempt <= SEND_RETRY_DELAYS_MS.length; attempt++) {
+    if (attempt > 0) {
+      console.log(`[Quiz] send retry ${attempt}/${SEND_RETRY_DELAYS_MS.length} (${label}): ${String(lastErr?.message || lastErr).slice(0, 70)}`);
+      await new Promise((r) => setTimeout(r, SEND_RETRY_DELAYS_MS[attempt - 1]));
+    }
+    try {
+      return await Promise.race([
+        Promise.resolve(sock.sendMessage(chatId, content, opts.sendOpts)),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("send attempt timeout")), SEND_ATTEMPT_TIMEOUT_MS)),
+      ]);
+    } catch (e) { lastErr = e; }
+  }
+  console.log(`[Quiz] send FAILED after all retries (${label}): ${String(lastErr?.message || lastErr).slice(0, 70)}`);
+  return null;
+}
+
 // ════════════════════════════════════════════
 // ANIME DATA (AniList GraphQL primary, Jikan v4 fallback)
 // family:4 everywhere - this box resolves AAAA first and Node aborts the
@@ -1300,6 +1334,26 @@ function buildSectionPlan(cfg, availability = {}) {
     if (mixed) return mixed;
   }
   if (count <= size) {
+    // 💡 2026-09-28 OWNER AUDIT §4 (image-system fix): "-images N" was
+    // SILENTLY DROPPED on short quizzes. The single-section plan only ever
+    // produced a lore/mixed section, and generateSectionQuestions builds
+    // image questions ONLY for domain==="images" sections - so
+    // ".j quiz X 10 -images 5" promised pictures in the planning card and
+    // shipped zero (seen live: Dragon Ball 10q, random 10 -images 5).
+    // Fix: when characters are available, split the quiz into a Picture
+    // Round + a text section (or a single Picture Round when -images >= count).
+    const imgN = cfg.imageQuestionCount > 0 && availability.characters
+      ? Math.min(cfg.imageQuestionCount, count)
+      : 0;
+    if (imgN > 0) {
+      if (imgN >= count) {
+        return [{ name: "Picture Round", domain: "images", perSection: count, fixed: true }];
+      }
+      return [
+        { name: "Picture Round", domain: "images", perSection: imgN, fixed: true },
+        { name: null, domain: cfg.categories ? cfg.categories[0] : "mixed", perSection: count - imgN, fixed: true },
+      ];
+    }
     return [{ name: null, domain: cfg.categories ? cfg.categories[0] : "mixed", perSection: count }];
   }
   const nSections = Math.ceil(count / size);
@@ -1725,24 +1779,26 @@ async function postQuestion(sock, chatId, session) {
   }
 
   // card sender (image = clue in caption; audio cue before card; text else)
+  // 2026-09-28: critical send -> safeSend (retrying); a connection blip must
+  // never eat a question card (the question only opens once delivery
+  // succeeded or is permanently impossible).
   const postCard = async (qq) => {
     const card = formatQuestionCard(session, session.idx, qq);
     if (qq.media && qq.media.kind === "image" && qq.type === "image") {
-      await sock.sendMessage(chatId, {
+      return safeSend(sock, chatId, {
         image: qq.media.buf,
         mimetype: qq.media.mime,
         caption: BOT_SAFE(card),
-      });
-    } else {
-      if (qq.media && qq.media.kind === "audio" && (qq.type === "audio" || qq.type === "theme")) {
-        await sock.sendMessage(chatId, {
-          audio: qq.media.buf,
-          mimetype: qq.media.mime,
-          ptt: false,
-        }).catch(() => {}); // clip fails -> card still carries the question
-      }
-      await sock.sendMessage(chatId, { text: BOT_SAFE(card) });
+      }, { label: `qcard:${session.questionNo}` });
     }
+    if (qq.media && qq.media.kind === "audio" && (qq.type === "audio" || qq.type === "theme")) {
+      await safeSend(sock, chatId, {
+        audio: qq.media.buf,
+        mimetype: qq.media.mime,
+        ptt: false,
+      }, { label: `qc:${session.questionNo}-audio` }).catch(() => {}); // clip fails -> card still carries the question
+    }
+    return safeSend(sock, chatId, { text: BOT_SAFE(card) }, { label: `qcard:${session.questionNo}` });
   };
 
   // media resolution + delivery happen BEFORE the question opens. A fatal
@@ -1752,7 +1808,10 @@ async function postQuestion(sock, chatId, session) {
   // deadline timer, overwriting session.timerId and leaving an ORPHANED
   // timer that fired revealAndAdvance in the middle of the NEXT question
   // (instant "time's up" + skipped question, seen live).
-  session.questionNo += 1;
+  // 💡 2026-09-28 OWNER AUDIT: questionNo now increments only when a card is
+  // actually DELIVERED (it used to increment once pre-loop while the loop
+  // could skip N unfetchable image questions -> "QUESTION 4/10" numbering
+  // drifted from reality).
   session.qStartedAt = Date.now();
   let q = section.questions[session.idx];
   while (q) {
@@ -1767,8 +1826,22 @@ async function postQuestion(sock, chatId, session) {
       continue;
     }
     try {
-      await postCard(q);
-      break; // delivered
+      session.questionNo += 1;
+      session.qStartedAt = Date.now();
+      const delivered = await postCard(q);
+      // safeSend exhausts retries -> null. An image-clue question that could
+      // not be delivered (image + caption) is unanswerable - skip it rather
+      // than open a blind question. Text questions still open (the reveal at
+      // least reaches the group; never stall the quiz silently).
+      if (!delivered && q.type === "image") {
+        console.log("[Quiz] image card undeliverable after safeSend retries - skipping question");
+        session.questionNo -= 1;
+        q.media = null;
+        session.idx += 1;
+        q = section.questions[session.idx];
+        continue;
+      }
+      break; // delivered (or text-only fallback: open anyway)
     } catch {
       if (q.type === "image") {
         // one resend of the same verified bytes; then skip (an image-clue
@@ -1776,6 +1849,7 @@ async function postQuestion(sock, chatId, session) {
         try { await postCard(q); break; } catch {
           console.log("[Quiz] image undeliverable after resend - skipping question");
           q.media = null;
+          session.questionNo -= 1; // never delivered - do not count it
           session.idx += 1;
           q = section.questions[session.idx];
           continue;
@@ -1852,15 +1926,17 @@ async function revealAndAdvance(sock, chatId, session, winner, timedOut) {
       sc.correct += 1;
       session.scores.set(winner.jid, sc);
       session.revealed.push({ q: q.q, correct: correctText, winner: winner.name, timedOut: false });
-      await sock.sendMessage(chatId, {
+      // 💡 critical send: reveals go through safeSend - a dropped reveal is
+      // exactly the "answers counted wrong / where did my point go" class.
+      await safeSend(sock, chatId, {
         text: BOT_SAFE(`✅ *Correct!* ${winner.name} answered ${LETTERS[q.correct]} (+${pts} Zeni)\nThe answer was: *${correctText}*`),
-      }).catch(() => {});
+      }, { label: `reveal:${session.questionNo}` });
     } else if (timedOut) {
       session.revealed.push({ q: q.q, correct: correctText, winner: null, timedOut: true });
       const tried = session.answeredBy ? session.answeredBy.size : 0;
-      await sock.sendMessage(chatId, {
+      await safeSend(sock, chatId, {
         text: BOT_SAFE(`⏰ *Time's up!*${tried ? ` (${tried} tried)` : ""}\nThe answer was: *${correctText}*`),
-      }).catch(() => {});
+      }, { label: `reveal:${session.questionNo}` });
     }
 
     // persist seen hashes (dedup across sessions) + idx advance
@@ -1906,14 +1982,14 @@ async function advanceToNextSection(sock, chatId, session) {
 
   if (next.state === SECTION_STATES.FAILED) {
     // one recovery attempt
-    await sock.sendMessage(chatId, { text: BOT_SAFE(`⚠️ I'm having trouble preparing the next section. Give me a moment...`) }).catch(() => {});
+    await safeSend(sock, chatId, { text: BOT_SAFE(`⚠️ I'm having trouble preparing the next section. Give me a moment...`) }, { label: "section-recover" }).catch(() => {});
     next.state = SECTION_STATES.GENERATING;
     delete session.sectionJobs[nextIdx];
   }
   if (next.state === SECTION_STATES.GENERATING) {
     hadToWait = true;
     if (multiSection) {
-      await sock.sendMessage(chatId, { text: BOT_SAFE(`⏳ Section complete! I'm loading the next section now, please stand by...`) }).catch(() => {});
+      await safeSend(sock, chatId, { text: BOT_SAFE(`⏳ Section complete! I'm loading the next section now, please stand by...`) }, { label: "section-loading" }).catch(() => {});
     }
     const job = ensureSectionGenerating(session, nextIdx, sock, chatId);
     const startWait = Date.now();
@@ -1925,15 +2001,15 @@ async function advanceToNextSection(sock, chatId, session) {
     if (session.cancelled) return;
     if (next.state !== SECTION_STATES.READY) {
       next.state = SECTION_STATES.FAILED;
-      await sock.sendMessage(chatId, { text: BOT_SAFE(`⚠️ The next section couldn't be prepared. Ending the quiz here - thanks for playing!`) }).catch(() => {});
+      await safeSend(sock, chatId, { text: BOT_SAFE(`⚠️ The next section couldn't be prepared. Ending the quiz here - thanks for playing!`) }, { label: "section-fail-end" }).catch(() => {});
       await finishQuiz(sock, chatId, session);
       return;
     }
   }
   // section break (configurable; skipped when players just waited on loading)
   if (multiSection && !hadToWait && session.cfg.sectionBreakDuration > 0 && next.state === SECTION_STATES.READY) {
-    await sock.sendMessage(chatId, { text: BOT_SAFE(`📚 Section break - next section starts in ${session.cfg.sectionBreakDuration}s!` +
-      `${next.name ? `\nUp next: *${next.name}*` : ""}`) }).catch(() => {});
+    await safeSend(sock, chatId, { text: BOT_SAFE(`📚 Section break - next section starts in ${session.cfg.sectionBreakDuration}s!` +
+      `${next.name ? `\nUp next: *${next.name}*` : ""}`) }, { label: "section-break" }).catch(() => {});
     await new Promise((r) => setTimeout(r, session.cfg.sectionBreakDuration * 1000));
     if (session.cancelled) return;
   }
@@ -1946,7 +2022,7 @@ function startSection(sock, chatId, session, idx) {
   section.state = SECTION_STATES.ACTIVE;
   session.idx = 0;
   if (session.sections.length > 1) {
-    sock.sendMessage(chatId, { text: BOT_SAFE(`📖 *Section ${idx + 1}/${session.sections.length}${section.name ? `: ${section.name}` : ""}*`) }).catch(() => {});
+    safeSend(sock, chatId, { text: BOT_SAFE(`📖 *Section ${idx + 1}/${session.sections.length}${section.name ? `: ${section.name}` : ""}*`) }, { label: `section:${idx + 1}` }).catch(() => {});
   }
   // kick the NEXT section's generation while this one plays (P19 buffer)
   if (session.cfg.streamingGeneration) {
@@ -1991,7 +2067,7 @@ async function finishQuiz(sock, chatId, session, opts = {}) {
   out += `\nPlay again: \`${botConfig.getPrefix()} quiz "<title>"\``;
 
   recordSessionResults(chatId, entries, winner ? winner.jid : null);
-  await sock.sendMessage(chatId, { text: BOT_SAFE(out) }).catch(() => {});
+  await safeSend(sock, chatId, { text: BOT_SAFE(out) }, { label: "final-scoreboard" }).catch(() => {});
 }
 
 // ════════════════════════════════════════════
@@ -2011,6 +2087,18 @@ function isQuizAnswerText(lowerTxt) {
   const first = t.slice(pfx.length).trim().split(/\s+/)[0] || "";
   if (!/^[abcd]$/.test(first)) return false;
   return t === `${pfx} ${first}` || t.startsWith(`${pfx} ${first} `);
+}
+
+// 💡 2026-09-28 OWNER AUDIT §2/§7: true while a question is LIVE (posted +
+// inside its timer window). The engine uses this to bypass the 5s global
+// command cooldown for the chat while a question is open: word answers
+// (".j <answer text>" - the format the question cards ADVERTISE) are
+// indistinguishable from commands at cooldown time, so the old exemption
+// (letters only) let "⚠️ SLOW DOWN!" EAT answers in busy chats - the message
+// was dropped before it ever reached the quiz receiver.
+function isQuestionOpen(chatId) {
+  const s = activeQuizzes.get(chatId);
+  return !!(s && !s.cancelled && s.qOpenUntil && Date.now() <= s.qOpenUntil);
 }
 
 async function handleAnswer(sock, chatId, senderJid, answerText, botMarker, m, senderName) {
@@ -2370,9 +2458,21 @@ const HEARTBEAT_MS = 60 * 1000;        // "still preparing" pulse interval
 
 function mentionOf(jid) { return jid ? `@${String(jid).split("@")[0]}` : ""; }
 
-// heartbeat = one 25s nudge (lore research feels instant-failed without it)
+// heartbeat = one 25s nudge (prep feels instant-failed without it)
 // then a 60s pulse until prep resolves. Every pulse re-checks live state so
 // a finished/cancelled prep never emits a ghost heartbeat.
+// 💡 2026-09-28 OWNER AUDIT §8: the nudge no longer says "researching the
+// lore" (not every quiz is a lore quiz) and the label is MODE-AWARE - the
+// old code printed the raw internal title for media modes, so a logo quiz
+// nudged with "Still researching the lore for *__logos__*".
+function planningLabel(parsed) {
+  if (parsed.mode === "logos") return "the logo round";
+  if (parsed.mode === "song") return "spot the song";
+  if (parsed.mode === "audio") return "theme songs";
+  if (parsed.randomMode) return "random mode";
+  return String(parsed.title || "the quiz").slice(0, 60);
+}
+
 function startPrepHeartbeat(prep, sock, chatId, botMarker, label) {
   const alive = () => !prep.cancelled
     && lifecycle.get(chatId)?.state === "generating"
@@ -2380,7 +2480,7 @@ function startPrepHeartbeat(prep, sock, chatId, botMarker, label) {
   prep.reassureTimerId = setTimeout(() => {
     if (!alive()) return;
     sock.sendMessage(chatId, {
-      text: botMarker + `🧠 Still researching the lore for *${label}* - good questions take a moment...`,
+      text: botMarker + `🧠 Still researching for *${label}* - good questions take a moment...`,
     }).catch(() => {});
     const startedAt = Date.now();
     prep.heartbeatId = setInterval(() => {
@@ -2425,7 +2525,7 @@ async function parkReadySession(sock, chatId, session, { head, introImage, botMa
     + `🎯 ${plannedTotal(session)} questions prepared${mediaNote}.\n`
     + `▶️ Start it whenever your group is ready:\n\`${prefix} quiz go\`\n`
     + `(starter or mods - expires in ${mins} minutes)`;
-  await sock.sendMessage(chatId, { text: readyMsg, mentions: session.askedBy ? [session.askedBy] : [] }, { quoted: m }).catch(() => {});
+  await safeSend(sock, chatId, { text: readyMsg, mentions: session.askedBy ? [session.askedBy] : [] }, { label: "ready-card", sendOpts: { quoted: m } }).catch(() => {});
   session.readyTimerId = setTimeout(async () => {
     try {
       const cur = activeQuizzes.get(chatId);
@@ -2471,11 +2571,11 @@ async function confirmStart(sock, chatId, senderJid, botMarker, canUseAdminComma
   session.readyHead = null;
   session.readyIntroImage = null;
   if (introImage && introImage.buf) {
-    await sock.sendMessage(chatId, { image: introImage.buf, mimetype: introImage.mime, caption: BOT_SAFE(head) }).catch(async () => {
-      await sock.sendMessage(chatId, { text: head }).catch(() => {});
+    await safeSend(sock, chatId, { image: introImage.buf, mimetype: introImage.mime, caption: BOT_SAFE(head) }, { label: "go-head-img" }).catch(async () => {
+      await safeSend(sock, chatId, { text: head }, { label: "go-head-txt-fallback" }).catch(() => {});
     });
   } else {
-    await sock.sendMessage(chatId, { text: head }).catch(() => {});
+    await safeSend(sock, chatId, { text: head }, { label: "go-head" }).catch(() => {});
   }
   startSection(sock, chatId, session, 0);
   return { handled: true, silent: true };
@@ -2497,7 +2597,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     if (ownsLock()) releaseLifecycle(chatId); // never kill a NEWER launch's lock
   };
   // planning-mode pulse: one nudge at 25s, then every 60s until resolved
-  startPrepHeartbeat(prep, sock, chatId, botMarker, parsed.randomMode ? "random mode" : parsed.title);
+  startPrepHeartbeat(prep, sock, chatId, botMarker, planningLabel(parsed));
   prep.session = null;
   let ownsSlot = false; // P20: true only while this launch holds a generation slot
 
@@ -2566,10 +2666,10 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
         else if (parsed.randomMode) bits.push(`📚 lore across fiction`);
         else if (parsed.title) bits.push(`📚 lore from "${String(parsed.title).slice(0, 40)}"`);
       }
-      await sock.sendMessage(chatId, {
+      await safeSend(sock, chatId, {
         text: botMarker + `🛠 *QUIZ PLANNING* ${mentionOf(senderJid)}\nBuilding a ${cfg.questionCount}-question ${cfg.difficulty} quiz: ${bits.join(" • ")}.\nI'll tag you here the moment it's ready to start - the bot stays fully usable meanwhile.`,
         mentions: [senderJid],
-      }, { quoted: m }).catch(() => {});
+      }, { label: "planning-card", sendOpts: { quoted: m } }).catch(() => {});
     }
     // ── 2026-09-27: standalone media modes (logos / song / audio) ──
     // No franchise resolution, no LLM: one media section is generated and
@@ -2668,9 +2768,9 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     // instead of blocking the start card after generation completes.
     const introImagePromise = getFranchiseIntroImage(franchise.wiki, franchise.title).catch(() => null);
     const totalQuestions = cfg.questionCount;
-    await sock.sendMessage(chatId, {
+    await safeSend(sock, chatId, {
       text: botMarker + `✅ *${franchise.title}*${parsed.section ? `\n📚 Section locked: *${parsed.section}*` : ""}\n🧠 Building ${totalQuestions} ${cfg.difficulty} lore questions…`,
-    }, { quoted: m }).catch(() => {});
+    }, { label: "building-card", sendOpts: { quoted: m } }).catch(() => {});
 
     const session = {
       cfg,
@@ -3052,6 +3152,7 @@ module.exports = {
   handleQuizMod,
   showLeaderboard,
   isQuizAnswerText,
+  isQuestionOpen,
   setDeps,
   // test surface:
   parseQuizArgs,
