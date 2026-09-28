@@ -85,7 +85,11 @@ async function cleanup(chatId) {
   const live = await waitFor(() => { const s = quiz.getSession(CHAT); return s && !s.awaitingGo && s.sections?.[0]?.state === "ACTIVE" ? s : null; }, 20000, "active session");
   ok(!!live, "quiz ACTIVE");
   ok(!!live && countCards(sock, "QUESTION 1/") === 1, "exactly one Q1 card");
-  ok(!!live && !!live.qOpenUntil && live.qOpenUntil > Date.now(), "Q1 open window armed");
+  // 💡 since the resilient-sends fix (40ce9f9ae) the deadline window opens at
+  // CARD DELIVERY, not at post-question entry - poll for it (the ACTIVE flag
+  // is set synchronously in startSection, before the card is even sent).
+  const winArmed = await waitFor(() => { const s = quiz.getSession(CHAT); return s && s.qOpenUntil && s.qOpenUntil > Date.now() ? true : null; }, 8000, "window armed");
+  ok(!!winArmed, "Q1 open window armed at delivery");
 
   // ── 3+4. correct answer + stale-tick race -> ONE reveal, gap-bounded Q2 ──
   console.log("── 3. answer race + randomized gap ──");

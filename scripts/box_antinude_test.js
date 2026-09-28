@@ -107,7 +107,7 @@ function t(name, cond) { if (cond) { pass++; console.log(`  ✅ ${name}`); } els
   const warns = [];
   handled = await antinude.handleAntinude(sock, mkMsg(), { antinude: true, antinudeThreshold: 0.45, antinudeAction: "warn" }, (u, c, r) => { warns.push(r); return 2; }, () => 2, mkCtx({}));
   t("warn action: deleted + warned", handled === true && sock.calls.deleted === 1);
-  t("warn action: warning text shows count", sock.calls.texts.some((x) => x.includes("ANTINUDE WARNING") && x.includes("2/3")));
+  t("warn action: warning text shows count (limit 10, owner directive 2026-09-28)", sock.calls.texts.some((x) => x.includes("ANTINUDE WARNING") && x.includes("2/10")));
 
   // 6. delete fails (bot not admin) -> explicit fallback message, no crash
   verdict = { nsfw: 0.9, parts: [], falconsai: 0.9 };
