@@ -2517,6 +2517,7 @@ async function startBot(configInstance) {
           antinude: false,
           antinudeAction: "delete", // delete | warn | kick
           antinudeThreshold: 0.45,  // recalibrated v2: NudeNet part scores (safe ~0, real nudity 0.44-0.9)
+          antinudeWarnLimit: 10,    // owner directive 2026-09-28: removal at 10th nude warning (was 3)
           blacklist: [],
           rankLadder: [],
           memberRanks: {},
@@ -2541,6 +2542,8 @@ async function startBot(configInstance) {
       if (settings.antinude === undefined) settings.antinude = false;
       if (settings.antinudeAction === undefined) settings.antinudeAction = "delete";
       if (settings.antinudeThreshold === undefined) settings.antinudeThreshold = 0.45;
+      // 💡 OWNER DIRECTIVE (2026-09-28): nude-removal limit 10 (was hardcoded 3)
+      if (settings.antinudeWarnLimit === undefined) settings.antinudeWarnLimit = 10;
       // 💡 v2 MIGRATION (2026-09-27): 0.7 was the default of the broken Falconsai-only
       // pipeline (real nudity scored 0.000-0.003 there, so 0.7 meant "never fire").
       // The threshold command itself was also broken (parseInt rejected its own
@@ -6295,6 +6298,14 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           loadSupportUsage();
           loadMutedUsers();
           loadUserWarnings();
+          // 💡 NOT-NUDE SAFELIST (2026-09-28): persist mod-marked images in the
+          // system KV so "antinude ok" verdicts survive restarts. Idempotent.
+          try {
+            require('./utils/antinude').initSafelistStore({
+              load: () => system.get(BOT_ID + "_antinude_safelist", {}),
+              save: (obj) => system.set(BOT_ID + "_antinude_safelist", obj),
+            });
+          } catch (e) { console.log(`[Antinude] safelist store init failed: ${e.message}`); }
         } else {
           console.log(`🔑 [${BOT_ID}] No existing session - showing QR immediately. Data will load after login.`);
           // 🛡️ AUTH PRESERVATION GUARD (2026-09-28): if a creds.json exists on
@@ -15394,10 +15405,14 @@ Prohibited media is removed automatically.
 
 Current action: *${settings.antinudeAction || "delete"}*
 Current threshold: *${Math.round((settings.antinudeThreshold || 0.45) * 100)}%*
+Warn limit: *${settings.antinudeWarnLimit || 10}* nude warnings before removal
 
 Tune it:
 • \`${botConfig.getPrefix()} antinude action <delete/warn/kick>\`
 • \`${botConfig.getPrefix()} antinude threshold <30-95>\` (or 0.30-0.95) - lower = catches more
+• \`${botConfig.getPrefix()} antinude limit <1-50>\` - warnings before removal (default 10)
+• \`${botConfig.getPrefix()} antinude reset @user\` - clear someone's nude warnings
+• \`${botConfig.getPrefix()} antinude ok\` (reply to media) - mark an image as NOT nude (false-positive fix)
 • \`${botConfig.getPrefix()} nsfwcheck\` (reply to media) - see exactly what it scores
 \`${botConfig.getPrefix()} antinude off\` to disable.
 
@@ -15421,6 +15436,96 @@ Tune it:
                           text: BOT_MARKER + `❌ Unknown action. Use: delete / warn / kick`,
                         });
                       }
+                    } else if (args[2] === "reset") {
+                      // 💡 OWNER REQUEST (2026-09-28): reset NUDE warnings only.
+                      // The warning pool is shared (manual warns, antilink,
+                      // antinude all write userWarnings) - this wipes ONLY the
+                      // "Antinude violation" entries so unrelated strikes and
+                      // the manual-warn 5-strike counter stay untouched.
+                      const targetUser = getMentionOrReply(m);
+                      if (!targetUser) {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `Usage: \`${botConfig.getPrefix()} antinude reset @user\` (or reply to one of their messages).`,
+                        }, { quoted: m });
+                      } else {
+                        const key = `${targetUser}@${chatId}`;
+                        const { kept, removed } = require('./utils/antinude').filterAntinudeWarnings(userWarnings.get(key) || []);
+                        if (removed > 0) {
+                          if (kept.length) userWarnings.set(key, kept);
+                          else userWarnings.delete(key);
+                          saveUserWarnings();
+                        }
+                        const tName = targetUser.split("@")[0];
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `🧼 Nude warnings cleared for @${tName}: *${removed} removed*, ${kept.length} other warning(s) untouched.\n_Nude-warning count is now 0/${settings.antinudeWarnLimit || 10}._`,
+                          contextInfo: { mentionedJid: [targetUser] },
+                        }, { quoted: m });
+                      }
+                    } else if (args[2] === "limit" && args[3]) {
+                      // 💡 OWNER DIRECTIVE (2026-09-28): removal limit default 10.
+                      const n = parseInt(args[3], 10);
+                      if (!Number.isFinite(n) || n < 1 || n > 50) {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `❌ Limit must be a number 1-50. Example: \`${botConfig.getPrefix()} antinude limit 10\``,
+                        }, { quoted: m });
+                      } else {
+                        settings.antinudeWarnLimit = n;
+                        saveGroupSettings();
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `✅ Nude-removal limit set to *${n}*.\n_A user reaching ${n} antinude warnings in this group is removed automatically (action = warn)._`,
+                        }, { quoted: m });
+                      }
+                    } else if (args[2] === "ok") {
+                      // 💡 OWNER REQUEST (2026-09-28): manually mark an image as
+                      // NOT nude. Marks by sha256 of the media bytes -> future
+                      // re-uploads of the same image are never flagged. Sources,
+                      // in order: explicit hash arg (from the violation notice),
+                      // replied-to media, else the last flagged image in this
+                      // chat (original is usually already deleted).
+                      const _anOk = require('./utils/antinude');
+                      const sub = (args[3] || "").toLowerCase();
+                      if (sub === "list") {
+                        const info = _anOk.safelistInfo();
+                        const lines = info.recent.map((r) => `• ${r.hash}… by ${String(r.by || "?").split("@")[0]}${r.at ? ` (${new Date(r.at).toLocaleDateString()})` : ""}`).join("\n") || "• (none yet)";
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `🖼 *Not-nude safelist* — ${info.size} image(s)\n${lines}`, 
+                        }, { quoted: m });
+                      } else if (sub === "clear") {
+                        const before = _anOk.safelistInfo().size;
+                        _anOk.safelistClear();
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `🧹 Not-nude safelist cleared (${before} entr${before === 1 ? "y" : "ies"} removed).`,
+                        }, { quoted: m });
+                      } else {
+                        let resolved = sub ? _anOk.resolveFlaggedHash(chatId, sub) : null;
+                        if (!resolved) {
+                          const qInfoOk = Object.values(m.message || {}).find(
+                            (v) => v && typeof v === "object" && v.contextInfo
+                          )?.contextInfo;
+                          const quotedMsgOk = qInfoOk?.quotedMessage;
+                          const qMediaOk = quotedMsgOk ? _anOk.extractImageMedia({ message: quotedMsgOk }) : null;
+                          if (qMediaOk) {
+                            try {
+                              const bufOk = await _anOk.downloadMedia(qMediaOk.node, qMediaOk.type, qMediaOk.dlType);
+                              if (bufOk && bufOk.length >= 800) {
+                                resolved = { hash: _anOk.mediaHash(bufOk), source: "replied media" };
+                              }
+                            } catch { /* fall through to flag ring */ }
+                          }
+                        }
+                        if (!resolved) resolved = _anOk.resolveFlaggedHash(chatId, "");
+                        if (!resolved) {
+                          await sock.sendMessage(chatId, {
+                            text: BOT_MARKER + `❌ Nothing to mark. Reply to an image/sticker/video with \`${botConfig.getPrefix()} antinude ok\`, pass the hash from the violation notice (\`${botConfig.getPrefix()} antinude ok <hash>\`), or use it right after a flag to mark the last flagged image.`,
+                          }, { quoted: m });
+                        } else {
+                          _anOk.safelistAdd(resolved.hash, { by: senderJid, chat: chatId, kind: "manual" });
+                          const infoOk = _anOk.safelistInfo();
+                          await sock.sendMessage(chatId, {
+                            text: BOT_MARKER + `✅ Marked as *NOT nude* (${resolved.hash.slice(0, 12)}…, via ${resolved.source}).\n_This exact image will never be flagged or deleted again — globally (${infoOk.size} safelisted)._`,
+                          }, { quoted: m });
+                        }
+                      }
                     } else if (args[2] === "threshold" && args[3]) {
                       // v2 FIX: the old parser used parseInt and rejected its own
                       // documented "0.5-0.95" format (parseInt("0.5") === 0 → error).
@@ -15441,17 +15546,21 @@ Tune it:
                     } else {
                       // status (also the no-arg default)
                       const st = require('./utils/antinude').stats();
+                      const slInfo = require('./utils/antinude').safelistInfo();
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + `🔞 *ANTINUDE STATUS*
 
 Protection: *${settings.antinude ? "ENABLED" : "disabled"}*
 Action: *${settings.antinudeAction || "delete"}*
 Threshold: *${Math.round((settings.antinudeThreshold || 0.45) * 100)}%*
+Warn limit: *${settings.antinudeWarnLimit || 10}* (nude warnings before removal)
+Not-nude safelist: *${slInfo.size}* image(s)
 Media scanned: ${st.checked} (videos: ${st.videos || 0}, anim. stickers: ${st.astickers || 0}, cache hits: ${st.cacheHits})
 Flagged: ${st.flagged} • Errors: ${st.errors}
 
 Toggle: \`${botConfig.getPrefix()} antinude on|off\` • Action: \`${botConfig.getPrefix()} antinude action <delete/warn/kick>\`
-Test media: \`${botConfig.getPrefix()} nsfwcheck\` (reply to an image/sticker/video)`,
+Limit: \`${botConfig.getPrefix()} antinude limit <1-50>\` • Reset: \`${botConfig.getPrefix()} antinude reset @user\`
+Mark not-nude: \`${botConfig.getPrefix()} antinude ok\` (reply to media / right after a flag) • Test media: \`${botConfig.getPrefix()} nsfwcheck\``,
                       });
                     }
                     return;

@@ -47,7 +47,105 @@ const _cache = new Map();
 let _inFlight = 0;
 let _stats = { checked: 0, flagged: 0, errors: 0, cacheHits: 0, videos: 0, astickers: 0 };
 // test hooks (see module.exports._internal)
-const _internal = { _classifyFrame, downloadImpl: null };
+const _internal = { _classifyFrame, downloadImpl: null, classifyImpl: null };
+
+// ── NOT-NUDE SAFELIST (2026-09-28 owner request) ───────────────────
+// Mods can whitelist a specific image ("mark an image as not nude") so the
+// classifier's false positives never fire on it again. Keyed by sha256 of
+// the media bytes -> judgment is content-based, survives re-uploads, and
+// applies GLOBALLY (nudity is not group-relative). Persisted through the
+// engine's system-KV (injected at boot via initSafelistStore) so restarts
+// keep the whitelist.
+const SAFELIST_MAX = 5000;
+const _safelist = new Map(); // hash -> { by, chat, at, note }
+let _safelistSave = null;
+let _safelistLoaded = false;
+// per-chat ring of the last flagged hashes - "antinude ok" with no reply
+// resolves the most recent flagged image in that chat (the original message
+// is usually already deleted by the time a mod reacts, so reply-to-media
+// alone is not enough).
+const FLAG_RING_MAX = 10;
+const _flagRing = new Map(); // chatId -> [{ hash, at, sender, kind }]
+
+function _sha256(buf) {
+  return crypto.createHash("sha256").update(buf).digest("hex");
+}
+
+function initSafelistStore({ load, save }) {
+  if (_safelistLoaded) return;
+  _safelistLoaded = true;
+  _safelistSave = typeof save === "function" ? save : null;
+  try {
+    const data = typeof load === "function" ? load() : null;
+    if (data && typeof data === "object") {
+      for (const [h, meta] of Object.entries(data)) _safelist.set(h, meta);
+    }
+    console.log(`[Antinude] safelist loaded: ${_safelist.size} entr${_safelist.size === 1 ? "y" : "ies"}`);
+  } catch (e) {
+    console.log(`[Antinude] safelist load failed (starting empty): ${String(e.message).slice(0, 60)}`);
+  }
+}
+
+function _safelistPersist() {
+  try { if (_safelistSave) _safelistSave(Object.fromEntries(_safelist)); } catch (e) { console.log(`[Antinude] safelist save failed: ${String(e.message).slice(0, 60)}`); }
+}
+
+function safelistAdd(hash, meta = {}) {
+  if (typeof hash !== "string" || hash.length < 16) return false;
+  _safelist.set(hash, { by: meta.by || "", chat: meta.chat || "", at: meta.at || new Date().toISOString(), kind: meta.kind || "" });
+  while (_safelist.size > SAFELIST_MAX) _safelist.delete(_safelist.keys().next().value);
+  _safelistPersist();
+  return true;
+}
+
+function safelistHas(hash) { return _safelist.has(hash); }
+function safelistRemove(hash) { const had = _safelist.delete(hash); if (had) _safelistPersist(); return had; }
+function safelistClear() { _safelist.clear(); _safelistPersist(); }
+function safelistInfo() {
+  const recent = [..._safelist.entries()].slice(-5).map(([h, m2]) => ({ hash: h.slice(0, 12), by: m2.by, at: m2.at }));
+  return { size: _safelist.size, recent };
+}
+
+// resolve what "antinude ok" should mark: an explicit hash (full or >=6-char
+// prefix) searched in the safelist first then this chat's flag ring, else the
+// most recent flagged hash in the chat. Returns { hash, source } or null.
+function resolveFlaggedHash(chatId, hashArg) {
+  const raw = String(hashArg || "").trim();
+  const arg = raw.toLowerCase().replace(/[^0-9a-f]/g, "");
+  if (arg.length >= 6) {
+    if (_safelist.has(arg)) return { hash: arg, source: "argument" };
+    const inSafelist = [..._safelist.keys()].find((h) => h.startsWith(arg));
+    if (inSafelist) return { hash: inSafelist, source: "argument" };
+    const ring = _flagRing.get(chatId) || [];
+    const inRing = ring.find((r) => r.hash === arg || r.hash.startsWith(arg));
+    if (inRing) return { hash: inRing.hash, source: "flag-history" };
+    return null; // explicit arg that matches nothing -> null (never silently fall back)
+  }
+  // no arg -> most recent flag in this chat. A non-empty arg that lost all
+  // its hex chars (e.g. "zzzzzz") must NOT fall through to this.
+  if (raw) return null;
+  const ring = _flagRing.get(chatId) || [];
+  if (ring.length) return { hash: ring[ring.length - 1].hash, source: ring.length > 1 ? `last-flagged (of ${ring.length})` : "last-flagged" };
+  return null;
+}
+
+function _recordFlag(chatId, hash, sender, kind) {
+  if (!chatId || !hash) return;
+  const ring = _flagRing.get(chatId) || [];
+  ring.push({ hash, at: Date.now(), sender: sender || "", kind: kind || "" });
+  while (ring.length > FLAG_RING_MAX) ring.shift();
+  _flagRing.set(chatId, ring);
+}
+
+// split a user's shared warning entries into { kept, removed } - antinude
+// resets clear ONLY "Antinude violation" entries (manual warns / antilink
+// strikes / the 5-strike manual counter stay untouched). Single source of
+// truth for the engine's `antinude reset` command + unit tests.
+function filterAntinudeWarnings(entries) {
+  const arr = Array.isArray(entries) ? entries : [];
+  const kept = arr.filter((w) => !/^Antinude violation/i.test(String(w?.reason || "")));
+  return { kept, removed: arr.length - kept.length };
+}
 
 function _cacheGet(key) {
   const hit = _cache.get(key);
@@ -216,7 +314,7 @@ async function analyzeMediaBuffer(kind, buf, label = "") {
   let nsfw = 0, parts = [], anyError = false;
   // classify frames through the bounded-concurrency queue in parallel
   const results = await Promise.all(frameList.map((f) =>
-    _classifyFrame(f.buf).then((v) => ({ pos: f.pos, ok: true, v })).catch((e) => {
+    (_internal.classifyImpl || _classifyFrame)(f.buf).then((v) => ({ pos: f.pos, ok: true, v })).catch((e) => {
       anyError = true;
       console.log(`[Antinude] ${label}frame ${f.pos} classify failed: ${String(e.message).slice(0, 60)}`);
       return { pos: f.pos, ok: false };
@@ -280,6 +378,14 @@ async function handleAntinude(sock, m, settings, addWarning, getWarningCount, ct
     catch (e) { console.log(`[Antinude] ${media.type} download failed: ${String(e.message).slice(0, 50)}`); return false; }
     if (!buf || buf.length < 800) { console.log(`[Antinude] ${media.type} skipped: ${buf ? buf.length + "B too small" : "oversize/empty"}`); return false; }
 
+    // 💡 NOT-NUDE SAFELIST (owner request): a mod-marked image is allowed
+    // BEFORE any classification - no vision call, no false positive, ever.
+    const mediaHash = _sha256(buf);
+    if (_safelist.has(mediaHash)) {
+      console.log(`[Antinude] skip ${media.type} ${mediaHash.slice(0, 12)}: safelisted (marked not-nude)`);
+      return false;
+    }
+
     const result = await analyzeMediaBuffer(media.type, buf, `${media.type} ${buf.length}B `);
     if (!result) return false;
 
@@ -293,6 +399,11 @@ async function handleAntinude(sock, m, settings, addWarning, getWarningCount, ct
     _stats.flagged++;
     const sender = m.key.participant || ctx.senderJid;
     const action = settings.antinudeAction || "delete";
+    // record in the per-chat flag ring + a false-positive hint goes into
+    // every notice - once the message is deleted the media is unrecoverable
+    // from chat, so the hash is the only handle a mod has left.
+    _recordFlag(ctx.chatId, mediaHash, sender, media.type);
+    const fpHint = `\n_False positive? Mods: \`${botConfig.getPrefix()} antinude ok ${mediaHash.slice(0, 12)}\`_`;
     let deleted = true;
     try { await sock.sendMessage(ctx.chatId, { delete: m.key }); }
     catch (e) {
@@ -312,21 +423,24 @@ async function handleAntinude(sock, m, settings, addWarning, getWarningCount, ct
       }).catch(() => {});
       setTimeout(() => sock.groupParticipantsUpdate(ctx.chatId, [sender], "remove").catch(() => {}), 1000);
     } else if (action === "warn") {
+      // 💡 OWNER DIRECTIVE (2026-09-28): removal limit configurable, default
+      // 10 (was hardcoded 3). Set per-group via `<prefix> antinude limit <n>`.
+      const warnLimit = Number.isFinite(settings.antinudeWarnLimit) && settings.antinudeWarnLimit >= 1 ? Math.floor(settings.antinudeWarnLimit) : 10;
       let warningCount = 0;
       try { warningCount = addWarning(sender, ctx.chatId, `Antinude violation (nsfw ${pct}%)`); } catch { /* no warning pool */ }
-      const strike = "⚠️".repeat(Math.min(warningCount, 3));
+      const strike = "⚠️".repeat(Math.min(warningCount, warnLimit));
       await sock.sendMessage(ctx.chatId, {
-        text: `${strike} *ANTINUDE WARNING* ${strike}\n@${name}: prohibited ${what} removed (confidence ${pct}%).\nCount: ${warningCount}/3`,
+        text: `${strike} *ANTINUDE WARNING* ${strike}\n@${name}: prohibited ${what} removed (confidence ${pct}%).\nCount: ${warningCount}/${warnLimit}${warningCount >= warnLimit ? " - REMOVED from the group" : ""}${fpHint}`,
         mentions: [sender],
       }).catch(() => {});
-      if (warningCount >= 3) {
+      if (warningCount >= warnLimit) {
         setTimeout(() => sock.groupParticipantsUpdate(ctx.chatId, [sender], "remove").catch(() => {}), 2000);
       }
     } else {
       await sock.sendMessage(ctx.chatId, {
         text: deleted
-          ? `🚨 *ANTINUDE* 🚨\n@${name}'s prohibited ${what} was removed (confidence ${pct}%).`
-          : `⚠️ *ANTINUDE* ⚠️\n@${name} posted prohibited content (${what}, confidence ${pct}%) but I couldn't remove it - make me a *group admin* so I can delete messages.`,
+          ? `🚨 *ANTINUDE* 🚨\n@${name}'s prohibited ${what} was removed (confidence ${pct}%).${fpHint}`
+          : `⚠️ *ANTINUDE* ⚠️\n@${name} posted prohibited content (${what}, confidence ${pct}%) but I couldn't remove it - make me a *group admin* so I can delete messages.${fpHint}`,
         mentions: [sender],
       }).catch(() => {});
     }
@@ -345,5 +459,15 @@ module.exports = {
   analyzeMediaBuffer,
   downloadMedia: _downloadMediaBuffer,
   stats,
-  _internal, // { _classifyFrame (real service or stub), downloadImpl (on-box E2E hook) }
+  // not-nude safelist (owner request 2026-09-28)
+  initSafelistStore,
+  safelistAdd,
+  safelistHas,
+  safelistRemove,
+  safelistClear,
+  safelistInfo,
+  resolveFlaggedHash,
+  filterAntinudeWarnings,
+  mediaHash: _sha256,
+  _internal, // { _classifyFrame (real service or stub), downloadImpl (on-box E2E hook), classifyImpl (unit-QA hook) }
 };
