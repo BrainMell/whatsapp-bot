@@ -115,11 +115,16 @@ function t(name, cond) { if (cond) { pass++; console.log(`  ✅ ${name}`); } els
   handled = await antinude.handleAntinude(sock, mkMsg(), { antinude: true, antinudeThreshold: 0.45, antinudeAction: "delete" }, addWarning, () => 1, mkCtx({}));
   t("delete-failure: still reports to the group", handled === true && sock.calls.texts.some((x) => x.includes("make me a *group admin*")));
 
-  // 7. REAL Box 2 service sanity (negative): Gaara art must score low, no action
+  // 7. safe-content sanity (negative): a LOW verdict must produce no action.
+  // NOTE: the verdict MUST be reset here - scenario 6 leaves 0.9 in the mock
+  // (stale-verdict made this scenario fail spuriously on 2026-09-28). The
+  // REAL Box 2 service check lives in box_antinude_real.js (SERVICE_URL is
+  // captured at require time, so this suite always talks to the mock).
+  verdict = { nsfw: 0.05, parts: [], falconsai: 0.05 };
   antinude._internal.downloadImpl = async () => Buffer.concat([Buffer.from(`case-real-${Date.now()}:`), realBuf]);
   sock = mkSock();
   handled = await antinude.handleAntinude(sock, mkMsg(), { antinude: true, antinudeThreshold: 0.45, antinudeAction: "delete" }, addWarning, () => 1, mkCtx({}));
-  t("real service: anime art scores safe, no action", handled === false && sock.calls.deleted === 0);
+  t("safe content (low verdict): no action", handled === false && sock.calls.deleted === 0);
 
   mock.close();
   console.log(`\nANTINUDE ENFORCEMENT: ${pass}/${pass + fail}`);
