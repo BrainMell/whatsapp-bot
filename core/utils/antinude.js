@@ -25,7 +25,9 @@
 // Architecture unchanged: classification on Box 2 via the Go facade
 // (NSFW_SERVICE_URL, default http://10.0.1.56:7860/vision/nsfw); fully
 // async bounded-concurrency queue; sha256 verdict cache; fail-open.
-// Exemptions: bot itself, group admins, General Mods, bot owner, GC owner.
+// Exemptions (2026-09-28 owner directive): bot itself + bot owner ONLY.
+// Group admins, General Mods and GC owners are SUBJECT to antinude
+// ("the antinude should affect admins except the owner").
 // ============================================
 
 const crypto = require("crypto");
@@ -231,22 +233,22 @@ async function analyzeMediaBuffer(kind, buf, label = "") {
 }
 
 // main entry. ctx: { senderIsAdmin, isOwner, isGlobalMod, isGcOwner, senderJid, chatId }
-// isGlobalMod/isGcOwner may be passed as FUNCTIONS (engine injects them) - a
-// function is truthy, so checking them as booleans exempted EVERY sender
-// ("sender exempt (admin/mod/owner)" on every scan - the whole "antinude
-// isnt checking/warning anyone" report). Resolve each check properly here.
+// EXEMPTIONS (2026-09-28 owner directive): ONLY the bot owner is exempt.
+// Group admins, General Mods and GC owners are subject to antinude like
+// everyone else ("the antinude should affect admins except the owner").
+// senderIsAdmin/isGlobalMod/isGcOwner are still accepted in ctx for
+// compatibility but no longer grant exemption. The bot itself is excluded
+// earlier via m.key.fromMe.
 // Returns true if a violation was handled (engine should not double-act).
 function _isExempt(ctx) {
   if (!ctx) return false;
-  if (ctx.senderIsAdmin === true) return true;
-  if (ctx.isOwner === true) return true;
-  if (typeof ctx.isGlobalMod === "function") {
-    try { if (ctx.isGlobalMod(ctx.senderJid)) return true; } catch { /* treat as non-exempt */ }
-  } else if (ctx.isGlobalMod === true) return true;
-  if (typeof ctx.isGcOwner === "function") {
-    try { if (ctx.isGcOwner(ctx.senderJid, ctx.chatId)) return true; } catch { /* treat as non-exempt */ }
-  } else if (ctx.isGcOwner === true) return true;
-  return false;
+  // defensive: if isOwner ever arrives as a function, CALL it (a function
+  // is truthy - truthiness-checking it would exempt everyone, the exact
+  // bug class that broke the original exemption logic)
+  if (typeof ctx.isOwner === "function") {
+    try { return ctx.isOwner(ctx.senderJid) === true; } catch { return false; }
+  }
+  return ctx.isOwner === true;
 }
 
 async function handleAntinude(sock, m, settings, addWarning, getWarningCount, ctx) {
@@ -261,7 +263,7 @@ async function handleAntinude(sock, m, settings, addWarning, getWarningCount, ct
     // exemptions AFTER media detection so every skip is visible in logs
     // (the "isnt deleting" report was undiagnosable while skips were silent)
     if (_isExempt(ctx)) {
-      console.log(`[Antinude] skip ${media.type} from ${String(ctx.senderJid || "?").split("@")[0]}: sender exempt (admin/mod/owner)`);
+      console.log(`[Antinude] skip ${media.type} from ${String(ctx.senderJid || "?").split("@")[0]}: sender exempt (owner)`);
       return false;
     }
 

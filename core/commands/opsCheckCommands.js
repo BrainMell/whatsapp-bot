@@ -98,7 +98,7 @@ async function handleOpsCheck(sock, chatId, args) {
             '🔞 *ANTINUDE (2026-09-27)* — NSFW image/sticker moderation (separate from quiz)',
             '   `.j antinude [on|off|status|action <delete|warn|kick>|threshold <50-95>]`',
             '   • scans images + stickers in enabled groups; classification runs on the Box 2 vision-worker (fail-open, async — never blocks the bot)',
-            '   • verdicts cached by media hash; admins/mods exempt; calibrated: safe anime/memes/swimwear/classical art score <= 0.03',
+            '   • verdicts cached by media hash; ONLY the bot owner is exempt - group admins, General Mods and GC owners are moderated like everyone else (2026-09-28); calibrated: safe anime/memes/swimwear/classical art score <= 0.03',
             '',
             '⚙️ *QUIZMOD* (admins + Quiz Mods — per-group unless marked GLOBAL)',
             quizConfigDoc,

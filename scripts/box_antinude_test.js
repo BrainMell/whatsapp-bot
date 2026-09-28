@@ -75,12 +75,29 @@ function t(name, cond) { if (cond) { pass++; console.log(`  ✅ ${name}`); } els
   handled = await antinude.handleAntinude(sock, mkMsg(), { antinude: true, antinudeThreshold: 0.45, antinudeAction: "delete" }, addWarning, () => 1, mkCtx({}));
   t("safe image: no action", handled === false && sock.calls.deleted === 0 && sock.calls.texts.length === 0);
 
-  // 4. exempt via isGlobalMod FUNCTION -> skipped, no download
+  // 4. 2026-09-28 owner directive: GROUP ADMIN is NOT exempt -> high score
+  //    still enforces (deleted + group message). This is the regression pin
+  //    for "the antinude should affect admins except the owner".
+  antinude._internal.downloadImpl = async () => Buffer.concat([Buffer.from(`case-admin-${Date.now()}:`), fakeBuf]);
+  verdict = { nsfw: 0.99, parts: [], falconsai: 0.99 };
+  sock = mkSock();
+  handled = await antinude.handleAntinude(sock, mkMsg(), { antinude: true, antinudeThreshold: 0.45, antinudeAction: "delete" }, addWarning, () => 1, mkCtx({ senderIsAdmin: true }));
+  t("admin + violation: STILL enforced (deleted)", handled === true && sock.calls.deleted === 1);
+  t("admin + violation: group notified", sock.calls.texts.some((x) => x.includes("ANTINUDE")));
+
+  // 4b. General Mod / GC owner functions -> also NOT exempt (full enforcement)
+  antinude._internal.downloadImpl = async () => Buffer.concat([Buffer.from(`case-mod-${Date.now()}:`), fakeBuf]);
+  verdict = { nsfw: 0.9, parts: [], falconsai: 0.9 };
+  sock = mkSock();
+  handled = await antinude.handleAntinude(sock, mkMsg(), { antinude: true, antinudeThreshold: 0.45, antinudeAction: "delete" }, addWarning, () => 1, mkCtx({ isGlobalMod: () => true, isGcOwner: () => true }));
+  t("global mod + gc owner + violation: STILL enforced", handled === true && sock.calls.deleted === 1);
+
+  // 4c. bot OWNER remains the ONLY exempt role -> skipped, no download
   antinude._internal.downloadImpl = async () => { throw new Error("should not download for exempt senders"); };
   verdict = { nsfw: 0.99, parts: [], falconsai: 0.99 };
   sock = mkSock();
-  handled = await antinude.handleAntinude(sock, mkMsg(), { antinude: true, antinudeThreshold: 0.45, antinudeAction: "delete" }, addWarning, () => 1, mkCtx({ isGlobalMod: () => true }));
-  t("exempt sender: skipped entirely", handled === false && sock.calls.deleted === 0);
+  handled = await antinude.handleAntinude(sock, mkMsg(), { antinude: true, antinudeThreshold: 0.45, antinudeAction: "delete" }, addWarning, () => 1, mkCtx({ isOwner: true }));
+  t("owner: skipped entirely (only exempt role)", handled === false && sock.calls.deleted === 0);
 
   // 5. warn action -> warning message + count
   antinude._internal.downloadImpl = async () => Buffer.concat([Buffer.from(`case-warn-${Date.now()}:`), fakeBuf]);

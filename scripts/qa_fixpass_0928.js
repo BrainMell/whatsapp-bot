@@ -1,7 +1,9 @@
 // Focused tests for the 2026-09-28 fix pass:
 //   1. buildRandomMixedPlan: random mode mixes logos/songs/images/lore
 //   2. wikipediaImage relevance anchor (title-token overlap + collage reject)
-//   3. antinude exemption: functions are CALLED, not truthiness-checked
+//   3. antinude exemption: functions are CALLED, not truthiness-checked;
+//      2026-09-28 owner directive - ONLY the bot owner is exempt
+//      (admins / General Mods / GC owners are subject to antinude)
 //   4. visionVerify: breaker + shrink fail-open behavior (no provider in sandbox)
 process.chdir(__dirname + "/..");
 
@@ -83,14 +85,25 @@ function t(name, cond) {
   t("non-exempt path logged a download failure instead", lines.some((l) => /download failed|skipped|scanned/.test(l)));
   lines.length = 0;
   console.log = (...a) => { lines.push(a.join(" ")); };
+  await antinude.handleAntinude(fakeSock, msgWithImage, fakeSettings, () => 0, () => 0, baseCtx({ senderIsAdmin: true }));
+  console.log = origLog;
+  t("group ADMIN is NOT exempt (2026-09-28 directive)", !lines.some((l) => l.includes("sender exempt")));
+  t("admin path reaches download/scan, not the skip", lines.some((l) => /download failed|skipped|scanned/.test(l)));
+  lines.length = 0;
+  console.log = (...a) => { lines.push(a.join(" ")); };
   await antinude.handleAntinude(fakeSock, msgWithImage, fakeSettings, () => 0, () => 0, baseCtx({ isGlobalMod: () => true }));
   console.log = origLog;
-  t("isGlobalMod FUNCTION returning true exempts", lines.some((l) => l.includes("sender exempt")));
+  t("isGlobalMod FUNCTION returning true is NOT exempt anymore", !lines.some((l) => l.includes("sender exempt")));
   lines.length = 0;
   console.log = (...a) => { lines.push(a.join(" ")); };
   await antinude.handleAntinude(fakeSock, msgWithImage, fakeSettings, () => 0, () => 0, baseCtx({ isGcOwner: () => true }));
   console.log = origLog;
-  t("isGcOwner FUNCTION returning true exempts", lines.some((l) => l.includes("sender exempt")));
+  t("isGcOwner FUNCTION returning true is NOT exempt anymore", !lines.some((l) => l.includes("sender exempt")));
+  lines.length = 0;
+  console.log = (...a) => { lines.push(a.join(" ")); };
+  await antinude.handleAntinude(fakeSock, msgWithImage, fakeSettings, () => 0, () => 0, baseCtx({ isOwner: true }));
+  console.log = origLog;
+  t("bot OWNER is exempt (skipped before download)", lines.some((l) => l.includes("sender exempt (owner)")));
   lines.length = 0;
   console.log = (...a) => { lines.push(a.join(" ")); };
   await antinude.handleAntinude(fakeSock, msgWithImage, fakeSettings, () => 0, () => 0, baseCtx({ isGlobalMod: () => false, isGcOwner: () => false }));
