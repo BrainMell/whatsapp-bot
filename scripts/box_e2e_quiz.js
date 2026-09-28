@@ -82,6 +82,11 @@ async function main() {
     for (let i = 0; i < 3; i++) {
       const card = await waitFor(() => cards(sock).find((t) => t.includes(`QUESTION ${i + 1}/3`)), 25000, `Q${i + 1}`);
       if (!card) break;
+      // the deadline window arms at CARD DELIVERY (resilient-sends order) -
+      // wait for it or a programmatic answer can race in before the window
+      // exists and get silently dropped (deadline would only fire ~25s later)
+      const win = await waitFor(() => { const s = quiz.getSession(CHAT); return s && s.qOpenUntil && s.qOpenUntil > Date.now() ? true : null; }, 8000, `window Q${i + 1}`);
+      if (!win) break;
       await quiz.handleAnswer(sock, CHAT, "bob@s.whatsapp.net", "B", MARK, { key: { id: `a${i}` } }, "Bob");
       answered++;
       await waitFor(() => texts(sock).some((t) => t.toLowerCase().includes("correct") || t.includes("wrong") || t.includes("⏱ Time")) || cards(sock).some((t) => t.includes(`QUESTION ${i + 2}/3`)), 25000, "reveal");
