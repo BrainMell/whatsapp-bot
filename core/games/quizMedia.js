@@ -329,7 +329,7 @@ async function buildSpotSongQuestion(entry, others, difficulty, goService, trimF
   if (cachedClip) return _finishSpotSong(entry, others, difficulty, cachedClip);
   if (audioCache.isFreshFail(cacheKey)) return null;
   if (!goService || typeof goService.getAudioInfo !== "function") return null;
-  const info = await goService.getAudioInfo(`${entry.song} ${entry.artist}`, { clipSeconds: 25, clipBitrate: "96k", timeoutMs: 120000 }).catch(() => null);
+  const info = await goService.getAudioInfo(`${entry.song} ${entry.artist}`, { clipSeconds: 25, clipBitrate: "96k", timeoutMs: 120000, noRetry: true }).catch(() => null);
   if (!info || info.error || !info.audioURL || !info.metadata) { audioCache.markFail(cacheKey); return null; }
   // P14-style verification: the hit must actually be this song/artist.
   const metaTitle = _norm(info.metadata.title);
@@ -449,7 +449,7 @@ async function buildThemeSongQuestionEntry(entry, others, difficulty, goService,
   if (cachedClip) return _finishThemeSong(entry, others, difficulty, cachedClip);
   if (audioCache.isFreshFail(cacheKey)) return null;
   if (!goService || typeof goService.getAudioInfo !== "function") return null;
-  const info = await goService.getAudioInfo(entry.search, { clipSeconds: 25, clipBitrate: "96k", timeoutMs: 120000 }).catch(() => null);
+  const info = await goService.getAudioInfo(entry.search, { clipSeconds: 25, clipBitrate: "96k", timeoutMs: 120000, noRetry: true }).catch(() => null);
   if (!info || info.error || !info.audioURL || !info.metadata) { audioCache.markFail(cacheKey); return null; }
   const metaTitle = _norm(info.metadata.title);
   const showN = _norm(entry.show);

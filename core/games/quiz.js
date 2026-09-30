@@ -1105,7 +1105,7 @@ async function buildThemeSongQuestion(franchise, otherTitles, usedKeys) {
     let clip = cachedClip || null;
     if (!clip && audioCache.isFreshFail(cacheKey)) continue;
     if (!clip) {
-      const info = await deps.goService.getAudioInfo(`${song} ${franchise.title} opening`, { clipSeconds: 30, clipBitrate: "96k", timeoutMs: 120000 }).catch(() => null);
+      const info = await deps.goService.getAudioInfo(`${song} ${franchise.title} opening`, { clipSeconds: 30, clipBitrate: "96k", timeoutMs: 120000, noRetry: true }).catch(() => null);
       if (!info || info.error || !info.audioURL || !info.metadata) { audioCache.markFail(cacheKey); continue; }
       // P14 verification: the hit must actually belong to this media. A search
       // API hit alone is NOT verification - require title overlap with the song
@@ -1558,7 +1558,7 @@ async function generateSectionQuestions(session, section, sock, chatId) {
     // budget (was 5min - the direct cause of the "~5 audio questions then
     // stall/break" ceiling) and passes a deadline into the builders so they
     // stop STARTING retrievals they cannot finish inside the budget.
-    const audioDeadline = Date.now() + 7 * 60 * 1000; // 7min builder deadline, 1min delivery buffer
+    const audioDeadline = Date.now() + 7 * 60 * 1000; // 7min builder deadline (2min slack under the 10min worker cap)
     const fresh = await mediaWorker.run(
       () => isTheme
         ? quizMediaMod.buildThemeSongQuestions({
@@ -1573,7 +1573,7 @@ async function generateSectionQuestions(session, section, sock, chatId) {
             trimFn: (buf, secs) => _clipAudioBuffer(buf, deps.ffmpegPath, secs || 25),
             deadlineMs: audioDeadline,
           }),
-      { label: `${section.domain}:build`, timeoutMs: 480000 },
+      { label: `${section.domain}:build`, timeoutMs: 600000 },
     ).catch(() => []);
     for (const q of fresh || []) {
       if (questions.length >= sectionCount) break;
@@ -2158,9 +2158,17 @@ function startSection(sock, chatId, session, idx) {
 }
 
 async function finishQuiz(sock, chatId, session, opts = {}) {
-  activeQuizzes.delete(chatId);
+  // 💡 RACE GUARD (found by E2E repro 2026-09-30): the reveal chain runs
+  // DETACHED - after awaits it reaches finishQuiz. If the group already
+  // started a NEW quiz in that window, an unconditional map/lock delete
+  // would vanish the NEW session (zombie quiz: no answers processed, no
+  // clean end). Only tear down state that still belongs to THIS session.
+  if (activeQuizzes.get(chatId) === session) activeQuizzes.delete(chatId);
   releaseSessionSlot(session); // OWNER SPEC §4: end path frees the bot-wide slot (harmless if never held)
-  releaseLifecycle(chatId); // P3: every exit path frees the group
+  const _lc = lifecycle.get(chatId);
+  if (_lc && (session.lockSince === undefined || _lc.since === session.lockSince)) {
+    releaseLifecycle(chatId); // P3: every exit path frees the group (identity-guarded)
+  }
   session.cancelled = true;
   session.token += 1;
   if (session.timerId) clearTimeout(session.timerId);
@@ -2645,6 +2653,7 @@ function stopPrepTimers(prep) {
 async function parkReadySession(sock, chatId, session, { head, introImage, botMarker, m, senderJid, prefix }) {
   session.awaitingGo = true;
   session.holdsGenSlot = true; // OWNER SPEC §4: the bot-wide slot rides with the session until it truly ends
+  session.lockSince = lifecycle.get(chatId)?.since ?? null; // identity for guarded teardown
   session.readyHead = head;
   session.readyIntroImage = introImage || null;
   session.readyAt = Date.now();
@@ -3258,9 +3267,10 @@ async function endQuiz(sock, chatId, senderJid, botMarker, canUseAdminCommands) 
     session.cancelled = true;
     if (session.readyTimerId) { clearTimeout(session.readyTimerId); session.readyTimerId = null; }
     session.awaitingGo = false;
-    activeQuizzes.delete(chatId);
+    if (activeQuizzes.get(chatId) === session) activeQuizzes.delete(chatId);
     releaseSessionSlot(session);
-    releaseLifecycle(chatId);
+    const _lc2 = lifecycle.get(chatId);
+    if (_lc2 && (session.lockSince === undefined || _lc2.since === session.lockSince)) releaseLifecycle(chatId);
     pendingPrep.delete(chatId);
     console.log("[Quiz] parked quiz cancelled via .quiz end");
     return { handled: true, message: botMarker + `🧹 The prepared *${session.title}* quiz was cancelled before starting. You can begin a new one now.` };

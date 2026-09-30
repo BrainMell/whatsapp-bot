@@ -803,12 +803,15 @@ class GoImageService {
       return response.data;
     };
     // 2026-09-14 audio v3: 180s budget per attempt (see note above).
+    // 💡 OWNER SPEC §3: quiz callers pass noRetry - the Go chain already
+    // retries internally, so a Node-side retry just doubles the per-candidate
+    // budget and overshoots the section deadline.
     try {
       return await attempt();
     } catch (error) {
       const status = error && error.response ? error.response.status : null;
       const transient = !status || status >= 500 || error.code === 'ECONNABORTED' || error.code === 'ECONNRESET';
-      if (transient) {
+      if (transient && !opts.noRetry) {
         try {
           console.warn(`[GoService] Audio transient failure (${error.message}), retrying once...`);
           return await attempt();
