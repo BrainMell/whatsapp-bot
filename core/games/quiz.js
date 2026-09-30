@@ -44,6 +44,7 @@ const imageGate = require("../utils/imageGate");         // 2026-09-27 pixel-lev
 const visionVerify = require("../utils/visionVerify");   // 2026-09-27 subject-match verify (Box 2 provider)
 const audioCache = require("../utils/quizAudioCache");   // 2026-09-28 owner spec §3: disk-cached audio clips
 const portraitCache = require("../utils/quizPortraitCache"); // 2026-09-30 image rebuild: disk-cached verified portraits
+const characterResolver = require("../utils/characterResolver"); // 2026-09-30 v3: category-routed multi-source character pipeline
 const wikiEntityImages = require("../utils/wikiEntityImages"); // 2026-09-30 rebuild v2: games/movies/TV entity portraits (Wikipedia graph)
 
 // ── state ──
@@ -165,7 +166,12 @@ function _fyShuffle(arr) {
   }
   return a;
 }
-function setDeps(d) { Object.assign(deps, d || {}); }
+function setDeps(d) {
+  Object.assign(deps, d || {});
+  // characterResolver gets the paced AniList cast + media-type detection via
+  // injection (no circular require: resolver is required by quiz.js)
+  characterResolver.setDeps({ fetchFranchiseCast, detectMediaType: quizLore.detectMediaType, resolveAnime });
+}
 
 // BOT_MARKER comes from the engine as a zero-width prefix; keep a module
 // constant instead of importing engine (avoid circular require).
@@ -341,6 +347,8 @@ async function fetchFranchiseCast(anilistId, sessionRef = null) {
 function _bandCast(cast, difficulty) {
   const withFav = [...cast].sort((a, b) => (b.favourites || 0) - (a.favourites || 0));
   const n = withFav.length;
+  // (shuffled variant below - _bandCastShuffled - keeps band preference while
+  // removing the deterministic head-first order inside each band)
   const bandOf = (idx) => {
     if (idx < Math.max(3, Math.ceil(n * 0.25))) return "easy";
     if (idx < Math.ceil(n * 0.6) || (withFav[idx].favourites || 0) < 30) return "medium";
@@ -351,6 +359,22 @@ function _bandCast(cast, difficulty) {
   return withFav
     .map((c, idx) => ({ ...c, band: bandOf(idx) }))
     .sort((a, b) => Math.abs(bandRank[a.band] - want) - Math.abs(bandRank[b.band] - want));
+}
+
+// 2026-09-30: per-session unbiased variant - keeps the difficulty-band
+// PREFERENCE (wanted band first) but Fisher-Yates-shuffles INSIDE each band,
+// so the same franchise+difficulty no longer serves the same character
+// sequence on every run.
+function _bandCastShuffled(cast, difficulty) {
+  const banded = _bandCast(cast, difficulty);
+  const byBand = new Map();
+  for (const c of banded) { if (!byBand.has(c.band)) byBand.set(c.band, []); byBand.get(c.band).push(c); }
+  const out = [];
+  for (const band of ["easy", "medium", "hard"]) {
+    const g = byBand.get(band);
+    if (g) out.push(..._fyShuffle(g));
+  }
+  return out;
 }
 
 async function anilistCharacterImage(anilistId, charName) {
@@ -1013,7 +1037,7 @@ async function buildCastImageQuestion(wiki, franchiseTitle, usedKeys, difficulty
   if (!anilistId) return null;
   const cast = await fetchFranchiseCast(anilistId, sessionRef);
   if (!cast || cast.length < 4) return null;
-  const ordered = _bandCast(cast, difficulty);
+  const ordered = _bandCastShuffled(cast, difficulty);
   for (const ch of ordered) {
     const ckey = `alchar-${ch.id}`;
     if (usedKeys && (usedKeys.has(ckey) || usedKeys.has(`img:${ch.name}`))) continue;
@@ -1039,7 +1063,7 @@ async function buildCastImageQuestion(wiki, franchiseTitle, usedKeys, difficulty
     if (othersPool.length < 3) continue;
     const mains = othersPool.filter((c) => c.role === "MAIN");
     const pickFrom = mains.length >= 3 ? mains : othersPool;
-    const others = [...pickFrom].sort(() => Math.random() - 0.5).slice(0, 3);
+    const others = _fyShuffle(pickFrom).slice(0, 3);
     const optionsPool = [ch.name, ...others.map((o) => o.name)];
     const optOrder = _fyShuffle(optionsPool.map((_, i) => i));
     // seed the shared asset cache so the post-time send reuses these bytes
@@ -1095,7 +1119,9 @@ async function buildWikiImageQuestion(frSlug, franchiseTitle, wiki, charBuckets,
   // decoys do NOT need verified images - they are text options. Verified
   // portraits go first, then same-franchise registry/wiki names fill up.
   const decoyNames = names.filter((n) => !portraits.some((p) => p.name === n));
-  const ordered = portraits;
+  // 2026-09-30: per-call unbiased shuffle (the registry/memo order is
+  // fame-deterministic - iterating it head-first replayed the same sequence)
+  const ordered = _fyShuffle(portraits);
   for (const p of ordered) {
     const ckey = `wentity-${frSlug || "fr"}-${p.name}`;
     if (usedKeys && (usedKeys.has(ckey) || usedKeys.has(`img:${p.name}`) || usedKeys.has(`wimg:${p.name}`))) continue;
@@ -1104,14 +1130,14 @@ async function buildWikiImageQuestion(frSlug, franchiseTitle, wiki, charBuckets,
     let othersPool = portraits.filter((o) => o.name !== p.name);
     if (othersPool.length < 3) {
       const need = 3 - othersPool.length;
-      const fill = [...decoyNames].sort(() => Math.random() - 0.5)
+      const fill = _fyShuffle(decoyNames)
         .filter((n) => n !== p.name && !othersPool.some((o) => o.name === n))
         .slice(0, need)
         .map((n) => ({ name: n, textOnly: true }));
       othersPool = [...othersPool, ...fill];
     }
     if (othersPool.length < 3) continue;
-    const others = [...othersPool].sort(() => Math.random() - 0.5).slice(0, 3);
+    const others = _fyShuffle(othersPool).slice(0, 3);
     const optionsPool = [p.name, ...others.map((o) => o.name)];
     const optOrder = _fyShuffle(optionsPool.map((_, i) => i));
     // seed the shared asset cache so the post-time send reuses these bytes
@@ -1136,7 +1162,32 @@ async function buildWikiImageQuestion(frSlug, franchiseTitle, wiki, charBuckets,
   return null;
 }
 
+// 2026-09-30 v3: category-routed multi-source selection. Order:
+//   1. characterResolver (category detection -> provider chain -> per-session
+//      Fisher-Yates pool -> image fallback chain) - covers anime via AniList
+//      cast, tv via TVMaze, games/movies/comics via Wikipedia generic
+//      pipeline (Hollow Knight etc.), wikidata fallback, tmdb/igdb keyed
+//   2. legacy: cast path -> curated wiki-entity path -> legacy source hunt
+//      (kept as a safety net for anything the resolver cannot resolve)
 async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, difficulty = "easy", sessionRef = null) {
+  const frCtx = sessionRef?.franchise || null;
+  if (frCtx && franchiseTitle) {
+    try {
+      const q = await characterResolver.pickImageQuestion({
+        title: franchiseTitle,
+        slug: frCtx.slug || null,
+        category: frCtx.mediaType || sessionRef?.mediaType || null,
+        anilistId: frCtx.anime?.id || null,
+        difficulty,
+        usedKeys,
+        sessionRef: sessionRef?._hostSession || null,
+        count: 5,
+      });
+      if (q) return q;
+    } catch (e) {
+      console.log(`[Quiz] resolver image path failed (${String(e?.message || e).slice(0, 60)}) - falling back to legacy`);
+    }
+  }
   // CAST PATH (2026-09-30 rebuild): AniList-anchored franchises never touch
   // the wiki hunt unless the cast yields nothing.
   const anilistIdEarly = sessionRef?.franchise?.anime?.id || null;
@@ -1168,7 +1219,18 @@ async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, d
   // 2026-09-27: candidate pool 8 -> 14. Fandom thumbnails are missing/403 for
   // many subjects ("images don't even spawn half the time"); each extra
   // candidate is one more chance to land a verified asset.
-  const candidates = [...uniq].sort((a, b) => (Math.random() - 0.7) + (bandRank(a.band) - bandRank(b.band)) * 0.4).slice(0, 14);
+  // 2026-09-30: band-preferred but UNBIASED selection - group by band,
+  // Fisher-Yates inside each group, then walk bands outward from the wanted one
+  const byBand = new Map();
+  for (const u of uniq) { if (!byBand.has(u.band)) byBand.set(u.band, []); byBand.get(u.band).push(u); }
+  const candidates = [];
+  for (const band of order) {
+    const g = byBand.get(band);
+    if (g) candidates.push(..._fyShuffle(g));
+  }
+  const uniqSeen = new Set();
+  const candidatesUniq = candidates.filter((c) => (uniqSeen.has(c.name) ? false : (uniqSeen.add(c.name), true)));
+  candidates.length = 0; candidates.push(...candidatesUniq.slice(0, 14));
 
   // fetch + VERIFY an image for one candidate. 2026-09-27 owner brief §4:
   // every byte passes FOUR checks before it may enter a question:
@@ -3336,7 +3398,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
 // section AND for every further random section, so a multi-section random
 // quiz spans many different worlds instead of one.
 async function drawSectionFranchise(session) {
-  const pool = session.randomPool && session.randomPool.length ? session.randomPool : [...RANDOM_POOL].sort(() => Math.random() - 0.5);
+  const pool = session.randomPool && session.randomPool.length ? session.randomPool : _fyShuffle(RANDOM_POOL);
   if (!session.randomPool) session.randomPool = pool;
   if (!session.randomUsed) session.randomUsed = new Set();
   while (pool.length) {
@@ -3351,7 +3413,7 @@ async function drawSectionFranchise(session) {
     const mediaDetect = await quizLore.detectMediaType(titleGuess).catch(() => ({ mediaType: "franchise" }));
     const anime = mediaDetect.mediaType === "anime" ? (await resolveAnime(titleGuess).catch(() => ({}))).anime : null;
     const characters = anime ? await fetchCharacters(anime).catch(() => []) : [];
-    const otherTitles = RANDOM_POOL.filter((s) => s !== slug).sort(() => Math.random() - 0.5).slice(0, 6)
+    const otherTitles = _fyShuffle(RANDOM_POOL.filter((s) => s !== slug)).slice(0, 6)
       .map((s) => RANDOM_TITLES[s] || s.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()));
     return {
       slug, usedAt: Date.now(),
@@ -3371,7 +3433,7 @@ async function buildFranchiseContext(sock, chatId, botMarker, m, parsed) {
   // questions across all of fiction, not pick a random world and stay inside
   // it")
   if (parsed.randomMode) {
-    const fctx = await drawSectionFranchise({ randomPool: [...RANDOM_POOL].sort(() => Math.random() - 0.5), randomUsed: new Set() }).catch(() => null);
+    const fctx = await drawSectionFranchise({ randomPool: _fyShuffle(RANDOM_POOL), randomUsed: new Set() }).catch(() => null);
     if (!fctx) return null;
     fctx.slug && fctx.randomUsed.add(fctx.slug);
     return { ...fctx, charIndex: null, hasImages: true, availability: null };

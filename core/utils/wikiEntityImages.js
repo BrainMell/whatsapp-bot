@@ -359,4 +359,11 @@ function stats() {
   return { registryFranchises: Object.keys(W).length, memoized: _sessionMemo.size, ...portraitCache.stats() };
 }
 
-module.exports = { W, hasRegistry, resolveFranchisePortraits, identityOk, stats };
+// 2026-09-30: characterResolver reuses the paced primitives (wikiApi,
+// pageimagesBatch, articleNamedFile, searchResolve, identityOk, _normUpload)
+// so the generic ANY-franchise pipeline inherits the same rate discipline.
+module.exports = {
+  W, hasRegistry, resolveFranchisePortraits, identityOk, stats,
+  wikiApi: _wikiApi, pageimagesBatch, articleNamedFile, searchResolve,
+  _normUpload, articleLinksModule: null,
+};

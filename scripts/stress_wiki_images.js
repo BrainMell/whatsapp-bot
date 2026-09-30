@@ -34,11 +34,11 @@ const DIFFS = ["easy", "medium", "hard"];
         if (!q) { console.log(`  ⚠ ${title} [${diff}]: null in ${dt}ms`); continue; }
         times.push(dt);
         built++;
-        const shapeOk = q.type === "image" && q.asset?.source === "wiki-entity" && q.hideOptions === true
+        const shapeOk = q.type === "image" && ["wiki-entity","wikipedia","tvmaze","anilist","fandom"].includes(q.asset?.source) && q.hideOptions === true
           && Array.isArray(q.options) && q.options.length === 4 && new Set(q.options).size === 4
           && Number.isInteger(q.correct) && q.correct >= 0 && q.correct < 4
           && q.options.includes(q.asset.subject)
-          && typeof q.asset.url === "string" && /^https:\/\/upload\.wikimedia\.org\//.test(q.asset.url);
+          && typeof q.asset.url === "string" && /^(https:\/\/upload\.wikimedia\.org\/|https:\/\/s4\.anilist\.co\/|https:\/\/image\.tmdb\.org\/|https:\/\/static\.tvmaze\.com\/)/.test(q.asset.url);
         if (!shapeOk) {
           malformed.push(`${title}/${diff}`);
           console.log(`    MALFORMED DETAIL ${title}/${diff}: ${JSON.stringify({ type: q.type, src: q.asset?.source, hide: q.hideOptions, opts: q.options, correct: q.correct, subj: q.asset?.subject, url: String(q.asset?.url).slice(0, 80) })}`);

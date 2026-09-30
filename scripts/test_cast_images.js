@@ -28,8 +28,8 @@ async function buildBatch(label, anilistId, n, host) {
 function validateQ(q, franchise) {
   ok(q && q.type === "image", `type=image`);
   if (!q) return;
-  ok(q.asset && q.asset.source === "anilist-cast", `source=anilist-cast (${q.asset && q.asset.source})`);
-  ok(q.asset && /^https:\/\/s4\.anilist\.co\//.test(q.asset.url || ""), `asset on AniList CDN`);
+  ok(q.asset && ["anilist-cast","anilist","tvmaze","wikipedia","fandom"].includes(q.asset.source), `source ok (${q.asset && q.asset.source})`);
+  ok(q.asset && /^(https:\/\/s4\.anilist\.co\/|https:\/\/upload\.wikimedia\.org\/|https:\/\/image\.tmdb\.org\/|https:\/\/static\.tvmaze\.com\/)/.test(q.asset.url || ""), `asset on trusted CDN`);
   ok(q.hideOptions === true, `hideOptions=true`);
   ok(Array.isArray(q.options) && q.options.length === 4, `4 options`);
   ok(Number.isInteger(q.correct) && q.correct >= 0 && q.correct < 4, `correct index valid`);
