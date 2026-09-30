@@ -44,6 +44,7 @@ const imageGate = require("../utils/imageGate");         // 2026-09-27 pixel-lev
 const visionVerify = require("../utils/visionVerify");   // 2026-09-27 subject-match verify (Box 2 provider)
 const audioCache = require("../utils/quizAudioCache");   // 2026-09-28 owner spec §3: disk-cached audio clips
 const portraitCache = require("../utils/quizPortraitCache"); // 2026-09-30 image rebuild: disk-cached verified portraits
+const wikiEntityImages = require("../utils/wikiEntityImages"); // 2026-09-30 rebuild v2: games/movies/TV entity portraits (Wikipedia graph)
 
 // ── state ──
 const activeQuizzes = new Map(); // chatId -> session (one live quiz per chat)
@@ -1063,6 +1064,78 @@ async function buildCastImageQuestion(wiki, franchiseTitle, usedKeys, difficulty
   return null;
 }
 
+// ══════════════════════════════════════════
+// 2026-09-30 REBUILD v2 - WIKI ENTITY PATH for games/movies/TV.
+// The AniList cast path only covers anime. Measured on Box 1
+// (scripts/wiki_entity_bakeoff.js, 286 chars x 33 RANDOM_POOL franchises):
+// Fandom CDN is Cloudflare-403 from this box (0/60 downloads) while the
+// en.wikipedia entity graph (pilicense=any + upload.wikimedia.org) verified
+// 225-257/286 with strict identity gating. So non-anime franchises resolve
+// portraits through core/utils/wikiEntityImages.js: curated canonical article
+// per character (page-anchored identity) -> search-anchored fallback with an
+// identity gate (rejects box art / wrong-subject hits) -> paced downloads ->
+// production pixel gate -> disk cache. Owner spec §7 unchanged: the picture
+// IS the question (options hidden, answer typed in chat).
+// ══════════════════════════════════════════
+async function buildWikiImageQuestion(frSlug, franchiseTitle, wiki, charBuckets, usedKeys, difficulty = "easy", sessionRef = null) {
+  const reg = frSlug ? wikiEntityImages.W[frSlug] : null;
+  const qualifier = reg?.q || franchiseTitle || null;
+  let names = reg?.names || null;
+  if (!names && charBuckets) {
+    // no curated registry: derive candidates from the franchise wiki index
+    const uniq = [];
+    const seen = new Set();
+    const push = (arr) => (arr || []).forEach((n) => { const k = String(n).toLowerCase(); if (n && !seen.has(k) && !usedKeys?.has(`img:${n}`)) { seen.add(k); uniq.push(n); } });
+    push(charBuckets.easy); push(charBuckets.medium); push(charBuckets.hard);
+    names = uniq.slice(0, 12);
+  }
+  if (!names || !names.length) return null;
+  const portraits = await wikiEntityImages.resolveFranchisePortraits(frSlug, qualifier, names, { difficulty, host: sessionRef?._hostSession }).catch(() => null);
+  if (!portraits || !portraits.length) return null;
+  // decoys do NOT need verified images - they are text options. Verified
+  // portraits go first, then same-franchise registry/wiki names fill up.
+  const decoyNames = names.filter((n) => !portraits.some((p) => p.name === n));
+  const ordered = portraits;
+  for (const p of ordered) {
+    const ckey = `wentity-${frSlug || "fr"}-${p.name}`;
+    if (usedKeys && (usedKeys.has(ckey) || usedKeys.has(`img:${p.name}`) || usedKeys.has(`wimg:${p.name}`))) continue;
+    // decoys come from the FULL portrait pool (previously-used subjects may
+    // still be wrong answers) - only the SUBJECT rotates through usedKeys
+    let othersPool = portraits.filter((o) => o.name !== p.name);
+    if (othersPool.length < 3) {
+      const need = 3 - othersPool.length;
+      const fill = [...decoyNames].sort(() => Math.random() - 0.5)
+        .filter((n) => n !== p.name && !othersPool.some((o) => o.name === n))
+        .slice(0, need)
+        .map((n) => ({ name: n, textOnly: true }));
+      othersPool = [...othersPool, ...fill];
+    }
+    if (othersPool.length < 3) continue;
+    const others = [...othersPool].sort(() => Math.random() - 0.5).slice(0, 3);
+    const optionsPool = [p.name, ...others.map((o) => o.name)];
+    const optOrder = _fyShuffle(optionsPool.map((_, i) => i));
+    // seed the shared asset cache so the post-time send reuses these bytes
+    quizBank.putCachedAsset(p.url, { buf: p.buf, mime: p.mime, kind: "image" });
+    const q = {
+      q: `Who is this character from ${franchiseTitle}?`,
+      options: optOrder.map((i) => optionsPool[i]),
+      correct: optOrder.indexOf(0),
+      hideOptions: true, // OWNER SPEC §7: the picture IS the question
+      difficulty: difficulty || "easy",
+      topic: "Character ID",
+      domain: "characters",
+      type: "image",
+      assetKey: p.url,
+      asset: { kind: "image", url: p.url, mime: p.mime, subject: p.name, source: "wiki-entity", bytesHash: crypto.createHash("sha1").update(p.buf).digest("hex").slice(0, 16) },
+      loreRef: { wiki, page: p.article || p.name, section: "wiki-entity" },
+    };
+    if (usedKeys) { usedKeys.add(ckey); usedKeys.add(`wimg:${p.name}`); usedKeys.add(`img:${p.name}`); }
+    console.log(`[Quiz] image Q (wiki-entity): ${p.name} via ${p.method} [${franchiseTitle}]`);
+    return q;
+  }
+  return null;
+}
+
 async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, difficulty = "easy", sessionRef = null) {
   // CAST PATH (2026-09-30 rebuild): AniList-anchored franchises never touch
   // the wiki hunt unless the cast yields nothing.
@@ -1070,6 +1143,15 @@ async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, d
   if (anilistIdEarly) {
     const castQ = await buildCastImageQuestion(wiki, franchiseTitle, usedKeys, difficulty, anilistIdEarly, sessionRef).catch(() => null);
     if (castQ) return castQ;
+  }
+  // WIKI ENTITY PATH (2026-09-30 rebuild v2): games/movies/TV franchises get
+  // Wikipedia entity-native portraits (page-anchored identity, identity-gated
+  // search fallback). Tried BEFORE the legacy hunt - the bake-off measured the
+  // old Fandom-first chain at 0/60 downloads from this box.
+  const frSlug = sessionRef?.franchise?.slug || null;
+  if (frSlug || charBuckets) {
+    const wikiQ = await buildWikiImageQuestion(frSlug, franchiseTitle, wiki, charBuckets, usedKeys, difficulty, sessionRef).catch(() => null);
+    if (wikiQ) return wikiQ;
   }
   if (!wiki || !charBuckets) return null;
   // flatten the popularity buckets (easy=top10% famous ... hard=obscure) and
@@ -1775,7 +1857,7 @@ async function generateSectionQuestions(session, section, sock, chatId) {
   const fAnime = F?.anime || session.anime;
   const fChars = F?.characters || session.animeCharacters || [];
   const fMk = F ? `wiki:${F.wiki}` : mk;
-  const fFranchise = F ? { title: F.title, wiki: F.wiki, anime: F.anime, mediaType: F.mediaType } : session.franchise;
+  const fFranchise = F ? { title: F.title, wiki: F.wiki, anime: F.anime, mediaType: F.mediaType, slug: F.slug } : session.franchise;
   const fOther = F?.otherTitles || session.otherTitles || [];
   const fMediaType = F?.mediaType || cfg.mediaType;
 
@@ -3364,9 +3446,22 @@ async function buildFranchiseContext(sock, chatId, botMarker, m, parsed) {
 
   return {
     title, wiki, anime, mediaType, characters, otherTitles,
+    slug: _poolSlugFor(parsed.title), // wiki-entity image path key (may be null)
     charIndex: null, // built lazily by section generation
     hasImages: true, availability: null,
   };
+}
+
+// map a user-typed franchise title onto a RANDOM_POOL slug (for the curated
+// Wikipedia entity registry); exact slug / display-name / spaced-slug match
+function _poolSlugFor(title) {
+  const t = String(title || "").toLowerCase().trim().replace(/[\u2019']/g, "");
+  if (!t) return null;
+  for (const s of RANDOM_POOL) {
+    const disp = String(RANDOM_TITLES[s] || "").toLowerCase().replace(/[\u2019']/g, "");
+    if (s === t.replace(/\s+/g, "-") || s.replace(/-/g, " ") === t || disp === t) return s;
+  }
+  return null;
 }
 
 async function pickCandidate(sock, chatId, senderJid, botMarker, m, numStr, senderName, smartGroqCall, MODELS) {
