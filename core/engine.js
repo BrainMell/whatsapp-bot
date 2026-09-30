@@ -7925,6 +7925,42 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     botId: BOT_ID,
                   });
 
+                  // ============================================
+                  // 🎯 DIRECT QUIZ ANSWERS (2026-09-28 owner spec §1)
+                  // ============================================
+                  // While a quiz question is OPEN in this chat, plain chat
+                  // text (no prefix) IS an answer attempt - the answer text
+                  // itself, or a letter when options are shown. Matching
+                  // attempts are consumed HERE (✅/❌ react + score); chatter
+                  // that matches nothing passes through untouched (no react,
+                  // no attempt lock, every downstream feature still sees it).
+                  // Prefixed forms (.j b / .j <answer>) still work via their
+                  // own routes further down. This must sit before the AI
+                  // layer so an answer like "Subaru Natsuki" can never also
+                  // wake the chatbot, and it ignores the bot's own messages.
+                  // ============================================
+                  if (quizGame.isQuestionOpen(chatId) && messageBody && !m.key.fromMe) {
+                    const _bareAns = String(messageBody).trim();
+                    const _pfxLower = String(botConfig.getPrefix() || ".").toLowerCase();
+                    if (_bareAns && !_bareAns.toLowerCase().startsWith(_pfxLower)) {
+                      try {
+                        const _qRes = await quizGame.handleAnswer(
+                          sock,
+                          chatId,
+                          senderJid,
+                          _bareAns,
+                          BOT_MARKER,
+                          m,
+                          senderName,
+                          { bareText: true },
+                        );
+                        if (_qRes && _qRes.handled) return; // consumed as a quiz answer
+                      } catch (_qaErr) {
+                        console.log("[Quiz] bare-answer intercept error:", _qaErr?.message);
+                      }
+                    }
+                  }
+
                   // 1. Get Group Metadata & Admin Status EARLY (Needed for Security & Commands)
                   let groupMetadata = null;
                   let botIsAdmin = false;

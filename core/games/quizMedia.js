@@ -34,6 +34,8 @@ const _norm = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
 const _sha = (s) => crypto.createHash("sha1").update(_norm(s)).digest("hex").slice(0, 16);
 
 // ── shuffle helper (Fisher-Yates, no bias) ──
+const audioCache = require("../utils/quizAudioCache"); // 2026-09-28 owner spec §3: disk-cached verified clips
+
 function _shuffle(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -202,6 +204,9 @@ function logoDatasetInfo() {
 }
 
 // shared question assembler (dataset path + live-search path)
+// 💡 OWNER SPEC §2/§7 (2026-09-28): logo questions carry hideOptions - the
+// card shows NO options ("name the brand" IS the challenge). Options remain
+// stored internally for answer matching + reveal text.
 function assembleLogoQuestion(brand, others, difficulty, url, buf, mime, sourceTag) {
   const optionsPool = [brand.name, ...others.map((o) => o.name)];
   const optOrder = _shuffle(optionsPool.map((_, i) => i)); // fair option order (Fisher-Yates)
@@ -209,6 +214,7 @@ function assembleLogoQuestion(brand, others, difficulty, url, buf, mime, sourceT
     q: `Which brand or company does this logo belong to?`,
     options: optOrder.map((i) => optionsPool[i]),
     correct: optOrder.indexOf(0),
+    hideOptions: true,
     difficulty: difficulty || "easy",
     topic: "Logo",
     domain: "logos",
@@ -315,18 +321,25 @@ const _SONG_VARIANT_RE = /(cover|karaoke|nightcore|slowed|sped\s*up|reverb|8d\s*
 // the legacy path (service did not pre-clip); without it, un-clipped hits
 // are SKIPPED - a full-length track would over-reveal the answer.
 async function buildSpotSongQuestion(entry, others, difficulty, goService, trimFn = null) {
+  // 💡 OWNER SPEC §3 (2026-09-28): disk-cached verified clip -> zero external
+  // calls for repeat quizzes; failure marks stop recently-dead candidates
+  // from burning the retry budget again within 24h.
+  const cacheKey = `song:${_norm(entry.song)}:${_norm(entry.artist)}`;
+  const cachedClip = audioCache.get(cacheKey);
+  if (cachedClip) return _finishSpotSong(entry, others, difficulty, cachedClip);
+  if (audioCache.isFreshFail(cacheKey)) return null;
   if (!goService || typeof goService.getAudioInfo !== "function") return null;
-  const info = await goService.getAudioInfo(`${entry.song} ${entry.artist}`, { clipSeconds: 25, clipBitrate: "96k" }).catch(() => null);
-  if (!info || info.error || !info.audioURL || !info.metadata) return null;
+  const info = await goService.getAudioInfo(`${entry.song} ${entry.artist}`, { clipSeconds: 25, clipBitrate: "96k", timeoutMs: 120000 }).catch(() => null);
+  if (!info || info.error || !info.audioURL || !info.metadata) { audioCache.markFail(cacheKey); return null; }
   // P14-style verification: the hit must actually be this song/artist.
   const metaTitle = _norm(info.metadata.title);
   const songN = _norm(entry.song);
   const artistN = _norm(entry.artist);
-  if (_SONG_VARIANT_RE.test(metaTitle)) return null;
+  if (_SONG_VARIANT_RE.test(metaTitle)) { audioCache.markFail(cacheKey); return null; }
   const overlap = (songN.length >= 6 && metaTitle.includes(songN.slice(0, Math.max(6, Math.floor(songN.length * 0.6)))))
     || (songN.length >= 6 && metaTitle.includes(songN))
     || metaTitle.includes(artistN);
-  if (!overlap) return null;
+  if (!overlap) { audioCache.markFail(cacheKey); return null; }
   // byte gates mirror the theme-song pipeline exactly (clip > 20KB,
   // full-file >= 50KB when the server reports it)
   const fullOk = !Number.isFinite(info.fullBytes) || info.fullBytes >= 50 * 1024;
@@ -341,7 +354,14 @@ async function buildSpotSongQuestion(entry, others, difficulty, goService, trimF
     const dl = await axiosGetBuffer(info.audioURL, 60000).catch(() => null);
     if (dl && dl.length >= 50 * 1024) clip = await trimFn(dl, 25).catch(() => null);
   }
-  if (!clip) return null;
+  if (!clip) { audioCache.markFail(cacheKey); return null; }
+  audioCache.put(cacheKey, clip);
+  audioCache.clearFail(cacheKey);
+  return _finishSpotSong(entry, others, difficulty, clip);
+}
+
+// clip -> question assembler for Spot the Song (cache hit and fresh path share it)
+function _finishSpotSong(entry, others, difficulty, clip) {
   const label = (e) => `${e.song} - ${e.artist}`;
   const optionsPool = [label(entry), ...others.map(label)];
   const optOrder = _shuffle(optionsPool.map((_, i) => i)); // fair option order (Fisher-Yates)
@@ -349,6 +369,7 @@ async function buildSpotSongQuestion(entry, others, difficulty, goService, trimF
     q: `🎵 Which song is this clip from?`,
     options: optOrder.map((i) => optionsPool[i]),
     correct: optOrder.indexOf(0),
+    hideOptions: true, // OWNER SPEC §2: audio questions show no options
     difficulty: difficulty || "medium",
     topic: "Spot the Song",
     domain: "song",
@@ -370,7 +391,7 @@ async function axiosGetBuffer(url, timeoutMs) {
 
 // build `count` verified song questions; retries across up to count*4
 // candidates (availability varies per track).
-async function buildSpotSongQuestions({ count, usedKeys, difficulty, goService, trimFn = null }) {
+async function buildSpotSongQuestions({ count, usedKeys, difficulty, goService, trimFn = null, deadlineMs = 0 }) {
   const n = Math.max(1, Math.min(parseInt(count, 10) || 10, SONGS_POOL.length - 4));
   const out = [];
   const claimed = new Set();
@@ -384,6 +405,9 @@ async function buildSpotSongQuestions({ count, usedKeys, difficulty, goService, 
   const buildOne = async (entry) => {
     const key = `song:${_norm(entry.song)}`;
     if (out.length >= n || usedKeys.has(key) || claimed.has(key)) return;
+    // 💡 OWNER SPEC §3: respect the section deadline - never start a fresh
+    // retrieval we cannot finish inside the mediaWorker budget
+    if (deadlineMs && Date.now() > deadlineMs) return;
     // distractors: same era first (fair), pad from the rest
     let others = _shuffle(SONGS_POOL.filter((s) => s.era === entry.era && s.song !== entry.song)).slice(0, 3);
     if (others.length < 3) {
@@ -400,8 +424,11 @@ async function buildSpotSongQuestions({ count, usedKeys, difficulty, goService, 
     bumpUsage(usage, "song", entry);
     out.push(q);
   };
-  for (let i = 0; i < candidates.length && out.length < n; i += 2) {
-    await Promise.all(candidates.slice(i, i + 2).map(buildOne));
+  // 💡 OWNER SPEC §3: waves of 3 (was pairs of 2) + deadline awareness -
+  // keeps the Go service saturated without overshooting the section budget
+  for (let i = 0; i < candidates.length && out.length < n; i += 3) {
+    if (deadlineMs && Date.now() > deadlineMs) break;
+    await Promise.all(candidates.slice(i, i + 3).map(buildOne));
   }
   if (out.length) saveUsage("song", usage);
   return out;
@@ -416,18 +443,23 @@ async function buildSpotSongQuestions({ count, usedKeys, difficulty, goService, 
 const THEMES_POOL = themesPool.THEMES;
 
 async function buildThemeSongQuestionEntry(entry, others, difficulty, goService, trimFn = null) {
+  // 💡 OWNER SPEC §3: disk cache + failure marks (same pattern as Spot the Song)
+  const cacheKey = `theme:${_norm(entry.show)}`;
+  const cachedClip = audioCache.get(cacheKey);
+  if (cachedClip) return _finishThemeSong(entry, others, difficulty, cachedClip);
+  if (audioCache.isFreshFail(cacheKey)) return null;
   if (!goService || typeof goService.getAudioInfo !== "function") return null;
-  const info = await goService.getAudioInfo(entry.search, { clipSeconds: 25, clipBitrate: "96k" }).catch(() => null);
-  if (!info || info.error || !info.audioURL || !info.metadata) return null;
+  const info = await goService.getAudioInfo(entry.search, { clipSeconds: 25, clipBitrate: "96k", timeoutMs: 120000 }).catch(() => null);
+  if (!info || info.error || !info.audioURL || !info.metadata) { audioCache.markFail(cacheKey); return null; }
   const metaTitle = _norm(info.metadata.title);
   const showN = _norm(entry.show);
   const searchN = _norm(entry.search);
-  if (_SONG_VARIANT_RE.test(metaTitle)) return null;
+  if (_SONG_VARIANT_RE.test(metaTitle)) { audioCache.markFail(cacheKey); return null; }
   // the hit must overlap the search phrase OR the show name
   const searchWords = searchN.split(" ").filter((w) => w.length > 3);
   const overlapWords = searchWords.filter((w) => metaTitle.includes(w)).length;
   const overlap = metaTitle.includes(showN) || (searchWords.length && overlapWords >= Math.min(2, searchWords.length));
-  if (!overlap) return null;
+  if (!overlap) { audioCache.markFail(cacheKey); return null; }
   const fullOk = !Number.isFinite(info.fullBytes) || info.fullBytes >= 50 * 1024;
   let clip = null;
   if (info.clipped) {
@@ -438,13 +470,21 @@ async function buildThemeSongQuestionEntry(entry, others, difficulty, goService,
     const dl = await axiosGetBuffer(info.audioURL, 60000).catch(() => null);
     if (dl && dl.length >= 50 * 1024) clip = await trimFn(dl, 25).catch(() => null);
   }
-  if (!clip) return null;
+  if (!clip) { audioCache.markFail(cacheKey); return null; }
+  audioCache.put(cacheKey, clip);
+  audioCache.clearFail(cacheKey);
+  return _finishThemeSong(entry, others, difficulty, clip);
+}
+
+// clip -> question assembler for Theme Song (cache hit and fresh path share it)
+function _finishThemeSong(entry, others, difficulty, clip) {
   const optionsPool = [entry.show, ...others.map((o) => o.show)];
   const optOrder = _shuffle(optionsPool.map((_, i) => i));
   return {
     q: `🎵 Which show or movie is this theme song from?`,
     options: optOrder.map((i) => optionsPool[i]),
     correct: optOrder.indexOf(0),
+    hideOptions: true, // OWNER SPEC §2: audio questions show no options
     difficulty: difficulty || "medium",
     topic: "Theme Song",
     domain: "audio",
@@ -456,7 +496,7 @@ async function buildThemeSongQuestionEntry(entry, others, difficulty, goService,
   };
 }
 
-async function buildThemeSongQuestions({ count, usedKeys, difficulty, goService, trimFn = null }) {
+async function buildThemeSongQuestions({ count, usedKeys, difficulty, goService, trimFn = null, deadlineMs = 0 }) {
   const n = Math.max(1, Math.min(parseInt(count, 10) || 10, THEMES_POOL.length - 4));
   const out = [];
   const claimed = new Set();
@@ -467,6 +507,8 @@ async function buildThemeSongQuestions({ count, usedKeys, difficulty, goService,
   const buildOne = async (entry) => {
     const key = `theme:${_norm(entry.show)}`;
     if (out.length >= n || usedKeys.has(key) || claimed.has(key)) return;
+    // 💡 OWNER SPEC §3: respect the section deadline
+    if (deadlineMs && Date.now() > deadlineMs) return;
     // distractors: same type first (anime vs anime...), pad from the rest
     let others = _shuffle(THEMES_POOL.filter((t) => t.type === entry.type && t.show !== entry.show)).slice(0, 3);
     if (others.length < 3) {
@@ -483,8 +525,10 @@ async function buildThemeSongQuestions({ count, usedKeys, difficulty, goService,
     bumpUsage(usage, "theme", entry);
     out.push(q);
   };
-  for (let i = 0; i < candidates.length && out.length < n; i += 2) {
-    await Promise.all(candidates.slice(i, i + 2).map(buildOne));
+  // 💡 OWNER SPEC §3: waves of 3 (was pairs of 2) + deadline awareness
+  for (let i = 0; i < candidates.length && out.length < n; i += 3) {
+    if (deadlineMs && Date.now() > deadlineMs) break;
+    await Promise.all(candidates.slice(i, i + 3).map(buildOne));
   }
   if (out.length) saveUsage("theme", usage);
   return out;

@@ -42,6 +42,7 @@ const quizMediaMod = require("./quizMedia");   // 2026-09-27 logos + spot-the-so
 const mediaWorker = require("../utils/mediaWorker"); // 2026-09-27 shared media job runner
 const imageGate = require("../utils/imageGate");         // 2026-09-27 pixel-level gates
 const visionVerify = require("../utils/visionVerify");   // 2026-09-27 subject-match verify (Box 2 provider)
+const audioCache = require("../utils/quizAudioCache");   // 2026-09-28 owner spec §3: disk-cached audio clips
 
 // ── state ──
 const activeQuizzes = new Map(); // chatId -> session (one live quiz per chat)
@@ -272,6 +273,39 @@ async function anilistCharacterImage(anilistId, charName) {
 }
 
 const _http = axios.create({ timeout: 15000, family: 4, headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", Accept: "application/json" } });
+
+// 💡 OWNER SPEC §5/§6 (2026-09-28): Jikan (MyAnimeList) character-page image.
+// Database-anchored EXACT entity lookup: search MAL's character index, accept
+// only a confident name match, return the character's own portrait. Free,
+// stable, keyless (fair-use rate limit ~3 req/s; callers run through
+// mediaWorker at concurrency 3 and this is one call per candidate).
+// Empirically evaluated 2026-09-28 (see worklog): exact-character hit rate
+// and portrait quality are high for known characters; miss = null (never a
+// vaguely-related image).
+let _jikanLastCall = 0;
+async function jikanCharacterImage(charName) {
+  if (!charName) return null;
+  // client-side rate-limit guard: >=450ms between calls
+  const now = Date.now();
+  if (now - _jikanLastCall < 450) {
+    await new Promise((r) => setTimeout(r, 450 - (now - _jikanLastCall)));
+  }
+  _jikanLastCall = Date.now();
+  const r = await _http.get("https://api.jikan.moe/v4/characters", {
+    params: { q: String(charName).slice(0, 80), limit: 3 },
+  });
+  const rows = (r.data?.data || []).filter((c) => c && c.name && c.images?.jpg?.image_url);
+  if (!rows.length) return null;
+  const norm = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const want = norm(charName);
+  // exact-name acceptance only - a wrong character's portrait is worse than none
+  const hit = rows.find((c) => norm(c.name.full || c.name) === want)
+    || rows.find((c) => {
+      const n = norm(c.name.full || c.name);
+      return n.length >= 5 && (n.includes(want) || want.includes(n));
+    });
+  return hit ? { url: hit.images.jpg.image_url, source: "jikan-character", name: hit.name.full || hit.name } : null;
+}
 
 function _cleanDesc(s) {
   return String(s || "")
@@ -918,6 +952,16 @@ async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, d
           if (hit) return hit;
         }
       }
+      // 2b. 💡 OWNER SPEC §5/§6: Jikan (MyAnimeList) character-page portrait -
+      // database-anchored EXACT entity (character index entry, not a search
+      // result). Free/keyless; exact-name acceptance only.
+      {
+        const jk = await jikanCharacterImage(subject).catch(() => null);
+        if (jk && jk.url) {
+          hit = await trySource("jikan-character", jk.url);
+          if (hit) return hit;
+        }
+      }
       // 3+4. Wikipedia (search-anchored, independent)
       for (const mode of ["article", "files"]) {
         const wp = await quizLore.wikipediaImage(`${subject} ${franchiseTitle}`, 700, mode).catch(() => null);
@@ -963,6 +1007,7 @@ async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, d
       q: `Who is this character from ${franchiseTitle}?`,
       options: optOrder.map((i) => optionsPool[i]),
       correct: optOrder.indexOf(0),
+      hideOptions: true, // OWNER SPEC §7: image questions show no options - the picture IS the question
       difficulty: ch.band || difficulty || "easy",
       topic: "Character ID",
       domain: "characters",
@@ -1052,46 +1097,57 @@ async function buildThemeSongQuestion(franchise, otherTitles, usedKeys) {
     // re-download AND the local ffmpeg spawn on this box. Same ffmpeg binary +
     // same args = same clip bytes/audio as the old local trim (1-byte LAME
     // metadata difference, zero effect: audio clips are never content-hashed).
-    const info = await deps.goService.getAudioInfo(`${song} ${franchise.title} opening`, { clipSeconds: 30, clipBitrate: "96k" }).catch(() => null);
-    if (!info || info.error || !info.audioURL || !info.metadata) continue;
-    // P14 verification: the hit must actually belong to this media. A search
-    // API hit alone is NOT verification - require title overlap with the song
-    // name or the franchise title.
-    const metaTitle = _normText(info.metadata.title);
-    const songN = _normText(song);
-    const franN = _normText(franchise.title || "");
-    const overlap = (metaTitle.includes(songN.slice(0, Math.max(6, Math.floor(songN.length * 0.6)))) && songN.length >= 6)
-      || (franN.length >= 5 && metaTitle.includes(franN.split(" ")[0]));
-    if (!overlap) continue;
-
-    // download + byte verification BEFORE the question is playable.
-    // Acceptance gates match the legacy pipeline exactly: full file >= 50KB,
-    // final clip > 20KB.
-    let clip = null;
-    if (info.clipped) {
-      // P25 fast path: the service already trimmed (fullBytes gate mirrors the
-      // old >=50KB check on the full file we used to download)
-      const fullOk = !Number.isFinite(info.fullBytes) || info.fullBytes >= 50 * 1024;
-      const dl = await mediaWorker.run(
-        () => axios.get(info.audioURL, { responseType: "arraybuffer", timeout: 60000, maxContentLength: 20 * 1024 * 1024 }).catch(() => null),
-        { label: `songclip:${_normText(song).slice(0, 40)}`, timeoutMs: 70000 },
-      ).catch(() => null);
-      if (fullOk && dl && dl.data && dl.data.length > 20 * 1024) clip = Buffer.from(dl.data);
-    }
+    // 💡 OWNER SPEC §3 (2026-09-28): disk cache first (keyed like the media
+    // modes: song:<song>:<franchise>) - repeat quizzes skip the Go chain
+    // entirely; fresh failures are marked for 24h.
+    const cacheKey = `song:${_normText(song)}:${_normText(franchise.title)}`;
+    const cachedClip = audioCache.get(cacheKey);
+    let clip = cachedClip || null;
+    if (!clip && audioCache.isFreshFail(cacheKey)) continue;
     if (!clip) {
-      // legacy path: full file download + local ffmpeg trim (older Go build or
-      // server-side clip failed) - unchanged behavior
-      const dl = await axios.get(info.audioURL, { responseType: "arraybuffer", timeout: 60000, maxContentLength: 20 * 1024 * 1024 }).catch(() => null);
-      if (!dl || !dl.data || dl.data.length < 50 * 1024) continue;
-      clip = await _clipAudioBuffer(Buffer.from(dl.data), deps.ffmpegPath, 30);
+      const info = await deps.goService.getAudioInfo(`${song} ${franchise.title} opening`, { clipSeconds: 30, clipBitrate: "96k", timeoutMs: 120000 }).catch(() => null);
+      if (!info || info.error || !info.audioURL || !info.metadata) { audioCache.markFail(cacheKey); continue; }
+      // P14 verification: the hit must actually belong to this media. A search
+      // API hit alone is NOT verification - require title overlap with the song
+      // name or the franchise title.
+      const metaTitle = _normText(info.metadata.title);
+      const songN = _normText(song);
+      const franN = _normText(franchise.title || "");
+      const overlap = (metaTitle.includes(songN.slice(0, Math.max(6, Math.floor(songN.length * 0.6)))) && songN.length >= 6)
+        || (franN.length >= 5 && metaTitle.includes(franN.split(" ")[0]));
+      if (!overlap) { audioCache.markFail(cacheKey); continue; }
+
+      // download + byte verification BEFORE the question is playable.
+      // Acceptance gates match the legacy pipeline exactly: full file >= 50KB,
+      // final clip > 20KB.
+      if (info.clipped) {
+        // P25 fast path: the service already trimmed (fullBytes gate mirrors the
+        // old >=50KB check on the full file we used to download)
+        const fullOk = !Number.isFinite(info.fullBytes) || info.fullBytes >= 50 * 1024;
+        const dl = await mediaWorker.run(
+          () => axios.get(info.audioURL, { responseType: "arraybuffer", timeout: 60000, maxContentLength: 20 * 1024 * 1024 }).catch(() => null),
+          { label: `songclip:${_normText(song).slice(0, 40)}`, timeoutMs: 70000 },
+        ).catch(() => null);
+        if (fullOk && dl && dl.data && dl.data.length > 20 * 1024) clip = Buffer.from(dl.data);
+      }
+      if (!clip) {
+        // legacy path: full file download + local ffmpeg trim (older Go build or
+        // server-side clip failed) - unchanged behavior
+        const dl = await axios.get(info.audioURL, { responseType: "arraybuffer", timeout: 60000, maxContentLength: 20 * 1024 * 1024 }).catch(() => null);
+        if (!dl || !dl.data || dl.data.length < 50 * 1024) { audioCache.markFail(cacheKey); continue; }
+        clip = await _clipAudioBuffer(Buffer.from(dl.data), deps.ffmpegPath, 30);
+      }
+      if (!clip) { audioCache.markFail(cacheKey); continue; }
+      audioCache.put(cacheKey, clip);
+      audioCache.clearFail(cacheKey);
     }
-    if (!clip) continue;
 
     if (usedKeys) usedKeys.add(`song:${_normText(song)}`);
     return {
       q: `🔊 Which anime is this opening from?`,
       options: order.map((i) => optionsPool[i]),
       correct: order.indexOf(0),
+      hideOptions: true, // OWNER SPEC §2: audio questions show no options
       difficulty: "easy",
       topic: "Theme Song",
       domain: "production",
@@ -1147,12 +1203,25 @@ function releaseLifecycle(chatId) {
 // Normal traffic (1 group generating) never touches the queue.
 // ════════════════════════════════════════════
 
-const GEN_SLOTS = Math.max(1, parseInt(process.env.QUIZ_GEN_SLOTS, 10) || 2);
-const GEN_QUEUE_TIMEOUT_MS = Math.max(30000, parseInt(process.env.QUIZ_GEN_QUEUE_TIMEOUT_MS, 10) || 10 * 60 * 1000);
+const GEN_SLOTS = Math.max(1, parseInt(process.env.QUIZ_GEN_SLOTS, 10) || 1);
+// 💡 OWNER SPEC §4 (2026-09-28): ONE quiz active bot-wide. The slot is now
+// held for the FULL lifecycle (planning + ready-park + playing), not just
+// prep - released when the quiz finishes, is ended, expires un-started, or
+// fails. The default queue wait is 45min so a queued group realistically
+// survives a full running quiz ahead of it (env still overrides).
+const GEN_QUEUE_TIMEOUT_MS = Math.max(30000, parseInt(process.env.QUIZ_GEN_QUEUE_TIMEOUT_MS, 10) || 45 * 60 * 1000);
+// 💡 OWNER SPEC §4: a running quiz must never block the queue forever -
+// hard session cap (zombie safety net on top of .j quiz end).
+const SESSION_MAX_MS = Math.max(10 * 60 * 1000, parseInt(process.env.QUIZ_SESSION_MAX_MS, 10) || 90 * 60 * 1000);
 const genGate = { active: 0, waiters: [] };
 
-function acquireGenSlot(prep) {
+function acquireGenSlot(prep, onQueued = null) {
   return new Promise((resolve) => {
+    // duplicate-entry guard: one queued launch per chat (owner spec §4)
+    if (prep && prep.chatId && genGate.waiters.some((w) => w.prep && w.prep.chatId === prep.chatId)) {
+      resolve(false);
+      return;
+    }
     if (genGate.active < GEN_SLOTS && genGate.waiters.length === 0) {
       genGate.active += 1;
       resolve(true);
@@ -1167,6 +1236,10 @@ function acquireGenSlot(prep) {
       }
     }, GEN_QUEUE_TIMEOUT_MS);
     genGate.waiters.push(waiter);
+    if (prep) prep.queuedAt = Date.now();
+    if (typeof onQueued === "function") {
+      try { onQueued(genGate.waiters.length); } catch {}
+    }
   });
 }
 
@@ -1193,6 +1266,16 @@ function pumpGenGate() {
 function releaseGenSlot() {
   genGate.active = Math.max(0, genGate.active - 1);
   pumpGenGate();
+}
+
+// 💡 OWNER SPEC §4: the gen slot travels WITH the session once it parks
+// (planning -> ready -> playing). Every end path must call this exactly
+// once; the flag makes double-calls harmless.
+function releaseSessionSlot(session) {
+  if (session && session.holdsGenSlot) {
+    session.holdsGenSlot = false;
+    releaseGenSlot();
+  }
 }
 
 // ════════════════════════════════════════════
@@ -1471,19 +1554,26 @@ async function generateSectionQuestions(session, section, sock, chatId) {
   }
   if (section.domain === "song" || section.domain === "audio") {
     const isTheme = section.domain === "audio";
+    // 💡 OWNER SPEC §3 (2026-09-28): the audio build gets an 8-minute media
+    // budget (was 5min - the direct cause of the "~5 audio questions then
+    // stall/break" ceiling) and passes a deadline into the builders so they
+    // stop STARTING retrievals they cannot finish inside the budget.
+    const audioDeadline = Date.now() + 7 * 60 * 1000; // 7min builder deadline, 1min delivery buffer
     const fresh = await mediaWorker.run(
       () => isTheme
         ? quizMediaMod.buildThemeSongQuestions({
             count: sectionCount, usedKeys, difficulty: cfg.difficulty,
             goService: deps.goService,
             trimFn: (buf, secs) => _clipAudioBuffer(buf, deps.ffmpegPath, secs || 25),
+            deadlineMs: audioDeadline,
           })
         : quizMediaMod.buildSpotSongQuestions({
             count: sectionCount, usedKeys, difficulty: cfg.difficulty,
             goService: deps.goService,
             trimFn: (buf, secs) => _clipAudioBuffer(buf, deps.ffmpegPath, secs || 25),
+            deadlineMs: audioDeadline,
           }),
-      { label: `${section.domain}:build`, timeoutMs: 300000 },
+      { label: `${section.domain}:build`, timeoutMs: 480000 },
     ).catch(() => []);
     for (const q of fresh || []) {
       if (questions.length >= sectionCount) break;
@@ -1714,13 +1804,18 @@ function formatQuestionCard(session, idx, q) {
   const sectionLabel = session.sections.length > 1 && section && section.name ? `${section.name} • ` : "";
   let s = `🎯 *QUESTION ${session.questionNo}/${total}*  •  ${sectionLabel}${q.topic}  •  ${q.difficulty.toUpperCase()}\n\n`;
   s += `*${q.q}*\n\n`;
-  q.options.forEach((o, i) => { s += `${LETTERS[i]}. ${o}\n`; });
-  s += `\n⏱ ${secs}s  •  ${POINTS[q.difficulty]} Zeni (+20 speed bonus)  •  one answer each\n`;
-  // 💡 2026-09-28: instructions MATCH the receiver exactly - both accepted
-  // forms are prefix-led (".j b" / ".j <answer text>"). The old wording
-  // ("type the option text") made people send bare text the bot ignores.
-  // (Placeholder is deliberately generic - never echo a real option here.)
-  s += `Answer with: \`${prefix} b\` (letter) or \`${prefix} <answer text>\``;
+  // 💡 OWNER SPEC §2/§7 (2026-09-28): logo / audio / image questions hide
+  // their options - identifying the answer IS the challenge. The options
+  // still exist internally (answer matching + reveal text), only the card
+  // omits them. Regular anime search / trivia quizzes keep their options.
+  if (!q.hideOptions) {
+    q.options.forEach((o, i) => { s += `${LETTERS[i]}. ${o}\n`; });
+    s += `\n⏱ ${secs}s  •  ${POINTS[q.difficulty]} Zeni (+20 speed bonus)  •  one answer each\n`;
+    s += `Answer with: \`${prefix} b\` (letter) or just type the answer in chat`;
+  } else {
+    s += `\n⏱ ${secs}s  •  ${POINTS[q.difficulty]} Zeni (+20 speed bonus)  •  one answer each\n`;
+    s += `No options - just type the answer in chat!`;
+  }
   return s;
 }
 
@@ -1940,7 +2035,9 @@ async function revealAndAdvance(sock, chatId, session, winner, timedOut) {
     const section = session.sections[session.activeSection];
     const q = section && section.questions[session.idx];
     if (!q) return; // defensive: section transition already owns the session
-    const correctText = `${LETTERS[q.correct]}. ${q.options[q.correct]}`;
+    const correctText = q.hideOptions
+      ? String(q.options[q.correct])
+      : `${LETTERS[q.correct]}. ${q.options[q.correct]}`;
     session.qOpenUntil = 0; // question closed - late answers ignored (sync: before any await)
 
     if (winner) {
@@ -2062,12 +2159,14 @@ function startSection(sock, chatId, session, idx) {
 
 async function finishQuiz(sock, chatId, session, opts = {}) {
   activeQuizzes.delete(chatId);
+  releaseSessionSlot(session); // OWNER SPEC §4: end path frees the bot-wide slot (harmless if never held)
   releaseLifecycle(chatId); // P3: every exit path frees the group
   session.cancelled = true;
   session.token += 1;
   if (session.timerId) clearTimeout(session.timerId);
   if (session.nextTimerId) clearTimeout(session.nextTimerId);
   if (session.reassureTimerId) clearTimeout(session.reassureTimerId);
+  if (session.hardCapTimerId) { clearTimeout(session.hardCapTimerId); session.hardCapTimerId = null; }
 
   const entries = [...session.scores.entries()]
     .map(([jid, s]) => ({ jid, ...s }))
@@ -2080,6 +2179,7 @@ async function finishQuiz(sock, chatId, session, opts = {}) {
   const totalQs = session.sections.reduce((a, s) => a + s.questions.length, 0);
   out += `📊 ${totalAnswered}/${totalQs} questions claimed\n`;
   out += `🎯 Difficulty: ${session.cfg.difficulty.toUpperCase()}\n`;
+  if (opts.reason === "hardcap") out += `⏱ (Session time limit reached - quiz closed automatically.)\n`;
 
   for (const e of entries) {
     await safeAddMoney(e.jid, e.points, `Quiz reward (${session.title || "quiz"})`);
@@ -2126,7 +2226,12 @@ function isQuestionOpen(chatId) {
   return !!(s && !s.cancelled && s.qOpenUntil && Date.now() <= s.qOpenUntil);
 }
 
-async function handleAnswer(sock, chatId, senderJid, answerText, botMarker, m, senderName) {
+async function handleAnswer(sock, chatId, senderJid, answerText, botMarker, m, senderName, opts = {}) {
+  // 💡 DIRECT ANSWER FORMAT (2026-09-28 owner spec §1): while a question is
+  // open, the engine routes PLAIN chat text here with { bareText: true } -
+  // players answer by simply typing the answer. Prefixed forms still work
+  // as explicit attempts.
+  const bareText = !!opts.bareText;
   const session = activeQuizzes.get(chatId);
   if (!session || session.cancelled) return { handled: false }; // no quiz -> let other handlers run
   const section = session.sections[session.activeSection];
@@ -2143,8 +2248,15 @@ async function handleAnswer(sock, chatId, senderJid, answerText, botMarker, m, s
   // 💡 SIMPLIFIED ANSWER FORMAT (2026-09-27): ".j b" (single letter) OR the
   // option TEXT (".j Subaru Natsuki"). The legacy ".j a b" form still works
   // because the engine strips the leading trigger letter before this runs.
+  // 2026-09-28: bare chat text follows the same matcher, but ONLY a MATCHING
+  // guess is consumed - chatter that matches nothing passes through untouched
+  // (no react, no lock-out, other features still see it). Explicit prefixed
+  // attempts always register: that is the "one answer each" contract.
+  // 💡 hideOptions questions (logo/audio/image - owner spec §2/§7): the
+  // player never saw letter labels, so a single letter must NOT match -
+  // only the answer TEXT identifies the option.
   let idx = -1;
-  if (/^[abcd]$/i.test(raw)) {
+  if (!q.hideOptions && /^[abcd]$/i.test(raw)) {
     idx = LETTERS.indexOf(raw.toUpperCase());
   } else {
     const norm = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").replace(/\b(the|a|an)\b/g, " ").trim();
@@ -2156,12 +2268,13 @@ async function handleAnswer(sock, chatId, senderJid, answerText, botMarker, m, s
         // "subaru natsuki" matches, "sub" does not
         idx = q.options.findIndex((o) => {
           const on = norm(o);
-          return on.length && (on === guess || (guess.split(" ").length > 1 && on.split(" ").join("") === guess.split(" ").join("")));
+          return on.length && (on === guess || on.split(" ").join("") === guess.split(" ").join(""));
         });
       }
     }
   }
   if (idx < 0) {
+    if (bareText) return { handled: false }; // chatter - never consume, never lock out
     await sock.sendMessage(chatId, { react: { text: "🤔", key: m.key } }).catch(() => {});
     return { handled: true, silent: true };
   }
@@ -2417,7 +2530,7 @@ Options:
 • \`-audio <n>\` adds n audio questions (theme songs / voices)
 • \`random\` mixes franchises across ALL of fiction, one per section
 
-During the quiz, answer with \`${prefix} <letter>\` (e.g. \`${prefix} b\`) or \`${prefix} <answer text>\`. One answer per player per question!
+During the quiz, answer by simply typing the answer in chat (or \`${prefix} <letter>\` when options are shown). One answer per player per question!
 Leaderboard: \`${prefix} quizboard\` • Cancel: \`${prefix} quiz end\` • Mods: \`${prefix} quizmod\``,
     };
   }
@@ -2531,6 +2644,7 @@ function stopPrepTimers(prep) {
 // a group is never blocked by an abandoned prep.
 async function parkReadySession(sock, chatId, session, { head, introImage, botMarker, m, senderJid, prefix }) {
   session.awaitingGo = true;
+  session.holdsGenSlot = true; // OWNER SPEC §4: the bot-wide slot rides with the session until it truly ends
   session.readyHead = head;
   session.readyIntroImage = introImage || null;
   session.readyAt = Date.now();
@@ -2557,6 +2671,7 @@ async function parkReadySession(sock, chatId, session, { head, introImage, botMa
       if (!cur || cur !== session || !cur.awaitingGo) return;
       cur.cancelled = true;
       activeQuizzes.delete(chatId);
+      releaseSessionSlot(cur);
       releaseLifecycle(chatId);
       await sock.sendMessage(chatId, {
         text: botMarker + `⌛ The prepared *${cur.title}* quiz expired without \`${prefix} quiz go\` - cleaned up. Start a fresh one any time: \`${prefix} quiz ...\``,
@@ -2591,6 +2706,18 @@ async function confirmStart(sock, chatId, senderJid, botMarker, canUseAdminComma
     return { handled: true, message: botMarker + `🛑 Only ${mentionOf(session.askedBy)} - or a Quiz Mod / Global Mod - can start this quiz.`, mentions: [session.askedBy] };
   }
   if (session.readyTimerId) { clearTimeout(session.readyTimerId); session.readyTimerId = null; }
+  // 💡 OWNER SPEC §4: hard session cap - a running quiz must never block the
+  // bot-wide queue forever. 90min (env QUIZ_SESSION_MAX_MS) after the go,
+  // the quiz is force-finished with a note. finishQuiz clears this timer.
+  session.hardCapTimerId = setTimeout(() => {
+    try {
+      const cur = activeQuizzes.get(chatId);
+      if (!cur || cur !== session || cur.cancelled) return;
+      console.log(`[Quiz] hard session cap (${Math.round(SESSION_MAX_MS / 60000)}min) hit - force-finishing`);
+      finishQuiz(sock, chatId, session, { reason: "hardcap" }).catch(() => {});
+    } catch (e) { console.log("[Quiz] hard cap tick failed:", e?.message); }
+  }, SESSION_MAX_MS);
+  session.hardCapTimerId.unref?.();
   const head = session.readyHead || "";
   const introImage = session.readyIntroImage;
   session.readyHead = null;
@@ -2627,20 +2754,34 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
   let ownsSlot = false; // P20: true only while this launch holds a generation slot
 
   try {
-    // P20: bot-wide generation gate - FIFO wait when at cap, clear deferral
-    // on queue timeout, never a silent drop. Released on EVERY exit below -
-    // but ONLY if this launch actually received a slot (queued launches that
-    // time out or are cancelled must not decrement someone else's slot).
-    const gotSlot = await acquireGenSlot(prep);
+    // P20 + OWNER SPEC §4: bot-wide ONE-quiz queue. FIFO wait when a quiz
+    // (anywhere in its lifecycle) holds the slot; the group is told its
+    // position at enqueue time and again the moment the slot is granted.
+    // Released on EVERY exit below - but ONLY if this launch actually
+    // received a slot (queued launches that time out or are cancelled must
+    // not decrement someone else's slot).
+    const gotSlot = await acquireGenSlot(prep, (position) => {
+      console.log(`[Quiz] ${chatId} queued bot-wide at position ${position}`);
+      sock.sendMessage(chatId, {
+        text: botMarker + `⏳ Queued! Another quiz is already running bot-wide - yours is *position ${position}* in the queue and will start automatically when it finishes.`,
+      }, { quoted: m }).catch(() => {});
+    });
     if (!gotSlot) {
       abortPrep();
       if (!prep.cancelled) {
         console.log("[Quiz] generation queue timeout - deferring launch");
-        await sock.sendMessage(chatId, { text: botMarker + `⏳ The quiz generation queue is full right now - please try again in a few minutes.` }).catch(() => {});
+        await sock.sendMessage(chatId, { text: botMarker + `⏳ The quiz queue wait timed out (another quiz ran too long) - please try again.` }).catch(() => {});
       }
       return;
     }
     ownsSlot = true;
+    if (prep.queuedAt) {
+      const waitedMin = Math.max(1, Math.round((Date.now() - prep.queuedAt) / 60000));
+      await sock.sendMessage(chatId, {
+        text: botMarker + `🚀 Queue free (waited ~${waitedMin} min) - planning your quiz now!`,
+      }).catch(() => {});
+      prep.queuedAt = null;
+    }
 
     const cfg = await quizConfigMod.buildQuizConfig(chatId, {
       count: parsed.count,
@@ -2766,13 +2907,14 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
           ? `🎵 ${totalQs} song clips • name the track behind each one\n`
           : `📺 ${totalQs} theme songs • name the show or movie behind each one\n`;
       head += `📚 ${cfg.difficulty.toUpperCase()} • ${POINTS[cfg.difficulty]} Zeni per correct (+20 speed bonus)\n`;
-      head += `✍️ Answer with \`${prefix} <letter>\` or \`${prefix} <answer text>\` - one answer per player per question\n`;
+      head += `✍️ Answer: just type the answer in chat - or \`${prefix} <letter>\` for multiple choice. One answer per player per question\n`;
       head += `⏱ ${cfg.timePerQuestion}s per question\n`;
       head += `🛑 Cancel: \`${prefix} quiz end\`\n\n`;
       head += `Let's go! 🚀`;
 
       // 2026-09-27 planning mode: media modes ALWAYS park for the go command
       await parkReadySession(sock, chatId, session, { head, introImage: null, botMarker, m, senderJid, prefix });
+      ownsSlot = false; // OWNER SPEC §4: the slot now rides with the parked session
       return;
     }
 
@@ -2896,7 +3038,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     head += `📚 ${totalQs} questions • ${cfg.difficulty.toUpperCase()} • ${POINTS[cfg.difficulty]} Zeni per correct (+20 speed bonus)\n`;
     if (session.sections.length > 1) head += `📖 ${session.sections.length} sections\n`;
     if (parsed.section) head += `📚 Topic locked: ${parsed.section}\n`;
-    head += `✍️ Answer with \`${prefix} <letter>\` or \`${prefix} <answer text>\` - one answer per player per question\n`;
+    head += `✍️ Answer: just type the answer in chat - or \`${prefix} <letter>\` for multiple choice. One answer per player per question\n`;
     head += `⏱ ${cfg.timePerQuestion}s per question\n`;
     head += `🛑 Cancel: \`${prefix} quiz end\`\n\n`;
     head += `Let's go! 🚀`;
@@ -2907,6 +3049,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     // lore quizzes and media quizzes alike. (Fixes "regular quizzes do not
     // follow the planning phase".)
     await parkReadySession(sock, chatId, session, { head, introImage, botMarker, m, senderJid, prefix });
+    ownsSlot = false; // OWNER SPEC §4: the slot now rides with the parked session
     return;
   } catch (e) {
     stopPrepTimers(prep);
@@ -3116,6 +3259,7 @@ async function endQuiz(sock, chatId, senderJid, botMarker, canUseAdminCommands) 
     if (session.readyTimerId) { clearTimeout(session.readyTimerId); session.readyTimerId = null; }
     session.awaitingGo = false;
     activeQuizzes.delete(chatId);
+    releaseSessionSlot(session);
     releaseLifecycle(chatId);
     pendingPrep.delete(chatId);
     console.log("[Quiz] parked quiz cancelled via .quiz end");
@@ -3210,5 +3354,5 @@ module.exports = {
   SECTION_STATES,
   FOREIGN_MEDIA_BLOCKLIST,
   RANDOM_POOL,
-  _internal: { activeQuizzes, pendingPicks, lifecycle, revealAndAdvance, finishQuiz, postQuestion, startSection, ensureSectionGenerating, generateSectionQuestions, advanceToNextSection, mediaKeyFor, probeAvailability, launchQuizAsync, buildFranchiseContext, parkReadySession, READY_TTL_MS, genGate: { acquireGenSlot, releaseGenSlot, pumpGenGate, state: () => genGate, slots: () => GEN_SLOTS } },
+  _internal: { activeQuizzes, pendingPicks, lifecycle, revealAndAdvance, finishQuiz, postQuestion, startSection, ensureSectionGenerating, generateSectionQuestions, advanceToNextSection, mediaKeyFor, probeAvailability, launchQuizAsync, buildFranchiseContext, parkReadySession, READY_TTL_MS, releaseSessionSlot, SESSION_MAX_MS, genGate: { acquireGenSlot, releaseGenSlot, pumpGenGate, state: () => genGate, slots: () => GEN_SLOTS } },
 };

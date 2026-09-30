@@ -794,7 +794,11 @@ class GoImageService {
     const attempt = async () => {
       const response = await axios.get(base + "/api/scrape/audio", {
         params,
-        timeout: 180000,
+        // 💡 OWNER SPEC §3 (2026-09-28): per-call budget. Quiz audio builders
+        // pass timeoutMs: 120000 (the Go service self-budgets ~95s on the
+        // YouTube branch) - the old hardcoded 180s x1 retry meant one dead
+        // candidate could burn 6 minutes of a 5-minute section budget.
+        timeout: Math.max(30000, parseInt(opts.timeoutMs, 10) || 180000),
       });
       return response.data;
     };
