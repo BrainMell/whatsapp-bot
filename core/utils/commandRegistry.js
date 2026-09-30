@@ -387,7 +387,6 @@ const COMMAND_REGISTRY = {
     { cmd: 'quiz', desc: 'Start an anime quiz on any title - AI questions from real AniList data.', usage: 'quiz "<anime>" [count 1-15] [easy/medium/hard]' },
     { cmd: 'quiz pick', desc: 'Choose the anime when your quiz title is ambiguous.', usage: 'quiz pick <number>' },
     { cmd: 'quiz end', desc: 'End the running quiz early (starter or admins).', usage: 'quiz end' },
-    { cmd: 'a', desc: 'Answer the running quiz question (A/B/C/D or full option).', usage: 'a <letter>' },
     { cmd: 'quizboard', desc: 'Quiz leaderboard for this chat - Zeni, correct answers, wins.', usage: 'quizboard' }
   ],
   PowerScaling: [

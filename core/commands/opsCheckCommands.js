@@ -61,7 +61,7 @@ async function handleOpsCheck(sock, chatId, args) {
             '   • `-images <n>` — add picture questions (character ID)',
             '   • `-audio <n>` — add audio questions (theme songs / character voices)',
             '   • `random` — `.j quiz random 20 -images 5 -audio 3` mixes franchises ACROSS ALL OF FICTION - one random world per section (66-franchise pool)',
-            '   • answers: `.j <letter>` (e.g. `.j b`) OR `.j <answer text>` — ONE answer per player per question (forms are prefix-led; the old `.j a <answer>` habit still works because the letter is stripped)',
+            '   • answers: just type the answer in chat — plain text or a single letter (e.g. `b`) — ONE answer per player per question, no command needed (only while a question is open)',
             '   • count up to 50; 40+ quizzes play in named sections with breaks',
             '   • one attempt per player per question; wrong first answer = out for that question',
             '   Related: `.j quizboard` • `.j quiz end` • `.j quiz pick <n>`',
@@ -143,7 +143,7 @@ async function handleOpsCheck(sock, chatId, args) {
             '   • questions are separated by a randomized 10-30s gap; one question resolves at a time (state locks)',
             '   • quiz option order is now fair (correct answer lands on A-D evenly)',
             '   • `.j quiz` START permission is now limited to Quiz Mods / Global Mods / owner (2026-09-27)',
-            '   • `.j <answer>` replaces `.j a <answer>` — single letter or option text, only while a question is open in that chat',
+            '   • quiz answers are typed directly in chat — no answer command exists; single letter or option text, only while a question is open in that chat',
             '',
             `📦 Commit: \`${deployed}\` on \`${branch}\``,
         ].join('\n');

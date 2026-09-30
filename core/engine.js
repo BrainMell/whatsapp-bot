@@ -11645,8 +11645,9 @@ _💡 Reply with another number from your search list!_`.trim();
 
                   // SPAM PREVENTION: Intelligent Cooldowns
                   // 💡 AUDIT FIX 2026-09-26 (quiz P4): quiz ANSWERS are gameplay
-                  // input, not commands. With a quiz running, ".j a <letter>"
-                  // (and .j b/.j c/.j d) must neither CHECK nor SET the global
+                  // input, not commands. With a quiz running, answer messages
+                  // (an option letter like ".j b", or plain typed text) must
+                  // neither CHECK nor SET the global
                   // 5s cooldown - otherwise players got "⚠️ SLOW DOWN!" mid-game
                   // and answering locked the group's other commands for 5s.
                   // Quiz-internal pacing is handled inside quiz.js separately.
