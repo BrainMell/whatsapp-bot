@@ -43,6 +43,7 @@ const mediaWorker = require("../utils/mediaWorker"); // 2026-09-27 shared media 
 const imageGate = require("../utils/imageGate");         // 2026-09-27 pixel-level gates
 const visionVerify = require("../utils/visionVerify");   // 2026-09-27 subject-match verify (Box 2 provider)
 const audioCache = require("../utils/quizAudioCache");   // 2026-09-28 owner spec §3: disk-cached audio clips
+const portraitCache = require("../utils/quizPortraitCache"); // 2026-09-30 image rebuild: disk-cached verified portraits
 
 // ── state ──
 const activeQuizzes = new Map(); // chatId -> session (one live quiz per chat)
@@ -251,16 +252,113 @@ query ($id: Int) {
   }
 }`;
 
+// 💡 IMAGE SYSTEM REBUILD (2026-09-30): character-native cast fetch.
+// Empirical bake-off on Box 1 (scripts/img_bakeoff.js, results in worklog):
+//   AniList character portraits  60/60 ok, median 18ms/image, cast query ~300ms
+//   Fandom pageimage (old #1)     0/60 ok (46 blocked downloads, 14 none)
+//   Jikan                          504 globally down
+// So the whole flow INVERTS: for AniList-anchored franchises the cast (name +
+// canonical portrait + favourites + role) IS the question bank. ONE query per
+// quiz (disk-cached 24h) replaces the old per-candidate source hunt, and the
+// portrait identity is guaranteed by the database - no CLIP needed on this
+// path. fetchFranchiseCast() is single-flight + session-memoized + disk-cached
+// so N image questions in a quiz cost exactly ONE graphql call.
+const ANILIST_CAST_Q = `
+query ($id: Int) {
+  Media(id: $id, type: ANIME) {
+    characters(perPage: 50, sort: [ROLE, FAVOURITES_DESC]) {
+      edges {
+        role
+        node { id name { full } favourites image { large } }
+      }
+    }
+  }
+}`;
+
+// Global AniList graphql pacing: min interval between calls + single-flight
+// dedupe for identical (query,vars) pairs. The old architecture re-queried
+// per candidate and got Box 1 rate-limited (429) mid-quiz; this keeps the
+// whole process inside AniList's per-minute budget no matter how many
+// quizzes/candidates run concurrently.
+const _anilistInflight = new Map();
+let _anilistLastCall = 0;
+const ANILIST_MIN_GAP_MS = 1100; // conservative under the 30-90/min ceilings
+async function anilistPost(query, variables) {
+  const key = `${crypto.createHash("sha1").update(query).digest("hex").slice(0, 12)}:${JSON.stringify(variables || {})}`;
+  if (_anilistInflight.has(key)) return _anilistInflight.get(key);
+  const exec = (async () => {
+    const gap = Date.now() - _anilistLastCall;
+    if (gap < ANILIST_MIN_GAP_MS) await new Promise((r) => setTimeout(r, ANILIST_MIN_GAP_MS - gap));
+    _anilistLastCall = Date.now();
+    return _http.post("https://graphql.anilist.co", { query, variables });
+  })();
+  _anilistInflight.set(key, exec);
+  try { return await exec; } finally { _anilistInflight.delete(key); }
+}
+
+// Fetch (and cache) the portrait-bearing cast of one AniList media.
+// Cache layers: session memo -> disk (24h) -> graphql (paced, single-flight).
+// Cast rows: { id, name, favourites, role, img }. Non-portrait / narrator
+// rows are dropped here so callers can assume every row has a usable asset.
+async function fetchFranchiseCast(anilistId, sessionRef = null) {
+  if (!anilistId) return null;
+  const host = (sessionRef && sessionRef._hostSession) || sessionRef; // memo across a quiz, not per-call
+  if (host) {
+    // keyed by media id - one random-mode session spans MANY franchises
+    if (!host._anilistCasts) host._anilistCasts = new Map();
+    const memo = host._anilistCasts.get(String(anilistId));
+    if (memo && memo.length) return memo;
+  }
+  const disk = portraitCache.getCast(anilistId);
+  if (disk) { if (host) host._anilistCasts.set(String(anilistId), disk); return disk; }
+  if (portraitCache.hasCastNegative(anilistId)) return null;
+  try {
+    const r = await anilistPost(ANILIST_CAST_Q, { id: anilistId });
+    const edges = r.data?.data?.Media?.characters?.edges || [];
+    const cast = edges
+      .map((e) => ({
+        id: e.node?.id,
+        name: e.node?.name?.full || "",
+        favourites: e.node?.favourites || 0,
+        role: e.role || "",
+        img: e.node?.image?.large || null,
+      }))
+      .filter((c) => c.id && c.name && c.img && /^narrator$/i.test(c.name) === false);
+    if (cast.length) portraitCache.putCast(anilistId, cast);
+    else portraitCache.putCastNegative(anilistId);
+    if (host && cast.length) host._anilistCasts.set(String(anilistId), cast);
+    return cast.length ? cast : null;
+  } catch {
+    portraitCache.putCastNegative(anilistId);
+    return null;
+  }
+}
+
+// Difficulty bands inside the cast via favourites (a real fame signal):
+// easy = top quartile, medium = next third, hard = the tail but never a
+// nobody (>= 30 favourites) so hard questions stay recognizable.
+function _bandCast(cast, difficulty) {
+  const withFav = [...cast].sort((a, b) => (b.favourites || 0) - (a.favourites || 0));
+  const n = withFav.length;
+  const bandOf = (idx) => {
+    if (idx < Math.max(3, Math.ceil(n * 0.25))) return "easy";
+    if (idx < Math.ceil(n * 0.6) || (withFav[idx].favourites || 0) < 30) return "medium";
+    return "hard";
+  };
+  const bandRank = { easy: 0, medium: 1, hard: 2 };
+  const want = bandRank[difficulty] ?? 1;
+  return withFav
+    .map((c, idx) => ({ ...c, band: bandOf(idx) }))
+    .sort((a, b) => Math.abs(bandRank[a.band] - want) - Math.abs(bandRank[b.band] - want));
+}
+
 async function anilistCharacterImage(anilistId, charName) {
   if (!anilistId || !charName) return null;
   // 2026-09-28 FIX: the old query used Media.characters(search:) which is NOT
   // a valid GraphQL argument - every call 400'd and AniList art (source 2,
   // the strongest canonical anchor for anime) silently NEVER rendered. Fetch
   // the media's main characters once and match the name client-side.
-  const r = await _http.post("https://graphql.anilist.co", {
-    query: ANILIST_CHAR_IMG_Q,
-    variables: { id: anilistId },
-  });
+  const r = await anilistPost(ANILIST_CHAR_IMG_Q, { id: anilistId });
   const edges = r.data?.data?.Media?.characters?.edges || [];
   const nodes = edges.map((e) => e.node).filter((n) => n && n.image && n.image.large);
   if (!nodes.length) return null;
@@ -895,7 +993,84 @@ async function generateLoreQuestions(wiki, franchiseTitle, difficulty, count, se
 // Bytes are fetched lazily at post time (bank stores the verified URL).
 // ════════════════════════════════════════════
 
+// ══════════════════════════════════════════
+// P8/P13: IMAGE QUESTIONS (character identification)
+// 2026-09-30 REBUILD - the flow is now CHARACTER-NATIVE for AniList-anchored
+// franchises. Empirical bake-off (scripts/img_bakeoff.js on Box 1):
+//   AniList cast portraits 60/60 ok @ 18ms/img | Fandom 0/60 | Jikan 504
+//   CAST PATH (primary): fetchFranchiseCast (ONE paced graphql call, cached
+//   session+disk 24h) -> pick subject by difficulty band -> portrait from
+//   disk cache or AniList CDN (18ms) -> pixel gate -> disk cache. Identity is
+//   database-guaranteed (the portrait belongs to the character entity), so
+//   no vision verify is needed on this path.
+//   LEGACY PATH (fallback, non-AniList franchises only - games/TV/comics):
+//   the old per-candidate source hunt (fandom -> anilist -> jikan -> wiki).
+// The image IS the clue. Returns {type:"image"} question or null.
+// ══════════════════════════════════════════
+
+async function buildCastImageQuestion(wiki, franchiseTitle, usedKeys, difficulty = "easy", anilistId = null, sessionRef = null) {
+  if (!anilistId) return null;
+  const cast = await fetchFranchiseCast(anilistId, sessionRef);
+  if (!cast || cast.length < 4) return null;
+  const ordered = _bandCast(cast, difficulty);
+  for (const ch of ordered) {
+    const ckey = `alchar-${ch.id}`;
+    if (usedKeys && (usedKeys.has(ckey) || usedKeys.has(`img:${ch.name}`))) continue;
+    // portrait: disk cache -> (AniList CDN download + pixel gate -> disk)
+    let bytes = portraitCache.getPortrait(ch.id);
+    if (!bytes && !portraitCache.hasNegative(ch.id)) {
+      const dl = await quizLore.downloadMedia(ch.img, "image").catch(() => null);
+      if (dl && dl.buf) {
+        const gate = await imageGate.inspectImageBuffer(dl.buf, { label: `al:${ch.name}`.slice(0, 60) }).catch(() => ({ ok: false }));
+        if (gate && gate.ok) {
+          portraitCache.putPortrait(ch.id, dl.buf, { mime: dl.mime, url: ch.img, name: ch.name, w: gate.width, h: gate.height });
+          bytes = { buf: dl.buf, mime: dl.mime, url: ch.img, w: gate.width, h: gate.height };
+        } else {
+          portraitCache.putNegative(ch.id);
+        }
+      } else {
+        portraitCache.putNegative(ch.id);
+      }
+    }
+    if (!bytes) continue;
+    // decoys: same-franchise cast members (MAIN roles preferred)
+    const othersPool = cast.filter((c) => c.id !== ch.id && c.name !== ch.name);
+    if (othersPool.length < 3) continue;
+    const mains = othersPool.filter((c) => c.role === "MAIN");
+    const pickFrom = mains.length >= 3 ? mains : othersPool;
+    const others = [...pickFrom].sort(() => Math.random() - 0.5).slice(0, 3);
+    const optionsPool = [ch.name, ...others.map((o) => o.name)];
+    const optOrder = _fyShuffle(optionsPool.map((_, i) => i));
+    // seed the shared asset cache so the post-time send reuses these bytes
+    quizBank.putCachedAsset(ch.img, { buf: bytes.buf, mime: bytes.mime, kind: "image" });
+    const q = {
+      q: `Who is this character from ${franchiseTitle}?`,
+      options: optOrder.map((i) => optionsPool[i]),
+      correct: optOrder.indexOf(0),
+      hideOptions: true, // OWNER SPEC §7: the picture IS the question
+      difficulty: ch.band || difficulty || "easy",
+      topic: "Character ID",
+      domain: "characters",
+      type: "image",
+      assetKey: ch.img,
+      asset: { kind: "image", url: ch.img, mime: bytes.mime, subject: ch.name, source: "anilist-cast", bytesHash: crypto.createHash("sha1").update(bytes.buf).digest("hex").slice(0, 16) },
+      loreRef: { wiki, page: ch.name, section: "anilist-cast" },
+    };
+    if (usedKeys) { usedKeys.add(ckey); usedKeys.add(`img:${ch.name}`); }
+    console.log(`[Quiz] image Q (cast-native): ${ch.name} [${ch.band}/${ch.favourites}♥] from disk=${!!portraitCache.getPortrait(ch.id)}`);
+    return q;
+  }
+  return null;
+}
+
 async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, difficulty = "easy", sessionRef = null) {
+  // CAST PATH (2026-09-30 rebuild): AniList-anchored franchises never touch
+  // the wiki hunt unless the cast yields nothing.
+  const anilistIdEarly = sessionRef?.franchise?.anime?.id || null;
+  if (anilistIdEarly) {
+    const castQ = await buildCastImageQuestion(wiki, franchiseTitle, usedKeys, difficulty, anilistIdEarly, sessionRef).catch(() => null);
+    if (castQ) return castQ;
+  }
   if (!wiki || !charBuckets) return null;
   // flatten the popularity buckets (easy=top10% famous ... hard=obscure) and
   // prefer the band matching the quiz difficulty, falling back outwards
@@ -928,7 +1103,7 @@ async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, d
   //      to this exact show, the strongest anchor there is)
   //   3. Wikipedia article image for "<character> <franchise>"
   //   4. Wikipedia File-namespace search (junk-filtered) - last resort
-  const anilistId = sessionRef?.franchise?.anime?.id || null;
+  const anilistId = anilistIdEarly; // cast path already tried; legacy sources below
   const fetchVerifiedImage = async (subject) => {
     return mediaWorker.run(async () => {
       const trySource = async (tag, url) => {
@@ -1650,7 +1825,7 @@ async function generateSectionQuestions(session, section, sock, chatId) {
     const banked = quizBank.bankLookup(fMk, loadSeen(fMk).map((h) => h), needImages, { type: "image" });
     for (const b of banked) { questions.push(b); served++; }
     while (served < needImages) {
-      const q = await buildImageQuestion(fWiki, fTitle, charIdx, usedKeys, cfg.difficulty, { franchise: fFranchise, mediaType: fMediaType }).catch(() => null);
+      const q = await buildImageQuestion(fWiki, fTitle, charIdx, usedKeys, cfg.difficulty, { franchise: fFranchise, mediaType: fMediaType, _hostSession: session }).catch(() => null);
       if (!q) break; // no verified images - graceful (text takes over below)
       // P15 dedup: skip if this asset already in bank
       if (quizBank.bankPut(fMk, q)) questions.push(q);
@@ -3340,6 +3515,9 @@ module.exports = {
   buildFallbackQuestions,
   buildSectionPlan,
   buildImageQuestion,
+  buildCastImageQuestion,
+  fetchFranchiseCast,
+  portraitCache,
   buildThemeSongQuestion,
   validateGeneratedQuestion,
   qhash,
