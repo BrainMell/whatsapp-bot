@@ -430,6 +430,27 @@ async function buildSpotSongQuestions({ count, usedKeys, difficulty, goService, 
     if (deadlineMs && Date.now() > deadlineMs) break;
     await Promise.all(candidates.slice(i, i + 3).map(buildOne));
   }
+  // 💡 OWNER SPEC §3 fallback: when live retrieval came up short (service
+  // degraded / rate-limited), fill the remaining slots from the DISK CACHE of
+  // previously verified clips. Pass 2 pre-checks the cache so it NEVER
+  // triggers a fresh retrieval - reliability beats variety mid-outage.
+  if (out.length < n) {
+    for (const entry of order) {
+      if (out.length >= n) break;
+      const key = `song:${_norm(entry.song)}`;
+      if (usedKeys.has(key) || claimed.has(key)) continue;
+      if (!audioCache.get(`song:${_norm(entry.song)}:${_norm(entry.artist)}`)) continue;
+      let others = _shuffle(SONGS_POOL.filter((s) => s.era === entry.era && s.song !== entry.song)).slice(0, 3);
+      if (others.length < 3) others = _shuffle(SONGS_POOL.filter((s) => s.song !== entry.song)).slice(0, 3);
+      if (others.length < 3) continue;
+      const q = await buildSpotSongQuestion(entry, others, difficulty, goService, trimFn).catch(() => null);
+      if (!q) continue;
+      claimed.add(key);
+      if (usedKeys) usedKeys.add(key);
+      bumpUsage(usage, "song", entry);
+      out.push(q);
+    }
+  }
   if (out.length) saveUsage("song", usage);
   return out;
 }
@@ -529,6 +550,25 @@ async function buildThemeSongQuestions({ count, usedKeys, difficulty, goService,
   for (let i = 0; i < candidates.length && out.length < n; i += 3) {
     if (deadlineMs && Date.now() > deadlineMs) break;
     await Promise.all(candidates.slice(i, i + 3).map(buildOne));
+  }
+  // 💡 OWNER SPEC §3 fallback: same cache-fill as Spot the Song - never
+  // triggers retrievals, only serves already-verified clips.
+  if (out.length < n) {
+    for (const entry of order) {
+      if (out.length >= n) break;
+      const key = `theme:${_norm(entry.show)}`;
+      if (usedKeys.has(key) || claimed.has(key)) continue;
+      if (!audioCache.get(key)) continue;
+      let others = _shuffle(THEMES_POOL.filter((t) => t.type === entry.type && t.show !== entry.show)).slice(0, 3);
+      if (others.length < 3) others = _shuffle(THEMES_POOL.filter((t) => t.show !== entry.show)).slice(0, 3);
+      if (others.length < 3) continue;
+      const q = await buildThemeSongQuestionEntry(entry, others, difficulty, goService, trimFn).catch(() => null);
+      if (!q) continue;
+      claimed.add(key);
+      if (usedKeys) usedKeys.add(key);
+      bumpUsage(usage, "theme", entry);
+      out.push(q);
+    }
   }
   if (out.length) saveUsage("theme", usage);
   return out;
