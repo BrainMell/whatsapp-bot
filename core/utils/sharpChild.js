@@ -33,7 +33,7 @@ const path = require('path');
 
 const WORKER_PATH = path.join(__dirname, 'sharpChildWorker.js');
 
-const JOB_TIMEOUT_MS = { gate: 8000, 'asticker-frames': 15000 };
+const JOB_TIMEOUT_MS = { gate: 8000, 'asticker-frames': 15000, normalize: 15000 };
 const DEFAULT_TIMEOUT_MS = 15000;
 const POISON_TTL_MS = 15 * 60 * 1000;
 const POISON_MAX = 400;

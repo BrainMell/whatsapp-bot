@@ -129,6 +129,61 @@ async function opShrink(buf, opts = {}) {
   return { buf: out, mime: 'image/jpeg' };
 }
 
+// normalize (2026-10-01 owner bug report §2/§3): uniform quiz image output.
+//   1. decode (gif/svg rejected like gate)
+//   2. extreme-aspect center-crop: when W:H > 3:1 or 1:3 the dead flanks get
+//      cropped at the 3:1 boundary around the center (wordmark banners keep
+//      their wordmark, padding waste is bounded)
+//   3. flatten onto WHITE (transparency + any alpha channel gone)
+//   4. contain-resize into CANVASxCANVAS without enlargement (no stretch,
+//      no distortion, small logos stay sharp, centered on white)
+//   5. JPEG q85 output (WhatsApp re-encodes anyway; universally sendable)
+// Returns { buf, mime, width, height, flattened, cropped }.
+async function opNormalize(buf, opts = {}) {
+  const CANVAS = Math.max(320, Math.min(1200, opts.canvas || 800));
+  const ASPECT_LIMIT = 3;
+  if (!Buffer.isBuffer(buf)) throw new Error('no-buffer');
+  if (buf.length < 1200) throw new Error('too-small(<1.2KB)');
+  const head = buf.subarray(0, 12);
+  if (head.subarray(0, 3).toString() === 'GIF') throw new Error('gif-unsupported');
+  if (looksLikeSvg(buf)) throw new Error('svg-unsupported');
+  const meta = await sharp(buf, { failOn: 'error', ...LIMITS }).metadata();
+  if (!meta.width || !meta.height) throw new Error('no-dimensions');
+  if (!ALLOWED_FORMATS.has(meta.format) && meta.format !== 'tiff' && meta.format !== 'avif') {
+    throw new Error('format(' + meta.format + ')');
+  }
+  let img = sharp(buf, { failOn: 'error', ...LIMITS }).rotate();
+  const aspect = meta.width / meta.height;
+  let cropped = false;
+  let w = meta.width, h = meta.height;
+  if (aspect > ASPECT_LIMIT || aspect < 1 / ASPECT_LIMIT) {
+    // center-crop the long flank to the 3:1 boundary
+    let cw = w, chh = h;
+    if (aspect > ASPECT_LIMIT) cw = Math.round(h * ASPECT_LIMIT);
+    else chh = Math.round(w * ASPECT_LIMIT);
+    const left = Math.max(0, Math.round((w - cw) / 2));
+    const top = Math.max(0, Math.round((h - chh) / 2));
+    img = img.extract({ left, top, width: Math.min(cw, w), height: Math.min(chh, h) });
+    cropped = true;
+    w = Math.min(cw, w); h = Math.min(chh, h);
+  }
+  // contain-fit WITHOUT enlargement, then symmetric white pad to CANVAS
+  const scale = Math.min(CANVAS / w, CANVAS / h, 1);
+  const rw = Math.max(1, Math.round(w * scale));
+  const rh = Math.max(1, Math.round(h * scale));
+  const padX = Math.floor((CANVAS - rw) / 2);
+  const padY = Math.floor((CANVAS - rh) / 2);
+  const out = await img
+    .flatten({ background: '#ffffff' })
+    .removeAlpha()
+    .resize(rw, rh, { fit: 'fill' }) // uniform-scale only (scale<=1), never stretches
+    .extend({ top: padY, bottom: CANVAS - rh - padY, left: padX, right: CANVAS - rw - padX, background: '#ffffff' })
+    .jpeg({ quality: 85, chromaSubsampling: '4:4:4' })
+    .toBuffer();
+  const om = await sharp(out).metadata();
+  return { buf: out, mime: 'image/jpeg', width: om.width, height: om.height, flattened: true, cropped, sourceFormat: meta.format };
+}
+
 async function opAstickerFrames(buf) {
   let pages = 1;
   try { pages = Math.max(1, (await sharp(buf, { pages: -1, ...LIMITS }).metadata()).pages || 1); } catch { /* single */ }
@@ -156,6 +211,7 @@ process.on('message', async (msg) => {
     let result;
     if (msg.op === 'gate') result = await opGate(msg.buf, msg.opts || {});
     else if (msg.op === 'shrink') result = await opShrink(msg.buf, msg.opts || {});
+    else if (msg.op === 'normalize') result = await opNormalize(msg.buf, msg.opts || {});
     else if (msg.op === 'asticker-frames') result = await opAstickerFrames(msg.buf);
     else throw new Error('unknown-op:' + msg.op);
     clearTimeout(watchdog);
