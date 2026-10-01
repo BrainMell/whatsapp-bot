@@ -23,6 +23,7 @@ const crypto = require("crypto");
 const quizLore = require("./quizLore");
 const imageGate = require("../utils/imageGate"); // 2026-09-27: pixel gates on every logo/audio-cover image
 const system = require("../utils/system");       // 2026-09-27: usage-fairness persistence
+const quizImagePipeline = require("../utils/quizImagePipeline"); // 2026-10-01: white-bg flatten + uniform canvas
 const logoPoolsV2 = require("./quizLogosPool");  // 2026-09-27: 500+ curated pool (owner brief §1)
 const songsPoolV2 = require("./quizSongsPool");  // 2026-09-27: 280-track pool (owner brief §3)
 const themesPool = require("./quizThemesPool");   // 2026-09-27: theme songs across fiction (§2)
@@ -240,21 +241,30 @@ async function buildLogosQuestion(brand, others, difficulty) {
       "https://en.wikipedia.org/wiki/Special:FilePath/",
     ];
     for (const h of hosts) {
-      const dsDl = await quizLore.downloadMedia(`${h}${enc}?width=480`, "image").catch(() => null);
+      const dsDl = await quizLore.downloadMedia(`${h}${enc}?width=640`, "image").catch(() => null);
       if (dsDl && dsDl.buf && dsDl.buf.length >= 1500) {
-        return assembleLogoQuestion(brand, others, difficulty, `${h}${enc}?width=480`, dsDl.buf, dsDl.mime || dsEntry.mime || "image/png", `logo-dataset:${dsEntry.source || "baked"}`);
+        // 2026-10-01 owner bug report §2/§3: normalize EVERY logo before it
+        // reaches the quiz UI - transparent/empty backgrounds flattened onto
+        // solid white, uniform 800x800 canvas, contain-fit (never stretched).
+        const norm = await quizImagePipeline.normalize(dsDl.buf, { url: `${h}${enc}`, minW: 64, minH: 40, label: `logo:${brand.name}` }).catch(() => ({ ok: false, reason: "norm-crash" }));
+        if (norm.ok) return assembleLogoQuestion(brand, others, difficulty, `${h}${enc}?width=640`, norm.buf, norm.mime, `logo-dataset:${dsEntry.source || "baked"}`);
+        // normalization failed (exotic format etc.) -> gate raw bytes and send
+        // as before rather than losing the question entirely
+        const gate = await imageGate.inspectImageBuffer(dsDl.buf, { minW: 64, minH: 40, label: `logo:${brand.name}`.slice(0, 50) }).catch(() => ({ ok: false, reason: "gate-crash" }));
+        if (gate.ok) return assembleLogoQuestion(brand, others, difficulty, `${h}${enc}?width=640`, dsDl.buf, dsDl.mime || dsEntry.mime || "image/png", `logo-dataset:${dsEntry.source || "baked"}`);
       }
     }
   }
   // FALLBACK: live per-brand Wikipedia file search (quizLore heuristic)
-  const img = await quizLore.wikipediaLogoImage(brand.wiki, 480, brand.name).catch(() => null);
+  const img = await quizLore.wikipediaLogoImage(brand.wiki, 640, brand.name).catch(() => null);
   if (!img || !img.url) return null;
   const dl = await quizLore.downloadMedia(img.url, "image").catch(() => null);
   if (!dl || !dl.buf || dl.buf.length < 1500) return null; // tiny = placeholder/blank
-  // 💡 2026-09-27 pixel gate: logos are 64px+ allowed (wordmarks are wide),
-  // but blank/black/corrupt/undecodable bytes are rejected here - a broken
-  // logo must never become the clue of a question. (Dataset entries were
-  // already gated at bake time; this live path is gated here, every time.)
+  // 2026-10-01: normalize first (white bg + uniform canvas, owner bug report
+  // §2/§3) - the pipeline runs its own pixel gates internally.
+  const norm = await quizImagePipeline.normalize(dl.buf, { url: img.url, minW: 64, minH: 40, label: `logo:${brand.name}` }).catch(() => ({ ok: false, reason: "norm-crash" }));
+  if (norm.ok) return assembleLogoQuestion(brand, others, difficulty, img.url, norm.buf, norm.mime, "wikipedia-logo");
+  // normalization failed -> previous behavior (pixel gate + raw bytes)
   const gate = await imageGate.inspectImageBuffer(dl.buf, { minW: 64, minH: 40, label: `logo:${brand.name}`.slice(0, 50) }).catch(() => ({ ok: false, reason: "gate-crash" }));
   if (!gate.ok) return null;
   return assembleLogoQuestion(brand, others, difficulty, img.url, dl.buf, dl.mime, "wikipedia-logo");
