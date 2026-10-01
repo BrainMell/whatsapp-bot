@@ -229,7 +229,8 @@ async function visionGate(buf, mime, subject, franchise = "") {
   try {
     if (!process.env.VISION_ENDPOINT) return { ok: false, decision: "unknown", reason: "no-provider" };
     const r = await visionVerify.verifySubject(buf, mime, subject, franchise);
-    return { ok: r?.decision === "match", decision: r?.decision || "unknown", reason: r?.reason || "" };
+    // visionVerify decision vocabulary: "accept" | "reject" | "unknown"
+    return { ok: r?.decision === "accept", decision: r?.decision || "unknown", reason: r?.reason || "" };
   } catch { return { ok: false, decision: "unknown", reason: "gate-error" }; }
 }
 

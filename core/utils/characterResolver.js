@@ -931,8 +931,10 @@ async function _dlGateNormalize(url, tag, record, ctx, cacheKey, { visionSubject
   if (!gate) { imgSources.noteHostFailure(url); return null; }
   if (visionSubject) {
     const v = await imgSources.visionGate(dl.buf, dl.mime, visionSubject, visionContext);
-    if (v.decision === "mismatch") return null; // vision says wrong subject -> reject
-    // decision unknown (no provider / provider flake) -> pixel gates only
+    // visionVerify vocabulary: "reject" = wrong subject / nsfw -> drop the
+    // candidate. "unknown" (no provider, breaker open, provider flake) keeps
+    // the pixel-gate-only lenient path.
+    if (v.decision === "reject" || v.decision === "mismatch") return null;
   }
   const norm = await quizImagePipeline.normalize(dl.buf, { url, label: `${tag}:${record.name}` }).catch(() => ({ ok: false, reason: "norm-crash" }));
   if (!norm.ok) return null;
