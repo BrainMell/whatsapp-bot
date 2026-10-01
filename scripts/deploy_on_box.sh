@@ -74,9 +74,18 @@ for inst in Jake Joker Subaru; do
 done
 rmdir "$STASH" 2>/dev/null || true
 
-# ── 6. deps + restart ──────────────────────────────────────────────────
+# ── 6. authorize Box2 deploy relay key (idempotent, self-heals relay path) ──
+mkdir -p ~/.ssh
+RELAY_PUB='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOJw8N7PZ/kOABzUbGDy7Qio4wmj182GIh5QS/1nCK+E ubuntu@probe-amd-e2-micro-2'
+touch ~/.ssh/authorized_keys
+grep -qF "$RELAY_PUB" ~/.ssh/authorized_keys 2>/dev/null || echo "$RELAY_PUB" >> ~/.ssh/authorized_keys
+chmod 700 ~/.ssh; chmod 600 ~/.ssh/authorized_keys
+echo "relay key authorized: $(grep -c ubuntu@probe-amd-e2-micro-2 ~/.ssh/authorized_keys)"
+
+# ── 7. deps + restart ──────────────────────────────────────────────────
 npm install --no-audit --no-fund --loglevel=error 2>&1 | tail -3
 pm2 restart whatsapp-bot 2>/dev/null || pm2 start ecosystem.config.js 2>/dev/null || pm2 start index.js --name whatsapp-bot
+pm2 save 2>/dev/null | tail -1
 sleep 6
 echo "=== pm2 ==="
 pm2 list
