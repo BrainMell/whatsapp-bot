@@ -10,7 +10,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: SSH and Deploy
+      - name: SSH and Deploy (smart auth precedence)
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.ORACLE_HOST }}
@@ -18,54 +18,9 @@ jobs:
           key: ${{ secrets.ORACLE_SSH_KEY }}
           command_timeout: 10m
           script: |
-            export PATH=$PATH:/usr/local/go/bin
             cd ~/whatsapp-bot
-
-            # ── ORACLE PUBLIC IP (for direct SSH access) ──────────────
-            echo "=== ORACLE PUBLIC IP (octets separated by spaces to bypass masking) ==="
-            MYIP=$(curl -s -m 5 ifconfig.me 2>/dev/null || curl -s -m 5 icanhazip.com 2>/dev/null | tr -d '[:space:]')
-            echo "$MYIP" | tr '.' ' '
-            echo "=== ORACLE HOSTNAME ==="
-            hostname
-            echo ""
-
-            # ── DUMP PM2 LOGS (grep for relevant markers only) ────────
-            echo "=== PRE-RESTART PM2 LOGS (cardSystem/cmdColl/GoService/errors) ==="
-            grep -E "cardSystem.*dispatching|cmdColl|sock_ref is null|GoService.*Health|TIMED OUT|TIMEOUT|SKIPPING|🔴|⏱️|Error:|TypeError|profilePictureUrl" ~/.pm2/logs/whatsapp-bot-out.log 2>&1 | tail -100
-            grep -E "cardSystem.*dispatching|cmdColl|sock_ref is null|GoService.*Health|TIMED OUT|TIMEOUT|SKIPPING|🔴|⏱️|Error:|TypeError|profilePictureUrl" ~/.pm2/logs/whatsapp-bot-error.log 2>&1 | tail -50
-            echo "=============================================="
-
-            # ── BACKUP AUTH FILES ────────────────────────────────────────
-            AUTH_BACKUP=/tmp/auth_backup_$(date +%s).tar.gz
-            if [ -d "instances/Jake/auth" ]; then
-              tar czf "$AUTH_BACKUP" instances/*/auth/ 2>/dev/null || true
-            fi
-
-            # ── FORCE-UPDATE CODE ────────────────────────────────────────
-            git fetch origin
-            git reset --hard "origin/${{ github.ref_name }}"
-            echo "Code updated to $(git rev-parse --short HEAD)"
-
-            # ── RESTORE AUTH FILES ───────────────────────────────────────
-            if [ -f "$AUTH_BACKUP" ]; then
-              tar xzf "$AUTH_BACKUP"
-              rm "$AUTH_BACKUP"
-            fi
-
-            npm install
-            pm2 restart whatsapp-bot
-
-            # ── QUICK GO SERVICE HEALTH CHECK ───────────────────────────
-            echo "=== GO SERVICE HEALTH ==="
-            curl -s -m 5 http://127.0.0.1:7860/health 2>/dev/null || echo "DOWN"
-            echo ""
-
-            # ── VERIFY ───────────────────────────────────────────────────
-            echo "=== DEPLOYED: $(git rev-parse --short HEAD) ==="
-            sleep 15
-            echo "=== PM2 STATUS ==="
-            pm2 list 2>&1 | grep -E "bot-generation|whatsapp-bot"
-            echo "=== POST-RESTART LOGS (last 30 lines) ==="
-            pm2 logs whatsapp-bot --lines 30 --nostream 2>&1 | tail -30
-            echo "=============================================="
-            echo "✅ Done."
+            git fetch origin || exit 1
+            # self-bootstrap: always run the newest deploy script from git,
+            # regardless of what state the working tree is in
+            git show "origin/${{ github.ref_name }}:scripts/deploy_on_box.sh" > /tmp/deploy_on_box.sh \
+              && bash /tmp/deploy_on_box.sh "${{ github.ref_name }}"
