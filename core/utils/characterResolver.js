@@ -50,6 +50,8 @@ const axios = require("axios");
 const imageGate = require("./imageGate");
 const portraitCache = require("./quizPortraitCache");
 const wikiEntityImages = require("./wikiEntityImages");
+const imgSources = require("./quizImageSources");
+const quizImagePipeline = require("./quizImagePipeline");
 
 // ── shared http ──
 const _UA = { "User-Agent": "ZenithQuizBot/1.0 (WhatsApp trivia bot; contact: ops@zenithbot.dev) axios" };
@@ -132,12 +134,35 @@ async function detectCategory(title, explicit) {
       else category = "anime";
     }
   } catch { /* anilist unreachable - continue */ }
-  // 2) TVMaze - live-action/animated TV (fast, free, no key)
+  // 2) TVMaze - type-aware: "Animation" routes to the cartoon chain (Ben 10
+  // fix - cartoons are NOT live-action tv), everything else that matches is tv.
   if (category === "other") {
     try {
       const r = await _http.get("https://api.tvmaze.com/singlesearch/shows", { params: { q: t }, timeout: 7000 });
-      if (r.data && r.data.name && _norm(r.data.name).includes(_norm(t).slice(0, 6))) category = "tv";
+      if (r.data && r.data.name && _norm(r.data.name).includes(_norm(t).slice(0, 6))) {
+        category = String(r.data.type || "").toLowerCase() === "animation" ? "cartoon" : "tv";
+      }
     } catch { /* not tv */ }
+  }
+  // 2b) Steam storesearch - deterministic game signal (Elden Ring, Hollow
+  // Knight...). Exact-name hits only; fuzzy matching would route movies with
+  // game-adjacent names to the game chain.
+  if (category === "other") {
+    try {
+      const probe = await imgSources.steamGameProbe(t);
+      if (probe && _norm(probe.name) === _norm(t)) category = "game";
+    } catch { /* not game */ }
+  }
+  // 2c) iTunes media=movie probe - deterministic movie signal (Apollo 9 fix).
+  if (category === "other") {
+    try {
+      const r = await _http.get("https://itunes.apple.com/search", { params: { term: t, media: "movie", limit: 3, country: "US" }, timeout: 7000 });
+      if (r.status === 200 && (r.data?.resultCount || 0) > 0) {
+        const nt = _norm(t);
+        const hit = (r.data.results || []).some((x) => _norm(x.trackName || x.collectionName).includes(nt) && nt.length >= 4);
+        if (hit) category = "movie";
+      }
+    } catch { /* not movie */ }
   }
   // 3) quizLore.detectMediaType (TVMaze + Wikipedia lead classification)
   if (category === "other" && typeof _deps.detectMediaType === "function") {
@@ -679,14 +704,16 @@ function _mergeRecords(lists, ctx) {
 }
 
 const CATEGORY_SOURCES = {
-  // 2026-09-30: anilist FIRST in every chain - resolveAnime() only matches
-  // real anime titles (Breaking Bad/The Matrix return []), and cross-media
-  // franchises (Pokemon, Batman) benefit from database-anchored cast art.
-  anime:   ["anilist", "jikan", "wikipedia", "fandomnames", "wikidata"],
-  manga:   ["anilist", "jikan", "wikipedia", "fandomnames", "wikidata"],
-  game:    ["anilist", "igdb", "wikipedia", "fandomnames", "wikidata"],
-  movie:   ["anilist", "tmdb", "wikipedia", "fandomnames", "wikidata"],
-  tv:      ["anilist", "tvmaze", "tmdb", "wikipedia", "fandomnames", "wikidata"],
+  // 2026-10-01 rewire (owner bug report §5): category chains rebuilt from
+  // measured per-source yields. DB-anchored art first, wiki tier second,
+  // entity-art for games/movies/tv, general search LAST (identity needs a
+  // vision gate there).
+  anime:   ["anilist", "jikan", "kitsu", "wikipedia", "fandomnames", "wikidata"],
+  manga:   ["anilist", "jikan", "kitsu", "wikipedia", "fandomnames", "wikidata"],
+  game:    ["steam", "anilist", "igdb", "speedrun", "wikipedia", "fandomnames", "wikidata"],
+  movie:   ["tmdb", "itunes", "anilist", "wikipedia", "fandomnames", "wikidata"],
+  tv:      ["anilist", "tvmaze", "tmdb", "itunes", "wikipedia", "fandomnames", "wikidata"],
+  cartoon: ["anilist", "kitsu", "tvmaze", "tmdb", "itunes", "wikipedia", "fandomnames", "wikidata"],
   comic:   ["anilist", "wikipedia", "fandomnames", "wikidata"],
   other:   ["anilist", "wikipedia", "tvmaze", "fandomnames", "wikidata"],
 };
@@ -745,9 +772,13 @@ async function buildPool(ctx) {
     try {
       const rows = src === "anilist" ? await anilistPool(ctx)
         : src === "jikan" ? await jikanPool(ctx)
+        : src === "kitsu" ? await imgSources.kitsuPool(ctx).then((rows) => rows.map((r) => rec({ ...r, franchise: ctx.title, category: ctx.category })))
         : src === "tvmaze" ? await tvmazePool(ctx)
         : src === "tmdb" ? await tmdbPool(ctx)
         : src === "igdb" ? await igdbPool(ctx)
+        : src === "steam" ? await imgSources.steamEntityArt(ctx)
+        : src === "speedrun" ? await imgSources.speedrunEntityArt(ctx)
+        : src === "itunes" ? await imgSources.itunesEntityArt(ctx)
         : src === "wikipedia" ? await wikipediaPool(ctx)
         : src === "fandomnames" ? await fandomNamesPool(ctx)
         : [];
@@ -834,14 +865,15 @@ async function _fileNamespaceSearch(name, qualifier) {
 async function resolveImageBytes(record, ctx) {
   if (!quizLore) quizLore = require("../games/quizLore");
   const attempts = [];
-  if (record.image_url) attempts.push({ tag: record.source, url: record.image_url });
+  if (record.image_url) attempts.push({ tag: record.source, url: record.image_url, anchored: true });
+  if (record.alt_urls) for (const u of record.alt_urls.slice(0, 2)) attempts.push({ tag: record.source, url: u, anchored: true });
   if (record.article) {
     const nf = await wikiEntityImages.articleNamedFile(record.article, record.name).catch(() => null);
-    if (nf) attempts.push({ tag: "wiki-article-file", url: nf.url });
+    if (nf) attempts.push({ tag: "wiki-article-file", url: nf.url, anchored: true });
   }
   if (record.article) {
     const wd = await wikidataImageForArticle(record.article).catch(() => null);
-    if (wd) attempts.push({ tag: "wikidata-P18", url: wd });
+    if (wd) attempts.push({ tag: "wikidata-P18", url: wd, anchored: true });
   }
   // File-namespace search - rescues franchise characters kept as SECTION
   // HEADINGS of the base article (Hollow Knight's The Knight / Hornet etc.):
@@ -849,28 +881,63 @@ async function resolveImageBytes(record, ctx) {
   // character article exists. Strict junk filter (cosplay/sketch/screenshots).
   if (ctx?.qualifier) {
     const fs_ = await _fileNamespaceSearch(record.name, ctx.qualifier).catch(() => null);
-    if (fs_) attempts.push({ tag: "wiki-file-search", url: fs_ });
+    if (fs_) attempts.push({ tag: "wiki-file-search", url: fs_, anchored: true });
   }
   if (ctx?.qualifier) {
     const sr = await wikiEntityImages.searchResolve(record.name.replace(/\s*\([^)]*\)\s*$/, ""), ctx.qualifier).catch(() => null);
     if (sr && wikiEntityImages.identityOk(record.name, sr.article, sr.url, ctx.qualifier)) {
-      attempts.push({ tag: "wiki-search", url: sr.url });
+      attempts.push({ tag: "wiki-search", url: sr.url, anchored: true });
     }
   }
+  const ck = `cr-${record.source}-${recordKey(record.name)}`;
+  const cached = portraitCache.getPortrait(ck);
+  if (cached) return { ...cached, url: cached.url, hash: crypto.createHash("sha1").update(cached.buf).digest("hex") };
   for (const a of attempts) {
     if (!a.url) continue;
-    const ck = `cr-${record.source}-${recordKey(record.name)}`;
-    const cached = portraitCache.getPortrait(ck);
-    if (cached) return { ...cached, url: cached.url, hash: crypto.createHash("sha1").update(cached.buf).digest("hex") };
-    if (portraitCache.hasNegative(ck)) continue;
-    const dl = await _download(a.url);
-    if (!dl || !dl.buf) { portraitCache.putNegative(ck); continue; }
-    const gate = await _gated(dl.buf, `${a.tag}:${record.name}`);
-    if (!gate) { portraitCache.putNegative(ck); continue; }
-    portraitCache.putPortrait(ck, dl.buf, { mime: dl.mime, url: a.url, name: record.name, w: gate.width, h: gate.height });
-    return { buf: dl.buf, mime: dl.mime, url: a.url, w: gate.width, h: gate.height, hash: crypto.createHash("sha1").update(dl.buf).digest("hex") };
+    if (portraitCache.hasNegative(ck)) break; // whole record failed earlier
+    const out = await _dlGateNormalize(a.url, a.tag, record, ctx, ck);
+    if (out) return out;
+  }
+  // GENERAL IMAGE SEARCH TIER (2026-10-01 owner bug report §4A) - LAST
+  // fallback, after every anchored source. Identity is NOT database-guaranteed
+  // here: every candidate must pass the vision gate when a provider is
+  // configured (open/closed circuit handled inside visionVerify), otherwise
+  // it is skipped in strict mode / allowed with pixel gates only in lenient
+  // mode (VISION_UNANCHORED=1).
+  const strictVision = !!process.env.VISION_ENDPOINT;
+  const allowUnanchored = strictVision ? true : process.env.VISION_UNANCHORED === "1";
+  if (allowUnanchored) {
+    const ddgRows = await imgSources.ddgRecordImages(record.name, ctx?.qualifier || record.franchise).catch(() => []);
+    for (const row of ddgRows.slice(0, 4)) {
+      const out = await _dlGateNormalize(row.image_url, `ddg:${row.host}`, record, ctx, ck, { visionSubject: record.name, visionContext: ctx?.qualifier || record.franchise || "" });
+      if (out) return out;
+    }
+    const ovRows = await imgSources.openverseImageSearch(`${record.name} ${ctx?.qualifier || record.franchise || ""}`.trim(), { limit: 4 }).catch(() => []);
+    for (const row of ovRows.slice(0, 3)) {
+      const out = await _dlGateNormalize(row.image_url, `openverse:${row.host}`, record, ctx, ck, { visionSubject: record.name, visionContext: ctx?.qualifier || record.franchise || "" });
+      if (out) return out;
+    }
   }
   return null;
+}
+
+// one URL through the full gauntlet: download -> pixel gate -> vision gate
+// (unanchored only) -> NORMALIZE (white-bg flatten + uniform canvas) -> cache
+async function _dlGateNormalize(url, tag, record, ctx, cacheKey, { visionSubject = null, visionContext = "" } = {}) {
+  if (!imgSources.hostAllowed(url)) { portraitCache.putNegative(cacheKey); return null; }
+  const dl = await _download(url);
+  if (!dl || !dl.buf) { imgSources.noteHostFailure(url); return null; }
+  const gate = await _gated(dl.buf, `${tag}:${record.name}`);
+  if (!gate) { imgSources.noteHostFailure(url); return null; }
+  if (visionSubject) {
+    const v = await imgSources.visionGate(dl.buf, dl.mime, visionSubject, visionContext);
+    if (v.decision === "mismatch") return null; // vision says wrong subject -> reject
+    // decision unknown (no provider / provider flake) -> pixel gates only
+  }
+  const norm = await quizImagePipeline.normalize(dl.buf, { url, label: `${tag}:${record.name}` }).catch(() => ({ ok: false, reason: "norm-crash" }));
+  if (!norm.ok) return null;
+  portraitCache.putPortrait(cacheKey, norm.buf, { mime: norm.mime, url, name: record.name, w: norm.width, h: norm.height });
+  return { buf: norm.buf, mime: norm.mime, url, w: norm.width, h: norm.height, hash: crypto.createHash("sha1").update(norm.buf).digest("hex") };
 }
 
 // ══════════════════════════════════════════
@@ -931,7 +998,54 @@ async function pickImageQuestion(ctx) {
     state.set(frKey, s);
   }
   const qualifier = ctx.qualifier || (ctx.slug && wikiEntityImages.W[ctx.slug]?.q) || ctx.title;
+  const charVerified = s.pool && s.pool.records ? s.pool.records.filter((r) => r.image_url && r.role !== "entity").length : 0;
+  // ENTITY-ART QUESTION (2026-10-01 owner bug report §5): movie/game/tv
+  // franchises whose pool is character-poor can still serve a GREAT question
+  // from their own artwork: "Which {movie|game|show} is this?" with same-
+  // category decoy titles. Tried FIRST when the character pool is thin (<4
+  // verified character images), and as the last resort when it exhausts.
+  // Entity records are database-anchored (Steam/TMDB/itunes/speedrun) -
+  // identity by construction. They are NEVER offered as "Who is this
+  // character?" clues (a poster is not a character).
+  const _entityQuestion = async (entityRecord) => {
+    if (!entityRecord || !entityRecord.image_url) return null;
+    if (ctx.usedKeys && (ctx.usedKeys.has(`img:${entityRecord.name}`) || ctx.usedKeys.has(`cr:${frKey}:${recordKey(entityRecord.name)}`))) return null;
+    const img = await resolveImageBytes(entityRecord, { qualifier }).catch(() => null);
+    if (!img || s.usedHashes.has(img.hash)) return null;
+    s.usedHashes.add(img.hash);
+    const decoyCat = entityRecord.entityKind === "show" ? "tv" : entityRecord.entityKind;
+    const decoyPool = (imgSources.ENTITY_DECOYS[decoyCat] || []).filter((n) => _norm(n) !== _norm(entityRecord.name));
+    const others = fyShuffle(decoyPool).slice(0, 3);
+    if (others.length < 3) return null;
+    const kindLabel = decoyCat === "game" ? "game" : decoyCat === "movie" ? "movie" : "TV show";
+    const optionsPool = [entityRecord.name, ...others];
+    const optOrder = fyShuffle(optionsPool.map((_, i) => i));
+    const q = {
+      q: `Which ${kindLabel} is this artwork from?`,
+      options: optOrder.map((i) => optionsPool[i]),
+      correct: optOrder.indexOf(0),
+      hideOptions: true,
+      difficulty: ctx.difficulty || "easy",
+      topic: "Media ID",
+      domain: "characters",
+      type: "image",
+      assetKey: img.url,
+      asset: { kind: "image", url: img.url, mime: img.mime, subject: entityRecord.name, source: entityRecord.source, bytesHash: img.hash.slice(0, 16) },
+      loreRef: { wiki: null, page: entityRecord.name, section: `entity-art:${entityRecord.source}` },
+      _resolver: { source: entityRecord.source, sourceId: entityRecord.source_id, confidence: entityRecord.confidence, category: s.pool.category, method: "entity-art" },
+    };
+    if (ctx.usedKeys) { ctx.usedKeys.add(`cr:${frKey}:${recordKey(entityRecord.name)}`); ctx.usedKeys.add(`img:${entityRecord.name}`); }
+    _recordRecent(frKey, entityRecord);
+    console.log(`[Quiz] image Q (entity-art): ${entityRecord.name} via ${entityRecord.source} [${ctx.title}]`);
+    return q;
+  };
+  const _firstEntity = () => s.order.find((r) => r.role === "entity" && r.image_url && !(ctx.usedKeys && (ctx.usedKeys.has(`img:${r.name}`) || ctx.usedKeys.has(`cr:${frKey}:${recordKey(r.name)}`))));
+  if (charVerified < 4) {
+    const eq = await _entityQuestion(_firstEntity()).catch(() => null);
+    if (eq) return eq;
+  }
   for (const record of s.order) {
+    if (record.role === "entity") continue; // a poster is not a character
     const k = recordKey(record.name);
     if (ctx.usedKeys && (ctx.usedKeys.has(`img:${record.name}`) || ctx.usedKeys.has(`cr:${frKey}:${k}`))) continue;
     const img = await resolveImageBytes(record, { qualifier }).catch(() => null);
@@ -979,6 +1093,9 @@ async function pickImageQuestion(ctx) {
     console.log(`[Quiz] image Q (resolver): ${record.name} via ${record.source}/${record.method} [${ctx.title}]`);
     return q;
   }
+  // character pool exhausted -> entity artwork as the last resort
+  const eqLate = await _entityQuestion(_firstEntity()).catch(() => null);
+  if (eqLate) return eqLate;
   return null;
 }
 
