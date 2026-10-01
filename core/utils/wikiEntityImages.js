@@ -108,20 +108,24 @@ function _dlSlot() {
 }
 function _dlFree() { _dlInflight--; const w = _dlWaiters.shift(); if (w) { _dlInflight++; w(); } }
 
-// one paced, retried download (quizLore.downloadMedia returns null on any
-// failure; retries absorb wikimedia's transient 429/5xx throttling)
+// one paced, retried download (quizLore.downloadMedia returns {buf:null,
+// transient} on failure; retries absorb wikimedia's transient 429/5xx
+// throttling) - the last failure object is returned so callers can skip
+// negative-caching transient errors
 async function _download(url) {
   await _dlSlot();
   try {
+    let last = null;
     for (let attempt = 0; attempt < 4; attempt++) {
       const gap = Date.now() - _lastDl;
       if (gap < 220) await new Promise((r) => setTimeout(r, 220 - gap));
       _lastDl = Date.now();
       const dl = await quizLore.downloadMedia(url, "image").catch(() => null);
       if (dl && dl.buf) return dl;
+      last = dl;
       if (attempt < 3) await new Promise((r) => setTimeout(r, [1200, 2500, 4000][attempt] + Math.random() * 500));
     }
-    return null;
+    return last;
   } finally { _dlFree(); }
 }
 
@@ -340,7 +344,9 @@ async function resolveFranchisePortraits(frSlug, qualifier, names, { difficulty 
         portraitCache.putNegative(cacheKey);
       }
     } else {
-      portraitCache.putNegative(cacheKey);
+      // transient failures (429/5xx/timeouts) must not poison the 24h
+      // negative cache - only deterministic rejections do
+      if (!dl?.transient) portraitCache.putNegative(cacheKey);
     }
   }
 

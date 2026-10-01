@@ -1054,7 +1054,9 @@ async function buildCastImageQuestion(wiki, franchiseTitle, usedKeys, difficulty
           portraitCache.putNegative(ch.id);
         }
       } else {
-        portraitCache.putNegative(ch.id);
+        // 2026-10-01: transient download failures (429/5xx/timeout) must not
+        // poison the 24h negative cache - only deterministic ones do
+        if (!dl?.transient) portraitCache.putNegative(ch.id);
       }
     }
     if (!bytes) continue;

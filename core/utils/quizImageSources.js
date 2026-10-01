@@ -52,6 +52,11 @@ const DENYLIST = [
   /(^|\.)facebook\.com$/i, /(^|\.)instagram\.com$/i, /(^|\.)x\.com$/i, /(^|\.)twitter\.com$/i,
 ];
 function hostOf(url) { try { return new URL(url).hostname; } catch { return ""; } }
+// deterministic rejection: hotlink-hostile / auth-walled domain (negative-cache safe)
+function isDenied(url) {
+  const h = hostOf(url);
+  return !!h && DENYLIST.some((re) => re.test(h));
+}
 function hostAllowed(url) {
   const h = hostOf(url);
   if (!h) return false;
@@ -72,10 +77,14 @@ async function kitsuPool(ctx) {
     const s = await _http.get("https://kitsu.io/api/edge/anime", { params: { "filter[text]": ctx.title, "page[limit]": 3 } });
     if (s.status !== 200 || !s.data?.data?.length) return [];
     const nt = _norm(ctx.title);
-    // STRICT title gate: the search hit must actually be this franchise
+    // STRICT title gate: the search hit must actually be this franchise.
+    // 2026-10-01: filter AFTER normalization - CJK titles ("ベン・トー") normalize
+    // to "" and `nt.includes("")` is always true, which let Kitsu's fuzzy
+    // search serve a DIFFERENT franchise's cast (measured: "Ben 10" -> Ben-To
+    // cast). Min length 2 also kills single-char substring noise.
     const hit = s.data.data.find((d) => {
       const t = d.attributes || {};
-      const titles = [t.canonicalTitle, t.titles?.en, t.titles?.en_jp, t.titles?.ja_jp, ...(t.abbreviatedTitles || [])].filter(Boolean).map(_norm);
+      const titles = [t.canonicalTitle, t.titles?.en, t.titles?.en_jp, t.titles?.ja_jp, ...(t.abbreviatedTitles || [])].map(_norm).filter((x) => x && x.length >= 2);
       return titles.some((x) => x === nt || (nt.length >= 5 && (x.includes(nt) || nt.includes(x))));
     });
     if (!hit) return [];
@@ -237,5 +246,5 @@ async function visionGate(buf, mime, subject, franchise = "") {
 module.exports = {
   kitsuPool, steamGameProbe, steamEntityArt, speedrunEntityArt, itunesEntityArt,
   ddgImageSearch, ddgRecordImages, openverseImageSearch, ENTITY_DECOYS,
-  visionGate, hostAllowed, noteHostFailure, hostOf,
+  visionGate, hostAllowed, isDenied, noteHostFailure, hostOf,
 };

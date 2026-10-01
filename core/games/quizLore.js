@@ -929,13 +929,24 @@ async function downloadMedia(url, kind = "image") {
     ? (b[0] === 0x89 ? "image/png" : (b.slice(8, 12).toString() === "WEBP" ? "image/webp" : "image/jpeg"))
     : (b.slice(0, 4).toString() === "OggS" ? "audio/ogg" : "audio/mpeg");
   let buf = null;
+  // 💡 2026-10-01: distinguish TRANSIENT failures (429/5xx/timeouts - network
+  // bursts, provider throttling) from DETERMINISTIC ones (404/403/bad magic).
+  // Callers use this to avoid poisoning the 24h disk negative-cache when a
+  // rate-limit burst made EVERY download fail for a few minutes.
+  let transient = false;
+  const _transientCode = (e) => ["ECONNABORTED", "ETIMEDOUT", "ECONNRESET", "ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED"].includes(String(e?.code || ""));
+  const _transientStatus = (st) => st === 429 || (st >= 500 && st <= 599);
   try {
     const isWikimedia = /(^|\.)wikipedia\.org$|(^|\.)wikimedia\.org$/i.test(new URL(url).hostname);
     const headers = isWikimedia ? _WP_UA : undefined;
     const r = await _http.get(url, { responseType: "arraybuffer", timeout: 20000, maxContentLength: 6 * 1024 * 1024, headers });
     const b = Buffer.from(r.data);
     if (b.length >= 1024 && _magicOk(b)) buf = b;
-  } catch { /* fall through to got-scraping */ }
+    else if (_transientStatus(r.status)) transient = true;
+  } catch (e) {
+    if (_transientCode(e)) transient = true;
+    /* fall through to got-scraping */
+  }
   // 💡 2026-09-28: Fandom's CDN (static.wikia.nocookie.net) Cloudflare-challenges
   // plain axios - EVERY Fandom pageimage download silently failed and every
   // image question fell through to the junky Wikipedia file search. Retry with
@@ -952,9 +963,15 @@ async function downloadMedia(url, kind = "image") {
       });
       const b2 = Buffer.from(r2.body || []);
       if (b2.length >= 1024 && _magicOk(b2)) buf = b2;
-    } catch { /* both failed - caller skips gracefully */ }
+      else if (_transientStatus(r2.statusCode)) transient = true;
+    } catch (e2) {
+      if (_transientCode(e2)) transient = true;
+      /* both failed - caller skips gracefully */
+    }
   }
-  if (!buf) return null;
+  // failure return is an OBJECT (buf:null) on purpose - every caller tests
+  // `dl && dl.buf` / `dl?.buf`, so the extra `transient` field is safe to read
+  if (!buf) return { buf: null, transient };
   return { buf, mime: _mimeOf(buf) };
 }
 

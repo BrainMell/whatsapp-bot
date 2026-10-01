@@ -124,8 +124,10 @@ async function detectCategory(title, explicit) {
     const q = `query($s:String){Page(perPage:5){media(search:$s,type:ANIME){id format title{romaji english}} } }`;
     const r = await _http.post("https://graphql.anilist.co", { query: q, variables: { s: t } }, { timeout: 8000 });
     const nt = _norm(t);
+    // filter AFTER normalization - a title that normalizes to "" would make
+    // nt.includes("") always-true and match an unrelated anime
     const media = (r.data?.data?.Page?.media || []).filter((m) => {
-      const titles = [m.title?.romaji, m.title?.english].filter(Boolean).map((x) => _norm(x));
+      const titles = [m.title?.romaji, m.title?.english].filter(Boolean).map((x) => _norm(x)).filter((x) => x && x.length >= 2);
       return titles.some((x) => x.includes(nt) || (nt.length >= 5 && nt.includes(x)));
     });
     if (media.length) {
@@ -136,21 +138,61 @@ async function detectCategory(title, explicit) {
   } catch { /* anilist unreachable - continue */ }
   // 2) TVMaze - type-aware: "Animation" routes to the cartoon chain (Ben 10
   // fix - cartoons are NOT live-action tv), everything else that matches is tv.
+  // 2026-10-01: ONE retry on network failure - a flaky probe must not silently
+  // drop the cartoon signal and let the Steam exact-name probe misroute a
+  // cartoon franchise to the game chain (measured: Ben 10 -> game on a
+  // transient TVMaze timeout).
+  let tvmazeUnknown = false;
+  if (category === "other") {
+    for (let tryN = 0; tryN < 2; tryN++) {
+      try {
+        const r = await _http.get("https://api.tvmaze.com/singlesearch/shows", { params: { q: t }, timeout: 7000 });
+        if (r.data && r.data.name && _norm(r.data.name).includes(_norm(t).slice(0, 6))) {
+          category = String(r.data.type || "").toLowerCase() === "animation" ? "cartoon" : "tv";
+        }
+        tvmazeUnknown = false;
+        break; // a 200 response is a definitive answer (hit or miss)
+      } catch {
+        tvmazeUnknown = true; // network failure - unknown, NOT negative
+      }
+    }
+  }
+  // 2b) Wikipedia lead classification - deterministic, independent of TVMaze
+  // reachability (TVMaze ETIMEDOUTs intermittently from datacenter IPs;
+  // measured Ben 10 -> game misroute when both TVMaze tries died).
   if (category === "other") {
     try {
-      const r = await _http.get("https://api.tvmaze.com/singlesearch/shows", { params: { q: t }, timeout: 7000 });
-      if (r.data && r.data.name && _norm(r.data.name).includes(_norm(t).slice(0, 6))) {
-        category = String(r.data.type || "").toLowerCase() === "animation" ? "cartoon" : "tv";
-      }
-    } catch { /* not tv */ }
+      const d = await wikiEntityImages.wikiApi({
+        action: "query", format: "json", formatversion: "2", redirects: "1",
+        prop: "extracts", exintro: "1", explaintext: "1", exsentences: "3",
+        titles: t,
+      }).catch(() => null);
+      const lead = String(d?.query?.pages?.[0]?.extract || "");
+      const hint = _wikiLeadCategory(lead);
+      if (hint) category = hint;
+    } catch { /* wiki unreachable - continue */ }
   }
-  // 2b) Steam storesearch - deterministic game signal (Elden Ring, Hollow
+  // 2c) Steam storesearch - deterministic game signal (Elden Ring, Hollow
   // Knight...). Exact-name hits only; fuzzy matching would route movies with
-  // game-adjacent names to the game chain.
+  // game-adjacent names to the game chain. 2026-10-01 multi-source guard
+  // (owner spec §6): cross-media franchises share exact names with their game
+  // adaptations (Ben 10, SpongeBob...). If TVMaze was UNREACHABLE (not
+  // negative), retry it once before committing to the game chain - an
+  // Animation/TV signal outranks the Steam name collision.
   if (category === "other") {
     try {
       const probe = await imgSources.steamGameProbe(t);
-      if (probe && _norm(probe.name) === _norm(t)) category = "game";
+      if (probe && _norm(probe.name) === _norm(t)) {
+        if (tvmazeUnknown) {
+          try {
+            const r2 = await _http.get("https://api.tvmaze.com/singlesearch/shows", { params: { q: t }, timeout: 7000 });
+            if (r2.data && r2.data.name && _norm(r2.data.name).includes(_norm(t).slice(0, 6))) {
+              category = String(r2.data.type || "").toLowerCase() === "animation" ? "cartoon" : "tv";
+            }
+          } catch { /* steam hit stands */ }
+        }
+        if (category === "other") category = "game";
+      }
     } catch { /* not game */ }
   }
   // 2c) iTunes media=movie probe - deterministic movie signal (Apollo 9 fix).
@@ -380,11 +422,32 @@ const _JUNK_LINK = /(speedrun|gameplay|soundtrack|\bost\b|album|film series|cate
 // American comic books", "Emilia is a fictional character in Re:Zero".
 // ══════════════════════════════════════════
 const _CHAR_PAT = /\bfictional\b|\bsuperhero\b|\bsupervillain\b|\bsuper villain\b|\btitle character\b|\bmain character\b|\bprotagonist\b|\bantagonist\b|\bdeuteragonist\b|\bplayable character\b|\bcharacter (in|from|of|created|and)|\bmecha\b|\bmascot\b|\bfictional (creature|being|entity|species|character|robot|android|monster|animal|deity)|\bboss (in|of)\b|\bvoice belongs\b|\bis voiced\b|\bportrayed by\b/i;
-const _JUNK_LEAD = /\bis a \d{4} (video game|film|movie)\b|\bvideo game (developed|published|based|in the|series)\b|\bplatform game\b|\baction-adventure game\b|\brole-playing (video )?game\b|\bfighting game\b|\bracing game\b|\bpuzzle (video )?game\b|\bstrategy (video )?game\b|\broguelike\b|\bshooter game\b|\bhorror game\b|\bindie game\b|\bgame engine\b|\btelevision (series|show|miniseries) (created|developed|that|premiered|which)\b|\bweb series\b|\bfilm (directed|series|adaptation|that|based)\b|\bsuperhero film\b|\banimated (science |martial arts |fantasy |action |short )?film\b|\bcomedy film\b|\baction film\b|\bhorror film\b|\bscience fiction film\b|\bshort film\b|\b\d{1,2}(st|nd|rd|th) (film|movie)\b|\bepisode of\b|\bsong (by|recorded|written)\b|\balbum (by|recorded)\b|\bsingle by\b|\bis a website\b|\bwebcomic\b|\bYouTube (channel|video)\b|\b(is|was) an? (American|Japanese|British|English|Canadian|Australian|South Korean|Chinese|French|German|Spanish|Italian|Swedish|Dutch) (actor|actress|singer|musician|writer|director|producer|designer|marketer|developer|programmer|journalist|artist|comedian)\b|\b(is|was) an? (video game|game) (developer|director|designer|producer|journalist|marketer|programmer|studio|company)\b|\bvideo game studio\b|\bvideo game developer\b|\bmanga series\b|\banime series\b|\blight novel series\b|\bmanga written\b|\bcomic (strip|book series)\b|\bnovel (by|written|series)\b|\bnon-player character\b|\bboss (battle|fight|level|stage)\b|\bmetroidvania\b|\bupcoming (video )?game\b|\bsequel to (the )?(video )?game\b/i;
+const _JUNK_LEAD = /\bis a \d{4} (video game|film|movie)\b|\bvideo game (developed|published|based|in the|series)\b|\bplatform game\b|\baction-adventure game\b|\brole-playing (video )?game\b|\bfighting game\b|\bracing game\b|\bpuzzle (video )?game\b|\bstrategy (video )?game\b|\broguelike\b|\bshooter game\b|\bhorror game\b|\bindie game\b|\bgame engine\b|\btelevision (series|show|miniseries) (created|developed|that|premiered|which)\b|\bweb series\b|\bfilm (directed|series|adaptation|that|based)\b|\bsuperhero film\b|\banimated (science |martial arts |fantasy |action |short )?film\b|\bcomedy film\b|\baction film\b|\bhorror film\b|\bscience fiction film\b|\bshort film\b|\b\d{1,2}(st|nd|rd|th) (film|movie)\b|\bepisode of\b|\bsong (by|recorded|written)\b|\balbum (by|recorded)\b|\bsingle by\b|\bis a website\b|\bwebcomic\b|\bYouTube (channel|video)\b|\b(is|was) an? (American|Japanese|British|English|Canadian|Australian|South Korean|Chinese|French|German|Spanish|Italian|Swedish|Dutch) (voice )?(actor|actress|singer|musician|writer|director|producer|designer|marketer|developer|programmer|journalist|artist|comedian)\b|\b(is|was) an? (video game|game) (developer|director|designer|producer|journalist|marketer|programmer|studio|company)\b|\bvideo game studio\b|\bvideo game developer\b|\bmanga series\b|\banime series\b|\blight novel series\b|\bmanga written\b|\bcomic (strip|book series)\b|\bnovel (by|written|series)\b|\bnon-player character\b|\bboss (battle|fight|level|stage)\b|\bmetroidvania\b|\bupcoming (video )?game\b|\bsequel to (the )?(video )?game\b|\bvoice (actor|actress|artist)\b|\bknown for (voicing|his voice|her voice|providing voices)\b/i;
 // generic-concept articles that keep leaking into franchise link pools
 // ("Boss (video games)", "Crossover (fiction)", "Cameo appearance", ...)
 const _GENERIC_TITLE = /^(boss|crossover|cameo|villain|hero|sidekick|protagonist|antagonist|character|enemy|monster|species|non-player character)\b/i;
 const _GENERIC_DISAMBIG = /\((video games?|fiction|concept|gaming|mechanic|trope|media|franchise)\)\s*$/i;
+// ══════════════════════════════════════════
+// WIKIPEDIA LEAD CATEGORY (2026-10-01 owner bug report §6: deterministic
+// classification first). Independent of TVMaze reachability: the en.wiki
+// intro of the franchise article states what the franchise IS.
+//   "animated ... television series" / network identity (Cartoon Network,
+//   Nickelodeon, Disney, PBS Kids - exclusively animated content) -> cartoon
+//   "television series" -> tv | "video game" family -> game | film -> movie
+// Measured: Ben 10 lead = "...media franchise... owned by The Cartoon
+// Network, Inc." -> cartoon BEFORE Steam's exact-name "Ben 10" game can
+// misroute it; Elden Ring lead = "action role-playing game" -> game.
+// ══════════════════════════════════════════
+function _wikiLeadCategory(lead) {
+  const s = String(lead || "").toLowerCase();
+  if (!s) return null;
+  if (/animated (television |tv )?(series|show|sitcom|comedy|science fiction)/.test(s)
+    || /\b(cartoon network|nickelodeon|nicktoons|disney (channel|xd)|pbs kids)\b/.test(s)) return "cartoon";
+  if (/television (series|show|miniseries|sitcom)/.test(s)) return "tv";
+  if (/video game|role-playing game|platform game|action-adventure game|puzzle game/.test(s)) return "game";
+  if (/(animated )?(film|movie)\b/.test(s)) return "movie";
+  return null;
+}
 function _classifyLead(lead, article, franchiseTitle) {
   const text = String(lead || "").slice(0, 600);
   if (!text) return false;
@@ -814,15 +877,17 @@ function _dlFree() { _bytesDl.inflight--; const w = _bytesDl.waiters.shift(); if
 async function _download(url) {
   await _dlSlot();
   try {
+    let last = null;
     for (let attempt = 0; attempt < 4; attempt++) {
       const gap = Date.now() - _bytesDl.last;
       if (gap < 220) await new Promise((r) => setTimeout(r, 220 - gap));
       _bytesDl.last = Date.now();
       const dl = await quizLore.downloadMedia(url, "image").catch(() => null);
       if (dl && dl.buf) return dl;
+      last = dl; // keep the failure object (carries .transient) for the caller
       if (attempt < 3) await new Promise((r) => setTimeout(r, 1200 * (attempt + 1) + crypto.randomInt(0, 500)));
     }
-    return null;
+    return last;
   } finally { _dlFree(); }
 }
 
@@ -924,9 +989,22 @@ async function resolveImageBytes(record, ctx) {
 // one URL through the full gauntlet: download -> pixel gate -> vision gate
 // (unanchored only) -> NORMALIZE (white-bg flatten + uniform canvas) -> cache
 async function _dlGateNormalize(url, tag, record, ctx, cacheKey, { visionSubject = null, visionContext = "" } = {}) {
-  if (!imgSources.hostAllowed(url)) { portraitCache.putNegative(cacheKey); return null; }
+  if (!imgSources.hostAllowed(url)) {
+    // 2026-10-01: DENYLIST hits are deterministic -> negative-cache is right;
+    // a 10-minute HOST COOLDOWN after a rate-limit burst is TRANSIENT - never
+    // poison 24h of per-record negatives for it (measured: one wikipedia 429
+    // burst negative-cached a whole franchise's cast for a day).
+    if (imgSources.isDenied(url)) portraitCache.putNegative(cacheKey);
+    return null;
+  }
   const dl = await _download(url);
-  if (!dl || !dl.buf) { imgSources.noteHostFailure(url); return null; }
+  if (!dl || !dl.buf) {
+    imgSources.noteHostFailure(url);
+    // deterministic failure (404/403/bad magic) -> negative-cache 24h;
+    // transient failure (429/5xx/timeout) -> retry later, no negative
+    if (!dl?.transient) portraitCache.putNegative(cacheKey);
+    return null;
+  }
   const gate = await _gated(dl.buf, `${tag}:${record.name}`);
   if (!gate) { imgSources.noteHostFailure(url); return null; }
   if (visionSubject) {
