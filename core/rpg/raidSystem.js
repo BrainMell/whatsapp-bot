@@ -586,7 +586,6 @@ async function distributeRewards(raid) {
     // Award guild XP + war points for raid participation
     try {
       guildPerks.awardGuildXp(a.jid, 50, 'Raid participation');
-      guildPerks.awardWarPoints(a.jid, 20, 'raid');
     } catch (e) {}
 
     // Show top 10 in summary
@@ -615,7 +614,6 @@ async function distributeConsolationRewards(raid) {
       const consoPaid = economy.addMoney(a.jid, 5000, 'Raid consolation');
       if (!consoPaid) console.warn(`[RaidConsolation] FAILED to pay 5000 to ${a.jid}`);
       guildPerks.awardGuildXp(a.jid, 10, 'Raid consolation');
-      guildPerks.awardWarPoints(a.jid, 5, 'raid_consolation');
     } catch (e) {}
   }
 }

@@ -236,29 +236,6 @@ function awardGuildXp(userId, amount, reason) {
   }
 }
 
-// ─── GUILD WAR POINTS (for Phase 7) ───────────────────────────────────────
-// Awards war points to the user's guild. Called from dungeon/boss/PvP/raid.
-function awardWarPoints(userId, amount, reason) {
-  if (!userId || !amount || amount <= 0) return;
-  const guildName = guilds.getUserGuild(userId);
-  if (!guildName) return;
-  try {
-    const guild = guilds.getGuild(guildName);
-    if (!guild) return;
-    // Get current week key
-    const now = new Date();
-    const weekKey = getWeekKey(now);
-    // Reset if new week
-    if (guild.warPointsWeek !== weekKey) {
-      guild.warPointsWeek = weekKey;
-      guild.warPoints = 0;
-    }
-    guild.warPoints = (guild.warPoints || 0) + Math.floor(amount);
-    // Note: persistence happens via guilds.syncGuild which is called periodically
-  } catch (e) {
-    console.error('[GuildPerks] Failed to award war points:', e.message);
-  }
-}
 
 function getWeekKey(date) {
   // 💡 FIX 2026-08-31: was `Date.UTC(date.getFullYear(), ...)` - LOCAL Y/M/D
@@ -318,56 +295,7 @@ function getPerkSummary(userId) {
 // Interest rate: 0.5% per treasury level, max 2.5% at L5.
 // Only fires if guild level >= 5 (the perk unlock threshold).
 // Capped at 1M interest per day to prevent runaway growth.
-async function runDailyInterest() {
-  console.log('[GuildPerks] Running daily guild bank interest...');
-  let totalPaid = 0;
-  let guildsPaid = 0;
-
-  try {
-    const guildsModule = require('./guilds');
-    const guildData = guildsModule.getGuildInfo();
-    if (!guildData || !guildData.guilds) return;
-
-    for (const [guildName, guild] of Object.entries(guildData.guilds)) {
-      if (!guild) continue;
-      const balance = guild.balance || 0;
-      if (balance <= 0) continue;
-
-      const rate = getBankInterestRate(guild);
-      if (rate <= 0) continue; // guild level < 5 or treasury L0
-
-      let interest = Math.floor(balance * rate);
-      // Cap at 1M per day
-      interest = Math.min(interest, 100000) // 💡 Rebalanced 2026-08-17: 1M cap was 2% of community cap per guild/day.;
-      if (interest <= 0) continue;
-
-      guild.balance = balance + interest;
-      totalPaid += interest;
-      guildsPaid++;
-
-      // Log the interest
-      if (guild.pointsHistory) {
-        guild.pointsHistory.push({
-          type: 'interest',
-          amount: interest,
-          timestamp: Date.now(),
-        });
-        if (guild.pointsHistory.length > 50) guild.pointsHistory.shift();
-      }
-
-      // Persist
-      try {
-        guild.lastInterestPayout = new Date();
-        guildsModule.syncGuild(guildName);
-      } catch (e) {}
-    }
-  } catch (e) {
-    console.error('[GuildPerks] Daily interest failed:', e.message);
-  }
-
-  console.log(`[GuildPerks] Interest done. Paid ${guildsPaid} guilds, total ${totalPaid.toLocaleString()} Zeni.`);
-  return { guildsPaid, totalPaid };
-}
+// (removed 2026-10-03, GW overhaul: runDailyInterest — no-interest loan system)
 
 // ─── MEMBER CAP CHECK ─────────────────────────────────────────────────────
 // Returns { canRecruit, currentMembers, cap, message }
@@ -402,13 +330,10 @@ module.exports = {
   getMemberCap,
   getBankInterestRate,
   awardGuildXp,
-  awardWarPoints,
   getPerkSummary,
   getUserGuildData,
   getWeekKey,
-  runDailyInterest,
   canRecruitMember,
-  runDailyLoanProcessing,
   // 💡 Phase 9: Summon Sanctuary perks
   getSummonSlotBonus,
   getSummonXpMultiplier,
@@ -422,61 +347,6 @@ module.exports = {
 //   - If wallet is empty, the loan stays overdue and accrues a 5% penalty
 //     added to the principal (compounding - encourages repayment)
 // Called from index.js scheduler (same as runDailyInterest).
-async function runDailyLoanProcessing() {
-  console.log('[GuildPerks] Running daily loan processing...');
-  let loansProcessed = 0;
-  let totalRecovered = 0;
-  let penaltiesApplied = 0;
-
-  try {
-    const guildsModule = require('./guilds');
-    const economy = require('./economy');
-    const guildData = guildsModule.getGuildInfo();
-    if (!guildData || !guildData.guilds) return;
-
-    const now = Date.now();
-    for (const [guildName, guild] of Object.entries(guildData.guilds)) {
-      if (!guild || !guild.loans || guild.loans.length === 0) continue;
-
-      for (const loan of guild.loans) {
-        if (loan.repaid) continue;
-        const dueAt = new Date(loan.dueAt).getTime();
-        if (dueAt > now) continue; // not overdue yet
-
-        loansProcessed++;
-        // Try to auto-deduct 10% from borrower's wallet
-        const deduction = Math.floor(loan.amount * 0.10);
-        if (deduction <= 0) continue;
-
-        const borrowerWallet = economy.getGold(loan.borrowerJid);
-        if (borrowerWallet >= deduction) {
-          // Force-deduct
-          economy.removeMoney(loan.borrowerJid, deduction, `Auto-repayment for overdue guild loan`);
-          loan.amount -= deduction;
-          totalRecovered += deduction;
-          // Add deducted amount back to guild bank
-          guild.balance = (guild.balance || 0) + deduction;
-          if (loan.amount <= 0) {
-            loan.repaid = true;
-            loan.repaidAt = new Date();
-          }
-        } else {
-          // Borrower can't pay - apply 5% penalty to principal (compounds)
-          const penalty = Math.floor(loan.amount * 0.05);
-          loan.amount += penalty;
-          penaltiesApplied += penalty;
-        }
-      }
-
-      // Persist
-      try { guildsModule.syncGuild(guildName); } catch (e) {}
-    }
-  } catch (e) {
-    console.error('[GuildPerks] Daily loan processing failed:', e.message);
-  }
-
-  console.log(`[GuildPerks] Loans done. Processed ${loansProcessed} overdue loans, recovered ${totalRecovered.toLocaleString()} Zeni, applied ${penaltiesApplied.toLocaleString()} in penalties.`);
-  return { loansProcessed, totalRecovered, penaltiesApplied };
-}
+// (removed 2026-10-03, GW overhaul: runDailyLoanProcessing — no-interest loan system)
 
 

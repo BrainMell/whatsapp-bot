@@ -1017,11 +1017,13 @@ function sellItem(userId, itemId, quantity = 1) {
     const userGuild = guilds.getUserGuild(userId);
     let guildMsg = "";
     if (userGuild) {
-        const contribution = Math.floor(value / 1000); // 1 XP per 1000 Zeni // 5% goes to guild
-        guilds.addGuildPoints(userGuild, contribution, `item sold: ${itemId}`);
-        guilds.addGuildBalance(userGuild, Math.floor(contribution / 2));
+        // 💡 GW-OVERHAUL 2026-10-03: money→guild-XP conversion REMOVED (owner ban:
+        // Guild Points are earned, not bought). Sales still contribute 0.05% of
+        // value to the guild bank as passive support.
+        const bankCut = Math.floor(value * 0.0005);
+        guilds.addGuildBalance(userGuild, bankCut);
         guilds.updateBoardProgress(userGuild, 'EARN_ZENI', value); // Track earning progress
-        guildMsg = `\n🏛️ *${userGuild}* bought your loot for the guild house! (+${contribution} XP)`;
+        guildMsg = `\n🏛️ *${userGuild}* bought your loot for the guild house!`;
     }
 
     if (typeof user.inventory[itemId] === 'number') {

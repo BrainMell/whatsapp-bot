@@ -16,10 +16,10 @@
 //   - The engine only needs two hooks: handleDM() (DM message routing) and
 //     the worldAlignment monitor for scheduled encounters.
 //
-// OWNER MAPPING HOOK: the built-in 'alignment_trial' spec is an explicit
-// PLACEHOLDER flow (attune -> boon -> confirm) with a no-op reward hook.
-// When the mechanics are mapped, replace/augment the spec - the framework
-// (state, expiry, dedup, DM plumbing, outcomes) stays as-is.
+// GW OVERHAUL 2026-10-03: the placeholder trial was removed. Alignment now
+// launches a real alignment-scale Guild War (worldAlignment.js). The
+// framework remains the generic step-based DM encounter host for future
+// encounter types; Ruins event actions route through guildWar/dmRouter.
 // ═══════════════════════════════════════════════════════════════════════════
 
 'use strict';
@@ -172,41 +172,8 @@ function cleanupExpired() {
     return swept;
 }
 
-// ── BUILT-IN PLACEHOLDER SPEC: the alignment trial ─────────────────────────
-// Mechanics will be mapped by the owner; this spec exercises the full
-// framework path (steps, validation, outcome) so the plumbing is proven.
-registerEncounterType({
-    id: 'alignment_trial',
-    title: 'Trial of the Aligned Worlds',
-    intro: (s) => `🌌 *THE WORLDS HAVE ALIGNED*\n\nThe First World, the Abyss and the Afterlife hang in a straight line - and something noticed *you*.\n\nA voice older than the map speaks through the alignment:\n"You stand where all worlds touch. Answer, and be attuned."\n\n1️⃣ *First - name your world.* What do you call the place you fight for? (one word or phrase)`,
-    steps: [
-        { key: 'world', prompt: '1️⃣ Name your world. (one word or phrase)' },
-        {
-            key: 'boon',
-            prompt: (s) => `2️⃣ The alignment offers a boon, traveler of *${s.answers.world || 'nowhere'}*.\n\nChoose: *might* (power) · *veil* (mystery) · *bond* (allies)`,
-            validate: (input) => {
-                const v = input.toLowerCase();
-                if (['might', 'veil', 'bond'].includes(v)) return { ok: true, value: v };
-                return { ok: false, message: '❓ Choose *might*, *veil* or *bond*.' };
-            },
-        },
-        {
-            key: 'confirm',
-            prompt: (s) => `3️⃣ The worlds wait on your word.\n\nWorld: *${s.answers.world}* · Boon: *${s.answers.boon}*\n\nType *accept* to be attuned - or *quit* to walk away.`,
-            validate: (input) => {
-                if (/^accept$/i.test(input.trim())) return { ok: true, value: true };
-                return { ok: false, message: '❓ Type *accept* to be attuned - or *quit*.' };
-            },
-        },
-    ],
-    onComplete: (session) => {
-        const name = economy.getDisplayName(session.meta.jid || '');
-        return {
-            summaryText: `🌌 *ATTUNED.*\n\nThe alignment closes over *${session.answers.world}*, and its boon - *${session.answers.boon}* - settles into you like a second shadow.\n\n_You were attuned during the great alignment, ${name}. The worlds will remember._\n\n_(The full consequences of the alignment trial arrive when the next chapter of the encounter is designed.)_`,
-            rewards: null, // owner maps real rewards with the encounter mechanics
-        };
-    },
-});
+// (alignment_trial placeholder REMOVED 2026-10-03 — alignment now launches the
+// real alignment-scale Guild War via worldAlignment.js / guildWar module.);
 
 // QA/testing seam
 const _internal = { specs, get sessions() { _load(); return sessions; } };

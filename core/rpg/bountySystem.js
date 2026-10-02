@@ -163,7 +163,6 @@ async function claimBounty(hunterJid, targetJid) {
   // Award guild XP + war points for the claim
   try {
     guildPerks.awardGuildXp(hunterJid, 20, `Bounty claim: ${targetJid}`);
-    guildPerks.awardWarPoints(hunterJid, 15, 'bounty');
   } catch (e) {}
 
   return {

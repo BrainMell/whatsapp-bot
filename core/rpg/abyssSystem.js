@@ -906,7 +906,6 @@ async function processDeath(userId, run, deathMsg) {
   try {
     const guildPerks = require('./guildPerks');
     guildPerks.awardGuildXp(userId, Math.floor(score / 100), `Abyss run (death, F${run.currentFloor})`);
-    guildPerks.awardWarPoints(userId, Math.floor(score / 50), 'abyss');
   } catch (e) { console.error('[Abyss] Guild perks failed:', e.message); }
 
   return {
@@ -982,7 +981,6 @@ async function retreat(userId) {
   try {
     const guildPerks = require('./guildPerks');
     guildPerks.awardGuildXp(userId, Math.floor(score / 50), `Abyss run (retreat, F${run.currentFloor})`);
-    guildPerks.awardWarPoints(userId, Math.floor(score / 25), 'abyss');
   } catch (e) {}
 
   return {

@@ -3907,6 +3907,13 @@ What to do:
             .tick(sock, BOT_MARKER)
             .catch(() => {});
         }
+        // ⚔️ GUILD WAR sweeper: registration expiry, hard end times,
+        // inactivity relic drops, feed flush. Cheap no-op without events.
+        if (sock) {
+          require("./rpg/guildWar")
+            .state.tick(sock, BOT_MARKER)
+            .catch((e) => console.error("[GuildWar] sweeper:", e?.message));
+        }
         const results = loans.checkDueLoans();
         if (results.length > 0) {
           console.log(
@@ -8767,6 +8774,23 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                     txt &&
                     !txt.toLowerCase().startsWith(botConfig.getPrefix().toLowerCase())
                   ) {
+                    try {
+                      // ⚔️ GUILD WAR first: active-event DM actions (movement,
+                      // relics, challenges). Returns null when not a Ruins action.
+                      const gwResult = await require("./rpg/guildWar/dmRouter").handleDM(
+                        sock, senderJid, chatId, txt, BOT_MARKER,
+                      );
+                      if (gwResult) {
+                        if (gwResult.image) {
+                          await sock.sendMessage(chatId, { image: gwResult.image, caption: BOT_MARKER + (gwResult.text || "") });
+                        } else if (gwResult.text) {
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + gwResult.text });
+                        }
+                        return;
+                      }
+                    } catch (e) {
+                      console.error("[GuildWar] DM router error:", e.message);
+                    }
                     try {
                       const consumed = await require("./rpg/encounterFramework").handleDM(
                         sock,
@@ -18840,7 +18864,15 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                       `${botConfig.getPrefix().toLowerCase()} guild leave`
                     ) {
                       try {
+                        // 🏦 GW overhaul: resolve guild BEFORE leaving, then settle
+                        // any active guild loan (wallet deduct, else User.debt — config policy)
+                        const _preLeaveGuild = guilds.getUserGuild(senderJid);
                         const result = guilds.leaveGuild(senderJid);
+                        if (_preLeaveGuild) {
+                          try {
+                            const _loanSettle = await require('./rpg/guildWar/bankLoans').handleGuildLeave(senderJid, _preLeaveGuild);
+                          } catch (e) { /* loan settle best-effort */ }
+                        }
                         await sock.sendMessage(chatId, {
                           text: BOT_MARKER + result.message,
                         });
@@ -19584,9 +19616,7 @@ Admins can:
                           if (mg) {
                             leaderboardText += `   🎮 Mini-games: ${mg.wordleWins}W/${mg.tttWins}T/${mg.gamblingWins}G\n`;
                           }
-                          if (guild.warPoints > 0) {
-                            leaderboardText += `   ⚔️ War Points: ${guild.warPoints}\n`;
-                          }
+
                           leaderboardText += `━━━━━━━━━━━━━━━━\n`;
                         });
 
@@ -19716,9 +19746,7 @@ Admins can:
                           text += `${medal} *${guild.name}* [${guild.type || 'ADVENTURER'}]\n`;
                           text += `   📊 Lv ${guild.level || 1} | XP ${guild.points.toLocaleString()}\n`;
                           text += `   💰 Bank: ${(guild.balance || 0).toLocaleString()} | 👥 ${guild.members} members\n`;
-                          if (guild.warPoints > 0) {
-                            text += `   ⚔️ War Points: ${guild.warPoints}\n`;
-                          }
+
                           text += `━━━━━━━━━━━━━━━━\n`;
                         });
 
@@ -19892,12 +19920,9 @@ Admins can:
                           return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You only have *${economy.getGold(senderJid).toLocaleString()}* Zeni in your wallet.` });
                         }
                         guild.balance = (guild.balance || 0) + amount;
-                        // 💡 QA FIX: cap donation XP to prevent inflation.
-                        // Was 1 XP per 1000 Zeni - depositing 500M = 500K XP,
-                        // which broke the level curve. Now: 1 XP per 100K Zeni,
-                        // capped at 100 XP per donation.
-                        const xpAward = Math.min(100, Math.max(1, Math.floor(amount / 100000)));
-                        guilds.addGuildPoints(userGuild, xpAward, `donation by ${senderJid}`);
+                        // 💡 GW-OVERHAUL 2026-10-03: donation→XP conversion REMOVED
+                        // (owner ban: Guild Points are earned, not bought). Donations
+                        // still fund the guild bank (support system).
                         // Sync to DB - if the bank persist fails, refund the
                         // wallet (never take money without recording it).
                         const persisted = await guilds.syncGuild(userGuild);
@@ -19919,226 +19944,49 @@ Admins can:
                       return;
                     }
 
-                    // `.p guild loan [list|repay <amt>|<amt>]` - borrow from guild bank (must repay in 7 days)
-                    // 💡 LOAN-BUG FIX 2026-09-20 (full-flow rework):
-                    //   1. The old gate required a TRAILING SPACE ("guild loan "),
-                    //      so a bare `${prefix} guild loan` never entered the
-                    //      handler and the bot silently ignored it.
-                    //   2. The guild bank was debited and the loan persisted
-                    //      BEFORE the wallet credit was attempted - a failed
-                    //      credit then "rolled back" from stale memory.
-                    //   3. The debt gate ran AFTER the payout: addMoney had
-                    //      already routed the loan into debt repayment, and the
-                    //      rollback un-debited the bank - free debt reduction.
-                    //   4. Bank balance was read from THIS instance's possibly
-                    //      stale cache (Joker/Subaru clobber each other's
-                    //      writes), producing "Max loan = 0" on money the guild
-                    //      actually has.
-                    // New order: heal both sides from the shared DB →
-                    // Validate (guild, member, amount, debt, account) →
-                    // credit wallet → debit bank + record loan → persist,
-                    // with claw-back if the persist fails and NOTHING mutated
-                    // when the credit fails.
+                    // `.j guild loan` — GM-approved no-interest loans (GW overhaul 2026-10-03)
+                    // request <amt> → GuildLoan collection (requested) → leader/officer
+                    // approve|reject @player → funds move bank→wallet → repay <amt>.
                     if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild loan` ||
                         lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild loan `)) {
+                      const bankLoans = require('./rpg/guildWar/bankLoans');
+                      const loanArgs = txt.trim().split(/\s+/).slice(2); // [guild, loan, ...args]
+                      const loanSub = (loanArgs[1] || 'list').toLowerCase();
+                      const ug = guilds.getUserGuild(senderJid);
+                      if (!ug) return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
+
                       try {
-                        const P = botConfig.getPrefix();
-                        const tokens = lowerTxt.split(/\s+/);
-                        const sub = tokens[3]?.toLowerCase();
-                        const userGuild = guilds.getUserGuild(senderJid);
-                        if (!userGuild) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
+                        if (loanSub === 'list') {
+                          const lists = await bankLoans.listLoans(senderJid, ug);
+                          const mine = lists.mine.join('\n') || 'No active loans.';
+                          const pendingLine = lists.pending.length
+                            ? `\n📜 Pending requests: ${lists.pending.length} (GM: \`loan approve @player\`)`
+                            : '';
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `🏦 *Guild Loans*\n${mine}${pendingLine}\n_No interest. One active loan per player._` });
                         }
-                        const guild = guilds.getGuild(userGuild);
-                        if (!guild) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Guild not found.' });
+                        if (loanSub === 'request' || (/^\d/.test(loanSub))) {
+                          const amt = loanSub === 'request' ? Number(loanArgs[2]) : Number(loanArgs[1]);
+                          const res = await bankLoans.requestLoan(senderJid, senderName, ug, amt);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + res.text });
                         }
-                        const economy = require('./rpg/economy');
-
-                        // Money-critical command: heal BOTH sides of the
-                        // transaction from the shared MongoDB first - the other
-                        // instances keep their own caches. refreshGuildMoney
-                        // merges the fresh bank balance + loans into the
-                        // in-memory guild; syncUserFromDB retries the User
-                        // collection under every JID variant for the borrower.
-                        await guilds.refreshGuildMoney(userGuild);
-                        let borrower = economy.getUser(senderJid);
-                        if (!borrower) {
-                          await economy.syncUserFromDB(senderJid);
-                          borrower = economy.getUser(senderJid);
+                        if (loanSub === 'approve' || loanSub === 'reject') {
+                          const targetName = (loanArgs[2] || '').replace(/^@/, '');
+                          const member = guilds.getGuildMember(ug, targetName);
+                          const targetJid = member?.jid || loanArgs[2];
+                          const res = loanSub === 'approve'
+                            ? await bankLoans.approveLoan(senderJid, ug, targetJid)
+                            : await bankLoans.rejectLoan(senderJid, ug, targetJid);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + res.text });
                         }
-
-                        const bankBalance = guild.balance || 0;
-                        const maxLoan = Math.floor(bankBalance * 0.10); // max 10% of bank
-
-                        // `.p guild loan` (no args) / list / status - bank, usage, your loans
-                        if (!sub || sub === 'list' || sub === 'status') {
-                          const myLoans = (guild.loans || []).filter(l => l.borrowerJid === senderJid && !l.repaid);
-                          let msg = `💵 *Guild Loans* — ${userGuild}\n`;
-                          msg += `🏦 Bank: ${bankBalance.toLocaleString()} Zeni · max loan: ${maxLoan.toLocaleString()} (10%)\n\n`;
-                          if (myLoans.length === 0) {
-                            msg += `_You have no active loans._\n\n`;
-                          } else {
-                            let totalOwed = 0;
-                            const shown = myLoans.slice(0, 8);
-                            for (const loan of shown) {
-                              const daysLeft = Math.ceil((new Date(loan.dueAt).getTime() - Date.now()) / 86400000);
-                              msg += `💰 ${loan.amount.toLocaleString()} Zeni — ${daysLeft > 0 ? `${daysLeft}d left` : '⚠️ OVERDUE'}\n`;
-                              totalOwed += loan.amount;
-                            }
-                            if (myLoans.length > shown.length) msg += `_…and ${myLoans.length - shown.length} more._\n`;
-                            msg += `\n*Total owed: ${totalOwed.toLocaleString()} Zeni*\n\n`;
-                          }
-                          msg += `Borrow: \`${P} guild loan <amount>\`\n`;
-                          msg += `Repay: \`${P} guild loan repay <amount>\`\n_7-day term, then 10% of earnings auto-deducts._`;
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        if (loanSub === 'repay') {
+                          const res = await bankLoans.repayLoan(senderJid, ug, Number(loanArgs[2]) || 0);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + res.text });
                         }
-
-                        // `.p guild loan repay <amount>`
-                        if (sub === 'repay') {
-                          const repayRaw = String(tokens[4] || '').replace(/,/g, '');
-                          if (!repayRaw) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${P} guild loan repay <amount>\`` });
-                          }
-                          const myLoans = (guild.loans || []).filter(l => l.borrowerJid === senderJid && !l.repaid);
-                          if (myLoans.length === 0) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You have no active loans to repay.' });
-                          }
-                          // 💡 OVERPAY FIX: the old code debited the FULL requested
-                          // amount but only credited what the loans absorbed -
-                          // repaying more than you owe silently DESTROYED the
-                          // difference. Clamp to the outstanding total instead.
-                          const outstanding = myLoans.reduce((s, l) => s + l.amount, 0);
-                          let repayAmount = /^\d+$/.test(repayRaw) ? parseInt(repayRaw, 10) : 0;
-                          if (!repayAmount || repayAmount <= 0) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${P} guild loan repay <amount>\`` });
-                          }
-                          if (repayAmount > outstanding) repayAmount = outstanding;
-                          if (!borrower) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Could not locate your economy account (JID: \`${senderJid}\`). Nothing was charged. Try the bot you registered with, or ask a mod.` });
-                          }
-                          const userWallet = economy.getGold(senderJid);
-                          if (userWallet < repayAmount) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You only have ${userWallet.toLocaleString()} Zeni in your wallet.` });
-                          }
-                          // 1) debit the wallet FIRST (removeMoney re-checks the
-                          // balance internally - a race here is a clean refusal)
-                          const took = economy.removeMoney(senderJid, repayAmount, 'Guild loan repayment');
-                          if (!took) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You only have ${economy.getGold(senderJid).toLocaleString()} Zeni in your wallet.` });
-                          }
-                          // 2) apply repayment to loans oldest-first
-                          const loanSnapshots = myLoans.map(l => ({ ref: l, amount: l.amount, repaid: l.repaid, repaidAt: l.repaidAt }));
-                          let remaining = repayAmount;
-                          let totalRepaid = 0;
-                          for (const loan of myLoans) {
-                            if (remaining <= 0) break;
-                            const apply = Math.min(remaining, loan.amount);
-                            loan.amount -= apply;
-                            remaining -= apply;
-                            totalRepaid += apply;
-                            if (loan.amount <= 0) {
-                              loan.repaid = true;
-                              loan.repaidAt = new Date();
-                            }
-                          }
-                          // 3) credit the guild bank and persist
-                          guild.balance = (guild.balance || 0) + totalRepaid;
-                          const persisted = await guilds.syncGuild(userGuild);
-                          if (!persisted) {
-                            // Persist failed - refund the wallet, restore the
-                            // loan records from the snapshot, restore the bank,
-                            // then best-effort re-pull the untouched DB state.
-                            for (const s of loanSnapshots) { s.ref.amount = s.amount; s.ref.repaid = s.repaid; s.ref.repaidAt = s.repaidAt; }
-                            guild.balance = (guild.balance || 0) - totalRepaid;
-                            economy.addMoney(senderJid, totalRepaid, 'Guild loan repay rollback (bank persist failed)');
-                            await guilds.refreshGuildMoney(userGuild);
-                            console.error(`[GuildLoan] repay persist FAILED for ${userGuild}: ${totalRepaid} refunded to ${senderJid}`);
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Repayment failed: the guild bank could not be saved. Your wallet was refunded - nothing was lost. Try again shortly.' });
-                          }
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Repaid ${totalRepaid.toLocaleString()} Zeni to *${userGuild}* bank.\n🏦 Bank: ${guild.balance.toLocaleString()} Zeni` });
-                        }
-
-                        // `.p guild loan <amount>` - take a new loan
-                        const amountRaw = String(sub).replace(/,/g, '');
-                        const amount = /^\d+$/.test(amountRaw) ? parseInt(amountRaw, 10) : 0;
-                        if (!amount || amount <= 0) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${P} guild loan <amount>\` (or \`list\` / \`repay <amount>\`)` });
-                        }
-                        if (amount > maxLoan) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Max loan is 10% of the guild bank.\n🏦 *${userGuild}* bank: ${bankBalance.toLocaleString()} Zeni → max loan ${maxLoan.toLocaleString()} Zeni.\n_Requested: ${amount.toLocaleString()}_` });
-                        }
-                        // Check existing loans from this user
-                        const existingLoans = (guild.loans || []).filter(l => l.borrowerJid === senderJid && !l.repaid);
-                        const totalExisting = existingLoans.reduce((s, l) => s + l.amount, 0);
-                        if (totalExisting + amount > maxLoan) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You already owe ${totalExisting.toLocaleString()} Zeni. Max additional loan: ${(maxLoan - totalExisting).toLocaleString()} Zeni.` });
-                        }
-                        // Permission: only members+ can borrow (not recruits)
-                        const memberInfo = guilds.getGuildMember(userGuild, senderJid);
-                        if (!memberInfo) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not a member of this guild.' });
-                        }
-                        if (memberInfo.role === 'recruit') {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Recruits cannot borrow from the guild bank. Ask an officer to promote you.' });
-                        }
-                        // 💡 The borrower MUST resolve to a registered economy
-                        // account BEFORE any money moves. syncUserFromDB (run
-                        // above) already retried the User collection under every
-                        // JID variant; if it still misses, this instance
-                        // genuinely cannot see the registration.
-                        if (!borrower) {
-                          console.error(`[GuildLoan] REFUSED ${senderJid} borrowing ${amount} from ${userGuild}: no registered economy account found (User collection miss on every JID variant).`);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Loan failed: your account could not be credited because this bot can't find your registration (JID: \`${senderJid}\`).\n_Nothing was borrowed and the guild bank was not touched. Try the bot you registered with, or ask a mod to check your account._` });
-                        }
-                        // 💡 Borrowers with an outstanding system debt never SEE
-                        // the loan - addMoney's auto-debt deduction swallows the
-                        // whole payout, so the loan reads as "not working".
-                        // This gate runs BEFORE any money moves (it used to run
-                        // after the payout, and the rollback handed the guild's
-                        // share back while the debt stayed reduced - free Zeni).
-                        if (borrower.debt && borrower.debt.amount > 0) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You have an outstanding debt of *${Number(borrower.debt.amount).toLocaleString()} Zeni*. Everything you earn currently goes to debt repayment, so the guild can't lend to you until it's cleared.\n\n_Last quest/loan earnings were also swallowed by the debt - clear it first._` });
-                        }
-
-                        // ── TRANSACTION: credit → debit → record → persist ──
-                        // 1) credit the wallet FIRST. On failure nothing has
-                        // been debited or recorded, so there is nothing to roll
-                        // back (the old code debited + persisted the bank first
-                        // and "rolled back" from stale in-memory state).
-                        const loanPaid = economy.addMoney(senderJid, amount, `Guild loan from ${userGuild}`);
-                        if (!loanPaid) {
-                          console.error(`[GuildLoan] addMoney returned false for ${senderJid} amount ${amount} (registered=${borrower.registered}) - loan refused, bank untouched.`);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Loan failed: could not credit your wallet. Nothing was borrowed and nothing was deducted from the guild bank.\n_If this keeps happening, ask a mod to check your account registration._' });
-                        }
-                        // 2) debit the guild bank + create the loan record
-                        if (!Array.isArray(guild.loans)) guild.loans = [];
-                        const dueAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-                        const loanRecord = {
-                          borrowerJid: senderJid,
-                          amount,
-                          takenAt: new Date(),
-                          dueAt,
-                          repaid: false,
-                          repaidAt: null,
-                        };
-                        guild.loans.push(loanRecord);
-                        guild.balance = bankBalance - amount;
-                        // 3) persist; claw the whole loan back if the save fails
-                        const persisted = await guilds.syncGuild(userGuild);
-                        if (!persisted) {
-                          guild.balance = bankBalance;
-                          guild.loans = guild.loans.filter(l => l !== loanRecord);
-                          economy.removeMoney(senderJid, amount, 'Guild loan rollback (bank persist failed)');
-                          await guilds.refreshGuildMoney(userGuild);
-                          console.error(`[GuildLoan] borrow persist FAILED for ${userGuild}: ${amount} clawed back from ${senderJid}`);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Loan failed: the guild bank could not be saved. The Zeni was taken back out of your wallet - nothing was lost. Try again shortly.' });
-                        }
-                        return sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Borrowed ${amount.toLocaleString()} Zeni from *${userGuild}* bank.\n📅 Due: ${dueAt.toLocaleDateString()} (7 days)\n⚠️ _Unpaid loans auto-deduct 10% from your earnings each day past due._\n\n_Repay early with \`${P} guild loan repay <amount>\`_` });
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + `Usage: \`guild loan [request <amt>|list|approve @player|reject @player|repay <amt>]\`` });
                       } catch (e) {
-                        await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        console.error('[GuildLoan] error:', e?.message);
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Loan error: ' + e.message });
                       }
-                      return;
                     }
 
                     // `.g guild info` - comprehensive guild info (level, members, perks, buildings)
@@ -21991,448 +21839,6 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                       }
 
                       return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown raid subcommand. Use \`${botConfig.getPrefix()} raid help\` for usage.` });
-                    }
-
-                    // ============================================
-                    // 💡 PHASE 7: GUILD WAR COMMANDS (`.g war ...`)
-                    // ============================================
-                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} war`)) {
-                      const warArgs = txt.trim().split(/\s+/).slice(2);
-                      const warSub = warArgs[0]?.toLowerCase();
-                      const guildWars = require('./rpg/guildWars');
-                      const isSenderAdmin = isOwner || isGlobalMod(senderJid);
-
-                      // Helper: check if sender is leader/officer of their guild
-                      const getSenderGuildRole = () => {
-                        const gName = guilds.getUserGuild(senderJid);
-                        if (!gName) return null;
-                        const member = guilds.getGuildMember(gName, senderJid);
-                        if (!member) return null;
-                        return { guildName: gName, role: member.role, member };
-                      };
-
-                      // .g war - help
-                      if (!warSub || warSub === 'help') {
-                        const event = guildWars.getCurrentEvent();
-                        let msg = `${event.icon} *GUILD WARS* ${event.icon}\n\n`;
-                        msg += `Weekly guild competition. 4 event types rotate weekly (Monday → Sunday):\n\n`;
-                        msg += `*Event Rotation:*\n`;
-                        msg += `• Week 1: ⚔️ Champion Tournament - 1v1 PvP bracket between guild champions\n`;
-                        msg += `• Week 2: 🛡️ Guardian Clash - 3v3 team PvP between top guilds\n`;
-                        msg += `• Week 3: 🐉 Monster Hunt - PvE race (boss kills + Abyss)\n`;
-                        msg += `• Week 4: 🏰 Stronghold Siege - defend virtual strongholds\n\n`;
-                        msg += `*This Week:* ${event.icon} ${event.name}\n${event.desc}\n\n`;
-                        msg += `*How to earn points:*\n`;
-                        msg += `• Dungeon clear: 10 × rank tier\n`;
-                        msg += `• Boss kill: 50\n`;
-                        msg += `• PvP win: 5\n`;
-                        msg += `• Raid participation: 20\n`;
-                        msg += `• Abyss completion: floor × 2\n\n`;
-                        msg += `*Rewards:*\n`;
-                        msg += `• 1st: 5M Zeni + 10% XP/gold buff for members\n`;
-                        msg += `• 2nd-3rd: 2M Zeni + 5% buff\n`;
-                        msg += `• 4th-8th: 500K Zeni\n\n`;
-                        msg += `*Member Commands:*\n`;
-                        msg += `• \`${botConfig.getPrefix()} war status\` - view current war\n`;
-                        msg += `• \`${botConfig.getPrefix()} war my\` - your guild's war setup, rank, points\n`;
-                        msg += `• \`${botConfig.getPrefix()} war leaderboard\` - this week's rankings\n`;
-                        msg += `• \`${botConfig.getPrefix()} war bracket\` - tournament bracket / clash matchups\n`;
-                        msg += `• \`${botConfig.getPrefix()} war schedule\` - upcoming event rotation\n`;
-                        msg += `• \`${botConfig.getPrefix()} war history\` - all-time top guilds\n`;
-                        msg += `• \`${botConfig.getPrefix()} war champion @user\` - set your guild's champion (leader/officer, tournament weeks)\n`;
-                        msg += `• \`${botConfig.getPrefix()} war guardian @u1 @u2 @u3\` - set 3 guardians (leader/officer, clash weeks)\n`;
-                        msg += `• \`${botConfig.getPrefix()} war admin\` - admin commands`;
-                        await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-                        return;
-                      }
-
-                      // .g war status
-                      if (warSub === 'status' || warSub === 'info') {
-                        try {
-                          const war = await guildWars.getWarStatus();
-                          if (!war) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No active war this week.' });
-                          }
-                          const event = guildWars.WAR_EVENTS.find(e => e.id === war.eventType);
-                          let msg = `${event?.icon || '⚔️'} *${war.eventName}* - Active\n\n`;
-                          msg += `📅 Ends: ${new Date(war.endsAt).toLocaleString()}\n`;
-                          msg += `👥 Guilds: ${war.participants.length}\n`;
-                          const hoursLeft = Math.ceil((new Date(war.endsAt) - new Date()) / 3600000);
-                          msg += `⏰ Time left: ${hoursLeft}h\n\n`;
-                          // Show top 5
-                          const sorted = [...war.participants].sort((a, b) => b.points - a.points).slice(0, 5);
-                          msg += `*Top 5:*\n`;
-                          for (let i = 0; i < sorted.length; i++) {
-                            msg += `${i + 1}. ${sorted[i].guildName} - ${sorted[i].points.toLocaleString()} pts\n`;
-                          }
-                          // Show user's guild rank
-                          const userGuild = guilds.getUserGuild(senderJid);
-                          if (userGuild) {
-                            const myRank = war.participants.find(p => p.guildName === userGuild);
-                            if (myRank) {
-                              const rankIdx = war.participants
-                                .slice()
-                                .sort((a, b) => b.points - a.points)
-                                .findIndex(p => p.guildName === userGuild) + 1;
-                              msg += `\n🏠 Your guild *${userGuild}*: rank ${rankIdx} (${myRank.points.toLocaleString()} pts)\n`;
-                            }
-                          }
-                          msg += `\n_Earn points by doing dungeons, bosses, PvP, raids, and Abyss runs._`;
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-                        } catch (e) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
-                        }
-                        return;
-                      }
-
-                      // .g war my - full info about YOUR guild's war setup
-                      if (warSub === 'my' || warSub === 'me' || warSub === 'mywar') {
-                        try {
-                          const userGuild = guilds.getUserGuild(senderJid);
-                          if (!userGuild) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild. Use `${botConfig.getPrefix()} guild create <name>` or ask an officer to invite you.' });
-                          }
-                          const info = await guildWars.getMyWarInfo(userGuild);
-                          if (!info) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No active war this week.' });
-                          }
-                          const { war, participant, rank, total } = info;
-                          const event = guildWars.WAR_EVENTS.find(e => e.id === war.eventType);
-                          let msg = `${event?.icon || '⚔️'} *${userGuild} - WAR DASHBOARD*\n\n`;
-                          msg += `*Event:* ${war.eventName}\n`;
-                          msg += `*Rank:* ${rank} / ${total}\n`;
-                          msg += `*Points:* ${participant.points.toLocaleString()}\n`;
-                          if (event?.id === 'champion_tournament') {
-                            msg += `*Champion:* ${participant.championJid ? '✅ ' + participant.championJid.split('@')[0] : '⚠️ Not set - use `${botConfig.getPrefix()} war champion @user`'}\n`;
-                            msg += `*Champion wins:* ${participant.championWins || 0}\n`;
-                          } else if (event?.id === 'guardian_clash') {
-                            msg += `*Guardians:* `;
-                            if (participant.guardians && participant.guardians.length > 0) {
-                              msg += participant.guardians.map(g => g.split('@')[0]).join(', ') + '\n';
-                            } else {
-                              msg += `⚠️ Not set - use \`${botConfig.getPrefix()} war guardian @u1 @u2 @u3\`\n`;
-                            }
-                            msg += `*Guardian wins:* ${participant.guardianWins || 0}\n`;
-                          } else if (event?.id === 'stronghold_siege') {
-                            msg += `*Stronghold:* Level ${participant.strongholdLevel || 1}\n`;
-                            msg += `*Defended:* ${participant.strongholdDefended ? '🛡️ Yes' : '⚔️ Overrun'}\n`;
-                          }
-                          const hoursLeft = Math.ceil((new Date(war.endsAt) - new Date()) / 3600000);
-                          msg += `*Time left:* ${hoursLeft}h\n\n`;
-                          // Show neighbors in leaderboard (rank-1, rank, rank+1)
-                          const sorted = [...war.participants].sort((a, b) => b.points - a.points);
-                          msg += `*Nearby Guilds:*\n`;
-                          for (let i = Math.max(0, rank - 2); i < Math.min(sorted.length, rank + 1); i++) {
-                            const arrow = sorted[i].guildName === userGuild ? '👉' : '  ';
-                            msg += `${arrow} ${i + 1}. ${sorted[i].guildName} - ${sorted[i].points.toLocaleString()} pts\n`;
-                          }
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-                        } catch (e) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
-                        }
-                        return;
-                      }
-
-                      // .g war leaderboard
-                      if (warSub === 'leaderboard' || warSub === 'lb') {
-                        try {
-                          const leaderboard = await guildWars.getWarLeaderboard();
-                          if (leaderboard.length === 0) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No active war this week.' });
-                          }
-                          let msg = `🏆 *WEEKLY WAR LEADERBOARD* 🏆\n\n`;
-                          for (let i = 0; i < Math.min(15, leaderboard.length); i++) {
-                            const entry = leaderboard[i];
-                            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
-                            msg += `${medal} ${entry.guildName} - ${entry.points.toLocaleString()} pts\n`;
-                          }
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-                        } catch (e) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
-                        }
-                        return;
-                      }
-
-                      // .g war bracket - tournament bracket or clash matchups
-                      if (warSub === 'bracket' || warSub === 'matches' || warSub === 'matchups') {
-                        try {
-                          const war = await guildWars.getWarStatus();
-                          if (!war) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No active war this week.' });
-                          }
-                          const bracket = await guildWars.getBracket();
-                          if (!bracket) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No bracket data.' });
-                          }
-                          if (bracket.type === 'none' || bracket.data.length === 0) {
-                            let msg = `📋 *${war.eventName}*\n\n`;
-                            msg += `_This event type has no bracket/matchups. Points are earned from regular activities (dungeons, bosses, PvP, raids, Abyss)._\n`;
-                            msg += `\nFinal rankings will be determined when the war resolves (${Math.ceil((new Date(war.endsAt) - new Date()) / 3600000)}h left).`;
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-                          }
-                          let msg = '';
-                          if (bracket.type === 'bracket') {
-                            msg = `⚔️ *CHAMPION TOURNAMENT BRACKET* ⚔️\n\n`;
-                            if (war.status === 'active' && bracket.data.length === 0) {
-                              msg += `_Bracket will be simulated when the war resolves (${Math.ceil((new Date(war.endsAt) - new Date()) / 3600000)}h left)._`;
-                              msg += `\n_Set your champion with_ \`${botConfig.getPrefix()} war champion @user\``;
-                            } else {
-                              // Group by round
-                              const byRound = {};
-                              for (const m of bracket.data) {
-                                if (!byRound[m.round]) byRound[m.round] = [];
-                                byRound[m.round].push(m);
-                              }
-                              for (const r of Object.keys(byRound).sort((a, b) => a - b)) {
-                                msg += `*Round ${r}:*\n`;
-                                for (const m of byRound[r]) {
-                                  const winA = m.winner === m.guildA;
-                                  msg += `  ${winA ? '✅' : '❌'} ${m.guildA} (${m.scoreA}) vs ${!winA ? '✅' : '❌'} ${m.guildB} (${m.scoreB})\n`;
-                                }
-                                msg += `\n`;
-                              }
-                            }
-                          } else if (bracket.type === 'clash') {
-                            msg = `🛡️ *GUARDIAN CLASH MATCHUPS* 🛡️\n\n`;
-                            if (war.status === 'active' && bracket.data.length === 0) {
-                              msg += `_Matchups will be simulated when the war resolves (${Math.ceil((new Date(war.endsAt) - new Date()) / 3600000)}h left)._`;
-                              msg += `\n_Set your 3 guardians with_ \`${botConfig.getPrefix()} war guardian @u1 @u2 @u3\``;
-                            } else {
-                              for (const m of bracket.data) {
-                                const winA = m.winner === m.guildA;
-                                msg += `${winA ? '✅' : '❌'} ${m.guildA} (${m.scoreA}) vs ${!winA ? '✅' : '❌'} ${m.guildB} (${m.scoreB})\n`;
-                              }
-                            }
-                          }
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-                        } catch (e) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
-                        }
-                        return;
-                      }
-
-                      // .g war schedule - upcoming event rotation
-                      if (warSub === 'schedule' || warSub === 'calendar') {
-                        try {
-                          const schedule = guildWars.getWarSchedule(8);
-                          let msg = `📅 *WAR EVENT SCHEDULE* 📅\n\n`;
-                          for (const s of schedule) {
-                            const marker = s.label === 'This week' ? '👉 ' : '   ';
-                            msg += `${marker}${s.label}: ${s.event.icon} ${s.event.name}\n`;
-                            if (s.label === 'This week') {
-                              msg += `      _${s.event.desc}_\n`;
-                            }
-                          }
-                          msg += `\n_Events rotate every Monday 00:00 UTC._`;
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-                        } catch (e) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
-                        }
-                        return;
-                      }
-
-                      // .g war history - all-time
-                      if (warSub === 'history' || warSub === 'alltime') {
-                        try {
-                          const history = await guildWars.getAllTimeWarLeaderboard(15);
-                          if (history.length === 0) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No war history yet.' });
-                          }
-                          let msg = `📜 *ALL-TIME WAR LEADERBOARD* 📜\n\n`;
-                          for (let i = 0; i < history.length; i++) {
-                            const entry = history[i];
-                            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
-                            msg += `${medal} ${entry._id}\n   📊 ${entry.totalPoints.toLocaleString()} pts | 🏆 ${entry.warsParticipated} wars\n`;
-                          }
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-                        } catch (e) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
-                        }
-                        return;
-                      }
-
-                      // .g war champion @user - set YOUR guild's champion (leader/officer only)
-                      if (warSub === 'champion') {
-                        try {
-                          const targetJid = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
-                          if (!targetJid) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war champion @user\`\n\n_Mentions your guild member to designate them as champion for the tournament._` });
-                          }
-                          const senderRole = getSenderGuildRole();
-                          if (!senderRole) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
-                          }
-                          if (!isSenderAdmin && senderRole.role !== 'leader' && senderRole.role !== 'officer') {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Only guild leaders and officers can set the champion.' });
-                          }
-                          const result = await guildWars.setChampion(senderRole.guildName, targetJid);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: buildMentions(m, [], targetJid) });
-                        } catch (e) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
-                        }
-                      }
-
-                      // .g war guardian @u1 @u2 @u3 - set YOUR guild's guardians (leader/officer)
-                      if (warSub === 'guardian' || warSub === 'guardians') {
-                        try {
-                          const mentions = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-                          if (mentions.length === 0) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war guardian @u1 @u2 @u3\`\n\n_Set 1-3 guardians for the 3v3 Guardian Clash._` });
-                          }
-                          const senderRole = getSenderGuildRole();
-                          if (!senderRole) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
-                          }
-                          if (!isSenderAdmin && senderRole.role !== 'leader' && senderRole.role !== 'officer') {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Only guild leaders and officers can set guardians.' });
-                          }
-                          const result = await guildWars.setGuardians(senderRole.guildName, mentions);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions });
-                        } catch (e) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
-                        }
-                      }
-
-                      // .g war clear - clear champion or guardians from your guild
-                      if (warSub === 'clear') {
-                        try {
-                          const clearWhat = warArgs[1]?.toLowerCase();
-                          if (!clearWhat || !['champion', 'guardian', 'guardians'].includes(clearWhat)) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war clear <champion|guardians>\`` });
-                          }
-                          const senderRole = getSenderGuildRole();
-                          if (!senderRole) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
-                          }
-                          if (!isSenderAdmin && senderRole.role !== 'leader' && senderRole.role !== 'officer') {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Only guild leaders and officers can clear.' });
-                          }
-                          let result;
-                          if (clearWhat === 'champion') {
-                            result = await guildWars.clearChampion(senderRole.guildName);
-                          } else {
-                            result = await guildWars.clearGuardians(senderRole.guildName);
-                          }
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
-                        } catch (e) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
-                        }
-                      }
-
-                      // .g war admin
-                      if (warSub === 'admin' || warSub === 'mod') {
-                        if (!isSenderAdmin) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Admin only.' });
-                        }
-                        const adminSub = warArgs[1]?.toLowerCase();
-                        if (!adminSub) {
-                          let msg = `🔧 *GUILD WAR ADMIN COMMANDS* 🔧\n\n`;
-                          msg += `*War Management:*\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin spawn\` - force-spawn the weekly war\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin resolve\` - force-resolve the war (distribute rewards)\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin sync\` - force-sync war points from guild data\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin purge\` - delete ALL war data\n\n`;
-                          msg += `*Event Control:*\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin event <champion_tournament|guardian_clash|monster_hunt|stronghold_siege>\` - override this week's event\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin schedule\` - preview upcoming events\n\n`;
-                          msg += `*Guild Management:*\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin addguild <name>\` - add a guild to the current war\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin removeguild <name>\` - remove a guild from the war\n\n`;
-                          msg += `*Champion/Guardian Override (any guild):*\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin champion <guildName> @user\` - set champion for any guild\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin guardian <guildName> @u1 @u2 @u3\` - set guardians for any guild\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin clear <guildName> <champion|guardians>\` - clear for any guild`;
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-                          return;
-                        }
-                        if (adminSub === 'spawn') {
-                          const result = await guildWars.adminForceSpawn();
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
-                        }
-                        if (adminSub === 'resolve') {
-                          const result = await guildWars.adminForceResolve();
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
-                        }
-                        if (adminSub === 'purge') {
-                          const result = await guildWars.adminPurgeAllWars();
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
-                        }
-                        if (adminSub === 'sync') {
-                          await guildWars.syncWarPointsToActiveWar();
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '✅ Synced war points from guild data.' });
-                        }
-                        if (adminSub === 'event') {
-                          const eventId = warArgs[2]?.toLowerCase();
-                          if (!eventId) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war admin event <champion_tournament|guardian_clash|monster_hunt|stronghold_siege>\`` });
-                          }
-                          const result = await guildWars.adminSetEventType(eventId);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
-                        }
-                        if (adminSub === 'addguild') {
-                          const gName = warArgs[2];
-                          if (!gName) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war admin addguild <guildName>\`` });
-                          }
-                          const result = await guildWars.adminAddGuild(gName);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
-                        }
-                        if (adminSub === 'removeguild') {
-                          const gName = warArgs[2];
-                          if (!gName) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war admin removeguild <guildName>\`` });
-                          }
-                          const result = await guildWars.adminRemoveGuild(gName);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
-                        }
-                        if (adminSub === 'schedule') {
-                          const schedule = guildWars.getWarSchedule(8);
-                          let msg = `📅 *WAR EVENT SCHEDULE (ADMIN)* 📅\n\n`;
-                          for (const s of schedule) {
-                            const marker = s.label === 'This week' ? '👉 ' : '   ';
-                            msg += `${marker}${s.label} [${s.weekKey}]: ${s.event.icon} ${s.event.name} (${s.event.id})\n`;
-                          }
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-                        }
-                        if (adminSub === 'champion') {
-                          // .g war admin champion <guildName> @user
-                          const gName = warArgs[2];
-                          const targetJid = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
-                          if (!gName || !targetJid) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war admin champion <guildName> @user\`` });
-                          }
-                          const result = await guildWars.setChampion(gName, targetJid);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: buildMentions(m, [], targetJid) });
-                        }
-                        if (adminSub === 'guardian' || adminSub === 'guardians') {
-                          // .g war admin guardian <guildName> @u1 @u2 @u3
-                          const gName = warArgs[2];
-                          const mentions = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-                          if (!gName || mentions.length === 0) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war admin guardian <guildName> @u1 @u2 @u3\`` });
-                          }
-                          const result = await guildWars.setGuardians(gName, mentions);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions });
-                        }
-                        if (adminSub === 'clear') {
-                          // .g war admin clear <guildName> <champion|guardians>
-                          const gName = warArgs[2];
-                          const clearWhat = warArgs[3]?.toLowerCase();
-                          if (!gName || !clearWhat || !['champion', 'guardian', 'guardians'].includes(clearWhat)) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war admin clear <guildName> <champion|guardians>\`` });
-                          }
-                          let result;
-                          if (clearWhat === 'champion') {
-                            result = await guildWars.clearChampion(gName);
-                          } else {
-                            result = await guildWars.clearGuardians(gName);
-                          }
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
-                        }
-                        return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown admin subcommand. Use \`${botConfig.getPrefix()} war admin\` for the menu.` });
-                      }
-
-                      return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown war subcommand. Use \`${botConfig.getPrefix()} war help\` for usage.` });
                     }
 
                     // ============================================
