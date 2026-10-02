@@ -112,20 +112,21 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER) {
 
         await rooms.enterRoom(eventDoc.eventId, senderJid, player.roomId, dest);
         const reveal = visibility.revealFor(eventDoc, dest, guildLevelOf(eventDoc, player));
-        const discovered = await rooms.applyFog(eventDoc.eventId, senderJid, reveal);
+        await rooms.applyFog(eventDoc.eventId, senderJid, reveal);
         await state.updatePlayer(eventDoc.eventId, senderJid, {}, {
             prevRoomId: player.roomId, roomId: dest, lastActionAt: Date.now(), lastMoveAt: Date.now(),
         });
         await touch();
 
-        // fresh doc for the new room + occupants
-        const fresh = await state.getEvent(eventDoc.eventId, { fresh: true });
-        const me = playerOf(fresh, senderJid);
-        const newRoom = roomOf(fresh, me);
-        const intro = await encounters.onRoomEnter(fresh, me, newRoom);
+        // ⚔️ projected context (room + light players) — no full-map re-read
+        const ctxDoc = await state.getMoveContext(eventDoc.eventId, dest);
+        const me = { ...player, roomId: dest, prevRoomId: player.roomId };
+        const newRoom = ctxDoc.room;
+        const intro = await encounters.onRoomEnter(ctxDoc, me, newRoom);
 
         // meeting other players
-        const others = (newRoom.occupants || []).filter((j) => j !== senderJid).map((j) => playerOf(fresh, j)).filter(Boolean);
+        const others = (newRoom.occupants || []).filter((j) => j !== senderJid)
+            .map((j) => (ctxDoc.players || []).find((p) => p.jid === j)).filter(Boolean);
         const foes = others.filter((o) => o.guildId !== me.guildId);
         const mates = others.filter((o) => o.guildId === me.guildId);
         const lines = [intro];
@@ -146,10 +147,10 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER) {
 
     // ── look ──
     if (/^(look|l|where|whereami)$/.test(norm)) {
-        const fresh = await state.getEvent(eventDoc.eventId, { fresh: true });
-        const me = playerOf(fresh, senderJid);
-        const room = roomOf(fresh, me);
-        return { text: await encounters.onRoomEnter(fresh, me, room) };
+        const ctxDoc = await state.getMoveContext(eventDoc.eventId, player.roomId);
+        if (!ctxDoc || !ctxDoc.room) return { text: 'You are between chambers...' };
+        const me = player;
+        return { text: await encounters.onRoomEnter(ctxDoc, me, ctxDoc.room) };
     }
 
     // ── relics ──

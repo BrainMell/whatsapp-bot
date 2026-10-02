@@ -79,6 +79,20 @@ async function getEvent(eventId, { fresh = false } = {}) {
     return viewOf(doc).doc;
 }
 
+// ⚔️ post-move context in ONE projected read (~1KB) instead of re-reading
+// the entire map (measured: 1849-room full reads per move = GC storms at
+// alignment scale). Players return as light rows for mate/foe detection.
+async function getMoveContext(eventId, roomKey) {
+    const doc = await GuildWarEvent.findOne(
+        { eventId },
+        { rooms: { $elemMatch: { key: roomKey } }, 'players.jid': 1, 'players.name': 1, 'players.guildId': 1, 'players.guildName': 1, 'players.roomId': 1, 'players.status': 1, side: 1, coreKey: 1, deadWorld: 1, type: 1, state: 1, seed: 1, edges: 1 }
+    ).lean();
+    if (!doc) return null;
+    doc.room = doc.rooms?.[0] || null;
+    delete doc.rooms;
+    return doc;
+}
+
 async function getActiveEvents() {
     const docs = await GuildWarEvent.find({ state: { $in: ['REGISTRATION', 'ACTIVE'] } }).lean();
     return docs.map((d) => viewOf(d).doc);
@@ -302,6 +316,7 @@ async function recoverOnBoot() {
 }
 
 module.exports = {
+    getMoveContext,
     createEvent, registerPlayer, startEvent, endEvent, archiveEvent, abortEvent,
     getEvent, getActiveEvents, updateRoom, updatePlayer, pushLog, tick,
     topologyOf, recoverOnBoot, viewOf,
