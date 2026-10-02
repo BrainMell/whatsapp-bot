@@ -1218,7 +1218,6 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
             try {
                 const guildPerks = require('./guildPerks');
                 guildPerks.awardGuildXp(stayingJid, 5, 'PvP win');
-                guildPerks.awardWarPoints(stayingJid, 5, 'pvp');
             } catch (e) {}
             // 💡 Phase 6: Check if the loser had an active bounty - claim it
             // (bounty message stored and appended to rewardMsg below)
@@ -1866,7 +1865,6 @@ async function finishDuel(chatId, duel, winner, loser) {
         try {
             const guildPerks = require('./guildPerks');
             guildPerks.awardGuildXp(winner.jid, 5, 'PvP win');
-            guildPerks.awardWarPoints(winner.jid, 5, 'pvp');
         } catch (e) {}
         // 💡 Phase 6: Check if loser had an active bounty - claim it
         try {

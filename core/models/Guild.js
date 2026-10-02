@@ -74,8 +74,6 @@ const GuildSchema = new mongoose.Schema({
     lastInterestPayout: { type: Date, default: null },
 
     // 💡 Phase 2: Weekly war points (for Phase 7 guild wars)
-    warPoints: { type: Number, default: 0 },
-    warPointsWeek: { type: String, default: null }, // ISO week key e.g. "2026-W28"
 
     // Extras
     logs: { type: Array, default: [] }

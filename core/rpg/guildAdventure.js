@@ -5964,7 +5964,6 @@ function recordEnemyKill(state, entity) {
       try {
         const guildPerks = require('./guildPerks');
         guildPerks.awardGuildXp(p.jid, 10, `Boss kill: ${entity.name || entity.id}`);
-        guildPerks.awardWarPoints(p.jid, 50, 'boss kill');
       } catch (e) {}
 
       // 💡 Phase 3: Roll for rune drop on S+ bosses
@@ -9048,7 +9047,6 @@ async function endAdventure(sock, sessionKey, victory = true) {
         const guildXpAward = rankXpMap[state.dungeonRank] || 5;
         guildPerks.awardGuildXp(player.jid, guildXpAward, `Dungeon clear (${state.dungeonRank})`);
         // Also award war points for Phase 7
-        guildPerks.awardWarPoints(player.jid, rankXpMap[state.dungeonRank] || 5, 'dungeon');
       } catch (e) {}
 
       // Add guild bonus to display message if applicable

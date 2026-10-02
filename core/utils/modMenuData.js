@@ -179,7 +179,6 @@ const MOD_MENU = {
       { cmd: "abyss admin", usage: "abyss admin <reset|clear|setfloor|purge|inspect>", desc: "Abyss admin actions." },
       { cmd: "raid admin", usage: "raid admin <spawn|end|sethp|revive|kick|skip|purge>", desc: "Raid admin actions." },
       { cmd: "bounty admin", usage: "bounty admin <cancel|purge|expire>", desc: "Bounty admin actions." },
-      { cmd: "war admin", usage: "war admin <spawn|resolve|champion|purge|sync|...>", desc: "Guild war admin (owner/global only)." },
     ],
   },
 

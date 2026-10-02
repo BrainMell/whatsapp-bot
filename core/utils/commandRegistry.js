@@ -456,7 +456,6 @@ const COMMAND_REGISTRY = {
     { cmd: 'abyss admin', desc: 'Abyss admin commands (Owner/GMod).', usage: 'abyss admin [reset|clear|setfloor|purge|inspect]' },
     { cmd: 'raid admin', desc: 'Raid admin commands (Owner/GMod).', usage: 'raid admin [spawn|end|sethp|revive|kick|skip|purge]' },
     { cmd: 'bounty admin', desc: 'Bounty admin commands (Owner/GMod).', usage: 'bounty admin [cancel|purge|expire]' },
-    { cmd: 'war admin', desc: 'Guild war admin commands (Owner/GMod).', usage: 'war admin [spawn|resolve|champion|purge|sync]' }
   ]
 };
 

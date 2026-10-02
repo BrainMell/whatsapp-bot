@@ -634,38 +634,6 @@ async function boot() {
       console.error("Failed to init bounty scheduler:", e.message);
     }
 
-    // 3e. Schedule weekly guild war spawn + resolve (Phase 7 - Multi-Event Guild Wars)
-    try {
-      const guildWars = require('./core/rpg/guildWars');
-      // Check on boot (delayed 3 min so DB is ready), then every 1h
-      // - spawns new war if missing for current week, resolves if expired
-      const checkAndSpawnWar = async () => {
-        try {
-          const existing = await guildWars.getWarStatus();
-          if (!existing) {
-            const result = await guildWars.spawnWeeklyWar();
-            if (result.success) {
-              console.log(`[GuildWars] Spawned weekly war: ${result.war.eventName}`);
-            }
-          } else if (existing.status === 'active' && new Date() > new Date(existing.endsAt)) {
-            // War has expired - resolve it
-            const result = await guildWars.resolveWeeklyWar();
-            if (result.action === 'resolved') {
-              console.log(`[GuildWars] Resolved expired war: ${result.war.eventName}`);
-              // Spawn next week's war
-              await guildWars.spawnWeeklyWar();
-            }
-          }
-        } catch (e) {
-          console.error('[GuildWars] Check failed:', e.message);
-        }
-      };
-      setTimeout(checkAndSpawnWar, 3 * 60 * 1000);
-      setInterval(checkAndSpawnWar, 60 * 60 * 1000);
-      console.log("⚔️ Guild war scheduler initialized (spawn check every 1h).");
-    } catch (e) {
-      console.error("Failed to init guild war scheduler:", e.message);
-    }
 
     // 3f. Out-of-combat passive regen scheduler (AUDIT FIX 2026-08-01)
     // Skill-tree passives (e.g. Dragon God's "Soul of the Deep": +2-6% HP/turn,

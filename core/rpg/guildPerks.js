@@ -236,29 +236,6 @@ function awardGuildXp(userId, amount, reason) {
   }
 }
 
-// ─── GUILD WAR POINTS (for Phase 7) ───────────────────────────────────────
-// Awards war points to the user's guild. Called from dungeon/boss/PvP/raid.
-function awardWarPoints(userId, amount, reason) {
-  if (!userId || !amount || amount <= 0) return;
-  const guildName = guilds.getUserGuild(userId);
-  if (!guildName) return;
-  try {
-    const guild = guilds.getGuild(guildName);
-    if (!guild) return;
-    // Get current week key
-    const now = new Date();
-    const weekKey = getWeekKey(now);
-    // Reset if new week
-    if (guild.warPointsWeek !== weekKey) {
-      guild.warPointsWeek = weekKey;
-      guild.warPoints = 0;
-    }
-    guild.warPoints = (guild.warPoints || 0) + Math.floor(amount);
-    // Note: persistence happens via guilds.syncGuild which is called periodically
-  } catch (e) {
-    console.error('[GuildPerks] Failed to award war points:', e.message);
-  }
-}
 
 function getWeekKey(date) {
   // 💡 FIX 2026-08-31: was `Date.UTC(date.getFullYear(), ...)` - LOCAL Y/M/D
@@ -402,7 +379,6 @@ module.exports = {
   getMemberCap,
   getBankInterestRate,
   awardGuildXp,
-  awardWarPoints,
   getPerkSummary,
   getUserGuildData,
   getWeekKey,

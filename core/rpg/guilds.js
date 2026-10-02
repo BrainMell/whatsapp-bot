@@ -100,7 +100,6 @@ async function loadGuilds() {
         }
 
         // 💡 QA FIX: load ALL new fields from the schema. Previously only
-        // a subset was loaded, causing loans/warPoints/emblem/recruits to
         // be missing from the in-memory cache - which broke guild loans,
         // war points, emblems, and the 4-tier role system after restart.
         // Also handle legacy buildings stored as `upgrades` (Map<Number>).
@@ -132,8 +131,6 @@ async function loadGuilds() {
             buildings,
             // 💡 QA FIX: load new fields that were missing
             loans: g.loans || [],
-            warPoints: g.warPoints || 0,
-            warPointsWeek: g.warPointsWeek || null,
             lastInterestPayout: g.lastInterestPayout || null,
             emblem: g.emblem || { icon: null, color: '#FFD700' },
         };
@@ -242,8 +239,6 @@ async function syncGuild(guildName) {
                 // loans to vanish on restart (borrower keeps Zeni, guild bank
                 // drained) and war points to reset to 0 every restart.
                 loans: g.loans || [],
-                warPoints: g.warPoints || 0,
-                warPointsWeek: g.warPointsWeek || null,
                 lastInterestPayout: g.lastInterestPayout || null,
                 emblem: g.emblem || { icon: null, color: '#FFD700' },
                 recruits: g.recruits || []
@@ -1298,7 +1293,6 @@ function getGuildPointsLeaderboard(limit = 10) {
       balance: guild.balance || 0,
       members: Array.isArray(guild.members) ? guild.members.length : 0,
       type: guild.type || 'ADVENTURER',
-      warPoints: guild.warPoints || 0,
     }))
     .sort((a, b) => {
       // Sort by level first, then by XP within same level
