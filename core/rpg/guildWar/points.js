@@ -53,12 +53,19 @@ function pvpWinGp(attacker, victim) {
 }
 
 async function recordPvpWin(eventId, winner, loser) {
-    const gp = pvpWinGp(winner, loser);
+    // decay ledger must be computed from FRESH state — the caller's player
+    // snapshot is stale across duels (measured: decay stuck at one step)
+    const GuildWarEvent = require('../../models/GuildWarEvent');
+    const fresh = await GuildWarEvent.findOne(
+        { eventId, players: { $elemMatch: { jid: winner.jid } } },
+        { players: { $elemMatch: { jid: winner.jid } } }
+    );
+    const freshWinner = fresh?.players?.[0] || winner;
+    const gp = pvpWinGp(freshWinner, loser);
     if (gp > 0) await award(eventId, winner.jid, gp, 'pvp');
-    // update decay ledger
     const key = victimKey(loser.jid);
-    const ledger = winner.pvpMeta || {};
-    const prev = (ledger.get && ledger.get(key)) || { count: 0 };
+    const ledger = freshWinner.pvpMeta || {};
+    const prev = (ledger.get && ledger.get(key)) || ledger[key] || { count: 0 };
     const next = { count: (prev.count || 0) + 1, at: Date.now() };
     const set = {};
     set[key] = next;
