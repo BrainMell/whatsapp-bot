@@ -21,22 +21,28 @@ function getFeed() { return lazy.feed || (lazy.feed = require('./feed')); }
 // ── in-memory read views (per instance) ──
 const activeViews = new Map(); // eventId → { map topology view, doc snapshot }
 
+// adjacency derives ONLY from the immutable pruned edges → cache by
+// (eventId, edges.length); rebuilding it per read measurably stalls the loop
+const adjacencyCache = new Map(); // eventId → { edgesLen, adjacency }
+
 function viewOf(doc) {
-    // topology is immutable after generation → cheap derived view
     const roomsMap = new Map();
     for (const r of doc.rooms) roomsMap.set(r.key, r);
-    const adjacency = new Map();
-    for (const r of doc.rooms) {
-        adjacency.set(r.key, {
-            n: roomsMap.has(mapEngine.key(r.x, r.y - 1)),
-            s: roomsMap.has(mapEngine.key(r.x, r.y + 1)),
-            e: roomsMap.has(mapEngine.key(r.x + 1, r.y)),
-            w: roomsMap.has(mapEngine.key(r.x - 1, r.y)),
-        });
+    const edgesLen = (doc.edges || []).length;
+    let cached = adjacencyCache.get(doc.eventId);
+    if (!cached || cached.edgesLen !== edgesLen) {
+        const adjacency = new Map();
+        for (const r of doc.rooms) adjacency.set(r.key, { n: false, s: false, e: false, w: false });
+        for (const e of doc.edges || []) {
+            const [k, d] = e.split('|');
+            if (adjacency.has(k)) adjacency.get(k)[d] = true;
+        }
+        cached = { edgesLen, adjacency };
+        adjacencyCache.set(doc.eventId, cached);
     }
     const view = activeViews.get(doc.eventId) || {};
     view.roomsMap = roomsMap;
-    view.adjacency = adjacency;
+    view.adjacency = cached.adjacency;
     view.doc = doc;
     activeViews.set(doc.eventId, view);
     return view;
@@ -69,7 +75,7 @@ async function updateRoom(eventId, roomKey, condition, update) {
     return GuildWarEvent.findOneAndUpdate(
         { eventId, rooms: { $elemMatch: elem } },
         { $set: setUpdate },
-        { new: true }
+        { new: false }
     );
 }
 
@@ -78,10 +84,12 @@ async function updatePlayer(eventId, jid, condition, update) {
     const elem = { jid, ...(condition || {}) };
     const setUpdate = {};
     for (const [k, val] of Object.entries(update)) setUpdate[`players.$.${k}`] = val;
+    // new:false: callers use the result only as a match indicator — returning
+    // the updated doc forces mongoose to re-cast the entire map (measured stall)
     return GuildWarEvent.findOneAndUpdate(
         { eventId, players: { $elemMatch: elem } },
         { $set: setUpdate },
-        { new: true }
+        { new: false }
     );
 }
 
@@ -193,14 +201,7 @@ async function startEvent(eventId, { deadWorld = null, worldIds = null } = {}) {
 // from the persisted pruned topology, NOT from coordinate-neighbor presence
 function topologyOf(doc) {
     const v = viewOf(doc);
-    const adjacency = new Map();
-    for (const r of doc.rooms) adjacency.set(r.key, { n: false, s: false, e: false, w: false });
-    for (const e of doc.edges || []) {
-        const [k, d] = e.split('|');
-        if (adjacency.has(k)) adjacency.get(k)[d] = true;
-    }
-    v.adjacency = adjacency;
-    return { side: doc.side, rooms: v.roomsMap, adjacency, coreKey: doc.coreKey, alignment: doc.type === 'alignment', seed: doc.seed };
+    return { side: doc.side, rooms: v.roomsMap, adjacency: v.adjacency, coreKey: doc.coreKey, alignment: doc.type === 'alignment', seed: doc.seed };
 }
 
 // ── sweeper: hard end + inactivity (called from engine 60s interval) ──
