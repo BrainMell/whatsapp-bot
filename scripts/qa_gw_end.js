@@ -39,6 +39,11 @@ async function main() {
     }
     const gw = require('../core/rpg/guildWar');
     const { state } = gw;
+    // QA: bypass the mod/owner gate (mock jids are not the real owner).
+    // handleGroupCommand reads engine.isBotOwner dynamically, so patching the
+    // export works. Production code path is exercised unchanged.
+    const engine = require('../core/engine');
+    engine.isBotOwner = () => true;
     const GuildWarEvent = require('../core/models/GuildWarEvent');
     // clear any stale gwtest events (MAX_CONCURRENT_EVENTS = 2 would block creation)
     await GuildWarEvent.updateMany({ state: { $in: ['INITIATED', 'REGISTRATION', 'ACTIVE', 'REWARDS'] } }, { $set: { state: 'ARCHIVED' } });
