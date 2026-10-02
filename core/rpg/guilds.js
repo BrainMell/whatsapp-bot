@@ -1462,7 +1462,7 @@ function getGuildGuide(prefix) {
   msg += `• \`${prefix} guild kick @user\` - Remove member\n`;
   msg += `• \`${prefix} guild title @user <title>\` - Set custom title\n`;
   msg += `• \`${prefix} guild motto <text>\` - Set guild motto\n`;
-  msg += `• \`${prefix} guild emblem <emoji> [hexColor]\` - Set guild emblem\n`;
+  msg += `• \`${prefix} guild emblem <emoji> [h<hexColor>\` - Set guild emblem\n`;
   msg += `• \`${prefix} guild delete\` - Disband guild (Leader only)\n\n`;
 
   msg += `*GUILD WAR (weekly)*\n`;

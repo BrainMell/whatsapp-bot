@@ -91,6 +91,9 @@ const UserSchema = new mongoose.Schema({
     // -1 = "not initialized" -> first access sets it to maxEnergy.
     currentEnergy: { type: Number, default: -1 },
     energyTs: { type: Number, default: 0 },
+    // 💡 PASSIVE HP REGEN (2026-10-02, owner bug #fec95c): fractional regen
+    // anchor (like energyTs). Full bar recharges in 24h out of combat.
+    hpTs: { type: Number, default: 0 },
   },
   
   // 💡 AUDIT FIX 2026-08-01: hospital cooldown timestamp. Set by healToFull()

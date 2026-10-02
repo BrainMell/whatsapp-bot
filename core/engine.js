@@ -20381,15 +20381,19 @@ Admins can:
                           return sock.sendMessage(chatId, {
                             text: BOT_MARKER + '\ud83c\udfa8 *GUILD EMBLEM*\n\n'
                               + `\u2022 Send an image with caption \`${botConfig.getPrefix()} guild emblem\` - it becomes the crest on the guild card\n`
-                              + `\u2022 \`${botConfig.getPrefix()} guild emblem <emoji> [hexColor]\` - emoji emblem (e.g. \ud83d\udc09 #FF5500)\n`
+                              + `\u2022 \`${botConfig.getPrefix()} guild emblem <emoji> [h<hexColor>\` - emoji emblem (e.g. \ud83d\udc09 #FF5500)\n`
                               + `\u2022 \`${botConfig.getPrefix()} guild emblem clear\` - remove the uploaded image`,
                           });
                         }
 
                         const icon = parts[3];
                         const color = parts[4] || '#FFD700';
-                        if (icon.length > 4) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Emblem icon must be a single emoji (max 4 chars).' });
+                        // 💡 2026-10-02: count CODE POINTS, not UTF-16 units -
+                        // ZWJ emoji (👨‍👩‍👧‍👦 = 7 code points, 11 UTF-16 units)
+                        // are valid single-grapheme emblems but the old
+                        // length check rejected them ("frequently breaks").
+                        if ([...icon].length > 7) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Emblem icon must be a single emoji.' });
                         }
                         const hexColorRegex = /^#[0-9A-Fa-f]{6}$/;
                         if (!hexColorRegex.test(color)) {

@@ -2594,28 +2594,49 @@ function getPersistentHP(userId, maxHP) {
   const user = getUser(userId);
   if (!user) return maxHP; // fallback for unregistered users
 
+  const max = Math.max(1, Math.floor(Number(maxHP) || 100));
+  const now = Date.now();
+
   // Lazy migration: if currentHP is -1 (default), initialize to maxHP
   if (user.stats.currentHP === undefined || user.stats.currentHP === -1) {
-    user.stats.currentHP = maxHP;
+    user.stats.currentHP = max;
+    user.stats.hpTs = now;
     scheduleSave(userId);
+    return max;
   }
 
-  // Clamp to valid range (1 to maxHP)
-  // Minimum 1 so players can always act (0 HP = defeated, handled by combat)
-  const hp = user.stats.currentHP;
-  if (hp > maxHP) {
-    user.stats.currentHP = maxHP;
-    scheduleSave(userId);
-    return maxHP;
-  }
-  if (hp < 1) {
-    // If HP is 0 or negative (player was defeated), restore to 1
-    // so they can continue playing. The actual "defeat" state is
-    // handled by the combat system, not by persistent HP.
+  // Defeated / invalid HP: restore to 1 so players can always act (0 HP =
+  // defeated, handled by combat) and re-anchor the regen clock.
+  const raw = Math.floor(Number(user.stats.currentHP) || 0);
+  if (raw < 1) {
     user.stats.currentHP = 1;
+    user.stats.hpTs = now;
     scheduleSave(userId);
     return 1;
   }
+
+  // 💡 PASSIVE HP REGEN (2026-10-02, owner bug #fec95c): the hospital
+  // cooldown message promises out-of-combat regen, but NO such system
+  // existed - hurt players had ZERO healing for the whole 12h hospital
+  // cooldown ("some players cannot regain HP"). Time regen like energy:
+  // a full bar recharges in 24h, scaled to max, fractional progress
+  // accumulates via stats.hpTs. Damage re-anchors via setPersistentHP.
+  let hp = raw;
+  const last = Number(user.stats.hpTs) || now;
+  const elapsed = Math.max(0, now - last);
+  if (hp >= max) {
+    hp = max;
+    user.stats.hpTs = now;
+  } else if (elapsed > 0) {
+    const regen = Math.floor((elapsed / HP_REGEN_FULL_MS) * max);
+    if (regen > 0) {
+      hp = Math.min(max, hp + regen);
+      user.stats.hpTs = now;
+    }
+    // regen === 0: keep hpTs so fractional regen keeps accumulating
+  }
+  user.stats.currentHP = hp;
+  scheduleSave(userId);
   return hp;
 }
 
@@ -2632,6 +2653,7 @@ function setPersistentHP(userId, hp, maxHP) {
 
   // Clamp: 0 to maxHP. 0 means defeated (will be restored to 1 on next access).
   user.stats.currentHP = Math.max(0, Math.min(maxHP, Math.floor(hp)));
+  user.stats.hpTs = Date.now(); // damage re-anchors the passive regen clock
   scheduleSave(userId);
 }
 
@@ -2702,6 +2724,7 @@ function setPersistentEnergy(userId, energy, maxEnergy) {
  * @returns {{healed: number, onCooldown: boolean, cooldownRemainingMs?: number}}
  */
 const HOSPITAL_COOLDOWN_MS = 12 * 60 * 60 * 1000; // 12 hours
+const HP_REGEN_FULL_MS = 24 * 60 * 60 * 1000; // passive regen: full bar in 24h
 function healToFull(userId, maxHP) {
   const user = getUser(userId);
   if (!user) return { healed: 0, onCooldown: false };
@@ -2720,6 +2743,7 @@ function healToFull(userId, maxHP) {
   const currentHP = getPersistentHP(userId, maxHP);
   const healed = maxHP - currentHP;
   user.stats.currentHP = maxHP;
+  user.stats.hpTs = Date.now(); // full heal re-anchors the regen clock
   user.lastHospitalUse = new Date();
   scheduleSave(userId);
   return { healed, onCooldown: false };
