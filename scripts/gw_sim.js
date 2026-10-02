@@ -288,6 +288,11 @@ async function s5_loans() {
 
     const economy = require('../core/rpg/economy');
     economy.addMoney('loaner@s.whatsapp.net', 100000, 'sim wallet topup');
+    if ((economy.getGold('loaner@s.whatsapp.net') || 0) < 60000) {
+        const u = economy.getUser('loaner@s.whatsapp.net');
+        if (u) { u.wallet = (u.wallet || 0) + 200000; economy.saveUser('loaner@s.whatsapp.net'); }
+    }
+    console.log(`[S5] loaner wallet: ${economy.getGold('loaner@s.whatsapp.net')}`);
     const req = await bankLoans.requestLoan('loaner@s.whatsapp.net', 'Loaner', 'GwTestA', 50000);
     check('loan request ok', req.ok);
     const tooBig = await bankLoans.requestLoan('loaner@s.whatsapp.net', 'Loaner', 'GwTestA', 999999999);

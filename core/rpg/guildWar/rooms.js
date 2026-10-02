@@ -21,7 +21,7 @@ async function seedEncounters(eventDoc, map) {
         if (payload && Object.keys(payload).length) {
             bulk.push({
                 updateOne: {
-                    filter: { eventId: eventDoc.eventId, 'rooms.key': room.key },
+                    filter: { eventId: eventDoc.eventId, rooms: { $elemMatch: { key: room.key } } },
                     update: { $set: { 'rooms.$.payload': payload } },
                 },
             });
@@ -44,12 +44,12 @@ async function applyFog(eventId, jid, revealKeys) {
 async function enterRoom(eventId, jid, fromKey, toKey) {
     if (fromKey && fromKey !== toKey) {
         await GuildWarEvent.updateOne(
-            { eventId, 'rooms.key': fromKey },
+            { eventId, rooms: { $elemMatch: { key: fromKey } } },
             { $pull: { 'rooms.$.occupants': jid } }
         );
     }
     const entered = await GuildWarEvent.findOneAndUpdate(
-        { eventId, 'rooms.key': toKey },
+        { eventId, rooms: { $elemMatch: { key: toKey } } },
         { $addToSet: { 'rooms.$.occupants': jid } },
         { new: false }
     );
@@ -58,7 +58,7 @@ async function enterRoom(eventId, jid, fromKey, toKey) {
 
 async function leaveRoom(eventId, jid, roomKey) {
     await GuildWarEvent.updateOne(
-        { eventId, 'rooms.key': roomKey },
+        { eventId, rooms: { $elemMatch: { key: roomKey } } },
         { $pull: { 'rooms.$.occupants': jid } }
     );
 }
@@ -66,12 +66,22 @@ async function leaveRoom(eventId, jid, roomKey) {
 // ── clear a room (the atomic claim): only one winner ever ──
 // condition: room ACTIVE (or UNEXPLORED for instant-clear types) and not already cleared
 async function clearRoom(eventId, roomKey, player, { extraPayload = null } = {}) {
+    // ⚔️ CLAIM SAFETY (race bug found in S3): plain 'rooms.key' + 'rooms.state'
+    // conditions can match the DOCUMENT via DIFFERENT elements, and the
+    // positional $ then writes an arbitrary element (measured: 6 winners, 6
+    // rooms corrupted). $elemMatch binds ALL conditions to ONE element, so
+    // the positional $ always points at the claimed room and the claim is
+    // lost (null) the moment another writer wins it.
     const prev = await GuildWarEvent.findOneAndUpdate(
         {
             eventId,
-            'rooms.key': roomKey,
-            'rooms.state': { $in: ['UNEXPLORED', 'ACTIVE'] },
-            'rooms.clearedBy': null,
+            rooms: {
+                $elemMatch: {
+                    key: roomKey,
+                    state: { $in: ['UNEXPLORED', 'ACTIVE'] },
+                    $or: [{ clearedBy: null }, { clearedBy: { $exists: false } }],
+                },
+            },
         },
         {
             $set: {
@@ -82,7 +92,7 @@ async function clearRoom(eventId, roomKey, player, { extraPayload = null } = {})
                 ...(extraPayload || {}),
             },
         },
-        { new: false } // false: return BEFORE → null means we did NOT win the race
+        { new: false } // return BEFORE → null means we did NOT win the race
     );
     if (!prev) return { won: false, reason: 'already-cleared-or-gone' };
 
@@ -105,7 +115,7 @@ async function clearRoom(eventId, roomKey, player, { extraPayload = null } = {})
 // ── room state transitions for encounter flow ──
 async function markActive(eventId, roomKey) {
     return GuildWarEvent.findOneAndUpdate(
-        { eventId, 'rooms.key': roomKey, 'rooms.state': 'UNEXPLORED' },
+        { eventId, rooms: { $elemMatch: { key: roomKey, state: 'UNEXPLORED' } } },
         { $set: { 'rooms.$.state': 'ACTIVE' } },
         { new: false }
     );
@@ -114,7 +124,10 @@ async function markActive(eventId, roomKey) {
 async function setRoomPayload(eventId, roomKey, payloadPatch) {
     const set = {};
     for (const [k, v] of Object.entries(payloadPatch)) set[`rooms.$.payload.${k}`] = v;
-    return GuildWarEvent.updateOne({ eventId, 'rooms.key': roomKey }, { $set: set });
+    return GuildWarEvent.updateOne(
+        { eventId, rooms: { $elemMatch: { key: roomKey } } },
+        { $set: set }
+    );
 }
 
 // ── inactivity: carried relics drop into the current room's loot ──
@@ -128,7 +141,7 @@ async function dropCarriedRelics(eventId, jid, reason) {
         { $set: { 'players.$.relics': [] } }
     );
     await GuildWarEvent.updateOne(
-        { eventId, 'rooms.key': p.roomId },
+        { eventId, rooms: { $elemMatch: { key: p.roomId } } },
         { $push: { 'rooms.$.payload.droppedRelics': { $each: dropped.map((r) => r.toObject ? r.toObject() : r) } } }
     );
     await state.pushLog(eventId, 'relic-drop', jid, `${dropped.length} relics dropped (${reason})`);

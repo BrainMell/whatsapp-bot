@@ -57,23 +57,28 @@ async function getActiveEvents() {
 
 // ── atomic mutation helpers (DB condition = the real guard) ──
 async function updateRoom(eventId, roomKey, condition, update) {
-    const cond = { eventId, 'rooms.key': roomKey, ...(condition || {}) };
+    // $elemMatch binds the room conditions to ONE element (claim-safe);
+    // extra `condition` entries are room-subdoc field conditions.
+    const elem = { key: roomKey, ...(condition || {}) };
     const setUpdate = {};
-    for (const [k, val] of Object.entries(update)) setUpdate[`rooms.$[r].${k}`] = val;
-    return GuildWarEvent.findOneAndUpdate(cond, { $set: setUpdate }, {
-        arrayFilters: [{ 'r.key': roomKey }],
-        new: true,
-    });
+    for (const [k, val] of Object.entries(update)) setUpdate[`rooms.$.${k}`] = val;
+    return GuildWarEvent.findOneAndUpdate(
+        { eventId, rooms: { $elemMatch: elem } },
+        { $set: setUpdate },
+        { new: true }
+    );
 }
 
 async function updatePlayer(eventId, jid, condition, update) {
-    const cond = { eventId, 'players.jid': jid, ...(condition || {}) };
+    // positional + $elemMatch (same claim-safety rationale as updateRoom)
+    const elem = { jid, ...(condition || {}) };
     const setUpdate = {};
-    for (const [k, val] of Object.entries(update)) setUpdate[`players.$[p].${k}`] = val;
-    return GuildWarEvent.findOneAndUpdate(cond, { $set: setUpdate }, {
-        arrayFilters: [{ 'p.jid': jid }],
-        new: true,
-    });
+    for (const [k, val] of Object.entries(update)) setUpdate[`players.$.${k}`] = val;
+    return GuildWarEvent.findOneAndUpdate(
+        { eventId, players: { $elemMatch: elem } },
+        { $set: setUpdate },
+        { new: true }
+    );
 }
 
 async function pushLog(eventId, type, actor, payload) {
