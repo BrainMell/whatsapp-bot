@@ -46,7 +46,7 @@ const mockSock = () => ({
 });
 
 async function makeGuild(guilds, name) {
-    await guilds.createGuild(name, `u-${name}`, `Leader ${name}`);
+    await guilds.createGuild(name, `u-${name}`, 'ADVENTURER');
     return name;
 }
 
