@@ -3120,7 +3120,13 @@ function getAvailableEnemies(poolId) {
 }
 
 function createEnemy(enemyType, level = 1) {
-  const template = ENEMY_TYPES[enemyType];
+  // 💡 FIX 2026-10-02: ENEMY_TYPES was referenced but never defined anywhere -
+  // every ruins/quest enemy creation crashed with ReferenceError. Templates
+  // now resolve through classEncounters pools (single source of truth).
+  const classEncounters = require('./classEncounters');
+  const template = classEncounters.findEnemyTemplate
+    ? classEncounters.findEnemyTemplate(enemyType)
+    : null;
   if (!template) return null;
 
   const enemy = {

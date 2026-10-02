@@ -959,6 +959,27 @@ const BOSS_ENCOUNTERS = {
 // 🎯 ENCOUNTER SELECTION
 // ==========================================
 
+// id -> template lookup across every pool tier (guildAdventure.createEnemy
+// referenced a never-defined ENEMY_TYPES registry and crashed ruins fights).
+let _enemyTemplateIndex = null;
+function findEnemyTemplate(enemyTypeId) {
+    if (!enemyTypeId) return null;
+    if (!_enemyTemplateIndex) {
+        _enemyTemplateIndex = {};
+        for (const pool of Object.values(INFECTED_POOLS)) {
+            for (const tier of Object.values(pool)) {
+                if (!Array.isArray(tier)) continue;
+                for (const e of tier) if (e && e.id) _enemyTemplateIndex[e.id] = e;
+            }
+        }
+        for (const bossPool of Object.values(BOSS_ENCOUNTERS)) {
+            const arr = Array.isArray(bossPool) ? bossPool : (bossPool && bossPool.BOSSES) || [];
+            for (const e of arr) if (e && e.id) _enemyTemplateIndex[e.id] = e;
+        }
+    }
+    return _enemyTemplateIndex[enemyTypeId] || null;
+}
+
 function getEnemyPoolByLevel(avgLevel) {
     if (avgLevel <= 10) return INFECTED_POOLS.FIRE_LOW;
     if (avgLevel <= 20) return INFECTED_POOLS.WATER_LOW;
@@ -1478,6 +1499,7 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
 
 module.exports = {
     INFECTED_POOLS,
+    findEnemyTemplate,
     BOSS_ENCOUNTERS,
     getEnemyPoolByLevel,
     selectRandomEnemy,
