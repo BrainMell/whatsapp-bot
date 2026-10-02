@@ -421,7 +421,7 @@ async function s8_recovery() {
             for (const ev of await stateRef0.getActiveEvents()) await stateRef0.abortEvent(ev.eventId, 'suite cleanup');
             await fn();
         } catch (e) {
-            console.error(`💥 ${name} CRASHED:`, e.message);
+            console.error(`💥 ${name} CRASHED:`, (e.stack || e.message).split('\n').slice(0, 3).join(' | '));
             results.push({ name: `${name} (crashed)`, ok: false, detail: e.message });
         }
     }
