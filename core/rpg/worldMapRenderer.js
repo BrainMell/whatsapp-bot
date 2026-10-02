@@ -1635,8 +1635,14 @@ function renderAbyssSheet(t = Date.now()) {
         _decreePlate(ctx, 610, 556, 330, 186, 'RELATION TO THE FIRST WORLD', [
             "the First World's bottom point links to",
             'the Abyss once per 5-hour orbit -',
-            'routine. the Afterlife joins that line',
-            'only once every 7 days (triune).',
+            `routine. the Afterlife joins that line`,
+            // 💡 2026-10-02 (#fec94f): was hardcoded "~7 days" - the triune
+            // cadence is now a configurable cosmology constant (4 days per
+            // owner brief #fec956). Derive the text so it can never drift.
+            `only once every ~${(() => {
+                const h = (cosmology.ALIGNMENT_PERIOD_MS || 96 * 3600000) / 3600000;
+                return Number.isInteger(h) ? h : h.toFixed(1);
+            })()} days (triune).`,
             '',
             'every dungeon entry opens a NEW',
             'consumed world - endless.',
