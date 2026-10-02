@@ -176,8 +176,12 @@ async function generateAnimatedCombatImage(players, enemies, options = {}) {
         return { success: true, buffer: videoBuffer, mimeType };
     } catch (error) {
         console.error('❌ Animated combat generation failed, falling back to static:', error.message);
-        // Fallback to static PNG
-        return await generateCombatImage(players, enemies, options);
+        // 💡 #fec95a 2026-10-02: the static fallback MUST take the express
+        // lane (bypassQueue). Load-test round 2 measured the old behavior:
+        // the fallback queued behind the very animated renders that caused
+        // it, starved at the 20s wait budget, and the user got NOTHING.
+        // Direct statics render in ~1-3s solo / ~7s worst-case under flood.
+        return await generateCombatImage(players, enemies, { ...options, bypassQueue: true });
     }
 }
 

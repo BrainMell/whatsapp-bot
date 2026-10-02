@@ -83,6 +83,20 @@ class GoImageService {
   this._concurrency = parseInt(process.env.GO_SERVICE_CONCURRENCY, 10) || 6; // 💡 2026-10-02: 3 -> 6 (#fec95a load test)
     this._activeOps = 0;
     this._waiters = [];
+    // 💡 #fec95a 2026-10-02 (load-test round 2): animated (ffmpeg) combat
+    // renders are the heaviest op on this 2-core box. Measured: 10
+    // simultaneous animated renders thrash both cores, pushing individual
+    // encodes past the 60s axios timeout AND starving the queued static
+    // fallbacks behind them (4/20 users ended with NO image in the mixed
+    // wave). Animated renders now run through a DEDICATED semaphore
+    // (default 2, GO_ANIMATED_CONCURRENCY) instead of _enqueue, and give
+    // up after GO_ANIMATED_WAIT_MS (default 15s) so the caller falls back
+    // to the static express lane early - in interactive combat a fast PNG
+    // beats a slow MP4.
+    this._animMax = parseInt(process.env.GO_ANIMATED_CONCURRENCY, 10) || 2;
+    this._animWaitMs = parseInt(process.env.GO_ANIMATED_WAIT_MS, 10) || 15000;
+    this._animActive = 0;
+    this._animWaiters = [];
     if (!global.goServiceInitialized) {
       global.goServiceInitialized = true;
       console.log(`📡 [GoService] Using Base URL: ${this.baseUrl} (concurrency=${this._concurrency})`);
@@ -282,7 +296,10 @@ class GoImageService {
       const baseURL = this.client.defaults.baseURL;
       const response = await axios.post(baseURL + '/api/combat?fmt=jpeg', data, {
         responseType: 'arraybuffer',
-        timeout: 10000,
+        // 💡 #fec95a 2026-10-02: 10s -> 20s. This is also the animated->static
+        // FALLBACK lane now; under a 20-user flood direct statics measured up
+        // to ~7s when animated renders saturate the CPU - 10s was too tight.
+        timeout: 20000,
         headers: { 'Content-Type': 'application/json' },
       });
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -297,24 +314,68 @@ class GoImageService {
   }
 
   /*
+   * Animated-render semaphore (dedicated; does NOT use _enqueue slots).
+   * Throws on wait-budget expiry so the caller falls back to the static
+   * express lane early instead of queueing behind stalled encodes.
+   */
+  _animAcquire() {
+    if (this._animActive < this._animMax) {
+      this._animActive++;
+      return Promise.resolve();
+    }
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const idx = this._animWaiters.indexOf(waiter);
+        if (idx !== -1) this._animWaiters.splice(idx, 1);
+        reject(new Error(`animated throttle: no render slot within ${Math.round(this._animWaitMs / 1000)}s`));
+      }, this._animWaitMs);
+      const waiter = () => {
+        clearTimeout(timer);
+        this._animActive++;
+        resolve();
+      };
+      this._animWaiters.push(waiter);
+    });
+  }
+
+  _animRelease() {
+    this._animActive = Math.max(0, this._animActive - 1);
+    if (this._animWaiters.length > 0) {
+      const next = this._animWaiters.shift();
+      next();
+    }
+  }
+
+  /*
    * Generate ANIMATED Combat Video (MP4) - NEW 2026-07-29
    * Renders a 12-frame animation as an MP4 with VFX overlays, sprite reactions,
    * HP interpolation, and defeated fade-out. Falls back to static PNG on failure.
    * Payload extends generateCombatImage with an `action` field.
+   *
+   * 💡 #fec95a 2026-10-02: was routed through _enqueue (1 of 6 shared slots
+   * + 25s queue-wait). Measured under a 20-user flood: 10 simultaneous
+   * ffmpeg encodes thrash 2 CPU cores -> 60s axios timeouts, and the
+   * shared queue stayed blocked so static fallbacks starved too. Now:
+   * dedicated 2-slot animated semaphore + direct axios call. Exceeding the
+   * semaphore wait budget throws fast -> caller falls back to static.
    */
   async generateAnimatedCombat(data) {
-    return this._enqueue(async () => {
-      try {
-        const response = await this.client.post("/api/combat/animated", data, {
-          responseType: "arraybuffer",
-          timeout: 60000, // MP4 encoding via ffmpeg can take 10-30s on slow CPU
-        });
-        return Buffer.from(response.data);
-      } catch (error) {
-        console.error("GoService Animated Combat Error:", error.message);
-        throw error;
-      }
-    }, { priority: true, waitMs: 25000 }); // 💡 #fec95a: animated combat also interactive
+    await this._animAcquire();
+    try {
+      const axios = require('axios');
+      const baseURL = this.client.defaults.baseURL;
+      const response = await axios.post(baseURL + "/api/combat/animated", data, {
+        responseType: "arraybuffer",
+        timeout: 60000, // MP4 encoding via ffmpeg can take 10-30s on slow CPU
+        headers: { 'Content-Type': 'application/json' },
+      });
+      return Buffer.from(response.data);
+    } catch (error) {
+      console.error("GoService Animated Combat Error:", error.message);
+      throw error;
+    } finally {
+      this._animRelease();
+    }
   }
 
   /*
