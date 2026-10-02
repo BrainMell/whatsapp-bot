@@ -95,8 +95,16 @@ async function renderNotice(text, opts = {}) {
     ctx.font = '16px "Cinzel"';
     ctx.fillText(opts.kicker || 'BY DECREE OF THE GUILD ASSOCIATION', W / 2, 100);
     ctx.fillStyle = PAL.ink;
-    ctx.font = '36px "Cinzel Deco"';
-    ctx.fillText(opts.title || 'OFFICIAL NOTICE', W / 2, 152);
+    ctx.font = '34px "Cinzel Deco"';
+    // Cinzel Deco swashes eat the word gap — spread the title manually
+    const title = (opts.title || 'OFFICIAL NOTICE');
+    if ('letterSpacing' in ctx) {
+        ctx.letterSpacing = '3px';
+        ctx.fillText(title, W / 2, 152);
+        ctx.letterSpacing = '0px';
+    } else {
+        ctx.fillText(title.split('').join('\u2009'), W / 2, 152);
+    }
     ctx.strokeStyle = PAL.frame;
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(W / 2 - 150, 176); ctx.lineTo(W / 2 + 150, 176); ctx.stroke();
