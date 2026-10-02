@@ -3899,6 +3899,14 @@ What to do:
     // Checks for due loans every 60 seconds
     setInterval(async () => {
       try {
+        // 🌍 World-alignment event monitor (owner brief #fec956): fires the
+        // DM encounter once per triune alignment window (~4-day cadence).
+        // Cheap no-op unless the alignment window is live.
+        if (sock) {
+          require("./rpg/worldAlignment")
+            .tick(sock, BOT_MARKER)
+            .catch(() => {});
+        }
         const results = loans.checkDueLoans();
         if (results.length > 0) {
           console.log(
@@ -8747,6 +8755,30 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                   const _looksLikeCmd = txt.startsWith('.') || txt.toLowerCase().startsWith(botConfig.getPrefix().toLowerCase());
                   if (_looksLikeCmd) {
                     console.log(`🔍 [Pipeline:2] Text parsed | from=${senderJid.split('@')[0]} | text=${JSON.stringify(txt.slice(0, 80))} | muted=${isMuted(senderJid, chatId)} | isRekeying=${isRekeying}`);
+                  }
+
+                  // 🌍 DM encounter routing (owner brief #fec956): while a
+                  // player has an active DM encounter session, their DMs go
+                  // to the encounter framework - EXCEPT prefix commands, so
+                  // players can still use normal bot commands mid-encounter.
+                  if (
+                    typeof chatId === "string" &&
+                    !chatId.endsWith("@g.us") &&
+                    txt &&
+                    !txt.toLowerCase().startsWith(botConfig.getPrefix().toLowerCase())
+                  ) {
+                    try {
+                      const consumed = await require("./rpg/encounterFramework").handleDM(
+                        sock,
+                        senderJid,
+                        chatId,
+                        txt,
+                        BOT_MARKER,
+                      );
+                      if (consumed) return;
+                    } catch (e) {
+                      console.error("[Encounter] DM routing error:", e.message);
+                    }
                   }
 
                   const handlePendingNameReply = async () => {

@@ -110,38 +110,43 @@ function _fmtSpan(ms, open) {
     return h > 0 ? `locked ${h}h ${m}m` : `locked ${m}m`;
 }
 
-// ─── CLOCK 4: TRIUNE ALIGNMENT (checked STATE, flaggable window) ────────────
-// TRIUNE_ALIGNED(t) = FW at its Abyss-linking bottom AND the Afterlife near
-// its alignment point AND (the Abyss is always beneath — it does not orbit).
-// This is the WEEKLY-grade coincidence (~1 per ~7 real days), and must never
-// be conflated with the routine 5-hour FW bottom-link.
+// ─── CLOCK 4: TRIUNE ALIGNMENT ────────────────────────────────────────────
+// 💡 2026-10-02 REDESIGN (owner brief #fec956): the alignment event must
+// recur on a RELIABLE ~4-day cadence. The previous epsilon-coincidence
+// (FW bottom window ∧ AL window) produced a lumpy bimodal lattice - a 45h
+// pair followed by a 195h dry spell inside the 240h LCM (measured) - which
+// players experienced as "about two weeks of nothing". The alignment is
+// now a DETERMINISTIC window on a fixed cadence anchored at T0: still a
+// pure checked state of wall time (restart-stable, zero Mongo, flaggable
+// window), still separate from the other three clocks, and the period is
+// owner-tunable via TRIUNE_ALIGNMENT_HOURS.
+const ALIGNMENT_PERIOD_H = parseFloat(process.env.TRIUNE_ALIGNMENT_HOURS, 10) || 96; // ~4 days (owner #fec956)
+const ALIGNMENT_PERIOD_MS  = ALIGNMENT_PERIOD_H * MS_HOUR;
+const ALIGNMENT_WINDOW_MS  = 2 * MS_HOUR;   // the three hold aligned for 2h
 
-/** The triune state right now (pure function of wall time). */
+/** The triune alignment state right now (pure function of wall time). */
 function isTriuneAligned(t = Date.now()) {
-    return fwAtBottom(t) && alAtAlignment(t);
+    const sinceT0 = (((t - T0) % ALIGNMENT_PERIOD_MS) + ALIGNMENT_PERIOD_MS) % ALIGNMENT_PERIOD_MS;
+    return sinceT0 < ALIGNMENT_WINDOW_MS;
 }
 
 /**
- * Flaggable window: if aligned now, compute the contiguous window bounds by
- * scanning at 1-minute resolution (bounded scan, cheap, on-demand only).
+ * Flaggable window with exact bounds (and the next window for scheduling).
  * @returns {{aligned: boolean, start: number|null, end: number|null,
- *            minutesLeft: number}}
+ *            minutesLeft: number, nextStart: number, periodMs: number}}
  */
 function triuneWindow(t = Date.now()) {
-    if (!isTriuneAligned(t)) {
-        return { aligned: false, start: null, end: null, minutesLeft: 0 };
-    }
-    const STEP = MS_MIN;
-    const MAX_SCAN = 12 * MS_HOUR; // far beyond the true window (<= ~36 min)
-    let start = t;
-    let end = t;
-    while (start - STEP > 0 && t - start < MAX_SCAN && isTriuneAligned(start - STEP)) start -= STEP;
-    while (t - end < MAX_SCAN && isTriuneAligned(end + STEP)) end += STEP;
+    const sinceT0 = (((t - T0) % ALIGNMENT_PERIOD_MS) + ALIGNMENT_PERIOD_MS) % ALIGNMENT_PERIOD_MS;
+    const start = t - sinceT0;
+    const end = start + ALIGNMENT_WINDOW_MS;
+    const aligned = sinceT0 < ALIGNMENT_WINDOW_MS;
     return {
-        aligned: true,
+        aligned,
         start,
         end,
-        minutesLeft: Math.max(1, Math.round((end - t) / MS_MIN)),
+        minutesLeft: aligned ? Math.max(1, Math.round((end - t) / MS_MIN)) : 0,
+        nextStart: start + ALIGNMENT_PERIOD_MS,
+        periodMs: ALIGNMENT_PERIOD_MS,
     };
 }
 
@@ -209,6 +214,13 @@ module.exports = {
     ABYSS_LOCKED_MS,
     AL_PERIOD_MS,
     FW_TO_WB_RADIUS_RATIO,
+    // clock 4 (deterministic cadence - owner #fec956)
+    ALIGNMENT_PERIOD_MS,
+    ALIGNMENT_WINDOW_MS,
+    // legacy epsilon constants (compat)
+    FW_BOTTOM_EPS,
+    AL_ALIGNMENT_EPS,
+    AL_ALIGNMENT_POINT,
     // clock 1
     fwPhase,
     fwAtBottom,
