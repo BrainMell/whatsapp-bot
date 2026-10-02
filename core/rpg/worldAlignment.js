@@ -1,123 +1,116 @@
-// ═══════════════════════════════════════════════════════════════════════════
-// WORLD ALIGNMENT EVENT LAYER (2026-10-02, owner brief #fec956)
-// ═══════════════════════════════════════════════════════════════════════════
-// Fires the world-alignment EVENT exactly ONCE per triune alignment window:
-//   1. the worlds align (cosmology.triuneWindow - deterministic ~4-day
-//      cadence, 2h window),
-//   2. affected players/guilds are determined (DEFAULT: every registered
-//      player and, through them, their guilds - the owner will map the
-//      real rules with the encounter mechanics),
-//   3. each affected player gets the new DM encounter via the encounter
-//      framework (paced DMs - never a burst),
-//   4. the fired window key is claimed in the SHARED system KV so all bot
-//      instances and restarts dedupe cleanly.
-//
-// Engine hook: call tick(sock, BOT_MARKER) from a periodic interval.
-// ═══════════════════════════════════════════════════════════════════════════
+// ============================================
+// 🌍 WORLD ALIGNMENT → GUILD WAR LAUNCHER — GW overhaul 2026-10-03
+// Alignment = the rare peak Guild War. When the triune alignment window
+// opens (cosmology: deterministic ~4-day cadence, 2h window), ONE instance
+// claims the window in shared KV and opens an alignment-scale event:
+//   - Guild Association official-notice cards DM'd to registered players
+//   - registration opens; players join by DM (`join`) or `.j gw join`
+// A mod can also manually host an alignment war from a group with
+// `.j gw start alignment` (that group becomes the feed HQ).
+// ============================================
 
-'use strict';
-
+const { get, set } = require('../utils/system');
 const cosmology = require('./cosmology');
-const encounterFramework = require('./encounterFramework');
 
-const EVENT_STATE_KEY = '_shared_world_alignment_last_event';
-const ENCOUNTER_TYPE = process.env.ALIGNMENT_ENCOUNTER_TYPE || 'alignment_trial';
-const DM_PACE_MS = (parseFloat(process.env.ALIGNMENT_DM_PACE_MS, 10) || 1200); // ~50 DMs/min default
-const DM_WAVE_CAP = 250; // hard cap per window (registered players << this today)
+const KV_KEY = '_shared_world_alignment_last_event';
+const DM_PACE_MS = 1200;
+const DM_WAVE_CAP = 500;
 
-let _inflight = false;
-let _lastFiredKey = null; // in-process dedup (KV covers restarts)
+let _lastFiredKey = null;
 
-function _windowKey(win) {
-    return `align_${win.start}`;
+function windowKey(win) {
+    return `align_gw_${win.start}`;
 }
 
+// claim the window once across 3 instances (KV upsert)
 async function _claim(key) {
-    // Best-effort shared claim: the in-memory guard is the primary dedup
-    // (all instances share this process); the KV claim covers restarts.
-    const System = require('../models/System');
-    const existing = await System.findOne({ key: EVENT_STATE_KEY }).lean();
-    if (existing && existing.value === key) return false;
-    await System.updateOne(
-        { key: EVENT_STATE_KEY },
-        { $set: { value: key, firedAt: new Date() } },
-        { upsert: true }
-    );
-    return true;
-}
-
-/** Announce + begin the DM encounter for one player. */
-async function _invitePlayer(sock, jid, win) {
-    const minsLeft = win.minutesLeft;
-    const started = encounterFramework.beginEncounter(jid, ENCOUNTER_TYPE, { jid, windowStart: win.start });
-    if (!started.ok) {
-        // already in an encounter - nudge instead of failing the wave
-        await sock.sendMessage(jid, { text: `🌌 The worlds align - but you are already mid-encounter. Finish it first.` }).catch(() => {});
-        return 'busy';
-    }
-    const banner = `🌌 *WORLD ALIGNMENT*\n\nThe Three are aligned *right now* (window closes in ~${minsLeft} min).\nYou have been chosen to be attuned.\n\n━━━━━━━━━━━━━━━\n`;
-    await sock.sendMessage(jid, { text: banner + started.text }).catch(() => {});
-    return 'invited';
-}
-
-/**
- * Periodic check (cheap when not aligned). Call from an engine interval
- * that has the instance sock in scope.
- */
-async function tick(sock, BOT_MARKER) {
-    if (_inflight) return { fired: false, reason: 'inflight' };
-    const win = cosmology.triuneWindow(Date.now());
-    if (!win.aligned) {
-        _inflight = false;
-        return { fired: false, aligned: false, nextStart: win.nextStart };
-    }
-    const key = _windowKey(win);
-    if (_lastFiredKey === key) return { fired: false, reason: 'already-fired-this-window' };
-
-    _inflight = true;
     try {
-        const claimed = await _claim(key);
-        if (!claimed) { _lastFiredKey = key; return { fired: false, reason: 'claimed-elsewhere' }; }
-
-        // affected players: every registered player (rules TBD by owner)
-        const User = require('../models/User');
-        const players = await User.find({ registered: true }, { userId: 1 }).lean();
-        const jids = players.map((p) => p.userId).filter(Boolean).slice(0, DM_WAVE_CAP);
-
-        console.log(`🌍 [WorldAlignment] window ${key}: firing ${ENCOUNTER_TYPE} for ${jids.length} player(s)`);
-        let invited = 0, busy = 0;
-        for (const jid of jids) {
-            try {
-                const r = await _invitePlayer(sock, jid, win);
-                if (r === 'invited') invited++; else busy++;
-            } catch (e) {
-                console.error(`[WorldAlignment] invite failed for ${jid}:`, e.message);
-            }
-            await new Promise((res) => setTimeout(res, DM_PACE_MS));
-        }
-        _lastFiredKey = key;
-        encounterFramework.cleanupExpired();
-        console.log(`🌍 [WorldAlignment] wave complete: ${invited} invited, ${busy} busy, window ${key}`);
-        return { fired: true, key, invited, busy };
+        const System = require('../models/System');
+        const existing = await System.findOne({ key: KV_KEY });
+        if (existing && existing.value && existing.value.lastKey === key) return false;
+        await System.updateOne(
+            { key: KV_KEY },
+            { $set: { value: { lastKey: key, at: new Date() } }, $setOnInsert: { key: KV_KEY } },
+            { upsert: true }
+        );
+        return true;
     } catch (e) {
-        console.error('[WorldAlignment] tick error:', e.message);
-        return { fired: false, reason: 'error', error: e.message };
-    } finally {
-        _inflight = false;
+        console.error('[WorldAlignment] claim failed:', e.message);
+        return false;
     }
 }
 
-/** Status for ops checks / QA. */
+async function _invitePlayer(sock, jid, eventId, aligned) {
+    const notice = require('./guildWar/noticeCard');
+    const guildWar = require('./guildWar');
+    try {
+        const buf = await notice.renderNotice(
+            'The walls between worlds have grown weak. The Guild Association calls all guilds to war across the joined worlds. Registration is OPEN — reply `join` to enter.',
+            { title: 'WORLD ALIGNMENT' }
+        );
+        await sock.sendMessage(jid, {
+            image: buf,
+            caption: `🌍 *WORLD ALIGNMENT — GUILD WAR*\n\nThe dead worlds overlap: greater dangers, greater glory, the largest Guild Points the system has ever offered.\n\nReply \`join\` to register. The war deploys once registration closes.`,
+        });
+    } catch (e) {
+        // card failed → plain text fallback
+        try {
+            await sock.sendMessage(jid, { text: `🌍 *WORLD ALIGNMENT — GUILD WAR*\n\nRegistration open — reply \`join\` to enter. (${eventId})` });
+        } catch (e2) { /* player unreachable */ }
+    }
+}
+
+// tick: called from the 60s engine interval (cheap no-op off-window)
+async function tick(sock, BOT_MARKER) {
+    const win = cosmology.triuneWindow(Date.now());
+    if (!win || !win.aligned) return { fired: false };
+
+    const key = windowKey(win);
+    if (_lastFiredKey === key) return { fired: false, dedup: 'memory' };
+    const claimed = await _claim(key);
+    if (!claimed) { _lastFiredKey = key; return { fired: false, dedup: 'kv' }; }
+    _lastFiredKey = key;
+
+    // auto-launch: alignment event with no host group (DM-driven); a mod can
+    // still host one manually per group — MAX_CONCURRENT_EVENTS guards floods
+    const guildWar = require('./guildWar');
+    const created = await guildWar.state.createEvent({
+        type: 'alignment',
+        hostGroupId: null,
+        initiatedBy: 'guild-association',
+        guilds: [],
+    });
+    if (!created.ok) {
+        console.log('[WorldAlignment] window claimed but event not created:', created.reason);
+        return { fired: false, reason: created.reason };
+    }
+
+    // paced DM notice wave to all registered players
+    try {
+        const User = require('../models/User');
+        const users = await User.find({ registered: true }, { jid: 1 }).lean();
+        const targets = users.map((u) => u.jid).filter(Boolean).slice(0, DM_WAVE_CAP);
+        let sent = 0;
+        for (const jid of targets) {
+            try { await _invitePlayer(sock, jid, created.event.eventId, true); sent++; } catch (e) { /* skip */ }
+            await new Promise((r) => setTimeout(r, DM_PACE_MS));
+        }
+        console.log(`[WorldAlignment] alignment war ${created.event.eventId}: notices sent to ${sent}/${targets.length} players`);
+        return { fired: true, eventId: created.event.eventId, sent };
+    } catch (e) {
+        console.error('[WorldAlignment] notice wave failed:', e.message);
+        return { fired: true, eventId: created.event.eventId, sent: 0 };
+    }
+}
+
 function status() {
     const win = cosmology.triuneWindow(Date.now());
     return {
-        aligned: win.aligned,
-        minutesLeft: win.minutesLeft,
-        nextStart: new Date(win.nextStart).toISOString(),
-        periodHours: Math.round(win.periodMs / 3600000),
-        encounterType: ENCOUNTER_TYPE,
-        lastFiredKey: _lastFiredKey,
+        aligned: !!win?.aligned,
+        windowKey: win ? windowKey(win) : null,
+        minutesLeft: win?.minutesLeft ?? null,
+        lastFired: _lastFiredKey,
     };
 }
 
-module.exports = { tick, status, _internal: { _windowKey, _claim, _invitePlayer } };
+module.exports = { tick, status, _claim, windowKey };

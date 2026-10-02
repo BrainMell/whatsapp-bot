@@ -552,31 +552,8 @@ async function boot() {
       console.error("Failed to init wealth tax scheduler:", e.message);
     }
 
-    // 3b. Schedule daily guild bank interest + loan processing (Phase 2 - Guild Polish)
-    try {
-      const guildPerks = require('./core/rpg/guildPerks');
-      if (typeof guildPerks.runDailyInterest === 'function') {
-        // Run every 24 hours
-        const ONE_DAY = 24 * 60 * 60 * 1000;
-        // First run in 1 hour (so it doesn't fire immediately on boot), then daily
-        setTimeout(() => {
-          guildPerks.runDailyInterest().catch(e => console.error('[GuildInterest] Run failed:', e.message));
-          // 💡 Phase 2: also process overdue loans daily
-          if (typeof guildPerks.runDailyLoanProcessing === 'function') {
-            guildPerks.runDailyLoanProcessing().catch(e => console.error('[GuildLoans] Run failed:', e.message));
-          }
-          setInterval(() => {
-            guildPerks.runDailyInterest().catch(e => console.error('[GuildInterest] Run failed:', e.message));
-            if (typeof guildPerks.runDailyLoanProcessing === 'function') {
-              guildPerks.runDailyLoanProcessing().catch(e => console.error('[GuildLoans] Run failed:', e.message));
-            }
-          }, ONE_DAY);
-        }, 60 * 60 * 1000);
-        console.log("🏛️ Guild bank interest + loan scheduler initialized (runs every 24h).");
-      }
-    } catch (e) {
-      console.error("Failed to init guild interest scheduler:", e.message);
-    }
+    // 3b. (REMOVED 2026-10-03, GW overhaul: bank interest + auto loan
+    // penalties are gone — loans are no-interest, GM-approved support.)
 
     // 3c. Schedule weekly raid spawn + voting round resolver (Phase 5 - Avatar Raid)
     try {
@@ -682,6 +659,15 @@ async function boot() {
       const maxHPCache = new Map(); // userId → { level, maxHP }
       let guildAdventureRef = null;
       try { guildAdventureRef = require('./core/rpg/guildAdventure'); } catch (e) {}
+
+      // ⚔️ Guild War boot (overhaul 2026-10-03): combat hooks + recovery
+      try {
+        const gw = require('./core/rpg/guildWar');
+        gw.installCombatHooks();
+        gw.state.recoverOnBoot().then((n) => {
+          if (n.length) console.log(`⚔️ [GuildWar] recovered in-flight events: ${n.map((e) => `${e.eventId}:${e.state}`).join(', ')}`);
+        }).catch(() => {});
+      } catch (e) { console.error('[GuildWar] boot init failed:', e.message); }
 
       const applyOutOfCombatPassiveRegen = async () => {
         try {

@@ -41,6 +41,10 @@ class ScopedMap {
 }
 const activeDuels = new ScopedMap();  // chatId → duelState
 const duelInvites = new ScopedMap();  // chatId → { challenger, target, stake, timestamp }
+// ⚔️ RUINS DUELS (Guild War Overhaul 2026-10-03): duels fought ACROSS two
+// DMs (the two combatants are in different chats). The duel lives under a
+// virtual chat id; this map routes each player's actions to it.
+const ruinsByPlayer = new Map(); // resolvedJid → virtualChatId
 
 function resolveJid(jid) {
     if (!jid) return jid;
@@ -282,7 +286,7 @@ function cancelDuel(chatId) {
             try { economy.addMoney(p.jid, duel.stake, 'Duel cancel refund'); } catch (e) {}
         }
     }
-    activeDuels.delete(chatId);
+    activeDuels.delete(duel?.chatId || chatId);
     return { success: true, message: `🚫 Duel cancelled.${duel.stake > 0 ? ` Stakes of ${botConfig.getCurrency().symbol}${duel.stake.toLocaleString()} refunded to both players.` : ''}` };
 }
 
@@ -721,7 +725,8 @@ async function deployPvPSummons(duelState) {
 // double-tapped flee applied penalties twice. This synchronous `processing`
 // guard (set before any await) makes re-entrant calls impossible.
 async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
-    const duelForLock = activeDuels.get(chatId);
+    // ⚔️ RUINS: the actor may be in a cross-DM duel (virtual chat id)
+    const duelForLock = activeDuels.get(chatId) || activeDuels.get(ruinsByPlayer.get(resolveJid(senderJid)));
     if (duelForLock && duelForLock.processing) {
         return { success: false, message: '⏳ Hold on - still processing the previous action!' };
     }
@@ -737,7 +742,7 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
 
 async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m) {
     const resolvedSender = resolveJid(senderJid);
-    const duel = activeDuels.get(chatId);
+    const duel = activeDuels.get(chatId) || activeDuels.get(ruinsByPlayer.get(resolvedSender));
     if (!duel) return { success: false, message: '❌ No active duel here!' };
 
     const currentPlayer = duel.players[duel.turn];
@@ -810,7 +815,7 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
         currentPlayer.hp = 0;
         const statusMsg = statusLog.join('\n');
         const result = await finishDuel(chatId, duel, opponent, currentPlayer);
-        activeDuels.delete(chatId);
+        activeDuels.delete(duel?.chatId || chatId);
         const resultMsg = (result && result.message) ? result.message : (typeof result === 'string' ? result : '');
         return { success: true, finished: true, message: statusMsg + '\n\n💀 *' + currentPlayer.name + '* died from status effects!\n\n' + resultMsg, image: result?.image || undefined };
     }
@@ -1160,13 +1165,29 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
                            `⚠️ *Flee Penalty:* ${currentPlayer._speciesName} lost *${cpPenalty}* loyalty (CP reduced).\n` +
                            `Current CP: ${oldCP}\n\n` +
                            `🏆 *${opponent._speciesName}* wins by forfeit!${stakeMsg}`;
-            activeDuels.delete(chatId);
+            activeDuels.delete(duel?.chatId || chatId);
             return { success: true, finished: true, fled: true, message: fleeMsg };
         }
 
         // Player who flees gets penalized, opponent wins.
         const fleeingJid = currentPlayer.jid;
         const stayingJid = opponent.jid;
+
+        // ⚔️ RUINS RULE (GW overhaul): fleeing a Ruins duel = conceding the
+        // contested prize. No wallet/XP/item penalties — the stakes are the
+        // room's spoils and the retreat to the previous room (handled by
+        // ruinsPvp.settle below).
+        if (duel.ruins) {
+            activeDuels.delete(duel.chatId || chatId);
+            for (const pl of duel.players || []) ruinsByPlayer.delete(pl.jid);
+            try {
+                Promise.resolve(require('./guildWar/ruinsPvp').settle(duel.ruins.eventId, stayingJid, fleeingJid)).catch((e) => console.error('[PvP] ruins settle (flee):', e?.message));
+            } catch (e) { console.error('[PvP] ruins settle (flee):', e?.message); }
+            return {
+                success: true, finished: true, fled: true,
+                message: `🏃 *${currentPlayer.name}* fled the duel — the contested prize is forfeit to *${opponent.name}*!`,
+            };
+        }
 
         const fleeingUser = economy.getUser(fleeingJid);
         const stayingUser = economy.getUser(stayingJid);
@@ -1276,7 +1297,7 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
         const xpGain = Math.floor(80 + (currentPlayer.level * 15));
         progression.addXP(stayingJid, xpGain, 'PvP Victory (Opponent Fled)');
 
-        activeDuels.delete(chatId);
+        activeDuels.delete(duel?.chatId || chatId);
 
         let fleeMsg = `🏃 *${currentPlayer.name}* has fled from the duel!\n\n` +
                       `⚠️ *Flee Penalties Applied to ${currentPlayer.name}:*\n` +
@@ -1574,7 +1595,7 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
         }
         loser.hp = 0;
         const result = await finishDuel(chatId, duel, winner, loser);
-        activeDuels.delete(chatId);
+        activeDuels.delete(duel?.chatId || chatId);
         const resultMsg = (result && result.message) ? result.message : (typeof result === 'string' ? result : '');
         return { success: true, finished: true, message: actionResult + '\n\n' + resultMsg, image: result?.image || undefined };
     }
@@ -1770,7 +1791,7 @@ async function finishSummonDuel(chatId, duel, winner, loser) {
         }
     } catch (e) {}
 
-    activeDuels.delete(chatId);
+    activeDuels.delete(duel?.chatId || chatId);
 
     const finalMsg = `🏆 *${winner._speciesName}* wins the summon duel!\n\n${rewardMsg}`;
 
@@ -1801,6 +1822,16 @@ async function finishDuel(chatId, duel, winner, loser) {
     // - Skip: player XP, Zeni prize, bounty, guild war points
     if (duel.mode === 'summon') {
         return await finishSummonDuel(chatId, duel, winner, loser);
+    }
+
+    // ⚔️ RUINS stakes (GW overhaul): winner earns GP (anti-farmed in
+    // points.recordPvpWin) and may claim the loser's carried relics; loser
+    // retreats to their previous room.
+    if (duel.ruins) {
+        for (const pl of duel.players || []) ruinsByPlayer.delete(pl.jid);
+        try {
+            await require('./guildWar/ruinsPvp').settle(duel.ruins.eventId, winner.jid, loser.jid);
+        } catch (e) { console.error('[PvP] ruins settle:', e?.message); }
     }
 
     const xpGain = Math.floor(80 + (loser.level * 15));
@@ -2035,7 +2066,57 @@ setInterval(() => {
 }, 60000);
 
 
+// ⚔️ RUINS DUELS — create a duel spanning two DMs under a virtual chat id.
+// meta: { eventId, roomKey, virtualChatId }
+function beginRuinsDuel(challengerJid, challengedJid, meta = {}) {
+    const c = resolveJid(challengerJid);
+    const t = resolveJid(challengedJid);
+    const virtualId = meta.virtualChatId || `ruins-duel:${Date.now()}:${Math.floor(Math.random() * 1e4)}`;
+    if (activeDuels.has(virtualId)) return { success: false, message: 'A duel is already running for this contest.' };
+    const p1Data = economy.getUser(c);
+    const p2Data = economy.getUser(t);
+    if (!p1Data || !p2Data) return { success: false, message: '❌ Player data unavailable.' };
+
+    const p1Stats = progression.getBaseStats(c, p1Data.class);
+    const p2Stats = progression.getBaseStats(t, p2Data.class);
+    const capPvPStats = (stats) => ({
+        ...stats,
+        atk: Math.min(stats.atk, 1200),
+        def: Math.min(stats.def, 500),
+        mag: Math.min(stats.mag, 1200),
+        spd: Math.min(stats.spd, 200),
+        crit: Math.min(stats.crit, 80),
+        evasion: Math.min(stats.evasion || 0, 55),
+    });
+
+    const duelState = {
+        chatId: virtualId,
+        players: [
+            buildDuelPlayer(c, p1Data, capPvPStats(p1Stats), 0, false),
+            buildDuelPlayer(t, p2Data, capPvPStats(p2Stats), 1, false),
+        ],
+        turn: (buildDuelPlayer(c, p1Data, capPvPStats(p1Stats), 0).stats?.spd || 0) >= (p2Stats?.spd || 0) ? 0 : 1,
+        stake: 0, mode: 'player', ruins: meta,
+        round: 1, lastAction: Date.now(), startedAt: Date.now(),
+    };
+    // SPD initiative (mirrors acceptChallenge)
+    duelState.turn = (duelState.players[0].stats?.spd || 0) >= (duelState.players[1].stats?.spd || 0) ? 0 : 1;
+
+    activeDuels.set(virtualId, duelState);
+    ruinsByPlayer.set(c, virtualId);
+    ruinsByPlayer.set(t, virtualId);
+    deployPvPSummons(duelState).catch(() => {});
+    return { success: true, duel: duelState };
+}
+
+function getRuinsDuelFor(jid) {
+    const vid = ruinsByPlayer.get(resolveJid(jid));
+    return vid ? activeDuels.get(vid) : null;
+}
+
 module.exports = {
+    beginRuinsDuel,
+    getRuinsDuelFor,
     getDuel,
     getInvite,
     challengePlayer,

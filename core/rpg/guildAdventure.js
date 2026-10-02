@@ -1967,6 +1967,104 @@ const scopedKey = (key) => `${botScope()}|${key}`;
 // "|", so stripping everything before the first "|" is unambiguous. A foreign
 // bot's key ("Subaru|chat") strips and then re-scopes under THIS bot - still
 // finds nothing, so cross-bot isolation is preserved.
+// ============================================
+// ⚔️ RUINS COMBAT BRIDGE (Guild War Overhaul 2026-10-03)
+// Lets the Ruins shared-map mode start standard combat encounters with the
+// REAL turn loop/UI, while enforcing Ruins surrounding rules via hooks:
+//   flee  → back to previous room, room forfeited (stays ACTIVE)
+//   end   → victory awards room GP/relic via the Guild War module
+// No parallel combat system: this reuses gameStates/startCombat verbatim.
+// ============================================
+const ruinsHooks = { onFlee: null, onEnd: null };
+function setRuinsHooks(h) {
+  if (h.onFlee) ruinsHooks.onFlee = h.onFlee;
+  if (h.onEnd) ruinsHooks.onEnd = h.onEnd;
+}
+
+// Build the solo-style player entity (same shape + stat enrichment as the
+// solo auto-join + startJourney enrichment, minus the chat-flow machinery).
+function buildRuinsPlayerEntity(senderJid) {
+  economy.initializeClass(senderJid);
+  const userClass = economy.getUserClass(senderJid);
+  let classData;
+  if (userClass && CLASSES[userClass.id]) classData = CLASSES[userClass.id];
+  else if (userClass) {
+    const csClass = classSystem.getClassById(userClass.id || userClass.name?.toUpperCase());
+    classData = csClass
+      ? { id: csClass.id, name: csClass.name, icon: csClass.icon, passive: csClass.passive, abilities: csClass.abilities || [], stats: csClass.stats || { hp: 100, atk: 10, def: 10, mag: 10, spd: 10, luck: 10, crit: 5 } }
+      : CLASSES['FIGHTER'];
+  } else classData = CLASSES['FIGHTER'];
+
+  const user = economy.getUser(senderJid);
+  const classId = userClass?.id || classData.id || 'FIGHTER';
+  const baseStats = progression.getBaseStats(senderJid, classId);
+  const level = progression.getLevel(senderJid) || 1;
+  const persistHP = economy.getPersistentHP(senderJid, baseStats.hp);
+  const persistEn = economy.getPersistentEnergy(senderJid, baseStats.maxEnergy);
+  return {
+    jid: senderJid,
+    name: user?.nickname || user?.profile?.nickname || economy.getDisplayName(senderJid),
+    class: classData,
+    level,
+    spriteIndex: user?.spriteIndex ?? Math.floor(Math.random() * 100),
+    adventurerRank: user?.adventurerRank || 'F',
+    stats: {
+      hp: persistHP, maxHp: baseStats.hp,
+      energy: Math.max(1, persistEn), maxEnergy: baseStats.maxEnergy,
+      atk: baseStats.atk, def: baseStats.def, mag: baseStats.mag,
+      spd: baseStats.spd, luck: baseStats.luck, crit: baseStats.crit,
+      dmgReduction: baseStats.dmgReduction || 0, evasion: baseStats.evasion || 0,
+    },
+    equipment: inventorySystem.getEquipment(senderJid) || {},
+    inventory: [], statusEffects: [], buffs: [], isDead: false,
+    xpEarned: 0, goldEarned: 0,
+    combatStats: { damageDealt: 0, damageTaken: 0, healed: 0, kills: 0 },
+    currentHP: persistHP, mana: 100, maxMana: 100,
+  };
+}
+
+// Start a Ruins encounter through the REAL combat pipeline.
+// spec: { enemies: [{type, level, name?}], eventId, roomKey, rank?, background?, groq?, greeting? }
+async function startRuinsCombat(sock, chatId, senderJid, spec) {
+  if (isUserInAnyCombat(senderJid)) return { success: false, msg: '❌ You are already in combat.' };
+  const sessionKey = scopedKey(`${chatId}_${senderJid}`);
+  if (gameStates.has(sessionKey)) return { success: false, msg: '❌ You already have an active quest!' };
+
+  const enemies = (spec.enemies || []).map((e) => {
+    const en = createEnemy(e.type, e.level || 10);
+    if (en && e.name) en.name = e.name;
+    return en;
+  }).filter(Boolean);
+  if (!enemies.length) return { success: false, msg: '❌ Encounter generation failed.' };
+
+  const state = JSON.parse(JSON.stringify(INITIAL_STATE_TEMPLATE));
+  Object.assign(state, {
+    active: true, chatId, mode: 'RUINS', solo: true,
+    dungeonRank: spec.rank || 'C',
+    encounter: 0, maxEncounters: 1,
+    lastActivity: Date.now(), createdAt: Date.now(),
+    groq: spec.groq || null, sock, sessionKey,
+    isProcessing: false, inCombat: false,
+    ruinsMeta: { eventId: spec.eventId, roomKey: spec.roomKey },
+    dungeonName: 'The Ruins',
+  });
+  state.botId = botScope();
+  state.players.push(buildRuinsPlayerEntity(senderJid));
+  gameStates.set(sessionKey, state);
+
+  const encounter = {
+    name: spec.name || 'Ruins Encounter',
+    enemies,
+    theme: 'ruins',
+    background: spec.background || 'spark_1.png',
+    intro: spec.greeting || '',
+  };
+  if (spec.greeting) {
+    try { await sock.sendMessage(chatId, { text: spec.greeting }); } catch (e) {}
+  }
+  await startCombat(sock, spec.groq || state.groq, encounter, sessionKey);
+  return { success: true, sessionKey };
+}
 function unscopeKey(key) {
   if (typeof key === "string") {
     const idx = key.indexOf("|");
@@ -4905,6 +5003,12 @@ async function performAction(sock, player, action, sessionKey) {
       resultMsg += `🏃 Party successfully escaped from combat!`;
       state.inCombat = false;
       state.active = false;
+      // ⚔️ RUINS RULE (GW overhaul): fleeing retreats to the PREVIOUS room and
+      // forfeits whatever was in the room to the enemy. The room stays ACTIVE
+      // (encounter intact for the next player), unclaimed rewards stay with it.
+      if (state.mode === 'RUINS' && ruinsHooks.onFlee) {
+        try { ruinsHooks.onFlee(state); } catch (e) { console.error('[Ruins] onFlee hook:', e?.message); }
+      }
     } else {
       resultMsg += `❌ *FLEE FAILED!* The party stumbled and lost their turns.`;
     }
@@ -6636,6 +6740,11 @@ async function handleAbyssVictory(sock, sessionKey) {
 async function endCombat(sock, victory, sessionKey) {
   const state = gameStates.get(sessionKey);
   if (!state || state.isEndingCombat) return;
+  // ⚔️ RUINS: report the outcome to the Guild War module (GP + relic award /
+  // defeat respawn). Standard rewards below still apply.
+  if (state.mode === 'RUINS' && ruinsHooks.onEnd) {
+    try { ruinsHooks.onEnd(state, !!victory, sessionKey); } catch (e) { console.error('[Ruins] onEnd hook:', e?.message); }
+  }
   state.isEndingCombat = true; // Guard to prevent double processing
 
   const chatId = state.chatId;
@@ -11171,6 +11280,8 @@ module.exports = {
   EQUIPMENT,
   GAME_CONFIG,
   startAbyssCombat,
+  startRuinsCombat,
+  setRuinsHooks,
   // 💡 Summoner System (Phase 2): export for summonAI.js to access.
   // summonAI does a lazy require('./guildAdventure') to avoid circular dep,
   // so these must be on the exports.

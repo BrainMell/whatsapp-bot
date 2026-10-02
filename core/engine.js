@@ -3907,6 +3907,13 @@ What to do:
             .tick(sock, BOT_MARKER)
             .catch(() => {});
         }
+        // ⚔️ GUILD WAR sweeper: registration expiry, hard end times,
+        // inactivity relic drops, feed flush. Cheap no-op without events.
+        if (sock) {
+          require("./rpg/guildWar")
+            .state.tick(sock, BOT_MARKER)
+            .catch((e) => console.error("[GuildWar] sweeper:", e?.message));
+        }
         const results = loans.checkDueLoans();
         if (results.length > 0) {
           console.log(
@@ -8767,6 +8774,23 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                     txt &&
                     !txt.toLowerCase().startsWith(botConfig.getPrefix().toLowerCase())
                   ) {
+                    try {
+                      // ⚔️ GUILD WAR first: active-event DM actions (movement,
+                      // relics, challenges). Returns null when not a Ruins action.
+                      const gwResult = await require("./rpg/guildWar/dmRouter").handleDM(
+                        sock, senderJid, chatId, txt, BOT_MARKER,
+                      );
+                      if (gwResult) {
+                        if (gwResult.image) {
+                          await sock.sendMessage(chatId, { image: gwResult.image, caption: BOT_MARKER + (gwResult.text || "") });
+                        } else if (gwResult.text) {
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + gwResult.text });
+                        }
+                        return;
+                      }
+                    } catch (e) {
+                      console.error("[GuildWar] DM router error:", e.message);
+                    }
                     try {
                       const consumed = await require("./rpg/encounterFramework").handleDM(
                         sock,
@@ -18840,7 +18864,15 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                       `${botConfig.getPrefix().toLowerCase()} guild leave`
                     ) {
                       try {
+                        // 🏦 GW overhaul: resolve guild BEFORE leaving, then settle
+                        // any active guild loan (wallet deduct, else User.debt — config policy)
+                        const _preLeaveGuild = guilds.getUserGuild(senderJid);
                         const result = guilds.leaveGuild(senderJid);
+                        if (_preLeaveGuild) {
+                          try {
+                            const _loanSettle = await require('./rpg/guildWar/bankLoans').handleGuildLeave(senderJid, _preLeaveGuild);
+                          } catch (e) { /* loan settle best-effort */ }
+                        }
                         await sock.sendMessage(chatId, {
                           text: BOT_MARKER + result.message,
                         });
@@ -19912,226 +19944,49 @@ Admins can:
                       return;
                     }
 
-                    // `.p guild loan [list|repay <amt>|<amt>]` - borrow from guild bank (must repay in 7 days)
-                    // 💡 LOAN-BUG FIX 2026-09-20 (full-flow rework):
-                    //   1. The old gate required a TRAILING SPACE ("guild loan "),
-                    //      so a bare `${prefix} guild loan` never entered the
-                    //      handler and the bot silently ignored it.
-                    //   2. The guild bank was debited and the loan persisted
-                    //      BEFORE the wallet credit was attempted - a failed
-                    //      credit then "rolled back" from stale memory.
-                    //   3. The debt gate ran AFTER the payout: addMoney had
-                    //      already routed the loan into debt repayment, and the
-                    //      rollback un-debited the bank - free debt reduction.
-                    //   4. Bank balance was read from THIS instance's possibly
-                    //      stale cache (Joker/Subaru clobber each other's
-                    //      writes), producing "Max loan = 0" on money the guild
-                    //      actually has.
-                    // New order: heal both sides from the shared DB →
-                    // Validate (guild, member, amount, debt, account) →
-                    // credit wallet → debit bank + record loan → persist,
-                    // with claw-back if the persist fails and NOTHING mutated
-                    // when the credit fails.
+                    // `.j guild loan` — GM-approved no-interest loans (GW overhaul 2026-10-03)
+                    // request <amt> → GuildLoan collection (requested) → leader/officer
+                    // approve|reject @player → funds move bank→wallet → repay <amt>.
                     if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild loan` ||
                         lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild loan `)) {
+                      const bankLoans = require('./rpg/guildWar/bankLoans');
+                      const loanArgs = txt.trim().split(/\s+/).slice(2); // [guild, loan, ...args]
+                      const loanSub = (loanArgs[1] || 'list').toLowerCase();
+                      const ug = guilds.getUserGuild(senderJid);
+                      if (!ug) return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
+
                       try {
-                        const P = botConfig.getPrefix();
-                        const tokens = lowerTxt.split(/\s+/);
-                        const sub = tokens[3]?.toLowerCase();
-                        const userGuild = guilds.getUserGuild(senderJid);
-                        if (!userGuild) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
+                        if (loanSub === 'list') {
+                          const lists = await bankLoans.listLoans(senderJid, ug);
+                          const mine = lists.mine.join('\n') || 'No active loans.';
+                          const pendingLine = lists.pending.length
+                            ? `\n📜 Pending requests: ${lists.pending.length} (GM: \`loan approve @player\`)`
+                            : '';
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `🏦 *Guild Loans*\n${mine}${pendingLine}\n_No interest. One active loan per player._` });
                         }
-                        const guild = guilds.getGuild(userGuild);
-                        if (!guild) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Guild not found.' });
+                        if (loanSub === 'request' || (/^\d/.test(loanSub))) {
+                          const amt = loanSub === 'request' ? Number(loanArgs[2]) : Number(loanArgs[1]);
+                          const res = await bankLoans.requestLoan(senderJid, senderName, ug, amt);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + res.text });
                         }
-                        const economy = require('./rpg/economy');
-
-                        // Money-critical command: heal BOTH sides of the
-                        // transaction from the shared MongoDB first - the other
-                        // instances keep their own caches. refreshGuildMoney
-                        // merges the fresh bank balance + loans into the
-                        // in-memory guild; syncUserFromDB retries the User
-                        // collection under every JID variant for the borrower.
-                        await guilds.refreshGuildMoney(userGuild);
-                        let borrower = economy.getUser(senderJid);
-                        if (!borrower) {
-                          await economy.syncUserFromDB(senderJid);
-                          borrower = economy.getUser(senderJid);
+                        if (loanSub === 'approve' || loanSub === 'reject') {
+                          const targetName = (loanArgs[2] || '').replace(/^@/, '');
+                          const member = guilds.getGuildMember(ug, targetName);
+                          const targetJid = member?.jid || loanArgs[2];
+                          const res = loanSub === 'approve'
+                            ? await bankLoans.approveLoan(senderJid, ug, targetJid)
+                            : await bankLoans.rejectLoan(senderJid, ug, targetJid);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + res.text });
                         }
-
-                        const bankBalance = guild.balance || 0;
-                        const maxLoan = Math.floor(bankBalance * 0.10); // max 10% of bank
-
-                        // `.p guild loan` (no args) / list / status - bank, usage, your loans
-                        if (!sub || sub === 'list' || sub === 'status') {
-                          const myLoans = (guild.loans || []).filter(l => l.borrowerJid === senderJid && !l.repaid);
-                          let msg = `💵 *Guild Loans* — ${userGuild}\n`;
-                          msg += `🏦 Bank: ${bankBalance.toLocaleString()} Zeni · max loan: ${maxLoan.toLocaleString()} (10%)\n\n`;
-                          if (myLoans.length === 0) {
-                            msg += `_You have no active loans._\n\n`;
-                          } else {
-                            let totalOwed = 0;
-                            const shown = myLoans.slice(0, 8);
-                            for (const loan of shown) {
-                              const daysLeft = Math.ceil((new Date(loan.dueAt).getTime() - Date.now()) / 86400000);
-                              msg += `💰 ${loan.amount.toLocaleString()} Zeni — ${daysLeft > 0 ? `${daysLeft}d left` : '⚠️ OVERDUE'}\n`;
-                              totalOwed += loan.amount;
-                            }
-                            if (myLoans.length > shown.length) msg += `_…and ${myLoans.length - shown.length} more._\n`;
-                            msg += `\n*Total owed: ${totalOwed.toLocaleString()} Zeni*\n\n`;
-                          }
-                          msg += `Borrow: \`${P} guild loan <amount>\`\n`;
-                          msg += `Repay: \`${P} guild loan repay <amount>\`\n_7-day term, then 10% of earnings auto-deducts._`;
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        if (loanSub === 'repay') {
+                          const res = await bankLoans.repayLoan(senderJid, ug, Number(loanArgs[2]) || 0);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + res.text });
                         }
-
-                        // `.p guild loan repay <amount>`
-                        if (sub === 'repay') {
-                          const repayRaw = String(tokens[4] || '').replace(/,/g, '');
-                          if (!repayRaw) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${P} guild loan repay <amount>\`` });
-                          }
-                          const myLoans = (guild.loans || []).filter(l => l.borrowerJid === senderJid && !l.repaid);
-                          if (myLoans.length === 0) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You have no active loans to repay.' });
-                          }
-                          // 💡 OVERPAY FIX: the old code debited the FULL requested
-                          // amount but only credited what the loans absorbed -
-                          // repaying more than you owe silently DESTROYED the
-                          // difference. Clamp to the outstanding total instead.
-                          const outstanding = myLoans.reduce((s, l) => s + l.amount, 0);
-                          let repayAmount = /^\d+$/.test(repayRaw) ? parseInt(repayRaw, 10) : 0;
-                          if (!repayAmount || repayAmount <= 0) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${P} guild loan repay <amount>\`` });
-                          }
-                          if (repayAmount > outstanding) repayAmount = outstanding;
-                          if (!borrower) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Could not locate your economy account (JID: \`${senderJid}\`). Nothing was charged. Try the bot you registered with, or ask a mod.` });
-                          }
-                          const userWallet = economy.getGold(senderJid);
-                          if (userWallet < repayAmount) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You only have ${userWallet.toLocaleString()} Zeni in your wallet.` });
-                          }
-                          // 1) debit the wallet FIRST (removeMoney re-checks the
-                          // balance internally - a race here is a clean refusal)
-                          const took = economy.removeMoney(senderJid, repayAmount, 'Guild loan repayment');
-                          if (!took) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You only have ${economy.getGold(senderJid).toLocaleString()} Zeni in your wallet.` });
-                          }
-                          // 2) apply repayment to loans oldest-first
-                          const loanSnapshots = myLoans.map(l => ({ ref: l, amount: l.amount, repaid: l.repaid, repaidAt: l.repaidAt }));
-                          let remaining = repayAmount;
-                          let totalRepaid = 0;
-                          for (const loan of myLoans) {
-                            if (remaining <= 0) break;
-                            const apply = Math.min(remaining, loan.amount);
-                            loan.amount -= apply;
-                            remaining -= apply;
-                            totalRepaid += apply;
-                            if (loan.amount <= 0) {
-                              loan.repaid = true;
-                              loan.repaidAt = new Date();
-                            }
-                          }
-                          // 3) credit the guild bank and persist
-                          guild.balance = (guild.balance || 0) + totalRepaid;
-                          const persisted = await guilds.syncGuild(userGuild);
-                          if (!persisted) {
-                            // Persist failed - refund the wallet, restore the
-                            // loan records from the snapshot, restore the bank,
-                            // then best-effort re-pull the untouched DB state.
-                            for (const s of loanSnapshots) { s.ref.amount = s.amount; s.ref.repaid = s.repaid; s.ref.repaidAt = s.repaidAt; }
-                            guild.balance = (guild.balance || 0) - totalRepaid;
-                            economy.addMoney(senderJid, totalRepaid, 'Guild loan repay rollback (bank persist failed)');
-                            await guilds.refreshGuildMoney(userGuild);
-                            console.error(`[GuildLoan] repay persist FAILED for ${userGuild}: ${totalRepaid} refunded to ${senderJid}`);
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Repayment failed: the guild bank could not be saved. Your wallet was refunded - nothing was lost. Try again shortly.' });
-                          }
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Repaid ${totalRepaid.toLocaleString()} Zeni to *${userGuild}* bank.\n🏦 Bank: ${guild.balance.toLocaleString()} Zeni` });
-                        }
-
-                        // `.p guild loan <amount>` - take a new loan
-                        const amountRaw = String(sub).replace(/,/g, '');
-                        const amount = /^\d+$/.test(amountRaw) ? parseInt(amountRaw, 10) : 0;
-                        if (!amount || amount <= 0) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${P} guild loan <amount>\` (or \`list\` / \`repay <amount>\`)` });
-                        }
-                        if (amount > maxLoan) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Max loan is 10% of the guild bank.\n🏦 *${userGuild}* bank: ${bankBalance.toLocaleString()} Zeni → max loan ${maxLoan.toLocaleString()} Zeni.\n_Requested: ${amount.toLocaleString()}_` });
-                        }
-                        // Check existing loans from this user
-                        const existingLoans = (guild.loans || []).filter(l => l.borrowerJid === senderJid && !l.repaid);
-                        const totalExisting = existingLoans.reduce((s, l) => s + l.amount, 0);
-                        if (totalExisting + amount > maxLoan) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You already owe ${totalExisting.toLocaleString()} Zeni. Max additional loan: ${(maxLoan - totalExisting).toLocaleString()} Zeni.` });
-                        }
-                        // Permission: only members+ can borrow (not recruits)
-                        const memberInfo = guilds.getGuildMember(userGuild, senderJid);
-                        if (!memberInfo) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not a member of this guild.' });
-                        }
-                        if (memberInfo.role === 'recruit') {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Recruits cannot borrow from the guild bank. Ask an officer to promote you.' });
-                        }
-                        // 💡 The borrower MUST resolve to a registered economy
-                        // account BEFORE any money moves. syncUserFromDB (run
-                        // above) already retried the User collection under every
-                        // JID variant; if it still misses, this instance
-                        // genuinely cannot see the registration.
-                        if (!borrower) {
-                          console.error(`[GuildLoan] REFUSED ${senderJid} borrowing ${amount} from ${userGuild}: no registered economy account found (User collection miss on every JID variant).`);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Loan failed: your account could not be credited because this bot can't find your registration (JID: \`${senderJid}\`).\n_Nothing was borrowed and the guild bank was not touched. Try the bot you registered with, or ask a mod to check your account._` });
-                        }
-                        // 💡 Borrowers with an outstanding system debt never SEE
-                        // the loan - addMoney's auto-debt deduction swallows the
-                        // whole payout, so the loan reads as "not working".
-                        // This gate runs BEFORE any money moves (it used to run
-                        // after the payout, and the rollback handed the guild's
-                        // share back while the debt stayed reduced - free Zeni).
-                        if (borrower.debt && borrower.debt.amount > 0) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You have an outstanding debt of *${Number(borrower.debt.amount).toLocaleString()} Zeni*. Everything you earn currently goes to debt repayment, so the guild can't lend to you until it's cleared.\n\n_Last quest/loan earnings were also swallowed by the debt - clear it first._` });
-                        }
-
-                        // ── TRANSACTION: credit → debit → record → persist ──
-                        // 1) credit the wallet FIRST. On failure nothing has
-                        // been debited or recorded, so there is nothing to roll
-                        // back (the old code debited + persisted the bank first
-                        // and "rolled back" from stale in-memory state).
-                        const loanPaid = economy.addMoney(senderJid, amount, `Guild loan from ${userGuild}`);
-                        if (!loanPaid) {
-                          console.error(`[GuildLoan] addMoney returned false for ${senderJid} amount ${amount} (registered=${borrower.registered}) - loan refused, bank untouched.`);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Loan failed: could not credit your wallet. Nothing was borrowed and nothing was deducted from the guild bank.\n_If this keeps happening, ask a mod to check your account registration._' });
-                        }
-                        // 2) debit the guild bank + create the loan record
-                        if (!Array.isArray(guild.loans)) guild.loans = [];
-                        const dueAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-                        const loanRecord = {
-                          borrowerJid: senderJid,
-                          amount,
-                          takenAt: new Date(),
-                          dueAt,
-                          repaid: false,
-                          repaidAt: null,
-                        };
-                        guild.loans.push(loanRecord);
-                        guild.balance = bankBalance - amount;
-                        // 3) persist; claw the whole loan back if the save fails
-                        const persisted = await guilds.syncGuild(userGuild);
-                        if (!persisted) {
-                          guild.balance = bankBalance;
-                          guild.loans = guild.loans.filter(l => l !== loanRecord);
-                          economy.removeMoney(senderJid, amount, 'Guild loan rollback (bank persist failed)');
-                          await guilds.refreshGuildMoney(userGuild);
-                          console.error(`[GuildLoan] borrow persist FAILED for ${userGuild}: ${amount} clawed back from ${senderJid}`);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Loan failed: the guild bank could not be saved. The Zeni was taken back out of your wallet - nothing was lost. Try again shortly.' });
-                        }
-                        return sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Borrowed ${amount.toLocaleString()} Zeni from *${userGuild}* bank.\n📅 Due: ${dueAt.toLocaleDateString()} (7 days)\n⚠️ _Unpaid loans auto-deduct 10% from your earnings each day past due._\n\n_Repay early with \`${P} guild loan repay <amount>\`_` });
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + `Usage: \`guild loan [request <amt>|list|approve @player|reject @player|repay <amt>]\`` });
                       } catch (e) {
-                        await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        console.error('[GuildLoan] error:', e?.message);
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Loan error: ' + e.message });
                       }
-                      return;
                     }
 
                     // `.g guild info` - comprehensive guild info (level, members, perks, buildings)

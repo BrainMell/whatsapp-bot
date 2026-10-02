@@ -1,0 +1,150 @@
+// ============================================
+// ⚔️ GUILD WAR — central configuration
+// Guild War Overhaul (Ruins + Alignment) 2026-10-03
+//
+// Every tunable in the system lives here. Balance by simulation,
+// not by editing engine code. Env overrides marked below.
+// ============================================
+
+const CFG = {
+    // ── lifecycle ──
+    REGISTRATION_MS: 10 * 60 * 1000,        // registration window (mod can force-start)
+    NORMAL_DURATION_MS: 90 * 60 * 1000,     // hard end time, normal war
+    ALIGNMENT_DURATION_MS: 4 * 60 * 60 * 1000,
+    INACTIVITY_MS: 20 * 60 * 1000,          // per-player inactivity → relics drop
+    REJOIN_PROTECT_MS: 60 * 1000,
+    MAX_CONCURRENT_EVENTS: 2,
+
+    // ── map ──
+    MAP: {
+        K_NORMAL: 8,                        // rooms per player (side = ceil(sqrt(players*K)))
+        K_ALIGNMENT: 12,
+        SIDE_MIN: 8, SIDE_MAX: 40,
+        SIDE_MIN_ALIGNMENT: 24, SIDE_MAX_ALIGNMENT: 60,
+        EXTRA_EDGE_RATIO: 0.12,             // extra edges over spanning tree
+        REGIONS_ALIGNMENT: 3,               // world bands in alignment maps
+        // room type weights (normal) — 'empty' is the remainder
+        TYPES: {
+            combat: 18, discovery: 10, reward: 8, puzzle: 8, hazard: 6,
+            lore: 4, coop: 3, secret: 1.5, anomaly: 1, landmark: 0.5,
+        },
+        TYPES_ALIGNMENT: {                  // alignment shifts weight to specials
+            combat: 16, discovery: 9, reward: 8, puzzle: 11, hazard: 6,
+            lore: 4, coop: 4, secret: 2.5, anomaly: 2, landmark: 0.75,
+        },
+        EMPTY_RATIO: 0.40,                  // approx share of empty rooms
+        RESIDUE_CHANCE: 0.25,               // cleared room leaves residue
+        RESIDUE_LOOT_CHANCE: 0.5,           // residue carries small loot vs lore-only
+        SPAWN_MIN_DIST_FRAC: 1 / 3,         // min pairwise spawn distance as fraction of side
+        MOVE_COOLDOWN_MS: 6 * 1000,
+    },
+
+    // ── combat rooms ──
+    COMBAT: {
+        BASE_ENEMY_LEVEL: 10,
+        LEVEL_RING_SCALE: 0.6,              // +levels per ring distance from spawn ring
+        BOSS_CHANCE_SECRET: 0.5,            // secret room boss
+        CORE_GUARD_LEVEL_MULT: 2.5,         // world-core guardian level multiplier
+        LIVES: 3,                           // per player per event
+        RESPAWN_PROTECT_MS: 60 * 1000,
+    },
+
+    // ── pvp ──
+    PVP: {
+        CHALLENGE_WINDOW_MS: 60 * 1000,
+        RELIC_STEAL_CAP: 2,                 // max carried relics claimable by winner
+        WIN_GP: 25,
+        SAME_VICTIM_DECAY: 0.5,             // GP multiplier per repeat vs same victim/day
+        SAME_VICTIM_FLOOR_AFTER: 3,         // …floor at 0 after N repeats
+        PROTECT_AFTER_LOSS_MS: 90 * 1000,
+    },
+
+    // ── puzzles ──
+    PUZZLE: {
+        TIME_LIMIT_MS: 90 * 1000,
+        ATTEMPTS: 3,
+        GP_SOLVE: 30,                       // fast/first-try graded below
+        GP_GRADE_BONUS: 10,                 // per unused attempt
+        FAIL_HAZARD_DAMAGE: 0.08,           // fraction of maxHP on final failed attempt
+    },
+
+    // ── relics (session-only) ──
+    RELICS: {
+        TIERS: ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic'],
+        TIER_WEIGHTS: [40, 25, 17, 10, 5, 3],
+        HANDIN_GP: { Common: 15, Uncommon: 30, Rare: 60, Epic: 120, Legendary: 240, Mythic: 500 },
+        STEALABLE_FROM: 'Rare',             // tiers >= this are PvP-stealable + expose carrier
+        SEEKER_CHARGES: 2,
+        BLINK_CHARGES: 2,
+        BLINK_MAX_ROOMS: 3,
+        BLINK_COOLDOWN_MS: 60 * 1000,
+        WARD_FIGHTS: 1,                     // wards consumed after N fights
+        WARD_ATK: 0.25, WARD_DEF: 0.25,
+        CARRY_EXPOSE_TIERS: ['Rare', 'Epic', 'Legendary', 'Mythic'],
+    },
+
+    // ── guild points ──
+    POINTS: {
+        ROOM_CLEAR: { combat: 15, puzzle: 20, discovery: 12, reward: 10, hazard: 12,
+                      lore: 8, secret: 40, anomaly: 25, landmark: 30, coop: 18 },
+        DISCOVERY_GP: 10,                   // first-visit exploration milestone per N rooms
+        DISCOVERY_EVERY: 5,                 // every N distinct rooms → milestone
+        PVP_WIN_GP: 25,
+        COOP_BONUS: 0.5,                    // +50% when cleared with guildmate(s) present
+        CORE_FIRST_GUILD: 200,              // first guild to breach World Core (each member share)
+        CORE_BREACH_PLAYER: 80,
+        PARTICIPATION_GP: 10,               // ≥1 action at end
+        PLAYER_CAP_NORMAL: 300,
+        PLAYER_CAP_ALIGNMENT: 800,
+        ALIGNMENT_MULT: 3,                  // global GP multiplier for alignment events
+    },
+
+    // ── visibility perks (guild level ladder) ──
+    VISIBILITY: {
+        TIERS: [
+            { level: 1, id: 'self', label: 'Own position + discovered map' },
+            { level: 3, id: 'quadrant', label: 'Enemy-carrier quadrant ping (5 min)' },
+            { level: 5, id: 'mates', label: 'Guildmate positions on demand' },
+            { level: 7, id: 'detect', label: 'Recent-enemy detection (5 min decay)' },
+            { level: 10, id: 'radius', label: 'Vision radius 2 + wider pings' },
+        ],
+        QUADRANT_REFRESH_MS: 5 * 60 * 1000,
+        DETECT_DECAY_MS: 5 * 60 * 1000,
+        RADIUS2: 2,
+    },
+
+    // ── feed ──
+    FEED: {
+        FLUSH_MS: 20 * 1000,                // digest flush cadence
+        MINOR_MAX_LINES: 6,                 // minors merged into digest (max lines)
+        NORMAL_GAP_MS: 8 * 1000,            // min gap between normal group messages
+        MAX_MSGS_PER_5MIN: 10,              // hard cap; overflow → digest
+        SCOREBOARD_EVERY_MS: 10 * 60 * 1000,
+        MAX_CAPTION: 380,
+    },
+
+    // ── guild bank loans (support system; no interest, no penalties) ──
+    LOANS: {
+        MAX_FRACTION_OF_BANK: 0.10,         // single loan cap vs guild balance
+        MIN_LOAN: 1000,
+        ONE_ACTIVE_PER_PLAYER: true,
+        TERM_MS: 7 * 24 * 60 * 60 * 1000,   // soft due date (reminder only)
+        LEAVE_POLICY: 'wallet_deduct_or_debt', // leave guild with active loan:
+                                            // auto-deduct from wallet, else User.debt flag
+                                            // + block new guild loans until repaid
+    },
+
+    // ── alignment ──
+    ALIGNMENT: {
+        REGIONS: 3,
+        CROSS_WORLD_RELIC_GP: 750,          // matching 2-piece cross-world relic hand-in
+        NOTICE_CARD_TO_HOST: true,          // official-notice card to host group
+    },
+};
+
+// env overrides (ops-friendly)
+if (process.env.GW_REGISTRATION_MS) CFG.REGISTRATION_MS = parseInt(process.env.GW_REGISTRATION_MS, 10);
+if (process.env.GW_NORMAL_DURATION_MS) CFG.NORMAL_DURATION_MS = parseInt(process.env.GW_NORMAL_DURATION_MS, 10);
+if (process.env.GW_MOVE_COOLDOWN_MS) CFG.MAP.MOVE_COOLDOWN_MS = parseInt(process.env.GW_MOVE_COOLDOWN_MS, 10);
+
+module.exports = CFG;
