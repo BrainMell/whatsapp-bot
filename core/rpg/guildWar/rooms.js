@@ -40,20 +40,35 @@ async function applyFog(eventId, jid, revealKeys) {
     return doc?.players?.[0]?.discovered || null;
 }
 
-// ── enter a room (atomic: pull from old occupants, push to new) ──
+// ── enter a room (ONE atomic op: pull from old occupants + push to new) ──
+// ⚔️ LOAD FIX: was 2 round-trips; aggregation-pipeline update does both in one
+// server-side atomic pass. Edge validity is checked upstream (topology).
 async function enterRoom(eventId, jid, fromKey, toKey) {
-    if (fromKey && fromKey !== toKey) {
-        await GuildWarEvent.updateOne(
-            { eventId, rooms: { $elemMatch: { key: fromKey } } },
-            { $pull: { 'rooms.$.occupants': jid } }
-        );
-    }
-    const entered = await GuildWarEvent.findOneAndUpdate(
-        { eventId, rooms: { $elemMatch: { key: toKey } } },
-        { $addToSet: { 'rooms.$.occupants': jid } },
-        { new: false }
+    await GuildWarEvent.updateOne(
+        { eventId },
+        [
+            { $set: {
+                rooms: {
+                    $map: {
+                        input: '$rooms',
+                        as: 'r',
+                        in: {
+                            $switch: {
+                                branches: [
+                                    { case: { $and: [{ $ne: [fromKey, null] }, { $eq: ['$$r.key', fromKey] }] },
+                                        then: { $mergeObjects: ['$$r', { occupants: { $setDifference: ['$$r.occupants', [jid]] } }] } },
+                                    { case: { $eq: ['$$r.key', toKey] },
+                                        then: { $mergeObjects: ['$$r', { occupants: { $setUnion: ['$$r.occupants', [jid]] } }] } },
+                                ],
+                                default: '$$r',
+                            },
+                        },
+                    },
+                },
+            } },
+        ]
     );
-    return !!entered;
+    return true;
 }
 
 async function leaveRoom(eventId, jid, roomKey) {

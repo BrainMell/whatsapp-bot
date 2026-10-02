@@ -143,7 +143,68 @@ const TYPE_LABEL = {
 
 // ── main render ──
 // opts: { player, discovered:Set, eventDoc, extras:{mates,enemyPings}, title }
+//
+// ⚔️ LOAD FIX (L2 measured a 5.2s event-loop stall from 12 concurrent
+// node-canvas draws — canvas blocks the loop). Renders are offloaded to a
+// child-process pool (max 2 concurrent; excess queues). Falls back to
+// in-process drawing if the child cannot start, so a render never hard-fails.
+const { fork } = require('child_process');
+const _renderPool = { children: [], queue: [], inflight: 0, max: 2 };
+let _renderSeq = 0;
+
+function _spawnChild() {
+    const child = fork(path.join(__dirname, 'renderWorker.js'), [], { stdio: 'ignore' });
+    child.on('exit', () => {
+        const i = _renderPool.children.indexOf(child);
+        if (i !== -1) _renderPool.children.splice(i, 1);
+    });
+    _renderPool.children.push(child);
+    return child;
+}
+
+function _renderViaChild(doc, player, extras) {
+    return new Promise((resolve, reject) => {
+        const task = () => {
+            const child = _renderPool.children.length ? _renderPool.children[0] : _spawnChild();
+            const id = ++_renderSeq;
+            const timeout = setTimeout(() => {
+                cleanup();
+                reject(new Error('render timeout (10s)'));
+            }, 10000);
+            const onMsg = (m) => {
+                if (!m || m.id !== id) return;
+                cleanup();
+                if (m.error) reject(new Error(m.error));
+                else resolve(Buffer.from(m.png, 'base64'));
+            };
+            const cleanup = () => {
+                clearTimeout(timeout);
+                child.off('message', onMsg);
+                _renderPool.inflight--;
+                const next = _renderPool.queue.shift();
+                if (next) { _renderPool.inflight++; next(); }
+            };
+            child.on('message', onMsg);
+            child.send({ type: 'render', id, doc, player, extras });
+        };
+        if (_renderPool.inflight >= _renderPool.max) _renderPool.queue.push(task);
+        else { _renderPool.inflight++; task(); }
+    });
+}
+
 async function renderRuinsMap(eventDoc, player, extras = {}) {
+    try {
+        // serialize the mongoose doc once; the child draws OFF the event loop
+        const plainDoc = typeof eventDoc.toObject === 'function' ? eventDoc.toObject({ depopulate: true }) : eventDoc;
+        const plainPlayer = typeof player.toObject === 'function' ? player.toObject({ depopulate: true }) : player;
+        return await _renderViaChild(plainDoc, plainPlayer, extras);
+    } catch (e) {
+        // fallback: better to block briefly than fail the player's map
+        return _renderInProcess(eventDoc, player, extras);
+    }
+}
+
+function _renderInProcess(eventDoc, player, extras = {}) {
     _ensureFonts();
     const canvas = require('canvas');
     const c = canvas.createCanvas(W, H);
