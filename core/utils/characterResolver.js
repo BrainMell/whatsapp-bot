@@ -1084,10 +1084,13 @@ async function pickImageQuestion(ctx) {
     // role, never "Who is this character?" clues.
     if (!verified.length) {
       const nt0 = _norm(ctx.title);
-      const cands = pool.records
-        .filter((r) => r.role !== "entity" && (r.article || r.name))
-        .sort((a, b) => ((_norm(b.name || "").includes(nt0) ? 1 : 0) - (_norm(a.name || "").includes(nt0) ? 1 : 0)))
-        .slice(0, 5);
+      const baseArticle = await _franchiseSearchTitle(ctx.title).catch(() => null);
+      const cands = [
+        ...(baseArticle ? [{ name: ctx.title, article: baseArticle, source: "wiki-base" }] : []),
+        ...pool.records
+          .filter((r) => r.role !== "entity" && (r.article || r.name))
+          .sort((a, b) => ((_norm(b.name || "").includes(nt0) ? 1 : 0) - (_norm(a.name || "").includes(nt0) ? 1 : 0))),
+      ].slice(0, 6);
       for (const r of cands) {
         const img = await resolveImageBytes(r, { qualifier: ctx.qualifier || ctx.title }).catch(() => null);
         if (img && img.url) {
