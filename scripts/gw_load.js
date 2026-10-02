@@ -100,7 +100,6 @@ async function runLoad(label, playerCount, opts = {}) {
     const avgRender = renderMs / buffers.length;
 
     delay.disable();
-    const lagSamples = [...delay.percentiles(50)].map((d) => d / 1e6); // ns→ms buckets: use mean/max instead
     const memNow = process.memoryUsage().rss;
 
     const p50 = pct(latencies, 0.5), p95 = pct(latencies, 0.95), p99 = pct(latencies, 0.99);
