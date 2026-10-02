@@ -287,6 +287,7 @@ async function s5_loans() {
     await guilds.syncGuild('GwTestA');
 
     const economy = require('../core/rpg/economy');
+    if (!economy.getUser('loaner@s.whatsapp.net')) economy.registerUser('loaner@s.whatsapp.net', 'Loaner');
     economy.addMoney('loaner@s.whatsapp.net', 100000, 'sim wallet topup');
     if ((economy.getGold('loaner@s.whatsapp.net') || 0) < 60000) {
         const u = economy.getUser('loaner@s.whatsapp.net');

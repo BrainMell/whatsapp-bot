@@ -35,12 +35,17 @@ async function award(eventId, playerJid, baseGp, activity, { coopBonus = false, 
     return { ok: true, awarded: gp, capped };
 }
 
+// mongoose Maps forbid '.' in keys — jids contain dots → encode them
+function victimKey(jid) {
+    return `victim:${String(jid).replace(/\./g, '_')}`;
+}
+
 // anti-farm: PvP GP vs the same victim decays; guildmates earn nothing
 function pvpWinGp(attacker, victim) {
     if (attacker.guildId === victim.guildId) return 0; // co-op, not PvP
-    const key = victim.jid;
+    const key = victimKey(victim.jid);
     const ledger = attacker.pvpMeta || {};
-    const victimState = ledger.get ? ledger.get(`victim:${key}`) : ledger[`victim:${key}`];
+    const victimState = ledger.get ? ledger.get(key) : ledger[key];
     const count = (victimState && victimState.count) || 0;
     if (count >= CFG.PVP.SAME_VICTIM_FLOOR_AFTER) return 0;
     const mult = Math.pow(CFG.PVP.SAME_VICTIM_DECAY, count);
@@ -51,7 +56,7 @@ async function recordPvpWin(eventId, winner, loser) {
     const gp = pvpWinGp(winner, loser);
     if (gp > 0) await award(eventId, winner.jid, gp, 'pvp');
     // update decay ledger
-    const key = `victim:${loser.jid}`;
+    const key = victimKey(loser.jid);
     const ledger = winner.pvpMeta || {};
     const prev = (ledger.get && ledger.get(key)) || { count: 0 };
     const next = { count: (prev.count || 0) + 1, at: Date.now() };
