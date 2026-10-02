@@ -129,11 +129,12 @@ function _mulberry32(seedU32) {
     };
 }
 
-// room glyph by type (DejaVu-verified symbols only, per card-system rules)
+// room glyphs — ONLY the DejaVu-verified whitelist (docs/CARD-SYSTEM.md §6;
+// probing note: ⌛ ⛨ ⛓ are known tofu, emoji have NO coverage at all)
 const TYPE_GLYPH = {
-    empty: '', combat: '⚔', puzzle: '🧩', discovery: '🔍', reward: '💠',
-    hazard: '☠', lore: '📖', coop: '🤝', secret: '✦', anomaly: '🌀',
-    landmark: '🗿', core: '◉',
+    empty: '', combat: '⚔', puzzle: '✥', discovery: '⚑', reward: '◈',
+    hazard: '☠', lore: '✺', coop: '✚', secret: '✦', anomaly: '✷',
+    landmark: '▲', core: '⨀',
 };
 const TYPE_LABEL = {
     empty: 'Empty hall', combat: 'Guarded', puzzle: 'Sealed', discovery: 'Buried find',
@@ -323,9 +324,9 @@ function _renderInProcess(eventDoc, player, extras = {}) {
     ctx.fillStyle = PAL.inkSoft;
     const legendItems = [
         `▲ you   ◯ ringed = guildmate   dashed ring = recent enemy movement`,
-        `${'●'} cleared halls fade · ⚔ guarded · 🧩 sealed · 🔍 buried finds · 💠 vaults`,
-        `☠ trapped · 📖 inscribed · 🤝 co-op · ✦ hidden · 🌀 anomalies · 🗿 landmarks`,
-        `◉ World Core — the heart of the ruin, first breach earns lasting glory`,
+        `● cleared halls fade · ⚔ guarded · ✥ sealed · ⚑ buried finds · ◈ vaults`,
+        `☠ trapped · ✺ inscribed · ✚ co-op · ✦ hidden · ✷ anomalies · ▲ landmarks`,
+        `⨀ World Core — the heart of the ruin, first breach earns lasting glory`,
     ];
     let ty = ly + 54;
     for (const line of legendItems) { ctx.fillText(line, 84, ty); ty += 22; }
