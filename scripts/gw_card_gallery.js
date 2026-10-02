@@ -13,16 +13,16 @@ async function main() {
 
     // 1) one card per encounter type
     const samples = {
-        combat:    { body: 'Scavengers bar the way — bold, but no veterans.', actionHint: 'Type fight to engage. Fleeing retreats you and forfeits this room\'s spoils.' },
-        puzzle:    { body: 'Three runes sit above the lintel: sun, moon, then the eye that is neither. Set them in the order the old hymn names them.', actionHint: 'Reply with your answer — 3 attempts. Wrong answers have a cost.' },
+        combat:    { body: 'Scavengers bar the way - bold, but no veterans.', actionHint: 'Type fight to engage. Fleeing retreats you and forfeits this room\'s spoils.' },
+        puzzle:    { body: 'Three runes sit above the lintel: sun, moon, then the eye that is neither. Set them in the order the old hymn names them.', actionHint: 'Reply with your answer - 3 attempts. Wrong answers have a cost.' },
         discovery: { body: 'Half-buried beneath the rubble, something still hums with old power.', actionHint: 'Type dig to unearth it.' },
-        reward:    { body: 'A vault-chamber of the old world — untouched since the world died.', actionHint: 'Type take to claim what lies within.' },
-        hazard:    { body: 'A pressure plate hisses — green gas floods the hall...', actionHint: 'Type cross to attempt passage.' },
+        reward:    { body: 'A vault-chamber of the old world - untouched since the world died.', actionHint: 'Type take to claim what lies within.' },
+        hazard:    { body: 'A pressure plate hisses - green gas floods the hall...', actionHint: 'Type cross to attempt passage.' },
         lore:      { body: 'This hall once belonged to the ember fields. The murals still burn faintly.', actionHint: 'Type read to study the inscriptions.' },
-        secret:    { body: 'A hidden chamber — and something ancient guards it.', actionHint: 'Type fight — or flee now.' },
-        anomaly:   { body: 'Reality thins here — the walls between worlds bleed through.', actionHint: 'Type touch to interact... or move on.' },
+        secret:    { body: 'A hidden chamber - and something ancient guards it.', actionHint: 'Type fight - or flee now.' },
+        anomaly:   { body: 'Reality thins here - the walls between worlds bleed through.', actionHint: 'Type touch to interact... or move on.' },
         landmark:  { title: 'The Silent Obelisk', body: 'A landmark of the ember fields, visible from far away. First guild to record it earns recognition.', actionHint: 'Type record to claim it for your guild.' },
-        coop:      { body: 'A hungry pack floods the hall — too many to count.', actionHint: 'Type fight to engage — allies share the reward.' },
+        coop:      { body: 'A hungry pack floods the hall - too many to count.', actionHint: 'Type fight to engage - allies share the reward.' },
         core:      { body: 'The heart of this dead world still beats here. A mighty guardian bars the way. First guild to breach it earns lasting glory.', actionHint: 'Type fight to challenge the guardian.' },
     };
     const CFG = require('../core/rpg/guildWar/config');
@@ -60,7 +60,7 @@ async function main() {
     jobs.push(['banner_relic', cards.renderBannerCard({
         glyph: '◈',
         title: 'Relic Claimed',
-        body: 'Nyx carries the Ember Compass (Rare). Rare+ relics can be stolen in ruins duels — hand it in with handin to bank it.',
+        body: 'Nyx carries the Ember Compass (Rare). Rare+ relics can be stolen in ruins duels - hand it in with handin to bank it.',
     })]);
 
     // 4) the two initiation cards
