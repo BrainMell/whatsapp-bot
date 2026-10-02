@@ -72,7 +72,8 @@ async function s1_mapgen() {
             }
             // spawn spacing
             const baseDist = Math.max(2, Math.floor(map.side * CFG.MAP.SPAWN_MIN_DIST_FRAC));
-            const feasible = Math.max(1, Math.floor((4 * (map.side - 1)) / Math.max(1, Math.min(players, 150) - 1)));
+            const targetCount = Math.min(players, 150);
+            const feasible = Math.max(1, Math.floor((4 * (map.side - 1)) / Math.max(1, targetCount - 1)));
             const minDist = Math.min(baseDist, feasible);
             let spaced = true;
             for (let i = 0; i < map.spawns.length && spaced; i++) {

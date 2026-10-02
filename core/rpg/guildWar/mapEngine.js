@@ -167,35 +167,27 @@ function generate(seed, playerCount, opts = {}) {
         r.ring = Math.max(r.ring, 0.5);
     }
 
-    // ── spawns: greedy farthest-point on outer ring, min pairwise distance ──
-    // adaptive spacing: target = side*frac, capped by what the outer ring can
-    // physically fit (perimeter/(players-1)) so large fields stay feasible
+    // ── spawns: even ring walk (guaranteed min spacing = perimeter/count),
+    // then players are SHUFFLED onto spawn slots at event start so same-guild
+    // players are not adjacent. Min pairwise Manhattan distance is capped by
+    // what the ring can physically fit at high player counts.
     const baseDist = Math.max(2, Math.floor(side * CFG.MAP.SPAWN_MIN_DIST_FRAC));
-    const feasible = Math.max(1, Math.floor((4 * (side - 1)) / Math.max(1, Math.min(playerCount, 150) - 1)));
+    const targetCount = Math.min(playerCount, 150);
+    const feasible = Math.max(1, Math.floor((4 * (side - 1)) / Math.max(1, targetCount - 1)));
     const minDist = Math.min(baseDist, feasible);
-    const outer = [];
-    for (let y = 0; y < side; y++) for (let x = 0; x < side; x++) {
-        if (x === 0 || y === 0 || x === side - 1 || y === side - 1) {
-            const r = rooms.get(key(x, y));
-            if (r.type !== 'core') outer.push(r);
-        }
-    }
+    const perimeter = [];
+    for (let x = 0; x < side - 1; x++) perimeter.push([x, 0]);
+    for (let y = 0; y < side - 1; y++) perimeter.push([side - 1, y]);
+    for (let x = side - 1; x > 0; x--) perimeter.push([x, side - 1]);
+    for (let y = side - 1; y > 0; y--) perimeter.push([0, y]);
     const spawns = [];
-    const shuffledOuter = rng.shuffle(outer);
-    for (const r of shuffledOuter) {
-        if (spawns.length >= Math.min(playerCount, 150)) break;
-        let okDist = true;
-        for (const s of spawns) {
-            const [sx, sy] = s.split(',').map(Number);
-            if (Math.abs(sx - r.x) + Math.abs(sy - r.y) < minDist) { okDist = false; break; }
-        }
-        if (okDist) spawns.push(r.key);
-    }
-    // fallback: fill remaining players anywhere on the ring with any spacing
-    let fi = 0;
-    while (spawns.length < Math.min(playerCount, 150) && fi < shuffledOuter.length) {
-        const k = shuffledOuter[fi++].key;
-        if (!spawns.includes(k)) spawns.push(k);
+    const count = Math.min(targetCount, perimeter.length);
+    const gap = perimeter.length / count;
+    const rot = rng.int(0, perimeter.length - 1); // seed variety, spacing preserved
+    for (let i = 0; i < count; i++) {
+        const [x, y] = perimeter[(rot + Math.floor(i * gap)) % perimeter.length];
+        const r = rooms.get(key(x, y));
+        if (r && r.type !== 'core') spawns.push(r.key);
     }
 
     return {

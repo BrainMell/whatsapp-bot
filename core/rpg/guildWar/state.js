@@ -10,9 +10,13 @@ const crypto = require('crypto');
 const GuildWarEvent = require('../../models/GuildWarEvent');
 const mapEngine = require('./mapEngine');
 const CFG = require('./config');
-const rooms = require('./rooms');
-const points = require('./points');
-const feed = require('./feed');
+// ⚠️ rooms/feed/points require this module back — load them LAZILY inside
+// functions to break the circular require (a top-level require here would
+// hand them this module's half-initialized exports object).
+const lazy = {};
+function getRooms() { return lazy.rooms || (lazy.rooms = require('./rooms')); }
+function getPoints() { return lazy.points || (lazy.points = require('./points')); }
+function getFeed() { return lazy.feed || (lazy.feed = require('./feed')); }
 
 // ── in-memory read views (per instance) ──
 const activeViews = new Map(); // eventId → { map topology view, doc snapshot }
@@ -169,9 +173,9 @@ async function startEvent(eventId, { deadWorld = null, worldIds = null } = {}) {
     viewOf(updated);
 
     // seed room encounters (server-side payloads) + reveal spawn fog
-    await rooms.seedEncounters(updated, map);
+    await getRooms().seedEncounters(updated, map);
     for (const p of updated.players) {
-        await rooms.applyFog(updated.eventId, p.jid, mapEngine.revealAround(map, p.roomId));
+        await getRooms().applyFog(updated.eventId, p.jid, mapEngine.revealAround(map, p.roomId));
     }
     return { ok: true, event: updated, map };
 }
@@ -217,15 +221,15 @@ async function tick(sock, BOT_MARKER) {
             const cutoff = Date.now() - CFG.INACTIVITY_MS;
             for (const p of ev.players) {
                 if (p.status === 'active' && p.lastActionAt < cutoff) {
-                    await rooms.dropCarriedRelics(ev.eventId, p.jid, 'inactivity');
+                    await getRooms().dropCarriedRelics(ev.eventId, p.jid, 'inactivity');
                     await updatePlayer(ev.eventId, p.jid, { status: 'active' }, { status: 'inactive' });
                     await pushLog(ev.eventId, 'inactivity', p.jid, 'went inactive; carried relics dropped in room');
-                    feed.queue(ev.eventId, 'minor', `${p.name} has gone quiet in the Ruins…`);
+                    getFeed().queue(ev.eventId, 'minor', `${p.name} has gone quiet in the Ruins…`);
                 }
             }
         }
     }
-    feed.tickAll(sock, BOT_MARKER);
+    getFeed().tickAll(sock, BOT_MARKER);
     return out;
 }
 
@@ -236,7 +240,7 @@ async function endEvent(eventId, reason) {
         { new: true }
     );
     if (!doc) return null;
-    const rewards = await points.distribute(doc, reason);
+    const rewards = await getPoints().distribute(doc, reason);
     await GuildWarEvent.updateOne({ eventId }, { $set: { state: 'REWARDS' } });
     return { event: doc, rewards };
 }
@@ -257,7 +261,7 @@ async function abortEvent(eventId, reason) {
     );
     if (doc) await pushLog(eventId, 'abort', 'system', reason || '');
     activeViews.delete(eventId);
-    feed.dispose(eventId);
+    getFeed().dispose(eventId);
     return doc;
 }
 
