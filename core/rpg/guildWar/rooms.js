@@ -66,7 +66,8 @@ async function enterRoom(eventId, jid, fromKey, toKey) {
                     },
                 },
             } },
-        ]
+        ],
+        { updatePipeline: true }
     );
     return true;
 }
