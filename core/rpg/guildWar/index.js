@@ -145,17 +145,18 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
             if (!res.ok) return sock.sendMessage(chatId, { text: `❌ ${res.reason}` });
 
             const notice = require('./noticeCard');
-            const buf = await notice.renderNotice(
-                type === 'alignment'
-                    ? 'THE WORLDS ALIGN. The Guild Association calls all guilds to war across the newly joined worlds. Registration is open — declare your champions.'
-                    : 'The Guild Association declares a GUILD WAR. The Ruins of a dead world await. Registration is open — players, join now.',
-                { title: type === 'alignment' ? 'WORLD ALIGNMENT' : 'GUILD WAR CALLED' }
-            );
+            const regMin = Math.round(CFG.REGISTRATION_MS / 60000);
+            const buf = await notice.renderWarCalledCard({
+                type,
+                title: type === 'alignment' ? 'ALIGNMENT WAR CALLED' : 'GUILD WAR CALLED',
+                host: senderName,
+                regMinutes: regMin,
+            });
             await sock.sendMessage(chatId, {
                 image: buf,
                 caption: `⚔️ *GUILD WAR ${type === 'alignment' ? '— WORLD ALIGNMENT' : 'CALLED'}*\n\n` +
                     `Registration open: \`.j gw join\` (or DM me \`join\`).\n` +
-                    `Registration closes in ${CFG.REGISTRATION_MS / 60000} minutes · deployment automatic.\n` +
+                    `Registration closes in ${regMin} minutes · deployment automatic.\n` +
                     `Players act through bot DMs — this group receives the live feed.\n` +
                     `_Initiated by ${senderName}._`,
             });
@@ -211,6 +212,64 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
             const target = args[1] || (await state.getActiveEvents())[0]?.eventId;
             await state.abortEvent(target, 'aborted by mod');
             return sock.sendMessage(chatId, { text: '🚫 War aborted. No rewards.' });
+        }
+
+        case 'rpg': {
+            // `.j gw rpg on|off|list|status` — mark this GC as RPG-friendly:
+            // organic alignment wars broadcast their call card here (paced).
+            const action = (args[1] || 'status').toLowerCase();
+            if (!chatId || !chatId.endsWith('@g.us')) {
+                return sock.sendMessage(chatId, { text: '❌ Mark whole groups — run this inside the GC you want to mark.' });
+            }
+            const system = require('../../utils/system');
+            let botId = 'global';
+            try { botId = require('../../../botConfig').getBotId() || 'global'; } catch (e) {}
+            const GCS_KEY = `gw_rpg_gcs_${botId}`;
+            const list = system.get(GCS_KEY, []) || [];
+            const normJ = (j) => String(j || '').split('@')[0].split(':')[0];
+            let allowed = canStart;
+            if (!allowed) {
+                try {
+                    const meta = await sock.groupMetadata(chatId);
+                    const meP = (meta.participants || []).find((p) => normJ(p.id) === normJ(senderJid));
+                    allowed = !!(meP && (meP.admin === 'admin' || meP.admin === 'superadmin'));
+                } catch (e) { allowed = false; }
+            }
+
+            if (action === 'on' || action === 'add' || action === 'mark') {
+                if (!allowed) {
+                    return sock.sendMessage(chatId, { text: '❌ Only group admins or bot mods can mark a GC as RPG-friendly.' });
+                }
+                if (list.includes(chatId)) {
+                    return sock.sendMessage(chatId, { text: '🌍 This group is already marked RPG-friendly. Organic alignment war calls will land here.' });
+                }
+                list.push(chatId);
+                system.set(GCS_KEY, list);
+                console.log(`[GuildWar] RPG-friendly GC marked (${botId}): ${chatId} (${list.length} total)`);
+                return sock.sendMessage(chatId, {
+                    text: `🌍 *This group is now RPG-friendly.*\nWhen the worlds align on their own, the Guild Association's call to war will be announced here — one card per alignment window, paced, no spam.\nUnmark anytime: \`.j gw rpg off\` · marked GCs on this bot: *${list.length}*`,
+                });
+            }
+            if (action === 'off' || action === 'remove' || action === 'unmark') {
+                if (!allowed) {
+                    return sock.sendMessage(chatId, { text: '❌ Only group admins or bot mods can unmark a GC.' });
+                }
+                const next = list.filter((c) => c !== chatId);
+                system.set(GCS_KEY, next);
+                return sock.sendMessage(chatId, { text: `🕯️ This group is no longer RPG-friendly. (${next.length} marked on this bot)` });
+            }
+            if (action === 'list') {
+                if (!canStart) return sock.sendMessage(chatId, { text: '❌ Mod only.' });
+                return sock.sendMessage(chatId, {
+                    text: `🌍 *RPG-friendly GCs on this bot* (${list.length}):\n${list.map((c, i) => `  ${i + 1}. ${c}`).join('\n') || '  none yet — mark one with \`.j gw rpg on\`'}`,
+                });
+            }
+            // status: is THIS group marked?
+            return sock.sendMessage(chatId, {
+                text: list.includes(chatId)
+                    ? `🌍 This group *is* marked RPG-friendly — organic alignment war calls land here. Remove: \`.j gw rpg off\``
+                    : `🕯️ This group is not marked. Mark it: \`.j gw rpg on\` (group admins or bot mods)`,
+            });
         }
 
         case 'help': default: {

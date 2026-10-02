@@ -63,6 +63,12 @@ async function main() {
         body: 'Nyx carries the Ember Compass (Rare). Rare+ relics can be stolen in ruins duels — hand it in with handin to bank it.',
     })]);
 
+    // 4) the two initiation cards
+    const notice = require('../core/rpg/guildWar/noticeCard');
+    jobs.push(['init_alignment_organic', notice.renderAlignmentCard({ regMinutes: 45 })]);
+    jobs.push(['init_mod_war_called', notice.renderWarCalledCard({ type: 'normal', host: 'Warlord Kaine', regMinutes: 45 })]);
+    jobs.push(['init_mod_war_called_align', notice.renderWarCalledCard({ type: 'alignment', host: 'Warlord Kaine', regMinutes: 45 })]);
+
     for (const [name, p] of jobs) {
         const buf = await p;
         if (!buf) { console.error('RENDER FAILED:', name); process.exitCode = 1; continue; }

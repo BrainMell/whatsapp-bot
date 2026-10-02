@@ -44,6 +44,8 @@ async function handleOpsCheck(sock, chatId, args) {
             '   • room types: guarded combat · puzzle seals · buried caches · vaults · hazards · lore · hidden chambers · world-thin anomalies · landmarks · guardian packs · THE WORLD CORE',
             '   • battle variants every fight: Skirmish · Ambush · Elite Guard · Horde · Cursed Ground · Bounty Mark — each changes enemies and spoils (+20%…+100%)',
             '   • every encounter now arrives as a parchment decree card; relics are session-only, hand them in for guild points',
+            '   • TWO initiation cards: mods raise a single-GC "WAR CALLED" decree; organic world alignments broadcast a "THE WORLDS ALIGN" card to every GC marked RPG-friendly',
+            '   • `.j gw rpg on|off|status` — admins/mods mark a GC to receive the organic alignment calls (paced, one card per ~4-day window, no spam)',
             '',
             '🖼 *QUIZ IMAGE SYSTEM REBUILT*',
             '   • category-routed multi-source retrieval (AniList / Kitsu / TVMaze / Steam / Speedrun / iTunes / Wikipedia / Wikidata + web fallback)',

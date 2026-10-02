@@ -138,4 +138,171 @@ async function renderNotice(text, opts = {}) {
     return c.toBuffer('image/png');
 }
 
-module.exports = { renderNotice };
+// ============================================
+// ORGANIC WORLD-ALIGNMENT CARD — broadcast look for the alignment wars that
+// open on their own when the worlds align. Posted (paced) to every GC marked
+// RPG-friendly (`gw rpg on`) by each bot instance.
+// Cosmic palette: night-ink header band, gold ⨀ seal, three-worlds flavour.
+// ============================================
+async function renderAlignmentCard(opts = {}) {
+    _ensureFonts();
+    const canvas = require('canvas');
+    const c = canvas.createCanvas(W, H);
+    const ctx = c.getContext('2d');
+
+    ctx.fillStyle = PAL.parchment;
+    ctx.fillRect(0, 0, W, H);
+    // night-ink header band
+    ctx.fillStyle = '#241A2E';
+    ctx.fillRect(0, 0, W, 210);
+    ctx.fillStyle = '#2E2340';
+    ctx.globalAlpha = 0.6;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, W, 210);
+    ctx.clip();
+    for (let i = 0; i < 6; i++) {
+        ctx.beginPath();
+        ctx.ellipse(80 + i * 170, 60 + (i % 3) * 70, 90, 34, i * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#B9A44C';
+    ctx.font = '15px "Cinzel"';
+    ctx.fillText('ON THEIR OWN ACCORD — NO HAND RAISED', W / 2, 52);
+    ctx.fillStyle = '#F3ECD9';
+    ctx.font = '36px "Cinzel Deco"';
+    if ('letterSpacing' in ctx) {
+        ctx.letterSpacing = '3px';
+        ctx.fillText(opts.title || 'THE WORLDS ALIGN', W / 2, 110);
+        ctx.letterSpacing = '0px';
+    } else {
+        ctx.fillText((opts.title || 'THE WORLDS ALIGN').split('').join('\u2009'), W / 2, 110);
+    }
+    ctx.strokeStyle = '#B9A44C';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(W / 2 - 170, 140); ctx.lineTo(W / 2 + 170, 140); ctx.stroke();
+
+    // gold triple-world seal
+    ctx.fillStyle = '#B9A44C';
+    ctx.beginPath(); ctx.arc(W / 2, 175, 26, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#241A2E';
+    ctx.font = '30px "Cinzel"';
+    ctx.fillText('⨀', W / 2, 187);
+
+    // body
+    ctx.textAlign = 'left';
+    ctx.font = '20px "IM Fell"';
+    ctx.fillStyle = PAL.ink;
+    const lines = _wrap(ctx, opts.text ||
+        'The walls between worlds have grown weak, and the dead worlds now overlap. The Guild Association calls ALL guilds to war across the joined worlds — greater dangers, greater glory, the largest Guild Points the system has ever offered.',
+        W - 220).slice(0, 7);
+    let ty = 260;
+    for (const line of lines) { ctx.fillText(line, 110, ty); ty += 32; }
+
+    // registration strip
+    ctx.fillStyle = 'rgba(58,42,30,0.08)';
+    ctx.fillRect(90, H - 170, W - 180, 66);
+    ctx.strokeStyle = PAL.frame;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(90, H - 170, W - 180, 66);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = PAL.wax;
+    ctx.font = '22px "Cinzel"';
+    ctx.fillText(`REGISTRATION IS OPEN${opts.regMinutes != null ? ` — ${opts.regMinutes} MIN` : ''}`, W / 2, H - 142);
+    ctx.fillStyle = PAL.ink;
+    ctx.font = '17px "IM Fell"';
+    ctx.fillText('Join from any group:  .j gw join   ·   then act in my DMs', W / 2, H - 116);
+
+    ctx.font = 'italic 15px "IM Fell Italic"';
+    ctx.fillStyle = PAL.inkSoft;
+    ctx.fillText('So it was written across the three worlds.', 110, H - 60);
+
+    return c.toBuffer('image/png');
+}
+
+// ============================================
+// MOD-INITIATED WAR-CALL CARD — the single-GC variant when a mod opens a war
+// with `.j gw start`. Martial wax-red styling; shows who raised the call.
+// ============================================
+async function renderWarCalledCard(opts = {}) {
+    _ensureFonts();
+    const canvas = require('canvas');
+    const c = canvas.createCanvas(W, H);
+    const ctx = c.getContext('2d');
+
+    ctx.fillStyle = PAL.parchment;
+    ctx.fillRect(0, 0, W, H);
+    // martial red header band
+    ctx.fillStyle = PAL.wax;
+    ctx.fillRect(0, 0, W, 210);
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, W, 210);
+    ctx.clip();
+    for (let i = 0; i < 6; i++) {
+        ctx.beginPath();
+        ctx.ellipse(80 + i * 170, 60 + (i % 3) * 70, 90, 34, i * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#F3ECD9';
+    ctx.font = '15px "Cinzel"';
+    ctx.fillText(opts.type === 'alignment' ? 'AN ALIGNMENT WAR, CALLED BY HAND' : 'BY DIRECT ORDER OF THE GUILD ASSOCIATION', W / 2, 52);
+    ctx.font = '36px "Cinzel Deco"';
+    if ('letterSpacing' in ctx) {
+        ctx.letterSpacing = '3px';
+        ctx.fillText(opts.title || 'GUILD WAR CALLED', W / 2, 110);
+        ctx.letterSpacing = '0px';
+    } else {
+        ctx.fillText((opts.title || 'GUILD WAR CALLED').split('').join('\u2009'), W / 2, 110);
+    }
+    ctx.strokeStyle = '#F3ECD9';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(W / 2 - 170, 140); ctx.lineTo(W / 2 + 170, 140); ctx.stroke();
+
+    // dark seal with crossed blades
+    ctx.fillStyle = '#241A2E';
+    ctx.beginPath(); ctx.arc(W / 2, 175, 26, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#F3ECD9';
+    ctx.font = '28px "Cinzel"';
+    ctx.fillText('⚔', W / 2, 186);
+
+    // body
+    ctx.textAlign = 'left';
+    ctx.font = '20px "IM Fell"';
+    ctx.fillStyle = PAL.ink;
+    const lines = _wrap(ctx, opts.text ||
+        'A war has been called by hand. The Ruins of a dead world await — rooms to clear, relics to carry, rivals to duel, and the World Core for the first guild bold enough to breach it.',
+        W - 220).slice(0, 6);
+    let ty = 260;
+    for (const line of lines) { ctx.fillText(line, 110, ty); ty += 32; }
+
+    // registration strip
+    ctx.fillStyle = 'rgba(58,42,30,0.08)';
+    ctx.fillRect(90, H - 170, W - 180, 66);
+    ctx.strokeStyle = PAL.frame;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(90, H - 170, W - 180, 66);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = PAL.wax;
+    ctx.font = '22px "Cinzel"';
+    ctx.fillText(`REGISTRATION IS OPEN${opts.regMinutes != null ? ` — ${opts.regMinutes} MIN` : ''}`, W / 2, H - 142);
+    ctx.fillStyle = PAL.ink;
+    ctx.font = '17px "IM Fell"';
+    ctx.fillText('Join here:  .j gw join   ·   this group carries the live war feed', W / 2, H - 116);
+
+    ctx.font = 'italic 15px "IM Fell Italic"';
+    ctx.fillStyle = PAL.inkSoft;
+    ctx.fillText(opts.host ? `The call was raised by ${opts.host}.` : 'Let all guilds take heed.', 110, H - 60);
+
+    return c.toBuffer('image/png');
+}
+
+module.exports = { renderNotice, renderAlignmentCard, renderWarCalledCard };

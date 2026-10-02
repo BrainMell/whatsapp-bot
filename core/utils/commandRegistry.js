@@ -116,6 +116,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'gw start', desc: 'Mods: open registration — this group becomes the war-feed HQ.', usage: 'gw start [alignment]' },
     { cmd: 'gw join', desc: 'Enter the registering war with your guild.', usage: 'gw join' },
     { cmd: 'gw status', desc: 'Live war standings.', usage: 'gw status' },
+    { cmd: 'gw rpg', desc: 'Mark this GC as RPG-friendly (admins/mods): organic world-alignment war calls are announced here, one paced card per alignment window.', usage: 'gw rpg on | off | status | list' },
     { cmd: 'wr', desc: 'Alias for gw — the Ruins switch (same subcommands).', usage: 'wr ...' },
     { cmd: 'war', desc: 'Alias for gw — same subcommands, old fingers welcome.', usage: 'war ...' }
   ],

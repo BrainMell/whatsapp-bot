@@ -15,6 +15,13 @@ const cosmology = require('./cosmology');
 const KV_KEY = '_shared_world_alignment_last_event';
 const DM_PACE_MS = 1200;
 const DM_WAVE_CAP = 500;
+// GC broadcast pacing (owner ask: intervals between group sends so the
+// announce wave never loads the box / trips flood protection)
+const GC_PACE_MS = parseInt(process.env.GW_GC_PACE_MS, 10) || 2500;
+
+function botIdSafe() {
+    try { return require('../botConfig').getBotId() || 'global'; } catch (e) { return 'global'; }
+}
 
 let _lastFiredKey = null;
 
@@ -60,11 +67,20 @@ async function _invitePlayer(sock, jid, eventId, aligned) {
     }
 }
 
-// tick: called from the 60s engine interval (cheap no-op off-window)
+// tick: called from the 60s engine interval (cheap no-op off-window).
+// Two independent phases:
+//   1. _launchOnce     — ONE instance claims the window and opens the event
+//   2. _broadcastOnce  — EVERY instance announces the organic call card to its
+//                        own RPG-friendly GCs (per-bot stamp, paced sends)
 async function tick(sock, BOT_MARKER) {
     const win = cosmology.triuneWindow(Date.now());
     if (!win || !win.aligned) return { fired: false };
+    const launch = await _launchOnce(sock, BOT_MARKER, win);
+    const broadcast = await _broadcastOnce(sock, BOT_MARKER, win);
+    return { fired: !!(launch && launch.fired), launch, broadcast };
+}
 
+async function _launchOnce(sock, BOT_MARKER, win) {
     const key = windowKey(win);
     if (_lastFiredKey === key) return { fired: false, dedup: 'memory' };
     const claimed = await _claim(key);
@@ -103,6 +119,58 @@ async function tick(sock, BOT_MARKER) {
     }
 }
 
+// per-instance organic broadcast: the alignment call card goes to every GC
+// marked RPG-friendly on THIS bot (`gw rpg on`), paced GC_PACE_MS apart.
+// Stamp-guarded per bot per window; self-heals if the event wasn't created
+// yet (non-claiming instances retry on the next 60s tick until it exists).
+async function _broadcastOnce(sock, BOT_MARKER, win) {
+    try {
+        const key = windowKey(win);
+        const stampKey = `gw_align_announced_${botIdSafe()}`;
+        if (get(stampKey, null) === key) return { skipped: 'already' };
+
+        const GuildWarEvent = require('../models/GuildWarEvent');
+        const ev = await GuildWarEvent.findOne({ type: 'alignment', state: 'REGISTRATION' })
+            .sort({ createdAt: -1 }).lean();
+        if (!ev) return { skipped: 'no-event-yet' };
+
+        const gcs = get(`gw_rpg_gcs_${botIdSafe()}`, []) || [];
+        if (!gcs.length) { set(stampKey, key); return { skipped: 'no-rpg-gcs' }; }
+
+        const notice = require('./guildWar/noticeCard');
+        let buf = null;
+        try {
+            buf = await notice.renderAlignmentCard({
+                regMinutes: ev.registrationEndsAt ? Math.max(0, Math.round((ev.registrationEndsAt - Date.now()) / 60000)) : null,
+            });
+        } catch (e) { /* text fallback below */ }
+
+        let sent = 0;
+        for (const gc of gcs) {
+            try {
+                if (buf) {
+                    await sock.sendMessage(gc, {
+                        image: buf,
+                        caption: `${BOT_MARKER}🌍 *THE WORLDS ALIGN*\n\nAn alignment-scale Guild War is forming on its own. \`.j gw join\` enters from any group — players deploy into bot DMs.\n_Mark/unmark this GC: \`.j gw rpg off\`_`,
+                    });
+                } else {
+                    await sock.sendMessage(gc, {
+                        text: `${BOT_MARKER}🌍 *THE WORLDS ALIGN* — an alignment-scale Guild War is forming. \`.j gw join\` to enter.`,
+                    });
+                }
+                sent++;
+            } catch (e) { /* dead group — skip */ }
+            await new Promise((r) => setTimeout(r, GC_PACE_MS));
+        }
+        set(stampKey, key);
+        console.log(`[WorldAlignment] organic broadcast: ${sent}/${gcs.length} RPG-friendly GCs (window ${key})`);
+        return { sent, total: gcs.length };
+    } catch (e) {
+        console.error('[WorldAlignment] broadcast failed:', e.message);
+        return { skipped: 'error', error: e.message };
+    }
+}
+
 function status() {
     const win = cosmology.triuneWindow(Date.now());
     return {
@@ -113,4 +181,4 @@ function status() {
     };
 }
 
-module.exports = { tick, status, _claim, windowKey };
+module.exports = { tick, status, _claim, windowKey, _broadcastOnce, GC_PACE_MS };
