@@ -25,9 +25,28 @@ const activeViews = new Map(); // eventId → { map topology view, doc snapshot 
 // (eventId, edges.length); rebuilding it per read measurably stalls the loop
 const adjacencyCache = new Map(); // eventId → { edgesLen, adjacency }
 
+// room key→index is IMMUTABLE (rooms are baked once at startEvent and never
+// reordered — subdoc updates replace elements in place) → cache the index map
+// per event instead of rebuilding a Map over 1800+ rooms on every read
+const roomIndexCache = new Map(); // eventId → Map(key → index)
+
+function roomLookup(doc) {
+    let idx = roomIndexCache.get(doc.eventId);
+    if (!idx || idx.size !== doc.rooms.length) {
+        idx = new Map();
+        doc.rooms.forEach((r, i) => idx.set(r.key, i));
+        roomIndexCache.set(doc.eventId, idx);
+    }
+    return {
+        get: (key) => {
+            const i = idx.get(key);
+            return i === undefined ? undefined : doc.rooms[i];
+        },
+    };
+}
+
 function viewOf(doc) {
-    const roomsMap = new Map();
-    for (const r of doc.rooms) roomsMap.set(r.key, r);
+    const roomsMap = roomLookup(doc);
     const edgesLen = (doc.edges || []).length;
     let cached = adjacencyCache.get(doc.eventId);
     if (!cached || cached.edgesLen !== edgesLen) {
