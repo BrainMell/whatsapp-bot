@@ -8778,7 +8778,7 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                       // ⚔️ GUILD WAR first: active-event DM actions (movement,
                       // relics, challenges). Returns null when not a Ruins action.
                       const gwResult = await require("./rpg/guildWar/dmRouter").handleDM(
-                        sock, senderJid, chatId, txt, BOT_MARKER,
+                        sock, senderJid, chatId, txt, BOT_MARKER, { prefix: (typeof prefix === "string" && prefix) || botConfig.getPrefix() },
                       );
                       if (gwResult) {
                         if (gwResult.image) {
@@ -19966,7 +19966,7 @@ Admins can:
                         }
                         if (loanSub === 'request' || (/^\d/.test(loanSub))) {
                           const amt = loanSub === 'request' ? Number(loanArgs[2]) : Number(loanArgs[1]);
-                          const res = await bankLoans.requestLoan(senderJid, senderName, ug, amt);
+                          const res = await bankLoans.requestLoan(senderJid, senderName, ug, amt, { prefix: botConfig.getPrefix() });
                           return sock.sendMessage(chatId, { text: BOT_MARKER + res.text });
                         }
                         if (loanSub === 'approve' || loanSub === 'reject') {
@@ -19974,12 +19974,12 @@ Admins can:
                           const member = guilds.getGuildMember(ug, targetName);
                           const targetJid = member?.jid || loanArgs[2];
                           const res = loanSub === 'approve'
-                            ? await bankLoans.approveLoan(senderJid, ug, targetJid)
+                            ? await bankLoans.approveLoan(senderJid, ug, targetJid, { prefix: botConfig.getPrefix() })
                             : await bankLoans.rejectLoan(senderJid, ug, targetJid);
                           return sock.sendMessage(chatId, { text: BOT_MARKER + res.text });
                         }
                         if (loanSub === 'repay') {
-                          const res = await bankLoans.repayLoan(senderJid, ug, Number(loanArgs[2]) || 0);
+                          const res = await bankLoans.repayLoan(senderJid, ug, Number(loanArgs[2]) || 0, { prefix: botConfig.getPrefix() });
                           return sock.sendMessage(chatId, { text: BOT_MARKER + res.text });
                         }
                         return sock.sendMessage(chatId, { text: BOT_MARKER + `Usage: \`guild loan [request <amt>|list|approve @player|reject @player|repay <amt>]\`` });
@@ -29541,7 +29541,7 @@ _(or reply to their message)_
                     try { gwSenderName = economy.getDisplayName(senderJid) || gwSenderName; } catch (e) {}
                     try {
                       await require('./rpg/guildWar').handleGroupCommand(
-                        sock, chatId, senderJid, gwSenderName, gwArgs, { m },
+                        sock, chatId, senderJid, gwSenderName, gwArgs, { m, prefix },
                       );
                     } catch (gwErr) {
                       console.error('⚔️ [GuildWar] command error:', gwErr.message);

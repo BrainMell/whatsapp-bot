@@ -215,7 +215,7 @@ async function renderAlignmentCard(opts = {}) {
     ctx.fillText(`REGISTRATION IS OPEN${opts.regMinutes != null ? ` - ${opts.regMinutes} MIN` : ''}`, W / 2, H - 142);
     ctx.fillStyle = PAL.ink;
     ctx.font = '17px "IM Fell"';
-    ctx.fillText('Join from any group:  .j gw join   ·   then act in my DMs', W / 2, H - 116);
+    ctx.fillText(`Join from any group:  ${opts.prefix || '.'} gw join   ·   then act in my DMs`, W / 2, H - 116);
 
     ctx.font = 'italic 15px "IM Fell Italic"';
     ctx.fillStyle = PAL.inkSoft;
@@ -296,7 +296,7 @@ async function renderWarCalledCard(opts = {}) {
     ctx.fillText(`REGISTRATION IS OPEN${opts.regMinutes != null ? ` - ${opts.regMinutes} MIN` : ''}`, W / 2, H - 142);
     ctx.fillStyle = PAL.ink;
     ctx.font = '17px "IM Fell"';
-    ctx.fillText('Join here:  .j gw join   ·   this group carries the live war feed', W / 2, H - 116);
+    ctx.fillText(`Join here:  ${opts.prefix || '.'} gw join   ·   this group carries the live war feed`, W / 2, H - 116);
 
     ctx.font = 'italic 15px "IM Fell Italic"';
     ctx.fillStyle = PAL.inkSoft;
@@ -350,17 +350,18 @@ async function renderWarHelpCard(opts = {}) {
     ctx.beginPath(); ctx.moveTo(W / 2 - 170, 138); ctx.lineTo(W / 2 + 170, 138); ctx.stroke();
     ctx.fillStyle = '#F3ECD9';
     ctx.font = '16px "Cinzel"';
-    ctx.fillText('open with  .j gw  ·  .j wr  ·  .j war', W / 2, 168);
+    const P = String(opts.prefix || '.');
+    ctx.fillText(`open with  ${P} gw  ·  ${P} wr  ·  ${P} war`, W / 2, 168);
 
     // command rows: command (Cinzel, ink) + description (IM Fell, soft)
     const rows = [
-        ['.j gw start', 'Mods open registration. This GC becomes the feed HQ.'],
-        ['.j gw start alignment', 'Alignment-scale war (mods).'],
-        ['.j gw join', 'Enter the registering war with your guild.'],
-        ['.j gw forcestart', 'Mods deploy the war now.'],
-        ['.j gw status', 'Live standings from the Ruins.'],
-        ['.j gw end  |  abort', 'Mods conclude the war (end pays rewards).'],
-        ['.j gw rpg on | off', 'Admins mark this GC for organic alignment calls.'],
+        [`${P} gw start`, 'Mods open registration. This GC becomes the feed HQ.'],
+        [`${P} gw start alignment`, 'Alignment-scale war (mods).'],
+        [`${P} gw join`, 'Enter the registering war with your guild.'],
+        [`${P} gw forcestart`, 'Mods deploy the war now.'],
+        [`${P} gw status`, 'Live standings from the Ruins.'],
+        [`${P} gw end  |  abort`, 'Mods conclude the war (end pays rewards).'],
+        [`${P} gw rpg on | off`, 'Admins mark this GC for organic alignment calls.'],
     ];
     ctx.textAlign = 'left';
     let ry = 244;

@@ -2058,6 +2058,8 @@ async function startRuinsCombat(sock, chatId, senderJid, spec) {
     theme: 'ruins',
     background: spec.background || 'spark_1.png',
     intro: spec.greeting || '',
+    // ⚔️ square map fragment - drawn in the battle scene's bottom-right panel
+    ruinsMap: spec.mapFragment || null,
   };
   if (spec.greeting) {
     try { await sock.sendMessage(chatId, { text: spec.greeting }); } catch (e) {}
@@ -4006,6 +4008,8 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   // Stamp dungeon rank on each enemy so calculateDamage can apply SS+ damage floor
   state.enemies.forEach(e => { e.rank = state.dungeonRank; });
   state.currentEncounterType = encounter.type || "COMBAT";
+  // ⚔️ ruins encounter scene payload (square map panel, bottom-right)
+  state.ruinsMap = encounter.ruinsMap || null;
 
   state.combatRound = 0;
   state.pendingActions = {};
@@ -4144,6 +4148,8 @@ async function startCombat(sock, groq, encounter, sessionKey) {
         floor: state.isAbyss ? state.abyssFloor : 0,
         backgroundPath: state.backgroundPath,
         turnOrderStr: turnOrderStr,
+        // ⚔️ ruins square map panel (bottom-right) - only for the START scene
+        encounter: state.ruinsMap ? { type: 'combat', map: state.ruinsMap } : undefined,
         theme: encounter.theme || {
           theme: "Battle",
           description: "A fierce fight breaks out!",

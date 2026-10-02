@@ -17,7 +17,9 @@ async function renderCombatStart(players, enemies, encounterInfo) {
             floor: encounterInfo.floor || 0,
             backgroundPath: encounterInfo.backgroundPath,
             // 💡 Phase 7: Pass summons through to the Go service
-            summons: encounterInfo.summons || []
+            summons: encounterInfo.summons || [],
+            // ⚔️ ruins encounter scene: square map panel replaces Options_menu
+            encounter: encounterInfo.encounter || undefined
         });
         return result;
     } catch (error) {

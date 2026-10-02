@@ -40,7 +40,8 @@ const MOVE_WORDS = {
 
 // main entry: returns null if this DM text is not a Ruins action (bot falls
 // through to other handlers); otherwise { text, image?, mentions? }
-async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER) {
+async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
+    const prefix = String(opts.prefix || '.'); // dynamic per-bot prefix (owner rule)
     const raw = String(txt || '').trim();
     if (!raw) return null;
     const norm = raw.toLowerCase().replace(/^\.j\s*/, ''); // tolerate prefix or not
@@ -132,7 +133,22 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER) {
         const lines = [intro.text];
         if (mates.length) lines.push(`🤝 Your guildmate${mates.length > 1 ? 's' : ''} ${mates.map((m) => m.name).join(', ')} ${mates.length > 1 ? 'are' : 'is'} here - work together for a shared reward.`);
         if (foes.length) lines.push(`⚠️ ${foes.map((f) => `${f.name} of ${f.guildName}`).join(', ')} ${foes.length > 1 ? 'are' : 'is'} here - rival guild. \`challenge @${foes[0].name}\` or move carefully... (they may challenge YOU).`);
-        return { text: lines.join('\n\n'), image: intro.image || undefined };
+        const fullText = lines.join('\n\n');
+
+        // ⚔️ puzzle rooms: intro scene first, then the ACTUAL game board card.
+        // Both sent here so the order is guaranteed; empty return keeps the
+        // engine from double-sending.
+        if (intro.extraImage) {
+            try {
+                if (intro.image) await sock.sendMessage(chatId, { image: intro.image, caption: BOT_MARKER + fullText });
+                else await sock.sendMessage(chatId, { text: BOT_MARKER + fullText });
+                await sock.sendMessage(chatId, { image: intro.extraImage, caption: BOT_MARKER + '_the mechanism, up close_' });
+            } catch (e) { /* best-effort: text fallback below */
+                return { text: fullText };
+            }
+            return {};
+        }
+        return { text: fullText, image: intro.image || undefined };
     }
 
     // ── personal map ──
@@ -151,6 +167,14 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER) {
         if (!ctxDoc || !ctxDoc.room) return { text: 'You are between chambers...' };
         const me = player;
         const intro = await encounters.roomIntro(ctxDoc, me, ctxDoc.room);
+        if (intro.extraImage) {
+            try {
+                if (intro.image) await sock.sendMessage(chatId, { image: intro.image, caption: BOT_MARKER + (intro.text || '') });
+                else await sock.sendMessage(chatId, { text: BOT_MARKER + (intro.text || '') });
+                await sock.sendMessage(chatId, { image: intro.extraImage, caption: BOT_MARKER + '_the mechanism, up close_' });
+                return {};
+            } catch (e) { return { text: intro.text }; }
+        }
         return { text: intro.text, image: intro.image || undefined };
     }
 
@@ -205,7 +229,7 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER) {
         const begun = pvp.beginRuinsDuel(res.challenger.jid, senderJid, { eventId: eventDoc.eventId, roomKey: player.roomId, virtualChatId: virtualId });
         if (!begun.success) return { text: begun.message };
         await touch();
-        return { text: `⚔️ *THE DUEL BEGINS!* ${begun.duel.players[0].name} vs ${begun.duel.players[1].name}.\nUse your standard combat commands: \`.j combat attack\`, \`.j combat ability <n>\`, \`.j combat flee\`.\n_Stakes: ${CFG.PVP.WIN_GP} GP + carried relics (max ${CFG.PVP.RELIC_STEAL_CAP})._` };
+        return { text: `⚔️ *THE DUEL BEGINS!* ${begun.duel.players[0].name} vs ${begun.duel.players[1].name}.\nUse your standard combat commands: \`${prefix} combat attack\`, \`${prefix} combat ability <n>\`, \`${prefix} combat flee\`.\n_Stakes: ${CFG.PVP.WIN_GP} GP + carried relics (max ${CFG.PVP.RELIC_STEAL_CAP})._` };
     }
     if (/^flee$/.test(norm)) {
         const room = roomOf(eventDoc, player);
@@ -245,6 +269,8 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER) {
                 const started = await encounters.startRoomCombat(sock, chatId, player, eventDoc, room, { groq: null });
                 return { text: started.success ? null : started.msg };
             }
+            // ⚔️ changed room: the cleared-state scene rides the result text
+            if (res.afterImage) return { text: res.text, image: res.afterImage };
             return { text: res.text };
         }
     }

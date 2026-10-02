@@ -15,7 +15,8 @@ function maxLoan(guildBalance) {
     return Math.max(0, Math.floor((guildBalance || 0) * CFG.LOANS.MAX_FRACTION_OF_BANK));
 }
 
-async function requestLoan(playerJid, playerName, guildId, amount) {
+async function requestLoan(playerJid, playerName, guildId, amount, opts = {}) {
+    const prefix = String(opts.prefix || '.');
     const guild = guilds.getGuild(guildId);
     if (!guild) return { ok: false, text: '❌ Guild not found.' };
 
@@ -31,7 +32,7 @@ async function requestLoan(playerJid, playerName, guildId, amount) {
     if (CFG.LOANS.ONE_ACTIVE_PER_PLAYER) {
         const existing = await GuildLoan.findOne({ guildId, playerId: playerJid, status: { $in: ['requested', 'active'] } });
         if (existing) {
-            return { ok: false, text: `❌ You already have a ${existing.status} loan of ${existing.amount.toLocaleString()} Zeni. Repay it first (\`.j guild loan repay <amt>\`).` };
+            return { ok: false, text: `❌ You already have a ${existing.status} loan of ${existing.amount.toLocaleString()} Zeni. Repay it first (\`${prefix} guild loan repay <amt>\`).` };
         }
     }
 
@@ -39,11 +40,12 @@ async function requestLoan(playerJid, playerName, guildId, amount) {
     await GuildLoan.create({ guildId, playerId: playerJid, playerName, amount, status: 'requested' });
     return {
         ok: true,
-        text: `📜 Loan request for *${amount.toLocaleString()}* Zeni submitted to the Guild Master of *${guildId}*.\nThey approve with: \`.j guild loan approve @${playerName}\``,
+        text: `📜 Loan request for *${amount.toLocaleString()}* Zeni submitted to the Guild Master of *${guildId}*.\nThey approve with: \`${prefix} guild loan approve @${playerName}\``,
     };
 }
 
-async function approveLoan(guildMasterJid, guildId, targetJid) {
+async function approveLoan(guildMasterJid, guildId, targetJid, opts = {}) {
+    const prefix = String(opts.prefix || '.');
     const member = guilds.getGuildMember(guildId, guildMasterJid);
     if (!member || (member.role !== 'leader' && member.role !== 'officer')) {
         return { ok: false, text: '❌ Only the Guild Master (or an officer) can approve loans.' };
@@ -72,7 +74,7 @@ async function approveLoan(guildMasterJid, guildId, targetJid) {
     req.approvedAt = new Date();
     req.dueAt = new Date(Date.now() + CFG.LOANS.TERM_MS);
     await req.save();
-    return { ok: true, text: `✅ Loan approved: *${req.amount.toLocaleString()}* Zeni paid to <@${req.playerId}> from the guild bank.\n_No interest. Repay with \`.j guild loan repay <amt>\`._` };
+    return { ok: true, text: `✅ Loan approved: *${req.amount.toLocaleString()}* Zeni paid to <@${req.playerId}> from the guild bank.\n_No interest. Repay with \`${opts.prefix || '.'} guild loan repay <amt>\`._` };
 }
 
 async function rejectLoan(guildMasterJid, guildId, targetJid) {

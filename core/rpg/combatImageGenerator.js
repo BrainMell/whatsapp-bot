@@ -76,6 +76,10 @@ function buildPayload(players, enemies, options = {}) {
         combatType: String(options.combatType || 'PVE'),
         rank: String(options.rank || 'F'),
         floor: Math.floor(Number(options.floor) || 0),
+        // ⚔️ ENCOUNTER SCENE (2026-10-02): ruins room payload — when present
+        // the Go renderer switches to scene mode (props + square map panel,
+        // no banner/menu for exploration kinds). Nil-safe: absent = classic.
+        encounter: options.encounter || undefined,
         // 💡 FIX 2026-09-11 R2 (owner directive: "PvP background = montage_E_4
         // style"): the colosseum (spark_15) was rejected by the owner - the
         // duel arena is now spark_5.png (the bright open beach arena from the

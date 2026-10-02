@@ -4,7 +4,7 @@
 // opens (cosmology: deterministic ~4-day cadence, 2h window), ONE instance
 // claims the window in shared KV and opens an alignment-scale event:
 //   - Guild Association official-notice cards DM'd to registered players
-//   - registration opens; players join by DM (`join`) or `.j gw join`
+//   - registration opens; players join by DM (`join`) or `${_botPrefix()} gw join`
 // A mod can also manually host an alignment war from a group with
 // `.j gw start alignment` (that group becomes the feed HQ).
 // ============================================
@@ -21,6 +21,10 @@ const GC_PACE_MS = parseInt(process.env.GW_GC_PACE_MS, 10) || 2500;
 
 function botIdSafe() {
     try { return require('../botConfig').getBotId() || 'global'; } catch (e) { return 'global'; }
+}
+function _botPrefix() {
+    // dynamic per-bot prefix (owner rule: never hardcode .j/.s in card text)
+    try { return require('../botConfig').getPrefix() || '.'; } catch (e) { return '.'; }
 }
 
 let _lastFiredKey = null;
@@ -142,6 +146,7 @@ async function _broadcastOnce(sock, BOT_MARKER, win) {
         try {
             buf = await notice.renderAlignmentCard({
                 regMinutes: ev.registrationEndsAt ? Math.max(0, Math.round((ev.registrationEndsAt - Date.now()) / 60000)) : null,
+                prefix: _botPrefix(),
             });
         } catch (e) { /* text fallback below */ }
 
@@ -151,11 +156,11 @@ async function _broadcastOnce(sock, BOT_MARKER, win) {
                 if (buf) {
                     await sock.sendMessage(gc, {
                         image: buf,
-                        caption: `${BOT_MARKER}🌍 *THE WORLDS ALIGN*\n\nAn alignment-scale Guild War is forming on its own. \`.j gw join\` enters from any group - players deploy into bot DMs.\n_Mark/unmark this GC: \`.j gw rpg off\`_`,
+                        caption: `${BOT_MARKER}🌍 *THE WORLDS ALIGN*\n\nAn alignment-scale Guild War is forming on its own. \`${_botPrefix()} gw join\` enters from any group - players deploy into bot DMs.\n_Mark/unmark this GC: \`${_botPrefix()} gw rpg off\`_`,
                     });
                 } else {
                     await sock.sendMessage(gc, {
-                        text: `${BOT_MARKER}🌍 *THE WORLDS ALIGN* - an alignment-scale Guild War is forming. \`.j gw join\` to enter.`,
+                        text: `${BOT_MARKER}🌍 *THE WORLDS ALIGN* - an alignment-scale Guild War is forming. \`${_botPrefix()} gw join\` to enter.`,
                     });
                 }
                 sent++;

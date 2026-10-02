@@ -252,7 +252,9 @@ function payloadGet(payload, key) {
 }
 
 // ── resolve DM input against the CURRENT room's encounter ──
-// returns { text, handled, sentCombat }
+// returns { text, handled, sentCombat, afterImage? }
+// afterImage = the CHANGED room scene (owner directive: show what the room
+// looks like after the interaction resolves).
 async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq } = {}) {
     const norm = String(input || '').trim().toLowerCase();
     const P = room.payload || {};
@@ -272,7 +274,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
                     await points.award(eventDoc.eventId, player.jid, gp, 'puzzle', { coopBonus: room.occupants?.length > 1 });
                     await awardRoomRelic(eventDoc, player, room);
                     feed.queue(eventDoc.eventId, 'normal', `🧩 ${player.name} solved the seal of a ${roomFlavor(room)}.`);
-                    return { handled: true, text: `🔓 *The mechanism clicks open!* (+GP${P.puzzle ? '' : ''}) The way onward is clear.` };
+                    return { handled: true, afterImage: await clearedScene(eventDoc, player, room), text: `🔓 *The mechanism clicks open!* (+GP${P.puzzle ? '' : ''}) The way onward is clear.` };
                 }
                 return { handled: true, text: `Someone else solved this seal a heartbeat before you.` };
             }
@@ -294,7 +296,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             await awardRoomRelic(eventDoc, player, room);
             if (P.zeni) await points.award(eventDoc.eventId, player.jid, 5, 'discovery');
             feed.queue(eventDoc.eventId, 'normal', `🔍 ${player.name} unearthed something from a ${roomFlavor(room)}.`);
-            return { handled: true, text: `⛏️ You unearth it! ${P.zeni ? 'A small cache of Zeni comes with it. ' : ''}Check \`relics\` - hand it in with \`handin\` when ready.` };
+            return { handled: true, afterImage: await clearedScene(eventDoc, player, room), text: `⛏️ You unearth it! ${P.zeni ? 'A small cache of Zeni comes with it. ' : ''}Check \`relics\` - hand it in with \`handin\` when ready.` };
         }
         case 'reward': {
             if (norm !== 'take') return { handled: false };
@@ -303,7 +305,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             await awardRoomRelic(eventDoc, player, room);
             await points.award(eventDoc.eventId, player.jid, CFG.POINTS.ROOM_CLEAR.reward, 'reward');
             feed.queue(eventDoc.eventId, 'normal', `💠 ${player.name} plundered an old-world vault.`);
-            return { handled: true, text: `💠 Claimed! The vault is yours. Hand the relic in with \`handin\` to secure its value.` };
+            return { handled: true, afterImage: await clearedScene(eventDoc, player, room), text: `💠 Claimed! The vault is yours. Hand the relic in with \`handin\` to secure its value.` };
         }
         case 'secret': {
             if (payloadGet(P, 'boss')) {
@@ -316,7 +318,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             await awardRoomRelic(eventDoc, player, room);
             await points.award(eventDoc.eventId, player.jid, CFG.POINTS.ROOM_CLEAR.secret, 'secret');
             feed.queue(eventDoc.eventId, 'major', `WORLD EVENT - ${player.name} uncovered a hidden chamber of the Ruins!`);
-            return { handled: true, text: `✨ A true find! This will be remembered.` };
+            return { handled: true, afterImage: await clearedScene(eventDoc, player, room), text: `✨ A true find! This will be remembered.` };
         }
 
         // ── hazard ──
@@ -327,7 +329,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
                 const claim = await rooms.clearRoom(eventDoc.eventId, room.key, player);
                 if (claim.won) {
                     await points.award(eventDoc.eventId, player.jid, CFG.POINTS.ROOM_CLEAR.hazard, 'hazard');
-                    return { handled: true, text: `🤸 You slip past the hazard unscathed. (+GP) The way is open.` };
+                    return { handled: true, afterImage: await clearedScene(eventDoc, player, room), text: `🤸 You slip past the hazard unscathed. (+GP) The way is open.` };
                 }
                 return { handled: true, text: `The hazard is spent - someone braved it first.` };
             }
@@ -342,18 +344,19 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             const claim = await rooms.clearRoom(eventDoc.eventId, room.key, player);
             if (!claim.won) return { handled: true, text: `The anomaly has already been disturbed.` };
             const kind = payloadGet(P, 'anomaly') || 'relic_ping';
+            const afterImage = await clearedScene(eventDoc, player, room);
             if (kind === 'relic_ping') {
                 const target = nearestRelicRoom(eventDoc, player.roomId);
-                return { handled: true, text: target ? `🌀 Through the rift you glimpse treasure ${describeDirection(eventDoc, player.roomId, target)}.` : `🌀 The rift shows only dust.` };
+                return { handled: true, afterImage, text: target ? `🌀 Through the rift you glimpse treasure ${describeDirection(eventDoc, player.roomId, target)}.` : `🌀 The rift shows only dust.` };
             }
             if (kind === 'gp_windfall') {
                 await points.award(eventDoc.eventId, player.jid, 20, 'anomaly');
-                return { handled: true, text: `🌀 Old-world coin rains through the rift! (+GP)` };
+                return { handled: true, afterImage, text: `🌀 Old-world coin rains through the rift! (+GP)` };
             }
             if (kind === 'hp_drain') {
-                return { handled: true, text: `🌀 The rift drinks deeply of you. You feel weaker...` };
+                return { handled: true, afterImage, text: `🌀 The rift drinks deeply of you. You feel weaker...` };
             }
-            return { handled: true, text: `🌀 The fog of war thins - distant paths flicker in your mind.` };
+            return { handled: true, afterImage, text: `🌀 The fog of war thins - distant paths flicker in your mind.` };
         }
 
         // ── lore / landmark / empty ──
@@ -361,7 +364,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             if (!norm || norm === 'lore' || norm === 'read') {
                 await points.award(eventDoc.eventId, player.jid, CFG.POINTS.ROOM_CLEAR.lore, 'lore');
                 await rooms.clearRoom(eventDoc.eventId, room.key, player);
-                return { handled: true, text: `📖 You study the inscriptions and carry their memory with you. (+GP)` };
+                return { handled: true, afterImage: await clearedScene(eventDoc, player, room), text: `📖 You study the inscriptions and carry their memory with you. (+GP)` };
             }
             return { handled: false };
         case 'landmark': {
@@ -370,7 +373,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             if (claim.won) {
                 await points.award(eventDoc.eventId, player.jid, CFG.POINTS.ROOM_CLEAR.landmark, 'landmark');
                 feed.queue(eventDoc.eventId, 'major', `WORLD EVENT - ${player.name} of ${player.guildName} recorded *${P.landmarkName || 'a landmark'}* for their guild!`);
-                return { handled: true, text: `🗿 Recorded for ${player.guildName}. The Association takes note. (+GP)` };
+                return { handled: true, afterImage: await clearedScene(eventDoc, player, room), text: `🗿 Recorded for ${player.guildName}. The Association takes note. (+GP)` };
             }
             return { handled: true, text: `This landmark was already recorded.` };
         }
@@ -389,6 +392,16 @@ function roomFlavor(room) {
     return { combat: 'guarded hall', puzzle: 'sealed chamber', discovery: 'buried cache', reward: 'old vault',
              hazard: 'trapped passage', secret: 'hidden chamber', anomaly: 'world-thin hall', coop: 'guarded hall',
              core: 'World Core', lore: 'inscribed hall', landmark: 'landmark' }[room.type] || 'chamber';
+}
+
+// the changed room: cleared-state scene (best-effort, never blocks)
+async function clearedScene(eventDoc, player, room) {
+    try {
+        const encounterScenes = require('./encounterScenes');
+        return await encounterScenes.renderScene(eventDoc, player, room, { state: 'cleared' });
+    } catch (e) {
+        return null;
+    }
 }
 
 async function awardRoomRelic(eventDoc, player, room) {
@@ -455,19 +468,37 @@ async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = 
         rank: 'C', background: theme.bg, groq,
         greeting: variant ? `${variant.line}` : null,
         name: isCore ? 'World Core Guardian' : (variant ? `Ruins ${variant.name}` : 'Ruins Encounter'),
+        // ⚔️ square map rides into the battle scene (bottom-right panel)
+        mapFragment: require('./encounterScenes').buildMapFragment(eventDoc, player, room),
     });
 }
 
-// ── room intro WITH encounter card: { text, image } (image may be null) ──
-// The proven text path (onRoomEnter) stays untouched; the card rides along.
+// ── room intro WITH encounter scene: { text, image, extraImage } ──
+// 2026-10-02 owner directive: every room renders as a battle-style scene
+// (player standing, per-type prop, square map bottom-right, NO combat UI).
+// Exploration rooms: scene image rides the intro text. Puzzle rooms ALSO
+// emit the actual game board as a follow-up image card (extraImage).
+// Combat kinds keep the classic battle render (enemies + square map panel)
+// produced by startCombat, so no scene here. The parchment card remains
+// only as a render-failure fallback - never the primary visual.
 async function roomIntro(eventDoc, player, room) {
     const text = await onRoomEnter(eventDoc, player, room);
     try {
-        if (room.state === 'CLEARED') return { text };
+        const encounterScenes = require('./encounterScenes');
         const P = room.payload || {};
         const theme = worldTheme(payloadGet(P, 'theme') || eventDoc.deadWorld);
         const variant = variantOf(room);
         let body = null, actionHint = null, title = null;
+
+        // combat kinds: the battle image IS the intro (enemies + map panel)
+        if (['combat', 'coop', 'core'].includes(room.type)) return { text };
+
+        if (room.state === 'CLEARED') {
+            // the changed room: show what it looks like now
+            const cleared = await encounterScenes.renderScene(eventDoc, player, room, { state: 'cleared' });
+            if (cleared) return { text, image: cleared };
+            return { text };
+        }
         switch (room.type) {
             case 'combat':
                 body = variant ? variant.line : 'Something moves in the dark - enemies bar the way. The room must be resolved before you may move on.';
@@ -519,6 +550,26 @@ async function roomIntro(eventDoc, player, room) {
             default:
                 return { text }; // empty rooms need no card
         }
+        // primary visual: the battle-style scene (prop + square map, no UI)
+        const scene = await encounterScenes.renderScene(eventDoc, player, room, { state: 'intact' });
+        if (scene) {
+            const out = { text, image: scene };
+            // puzzle rooms: the actual game board rides as the follow-up card
+            if (room.type === 'puzzle') {
+                const pz = payloadGet(P, 'puzzle');
+                if (pz) {
+                    const puzzleCards = require('./puzzleCards');
+                    out.extraImage = await puzzleCards.renderPuzzleCard({
+                        kind: pz.kind, prompt: pz.prompt,
+                        attemptsUsed: pz.attemptsUsed || 0,
+                        attemptsMax: pz.maxAttempts || CFG.PUZZLE.ATTEMPTS,
+                        world: theme.name, ring: Math.max(1, Math.round((room.ring || 0) * 4) + 1),
+                    });
+                }
+            }
+            return out;
+        }
+        // fallback: parchment decree card (scene render failure never blocks play)
         const encounterCards = require('./encounterCards');
         const image = await encounterCards.renderRoomCard({
             type: room.type,
