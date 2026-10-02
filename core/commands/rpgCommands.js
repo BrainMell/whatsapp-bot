@@ -1562,7 +1562,7 @@ async function displayEquipmentCard(sock, chatId, senderJid, senderName) {
             kind: 'EQUIP',
             nickname,
             sealText: rankLetter,
-            caption: `${worn.length}/9 slots filled - repair at .j blacksmith`,
+            caption: `${worn.length}/9 slots filled - repair at ${getPrefix()} blacksmith`,
             slots,
             playerClass: String(classInfo?.id || '').toUpperCase(),
             playerIndex: econUser?.spriteIndex || 0,

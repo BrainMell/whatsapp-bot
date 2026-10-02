@@ -174,13 +174,15 @@ function _asciiFirstWorld(t) {
 }
 
 function _asciiWorldBeyond(t) {
+    // 🔄 dynamic per-bot prefix (owner rule: never hardcode .j/.s/.jk)
+    const seeLine = `  |      inside - see ${P()} world )  |`;
     const lines = [
         '*THE WORLD BEYOND*',
         '```',
         '  +-------------------------------+',
         '  |                               |',
         '  |    ( the First World rides    |',
-        '  |      inside - see .j world )  |',
+        seeLine,
         '  |                               |',
         '  |   THE REST IS NOT NAMED       |',
         '  |                               |',

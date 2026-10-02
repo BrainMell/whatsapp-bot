@@ -1510,7 +1510,7 @@ async function cmdAnim(senderJid, reply, chatId, args = []) {
     await setUserRenderMode(senderJid, 'hybrid');
     return reply(
       `🎬 *Animated Hybrid - ENABLED*\n\n` +
-      `.jk coll and .jk deck will now produce animated MP4s by default.\n\n` +
+      `${p} coll and ${p} deck will now produce animated MP4s by default.\n\n` +
       `*Commands:*\n` +
       `• \`${p} anim off\` - switch to static PNG\n` +
       `• \`${p} coll --static\` - one-shot static (overrides preference)\n` +
@@ -1522,7 +1522,7 @@ async function cmdAnim(senderJid, reply, chatId, args = []) {
     await setUserRenderMode(senderJid, 'static');
     return reply(
       `🖼️ *Static PNG - ENABLED*\n\n` +
-      `.jk coll and .jk deck will now produce static PNGs by default.\n\n` +
+      `${p} coll and ${p} deck will now produce static PNGs by default.\n\n` +
       `*Commands:*\n` +
       `• \`${p} anim on\` - switch back to animated hybrid (default)\n` +
       `• \`${p} coll --anim\` - one-shot hybrid (overrides preference)\n` +

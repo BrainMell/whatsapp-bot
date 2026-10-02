@@ -848,7 +848,10 @@ async function renderFirstWorldSheet(t = Date.now()) {
         _centered(ctx, 'timelines are not mapped. every world holds more than the guild can chart',
             1242, 'italic 13px "IM Fell Italic"', PAL.inkSoft);
         _liveStrip(ctx, 1272);
-        _centered(ctx, '".j world" - the chart every adventurer carries',
+        // 🔄 dynamic per-bot prefix (owner rule) - resolve at draw time via the
+        // bot's async context; '.' fallback outside any bot context
+        const _pfx1 = (require('../../botConfig').get()?.getPrefix() || '.').trim();
+        _centered(ctx, `"${_pfx1} world" - the chart every adventurer carries`,
             1352, 'italic 13px "IM Fell Italic"', PAL.inkSoft);
         _waxSeal(ctx, 80, H - 62, 'I');
     });
@@ -1022,7 +1025,10 @@ function renderPresenceOfOrderSheet(t = Date.now()) {
         _centered(ctx, 'timelines are not mapped. every world holds more than the guild can chart',
             1242, 'italic 13px "IM Fell Italic"', PAL.inkSoft);
         _liveStrip(ctx, 1272);
-        _centered(ctx, '".j world order" - the chart of the center',
+        // 🔄 dynamic per-bot prefix (owner rule) - resolve at draw time via the
+        // bot's async context; '.' fallback outside any bot context
+        const _pfx2 = (require('../../botConfig').get()?.getPrefix() || '.').trim();
+        _centered(ctx, `"${_pfx2} world order" - the chart of the center`,
             1352, 'italic 13px "IM Fell Italic"', PAL.inkSoft);
         _waxSeal(ctx, 80, H - 62, 'O');
     });

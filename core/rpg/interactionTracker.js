@@ -31,6 +31,7 @@
 //     error - it can NEVER break or slow the message pipeline
 
 const economy = require('./economy');
+const botConfig = require('../../botConfig');
 
 const MAX_PAIRS = 40;
 const MAX_COUNT = 300;
@@ -269,7 +270,7 @@ function timeAgo(ts) {
 function renderPairHistory(jid1, jid2) {
   try {
     if (!jid1 || !jid2) {
-      return { ok: false, text: '❌ Tag two people (or reply to one) - e.g. `.j bond @a @b`' };
+      return { ok: false, text: `❌ Tag two people (or reply to one) - e.g. \`${botConfig.getPrefix()} bond @a @b\`` };
     }
     if (jid1 === jid2) {
       return { ok: false, text: '❌ Tag two *different* people to see their interaction history.' };

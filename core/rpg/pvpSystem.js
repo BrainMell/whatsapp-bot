@@ -330,7 +330,7 @@ function challengePlayer(chatId, challengerJid, targetJid, stake = 0, opts = {})
         const challengerUser = economy.getUser(resolvedChallenger);
         const targetUser = economy.getUser(resolvedTarget);
         if (!challengerUser?.activeSummonId) {
-            return { success: false, message: '❌ You need a deployed summon to issue a summon duel! Use `.s summon deploy <#>` first.' };
+            return { success: false, message: `❌ You need a deployed summon to issue a summon duel! Use \`${botConfig.getPrefix()} summon deploy <#>\` first.` };
         }
         if (!targetUser?.activeSummonId) {
             return { success: false, message: `❌ ${targetUser?.nickname || economy.getDisplayName(resolvedTarget)} doesn't have a deployed summon!` };
