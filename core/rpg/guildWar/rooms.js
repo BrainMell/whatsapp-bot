@@ -148,7 +148,7 @@ async function setRoomPayload(eventId, roomKey, payloadPatch) {
 
 // ── inactivity: carried relics drop into the current room's loot ──
 async function dropCarriedRelics(eventId, jid, reason) {
-    const doc = await GuildWarEvent.findOne({ eventId }, { players: { $elemMatch: { jid } } });
+    const doc = await GuildWarEvent.findOne({ eventId }, { players: { $elemMatch: { jid } } }).lean();
     const p = doc?.players?.[0];
     if (!p || !p.relics || !p.relics.length) return 0;
     const dropped = p.relics;

@@ -22,7 +22,7 @@ async function getEventForPlayer(jid) {
         state: 'ACTIVE',
         'players.jid': jid,
         'players.status': { $ne: 'quit' },
-    });
+    }).lean(); // skip casting the full map on every DM action
 }
 
 function playerOf(eventDoc, jid) {
@@ -331,7 +331,7 @@ async function useRelic(eventDoc, player, arg, { sock, chatId, BOT_MARKER }) {
 }
 
 async function decrementCharges(eventId, jid, relicId) {
-    const doc = await GuildWarEvent.findOne({ eventId }, { players: { $elemMatch: { jid } } });
+    const doc = await GuildWarEvent.findOne({ eventId }, { players: { $elemMatch: { jid } } }).lean();
     const p = doc?.players?.[0];
     const relic = p?.relics?.find((r) => r.id === relicId);
     if (!relic) return;

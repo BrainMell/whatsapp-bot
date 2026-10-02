@@ -45,13 +45,17 @@ function viewOf(doc) {
 async function getEvent(eventId, { fresh = false } = {}) {
     const v = activeViews.get(eventId);
     if (v && !fresh) return v.doc;
-    const doc = await GuildWarEvent.findOne({ eventId });
+    // ⚔️ .lean(): skip mongoose casting of thousands of room subdocs on every
+    // read (measured: multi-second loop stalls without it at 100+ players).
+    // Lean POJOs are read-only views — ALL mutations go through atomic
+    // findOneAndUpdate helpers, so nothing here needs a full Document.
+    const doc = await GuildWarEvent.findOne({ eventId }).lean();
     if (!doc) { activeViews.delete(eventId); return null; }
     return viewOf(doc).doc;
 }
 
 async function getActiveEvents() {
-    const docs = await GuildWarEvent.find({ state: { $in: ['REGISTRATION', 'ACTIVE'] } });
+    const docs = await GuildWarEvent.find({ state: { $in: ['REGISTRATION', 'ACTIVE'] } }).lean();
     return docs.map((d) => viewOf(d).doc);
 }
 
@@ -128,7 +132,7 @@ async function registerPlayer(eventId, player) {
 }
 
 async function startEvent(eventId, { deadWorld = null, worldIds = null } = {}) {
-    const doc = await GuildWarEvent.findOne({ eventId, state: 'REGISTRATION' });
+    const doc = await GuildWarEvent.findOne({ eventId, state: 'REGISTRATION' }).lean();
     if (!doc) return { ok: false, reason: 'Event not in REGISTRATION.' };
     if (!doc.players.length) return { ok: false, reason: 'No players registered.' };
 
@@ -148,7 +152,7 @@ async function startEvent(eventId, { deadWorld = null, worldIds = null } = {}) {
     // spawn assignment: shuffle spawn keys (same-guild adjacency already minimized by farthest-point)
     const spawnKeys = mapEngine.makeRng(seed + ':spawns').shuffle(map.spawns);
     const playerDocs = doc.players.map((p, i) => ({
-        ...p.toObject(),
+        ...(p.toObject ? p.toObject({ depopulate: true }) : p),
         spawnRoomId: spawnKeys[i % spawnKeys.length],
         roomId: spawnKeys[i % spawnKeys.length],
         prevRoomId: spawnKeys[i % spawnKeys.length],

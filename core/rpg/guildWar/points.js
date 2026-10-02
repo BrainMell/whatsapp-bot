@@ -59,7 +59,7 @@ async function recordPvpWin(eventId, winner, loser) {
     const fresh = await GuildWarEvent.findOne(
         { eventId, players: { $elemMatch: { jid: winner.jid } } },
         { players: { $elemMatch: { jid: winner.jid } } }
-    );
+    ).lean();
     const freshWinner = fresh?.players?.[0] || winner;
     const gp = pvpWinGp(freshWinner, loser);
     if (gp > 0) await award(eventId, winner.jid, gp, 'pvp');
