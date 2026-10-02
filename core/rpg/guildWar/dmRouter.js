@@ -44,11 +44,21 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
     const prefix = String(opts.prefix || '.'); // dynamic per-bot prefix (owner rule)
     const raw = String(txt || '').trim();
     if (!raw) return null;
-    const norm = raw.toLowerCase().replace(/^\.j\s*/, ''); // tolerate prefix or not
+    // tolerate own prefix or not - strip the ACTUAL per-bot prefix dynamically
+    // (owner rule: never hardcode .j/.s). Legacy bare ".j" still tolerated.
+    const lower = raw.toLowerCase();
+    const norm = lower.startsWith(prefix.toLowerCase())
+        ? lower.slice(prefix.length).trim()
+        : lower.replace(/^\.j\s*/, '');
+
+    // ── ruins action grammar: any DM verb this router understands ──
+    const QUIET_ACTION_RE = /^(?:look|l|where(?:\s?am\s?i)?|map|gw map|relics|bag|status|score|rejoin|return|quit|leave|exit|accept|flee|handin(?:\s\S.*)?|use(?:\s\S.*)?|challenge(?:\s\S.*)?|share map(?:\s\S.*)?|move\s+(?:n|north|s|south|e|east|w|west|forward|back|left|right)|(?:n|north|s|south|e|east|w|west|forward|back|left|right))$/;
 
     const eventDoc = await getEventForPlayer(senderJid);
     if (!eventDoc) {
-        // not in an event: only "join" matters (during registration)
+        // not in an event: "join" matters (during registration); recognized
+        // ruins verbs get a guidance reply instead of dead silence (owner:
+        // "typing look or e does nothing" - never leave a DM unanswered)
         if (/^(join|gw join)$/.test(norm)) {
             const pending = await GuildWarEvent.findOne({ state: 'REGISTRATION', 'players.jid': { $ne: senderJid } }).sort({ createdAt: -1 });
             if (pending) {
@@ -60,6 +70,10 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
                 });
                 if (res) return { text: `✅ You are registered for *${pending.type === 'alignment' ? 'the Alignment' : 'the Guild War'}* (${pending.players.length} players). Stand by for deployment.` };
             }
+            return { text: `🕊️ *No war is registering right now.*\nMods raise the call in the GC: \`${prefix} gw start\`. Once a war opens, \`${prefix} gw join\` (or DM me \`join\`) gets you in.` };
+        }
+        if (QUIET_ACTION_RE.test(norm)) {
+            return { text: `🕯️ *The Ruins stand quiet.* No war is running right now.\n\nWhen one deploys, my DMs become your game screen: \`look\`, \`move n/s/e/w\`, \`map\`, \`relics\`, \`handin\`, \`challenge @name\`, \`status\`, \`quit\`.\nMods start it with \`${prefix} gw start\` - players join with \`${prefix} gw join\`.` };
         }
         return null;
     }

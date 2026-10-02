@@ -3912,6 +3912,20 @@ What to do:
         if (sock) {
           require("./rpg/guildWar")
             .state.tick(sock, BOT_MARKER)
+            .then(async (out) => {
+              // Wars auto-deployed on registration expiry: DM every champion
+              // the start card ("the war has begun + how you play").
+              const started = (out || []).filter((o) => o && o.auto === "started");
+              for (const s of started) {
+                try {
+                  const gw = require("./rpg/guildWar");
+                  const ev = await gw.state.getEvent(s.eventId, { fresh: true });
+                  if (ev) await gw.dmWarStartCards(sock, BOT_MARKER, ev, botConfig.getPrefix());
+                } catch (e) {
+                  console.error("[GuildWar] start-card DM:", e?.message);
+                }
+              }
+            })
             .catch((e) => console.error("[GuildWar] sweeper:", e?.message));
         }
         const results = loans.checkDueLoans();
@@ -8777,8 +8791,10 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                     try {
                       // ⚔️ GUILD WAR first: active-event DM actions (movement,
                       // relics, challenges). Returns null when not a Ruins action.
+                      // NOTE: `prefix` const is declared further down this scope
+                      // (TDZ) - NEVER reference it here. Use botConfig directly.
                       const gwResult = await require("./rpg/guildWar/dmRouter").handleDM(
-                        sock, senderJid, chatId, txt, BOT_MARKER, { prefix: (typeof prefix === "string" && prefix) || botConfig.getPrefix() },
+                        sock, senderJid, chatId, txt, BOT_MARKER, { prefix: botConfig.getPrefix() },
                       );
                       if (gwResult) {
                         if (gwResult.image) {

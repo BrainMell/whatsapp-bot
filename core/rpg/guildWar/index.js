@@ -185,6 +185,9 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
             const res = await state.startEvent(pending.eventId, { deadWorld: args[1] || null });
             if (!res.ok) return sock.sendMessage(chatId, { text: `❌ ${res.reason}` });
             feed.queue(pending.eventId, 'major', `The war has begun! ${res.event.players.length} champions deploy into the Ruins of a dead world.`);
+            // ⚔️ owner brief: DM every champion the start card ("the war has
+            // begun + how you play") - fire and forget, never block the GC reply
+            dmWarStartCards(sock, '\u200B', res.event, prefix).catch((e) => console.error('[GW] start-card DM:', e?.message));
             return sock.sendMessage(chatId, { text: `⚔️ *DEPLOYED!* ${res.event.players.length} players, grid ${res.event.side}×${res.event.side}.\nPlayers: open my DMs and \`look\` around.` });
         }
 
@@ -341,7 +344,30 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
     }
 }
 
+// ⚔️ DM the "war has begun + how you play" start card to every champion.
+// Fired on deploy - both manual forcestart and auto registration-expiry start.
+// Card is rendered ONCE per war (per-bot prefix), then sent to each player DM.
+async function dmWarStartCards(sock, BOT_MARKER = '\u200B', event, prefix = '.') {
+    if (!sock || !event) return 0;
+    const notice = require('./noticeCard');
+    const buf = await notice.renderWarStartCard({ prefix });
+    const players = (event.players || []).filter((p) => p && p.jid && p.status !== 'quit');
+    let sent = 0;
+    for (const p of players) {
+        try {
+            await sock.sendMessage(p.jid, {
+                image: buf,
+                caption: `${BOT_MARKER}⚔️ *THE WAR HAS BEGUN, ${p.name}.*\nYou are deployed into the Ruins of a dead world. My DMs are now your game screen - your first move is \`look\`.`,
+            });
+            sent += 1;
+        } catch (e) {
+            console.error('[GW] start card DM failed:', p.jid, e?.message);
+        }
+    }
+    return sent;
+}
+
 module.exports = {
     CFG, state, feed, points, encounters, rooms, mapEngine,
-    installCombatHooks, handleGroupCommand, _noteRetreat,
+    installCombatHooks, handleGroupCommand, dmWarStartCards, _noteRetreat,
 };
