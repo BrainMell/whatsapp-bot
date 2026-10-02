@@ -131,9 +131,15 @@ async function detectCategory(title, explicit) {
       return titles.some((x) => x.includes(nt) || (nt.length >= 5 && nt.includes(x)));
     });
     if (media.length) {
-      const fmts = media.map((m) => m.format).filter(Boolean);
-      if (fmts.includes("MANGA") && fmts.length === 1) category = "manga";
-      else category = "anime";
+      // 2026-10-02 format gate: the AniList ANIME-type search also returns
+      // MUSIC entries ("Casablanca" id 107907 format=MUSIC misrouted the 1942
+      // film to the anime chain). Only real media formats classify.
+      const fmts = media.map((m) => m.format).filter((f) =>
+        ["TV", "TV_SHORT", "MOVIE", "OVA", "ONA", "SPECIAL", "MANGA", "ONE_SHOT", "NOVEL"].includes(f));
+      if (fmts.length) {
+        if (fmts.includes("MANGA") && fmts.length === 1) category = "manga";
+        else category = "anime";
+      }
     }
   } catch { /* anilist unreachable - continue */ }
   // 2) TVMaze - type-aware: "Animation" routes to the cartoon chain (Ben 10
@@ -1070,6 +1076,29 @@ async function pickImageQuestion(ctx) {
     // build/load the pool ONCE per session per franchise, then shuffle ONCE
     const pool = await buildPool({ title: ctx.title, slug: ctx.slug, category: ctx.category, anilistId: ctx.anilistId, sessionRef: ctx.sessionRef });
     const verified = pool.records.filter((r) => r.image_url);
+    // DEAD-POOL RESCUE (2026-10-02): obscure/non-media entities ("Apollo 9")
+    // can end with 0 verified images while holding wiki metadata records.
+    // Run the per-record fallback chain (article named-file -> wikidata P18
+    // -> file-namespace search) on the closest-name records and adopt what
+    // passes the gate. Rescued images are franchise-level topics -> entity
+    // role, never "Who is this character?" clues.
+    if (!verified.length) {
+      const nt0 = _norm(ctx.title);
+      const cands = pool.records
+        .filter((r) => r.role !== "entity" && (r.article || r.name))
+        .sort((a, b) => ((_norm(b.name || "").includes(nt0) ? 1 : 0) - (_norm(a.name || "").includes(nt0) ? 1 : 0)))
+        .slice(0, 5);
+      for (const r of cands) {
+        const img = await resolveImageBytes(r, { qualifier: ctx.qualifier || ctx.title }).catch(() => null);
+        if (img && img.url) {
+          r.image_url = img.url;
+          r.role = r.role || "entity";
+          verified.push(r);
+          if (verified.length >= 3) break;
+        }
+      }
+      if (verified.length) console.log(`[Quiz] dead-pool rescue: +${verified.length} img(s) for "${ctx.title}" [${pool.category}]`);
+    }
     const recent = _recentKeys(frKey);
     const deep = verified.length >= (ctx.count || 5) * 3; // only skip recency when the pool can afford it
     const fresh = deep ? verified.filter((r) => !recent.map.has(recordKey(r.name))) : verified;
@@ -1094,10 +1123,22 @@ async function pickImageQuestion(ctx) {
     if (!img || s.usedHashes.has(img.hash)) return null;
     s.usedHashes.add(img.hash);
     const decoyCat = entityRecord.entityKind === "show" ? "tv" : entityRecord.entityKind;
-    const decoyPool = (imgSources.ENTITY_DECOYS[decoyCat] || []).filter((n) => _norm(n) !== _norm(entityRecord.name));
+    let decoyPool = (imgSources.ENTITY_DECOYS[decoyCat] || []).filter((n) => _norm(n) !== _norm(entityRecord.name));
+    if (decoyPool.length < 3) {
+      // rescued/unknown-kind entities (dead-pool rescue): same-pool topic
+      // names as decoys so non-media topics can still serve a question
+      decoyPool = decoyPool.concat(
+        ((s.pool && s.pool.records) || [])
+          .map((r) => r.name)
+          .filter((n) => n && n !== entityRecord.name && !decoyPool.includes(n))
+      );
+    }
     const others = fyShuffle(decoyPool).slice(0, 3);
     if (others.length < 3) return null;
-    const kindLabel = decoyCat === "game" ? "game" : decoyCat === "movie" ? "movie" : "TV show";
+    const kindLabel = decoyCat === "game" ? "game"
+      : decoyCat === "movie" ? "movie"
+      : decoyCat ? "TV show"
+      : ({ anime: "anime", manga: "manga", game: "game", movie: "movie", tv: "TV show", cartoon: "cartoon", comic: "comic" }[s.pool.category] || "media");
     const optionsPool = [entityRecord.name, ...others];
     const optOrder = fyShuffle(optionsPool.map((_, i) => i));
     const q = {
