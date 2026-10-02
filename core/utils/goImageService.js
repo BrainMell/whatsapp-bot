@@ -80,7 +80,7 @@ class GoImageService {
     // production for months with no Go-service OOM. So 3 concurrent slots
     // is a conservative bump that roughly halves image-command latency
     // under multi-user load without risking the Go service's RAM.
-    this._concurrency = 3;
+  this._concurrency = parseInt(process.env.GO_SERVICE_CONCURRENCY, 10) || 6; // 💡 2026-10-02: 3 -> 6 (#fec95a load test)
     this._activeOps = 0;
     this._waiters = [];
     if (!global.goServiceInitialized) {
@@ -122,7 +122,9 @@ class GoImageService {
    * that property: resolve/reject happens on the caller's promise, and
    * the slot-release happens in `finally` regardless of outcome.
    */
-  async _enqueue(op) {
+  async _enqueue(op, opts = {}) {
+    const waitBudget = opts.waitMs || 8000;
+    const priority = !!opts.priority;
     return new Promise((resolve, reject) => {
       // 💡 FIX 2026-08-03: Queue wait timeout.
       // If all 3 concurrency slots are busy with 10s timeouts, a 4th request
@@ -155,17 +157,25 @@ class GoImageService {
       if (this._activeOps < this._concurrency) {
         run();
       } else {
-        // Queue wait timeout - if we don't get a slot in 8s, reject so
-        // the caller can fall back gracefully instead of hanging the
-        // outer command for 45s.
+        // Queue wait timeout - if we don't get a slot within the wait
+        // budget, reject so the caller can fall back gracefully instead
+        // of hanging the outer command for 45s.
+        // 💡 2026-10-02 LOAD-TEST FIX (#fec95a): 24 simultaneous users with
+        // animated (ffmpeg) renders in the mix starved static combat
+        // renders past the fixed 8s budget (measured: 13/20 success).
+        // Combat ops now get (a) FRONT-OF-QUEUE priority and (b) a 20s
+        // budget; bulk renders keep 8s. Concurrency raised 3 -> 6
+        // (GO_SERVICE_CONCURRENCY env; Go RSS peaked 259MB of ~400MB
+        // available during the 24-user flood - measured safe).
         queueTimer = setTimeout(() => {
           if (started) return;
           // Remove our `run` from the waiters list so it doesn't fire later.
           const idx = this._waiters.indexOf(run);
           if (idx !== -1) this._waiters.splice(idx, 1);
-          reject(new Error('GoService queue timeout (8s wait for slot)'));
-        }, 8000);
-        this._waiters.push(run);
+          reject(new Error(`GoService queue timeout (${Math.round(waitBudget / 1000)}s wait for slot)`));
+        }, waitBudget);
+        if (priority) this._waiters.unshift(run);
+        else this._waiters.push(run);
       }
     });
   }
@@ -246,7 +256,7 @@ class GoImageService {
         console.error("GoService Combat Error:", error.message);
         throw error;
       }
-    });
+    }, { priority: true, waitMs: 20000 }); // 💡 #fec95a: interactive combat jumps the queue
   }
 
   /*
@@ -304,7 +314,7 @@ class GoImageService {
         console.error("GoService Animated Combat Error:", error.message);
         throw error;
       }
-    });
+    }, { priority: true, waitMs: 25000 }); // 💡 #fec95a: animated combat also interactive
   }
 
   /*
