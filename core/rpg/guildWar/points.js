@@ -47,9 +47,9 @@ function pvpWinGp(attacker, victim) {
     const ledger = attacker.pvpMeta || {};
     const victimState = ledger.get ? ledger.get(key) : ledger[key];
     const count = (victimState && victimState.count) || 0;
-    if (count >= CFG.PVP.SAME_VICTIM_FLOOR_AFTER) return 0;
+    if (count > CFG.PVP.SAME_VICTIM_FLOOR_AFTER) return 0; // floor after N decayed repeats
     const mult = Math.pow(CFG.PVP.SAME_VICTIM_DECAY, count);
-    return Math.max(0, Math.round(CFG.PVP.WIN_GP * mult));
+    return Math.max(0, Math.floor(CFG.PVP.WIN_GP * mult)); // floor: never rounds up a decayed payout
 }
 
 async function recordPvpWin(eventId, winner, loser) {
