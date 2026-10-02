@@ -47,6 +47,29 @@ const CFG = {
         CORE_GUARD_LEVEL_MULT: 2.5,         // world-core guardian level multiplier
         LIVES: 3,                           // per player per event
         RESPAWN_PROTECT_MS: 60 * 1000,
+        // ── battle encounter variants ("the various adjustments") ──
+        // Each variant reshapes the fight: enemy count/level, clear-reward
+        // multiplier, and the card subtitle. Seeded per-room at event start.
+        VARIANTS: {
+            SKIRMISH: { name: 'Skirmish', weight: 38, levelDelta: 0, countDelta: 0, gpMult: 1.0,
+                        note: 'a fair fight', danger: false,
+                        line: 'Scavengers bar the way — bold, but no veterans.' },
+            AMBUSH:   { name: 'Ambush', weight: 20, levelDelta: -1, countDelta: 1, gpMult: 1.2,
+                        note: 'they strike first, +20% spoils', danger: true,
+                        line: 'They were waiting for you. Blades flash from the dark.' },
+            ELITE:    { name: 'Elite Guard', weight: 13, levelDelta: 3, countDelta: -1, gpMult: 1.5,
+                        note: 'veterans, +50% spoils', danger: true,
+                        line: 'Old-war veterans — armoured, drilled, unhurried.' },
+            HORDE:    { name: 'Horde', weight: 15, levelDelta: -2, countDelta: 2, gpMult: 1.3,
+                        note: 'many, weak, +30% spoils', danger: true,
+                        line: 'A hungry pack floods the hall — too many to count.' },
+            CURSED:   { name: 'Cursed Ground', weight: 9, levelDelta: 1, countDelta: 0, gpMult: 1.6,
+                        note: 'the room drains you, +60% spoils', danger: true,
+                        line: 'The air itself bites here. The dead do not rest easy.' },
+            BOUNTY:   { name: 'Bounty Mark', weight: 5, levelDelta: 2, countDelta: 0, gpMult: 2.0,
+                        note: 'a war-lord worth double', danger: true,
+                        line: 'Their war-lord wears the silver of a bounty. Double spoils for the head.' },
+        },
     },
 
     // ── pvp ──

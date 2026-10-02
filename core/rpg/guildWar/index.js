@@ -50,7 +50,9 @@ function installCombatHooks() {
 
                 const claim = await rooms.clearRoom(meta.eventId, room.key, me);
                 if (claim.won) {
-                    const gpValue = CFG.POINTS.ROOM_CLEAR[room.type] ?? 10;
+                    // battle-variant adjustment: elite/cursed/bounty rooms pay more
+                    const variant = require('./encounters').variantOf(room);
+                    const gpValue = Math.round((CFG.POINTS.ROOM_CLEAR[room.type] ?? 10) * (variant?.gpMult || 1));
                     const coopBonus = (room.occupants || []).filter((j) => j !== jid)
                         .some((j) => ev.players.find((p) => p.jid === j)?.guildId === me.guildId);
                     await points.award(meta.eventId, jid, gpValue, 'room-clear', { coopBonus });

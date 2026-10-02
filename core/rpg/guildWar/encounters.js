@@ -29,6 +29,26 @@ const DEAD_WORLDS = [
 ];
 function worldTheme(worldKey) { return DEAD_WORLDS.find((w) => w.key === worldKey) || DEAD_WORLDS[0]; }
 
+// ── battle variants: weighted, deterministic pick per room seed ──
+function pickVariant(rng) {
+    const entries = Object.entries(CFG.COMBAT.VARIANTS || {});
+    if (!entries.length) return null;
+    const total = entries.reduce((s, [, v]) => s + (v.weight || 1), 0);
+    let roll = rng.next() * total;
+    for (const [key, v] of entries) {
+        roll -= (v.weight || 1);
+        if (roll <= 0) return { key, ...v };
+    }
+    return { key: entries[0][0], ...entries[0][1] };
+}
+
+function variantOf(room) {
+    const key = payloadGet(room.payload, 'variant');
+    if (!key) return null;
+    const v = (CFG.COMBAT.VARIANTS || {})[key];
+    return v ? { key, ...v } : null;
+}
+
 // ── seeding: server-side payload per room (called once at event start) ──
 function buildRoomPayload(eventDoc, room, map) {
     const rng = mapEngine.makeRng(`${eventDoc.seed}:${room.key}`);
@@ -38,8 +58,16 @@ function buildRoomPayload(eventDoc, room, map) {
 
     switch (room.type) {
         case 'combat': {
-            const count = rng.int(1, Math.min(3, 1 + Math.floor(room.ring * 3)));
-            payload.enemies = Array.from({ length: count }, () => ({ level: enemyLvl }));
+            const variant = pickVariant(rng);
+            let count = rng.int(1, Math.min(3, 1 + Math.floor(room.ring * 3)));
+            let lvl = enemyLvl;
+            if (variant) {
+                payload.variant = variant.key;
+                payload.gpMult = variant.gpMult || 1;
+                count = Math.max(1, Math.min(4, count + (variant.countDelta || 0)));
+                lvl = Math.max(1, enemyLvl + (variant.levelDelta || 0));
+            }
+            payload.enemies = Array.from({ length: count }, () => ({ level: lvl }));
             payload.boss = false;
             break;
         }
@@ -99,8 +127,11 @@ function buildRoomPayload(eventDoc, room, map) {
             break;
         }
         case 'coop': {
-            const count = rng.int(2, 3);
-            payload.enemies = Array.from({ length: count }, () => ({ level: enemyLvl + 2 }));
+            const variant = pickVariant(rng);
+            payload.variant = variant ? variant.key : undefined;
+            payload.gpMult = variant ? (variant.gpMult || 1) : 1;
+            const count = Math.max(1, Math.min(4, rng.int(2, 3) + (variant ? (variant.countDelta || 0) : 0)));
+            payload.enemies = Array.from({ length: count }, () => ({ level: Math.max(1, enemyLvl + 2 + (variant ? (variant.levelDelta || 0) : 0)) }));
             payload.coopEncounter = true;
             break;
         }
@@ -408,6 +439,8 @@ async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = 
     const guildAdventure = require('../guildAdventure');
     const theme = worldTheme(payloadGet(room.payload, 'theme') || eventDoc.deadWorld);
     const enemySpecs = payloadGet(room.payload, 'enemies') || [{ level: 10 }];
+    const variant = variantOf(room);
+    const isCore = !!payloadGet(room.payload, 'coreGuardian');
 
     // pull enemies from the level pools (real enemy templates) + world flavor names
     const enemies = enemySpecs.map((e) => {
@@ -420,13 +453,89 @@ async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = 
         enemies: enemies.filter((e) => e.type),
         eventId: eventDoc.eventId, roomKey: room.key,
         rank: 'C', background: theme.bg, groq,
-        greeting: null,
-        name: P.coreGuardian ? 'World Core Guardian' : 'Ruins Encounter',
+        greeting: variant ? `${variant.line}` : null,
+        name: isCore ? 'World Core Guardian' : (variant ? `Ruins ${variant.name}` : 'Ruins Encounter'),
     });
+}
+
+// ── room intro WITH encounter card: { text, image } (image may be null) ──
+// The proven text path (onRoomEnter) stays untouched; the card rides along.
+async function roomIntro(eventDoc, player, room) {
+    const text = await onRoomEnter(eventDoc, player, room);
+    try {
+        if (room.state === 'CLEARED') return { text };
+        const P = room.payload || {};
+        const theme = worldTheme(payloadGet(P, 'theme') || eventDoc.deadWorld);
+        const variant = variantOf(room);
+        let body = null, actionHint = null, title = null;
+        switch (room.type) {
+            case 'combat':
+                body = variant ? variant.line : 'Something moves in the dark — enemies bar the way. The room must be resolved before you may move on.';
+                actionHint = 'Type fight to engage. Fleeing retreats you and forfeits this room\'s spoils.';
+                break;
+            case 'coop':
+                body = variant ? variant.line : 'A guardian pack blocks this hall. Allies in the room may fight it together.';
+                actionHint = 'Type fight to engage — allies share the reward.';
+                break;
+            case 'core':
+                body = 'The heart of this dead world still beats here. A mighty guardian bars the way. First guild to breach it earns lasting glory.';
+                actionHint = 'Type fight to challenge the guardian.';
+                break;
+            case 'puzzle': {
+                const pz = payloadGet(P, 'puzzle');
+                body = (pz && pz.prompt) || 'A mechanism blocks the far door.';
+                actionHint = `Reply with your answer — ${CFG.PUZZLE.ATTEMPTS} attempts. Wrong answers have a cost.`;
+                break;
+            }
+            case 'discovery':
+                body = payloadGet(P, 'text') || 'Something is hidden here.';
+                actionHint = 'Type dig to unearth it.';
+                break;
+            case 'reward':
+                body = 'A vault-chamber of the old world — untouched since the world died.';
+                actionHint = 'Type take to claim what lies within.';
+                break;
+            case 'hazard':
+                body = payloadGet(P, 'hazardText') || 'Danger lurks here.';
+                actionHint = 'Type cross to attempt passage.';
+                break;
+            case 'lore':
+                body = payloadGet(P, 'lore') || 'Old words cover these walls.';
+                actionHint = 'Type read to study the inscriptions.';
+                break;
+            case 'secret':
+                body = payloadGet(P, 'boss') ? 'A hidden chamber — and something ancient guards it.' : 'A hidden chamber! The air shivers with concentrated power.';
+                actionHint = payloadGet(P, 'boss') ? 'Type fight — or flee now.' : 'Type claim to take what it holds.';
+                break;
+            case 'anomaly':
+                body = 'Reality thins here — the walls between worlds bleed through.';
+                actionHint = 'Type touch to interact... or move on.';
+                break;
+            case 'landmark':
+                title = payloadGet(P, 'landmarkName') || null;
+                body = payloadGet(P, 'lore') || 'A marker of the old world.';
+                actionHint = 'Type record to claim it for your guild.';
+                break;
+            default:
+                return { text }; // empty rooms need no card
+        }
+        const encounterCards = require('./encounterCards');
+        const image = await encounterCards.renderRoomCard({
+            type: room.type,
+            variant: (room.type === 'combat' || room.type === 'coop') ? variant : null,
+            title, body, actionHint,
+            world: theme.name,
+            ring: room.ring,
+            boss: room.type === 'core' || (room.type === 'secret' && !!payloadGet(P, 'boss')),
+        });
+        return { text, image };
+    } catch (e) {
+        return { text }; // card failure never blocks play
+    }
 }
 
 module.exports = {
     DEAD_WORLDS, worldTheme,
-    buildRoomPayload, onRoomEnter, resolveInput, startRoomCombat,
-    nearestRelicRoom, describeDirection, awardRoomRelic,
+    buildRoomPayload, onRoomEnter, roomIntro, resolveInput, startRoomCombat,
+    nearestRelicRoom, describeDirection, awardRoomRelic, variantOf, pickVariant,
 };

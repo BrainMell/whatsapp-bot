@@ -122,17 +122,17 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER) {
         const ctxDoc = await state.getMoveContext(eventDoc.eventId, dest);
         const me = { ...player, roomId: dest, prevRoomId: player.roomId };
         const newRoom = ctxDoc.room;
-        const intro = await encounters.onRoomEnter(ctxDoc, me, newRoom);
+        const intro = await encounters.roomIntro(ctxDoc, me, newRoom);
 
         // meeting other players
         const others = (newRoom.occupants || []).filter((j) => j !== senderJid)
             .map((j) => (ctxDoc.players || []).find((p) => p.jid === j)).filter(Boolean);
         const foes = others.filter((o) => o.guildId !== me.guildId);
         const mates = others.filter((o) => o.guildId === me.guildId);
-        const lines = [intro];
+        const lines = [intro.text];
         if (mates.length) lines.push(`🤝 Your guildmate${mates.length > 1 ? 's' : ''} ${mates.map((m) => m.name).join(', ')} ${mates.length > 1 ? 'are' : 'is'} here — work together for a shared reward.`);
         if (foes.length) lines.push(`⚠️ ${foes.map((f) => `${f.name} of ${f.guildName}`).join(', ')} ${foes.length > 1 ? 'are' : 'is'} here — rival guild. \`challenge @${foes[0].name}\` or move carefully... (they may challenge YOU).`);
-        return { text: lines.join('\n\n') };
+        return { text: lines.join('\n\n'), image: intro.image || undefined };
     }
 
     // ── personal map ──
@@ -150,7 +150,8 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER) {
         const ctxDoc = await state.getMoveContext(eventDoc.eventId, player.roomId);
         if (!ctxDoc || !ctxDoc.room) return { text: 'You are between chambers...' };
         const me = player;
-        return { text: await encounters.onRoomEnter(ctxDoc, me, ctxDoc.room) };
+        const intro = await encounters.roomIntro(ctxDoc, me, ctxDoc.room);
+        return { text: intro.text, image: intro.image || undefined };
     }
 
     // ── relics ──
@@ -307,8 +308,8 @@ async function useRelic(eventDoc, player, arg, { sock, chatId, BOT_MARKER }) {
         });
         await decrementCharges(eventDoc.eventId, player.jid, match.id);
         const me = playerOf(fresh, player.jid);
-        const intro = await encounters.onRoomEnter(fresh, me, destRoom);
-        return { text: `✨ You blink through the stones... skipped rooms yield nothing.\n\n${intro}` };
+        const intro = await encounters.roomIntro(fresh, me, destRoom);
+        return { text: `✨ You blink through the stones... skipped rooms yield nothing.\n\n${intro.text}`, image: intro.image || undefined };
     }
     if (match.category === 'ward') {
         // ward applies to the next combat: attach buff to the room combat via player pvpMeta

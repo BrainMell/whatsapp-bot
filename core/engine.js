@@ -29520,6 +29520,36 @@ _(or reply to their message)_
                   }
 
                   // ============================================
+                  // ⚔️ GUILD WAR — THE RUINS (`${prefix} gw` / `${prefix} wr` / `${prefix} war`)
+                  // Mods: start / forcestart / end / abort · Players: join / status.
+                  // After deployment players act in bot DMs (move/look/map/relics/
+                  // handin/challenge) — see core/rpg/guildWar/. `wr` and `war` are
+                  // first-class aliases of `gw` (owner ask: keep the old switch alive).
+                  // ============================================
+                  if (
+                    lowerTxt.startsWith(`${prefix} gw`) ||
+                    lowerTxt.startsWith(`${prefix} wr`) ||
+                    lowerTxt.startsWith(`${prefix} war`)
+                  ) {
+                    const gwRest = lowerTxt.startsWith(`${prefix} gw`)
+                      ? lowerTxt.substring(`${prefix} gw`.length)
+                      : lowerTxt.startsWith(`${prefix} wr`)
+                        ? lowerTxt.substring(`${prefix} wr`.length)
+                        : lowerTxt.substring(`${prefix} war`.length);
+                    const gwArgs = gwRest.trim() ? gwRest.trim().split(/\s+/) : [];
+                    let gwSenderName = 'Champion';
+                    try { gwSenderName = economy.getDisplayName(senderJid) || gwSenderName; } catch (e) {}
+                    try {
+                      await require('./rpg/guildWar').handleGroupCommand(
+                        sock, chatId, senderJid, gwSenderName, gwArgs, { m },
+                      );
+                    } catch (gwErr) {
+                      console.error('⚔️ [GuildWar] command error:', gwErr.message);
+                    }
+                    return;
+                  }
+
+                  // ============================================
                   // Don't forget to update the allCommands array for the unknown command handler:
                   // Add these to the allCommands array (around line 6023):
                   //
@@ -30050,6 +30080,12 @@ _(or reply to their message)_
                       "murder investigate",
                       "murder end",
                       "murder help",
+                      "gw",
+                      "gw start",
+                      "gw join",
+                      "gw status",
+                      "wr",
+                      "war",
                       "shop",
                       "buy",
                       "evolve",
