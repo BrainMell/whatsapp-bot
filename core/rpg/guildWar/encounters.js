@@ -59,7 +59,8 @@ function buildRoomPayload(eventDoc, room, map) {
     switch (room.type) {
         case 'combat': {
             const variant = pickVariant(rng);
-            let count = rng.int(1, Math.min(3, 1 + Math.floor(room.ring * 3)));
+            const ringSafe = Number.isFinite(room.ring) ? room.ring : 0; // NaN ring -> empty enemies (fight bricked)
+            let count = rng.int(1, Math.max(1, Math.min(3, 1 + Math.floor(ringSafe * 3))));
             let lvl = enemyLvl;
             if (variant) {
                 payload.variant = variant.key;
@@ -451,7 +452,10 @@ function describeDirection(eventDoc, fromKey, toKey) {
 async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = {}) {
     const guildAdventure = require('../guildAdventure');
     const theme = worldTheme(payloadGet(room.payload, 'theme') || eventDoc.deadWorld);
-    const enemySpecs = payloadGet(room.payload, 'enemies') || [{ level: 10 }];
+    // ⚔️ robustness: an empty enemies array (e.g. NaN-ring map build) must
+    // never brick a fight - always fall back to a ring-scaled default spec.
+    const rawSpecs = payloadGet(room.payload, 'enemies');
+    const enemySpecs = (Array.isArray(rawSpecs) && rawSpecs.length) ? rawSpecs : [{ level: 10 + Math.round((room.ring || 0) * 6) }];
     const variant = variantOf(room);
     const isCore = !!payloadGet(room.payload, 'coreGuardian');
 
