@@ -15736,7 +15736,7 @@ Tune it:
                         const info = _anOk.safelistInfo();
                         const lines = info.recent.map((r) => `• ${r.hash}… by ${String(r.by || "?").split("@")[0]}${r.at ? ` (${new Date(r.at).toLocaleDateString()})` : ""}`).join("\n") || "• (none yet)";
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + `🖼 *Not-nude safelist* — ${info.size} image(s)\n${lines}`, 
+                          text: BOT_MARKER + `🖼 *Not-nude safelist* - ${info.size} image(s)\n${lines}`, 
                         }, { quoted: m });
                       } else if (sub === "clear") {
                         const before = _anOk.safelistInfo().size;
@@ -15770,7 +15770,7 @@ Tune it:
                           _anOk.safelistAdd(resolved.hash, { by: senderJid, chat: chatId, kind: "manual" });
                           const infoOk = _anOk.safelistInfo();
                           await sock.sendMessage(chatId, {
-                            text: BOT_MARKER + `✅ Marked as *NOT nude* (${resolved.hash.slice(0, 12)}…, via ${resolved.source}).\n_This exact image will never be flagged or deleted again — globally (${infoOk.size} safelisted)._`,
+                            text: BOT_MARKER + `✅ Marked as *NOT nude* (${resolved.hash.slice(0, 12)}…, via ${resolved.source}).\n_This exact image will never be flagged or deleted again - globally (${infoOk.size} safelisted)._`,
                           }, { quoted: m });
                         }
                       }
@@ -15857,11 +15857,11 @@ Mark not-nude: \`${botConfig.getPrefix()} antinude ok\` (reply to media / right 
                       const verdict = r.nsfw >= threshold ? "🚨 WOULD BE DELETED" : "✅ allowed";
                       const frameStr = r.frames.map((f) => `#${f.pos}${r.frames.length > 1 ? "s" : ""} ${(f.nsfw * 100).toFixed(0)}%`).join(" • ");
                       const partsStr = (r.parts && r.parts.length)
-                        ? r.parts.map((p) => `• ${p.label} — ${(p.score * 100).toFixed(0)}%`).join("\n")
+                        ? r.parts.map((p) => `• ${p.label} - ${(p.score * 100).toFixed(0)}%`).join("\n")
                         : "• none detected";
                       const what = { image: "Image", sticker: "Sticker", asticker: "Animated sticker", video: "Video" }[r.kind] || r.kind;
                       await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + `🔞 *NSFW CHECK — ${what}* (${(buf.length / 1024).toFixed(0)} KB)\n\n` +
+                        text: BOT_MARKER + `🔞 *NSFW CHECK - ${what}* (${(buf.length / 1024).toFixed(0)} KB)\n\n` +
                           `Final score: *${(r.nsfw * 100).toFixed(1)}%* (threshold ${(threshold * 100).toFixed(0)}%)\n` +
                           `Verdict: *${verdict}*\n\n` +
                           `Frames (${r.frames.length}${r.kind === "video" ? " sampled start→finish" : ""}):\n${frameStr}\n\n` +
@@ -20397,7 +20397,7 @@ _Kill dragons in the Dragon Dungeon (\`${botConfig.getPrefix()} solo dragon\`) o
                         const parts = txt.trim().split(/\s+/);
                         const newType = parts[3]?.toUpperCase();
                         if (!['ADVENTURER', 'MERCHANT', 'RESEARCH'].includes(newType)) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} guild archetype <type>\`\n\nValid archetypes:\n• *ADVENTURER* — +15% XP from dungeons\n• *MERCHANT* — +10% gold + 10% sell value\n• *RESEARCH* — −10% crafting material cost\n\n_Cost: 1,000,000 Zeni from the guild bank._` });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} guild archetype <type>\`\n\nValid archetypes:\n• *ADVENTURER* - +15% XP from dungeons\n• *MERCHANT* - +10% gold + 10% sell value\n• *RESEARCH* - −10% crafting material cost\n\n_Cost: 1,000,000 Zeni from the guild bank._` });
                         }
                         const guild = guilds.getGuild(userGuild);
                         if (guild.type === newType) {
@@ -28417,7 +28417,7 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                       text:
                         BOT_MARKER +
                         `┏━━━━━━━━━━━━━━━━━┓
-┃ ⚖️ *DEBATE* — AI-judged duel
+┃ ⚖️ *DEBATE* - AI-judged duel
 ┗━━━━━━━━━━━━━━━━━┛
 
 ⚔️ Start: \`${botConfig.getPrefix()} debate on <topic> @user\`
@@ -28484,7 +28484,7 @@ _Needs the bot to be a group admin (it locks the group and promotes the debaters
                         text:
                           BOT_MARKER +
                           `┏━━━━━━━━━━━━━━━━━┓
-┃ ⚖️ *DEBATE* — how to start
+┃ ⚖️ *DEBATE* - how to start
 ┗━━━━━━━━━━━━━━━━━┛
 
 ❌ You must name the two debaters.

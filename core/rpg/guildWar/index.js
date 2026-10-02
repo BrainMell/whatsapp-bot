@@ -15,6 +15,7 @@ const points = require('./points');
 const encounters = require('./encounters');
 const rooms = require('./rooms');
 const mapEngine = require('./mapEngine');
+const notice = require('./noticeCard');
 const guilds = require('../guilds');
 
 // ── combat hooks (installed once at boot) ──
@@ -69,7 +70,7 @@ function installCombatHooks() {
                             { $set: { coreClaimedBy: me.guildId } }
                         );
                         feed.queue(meta.eventId, 'major',
-                            `WORLD EVENT — ${me.name} of ${me.guildName} has breached the WORLD CORE! First-guild glory: +${CFG.POINTS.CORE_FIRST_GUILD} GP to every member!`);
+                            `WORLD EVENT - ${me.name} of ${me.guildName} has breached the WORLD CORE! First-guild glory: +${CFG.POINTS.CORE_FIRST_GUILD} GP to every member!`);
                         for (const mate of ev.players.filter((p) => p.guildId === me.guildId)) {
                             await points.award(meta.eventId, mate.jid, CFG.POINTS.CORE_FIRST_GUILD, 'core-guild', { ignoreCap: false });
                         }
@@ -79,7 +80,7 @@ function installCombatHooks() {
                     feed.queue(meta.eventId, 'normal',
                         `⚔️ ${me.name} cleared a ${room.type === 'core' ? 'World Core guardian' : 'guarded chamber'}${coopBonus ? ' (with guild help)' : ''}.`);
                 } else {
-                    feed.queue(meta.eventId, 'minor', `${me.name} arrived a moment too late — the chamber was already taken.`);
+                    feed.queue(meta.eventId, 'minor', `${me.name} arrived a moment too late - the chamber was already taken.`);
                 }
             } else {
                 // defeat: lives--, respawn at spawn corner with protection, room stays ACTIVE
@@ -92,7 +93,7 @@ function installCombatHooks() {
                         protectedUntil: Date.now() + CFG.COMBAT.RESPAWN_PROTECT_MS,
                         lastActionAt: Date.now(),
                     });
-                    feed.queue(meta.eventId, 'minor', `💀 ${player.name} fell in the Ruins — they will return at the edge (${freshLives} lives left).`);
+                    feed.queue(meta.eventId, 'minor', `💀 ${player.name} fell in the Ruins - they will return at the edge (${freshLives} lives left).`);
                 } else {
                     await rooms.dropCarriedRelics(meta.eventId, jid, 'final death');
                     await state.updatePlayer(meta.eventId, jid, {}, { status: 'defeated', lives: 0 });
@@ -117,7 +118,7 @@ async function _noteRetreat(eventId, jid) {
         protectedUntil: Date.now() + CFG.PVP.PROTECT_AFTER_LOSS_MS,
         lastActionAt: Date.now(),
     });
-    feed.queue(eventId, 'minor', `${p.name} fled a chamber — the spoils stay behind.`);
+    feed.queue(eventId, 'minor', `${p.name} fled a chamber - the spoils stay behind.`);
 }
 
 // ── group command surface: .j gw <sub> ──
@@ -144,7 +145,6 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
             const res = await state.createEvent({ type, hostGroupId: chatId, initiatedBy: senderJid });
             if (!res.ok) return sock.sendMessage(chatId, { text: `❌ ${res.reason}` });
 
-            const notice = require('./noticeCard');
             const regMin = Math.round(CFG.REGISTRATION_MS / 60000);
             const buf = await notice.renderWarCalledCard({
                 type,
@@ -154,10 +154,10 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
             });
             await sock.sendMessage(chatId, {
                 image: buf,
-                caption: `⚔️ *GUILD WAR ${type === 'alignment' ? '— WORLD ALIGNMENT' : 'CALLED'}*\n\n` +
+                caption: `⚔️ *GUILD WAR ${type === 'alignment' ? '- WORLD ALIGNMENT' : 'CALLED'}*\n\n` +
                     `Registration open: \`.j gw join\` (or DM me \`join\`).\n` +
                     `Registration closes in ${regMin} minutes · deployment automatic.\n` +
-                    `Players act through bot DMs — this group receives the live feed.\n` +
+                    `Players act through bot DMs - this group receives the live feed.\n` +
                     `_Initiated by ${senderName}._`,
             });
             return;
@@ -188,30 +188,74 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
 
         case 'status': case 'score': {
             const active = await state.getActiveEvents();
-            if (!active.length) return sock.sendMessage(chatId, { text: 'No war is running. Mods start one with `.j gw start`.' });
-            for (const ev of active) {
-                const standings = feed.computeScoreboard(ev).slice(0, 8)
-                    .map((g, i) => `${['🥇', '🥈', '🥉'][i] || '▫️'} ${g.name}: ${g.points} GP`).join('\n') || 'no scores yet';
-                await sock.sendMessage(chatId, {
-                    text: `⚔️ *Guild War* (${ev.type}, ${ev.state}) — ${ev.players.length} players\n` +
-                        `Ends: ${ev.endsAt ? new Date(ev.endsAt).toUTCString() : 'after registration'}\n\n${standings}`,
+            if (!active.length) {
+                return sock.sendMessage(chatId, {
+                    text: `🕊️ *No war is running right now.*\nThe Ruins stand quiet. Mods raise the call: \`.j gw start\`\nOrganic alignment wars announce themselves in RPG-friendly GCs (\`.j gw rpg on\`).`,
                 });
+            }
+            for (const ev of active) {
+                const board = feed.computeScoreboard(ev).slice(0, 8);
+                const standings = board
+                    .map((g, i) => `${['🥇', '🥈', '🥉'][i] || '▫️'} *${g.name}:* ${g.points} GP`).join('\n') || '_no scores yet: chambers, relics and the World Core await_';
+                const minsLeft = ev.endsAt ? Math.round((ev.endsAt - Date.now()) / 60000) : null;
+                const caption = `⚔️ *GUILD WAR: THE RUINS* (${ev.type}, ${ev.state})\n` +
+                    `👥 ${ev.players.length} champions · ${minsLeft != null ? `${Math.max(0, minsLeft)} min left` : 'no clock'}\n\n${standings}\n\n_Act in my DMs: \`look\`, \`move n/s/e/w\`, \`map\`._`;
+                try {
+                    const buf = await notice.renderWarStatusCard({
+                        type: ev.type, state: ev.state, players: ev.players.length,
+                        endsInMin: minsLeft, standings: board,
+                    });
+                    await sock.sendMessage(chatId, { image: buf, caption });
+                } catch (e) {
+                    console.error('[GW] status card failed:', e?.message);
+                    await sock.sendMessage(chatId, { text: caption });
+                }
             }
             return;
         }
 
         case 'end': {
             if (!canStart) return sock.sendMessage(chatId, { text: '❌ Mod only.' });
-            const ended = await state.endEvent(args[1] || (await state.getActiveEvents())[0]?.eventId, 'Called to an end by the Association.');
+            const targetId = args[1] || (await state.getActiveEvents())[0]?.eventId;
+            if (!targetId) return sock.sendMessage(chatId, { text: '❌ No war to end. Mods open one with `.j gw start`.' });
+            const ev = await require('../../models/GuildWarEvent').findOne({ eventId: targetId });
+            if (!ev) return sock.sendMessage(chatId, { text: `❌ No war found (\`${targetId}\`).` });
+
+            // still registering / initiated: close it quietly, nobody deployed
+            if (ev.state === 'INITIATED' || ev.state === 'REGISTRATION') {
+                await state.abortEvent(targetId, 'ended by mod during registration');
+                return sock.sendMessage(chatId, { text: `🏳️ *War closed during registration.*\nNobody deployed, so no rewards are due. The call card already posted in this GC stays as the record.` });
+            }
+            if (ev.state !== 'ACTIVE') {
+                return sock.sendMessage(chatId, { text: `ℹ️ That war is already *${ev.state}*. Nothing to end.` });
+            }
+
+            const ended = await state.endEvent(targetId, 'Called to an end by the Association.');
             if (!ended) return sock.sendMessage(chatId, { text: '❌ No active war found.' });
-            return sock.sendMessage(chatId, { text: '🏳️ The war has ended. Rewards are being distributed.' });
+            feed.queue(targetId, 'major', `🏳️ THE WAR HAS ENDED. The Association tallies the spoils: ${ended.rewards.guilds.length} guilds took the field.`);
+
+            const board = ended.rewards.guilds.slice(0, 8).map((g, i) => `${['🥇', '🥈', '🥉'][i] || '▫️'} *${g.name}:* ${g.points} GP`).join('\n') || '_no guild scored_';
+            const topPlayers = ended.rewards.top.slice(0, 3).map((p, i) => `${['🥇', '🥈', '🥉'][i] || '▫️'} ${p.name} (${p.guild})`).join('\n') || '';
+            const caption = `🏳️ *THE WAR HAS ENDED*\n\n*Guild standings:*\n${board}\n${topPlayers ? `\n*Heroes of the war:*\n${topPlayers}\n` : ''}\n_Guild Points have been added to the guild level curve._`;
+            try {
+                const buf = await notice.renderWarStatusCard({
+                    type: ended.event.type, final: true, players: ended.event.players.length,
+                    standings: ended.rewards.guilds,
+                });
+                await sock.sendMessage(chatId, { image: buf, caption });
+            } catch (e) {
+                console.error('[GW] end card failed:', e?.message);
+                await sock.sendMessage(chatId, { text: caption });
+            }
+            return;
         }
 
         case 'abort': {
             if (!canStart) return sock.sendMessage(chatId, { text: '❌ Mod only.' });
             const target = args[1] || (await state.getActiveEvents())[0]?.eventId;
+            if (!target) return sock.sendMessage(chatId, { text: '❌ No war to abort.' });
             await state.abortEvent(target, 'aborted by mod');
-            return sock.sendMessage(chatId, { text: '🚫 War aborted. No rewards.' });
+            return sock.sendMessage(chatId, { text: '🚫 *War aborted.* No rewards, the record is closed.' });
         }
 
         case 'rpg': {
@@ -219,7 +263,7 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
             // organic alignment wars broadcast their call card here (paced).
             const action = (args[1] || 'status').toLowerCase();
             if (!chatId || !chatId.endsWith('@g.us')) {
-                return sock.sendMessage(chatId, { text: '❌ Mark whole groups — run this inside the GC you want to mark.' });
+                return sock.sendMessage(chatId, { text: '❌ Mark whole groups - run this inside the GC you want to mark.' });
             }
             const system = require('../../utils/system');
             let botId = 'global';
@@ -247,7 +291,7 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
                 system.set(GCS_KEY, list);
                 console.log(`[GuildWar] RPG-friendly GC marked (${botId}): ${chatId} (${list.length} total)`);
                 return sock.sendMessage(chatId, {
-                    text: `🌍 *This group is now RPG-friendly.*\nWhen the worlds align on their own, the Guild Association's call to war will be announced here — one card per alignment window, paced, no spam.\nUnmark anytime: \`.j gw rpg off\` · marked GCs on this bot: *${list.length}*`,
+                    text: `🌍 *This group is now RPG-friendly.*\nWhen the worlds align on their own, the Guild Association's call to war will be announced here - one card per alignment window, paced, no spam.\nUnmark anytime: \`.j gw rpg off\` · marked GCs on this bot: *${list.length}*`,
                 });
             }
             if (action === 'off' || action === 'remove' || action === 'unmark') {
@@ -261,28 +305,36 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
             if (action === 'list') {
                 if (!canStart) return sock.sendMessage(chatId, { text: '❌ Mod only.' });
                 return sock.sendMessage(chatId, {
-                    text: `🌍 *RPG-friendly GCs on this bot* (${list.length}):\n${list.map((c, i) => `  ${i + 1}. ${c}`).join('\n') || '  none yet — mark one with \`.j gw rpg on\`'}`,
+                    text: `🌍 *RPG-friendly GCs on this bot* (${list.length}):\n${list.map((c, i) => `  ${i + 1}. ${c}`).join('\n') || '  none yet - mark one with \`.j gw rpg on\`'}`,
                 });
             }
             // status: is THIS group marked?
             return sock.sendMessage(chatId, {
                 text: list.includes(chatId)
-                    ? `🌍 This group *is* marked RPG-friendly — organic alignment war calls land here. Remove: \`.j gw rpg off\``
+                    ? `🌍 This group *is* marked RPG-friendly - organic alignment war calls land here. Remove: \`.j gw rpg off\``
                     : `🕯️ This group is not marked. Mark it: \`.j gw rpg on\` (group admins or bot mods)`,
             });
         }
 
         case 'help': default: {
-            return sock.sendMessage(chatId, {
-                text: `⚔️ *GUILD WAR*\n` +
-                    `\`.j gw start\` — mod: open registration (this group = feed HQ)\n` +
-                    `\`.j gw start alignment\` — mod: alignment-scale war\n` +
-                    `\`.j gw join\` — enter the registering war\n` +
-                    `\`.j gw forcestart\` — mod: deploy now\n` +
-                    `\`.j gw status\` — live standings\n` +
-                    `\`.j gw end | abort\` — mod: conclude\n\n` +
-                    `In my DMs once deployed: \`look\`, \`move n/s/e/w\`, \`map\`, \`relics\`, \`handin\`, \`challenge @name\`, \`share map @mate\`, \`status\`, \`quit\`.`,
-            });
+            const caption = `⚔️ *GUILD WAR: THE RUINS*\n` +
+                `\`.j gw start\` mods: open registration (this GC = feed HQ)\n` +
+                `\`.j gw start alignment\` mods: alignment-scale war\n` +
+                `\`.j gw join\` enter the registering war\n` +
+                `\`.j gw forcestart\` mods: deploy now\n` +
+                `\`.j gw status\` live standings\n` +
+                `\`.j gw end\` mods: conclude and pay rewards\n` +
+                `\`.j gw abort\` mods: shut it down, no rewards\n` +
+                `\`.j gw rpg on|off\` admins: mark this GC for alignment calls\n\n` +
+                `In my DMs once deployed: \`look\`, \`move n/s/e/w\`, \`map\`, \`relics\`, \`handin\`, \`challenge @name\`, \`share map @mate\`, \`status\`, \`quit\`.`;
+            try {
+                const buf = await notice.renderWarHelpCard();
+                await sock.sendMessage(chatId, { image: buf, caption });
+            } catch (e) {
+                console.error('[GW] help card failed:', e?.message);
+                return sock.sendMessage(chatId, { text: caption });
+            }
+            return;
         }
     }
 }

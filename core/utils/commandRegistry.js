@@ -112,13 +112,14 @@ const COMMAND_REGISTRY = {
     { cmd: 'guild loan', desc: 'Borrow from guild bank (7-day repayment).', usage: 'guild loan <amount> | list | repay <amount>' },
     { cmd: 'guild emblem', desc: 'Set the guild emblem (Leader only): upload an image, or clear it.', usage: 'guild emblem <image> | clear' },
     { cmd: 'guild role', desc: 'Set member role (Leader only).', usage: 'guild role @user <recruit|member|officer>' },
-    { cmd: 'gw', desc: 'Guild War — the Ruins of a dead world. Mods open the war; guilds race rooms, relics and the World Core. Players act in bot DMs.', usage: 'gw start [alignment] | join | forcestart | status | end | abort' },
-    { cmd: 'gw start', desc: 'Mods: open registration — this group becomes the war-feed HQ.', usage: 'gw start [alignment]' },
+    { cmd: 'gw', desc: 'Guild War: the Ruins of a dead world. Mods open the war; guilds race rooms, relics and the World Core. Players act in bot DMs.', usage: 'gw start [alignment] | join | forcestart | status | end | abort | rpg' },
+    { cmd: 'gw start', desc: 'Mods: open registration. This group becomes the war-feed HQ.', usage: 'gw start [alignment]' },
     { cmd: 'gw join', desc: 'Enter the registering war with your guild.', usage: 'gw join' },
     { cmd: 'gw status', desc: 'Live war standings.', usage: 'gw status' },
+    { cmd: 'gw end', desc: 'Mods: conclude the running war and distribute rewards.', usage: 'gw end' },
     { cmd: 'gw rpg', desc: 'Mark this GC as RPG-friendly (admins/mods): organic world-alignment war calls are announced here, one paced card per alignment window.', usage: 'gw rpg on | off | status | list' },
-    { cmd: 'wr', desc: 'Alias for gw — the Ruins switch (same subcommands).', usage: 'wr ...' },
-    { cmd: 'war', desc: 'Alias for gw — same subcommands, old fingers welcome.', usage: 'war ...' }
+    { cmd: 'wr', desc: 'Alias for gw: the Ruins switch, same subcommands.', usage: 'wr ...' },
+    { cmd: 'war', desc: 'Alias for gw: same subcommands.', usage: 'war ...' }
   ],
   RPG: [
     { cmd: 'cardstyle', desc: 'Choose your character card design (10 styles).', usage: 'cardstyle <1-10>' },

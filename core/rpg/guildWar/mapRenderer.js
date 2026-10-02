@@ -214,7 +214,7 @@ function _renderInProcess(eventDoc, player, extras = {}) {
     _bg(ctx);
     _frame(ctx);
     _titleBlock(ctx,
-        'GUILD WAR — THE RUINS',
+        'GUILD WAR · THE RUINS',
         extras.title || 'Charted Reaches',
         `${eventDoc.type === 'alignment' ? 'Alignment of Worlds' : 'A dead world, half-remembered'} · chamber ${player.roomId}`);
 
@@ -326,15 +326,15 @@ function _renderInProcess(eventDoc, player, extras = {}) {
         `▲ you   ◯ ringed = guildmate   dashed ring = recent enemy movement`,
         `● cleared halls fade · ⚔ guarded · ✥ sealed · ⚑ buried finds · ◈ vaults`,
         `☠ trapped · ✺ inscribed · ✚ co-op · ✦ hidden · ✷ anomalies · ▲ landmarks`,
-        `⨀ World Core — the heart of the ruin, first breach earns lasting glory`,
+        `⨀ World Core - the heart of the ruin, first breach earns lasting glory`,
     ];
     let ty = ly + 54;
     for (const line of legendItems) { ctx.fillText(line, 84, ty); ty += 22; }
     ctx.font = 'italic 13px "IM Fell Italic"';
-    ctx.fillText(`Carried relics: ${(player.relics || []).length ? (player.relics || []).map((r) => `${r.name} (${r.tier})`).join(', ') : 'none — hand-ins secure their value'}`, 84, ty + 6);
+    ctx.fillText(`Carried relics: ${(player.relics || []).length ? (player.relics || []).map((r) => `${r.name} (${r.tier})`).join(', ') : 'none - hand-ins secure their value'}`, 84, ty + 6);
 
     // score line
-    _centered(ctx, `${player.guildName || player.guildId} — ${player.score || 0} GP · lives ${player.lives ?? 3} · discovered ${(player.discovered || []).length} of ${eventDoc.rooms.length} chambers`, H - 44, 'italic 15px "IM Fell Italic"', PAL.inkSoft);
+    _centered(ctx, `${player.guildName || player.guildId} - ${player.score || 0} GP · lives ${player.lives ?? 3} · discovered ${(player.discovered || []).length} of ${eventDoc.rooms.length} chambers`, H - 44, 'italic 15px "IM Fell Italic"', PAL.inkSoft);
     void rnd;
 
     return c.toBuffer('image/png');

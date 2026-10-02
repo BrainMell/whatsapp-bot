@@ -269,7 +269,7 @@ function timeAgo(ts) {
 function renderPairHistory(jid1, jid2) {
   try {
     if (!jid1 || !jid2) {
-      return { ok: false, text: '❌ Tag two people (or reply to one) — e.g. `.j bond @a @b`' };
+      return { ok: false, text: '❌ Tag two people (or reply to one) - e.g. `.j bond @a @b`' };
     }
     if (jid1 === jid2) {
       return { ok: false, text: '❌ Tag two *different* people to see their interaction history.' };
@@ -289,7 +289,7 @@ function renderPairHistory(jid1, jid2) {
           '',
           '📭 No logged interactions yet.',
           '',
-          'Tags, mentions and replies are tracked automatically. Once these two start talking, this fills up — and their ship score climbs with it (silent pairs ship LOW).',
+          'Tags, mentions and replies are tracked automatically. Once these two start talking, this fills up - and their ship score climbs with it (silent pairs ship LOW).',
         ].join('\n'),
       };
     }
@@ -328,13 +328,13 @@ function renderPairHistory(jid1, jid2) {
           : pa > 50 ? `(${name1} initiates more)` : `(${name2} initiates more)`),
       );
     } else if (hasOutA && hasOutB && (outA === 0 || outB === 0)) {
-      lines.push('⚖️ One-sided so far — only one of them has been initiating.');
+      lines.push('⚖️ One-sided so far - only one of them has been initiating.');
     }
     lines.push(
       `🔗 Relative focus: ${name1} spends *${hist.shareA}%* of their interaction time on ${name2} · ${name2} spends *${hist.shareB}%* on ${name1}`,
     );
     lines.push(
-      `💫 Bond strength: *${hist.score == null ? 0 : hist.score}/100* — how much of your chat life is each other (40% of the ship score)`,
+      `💫 Bond strength: *${hist.score == null ? 0 : hist.score}/100* - how much of your chat life is each other (40% of the ship score)`,
     );
 
     // Recent events: merge both directions' rings, newest first. d=1 means

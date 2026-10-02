@@ -20,10 +20,10 @@ const openChallenges = new Map();
 // ── challenge flow ──
 async function challenge(eventDoc, challenger, targetJid) {
     if (challenger.guildId === (eventDoc.players.find((p) => p.jid === targetJid)?.guildId)) {
-        return { ok: false, text: '🤝 Same guild — challenge your rivals, not your brothers-in-arms. Work together instead.' };
+        return { ok: false, text: '🤝 Same guild - challenge your rivals, not your brothers-in-arms. Work together instead.' };
     }
     if (challenger.protectedUntil > Date.now()) {
-        return { ok: false, text: '🛡️ Your spawn protection is still active — you cannot challenge yet.' };
+        return { ok: false, text: '🛡️ Your spawn protection is still active - you cannot challenge yet.' };
     }
     const target = eventDoc.players.find((p) => p.jid === targetJid && p.status === 'active');
     if (!target) return { ok: false, text: '❌ That player is not here (or not active).' };
@@ -45,7 +45,7 @@ async function challenge(eventDoc, challenger, targetJid) {
     }, CFG.PVP.CHALLENGE_WINDOW_MS + 1000);
 
     feed.queue(eventDoc.eventId, 'normal', `⚔️ ${challenger.name} challenges ${target.name} in a ${roomLabel(challenger.roomId)}!`);
-    return { ok: true, text: `⚔️ Challenge issued to *${target.name}* — they have 60s to accept.\nThey may: \`accept\` the duel, or \`flee\` (retreat to their previous room and concede what was contested).` };
+    return { ok: true, text: `⚔️ Challenge issued to *${target.name}* - they have 60s to accept.\nThey may: \`accept\` the duel, or \`flee\` (retreat to their previous room and concede what was contested).` };
 }
 
 async function accept(eventDoc, challenged) {
@@ -82,7 +82,7 @@ async function forfeitToRoom(eventDoc, loser, why, { sock = null, chatId = null 
         protectedUntil: Date.now() + CFG.PVP.PROTECT_AFTER_LOSS_MS,
         lastActionAt: Date.now(),
     });
-    feed.queue(eventDoc.eventId, 'normal', `🏃 ${loser.name} ${why} — retreats to their previous room.`);
+    feed.queue(eventDoc.eventId, 'normal', `🏃 ${loser.name} ${why} - retreats to their previous room.`);
     return { text: `🏃 You retreat to your previous room. Whatever was contested stays with the room.` };
 }
 

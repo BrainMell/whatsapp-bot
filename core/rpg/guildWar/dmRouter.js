@@ -70,7 +70,7 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER) {
     if (eventDoc.state === 'REGISTRATION') {
         if (/^(join|gw join)$/.test(norm)) {
             const res = await state.registerPlayer(eventDoc.eventId, { jid: senderJid, name: displayName(senderJid), guildId: player.guildId, guildName: player.guildName });
-            return res ? { text: '✅ Already registered — stand by.' } : null;
+            return res ? { text: '✅ Already registered - stand by.' } : null;
         }
         return { text: '⏳ The war is still gathering. Deployment begins soon.' };
     }
@@ -85,7 +85,7 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER) {
                 status: 'active', lastActionAt: Date.now(),
                 protectedUntil: Date.now() + CFG.REJOIN_PROTECT_MS,
             });
-            return { text: `🛡️ Welcome back. Spawn protection for ${CFG.REJOIN_PROTECT_MS / 1000}s. Your carried relics dropped where you fell — your position is unchanged.` };
+            return { text: `🛡️ Welcome back. Spawn protection for ${CFG.REJOIN_PROTECT_MS / 1000}s. Your carried relics dropped where you fell - your position is unchanged.` };
         }
         return { text: '💤 You went inactive. Type `rejoin` to return to the war.' };
     }
@@ -108,7 +108,7 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER) {
             return { text: `⏳ You catch your breath... ${Math.ceil(cooldownLeft / 1000)}s until you can move again.` };
         }
         const dest = mapEngine.step(topo, player.roomId, dir);
-        if (!dest) return { text: '🧱 No passage that way — the walls of the dead world are unbroken.' };
+        if (!dest) return { text: '🧱 No passage that way - the walls of the dead world are unbroken.' };
 
         await rooms.enterRoom(eventDoc.eventId, senderJid, player.roomId, dest);
         const reveal = visibility.revealFor(eventDoc, dest, guildLevelOf(eventDoc, player));
@@ -130,8 +130,8 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER) {
         const foes = others.filter((o) => o.guildId !== me.guildId);
         const mates = others.filter((o) => o.guildId === me.guildId);
         const lines = [intro.text];
-        if (mates.length) lines.push(`🤝 Your guildmate${mates.length > 1 ? 's' : ''} ${mates.map((m) => m.name).join(', ')} ${mates.length > 1 ? 'are' : 'is'} here — work together for a shared reward.`);
-        if (foes.length) lines.push(`⚠️ ${foes.map((f) => `${f.name} of ${f.guildName}`).join(', ')} ${foes.length > 1 ? 'are' : 'is'} here — rival guild. \`challenge @${foes[0].name}\` or move carefully... (they may challenge YOU).`);
+        if (mates.length) lines.push(`🤝 Your guildmate${mates.length > 1 ? 's' : ''} ${mates.map((m) => m.name).join(', ')} ${mates.length > 1 ? 'are' : 'is'} here - work together for a shared reward.`);
+        if (foes.length) lines.push(`⚠️ ${foes.map((f) => `${f.name} of ${f.guildName}`).join(', ')} ${foes.length > 1 ? 'are' : 'is'} here - rival guild. \`challenge @${foes[0].name}\` or move carefully... (they may challenge YOU).`);
         return { text: lines.join('\n\n'), image: intro.image || undefined };
     }
 
@@ -180,7 +180,7 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER) {
         await points.award(eventDoc.eventId, senderJid, gpTotal, 'relic-handin', { ignoreCap: false });
         await state.pushLog(eventDoc.eventId, 'relic-handin', senderJid, `${toHand.map((r) => r.name).join(', ')} → ${gpTotal} GP`);
         feed.queue(eventDoc.eventId, 'normal', `🏛️ ${player.name} handed ${toHand.length === 1 ? `*${toHand[0].name}*` : `${toHand.length} relics`} to their guild (+${gpTotal} GP).`);
-        return { text: `🏛️ Handed in: ${toHand.map((r) => `${r.name} (${r.tier})`).join(', ')} — *+${gpTotal} GP* to you and your guild. Secured.` };
+        return { text: `🏛️ Handed in: ${toHand.map((r) => `${r.name} (${r.tier})`).join(', ')} - *+${gpTotal} GP* to you and your guild. Secured.` };
     }
 
     // ── use relic ──
@@ -193,7 +193,7 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER) {
         const room = roomOf(eventDoc, player);
         const targetName = norm.replace(/^challenge\s*@?/, '').trim();
         const target = eventDoc.players.find((p) => p.name.toLowerCase() === targetName && (p.roomId === player.roomId) && p.jid !== senderJid);
-        if (!target) return { text: '❌ No such rival in this room. `challenge @name` — they must stand here.' };
+        if (!target) return { text: '❌ No such rival in this room. `challenge @name` - they must stand here.' };
         const res = await ruinsPvp.challenge(eventDoc, player, target.jid);
         return { text: res.text };
     }
@@ -217,7 +217,7 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER) {
                 lastActionAt: Date.now(),
             });
             await rooms.leaveRoom(eventDoc.eventId, senderJid, player.roomId);
-            feed.queue(eventDoc.eventId, 'normal', `🏃 ${player.name} retreated from a ${room?.type || 'contest'} — the spoils stay behind.`);
+            feed.queue(eventDoc.eventId, 'normal', `🏃 ${player.name} retreated from a ${room?.type || 'contest'} - the spoils stay behind.`);
             return { text: '🏃 You retreat to your previous room. What was here stays here, unclaimed.' };
         }
         return { text: 'There is nothing here to flee from.' };
@@ -253,7 +253,7 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER) {
     if (/^(status|gw status|score)$/.test(norm)) {
         const byGuild = feed.computeScoreboard(eventDoc);
         const standings = byGuild.slice(0, 8).map((g, i) => `${['🥇', '🥈', '🥉'][i] || '▫️'} ${g.name}: ${g.points}`).join('\n');
-        return { text: `⚔️ *Guild War* (${eventDoc.type}) — ends <t:${Math.floor((eventDoc.endsAt || 0) / 1000)}:R>\nYou: ${player.score} GP · lives ${player.lives} · position ${player.roomId}\n\n${standings}` };
+        return { text: `⚔️ *Guild War* (${eventDoc.type}) - ends <t:${Math.floor((eventDoc.endsAt || 0) / 1000)}:R>\nYou: ${player.score} GP · lives ${player.lives} · position ${player.roomId}\n\n${standings}` };
     }
 
     if (/^(quit|leave war|abandon)$/.test(norm)) {
@@ -280,7 +280,7 @@ async function useRelic(eventDoc, player, arg, { sock, chatId, BOT_MARKER }) {
         await decrementCharges(eventDoc.eventId, player.jid, match.id);
         return { text: target
             ? `🧭 The ${match.name} trembles and points: treasure lies ${encounters.describeDirection(eventDoc, player.roomId, target)}.`
-            : '🧭 The seeker spins wildly — nothing left to find. (charge spent)' };
+            : '🧭 The seeker spins wildly - nothing left to find. (charge spent)' };
     }
     if (match.category === 'blink' && match.charges > 0) {
         const topo = state.topologyOf(eventDoc);
@@ -292,14 +292,14 @@ async function useRelic(eventDoc, player, arg, { sock, chatId, BOT_MARKER }) {
             const far = [...discoveredSet].filter((k) => k !== player.roomId);
             if (far.length) target = rng.pick(far);
         }
-        if (!target) return { text: '🪨 Nowhere to blink to yet — explore more, then try again. (no charge spent)' };
+        if (!target) return { text: '🪨 Nowhere to blink to yet - explore more, then try again. (no charge spent)' };
         const path = mapEngine.blinkPath(topo, discoveredSet, player.roomId, target, CFG.RELICS.BLINK_MAX_ROOMS);
-        if (!path) return { text: `🪨 The ${match.name} fizzles — too far off your known paths. (no charge spent)` };
+        if (!path) return { text: `🪨 The ${match.name} fizzles - too far off your known paths. (no charge spent)` };
         const dest = path[path.length - 1];
         const fresh = await state.getEvent(eventDoc.eventId, { fresh: true });
         const destRoom = fresh.rooms.find((r) => r.key === dest);
         if (dest === fresh.coreKey || (destRoom?.occupants || []).length > 0) {
-            return { text: '🪨 The blink refuses — the destination is contested ground. (no charge spent)' };
+            return { text: '🪨 The blink refuses - the destination is contested ground. (no charge spent)' };
         }
         await rooms.enterRoom(eventDoc.eventId, player.jid, player.roomId, dest);
         await rooms.applyFog(eventDoc.eventId, player.jid, mapEngine.revealAround(topo, dest));
@@ -324,10 +324,10 @@ async function useRelic(eventDoc, player, arg, { sock, chatId, BOT_MARKER }) {
             { eventId: eventDoc.eventId, 'players.jid': player.jid },
             { $push: { 'players.$.relics': { ...match, category: 'ward_active', charges: 0, meta: { buff } } } }
         );
-        return { text: `🛡️ The ${match.name} flares — its ward wraps your next fight (${buff.type}).` };
+        return { text: `🛡️ The ${match.name} flares - its ward wraps your next fight (${buff.type}).` };
     }
     if ((match.category === 'trophy' || match.category === 'cross')) {
-        return { text: '💠 This relic is not usable — hand it in with `handin` to secure its value.' };
+        return { text: '💠 This relic is not usable - hand it in with `handin` to secure its value.' };
     }
     return { text: '❌ That relic has no charges left.' };
 }

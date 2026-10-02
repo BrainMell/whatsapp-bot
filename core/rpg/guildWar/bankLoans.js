@@ -60,10 +60,10 @@ async function approveLoan(guildMasterJid, guildId, targetJid) {
 
     // checked debit: bank → wallet
     const guild = guilds.getGuild(guildId);
-    if ((guild?.balance || 0) < req.amount) return { ok: false, text: '❌ Guild balance changed — insufficient funds.' };
+    if ((guild?.balance || 0) < req.amount) return { ok: false, text: '❌ Guild balance changed - insufficient funds.' };
     guild.balance -= req.amount;
     const persisted = await guilds.syncGuild(guildId);
-    if (!persisted) return { ok: false, text: '❌ Bank persist failed — loan not paid out.' };
+    if (!persisted) return { ok: false, text: '❌ Bank persist failed - loan not paid out.' };
 
     economy.addMoney(req.playerId, req.amount, `Guild loan from ${guildId}`);
 
@@ -123,7 +123,7 @@ async function listLoans(playerJid, guildId) {
     const mine = await GuildLoan.find({ guildId, playerId: playerJid, status: { $in: ['requested', 'active'] } });
     const pending = await GuildLoan.find({ guildId, status: 'requested' });
     const lines = [];
-    for (const l of mine) lines.push(`🧾 Your ${l.status} loan: ${l.amount.toLocaleString()} Zeni${l.status === 'active' ? ` (repaid ${(l.repaidAmount || 0).toLocaleString()})` : ' — awaiting Guild Master approval'}`);
+    for (const l of mine) lines.push(`🧾 Your ${l.status} loan: ${l.amount.toLocaleString()} Zeni${l.status === 'active' ? ` (repaid ${(l.repaidAmount || 0).toLocaleString()})` : ' - awaiting Guild Master approval'}`);
     return { mine: lines, pending };
 }
 

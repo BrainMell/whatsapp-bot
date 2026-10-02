@@ -83,7 +83,7 @@ function buildRoomPayload(eventDoc, room, map) {
             if (rng.next() < 0.4) payload.zeni = rng.int(200, 2000);
             payload.text = rng.pick([
                 'Half-buried beneath the rubble, something still hums with old power.',
-                'A shattered shrine hides a cavity beneath — something inside survived the world\u2019s death.',
+                'A shattered shrine hides a cavity beneath - something inside survived the world\u2019s death.',
                 'Time-worn wrappings guard an object the end of the world could not claim.',
             ]);
             break;
@@ -97,7 +97,7 @@ function buildRoomPayload(eventDoc, room, map) {
             payload.hazardDamage = 0.05 + room.ring * 0.1; // fraction of maxHP
             payload.hazardText = rng.pick([
                 'The floor gives way to a spiked pit...',
-                'A pressure plate hisses — green gas floods the hall...',
+                'A pressure plate hisses - green gas floods the hall...',
                 'The ceiling groans and drops stone shards...',
             ]);
             break;
@@ -106,7 +106,7 @@ function buildRoomPayload(eventDoc, room, map) {
             payload.lore = rng.pick([
                 `This hall once belonged to ${theme.name}. The murals still burn faintly.`,
                 'A dead world\u2019s last message is scratched here: "We were not warned."',
-                'Statues line the walls — each face eroded to smoothness except their eyes.',
+                'Statues line the walls - each face eroded to smoothness except their eyes.',
                 `The air tastes of ${theme.flavor.toLowerCase()} stone. Something great fell here.`,
             ]);
             break;
@@ -172,7 +172,7 @@ async function onRoomEnter(eventDoc, player, room) {
             break;
         case 'combat':
             rooms.markActive(eventDoc.eventId, room.key);
-            lines.push(`⚔️ Something moves in the dark of this ${flavor.toLowerCase()} chamber — *enemies bar the way*. The room must be resolved before you may move on.`);
+            lines.push(`⚔️ Something moves in the dark of this ${flavor.toLowerCase()} chamber - *enemies bar the way*. The room must be resolved before you may move on.`);
             lines.push(`Use your standard combat commands here. _Fleeing retreats you to the previous room and forfeits this room\u2019s spoils._`);
             break;
         case 'puzzle':
@@ -185,7 +185,7 @@ async function onRoomEnter(eventDoc, player, room) {
             lines.push(`Type \`dig\` to unearth it.`);
             break;
         case 'reward':
-            lines.push(`💠 A vault-chamber of the old world — untouched. Type \`take\` to claim what lies within.`);
+            lines.push(`💠 A vault-chamber of the old world - untouched. Type \`take\` to claim what lies within.`);
             break;
         case 'hazard':
             lines.push(`☠️ ${payloadGet(room.payload, 'hazardText') || 'Danger lurks here.'} Type \`cross\` to attempt passage.`);
@@ -195,14 +195,14 @@ async function onRoomEnter(eventDoc, player, room) {
             break;
         case 'secret':
             lines.push(`✨ A hidden chamber! The air shivers with concentrated power.`);
-            if (room.payload.boss) lines.push(`But something ancient guards it... Type \`fight\` — or \`flee\` now.`);
+            if (room.payload.boss) lines.push(`But something ancient guards it... Type \`fight\` - or \`flee\` now.`);
             else lines.push(`Type \`claim\` to take what it holds.`);
             break;
         case 'anomaly':
-            lines.push(`🌀 Reality thins here — the walls between worlds bleed through. Type \`touch\` to interact... or move on.`);
+            lines.push(`🌀 Reality thins here - the walls between worlds bleed through. Type \`touch\` to interact... or move on.`);
             break;
         case 'landmark':
-            lines.push(`🗿 *${payloadGet(room.payload, 'landmarkName') || 'A landmark'}* — ${payloadGet(room.payload, 'lore') || 'a marker of the old world.'}`);
+            lines.push(`🗿 *${payloadGet(room.payload, 'landmarkName') || 'A landmark'}* - ${payloadGet(room.payload, 'lore') || 'a marker of the old world.'}`);
             break;
         case 'coop':
             rooms.markActive(eventDoc.eventId, room.key);
@@ -210,7 +210,7 @@ async function onRoomEnter(eventDoc, player, room) {
             break;
         case 'core':
             rooms.markActive(eventDoc.eventId, room.key);
-            lines.push(`🌍 *THE WORLD CORE* — the heart of this dead world still beats here. A mighty guardian bars the way.`);
+            lines.push(`🌍 *THE WORLD CORE* - the heart of this dead world still beats here. A mighty guardian bars the way.`);
             lines.push(`First guild to breach it earns lasting glory. Type \`fight\` to challenge the guardian.`);
             break;
         default:
@@ -280,7 +280,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
                 const dmg = Math.round((player.stats?.maxHp || 100) * CFG.PUZZLE.FAIL_HAZARD_DAMAGE);
                 await state.updatePlayer(eventDoc.eventId, player.jid, {}, { lastActionAt: Date.now() });
                 feed.queue(eventDoc.eventId, 'minor', `${player.name} failed a seal and paid in blood.`);
-                return { handled: true, text: `💥 The mechanism rejects you with a shock (-${dmg} HP). The seal resets — try again from the first inscription.` };
+                return { handled: true, text: `💥 The mechanism rejects you with a shock (-${dmg} HP). The seal resets - try again from the first inscription.` };
             }
             await rooms.setRoomPayload(eventDoc.eventId, room.key, { 'puzzle.attemptsUsed': attempts });
             return { handled: true, text: `❌ Wrong. ${result.attemptsLeft} attempt${result.attemptsLeft === 1 ? '' : 's'} left.` };
@@ -290,11 +290,11 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
         case 'discovery': {
             if (norm !== 'dig') return { handled: false };
             const claim = await rooms.clearRoom(eventDoc.eventId, room.key, player);
-            if (!claim.won) return { handled: true, text: `Another explorer got here first — the chamber is bare.` };
+            if (!claim.won) return { handled: true, text: `Another explorer got here first - the chamber is bare.` };
             await awardRoomRelic(eventDoc, player, room);
             if (P.zeni) await points.award(eventDoc.eventId, player.jid, 5, 'discovery');
             feed.queue(eventDoc.eventId, 'normal', `🔍 ${player.name} unearthed something from a ${roomFlavor(room)}.`);
-            return { handled: true, text: `⛏️ You unearth it! ${P.zeni ? 'A small cache of Zeni comes with it. ' : ''}Check \`relics\` — hand it in with \`handin\` when ready.` };
+            return { handled: true, text: `⛏️ You unearth it! ${P.zeni ? 'A small cache of Zeni comes with it. ' : ''}Check \`relics\` - hand it in with \`handin\` when ready.` };
         }
         case 'reward': {
             if (norm !== 'take') return { handled: false };
@@ -315,7 +315,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             if (!claim.won) return { handled: true, text: `Someone claimed this secret before you.` };
             await awardRoomRelic(eventDoc, player, room);
             await points.award(eventDoc.eventId, player.jid, CFG.POINTS.ROOM_CLEAR.secret, 'secret');
-            feed.queue(eventDoc.eventId, 'major', `WORLD EVENT — ${player.name} uncovered a hidden chamber of the Ruins!`);
+            feed.queue(eventDoc.eventId, 'major', `WORLD EVENT - ${player.name} uncovered a hidden chamber of the Ruins!`);
             return { handled: true, text: `✨ A true find! This will be remembered.` };
         }
 
@@ -329,7 +329,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
                     await points.award(eventDoc.eventId, player.jid, CFG.POINTS.ROOM_CLEAR.hazard, 'hazard');
                     return { handled: true, text: `🤸 You slip past the hazard unscathed. (+GP) The way is open.` };
                 }
-                return { handled: true, text: `The hazard is spent — someone braved it first.` };
+                return { handled: true, text: `The hazard is spent - someone braved it first.` };
             }
             const dmg = Math.round((player.stats?.maxHp || 100) * (payloadGet(P, 'hazardDamage') || 0.08));
             feed.queue(eventDoc.eventId, 'minor', `${player.name} took a hit from a ${roomFlavor(room)} hazard.`);
@@ -353,7 +353,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             if (kind === 'hp_drain') {
                 return { handled: true, text: `🌀 The rift drinks deeply of you. You feel weaker...` };
             }
-            return { handled: true, text: `🌀 The fog of war thins — distant paths flicker in your mind.` };
+            return { handled: true, text: `🌀 The fog of war thins - distant paths flicker in your mind.` };
         }
 
         // ── lore / landmark / empty ──
@@ -369,7 +369,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             const claim = await rooms.clearRoom(eventDoc.eventId, room.key, player);
             if (claim.won) {
                 await points.award(eventDoc.eventId, player.jid, CFG.POINTS.ROOM_CLEAR.landmark, 'landmark');
-                feed.queue(eventDoc.eventId, 'major', `WORLD EVENT — ${player.name} of ${player.guildName} recorded *${P.landmarkName || 'a landmark'}* for their guild!`);
+                feed.queue(eventDoc.eventId, 'major', `WORLD EVENT - ${player.name} of ${player.guildName} recorded *${P.landmarkName || 'a landmark'}* for their guild!`);
                 return { handled: true, text: `🗿 Recorded for ${player.guildName}. The Association takes note. (+GP)` };
             }
             return { handled: true, text: `This landmark was already recorded.` };
@@ -470,12 +470,12 @@ async function roomIntro(eventDoc, player, room) {
         let body = null, actionHint = null, title = null;
         switch (room.type) {
             case 'combat':
-                body = variant ? variant.line : 'Something moves in the dark — enemies bar the way. The room must be resolved before you may move on.';
+                body = variant ? variant.line : 'Something moves in the dark - enemies bar the way. The room must be resolved before you may move on.';
                 actionHint = 'Type fight to engage. Fleeing retreats you and forfeits this room\'s spoils.';
                 break;
             case 'coop':
                 body = variant ? variant.line : 'A guardian pack blocks this hall. Allies in the room may fight it together.';
-                actionHint = 'Type fight to engage — allies share the reward.';
+                actionHint = 'Type fight to engage - allies share the reward.';
                 break;
             case 'core':
                 body = 'The heart of this dead world still beats here. A mighty guardian bars the way. First guild to breach it earns lasting glory.';
@@ -484,7 +484,7 @@ async function roomIntro(eventDoc, player, room) {
             case 'puzzle': {
                 const pz = payloadGet(P, 'puzzle');
                 body = (pz && pz.prompt) || 'A mechanism blocks the far door.';
-                actionHint = `Reply with your answer — ${CFG.PUZZLE.ATTEMPTS} attempts. Wrong answers have a cost.`;
+                actionHint = `Reply with your answer - ${CFG.PUZZLE.ATTEMPTS} attempts. Wrong answers have a cost.`;
                 break;
             }
             case 'discovery':
@@ -492,7 +492,7 @@ async function roomIntro(eventDoc, player, room) {
                 actionHint = 'Type dig to unearth it.';
                 break;
             case 'reward':
-                body = 'A vault-chamber of the old world — untouched since the world died.';
+                body = 'A vault-chamber of the old world - untouched since the world died.';
                 actionHint = 'Type take to claim what lies within.';
                 break;
             case 'hazard':
@@ -504,11 +504,11 @@ async function roomIntro(eventDoc, player, room) {
                 actionHint = 'Type read to study the inscriptions.';
                 break;
             case 'secret':
-                body = payloadGet(P, 'boss') ? 'A hidden chamber — and something ancient guards it.' : 'A hidden chamber! The air shivers with concentrated power.';
-                actionHint = payloadGet(P, 'boss') ? 'Type fight — or flee now.' : 'Type claim to take what it holds.';
+                body = payloadGet(P, 'boss') ? 'A hidden chamber - and something ancient guards it.' : 'A hidden chamber! The air shivers with concentrated power.';
+                actionHint = payloadGet(P, 'boss') ? 'Type fight - or flee now.' : 'Type claim to take what it holds.';
                 break;
             case 'anomaly':
-                body = 'Reality thins here — the walls between worlds bleed through.';
+                body = 'Reality thins here - the walls between worlds bleed through.';
                 actionHint = 'Type touch to interact... or move on.';
                 break;
             case 'landmark':

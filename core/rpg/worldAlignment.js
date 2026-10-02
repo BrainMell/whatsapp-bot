@@ -52,17 +52,17 @@ async function _invitePlayer(sock, jid, eventId, aligned) {
     const guildWar = require('./guildWar');
     try {
         const buf = await notice.renderNotice(
-            'The walls between worlds have grown weak. The Guild Association calls all guilds to war across the joined worlds. Registration is OPEN — reply `join` to enter.',
+            'The walls between worlds have grown weak. The Guild Association calls all guilds to war across the joined worlds. Registration is OPEN - reply `join` to enter.',
             { title: 'WORLD ALIGNMENT' }
         );
         await sock.sendMessage(jid, {
             image: buf,
-            caption: `🌍 *WORLD ALIGNMENT — GUILD WAR*\n\nThe dead worlds overlap: greater dangers, greater glory, the largest Guild Points the system has ever offered.\n\nReply \`join\` to register. The war deploys once registration closes.`,
+            caption: `🌍 *WORLD ALIGNMENT - GUILD WAR*\n\nThe dead worlds overlap: greater dangers, greater glory, the largest Guild Points the system has ever offered.\n\nReply \`join\` to register. The war deploys once registration closes.`,
         });
     } catch (e) {
         // card failed → plain text fallback
         try {
-            await sock.sendMessage(jid, { text: `🌍 *WORLD ALIGNMENT — GUILD WAR*\n\nRegistration open — reply \`join\` to enter. (${eventId})` });
+            await sock.sendMessage(jid, { text: `🌍 *WORLD ALIGNMENT - GUILD WAR*\n\nRegistration open - reply \`join\` to enter. (${eventId})` });
         } catch (e2) { /* player unreachable */ }
     }
 }
@@ -151,11 +151,11 @@ async function _broadcastOnce(sock, BOT_MARKER, win) {
                 if (buf) {
                     await sock.sendMessage(gc, {
                         image: buf,
-                        caption: `${BOT_MARKER}🌍 *THE WORLDS ALIGN*\n\nAn alignment-scale Guild War is forming on its own. \`.j gw join\` enters from any group — players deploy into bot DMs.\n_Mark/unmark this GC: \`.j gw rpg off\`_`,
+                        caption: `${BOT_MARKER}🌍 *THE WORLDS ALIGN*\n\nAn alignment-scale Guild War is forming on its own. \`.j gw join\` enters from any group - players deploy into bot DMs.\n_Mark/unmark this GC: \`.j gw rpg off\`_`,
                     });
                 } else {
                     await sock.sendMessage(gc, {
-                        text: `${BOT_MARKER}🌍 *THE WORLDS ALIGN* — an alignment-scale Guild War is forming. \`.j gw join\` to enter.`,
+                        text: `${BOT_MARKER}🌍 *THE WORLDS ALIGN* - an alignment-scale Guild War is forming. \`.j gw join\` to enter.`,
                     });
                 }
                 sent++;

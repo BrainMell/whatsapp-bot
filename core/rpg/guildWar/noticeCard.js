@@ -172,7 +172,7 @@ async function renderAlignmentCard(opts = {}) {
     ctx.textAlign = 'center';
     ctx.fillStyle = '#B9A44C';
     ctx.font = '15px "Cinzel"';
-    ctx.fillText('ON THEIR OWN ACCORD — NO HAND RAISED', W / 2, 52);
+    ctx.fillText('ON THEIR OWN ACCORD · NO HAND RAISED', W / 2, 52);
     ctx.fillStyle = '#F3ECD9';
     ctx.font = '36px "Cinzel Deco"';
     if ('letterSpacing' in ctx) {
@@ -198,7 +198,7 @@ async function renderAlignmentCard(opts = {}) {
     ctx.font = '20px "IM Fell"';
     ctx.fillStyle = PAL.ink;
     const lines = _wrap(ctx, opts.text ||
-        'The walls between worlds have grown weak, and the dead worlds now overlap. The Guild Association calls ALL guilds to war across the joined worlds — greater dangers, greater glory, the largest Guild Points the system has ever offered.',
+        'The walls between worlds have grown weak, and the dead worlds now overlap. The Guild Association calls ALL guilds to war across the joined worlds - greater dangers, greater glory, the largest Guild Points the system has ever offered.',
         W - 220).slice(0, 7);
     let ty = 260;
     for (const line of lines) { ctx.fillText(line, 110, ty); ty += 32; }
@@ -212,7 +212,7 @@ async function renderAlignmentCard(opts = {}) {
     ctx.textAlign = 'center';
     ctx.fillStyle = PAL.wax;
     ctx.font = '22px "Cinzel"';
-    ctx.fillText(`REGISTRATION IS OPEN${opts.regMinutes != null ? ` — ${opts.regMinutes} MIN` : ''}`, W / 2, H - 142);
+    ctx.fillText(`REGISTRATION IS OPEN${opts.regMinutes != null ? ` - ${opts.regMinutes} MIN` : ''}`, W / 2, H - 142);
     ctx.fillStyle = PAL.ink;
     ctx.font = '17px "IM Fell"';
     ctx.fillText('Join from any group:  .j gw join   ·   then act in my DMs', W / 2, H - 116);
@@ -279,7 +279,7 @@ async function renderWarCalledCard(opts = {}) {
     ctx.font = '20px "IM Fell"';
     ctx.fillStyle = PAL.ink;
     const lines = _wrap(ctx, opts.text ||
-        'A war has been called by hand. The Ruins of a dead world await — rooms to clear, relics to carry, rivals to duel, and the World Core for the first guild bold enough to breach it.',
+        'A war has been called by hand. The Ruins of a dead world await - rooms to clear, relics to carry, rivals to duel, and the World Core for the first guild bold enough to breach it.',
         W - 220).slice(0, 6);
     let ty = 260;
     for (const line of lines) { ctx.fillText(line, 110, ty); ty += 32; }
@@ -293,7 +293,7 @@ async function renderWarCalledCard(opts = {}) {
     ctx.textAlign = 'center';
     ctx.fillStyle = PAL.wax;
     ctx.font = '22px "Cinzel"';
-    ctx.fillText(`REGISTRATION IS OPEN${opts.regMinutes != null ? ` — ${opts.regMinutes} MIN` : ''}`, W / 2, H - 142);
+    ctx.fillText(`REGISTRATION IS OPEN${opts.regMinutes != null ? ` - ${opts.regMinutes} MIN` : ''}`, W / 2, H - 142);
     ctx.fillStyle = PAL.ink;
     ctx.font = '17px "IM Fell"';
     ctx.fillText('Join here:  .j gw join   ·   this group carries the live war feed', W / 2, H - 116);
@@ -305,4 +305,222 @@ async function renderWarCalledCard(opts = {}) {
     return c.toBuffer('image/png');
 }
 
-module.exports = { renderNotice, renderAlignmentCard, renderWarCalledCard };
+// ============================================
+// FIELD MANUAL CARD — the `.j gw` / `.j war` / `.j wr` popup. A war-table
+// board listing the full command surface, martial styling to match the
+// war-call card. Same parchment kit, command rows in two columns.
+// ============================================
+async function renderWarHelpCard(opts = {}) {
+    _ensureFonts();
+    const canvas = require('canvas');
+    const c = canvas.createCanvas(W, H);
+    const ctx = c.getContext('2d');
+
+    ctx.fillStyle = PAL.parchment;
+    ctx.fillRect(0, 0, W, H);
+    // martial red header band (matches the war-call card family)
+    ctx.fillStyle = PAL.wax;
+    ctx.fillRect(0, 0, W, 190);
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, W, 190);
+    ctx.clip();
+    for (let i = 0; i < 6; i++) {
+        ctx.beginPath();
+        ctx.ellipse(80 + i * 170, 55 + (i % 3) * 65, 90, 34, i * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#F3ECD9';
+    ctx.font = '15px "Cinzel"';
+    ctx.fillText('GUILD WAR FIELD MANUAL', W / 2, 50);
+    ctx.font = '38px "Cinzel Deco"';
+    if ('letterSpacing' in ctx) {
+        ctx.letterSpacing = '3px';
+        ctx.fillText(opts.title || 'THE RUINS', W / 2, 108);
+        ctx.letterSpacing = '0px';
+    } else {
+        ctx.fillText((opts.title || 'THE RUINS').split('').join('\u2009'), W / 2, 108);
+    }
+    ctx.strokeStyle = '#F3ECD9';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(W / 2 - 170, 138); ctx.lineTo(W / 2 + 170, 138); ctx.stroke();
+    ctx.fillStyle = '#F3ECD9';
+    ctx.font = '16px "Cinzel"';
+    ctx.fillText('open with  .j gw  ·  .j wr  ·  .j war', W / 2, 168);
+
+    // command rows: command (Cinzel, ink) + description (IM Fell, soft)
+    const rows = [
+        ['.j gw start', 'Mods open registration. This GC becomes the feed HQ.'],
+        ['.j gw start alignment', 'Alignment-scale war (mods).'],
+        ['.j gw join', 'Enter the registering war with your guild.'],
+        ['.j gw forcestart', 'Mods deploy the war now.'],
+        ['.j gw status', 'Live standings from the Ruins.'],
+        ['.j gw end  |  abort', 'Mods conclude the war (end pays rewards).'],
+        ['.j gw rpg on | off', 'Admins mark this GC for organic alignment calls.'],
+    ];
+    ctx.textAlign = 'left';
+    let ry = 244;
+    const rowGap = 40;
+    for (const [cmd, desc] of rows) {
+        ctx.fillStyle = PAL.ink;
+        ctx.font = '19px "Cinzel"';
+        ctx.fillText(cmd, 100, ry);
+        ctx.fillStyle = PAL.inkSoft;
+        ctx.font = '17px "IM Fell"';
+        // description column, wrapped to fit
+        const dLines = _wrap(ctx, desc, W - 560);
+        let dy = ry;
+        for (const dl of dLines.slice(0, 2)) { ctx.fillText(dl, 400, dy); dy += 21; }
+        // faint row rule
+        ctx.strokeStyle = 'rgba(166,124,46,0.35)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(100, ry + 14); ctx.lineTo(W - 100, ry + 14); ctx.stroke();
+        ry += rowGap;
+        if (ry > H - 200) break;
+    }
+
+    // DM verbs strip
+    ctx.fillStyle = 'rgba(58,42,30,0.08)';
+    ctx.fillRect(90, H - 150, W - 180, 62);
+    ctx.strokeStyle = PAL.frame;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(90, H - 150, W - 180, 62);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = PAL.wax;
+    ctx.font = '18px "Cinzel"';
+    ctx.fillText('ONCE DEPLOYED, ACT IN MY DMs', W / 2, H - 126);
+    ctx.fillStyle = PAL.ink;
+    ctx.font = '16px "IM Fell"';
+    ctx.fillText('look · move n/s/e/w · map · relics · handin · challenge @name · status · quit', W / 2, H - 100);
+
+    ctx.font = 'italic 15px "IM Fell Italic"';
+    ctx.fillStyle = PAL.inkSoft;
+    ctx.textAlign = 'left';
+    ctx.fillText('The Association honors the bold.', 110, H - 62);
+
+    return c.toBuffer('image/png');
+}
+
+// ============================================
+// STATUS / FINAL STANDINGS CARD — `.j gw status` live board and the final
+// standings board when a war ends. Night-ink band, ranked rows, right-aligned GP.
+// ============================================
+async function renderWarStatusCard(opts = {}) {
+    _ensureFonts();
+    const canvas = require('canvas');
+    const c = canvas.createCanvas(W, H);
+    const ctx = c.getContext('2d');
+
+    ctx.fillStyle = PAL.parchment;
+    ctx.fillRect(0, 0, W, H);
+    // night-ink band (war-desk look)
+    ctx.fillStyle = '#241A2E';
+    ctx.fillRect(0, 0, W, 200);
+    ctx.fillStyle = '#2E2340';
+    ctx.globalAlpha = 0.6;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, W, 200);
+    ctx.clip();
+    for (let i = 0; i < 6; i++) {
+        ctx.beginPath();
+        ctx.ellipse(80 + i * 170, 55 + (i % 3) * 65, 90, 34, i * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#B9A44C';
+    ctx.font = '15px "Cinzel"';
+    ctx.fillText(opts.final ? 'FINAL STANDINGS OF THE WAR' : 'GUILD ASSOCIATION WAR DESK', W / 2, 50);
+    ctx.fillStyle = '#F3ECD9';
+    ctx.font = '36px "Cinzel Deco"';
+    if ('letterSpacing' in ctx) {
+        ctx.letterSpacing = '3px';
+        ctx.fillText(opts.final ? 'THE WAR IS OVER' : 'WAR STATUS', W / 2, 106);
+        ctx.letterSpacing = '0px';
+    } else {
+        ctx.fillText((opts.final ? 'THE WAR IS OVER' : 'WAR STATUS').split('').join('\u2009'), W / 2, 106);
+    }
+    ctx.strokeStyle = '#B9A44C';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(W / 2 - 170, 134); ctx.lineTo(W / 2 + 170, 134); ctx.stroke();
+
+    // meta line: type · state · players · clock
+    ctx.fillStyle = '#B9A44C';
+    ctx.font = '17px "Cinzel"';
+    const meta = [
+        (opts.type || 'normal').toUpperCase(),
+        opts.final ? 'FINAL' : (opts.state || 'ACTIVE').toUpperCase(),
+        `${opts.players != null ? opts.players : '?'} CHAMPIONS`,
+        opts.endsInMin != null ? (opts.endsInMin > 0 ? `${opts.endsInMin} MIN LEFT` : 'CLOSING') : null,
+    ].filter(Boolean).join('   ·   ');
+    ctx.fillText(meta, W / 2, 168);
+
+    // standings rows
+    const standings = Array.isArray(opts.standings) ? opts.standings.slice(0, 8) : [];
+    ctx.textAlign = 'left';
+    let sy = 250;
+    if (!standings.length) {
+        ctx.fillStyle = PAL.inkSoft;
+        ctx.font = '20px "IM Fell"';
+        ctx.fillText('No guild has scored yet. The Ruins wait in silence.', 120, sy);
+    } else {
+        for (let i = 0; i < standings.length; i++) {
+            const g = standings[i];
+            const rank = `${i + 1}.`;
+            // rank numeral in gold for top 3
+            ctx.fillStyle = i < 3 ? '#8B1A2B' : PAL.inkSoft;
+            ctx.font = '22px "Cinzel"';
+            ctx.fillText(rank, 120, sy);
+            ctx.fillStyle = PAL.ink;
+            ctx.font = '22px "Cinzel"';
+            const name = String(g.name || '').slice(0, 24);
+            ctx.fillText(name, 165, sy);
+            // dotted leader
+            const nameW = ctx.measureText(name).width;
+            ctx.strokeStyle = 'rgba(58,42,30,0.4)';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([2, 7]);
+            ctx.beginPath();
+            ctx.moveTo(175 + nameW, sy - 6);
+            ctx.lineTo(W - 220, sy - 6);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            // GP right-aligned
+            ctx.fillStyle = i < 3 ? PAL.wax : PAL.ink;
+            ctx.font = '22px "Cinzel"';
+            const gp = `${g.points != null ? g.points : 0} GP`;
+            ctx.textAlign = 'right';
+            ctx.fillText(gp, W - 120, sy);
+            ctx.textAlign = 'left';
+            sy += 48;
+            if (sy > H - 160) break;
+        }
+    }
+
+    // footer strip
+    ctx.fillStyle = 'rgba(58,42,30,0.08)';
+    ctx.fillRect(90, H - 130, W - 180, 52);
+    ctx.strokeStyle = PAL.frame;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(90, H - 130, W - 180, 52);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = PAL.wax;
+    ctx.font = '17px "Cinzel"';
+    ctx.fillText(opts.final ? 'REWARDS HAVE BEEN PAID TO THE GUILDS' : 'LIVE FEED RUNS IN THE HOST GROUP', W / 2, H - 97);
+
+    ctx.font = 'italic 15px "IM Fell Italic"';
+    ctx.fillStyle = PAL.inkSoft;
+    ctx.textAlign = 'left';
+    ctx.fillText(opts.final ? 'Let the archives record their names.' : 'Score by clearing chambers, carrying relics and breaching the World Core.', 110, H - 62);
+
+    return c.toBuffer('image/png');
+}
+
+module.exports = { renderNotice, renderAlignmentCard, renderWarCalledCard, renderWarHelpCard, renderWarStatusCard };

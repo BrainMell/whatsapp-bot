@@ -1185,7 +1185,7 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
             } catch (e) { console.error('[PvP] ruins settle (flee):', e?.message); }
             return {
                 success: true, finished: true, fled: true,
-                message: `🏃 *${currentPlayer.name}* fled the duel — the contested prize is forfeit to *${opponent.name}*!`,
+                message: `🏃 *${currentPlayer.name}* fled the duel - the contested prize is forfeit to *${opponent.name}*!`,
             };
         }
 

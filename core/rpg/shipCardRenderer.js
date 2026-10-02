@@ -420,7 +420,7 @@ function factorRow(ctx, y, label, value) {
   ctx.textAlign = 'right';
   ctx.font = '20px "RobotoB"';
   ctx.fillStyle = value === null ? C.dim : C.text;
-  ctx.fillText(value === null ? '—' : String(value), 710, y);
+  ctx.fillText(value === null ? '-' : String(value), 710, y);
 }
 
 async function renderShipCard({ name1, name2, score, factors, tier, comment, mash, hearts }) {

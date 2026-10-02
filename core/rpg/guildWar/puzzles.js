@@ -18,7 +18,7 @@ function genSequence(rng, room) {
     return {
         kind: 'sequence',
         prompt: `Ancient glyphs flicker as you approach the lock: *${shown}*\n` +
-            `An inscription reads: "The ${ordinal(hintIdx + 1)} glyph was carved first — follow its lead, then onward in the order of shadows."\n` +
+            `An inscription reads: "The ${ordinal(hintIdx + 1)} glyph was carved first - follow its lead, then onward in the order of shadows."\n` +
             `Reply with the ${n} glyphs in the correct order (e.g. \`${seq[0]} ${seq[1]}\`).`,
         answer: seq[hintIdx] + ' ' + seq.filter((_, i) => i !== hintIdx).join(' '),
         altAnswer: seq[hintIdx] + seq.filter((_, i) => i !== hintIdx).join(''),
@@ -55,7 +55,7 @@ function genCipher(rng, room, map) {
     const enc = word.split('').map((ch) => String.fromCharCode(((ch.charCodeAt(0) - 65 + shift) % 26) + 65)).join('');
     return {
         kind: 'cipher',
-        prompt: `A weathered plaque bears a shifted alphabet: *${enc}* — "Caesar walked this hall ${shift} step${shift > 1 ? 's' : ''} back."\nDecode the word.`,
+        prompt: `A weathered plaque bears a shifted alphabet: *${enc}* - "Caesar walked this hall ${shift} step${shift > 1 ? 's' : ''} back."\nDecode the word.`,
         answer: word,
         normalize: (s) => String(s).toUpperCase().replace(/[^A-Z]/g, ''),
         maxAttempts: 3,
@@ -103,7 +103,7 @@ function genMapRiddle(rng, room, map) {
     const dirDesc = `${Math.abs(dx)} room${Math.abs(dx) === 1 ? '' : 's'} ${dx >= 0 ? 'east' : 'west'}, ${Math.abs(dy)} room${Math.abs(dy) === 1 ? '' : 's'} ${dy >= 0 ? 'south' : 'north'}`;
     return {
         kind: 'mapriddle',
-        prompt: `A carved verse: "Seek the hidden chamber — ${dirDesc} from this very hall. Speak 'open' and name what you seek: *vault*."`,
+        prompt: `A carved verse: "Seek the hidden chamber - ${dirDesc} from this very hall. Speak 'open' and name what you seek: *vault*."`,
         answer: 'vault',
         normalize: (s) => String(s).toLowerCase().replace(/[^a-z]/g, ''),
         maxAttempts: 3,
