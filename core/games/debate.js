@@ -36,11 +36,42 @@ function _dkey(chatId) {
 // Load debates and leaderboard from system cache
 function loadDebates() {
     activeDebates = system.get(debatesKey(), {}) || {};
+    // 💡 STALE-SESSION PRUNE (Issue #31ff98): sessions whose 2h window
+    // expired while the process was down must not block new debates
+    // forever (their setTimeout died with the old process).
+    let pruned = false;
+    const now = Date.now();
+    for (const [k, d] of Object.entries(activeDebates)) {
+        if (!d || !d.expirationTime || d.expirationTime <= now) {
+            delete activeDebates[k];
+            pruned = true;
+        }
+    }
+    if (pruned) saveDebates();
     debateLeaderboard = system.get('debate_leaderboard', {}) || {};
 }
 
-// Save data to MongoDB
+// 💡 BSON FIX 2026-10-02 (Issue #31ff98 "debate isn't working"): the live
+// setTimeout handle was stored INSIDE the session object, so every
+// saveDebates() hit "Cannot convert circular structure to BSON" (110+
+// logged occurrences) - debate state never persisted and the pipeline
+// logged an error on EVERY recorded argument. Timer handles now live in
+// this side Map; sessions stay plain JSON-able data.
+const _debateTimers = new Map(); // dkey -> Timeout
+function _clearTimer(dk) {
+    const t = _debateTimers.get(dk);
+    if (t) { clearTimeout(t); _debateTimers.delete(dk); }
+}
+
+// Save data to MongoDB (defensive: a non-serializable value must never
+// crash the message pipeline - log and skip instead).
 function saveDebates() {
+    try {
+        JSON.stringify(activeDebates);
+    } catch (e) {
+        console.error('Debate session not serializable - skipping KV save:', e.message);
+        return;
+    }
     system.set(debatesKey(), activeDebates);
 }
 
@@ -106,6 +137,31 @@ function userIsGroupAdmin(groupMetadata, jid) {
     if (!groupMetadata?.participants || !groupMetadata.participants.length) return false;
     const target = _userPart(jid);
     return groupMetadata.participants.some((p) => _participantIsAdmin(p) && _userPart(p.id) === target);
+}
+
+// ═══ LID/PHONE-AWARE SAME-USER MATCH (Issue #31ff98) ═══════════════
+// A debate is started from a MENTION (usually <phone>@s.whatsapp.net) but
+// arguments arrive as senderJid (<num>@lid in LID-privacy groups). The old
+// full-JID comparison silently DROPPED those arguments, so .j judge always
+// answered "Both debaters must make at least 1 argument" - the debate
+// looked broken. Same user = equal user part (covers :device suffixes) OR
+// linked LID/phone numbers via the auth-dir maps.
+const _lidMaps = () => { try { return require('../utils/lidResolver'); } catch { return {}; } };
+function _sameUser(a, b) {
+    const part = (j) => String(j || '').split('@')[0].split(':')[0];
+    const dom = (j) => (String(j || '').split('@')[1] || '').split(':')[0];
+    const pa = part(a), pb = part(b);
+    if (!pa || !pb) return false;
+    if (pa === pb) return true;
+    try {
+        const { lidCache, phoneCache } = _lidMaps();
+        if (!lidCache || !phoneCache) return false;
+        const phoneOfLid = (p) => lidCache.get(p);
+        const lidOfPhone = (p) => phoneCache.get(p);
+        const ca = dom(a) === 'lid' ? phoneOfLid(pa) : lidOfPhone(pa);
+        const cb = dom(b) === 'lid' ? phoneOfLid(pb) : lidOfPhone(pb);
+        return (ca && ca === pb) || (cb && cb === pa) || (ca && cb && ca === cb);
+    } catch { return false; }
 }
 
 // ═══ VERDICT PARSING HELPERS (JUDGE FIX 2026-09-22) ═════════════════
@@ -205,7 +261,25 @@ function coerceVerdict(verdict) {
     return out;
 }
 
+// Re-arm the 2h expiry timers after a process restart (the old process's
+// setTimeout died with it). Engine calls this lazily on the first group
+// message; only THIS bot's sessions are touched (dkey is bot-scoped).
+let _rearmed = false;
+async function rearmTimers(sock, BOT_MARKER) {
+    if (_rearmed) return;
+    _rearmed = true;
+    const now = Date.now();
+    for (const [dk, d] of Object.entries(activeDebates)) {
+        if (!dk.startsWith(`${botConfig.getBotId?.() || 'global'}|`)) continue;
+        if (_debateTimers.has(dk)) continue;
+        const remaining = (d.expirationTime || 0) - now;
+        if (remaining <= 0) continue; // loader prunes already-expired ones
+        _debateTimers.set(dk, setTimeout(() => module.exports.handleDebateTimeout(sock, dk.split('|')[1], BOT_MARKER), remaining));
+    }
+}
+
 module.exports = {
+    rearmTimers,
     startDebate: async (sock, chatId, topic, debater1Jid, debater2Jid, groupMetadata, BOT_MARKER, smartGroqCall, MODELS) => {
         // Check if debate already active
         if (activeDebates[_dkey(chatId)]) {
@@ -249,9 +323,10 @@ module.exports = {
             arguments: [],
             startTime: Date.now(),
             expirationTime: expirationTime, // Store expiration time
-            locked: true,
-            timeoutId: setTimeout(() => module.exports.handleDebateTimeout(sock, chatId, BOT_MARKER), DEBATE_DURATION_MS) // Set timeout
+            locked: true
         };
+        // timer handle lives OUTSIDE the session (BSON fix - see _debateTimers)
+        _debateTimers.set(_dkey(chatId), setTimeout(() => module.exports.handleDebateTimeout(sock, chatId, BOT_MARKER), DEBATE_DURATION_MS));
 
         saveDebates();
 
@@ -302,15 +377,9 @@ module.exports = {
         const debate = activeDebates[_dkey(chatId)];
         if (!debate) return;
 
-        // 💡 FIX: Normalize JIDs before comparison - previously strict !==
-        // was used, which failed if senderJid had a device suffix (e.g.
-        // 123:12@s.whatsapp.net) but the stored JID didn't.
-        const normJid = (jid) => {
-            if (!jid) return '';
-            return jid.split('@')[0].split(':')[0] + '@' + (jid.split('@')[1] || 's.whatsapp.net');
-        };
-        const sender = normJid(senderJid);
-        if (sender !== normJid(debate.debater1) && sender !== normJid(debate.debater2)) {
+        // 💡 LID/phone-aware match (see _sameUser) - device suffixes and
+        // @lid vs @s.whatsapp.net spellings must never drop an argument.
+        if (!_sameUser(senderJid, debate.debater1) && !_sameUser(senderJid, debate.debater2)) {
             return;
         }
 
@@ -341,15 +410,10 @@ module.exports = {
             };
         }
 
-        // 💡 FIX: Check that BOTH debaters have at least 1 argument -
-        // previously the check was total count >= 2, which allowed one
-        // debater to make 2 arguments while the other made 0.
-        const normJid = (jid) => {
-            if (!jid) return '';
-            return jid.split('@')[0].split(':')[0] + '@' + (jid.split('@')[1] || 's.whatsapp.net');
-        };
-        const d1Count = debate.arguments.filter(a => normJid(a.debater) === normJid(debate.debater1)).length;
-        const d2Count = debate.arguments.filter(a => normJid(a.debater) === normJid(debate.debater2)).length;
+        // 💡 FIX: Check that BOTH debaters have at least 1 argument (LID/
+        // phone-aware via _sameUser).
+        const d1Count = debate.arguments.filter(a => _sameUser(a.debater, debate.debater1)).length;
+        const d2Count = debate.arguments.filter(a => _sameUser(a.debater, debate.debater2)).length;
         if (d1Count < 1 || d2Count < 1) {
             return {
                 success: false,
@@ -361,15 +425,15 @@ module.exports = {
         const debater1Name = debate.debater1.split('@')[0];
         const debater2Name = debate.debater2.split('@')[0];
 
-        // Organize arguments by debater (normalized - device suffixes and
-        // LID/phone spellings must not split one debater's argument list)
+        // Organize arguments by debater (LID/phone-aware - one debater's
+        // arguments must not split across @lid/@s.whatsapp.net spellings)
         const debater1Args = debate.arguments
-            .filter(arg => normJid(arg.debater) === normJid(debate.debater1))
+            .filter(arg => _sameUser(arg.debater, debate.debater1))
             .map(arg => arg.message)
             .join('\n\n');
         
         const debater2Args = debate.arguments
-            .filter(arg => normJid(arg.debater) === normJid(debate.debater2))
+            .filter(arg => _sameUser(arg.debater, debate.debater2))
             .map(arg => arg.message)
             .join('\n\n');
 
@@ -485,7 +549,7 @@ _the group is unlocked. debate again anytime._`;
             }
 
             // Clear the timeout for the debate as it's ending
-            clearTimeout(debate.timeoutId);
+            _clearTimer(_dkey(chatId));
 
             // Clear debate
             delete activeDebates[_dkey(chatId)];
@@ -552,7 +616,7 @@ _the group is unlocked. debate again anytime._`;
             return { success: false, message: BOT_MARKER + "❌ No active debate!" };
         }
 
-        if (debate.timeoutId) clearTimeout(debate.timeoutId);
+        _clearTimer(_dkey(chatId));
 
         try {
             // Unlock and demote if they weren't admins before
@@ -590,6 +654,7 @@ _the group is unlocked. debate again anytime._`;
     handleDebateTimeout: async (sock, chatId, BOT_MARKER) => {
         const debate = activeDebates[_dkey(chatId)];
         if (!debate) return; // Debate might have been cleared already
+        _clearTimer(_dkey(chatId)); // fired timer must leave the side Map
 
         console.log(`Debate for chat ${chatId} timed out.`);
 
@@ -634,11 +699,7 @@ _the group is unlocked. debate again anytime._`;
         // 💡 FIX: Don't allow debaters to be added as spectators - they
         // would get a 2-minute spectator timeout that demotes them
         // mid-debate, losing their ability to post in the locked group.
-        const normJid = (jid) => {
-            if (!jid) return '';
-            return jid.split('@')[0].split(':')[0] + '@' + (jid.split('@')[1] || 's.whatsapp.net');
-        };
-        if (normJid(userId) === normJid(debate.debater1) || normJid(userId) === normJid(debate.debater2)) {
+        if (_sameUser(userId, debate.debater1) || _sameUser(userId, debate.debater2)) {
             return { success: false, message: "❌ Debaters cannot be spectators!" };
         }
 

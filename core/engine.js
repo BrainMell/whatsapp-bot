@@ -11287,6 +11287,9 @@ _💡 Reply with another number from your search list!_`.trim();
                     chatId.endsWith("@g.us") &&
                     debate.isDebateActive(chatId)
                   ) {
+                    // BSON fix follow-up: re-arm the 2h expiry timers that
+                    // died with a previous process (no-op after first call).
+                    debate.rearmTimers(sock, BOT_MARKER).catch(() => {});
                     // 1. Check if sender is a regular debater
                     debate.recordArgument(chatId, senderJid, txt);
 
