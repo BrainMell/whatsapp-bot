@@ -86,12 +86,16 @@ async function forfeitToRoom(eventDoc, loser, why, { sock = null, chatId = null 
     return { text: `🏃 You retreat to your previous room. Whatever was contested stays with the room.` };
 }
 
-// ── settle a completed duel (called from the ruins combat onEnd hook) ──
-// duelMeta: { eventId, roomKey, winnerJid, loserJid, isPvP }
-async function settle(eventDoc, winnerJid, loserJid) {
+// ── settle a completed duel (called from the pvpSystem finish hook) ──
+// Accepts an event DOC or an eventId string; resolves the fresh doc itself.
+async function settle(eventDocOrId, winnerJid, loserJid) {
+    const eventDoc = typeof eventDocOrId === 'string'
+        ? await state.getEvent(eventDocOrId, { fresh: true })
+        : eventDocOrId;
+    if (!eventDoc || eventDoc.state !== 'ACTIVE') return { gp: 0, claimed: 0 };
     const winner = eventDoc.players.find((p) => p.jid === winnerJid);
     const loser = eventDoc.players.find((p) => p.jid === loserJid);
-    if (!winner || !loser) return;
+    if (!winner || !loser) return { gp: 0, claimed: 0 };
 
     const gp = await points.recordPvpWin(eventDoc.eventId, winner, loser);
 
