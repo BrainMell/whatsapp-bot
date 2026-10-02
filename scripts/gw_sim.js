@@ -16,20 +16,22 @@ const ROOT = path.resolve(__dirname, '..');
 
 // ── DB connect: same cluster, TEST database ──
 async function connectDB() {
-    const mongoose = require('mongoose');
-    // read live .env for the cluster URI
+    // parse .env FIRST and redirect MONGO_URI to the TEST database BEFORE any
+    // bot module loads, so db.js connects to gwtest too (ONE connection).
     const envPath = fs.existsSync(path.join(ROOT, '.env')) ? path.join(ROOT, '.env') : '/home/ubuntu/whatsapp-bot/.env';
     const env = {};
     for (const line of fs.readFileSync(envPath, 'utf8').split('\n')) {
         const m = /^\s*([A-Z0-9_]+)\s*=\s*"?([^"\n]*)"?/.exec(line);
         if (m) env[m[1]] = m[2];
     }
-    let uri = env.MONGODB_URI || env.MONGO_URI || env.MONGO_URL || env.DATABASE_URL;
+    let uri = env.MONGO_URI || env.MONGODB_URI || env.MONGO_URL || env.DATABASE_URL;
     if (!uri) throw new Error('No Mongo URI in env keys: ' + Object.keys(env).join(','));
-    // force test db
     uri = uri.replace(/\/([^/?]+)(\?|$)/, '/gwtest$2');
-    await mongoose.connect(uri, { serverSelectionTimeoutMS: 20000 });
-    console.log(`[sim] connected to TEST db: ${mongoose.connection.name}`);
+    process.env.MONGO_URI = uri;
+    const connectDB = require('../db'); // bot's own connection helper — same mongoose instance
+    await connectDB();
+    const mongoose = require('mongoose');
+    console.log(`[sim] connected to TEST db: ${mongoose.connection.name} @ ${mongoose.connection.host}`);
     return mongoose;
 }
 
@@ -69,7 +71,9 @@ async function s1_mapgen() {
                 if (reach.size !== map.rooms.size) break;
             }
             // spawn spacing
-            const minDist = Math.max(2, Math.floor(map.side * CFG.MAP.SPAWN_MIN_DIST_FRAC));
+            const baseDist = Math.max(2, Math.floor(map.side * CFG.MAP.SPAWN_MIN_DIST_FRAC));
+            const feasible = Math.max(1, Math.floor((4 * (map.side - 1)) / Math.max(1, Math.min(players, 150) - 1)));
+            const minDist = Math.min(baseDist, feasible);
             let spaced = true;
             for (let i = 0; i < map.spawns.length && spaced; i++) {
                 for (let j = i + 1; j < map.spawns.length; j++) {
@@ -120,9 +124,11 @@ async function s2_lifecycle() {
         const reg = await state.registerPlayer(ev.eventId, { jid: `p${i}@s.whatsapp.net`, name: `P${i}`, guildId: g, guildName: g });
         if (i === 0) check('register p0', !!reg);
     }
-    // double-register must not duplicate
+    // double-register: atomic $ne condition returns null (no duplicate)
     const ev2 = await state.registerPlayer(ev.eventId, { jid: 'p0@s.whatsapp.net', name: 'P0', guildId: 'GwTestA', guildName: 'GwTestA' });
-    check('no duplicate registration', ev2.players.filter((p) => p.jid === 'p0@s.whatsapp.net').length === 1);
+    check('no duplicate registration', ev2 === null);
+    const evr = await state.getEvent(ev.eventId, { fresh: true });
+    check('registration count intact', evr.players.length === 8, `${evr.players.length}`);
 
     // start (map baked, encounters seeded, fog applied)
     const started = await state.startEvent(ev.eventId);
@@ -279,6 +285,8 @@ async function s5_loans() {
     g.balance = (g.balance || 0) + 1000000;
     await guilds.syncGuild('GwTestA');
 
+    const economy = require('../core/rpg/economy');
+    economy.addMoney('loaner@s.whatsapp.net', 100000, 'sim wallet topup');
     const req = await bankLoans.requestLoan('loaner@s.whatsapp.net', 'Loaner', 'GwTestA', 50000);
     check('loan request ok', req.ok);
     const tooBig = await bankLoans.requestLoan('loaner@s.whatsapp.net', 'Loaner', 'GwTestA', 999999999);
@@ -387,6 +395,8 @@ async function s8_recovery() {
     const guilds = require('../core/rpg/guilds');
     await guilds.loadGuilds();
 
+    // abort any leftovers before each suite (cap bypass handled via GW_TEST too)
+    const stateRef0 = require('../core/rpg/guildWar/state');
     const suites = [
         ['S1 mapgen', s1_mapgen],
         ['S2 lifecycle', s2_lifecycle],
@@ -401,7 +411,10 @@ async function s8_recovery() {
     for (const [name, fn] of suites) {
         if (filter && !name.toLowerCase().includes(filter.toLowerCase())) continue;
         console.log(`\n══════ ${name} ══════`);
-        try { await fn(); } catch (e) {
+        try {
+            for (const ev of await stateRef0.getActiveEvents()) await stateRef0.abortEvent(ev.eventId, 'suite cleanup');
+            await fn();
+        } catch (e) {
             console.error(`💥 ${name} CRASHED:`, e.message);
             results.push({ name: `${name} (crashed)`, ok: false, detail: e.message });
         }

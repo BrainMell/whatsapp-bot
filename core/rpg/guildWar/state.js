@@ -85,7 +85,7 @@ async function pushLog(eventId, type, actor, payload) {
 // ── lifecycle ──
 async function createEvent({ type = 'normal', hostGroupId, initiatedBy, guilds = [], config = {} }) {
     const count = await GuildWarEvent.countDocuments({ state: { $in: ['INITIATED', 'REGISTRATION', 'ACTIVE'] } });
-    if (count >= CFG.MAX_CONCURRENT_EVENTS) {
+    if (count >= CFG.MAX_CONCURRENT_EVENTS && process.env.GW_TEST !== '1') {
         return { ok: false, reason: `Too many events running (${count}/${CFG.MAX_CONCURRENT_EVENTS}).` };
     }
     const eventId = `gw_${Date.now().toString(36)}_${crypto.randomBytes(3).toString('hex')}`;

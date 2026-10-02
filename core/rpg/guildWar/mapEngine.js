@@ -168,7 +168,11 @@ function generate(seed, playerCount, opts = {}) {
     }
 
     // ── spawns: greedy farthest-point on outer ring, min pairwise distance ──
-    const minDist = Math.max(2, Math.floor(side * CFG.MAP.SPAWN_MIN_DIST_FRAC));
+    // adaptive spacing: target = side*frac, capped by what the outer ring can
+    // physically fit (perimeter/(players-1)) so large fields stay feasible
+    const baseDist = Math.max(2, Math.floor(side * CFG.MAP.SPAWN_MIN_DIST_FRAC));
+    const feasible = Math.max(1, Math.floor((4 * (side - 1)) / Math.max(1, Math.min(playerCount, 150) - 1)));
+    const minDist = Math.min(baseDist, feasible);
     const outer = [];
     for (let y = 0; y < side; y++) for (let x = 0; x < side; x++) {
         if (x === 0 || y === 0 || x === side - 1 || y === side - 1) {
