@@ -147,7 +147,10 @@ async function s2_lifecycle() {
         for (let i = 0; i < 8; i++) {
             const r = await dmRouter.handleDM(sock, `p${i}@s.whatsapp.net`, `p${i}@s.whatsapp.net`, ['n', 'e', 's', 'w'][step % 4], 'GW');
             if (r && /No passage|catch your breath/.test(r.text || '')) blockedByCooldown++;
-            else if (r && r.text) { moved++; intros++; }
+            // 💡 NAV OVERHAUL 2026-10-03: a successful move returns {} when
+            // presentRoom already sent map + type card + scene through the
+            // sock itself (same convention as the puzzle double-image path).
+            else if (r && (r.text || (r.image !== undefined) || Object.keys(r).length === 0)) { moved++; intros++; }
         }
     }
     check('players moved (some OK)', moved > 5, `moved=${moved} blocked=${blockedByCooldown}`);
