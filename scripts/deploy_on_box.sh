@@ -18,6 +18,24 @@ echo "=== smart deploy: branch=$BRANCH  $(date -u +%FT%TZ) ==="
 git fetch origin || exit 1
 TARGET="$BRANCH"
 
+# ── 0. idempotency gate (2026-10-03 incident fix) ──────────────────────
+# THREE deploy relays watch this branch (GitHub Action, Box2 cron relay,
+# an external polling relay). Before tonight, ONE push triggered up to
+# THREE full deploys ~2-3 min apart; the rapid SIGKILLed restarts
+# corrupted a Baileys auth file mid-write and logged a tenant out. Gate:
+# if the box already runs the target commit AND pm2 is online, this
+# invocation is a no-op (still prints the "deploy done" marker so every
+# relay consumes its head and stays quiet).
+TARGET_HEAD=$(git rev-parse "origin/$TARGET" 2>/dev/null || echo "")
+CURRENT_HEAD=$(git rev-parse HEAD 2>/dev/null || echo "")
+if [ -n "$TARGET_HEAD" ] && [ "$TARGET_HEAD" = "$CURRENT_HEAD" ]; then
+  PSTATE=$(pm2 jlist 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const p=JSON.parse(s);const w=(p||[]).find(x=>x&&x.name==='whatsapp-bot');console.log(w&&w.pm2_env&&w.pm2_env.status==='online'?'online':'no')}catch(e){console.log('no')}})" 2>/dev/null || echo no)
+  if [ "$PSTATE" = "online" ]; then
+    echo "=== deploy done: skip $(git rev-parse --short HEAD) already deployed, pm2 online $(date -u +%FT%TZ) ==="
+    exit 0
+  fi
+fi
+
 TS=$(date +%Y%m%d-%H%M%S)
 mkdir -p "$BACKUP_ROOT"
 
