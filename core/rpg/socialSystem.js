@@ -77,7 +77,7 @@ function getRelationshipsText(activeJids, senderJid) {
         const score = getScore(rels, jid);
         if (score === 0) continue; // Skip neutral relations to save tokens
 
-        const otherName = otherUser.nickname || jid.split('@')[0];
+        const otherName = otherUser.nickname || economy.getDisplayName(jid);
         
         // Convert relationship score into a descriptive relationship label
         let relationshipLabel = "Neutral Acquaintance";

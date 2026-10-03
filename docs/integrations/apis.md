@@ -8,7 +8,7 @@ The External Integrations Subsystem connects the bot with external services, mic
 
 ## How it works
 
-**Groq API Client with Key Rotation** — [GroqClient.js L41-L95](https://github.com/BrainMell/whatsapp-bot/blob/main/core/src/context_engine/GroqClient.js#L41-L95)
+**Groq API Client with Key Rotation** - [GroqClient.js L41-L95](https://github.com/BrainMell/whatsapp-bot/blob/main/core/src/context_engine/GroqClient.js#L41-L95)
 ```javascript
     async extract(prompt) {
         let attempts = 0;
@@ -70,7 +70,7 @@ This method handles structured query extraction using the Groq API. It targets a
 
 ---
 
-**Go Service Image Generation** — [goImageService.js L63-L76](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/goImageService.js#L63-L76)
+**Go Service Image Generation** - [goImageService.js L63-L76](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/goImageService.js#L63-L76)
 ```javascript
   async generateCombatImage(data) {
     return this._enqueue(async () => {
@@ -91,7 +91,7 @@ This method makes a POST request to the `/api/combat` endpoint of the Go microse
 
 ---
 
-**News Fetching** — [news.js L24-L33](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/news.js#L24-L33)
+**News Fetching** - [news.js L24-L33](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/news.js#L24-L33)
 ```javascript
 async function getLatestNews() {
     try {
@@ -128,10 +128,10 @@ To configure API request options or connection delays, developers can change key
 ```
 
 ## Common tasks
-- **Change Groq extraction timeout** — Adjust the max response wait time for Groq completions in [GroqClient.js L72](https://github.com/BrainMell/whatsapp-bot/blob/main/core/src/context_engine/GroqClient.js#L72).
-- **Change Go Service combat render timeout** — Customize the API request timeout for rendering combat cards in [goImageService.js L68](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/goImageService.js#L68).
-- **Configure Groq model key rotation limit** — Update the maximum retry attempts when rotating keys in [GroqClient.js L43](https://github.com/BrainMell/whatsapp-bot/blob/main/core/src/context_engine/GroqClient.js#L43).
-- **Adjust news history cache limit** — Set how many article link hashes are saved in the system database to prevent duplicates in [news.js L16-L19](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/news.js#L16-L19).
+- **Change Groq extraction timeout** - Adjust the max response wait time for Groq completions in [GroqClient.js L72](https://github.com/BrainMell/whatsapp-bot/blob/main/core/src/context_engine/GroqClient.js#L72).
+- **Change Go Service combat render timeout** - Customize the API request timeout for rendering combat cards in [goImageService.js L68](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/goImageService.js#L68).
+- **Configure Groq model key rotation limit** - Update the maximum retry attempts when rotating keys in [GroqClient.js L43](https://github.com/BrainMell/whatsapp-bot/blob/main/core/src/context_engine/GroqClient.js#L43).
+- **Adjust news history cache limit** - Set how many article link hashes are saved in the system database to prevent duplicates in [news.js L16-L19](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/news.js#L16-L19).
 
 
 

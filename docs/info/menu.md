@@ -68,7 +68,7 @@ async function sendBotMenu(sock, chatId, botMarker, args = [], senderJid) {
   // 2. CATEGORY DETAIL (.j menu <category>)
   if (targetCategory) {
     let catMsg = GET_BANNER(`...`) + `\n\n`;
-    visibleCmds.forEach((c) => { catMsg += `➤ \`${prefix} ${c.cmd}\` – ${c.desc}\n`; });
+    visibleCmds.forEach((c) => { catMsg += `➤ \`${prefix} ${c.cmd}\` - ${c.desc}\n`; });
     return await sendMenuWithBanner(sock, chatId, catMsg);
   }
 

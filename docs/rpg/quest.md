@@ -271,7 +271,7 @@ The Boss Raids/Adventure Boss system expands the Quest loop, allowing group part
 
 ## How it works
 
-**Raid Lobby and Party Gathering** — [guildAdventure.js L4169-L4232](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/guildAdventure.js#L4169-L4232)
+**Raid Lobby and Party Gathering** - [guildAdventure.js L4169-L4232](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/guildAdventure.js#L4169-L4232)
 ```javascript
 const joinAdventure = (chatId, senderJid, senderName) => {
   const state = getGameState(chatId);
@@ -342,7 +342,7 @@ This function handles player registration in the adventure/raid lobby. It retrie
 
 ---
 
-**Boss HP and Phase Transitions** — [guildAdventure.js L3629-L3671](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/guildAdventure.js#L3629-L3671)
+**Boss HP and Phase Transitions** - [guildAdventure.js L3629-L3671](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/guildAdventure.js#L3629-L3671)
 ```javascript
 async function checkBossPhase(sock, boss, chatId) {
   if (!boss.isBoss || !boss.phases) return null;
@@ -392,7 +392,7 @@ This function is run during boss battles to evaluate phase progression. It compu
 
 ---
 
-**Boss Combat Turn Logic** — [bossMechanics.js L1144-L1179](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/bossMechanics.js#L1144-L1179)
+**Boss Combat Turn Logic** - [bossMechanics.js L1144-L1179](https://github.com/BrainMell/whatsapp-bot/blob/main/core/rpg/bossMechanics.js#L1144-L1179)
 ```javascript
     processTurn() {
         this.currentTurn++;

@@ -1,9 +1,9 @@
 // ═══════════════════════════════════════════════════════════════════════════
-//  BOUNTY SYSTEM (Phase 6 — PvP Bounty)
+//  BOUNTY SYSTEM (Phase 6 - PvP Bounty)
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // Players place Zeni bounties on other players. Bounty hunters track via PvP.
-// Adds risk to hoarding wealth — wealthy players become targets.
+// Adds risk to hoarding wealth - wealthy players become targets.
 //
 // Rules:
 //   - Min bounty: 100K Zeni, Max: 50M Zeni
@@ -15,14 +15,16 @@
 //   - Failed hunt: hunter pays 10% of bounty as penalty
 //   - Targets with bounties cannot use the bank (forces wallet carry = risk)
 //   - Anti-abuse: can't bounty yourself, can't bounty alt accounts
-//     (alt detection by phone number — same as multi-account detection)
+//     (alt detection by phone number - same as multi-account detection)
 
 const Bounty = require('../models/Bounty');
+const botConfig = require('../../botConfig');
+const P = () => botConfig.getPrefix();
 const mongoose = require('mongoose');
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────
-const MIN_BOUNTY = 100000;
-const MAX_BOUNTY = 50000000;
+const MIN_BOUNTY = 5000; // 💡 Rebalanced 2026-08-17: 100K excluded most players; 5K is ~1 D-rank day.
+const MAX_BOUNTY = 5000000; // 💡 Rebalanced 2026-08-17: 50M = 10% of community cap per single bounty. 5M cap.
 const MAX_ACTIVE_PER_TARGET = 3;
 const PLACER_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24h
 const BOUNTY_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -31,7 +33,8 @@ const FAILED_HUNT_PENALTY_PCT = 0.10; // 10% of bounty
 
 // ─── GENERATE BOUNTY ID ───────────────────────────────────────────────────
 function generateBountyId() {
-  return `bounty_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  // 💡 Short readable ID: "B-3F7A" instead of "bounty_1699999999999_a1b2c3d4"
+  return 'B-' + Math.random().toString(36).slice(2, 6).toUpperCase();
 }
 
 // ─── PLACE BOUNTY ─────────────────────────────────────────────────────────
@@ -50,7 +53,7 @@ async function placeBounty(placerJid, targetJid, amount, placerLevel, targetLeve
     return { success: false, message: `❌ Target must be at least level 20. (They are L${targetLevel})` };
   }
 
-  // Check placer cooldown — any bounty placed in last 24h
+  // Check placer cooldown - any bounty placed in last 24h
   const recentBounty = await Bounty.findOne({
     placerJid,
     placedAt: { $gte: new Date(Date.now() - PLACER_COOLDOWN_MS) },
@@ -91,7 +94,7 @@ async function placeBounty(placerJid, targetJid, amount, placerLevel, targetLeve
   return {
     success: true,
     bounty,
-    message: `💰 *BOUNTY PLACED*\n\nTarget: @${targetJid.split('@')[0]}\nAmount: ${amount.toLocaleString()} Zeni\nExpires: ${new Date(bounty.expiresAt).toLocaleDateString()}\n\n_Hunters can claim with \`.g bounty claim @target\`_`,
+    message: `💰 *BOUNTY PLACED*\n\nTarget: @${economy.getDisplayName(targetJid)}\nAmount: ${amount.toLocaleString()} Zeni\nExpires: ${new Date(bounty.expiresAt).toLocaleDateString()}\n\n_Hunters can claim with \`${P()} bounty claim @target\`_`,
   };
 }
 
@@ -129,13 +132,18 @@ async function claimBounty(hunterJid, targetJid) {
   const guildPerks = require('./guildPerks');
   let totalClaimed = 0;
   let totalFee = 0;
+  let totalTax = 0;
   const claimedBounties = [];
 
   for (const bounty of bounties) {
-    // Hunter fee to guild treasury
-    const fee = Math.floor(bounty.amount * HUNTER_FEE_PCT);
-    const hunterPayout = bounty.amount - fee;
-    economy.addMoney(hunterJid, hunterPayout, `Bounty claim: ${bounty.bountyId}`);
+    // 💡 P4 Item 18 fix (2026-08-17): 10% economy tax evaporates FIRST (genuine sink,
+    // same as P2P transfer + card/item market). THEN 5% hunter fee to guild treasury
+    // is computed on the post-tax amount.
+    const economyTax = Math.floor(bounty.amount * 0.10);
+    const afterTax = bounty.amount - economyTax;
+    const fee = Math.floor(afterTax * HUNTER_FEE_PCT);
+    const hunterPayout = afterTax - fee;
+    economy.addMoney(hunterJid, hunterPayout, `Bounty claim (10% tax + ${HUNTER_FEE_PCT*100}% fee): ${bounty.bountyId}`);
     // Fee to hunter's guild treasury if they have one
     const hunterGuild = guilds.getUserGuild(hunterJid);
     if (hunterGuild && fee > 0) {
@@ -144,6 +152,7 @@ async function claimBounty(hunterJid, targetJid) {
     }
     totalClaimed += hunterPayout;
     totalFee += fee;
+    totalTax += economyTax;
     bounty.status = 'claimed';
     bounty.claimedByJid = hunterJid;
     bounty.claimedAt = new Date();
@@ -154,7 +163,6 @@ async function claimBounty(hunterJid, targetJid) {
   // Award guild XP + war points for the claim
   try {
     guildPerks.awardGuildXp(hunterJid, 20, `Bounty claim: ${targetJid}`);
-    guildPerks.awardWarPoints(hunterJid, 15, 'bounty');
   } catch (e) {}
 
   return {
@@ -162,13 +170,20 @@ async function claimBounty(hunterJid, targetJid) {
     claimed: true,
     totalClaimed,
     totalFee,
+    totalTax,
     claimedBounties,
-    message: `💰 *BOUNTY CLAIMED!*\n\nYou defeated @${targetJid.split('@')[0]} and collected ${totalClaimed.toLocaleString()} Zeni!\nHunter fee: ${totalFee.toLocaleString()} Zeni to your guild treasury.\nBounties claimed: ${claimedBounties.length}`,
+    message: `💰 *BOUNTY CLAIMED!*\n\nYou defeated @${economy.getDisplayName(targetJid)} and collected ${totalClaimed.toLocaleString()} Zeni!\nEconomy tax (10%): ${totalTax.toLocaleString()} Zeni evaporated.\nHunter fee (${HUNTER_FEE_PCT*100}%): ${totalFee.toLocaleString()} Zeni to your guild treasury.\nBounties claimed: ${claimedBounties.length}`,
   };
 }
 
 // ─── FAILED HUNT PENALTY (called after PvP loss when hunting) ─────────────
 // Hunter pays 10% of total active bounty as penalty.
+// 💡 AUDIT FIX 2026-08-01: also increment `defendersWon` on each active
+// bounty. If the target defeats 3 challengers, the bounty is auto-
+// terminated (status='defended', no refund to placer). This gives the
+// target a path to clear the bounty by winning duels, not just waiting
+// 7 days. Placer forfeits the Zeni - they chose to place the bounty.
+const DEFENDERS_WIN_THRESHOLD = 3;
 async function failedHuntPenalty(hunterJid, targetJid) {
   const bounties = await Bounty.find({ targetJid, status: 'active' });
   if (bounties.length === 0) {
@@ -181,17 +196,39 @@ async function failedHuntPenalty(hunterJid, targetJid) {
   }
   const economy = require('./economy');
   const hunterWallet = economy.getGold(hunterJid);
-  // Hunter pays min(penalty, wallet) — can't go negative
+  // Hunter pays min(penalty, wallet) - can't go negative
   const actualPenalty = Math.min(penalty, hunterWallet);
   if (actualPenalty > 0) {
     economy.removeMoney(hunterJid, actualPenalty, `Failed bounty hunt penalty: ${targetJid}`);
     // Penalty goes to the target (consolation for being attacked)
     economy.addMoney(targetJid, actualPenalty, `Failed bounty hunt consolation from ${hunterJid}`);
   }
+
+  // 💡 AUDIT FIX 2026-08-01: increment defendersWon + auto-terminate at threshold.
+  // Track this on each active bounty on the target. If any reaches the
+  // threshold, flip it to 'defended' (terminated, no refund).
+  const defendedBounties = [];
+  for (const bounty of bounties) {
+    bounty.defendersWon = (bounty.defendersWon || 0) + 1;
+    bounty.penaltyPaid = (bounty.penaltyPaid || 0) + actualPenalty;
+    if (bounty.defendersWon >= DEFENDERS_WIN_THRESHOLD) {
+      bounty.status = 'defended';
+      bounty.defendedAt = new Date();
+      defendedBounties.push(bounty);
+    }
+    await bounty.save();
+  }
+
+  let defenseMsg = '';
+  if (defendedBounties.length > 0) {
+    defenseMsg = `\n🛡️ *BOUNTY DEFENDED!* @${economy.getDisplayName(targetJid)} defeated ${DEFENDERS_WIN_THRESHOLD} challengers - ${defendedBounties.length} bounty(ies) cleared!`;
+  }
+
   return {
     success: true,
     penaltyPaid: actualPenalty,
-    message: `💸 You lost the duel and paid ${actualPenalty.toLocaleString()} Zeni penalty (10% of bounty) to @${targetJid.split('@')[0]}.`,
+    defendedBounties,
+    message: `💸 You lost the duel and paid ${actualPenalty.toLocaleString()} Zeni penalty (10% of bounty) to @${economy.getDisplayName(targetJid)}.${defenseMsg}`,
   };
 }
 

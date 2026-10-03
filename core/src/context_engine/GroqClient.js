@@ -12,7 +12,13 @@ class GroqClient {
             .map((key) => key.trim())
             .filter((key) => key !== "");
         this.currentKeyIndex = 0;
-        this.model = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
+        // 💡 MIGRATION 2026-09-10: Groq decommissioned the llama-3.x chat models
+        // (llama-3.3-70b-versatile / llama-3.1-8b-instant -> 404 model_not_found on
+        // every call). Switched to openai/gpt-oss-120b (SMART, JSON mode verified 200)
+        // and openai/gpt-oss-20b (FAST). Note gpt-oss models return reasoning in a
+        // separate field; message.content stays clean JSON. If GROQ_MODEL is set in
+        // .env, it overrides this default - keep it in sync with the Groq catalog.
+        this.model = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
         this.baseUrl = 'https://api.groq.com/openai/v1';
         
         console.log(`🔌 Groq Client initialized (Model: ${this.model}, hasKeys: ${this.keys.length > 0})`);

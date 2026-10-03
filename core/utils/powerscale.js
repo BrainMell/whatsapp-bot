@@ -2,8 +2,7 @@
 // POWERSCALE.JS - Character list + selection flow
 // ===============================================
 
-const GoImageService = require('./goImageService');
-const goService = new GoImageService();
+const goService = require('./goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
 
 // Pending selections: chatId → { characters, timestamp }
 const pendingSelections = new Map();
@@ -57,9 +56,9 @@ async function getPowerScale(characterName, chatId) {
 }
 
 /**
- * Step 2: User picked a number — scrape that character's page
+ * Step 2: User picked a number - scrape that character's page
  * @param {string} chatId
- * @param {number} selection  — 1-based index
+ * @param {number} selection  - 1-based index
  * @returns {Promise<Object>} { success, message, imageUrl } or null if no pending
  */
 async function handlePowerscaleSelection(chatId, selection) {

@@ -5,7 +5,7 @@ The Power Scaling & Stats Lookup Subsystem integrates external fandom-based powe
 
 ## How it works
 
-**Powerscaling Search & Pending Selection** — [powerscale.js L18-L57](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/powerscale.js#L18-L57)
+**Powerscaling Search & Pending Selection** - [powerscale.js L18-L57](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/powerscale.js#L18-L57)
 ```javascript
 async function getPowerScale(characterName, chatId) {
     try {
@@ -52,7 +52,7 @@ This function receives a user’s character query and requests search results fr
 
 ---
 
-**Selection Handler & Page Scraper** — [powerscale.js L65-L135](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/powerscale.js#L65-L135)
+**Selection Handler & Page Scraper** - [powerscale.js L65-L135](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/powerscale.js#L65-L135)
 ```javascript
 async function handlePowerscaleSelection(chatId, selection) {
     const pending = pendingSelections.get(chatId);
@@ -126,11 +126,11 @@ async function handlePowerscaleSelection(chatId, selection) {
     }
 }
 ```
-This handler executes when a user replies with a selection index. It verifies the selection matches a pending search entry, clears the entry, and commands the Go Service to parse the chosen character's profile URL. It then formats the return values—such as character descriptions, tiers, offensive stats, standard equipment, and source URLs—to be sent to the group chat.
+This handler executes when a user replies with a selection index. It verifies the selection matches a pending search entry, clears the entry, and commands the Go Service to parse the chosen character's profile URL. It then formats the return values-such as character descriptions, tiers, offensive stats, standard equipment, and source URLs-to be sent to the group chat.
 
 ---
 
-**Selection Presence Checker** — [powerscale.js L140-L148](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/powerscale.js#L140-L148)
+**Selection Presence Checker** - [powerscale.js L140-L148](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/powerscale.js#L140-L148)
 ```javascript
 function hasPendingSelection(chatId) {
     const pending = pendingSelections.get(chatId);
@@ -169,10 +169,10 @@ const SELECTION_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes timeout
 ```
 
 ## Common tasks
-- **Change the selection timeout** — Adjust the expiration time for character choice selection in [powerscale.js L10](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/powerscale.js#L10).
-- **Check pending search selections** — Read the active state verification function for pending lookups in [powerscale.js L140](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/powerscale.js#L140).
-- **Modify formatting of power scaling stats** — Add or customize statistics displayed in the chat message response in [powerscale.js L106-L121](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/powerscale.js#L106-L121).
-- **Inspect Go Service integration** — Examine search powerscale API calls inside [powerscale.js L22](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/powerscale.js#L22).
+- **Change the selection timeout** - Adjust the expiration time for character choice selection in [powerscale.js L10](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/powerscale.js#L10).
+- **Check pending search selections** - Read the active state verification function for pending lookups in [powerscale.js L140](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/powerscale.js#L140).
+- **Modify formatting of power scaling stats** - Add or customize statistics displayed in the chat message response in [powerscale.js L106-L121](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/powerscale.js#L106-L121).
+- **Inspect Go Service integration** - Examine search powerscale API calls inside [powerscale.js L22](https://github.com/BrainMell/whatsapp-bot/blob/main/core/utils/powerscale.js#L22).
 
 
 

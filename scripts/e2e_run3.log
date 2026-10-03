@@ -1,0 +1,65 @@
+◇ injected env (11) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+◇ injected env (0) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+✅ MongoDB Connected: ac-a1ycpnn-shard-00-00.drpztk6.mongodb.net
+📡 [GoService] Using Base URL: http://127.0.0.1:7860 (concurrency=3)
+PASS :: S0 db+modules load :: mongo connected, 12 modules required
+PASS :: S1 register P1+P2 :: class=ACOLYTE zeni=1000
+PASS :: S2 XP curve 200*L^2 :: L10=20000 L100=2000000
+PASS :: S2b base stats + level :: class=ACOLYTE hp=100 atk=6
+PASS :: S3 claimDaily :: {"success":true,"message":"🎁 *DAILY REWARD CLAIMED!*\n\n━━━━━━━━━━━━━━━\n💰 *Reward:* +Ꞩ2,000\n*Total:* +Ꞩ2,000\n━━━━━━
+PASS :: S4 wallet add/remove :: bal 53000 -> 52000
+PASS :: S5 addItem+equip :: equip ok; equipStats atk bonus present=true
+PASS :: S6 initAdventure solo F-rank :: active=true inCombat=false encounter=0/3
+PASS :: S6b combat loop to victory :: iters=0 inCombat=false
+[GoService] Health: ✅ {"engine":"synchronous","status":"ready"}
+FAIL :: S7 def leak: fight, defend, HP drops a little :: second quest did not enter combat @     at /home/ubuntu/whatsapp-bot/scripts/e2e_journey.js:182:36
+FAIL :: S8 abyss startRun :: ❌ You already have an active Abyss run on floor 1.
+_Continue with `.j abyss status` or retreat with `.j abyss retreat`._ @ _Continue with `.j abyss status` or retreat with `.j abyss retreat`._
+[GoService] Combat image: 112790 bytes in 0.15s
+[GoService] Combat image: 112825 bytes in 0.18s
+[GoService] Combat image: 112773 bytes in 0.14s
+[GoService] Combat image: 112800 bytes in 0.15s
+[GoService] Combat image: 112783 bytes in 0.15s
+[GoService] Combat image: 112800 bytes in 0.15s
+[GoService] Combat image: 112819 bytes in 0.09s
+[GoService] Combat image: 112777 bytes in 0.14s
+[GoService] Combat image: 112758 bytes in 0.14s
+[GoService] Combat image: 112818 bytes in 0.14s
+[GoService] Combat image: 112775 bytes in 0.14s
+[GoService] Combat image: 112779 bytes in 0.14s
+[GoService] Combat image: 112562 bytes in 0.18s
+[GoService] Combat image: 112604 bytes in 0.14s
+[GoService] Combat image: 112551 bytes in 0.14s
+[Quest] Combat ended. Victory: false, Encounter: 1/1
+FAIL :: S8b abyss drive to floor 4 :: getRunStatus null; raw docs: [{"status":"failed","floor":1}] @     at /home/ubuntu/whatsapp-bot/scripts/e2e_journey.js:231:15
+   [last bot msgs] <text> ✨ E2EH chilling: Strikes 👾 EMBER SPAWN for *5* damage! || <image> 🎮 *TURN 27* ——————————— ⚡ *E2EH chilling* uses *Basic Attac || <image> 💀 *PARTY WIPED* 💀  _The party falls into darkness..._  💀 
+FAIL :: S9 MID-COMBAT retreat (defuse contract) :: run vanished before retreat test @     at /home/ubuntu/whatsapp-bot/scripts/e2e_journey.js:273:23
+   [last bot msgs] <image> 🎮 *TURN 27* ——————————— ⚡ *E2EH chilling* uses *Basic Attac || <image> 💀 *PARTY WIPED* 💀  _The party falls into darkness..._  💀  || <image> 💀 Defeated on Abyss floor 1! 💀 *YOU DIED IN THE ABYSS*  🕳
+PASS :: S10 allocateStatPoint :: {"success":true,"stat":"ATK","pointsSpent":2,"valueGained":6,"remainingPoints":18}
+PASS :: S11 skill tree :: class=ACOLYTE pts=5 skills=9 abilities=9
+PASS :: S12 craft leg :: recipes=247 first=steel_sabre canCraft={"canCraft":false,"reason":"Missing ingredients:\n- Iron Swo craft=OK 
+PASS :: S13 rune leg :: created=true inventoryCount=1
+PASS :: S14 summon create+deploy :: species=slime id=6aa8c34bdcf01a97f023ee31 active=false
+[GoService] Combat image (direct): 110283 bytes in 0.2s
+[GoService] Combat image (direct): 110544 bytes in 0.2s
+[GoService] Combat image (direct): 110451 bytes in 0.2s
+[GoService] Combat image (direct): 110553 bytes in 0.2s
+[GoService] Combat image (direct): 110505 bytes in 0.2s
+[GoService] Combat image (direct): 110498 bytes in 0.2s
+[GoService] Combat image (direct): 110111 bytes in 0.2s
+[GoService] Combat image (direct): 110442 bytes in 0.2s
+[GoService] Combat image (direct): 110497 bytes in 0.2s
+[GoService] Combat image (direct): 110282 bytes in 0.2s
+[GoService] Combat image (direct): 110111 bytes in 0.2s
+PASS :: S15 pvp challenge->accept->attack :: duel driven 6 actions ended=true
+PASS :: S16 leaderboards read-only :: abyssLb=327ch progLb=524ch
+PASS :: S17 ABYSS_RESULT card via Go svc :: ABYSS_RESULT 147966B
+
+===== E2E REPORT: 17/21 PASS =====
+FAILED: S7 def leak: fight, defend, HP drops a little :: second quest did not enter combat @     at /home/ubuntu/whatsapp-bot/scripts/e2e_journey.js:182:36
+FAILED: S8 abyss startRun :: ❌ You already have an active Abyss run on floor 1.
+_Continue with `.j abyss status` or retreat with `.j abyss retreat`._ @ _Continue with `.j abyss status` or retreat with `.j abyss retreat`._
+FAILED: S8b abyss drive to floor 4 :: getRunStatus null; raw docs: [{"status":"failed","floor":1}] @     at /home/ubuntu/whatsapp-bot/scripts/e2e_journey.js:231:15
+FAILED: S9 MID-COMBAT retreat (defuse contract) :: run vanished before retreat test @     at /home/ubuntu/whatsapp-bot/scripts/e2e_journey.js:273:23
+sock messages captured: 61
+CLEANUP removed: abyssruns:1, abyssleaderboards:1, summons:1, settlements:3, runes:1, users:2

@@ -17,85 +17,85 @@ const CRAFTING_RECIPES = {
         name: 'Steel Sabre', category: 'WEAPON', id: 'steel_sabre',
         desc: 'A sharp, finely forged blade. (+25 ATK, +5 SPD)',
         ingredients: { 'iron_sword': 1, 'refined_steel': 3, 'sharp_whetstone': 1 },
-        result: { id: 'steel_sabre', stats: { atk: 25, spd: 5 }, slot: 'weapon' }
+        result: { id: 'steel_sabre', stats: { atk: 25, spd: 5 }, slot: 'main_hand' }
     },
     'mythril_staff': {
         name: 'Mythril Staff', category: 'WEAPON', id: 'mythril_staff',
         desc: 'A staff made of rare mythril that amplifies magic. (+40 MAG, +10 HP)',
         ingredients: { 'arcane_wand': 1, 'mythril_ore': 5, 'mana_crystal': 2 },
-        result: { id: 'mythril_staff', stats: { mag: 40, hp: 10 }, slot: 'weapon' }
+        result: { id: 'mythril_staff', stats: { mag: 40, hp: 10 }, slot: 'main_hand' }
     },
     'inferno_blade': {
         name: 'Inferno Blade', category: 'WEAPON', id: 'inferno_blade',
         desc: 'A sword that burns with divine fire. (+35 ATK, +15% Crit)',
         ingredients: { 'steel_sabre': 1, 'fire_shard': 3, 'fire_essence': 2 },
-        result: { id: 'inferno_blade', stats: { atk: 35, crit: 15 }, slot: 'weapon' }
+        result: { id: 'inferno_blade', stats: { atk: 35, crit: 15 }, slot: 'main_hand' }
     },
     'volt_dagger': {
         name: 'Volt Dagger', category: 'WEAPON', id: 'volt_dagger',
         desc: 'Fast as lightning. (+20 ATK, +25 SPD)',
         ingredients: { 'iron_sword': 1, 'lightning_shard': 3, 'refined_steel': 2 },
-        result: { id: 'volt_dagger', stats: { atk: 20, spd: 25 }, slot: 'weapon' }
+        result: { id: 'volt_dagger', stats: { atk: 20, spd: 25 }, slot: 'main_hand' }
     },
     'dragonslayer_spear': {
         name: 'Dragonslayer Spear', category: 'WEAPON', id: 'dragonslayer_spear',
         desc: 'The ultimate boss-killing tool. (+50 ATK)',
         ingredients: { 'steel_sabre': 1, 'dragon_blood': 1, 'dragon_scale': 5 },
-        result: { id: 'dragonslayer_spear', stats: { atk: 50 }, slot: 'weapon' }
+        result: { id: 'dragonslayer_spear', stats: { atk: 50 }, slot: 'main_hand' }
     },
     'shadow_dagger': {
         name: 'Shadow Dagger', category: 'WEAPON', id: 'shadow_dagger',
         desc: 'A blade that thirsts for blood. (+30 ATK, +15 SPD)',
         ingredients: { 'rusty_dagger': 1, 'dark_matter': 1, 'sharp_whetstone': 2 },
-        result: { id: 'shadow_dagger', stats: { atk: 30, spd: 15 }, slot: 'weapon' }
+        result: { id: 'shadow_dagger', stats: { atk: 30, spd: 15 }, slot: 'main_hand' }
     },
     'warhammer': {
         name: 'Paladin Warhammer', category: 'WEAPON', id: 'warhammer',
         desc: 'Heavy and blessed. (+35 ATK, +10 DEF)',
         ingredients: { 'iron_sword': 1, 'refined_steel': 5, 'mana_crystal': 1 },
-        result: { id: 'warhammer', stats: { atk: 35, def: 10 }, slot: 'weapon' }
+        result: { id: 'warhammer', stats: { atk: 35, def: 10 }, slot: 'main_hand' }
     },
     'death_scythe': {
         name: 'Reaper Scythe', category: 'WEAPON', id: 'death_scythe',
         desc: 'Harvests the souls of the living. (+45 ATK, +20 MAG)',
         ingredients: { 'mythril_staff': 1, 'dark_matter': 2, 'ghost_essence': 5 },
-        result: { id: 'death_scythe', stats: { atk: 45, mag: 20 }, slot: 'weapon' }
+        result: { id: 'death_scythe', stats: { atk: 45, mag: 20 }, slot: 'main_hand' }
     },
     'chrono_blade': {
         name: 'Chrono Blade', category: 'WEAPON', id: 'chrono_blade',
         desc: 'A sword that exists in multiple timelines. (+25 ATK, +40 SPD)',
         ingredients: { 'steel_sabre': 1, 'mana_dew': 5, 'mana_crystal': 3 },
-        result: { id: 'chrono_blade', stats: { atk: 25, spd: 40 }, slot: 'weapon' }
+        result: { id: 'chrono_blade', stats: { atk: 25, spd: 40 }, slot: 'main_hand' }
     },
     'golden_cane': {
         name: 'Merchant Cane', category: 'WEAPON', id: 'golden_cane',
         desc: 'Wealth is power. (+20 ATK, +50 LUCK)',
         ingredients: { 'iron_sword': 1, 'gold_pile': 1000, 'rare_gem': 2 },
-        result: { id: 'golden_cane', stats: { atk: 20, luck: 50 }, slot: 'weapon' }
+        result: { id: 'golden_cane', stats: { atk: 20, luck: 50 }, slot: 'main_hand' }
     },
     'multi_tool': {
         name: 'Artificer Tool', category: 'WEAPON', id: 'multi_tool',
         desc: 'A gadget for every situation. (+25 ATK, +25 MAG, +10 DEF)',
         ingredients: { 'iron_shard': 20, 'gunpowder': 10, 'refined_steel': 5 },
-        result: { id: 'multi_tool', stats: { atk: 25, mag: 25, def: 10 }, slot: 'weapon' }
+        result: { id: 'multi_tool', stats: { atk: 25, mag: 25, def: 10 }, slot: 'main_hand' }
     },
     'greataxe': {
         name: 'Berserker Axe', category: 'WEAPON', id: 'greataxe',
         desc: 'Pure, unadulterated rage. (+55 ATK, -10 DEF)',
         ingredients: { 'refined_steel': 10, 'dragon_blood': 1, 'tough_leather': 5 },
-        result: { id: 'greataxe', stats: { atk: 55, def: -10 }, slot: 'weapon' }
+        result: { id: 'greataxe', stats: { atk: 55, def: -10 }, slot: 'main_hand' }
     },
     'elemental_wand': {
         name: 'Prism Wand', category: 'WEAPON', id: 'elemental_wand',
         desc: 'Channels the four elements. (+50 MAG)',
         ingredients: { 'arcane_wand': 1, 'fire_shard': 2, 'ice_shard': 2, 'lightning_shard': 2 },
-        result: { id: 'elemental_wand', stats: { mag: 50 }, slot: 'weapon' }
+        result: { id: 'elemental_wand', stats: { mag: 50 }, slot: 'main_hand' }
     },
     'storm_bow': {
         name: 'Storm Bow', category: 'WEAPON', id: 'storm_bow',
         desc: 'Shoots arrows of pure lightning. (+40 ATK, +20 SPD)',
         ingredients: { 'ancient_wood': 5, 'lightning_shard': 5, 'mystic_thread': 5 },
-        result: { id: 'storm_bow', stats: { atk: 40, spd: 20 }, slot: 'weapon' }
+        result: { id: 'storm_bow', stats: { atk: 40, spd: 20 }, slot: 'main_hand' }
     },
 
     // --- ARMOR ---
@@ -113,15 +113,15 @@ const CRAFTING_RECIPES = {
     },
     'holy_raiment': {
         name: 'Holy Raiment', category: 'ARMOR', id: 'holy_raiment',
-        desc: 'Blessed by the divine. (+25 DEF, +40 MAG)',
+        desc: 'Blessed by the divine. (+35 DEF, +50 MAG, +20 HP)',
         ingredients: { 'leather_tunic': 1, 'mystic_thread': 10, 'mana_dew': 2 },
-        result: { id: 'holy_raiment', stats: { def: 25, mag: 40 }, slot: 'armor' }
+        result: { id: 'holy_raiment', stats: { def: 35, mag: 50, hp: 20 }, slot: 'armor' }
     },
     'dragon_plate': {
         name: 'Dragon Armor', category: 'ARMOR', id: 'dragon_plate',
-        desc: 'Forged from dragon scales. (+60 DEF, +100 HP)',
+        desc: 'Forged from dragon scales. (+90 DEF, +140 HP, +15 SPD)',
         ingredients: { 'reinforced_plate': 1, 'dragon_scale': 10, 'dragon_blood': 2 },
-        result: { id: 'dragon_plate', stats: { def: 60, hp: 100 }, slot: 'armor' }
+        result: { id: 'dragon_plate', stats: { def: 90, hp: 140, spd: 15 }, slot: 'armor' }
     },
     'archmage_robes': {
         name: 'Archmage Robes', category: 'ARMOR', id: 'archmage_robes',
@@ -145,9 +145,9 @@ const CRAFTING_RECIPES = {
     },
     'assassin_hood': {
         name: 'Shadow Hood', category: 'ARMOR', id: 'assassin_hood',
-        desc: 'Hides your face. (+5 DEF, +10 SPD, +5% Crit)',
+        desc: 'Hides your face. (+10 DEF, +15 SPD, +8% Crit)',
         ingredients: { 'spider_silk': 5, 'dark_matter': 1 },
-        result: { id: 'assassin_hood', stats: { def: 5, spd: 10, crit: 5 }, slot: 'helmet' }
+        result: { id: 'assassin_hood', stats: { def: 10, spd: 15, crit: 8 }, slot: 'helmet' }
     },
 
     // --- BOOTS ---
@@ -298,7 +298,7 @@ const CRAFTING_RECIPES = {
     // Each tier's raw ore can be refined into a workable form for forging.
     'chaos_ingot_conv': {
         name: 'Chaos Ingot', category: 'CRAFT', id: 'chaos_ingot',
-        desc: 'Smelt 3 chaos ores into a single workable chaos ingot. Volatile process — keep mana crystals on hand to quench.',
+        desc: 'Smelt 3 chaos ores into a single workable chaos ingot. Volatile process - keep mana crystals on hand to quench.',
         ingredients: { 'chaos_ore': 3, 'mana_crystal': 1 },
         result: { id: 'chaos_ingot' }
     },
@@ -316,7 +316,7 @@ const CRAFTING_RECIPES = {
     },
 
     // --- FORGED EQUIPMENT FROM NEW RARE MATERIALS ---
-    // Tier 1 (S-rank): chaos_blade + chaos_cloak — reqLevel 50, LEGENDARY
+    // Tier 1 (S-rank): chaos_blade + chaos_cloak - reqLevel 50, LEGENDARY
     'chaos_blade': {
         name: 'Chaos Blade', category: 'WEAPON', id: 'chaos_blade',
         desc: 'Forge a chaos ingot into a two-handed blade that fractures reality on impact. (+95 ATK, +15 SPD, +10 CRIT)',
@@ -330,7 +330,7 @@ const CRAFTING_RECIPES = {
         result: { id: 'chaos_cloak', stats: { def: 55, hp: 90, spd: 20 }, slot: 'armor' }
     },
 
-    // Tier 2 (SS-rank): null_staff + null_aegis — reqLevel 70, MYTHIC
+    // Tier 2 (SS-rank): null_staff + null_aegis - reqLevel 70, MYTHIC
     'null_staff': {
         name: 'Null Staff', category: 'WEAPON', id: 'null_staff',
         desc: 'Mount a null matrix atop a mythril staff. Spells cast through it simply unmake their targets. (+135 MAG, +35 HP, +15 CRIT)',
@@ -344,7 +344,7 @@ const CRAFTING_RECIPES = {
         result: { id: 'null_aegis', stats: { def: 130, hp: 110, luck: 15 }, slot: 'armor' }
     },
 
-    // Tier 3 (SSS-rank): abyssal_blade + abyssal_crown — reqLevel 90, MYTHIC
+    // Tier 3 (SSS-rank): abyssal_blade + abyssal_crown - reqLevel 90, MYTHIC
     'abyssal_blade': {
         name: 'Abyssal Blade', category: 'WEAPON', id: 'abyssal_blade',
         desc: 'A blade with an abyssal core at its pommel. The edge exists partially outside reality. (+210 ATK, +50 MAG, +20 CRIT)',
@@ -425,6 +425,28 @@ const BREWING_RECIPES = {
         desc: 'Grants an invincible shield for 1 turn.',
         ingredients: { 'obsidian_chunk': 2, 'refined_steel': 5, 'boss_essence': 1 },
         result: { id: 'fortress_potion', usable: true, effect: 'invincibility' }
+    },
+    // 💡 DEEP BREWS (cosmology pass 2026-09-19): abyss-tier brewing. Reuse
+    // EXISTING effect ids + EXISTING ingredient ids only - no new mechanics.
+    // Effect values follow the established fraction semantics (see
+    // inventorySystem.useItem: 'heal'/'restore_energy' use fraction of max).
+    'abyssal_tonic': {
+        name: 'Abyssal Tonic', id: 'abyssal_tonic', category: 'BREWING',
+        desc: 'A deep-pressed tonic that restores all Energy. The color is not from any berry.',
+        ingredients: { 'void_essence': 1, 'mana_crystal': 2, 'mana_dew': 2 },
+        result: { id: 'abyssal_tonic', usable: true, effect: 'restore_energy', effectValue: 1.0, rarity: 'EPIC' }
+    },
+    'warden_broth': {
+        name: "Warden's Broth", id: 'warden_broth', category: 'BREWING',
+        desc: 'Hospital broth made the soldier way. Restores 60% of Max HP.',
+        ingredients: { 'healing_herb': 8, 'mana_dew': 2, 'ghost_essence': 1 },
+        result: { id: 'warden_broth', usable: true, effect: 'heal', effectValue: 0.60, rarity: 'RARE' }
+    },
+    'banner_ale': {
+        name: 'Banner Ale', id: 'banner_ale', category: 'BREWING',
+        desc: 'Forge-town courage in a cup. +35% ATK and MAG for 3 turns (battle only).',
+        ingredients: { 'strength_brew': 2, 'obsidian_chunk': 2 },
+        result: { id: 'banner_ale', usable: true, effect: 'buff_all', effectValue: 35, duration: 3, rarity: 'UNCOMMON' }
     }
 };
 
@@ -530,10 +552,10 @@ function getRecipeById(id) {
     const needle = String(id).toLowerCase().trim();
 
     // 1) Direct key match (handles legacy keys like 'refined_steel_conv',
-    //    'dragon_key_repair', etc. — keeps backward compat).
+    //    'dragon_key_repair', etc. - keeps backward compat).
     if (all[needle]) return all[needle];
 
-    // 2) Match by result.id — so users can type the item name they want
+    // 2) Match by result.id - so users can type the item name they want
     //    to make: `.g craft refined_steel` finds the `refined_steel_conv`
     //    recipe whose result.id is 'refined_steel'. This is the most
     //    intuitive lookup and was previously failing as "Recipe not found."
@@ -626,7 +648,7 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
       }
       const RARITY_GOLD_COST = {
         'COMMON': 0, 'UNCOMMON': 1000, 'RARE': 5000,
-        'EPIC': 25000, 'LEGENDARY': 100000, 'MYTHIC': 500000,
+        'EPIC': 25000, 'LEGENDARY': 100000, 'MYTHIC': 250000, // 💡 Rebalanced 2026-08-17: 500K was 0.1% of community cap per craft.
       };
       goldCost = RARITY_GOLD_COST[rarity] || 0;
     }
@@ -639,7 +661,7 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
           message: `❌ You need ${goldCost.toLocaleString()} Zeni to craft this (have ${userGold.toLocaleString()}).`,
         };
       }
-      // 💡 QA FIX: check return value — removeMoney returns false if wallet insufficient
+      // 💡 QA FIX: check return value - removeMoney returns false if wallet insufficient
       const deductResult = economy.removeMoney(userId, goldCost, `Craft: ${recipe.name}`);
       if (!deductResult) {
         return { success: false, message: '❌ Zeni deduction failed. You may not have enough Zeni.' };
@@ -699,7 +721,7 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
     const userGuild = guilds.getUserGuild(userId);
     let guildMsg = "";
     if (userGuild) {
-        guilds.updateBoardProgress(userGuild, 'CRAFT_ITEMS', 1); // 💡 FIX: was 'CRAFT' — mismatched the board target type 'CRAFT_ITEMS', making RESEARCH guild boards uncompletable
+        guilds.updateBoardProgress(userGuild, 'CRAFT_ITEMS', 1); // 💡 FIX: was 'CRAFT' - mismatched the board target type 'CRAFT_ITEMS', making RESEARCH guild boards uncompletable
         guildMsg = `\n🧪 *${userGuild}* Research Lab logged your creation! (+1 Craft Progress)`;
     }
 
@@ -710,10 +732,26 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
 
     const typeLabel = recipe.category === 'COOKING' ? 'COOKING' : (recipe.category === 'BREWING' ? 'BREWING' : 'CRAFT');
     const goldCostMsg = goldCost > 0 ? `\n💸 Zeni cost: ${goldCost.toLocaleString()}` : '';
+
+    // 💡 LORE DROP (lore_drop_system.md §2/§3, 8% on a high-frequency surface):
+    // category follows the recipe family - BREWING/COOKING -> brewing pool,
+    // WEAPON/ARMOR (forge family) -> blacksmith pool, everything else ->
+    // crafting pool. Carried OUT-OF-BAND on result.loreDrop - the handler
+    // sends it as its own message box (owner ruling 2026-09-20).
+    let craftLoreDrop = null;
+    try {
+      const loreDrops = require('./loreDrops');
+      const cat = (recipe.category === 'BREWING' || recipe.category === 'COOKING')
+        ? 'brewing'
+        : (recipe.category === 'WEAPON' || recipe.category === 'ARMOR' ? 'blacksmith' : 'crafting');
+      craftLoreDrop = loreDrops.maybeDrop(cat, { userId, chance: 0.08 });
+    } catch (e) {}
+
     return {
         success: true,
         message: `⚒️ *${typeLabel} SUCCESSFUL: ${recipe.name}*\n\nYou created 1x ${recipe.name}!${goldCostMsg}${guildMsg}`,
-        recipe
+        recipe,
+        loreDrop: craftLoreDrop,
     };
 }
 
@@ -723,7 +761,7 @@ async function dismantleItem(userId, itemId) {
 
     // 💡 QA FIX: snapshot a deep copy of itemData BEFORE removeItem mutates it.
     // Previously itemData was a reference to inventory[itemId], and removeItem
-    // would set quantity=0 and delete the key — then the rollback would restore
+    // would set quantity=0 and delete the key - then the rollback would restore
     // the item with quantity: 0 (permanently destroyed).
     const itemSnapshot = { ...inventory[itemId] };
     delete itemSnapshot.quantity; // let addItem set quantity: 1
@@ -746,7 +784,7 @@ async function dismantleItem(userId, itemId) {
         if (inventory[ingId]) continue;
         newSlotsNeeded++;
     }
-    // 💡 QA FIX: freesSlot check was wrong — !inventory[itemId]?.quantity is
+    // 💡 QA FIX: freesSlot check was wrong - !inventory[itemId]?.quantity is
     // false for quantity: 1 (the most common case). Should check if the item
     // will be fully consumed (current quantity <= 1).
     const removedItemInfo = lootSystem.getItemInfo(itemId);
@@ -781,7 +819,11 @@ async function dismantleItem(userId, itemId) {
         addedSoFar.push([id, qty]);
     }
 
-    let msg = `♻️ *DISMANTLED: ${itemData.name || itemId}*\n\nRecovered materials:\n`;
+    // 💡 FIX 2026-08-31: `itemData` doesn't exist in dismantleItem (renamed to
+    // itemSnapshot in an earlier QA fix) - every successful dismantle threw
+    // ReferenceError AFTER the item was destroyed and materials granted,
+    // showing the user an error for a dismantle that actually worked.
+    let msg = `♻️ *DISMANTLED: ${itemSnapshot?.name || itemId}*\n\nRecovered materials:\n`;
     for (const [id, qty] of Object.entries(returned)) {
         msg += `- ${qty}x ${lootSystem.getItemInfo(id).name}\n`;
     }

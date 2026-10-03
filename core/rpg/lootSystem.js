@@ -39,7 +39,7 @@ const LOOT_TABLES = {
     // Elite enemy drops
     // 💡 FIX: Previously this table still dropped bronze_spear (reqLvl 2),
     // chainmail (reqLvl 4), crystal_staff (reqLvl 6), greatsword (reqLvl 8)
-    // — all low-tier equipment unsuitable for B/A-rank players (the ranks
+    // - all low-tier equipment unsuitable for B/A-rank players (the ranks
     // that actually hit this table per the routing at lootSystem.js:508,
     // since S+ uses S_RANK_COMMON). Removed those four and rebalanced
     // weights toward mid-tier materials + a higher equipment_piece weight
@@ -82,7 +82,7 @@ const LOOT_TABLES = {
             { id: 'legendary_enhancement_stone', weight: 10, quantity: [1, 1] },
             { id: 'legendary_shard', weight: 5, quantity: [1, 1] },
             { id: 'dragon_helm', weight: 5, quantity: [1, 1] },
-            { id: 'legendary_shard', weight: 5, quantity: [1, 1] },
+            // 💡 FIX 2026-08-01: Removed duplicate legendary_shard (was doubling its drop rate)
         ]
     },
     
@@ -255,7 +255,22 @@ const BOSS_DROPS = {
             dropChance: 12,
             quantity: 1,
             rarity: 'MYTHIC',
-            announcement: '🌌 *MYTHIC DROP!* A Godshard — fragment of the Abyssal God\'s divine essence — descends!'
+            announcement: '🌌 *MYTHIC DROP!* A Godshard - fragment of the Abyssal God\'s divine essence - descends!'
+        },
+        // 💡 Phase 5: Summon egg drops
+        {
+            id: 'summon_egg_void_walker',
+            dropChance: 25,
+            quantity: 1,
+            rarity: 'RARE',
+            announcement: '🌑 An egg of pure darkness condenses from the void!'
+        },
+        {
+            id: 'summon_egg_common',
+            dropChance: 50,
+            quantity: [1, 2],
+            rarity: 'UNCOMMON',
+            announcement: '🥚 A common summon egg materializes!'
         }]
     },
     
@@ -275,6 +290,21 @@ const BOSS_DROPS = {
                 quantity: 1,
                 rarity: 'EPIC',
                 announcement: '💀 The Lich\'s phylactery cracks and reveals a dark gem!'
+            },
+            // 💡 Phase 5: Summon egg drops
+            {
+                id: 'summon_egg_lich_minion',
+                dropChance: 20,
+                quantity: 1,
+                rarity: 'RARE',
+                announcement: '💀 A necrotic egg drops from the Lich\'s remains!'
+            },
+            {
+                id: 'summon_egg_skeleton',
+                dropChance: 35,
+                quantity: 1,
+                rarity: 'UNCOMMON',
+                announcement: '🦴 A bone-white egg clatters to the ground!'
             }
         ]
     },
@@ -290,6 +320,14 @@ const BOSS_DROPS = {
                 quantity: 1,
                 rarity: 'LEGENDARY',
                 announcement: '🔥 *LEGENDARY DROP!* The Dragon\'s Heart still beats with ancient power!'
+            },
+            // 💡 Phase 5: Summon egg drops
+            {
+                id: 'summon_egg_wyrmling',
+                dropChance: 15,
+                quantity: 1,
+                rarity: 'EPIC',
+                announcement: '🐉 A scaled, warm egg drops from the Dragon!'
             }
         ]
     },
@@ -360,13 +398,13 @@ const BOSS_DROPS = {
 // ==========================================
 
 const GOLD_RANGES = {
-    COMMON_ENEMY: [15, 50],      // Was [10, 30] — increased by 50-66%
-    ELITE_ENEMY: [80, 200],      // Was [50, 100] — increased by 60-100%
-    BOSS: [400, 1200],            // Was [200, 500] — increased by 100-140%
-    TRAP_SUCCESS: [30, 80],       // Was [20, 50] — increased by 50-60%
-    PUZZLE_SUCCESS: [80, 250],    // Was [50, 150] — increased by 60-67%
-    TREASURE: [200, 600],         // Was [100, 300] — increased by 100%
-    MERCHANT_BONUS: [100, 400]    // Was [50, 200] — increased by 100%
+    COMMON_ENEMY: [15, 50],      // Was [10, 30] - increased by 50-66%
+    ELITE_ENEMY: [80, 200],      // Was [50, 100] - increased by 60-100%
+    BOSS: [400, 1200],            // Was [200, 500] - increased by 100-140%
+    TRAP_SUCCESS: [30, 80],       // Was [20, 50] - increased by 50-60%
+    PUZZLE_SUCCESS: [80, 250],    // Was [50, 150] - increased by 60-67%
+    TREASURE: [200, 600],         // Was [100, 300] - increased by 100%
+    MERCHANT_BONUS: [100, 400]    // Was [50, 200] - increased by 100%
 };
 
 // ==========================================
@@ -390,7 +428,7 @@ function rollDrop(lootTable, rarityBoost = 0) {
             const dbInfo = ITEM_DATABASE[item.id];
             let finalRarity = item.rarity || dbInfo?.rarity || 'COMMON';
 
-            // Scale rarity of any item upward with difficulty — higher dungeons give better loot
+            // Scale rarity of any item upward with difficulty - higher dungeons give better loot
             const rarities = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC'];
             let currentIdx = rarities.indexOf(finalRarity);
             if (rarityBoost > 0 && currentIdx < rarities.length - 1) {
@@ -535,7 +573,7 @@ function generateLoot(encounterType, enemyName = null, difficulty = 1.0) {
                 // this did `const [min, max] = guaranteedDrop.quantity` which
                 // throws TypeError when quantity is a number (e.g. 1) instead
                 // of an array (e.g. [1, 1]). Multiple boss guaranteed drops
-                // use the shorthand `quantity: 1` — ELEMENTAL_ARCHON's
+                // use the shorthand `quantity: 1` - ELEMENTAL_ARCHON's
                 // mega_potion, VOID_CORRUPTED's legendary_shard, PRIMORDIAL_CHAOS's
                 // void_essence, ABYSSAL_GOD's infernal_crown. Any kill of these
                 // bosses would have thrown and (depending on caller's try/catch)
@@ -569,9 +607,22 @@ function generateLoot(encounterType, enemyName = null, difficulty = 1.0) {
                 const effectiveChance = specialDrop.dropChance + (rarityBoost * 0.5);
                 if (Math.random() * 100 < effectiveChance) {
                     const dbInfo = ITEM_DATABASE[specialDrop.id];
+                    // 💡 FIX 2026-08-31: normalize array quantities - same fix
+                    // the guaranteed-drop loop got above. ABYSSAL_GOD's
+                    // summon_egg_common uses quantity:[1,2], which was passed
+                    // through RAW, stored as the stack quantity, and bricked
+                    // the inventory slot permanently (NaN math, unremovable
+                    // stack, hasItem always false).
+                    let specialQty;
+                    if (Array.isArray(specialDrop.quantity)) {
+                        const [sMin, sMax] = specialDrop.quantity;
+                        specialQty = Math.floor(Math.random() * (sMax - sMin + 1)) + sMin;
+                    } else {
+                        specialQty = specialDrop.quantity;
+                    }
                     drops.push({
                         id: specialDrop.id,
-                        quantity: specialDrop.quantity,
+                        quantity: specialQty,
                         rarity: specialDrop.rarity || dbInfo?.rarity || 'COMMON',
                         announcement: specialDrop.announcement,
                         source: enemyName
@@ -604,7 +655,7 @@ function generateLoot(encounterType, enemyName = null, difficulty = 1.0) {
         drops.push(standardDrop);
     }
 
-    // Bonus drop chance scales with difficulty — high-rank dungeons get
+    // Bonus drop chance scales with difficulty - high-rank dungeons get
     // more bonus drops, so the loot feels richer.
     const bonusChance = difficulty >= 35.0 ? 0.5 + (difficulty * 0.005) : 0.3 + (difficulty * 0.02);
     if (difficulty >= 2.0 && Math.random() < bonusChance) {
@@ -668,24 +719,38 @@ async function distributeLoot(players, encounterType, enemyName = null, difficul
     
     for (const drop of loot) {
         const itemInfo = getItemInfo(drop.id);
-        
+
         if (drop.announcement) {
             results.announcements.push(drop.announcement);
         }
-        
+
         const luckyPlayer = players[Math.floor(Math.random() * players.length)];
-        
+
+        // 💡 FIX (BUG 4: "equipments still not in their actual rank, all come
+        // as common, enhanced mythic weapon had no effect"):
+        // distributeLoot was passing itemInfo.name, itemInfo.stats, and
+        // itemInfo.value (the BASE item database values) to addItem -
+        // completely discarding the rolled name/stats/rarity/value from the
+        // loot generation (which includes prefix/suffix bonuses and rarity
+        // boosts). So a "Sturdy Sharp Iron Sword of Might" with MYTHIC
+        // rarity and +30 atk was stored as a plain "Iron Sword" with base
+        // +12 atk and the rolled rarity was overwritten by the base item's
+        // rarity (often COMMON/UNCOMMON).
+        //
+        // Fix: use the drop's own name/stats/value if present (they were
+        // already computed by rollDrop), falling back to itemInfo only for
+        // fields the drop didn't populate.
         const addResult = await inventorySystem.addItem(
             luckyPlayer.jid,
             drop.id,
             drop.quantity,
             {
-                name: itemInfo.name,
+                name: drop.name || itemInfo.name,
                 rarity: drop.rarity || itemInfo.rarity,
                 type: itemInfo.type || (drop.id.includes('fish') || drop.id.includes('hide') ? 'MATERIAL' : 'ITEM'),
-                value: itemInfo.value || drop.value || 100,
-                stats: itemInfo.stats,
-                slot: itemInfo.slot,
+                value: drop.value || itemInfo.value || 100,
+                stats: drop.stats || itemInfo.stats,
+                slot: drop.slot || itemInfo.slot,
                 source: drop.source || encounterType,
                 acquiredAt: Date.now()
             }
@@ -746,7 +811,7 @@ const ITEM_DATABASE = {
 
     // --- KEY ITEMS ---
     'dragon_key': { name: 'Dragon Hunter Key', description: 'Unlocks the Dragons Lair. Consumed on use.', rarity: 'RARE', value: 15000, type: 'ITEM' },
-    'dragon_key_reusable': { name: 'Master Dragon Key', description: 'A permanently enchanted key. Never consumed — unlimited Dragon Dungeon entry.', rarity: 'LEGENDARY', value: 100000, type: 'ITEM' },
+    'dragon_key_reusable': { name: 'Master Dragon Key', description: 'A permanently enchanted key. Never consumed - unlimited Dragon Dungeon entry.', rarity: 'LEGENDARY', value: 100000, type: 'ITEM' },
     'infected_shard': { name: '☣️ Infected Shard', description: 'Concentrated Hive essence.', rarity: 'EPIC', value: 3000, type: 'MATERIAL' },
     'infected_heart': { name: '☣️ Pulsing Heart', description: 'It is still beating... barely.', rarity: 'EPIC', value: 2000, type: 'MATERIAL' },
     'rare_gem': { name: 'Rare Gem', description: 'A sparkling gemstone of immense value.', rarity: 'RARE', value: 5000, type: 'MATERIAL' },
@@ -759,6 +824,19 @@ const ITEM_DATABASE = {
     'lich_phylactery': { name: 'Lich Phylactery', description: 'Contains the soul of a powerful necromancer.', rarity: 'EPIC', value: 15000, type: 'MATERIAL' },
     'dragon_scale': { name: 'Dragon Scale', description: 'Nearly indestructible plate from a dragon.', rarity: 'RARE', value: 3000, type: 'MATERIAL' },
     'demon_horn': { name: 'Demon Horn', description: 'Razor sharp and warm to the touch.', rarity: 'EPIC', value: 8000, type: 'MATERIAL' },
+  // 💡 FIX 2026-08-18: Added missing entry - was showing as "Unknown item" in inventory.
+  // Stats sourced from guildAdventure.js SHOP_LIST (cost=150K, 25% MAX HP true dmg).
+  'abyssal_detonator': {
+    name: 'Abyssal Detonator',
+    description: 'Deals 25% of target MAX HP as true damage.',
+    rarity: 'MYTHIC',
+    value: 50000,
+    type: 'CONSUMABLE',
+    icon: '💥🌀',
+    usable: true,
+    effect: 'percent_hp_damage',
+    effectValue: 0.25
+  },
     'infernal_crown': { name: 'Infernal Crown', description: 'A crown forged in the deepest pits of hell.', rarity: 'MYTHIC', value: 50000, type: 'MATERIAL' },
     'golem_core': { name: 'Golem Core', description: 'A pulsating heart of stone and magic.', rarity: 'RARE', value: 6000, type: 'MATERIAL' },
     'titan_heart': { name: 'Titan Heart', description: 'The power source of a colossal golem.', rarity: 'LEGENDARY', value: 20000, type: 'MATERIAL' },
@@ -803,6 +881,112 @@ const ITEM_DATABASE = {
     'iron_ring': { name: 'Iron Ring', description: 'A sturdy band. (+10 HP)', rarity: 'UNCOMMON', value: 2000, type: 'EQUIPMENT', stats: { hp: 10 }, slot: 'ring', reqLevel: 5 },
     'dragon_seal_ring': { name: 'Dragon Seal Ring', description: 'Pierce draconic hide. (+10 ATK)', rarity: 'EPIC', value: 20000, type: 'EQUIPMENT', stats: { atk: 10 }, slot: 'ring', reqLevel: 20 },
 
+    // ═══════════════════════════════════════════════════════════════
+    // 💡 AUDIT FIX 2026-08-01 (Equipment Audit): CRAFTED EQUIPMENT
+    // The crafting system (craftingSystem.js) creates items by ID, but
+    // these IDs were NEVER added to ITEM_DATABASE. This means crafted
+    // items had no rarity (defaulted to COMMON), no proper name, no
+    // sell value, no reqLevel, and wrong enhancement caps. Now all
+    // crafted equipment is properly registered here.
+    // ═══════════════════════════════════════════════════════════════
+
+    // --- CRAFTED WEAPONS (slot: main_hand) ---
+    'inferno_blade': { name: 'Inferno Blade', description: 'A blade wreathed in flame. (+35 ATK, +15% Crit)', rarity: 'RARE', value: 18000, type: 'EQUIPMENT', stats: { atk: 35, crit: 15 }, slot: 'main_hand', reqLevel: 15 },
+    'volt_dagger': { name: 'Volt Dagger', description: 'Crackles with electrical energy. (+20 ATK, +25 SPD)', rarity: 'RARE', value: 14000, type: 'EQUIPMENT', stats: { atk: 20, spd: 25 }, slot: 'main_hand', reqLevel: 12 },
+    'dragonslayer_spear': { name: 'Dragonslayer Spear', description: 'Forged to pierce dragon scales. (+50 ATK)', rarity: 'EPIC', value: 35000, type: 'EQUIPMENT', stats: { atk: 50 }, slot: 'main_hand', reqLevel: 22, isTwoHanded: true },
+    'shadow_dagger': { name: 'Shadow Dagger', description: 'Strikes from the darkness. (+30 ATK, +15 SPD)', rarity: 'RARE', value: 16000, type: 'EQUIPMENT', stats: { atk: 30, spd: 15 }, slot: 'main_hand', reqLevel: 14 },
+    'warhammer': { name: 'Paladin Warhammer', description: 'A holy blunt weapon. (+35 ATK, +10 DEF)', rarity: 'RARE', value: 18000, type: 'EQUIPMENT', stats: { atk: 35, def: 10 }, slot: 'main_hand', reqLevel: 15, isTwoHanded: true },
+    'death_scythe': { name: 'Reaper Scythe', description: 'Harvests souls. (+45 ATK, +20 MAG)', rarity: 'EPIC', value: 40000, type: 'EQUIPMENT', stats: { atk: 45, mag: 20 }, slot: 'main_hand', reqLevel: 25, isTwoHanded: true },
+    'chrono_blade': { name: 'Chrono Blade', description: 'Bends time with each swing. (+25 ATK, +40 SPD)', rarity: 'EPIC', value: 45000, type: 'EQUIPMENT', stats: { atk: 25, spd: 40 }, slot: 'main_hand', reqLevel: 28 },
+    'golden_cane': { name: 'Merchant Cane', description: 'A symbol of wealth. (+20 ATK, +50 LUCK)', rarity: 'EPIC', value: 50000, type: 'EQUIPMENT', stats: { atk: 20, luck: 50 }, slot: 'main_hand', reqLevel: 25 },
+    'multi_tool': { name: 'Artificer Tool', description: 'A versatile multi-tool. (+25 ATK, +25 MAG, +10 DEF)', rarity: 'RARE', value: 20000, type: 'EQUIPMENT', stats: { atk: 25, mag: 25, def: 10 }, slot: 'main_hand', reqLevel: 18 },
+    'greataxe': { name: 'Berserker Axe', description: 'Raw power at the cost of defense. (+55 ATK, -10 DEF)', rarity: 'EPIC', value: 38000, type: 'EQUIPMENT', stats: { atk: 55, def: -10 }, slot: 'main_hand', reqLevel: 25, isTwoHanded: true },
+    'elemental_wand': { name: 'Prism Wand', description: 'Channels raw elemental power. (+50 MAG)', rarity: 'EPIC', value: 42000, type: 'EQUIPMENT', stats: { mag: 50 }, slot: 'main_hand', reqLevel: 25, isTwoHanded: true },
+    'storm_bow': { name: 'Storm Bow', description: 'Fires arrows of lightning. (+40 ATK, +20 SPD)', rarity: 'EPIC', value: 40000, type: 'EQUIPMENT', stats: { atk: 40, spd: 20 }, slot: 'main_hand', reqLevel: 25, isTwoHanded: true },
+
+    // --- CRAFTED ARMOR ---
+    'stealth_garb': { name: 'Stealth Garb', description: 'Lightweight and silent. (+15 DEF, +30 SPD)', rarity: 'RARE', value: 16000, type: 'EQUIPMENT', stats: { def: 15, spd: 30 }, slot: 'armor', reqLevel: 15 },
+    'holy_raiment': { name: 'Holy Raiment', description: 'Blessed by the divine. (+35 DEF, +50 MAG, +20 HP)', rarity: 'EPIC', value: 35000, type: 'EQUIPMENT', stats: { def: 35, mag: 50, hp: 20 }, slot: 'armor', reqLevel: 22 },
+    'dragon_plate': { name: 'Dragon Armor', description: 'Forged from dragon scales. (+90 DEF, +140 HP, +15 SPD)', rarity: 'LEGENDARY', value: 80000, type: 'EQUIPMENT', stats: { def: 90, hp: 140, spd: 15 }, slot: 'armor', reqLevel: 35 },
+    'archmage_robes': { name: 'Archmage Robes', description: 'Pulses with arcane energy. (+20 DEF, +80 MAG)', rarity: 'LEGENDARY', value: 90000, type: 'EQUIPMENT', stats: { def: 20, mag: 80 }, slot: 'armor', reqLevel: 40 },
+    'glacier_guard': { name: 'Glacier Guard', description: 'Armor that chills attackers. (+50 DEF, +80 HP)', rarity: 'EPIC', value: 45000, type: 'EQUIPMENT', stats: { def: 50, hp: 80 }, slot: 'armor', reqLevel: 25 },
+    'obsidian_shield': { name: 'Obsidian Shield', description: 'A heavy shield of black glass. (+60 DEF)', rarity: 'EPIC', value: 40000, type: 'EQUIPMENT', stats: { def: 60 }, slot: 'armor', reqLevel: 22 },
+
+    // --- CRAFTED HELMETS ---
+    'iron_helm': { name: 'Iron Helmet', description: 'Basic head protection. (+10 DEF)', rarity: 'UNCOMMON', value: 3000, type: 'EQUIPMENT', stats: { def: 10 }, slot: 'helmet', reqLevel: 5 },
+    'wizard_hat': { name: 'Wizard Hat', description: 'Classic pointy hat. (+15 MAG)', rarity: 'UNCOMMON', value: 4000, type: 'EQUIPMENT', stats: { mag: 15 }, slot: 'helmet', reqLevel: 8 },
+    'assassin_hood': { name: 'Shadow Hood', description: 'Hides your face. (+10 DEF, +15 SPD, +8% Crit)', rarity: 'RARE', value: 14000, type: 'EQUIPMENT', stats: { def: 10, spd: 15, crit: 8 }, slot: 'helmet', reqLevel: 15 },
+
+    // --- CRAFTED BOOTS ---
+    'leather_boots': { name: 'Leather Boots', description: 'Simple walking boots. (+5 SPD)', rarity: 'COMMON', value: 800, type: 'EQUIPMENT', stats: { spd: 5 }, slot: 'boots', reqLevel: 1 },
+    'winged_sandals': { name: 'Winged Sandals', description: 'Feel as light as a feather. (+40 SPD)', rarity: 'RARE', value: 18000, type: 'EQUIPMENT', stats: { spd: 40 }, slot: 'boots', reqLevel: 18 },
+    'wind_boots': { name: 'Wind Boots', description: 'Walk on the air itself. (+50 SPD)', rarity: 'EPIC', value: 35000, type: 'EQUIPMENT', stats: { spd: 50 }, slot: 'boots', reqLevel: 25 },
+
+    // --- CRAFTED AMULETS ---
+    'health_pendant': { name: 'Vitality Amulet', description: 'Increases max health. (+50 HP)', rarity: 'RARE', value: 15000, type: 'EQUIPMENT', stats: { hp: 50 }, slot: 'amulet', reqLevel: 15 },
+    'ghost_pendant': { name: 'Ghost Pendant', description: 'Pulsing with ethereal energy. (+45 MAG)', rarity: 'EPIC', value: 38000, type: 'EQUIPMENT', stats: { mag: 45 }, slot: 'amulet', reqLevel: 25 },
+
+    // --- CRAFTED RINGS ---
+    'power_ring': { name: 'Ring of Might', description: 'Increases physical power. (+15 ATK)', rarity: 'RARE', value: 16000, type: 'EQUIPMENT', stats: { atk: 15 }, slot: 'ring', reqLevel: 15 },
+    'vampiric_ring': { name: 'Vampiric Ring', description: 'Drains life from your foes. (+15 ATK, +10% Lifesteal)', rarity: 'EPIC', value: 35000, type: 'EQUIPMENT', stats: { atk: 15 }, slot: 'ring', reqLevel: 25 },
+
+    // --- CRAFTED GLOVES ---
+    'titan_gauntlets': { name: 'Titan Gauntlets', description: 'Grants the strength of a titan. (+30 ATK, +20 DEF)', rarity: 'EPIC', value: 40000, type: 'EQUIPMENT', stats: { atk: 30, def: 20 }, slot: 'gloves', reqLevel: 25 },
+
+    // --- CRAFTED CLOAK ---
+    'silk_cloak': { name: 'Silk Cloak', description: 'Lightweight and elegant. (+30 SPD, +15 LUCK)', rarity: 'RARE', value: 18000, type: 'EQUIPMENT', stats: { spd: 30, luck: 15 }, slot: 'cloak', reqLevel: 18 },
+
+    // ═══════════════════════════════════════════════════════════════
+    // 💡 AUDIT FIX 2026-08-01 (Equipment Audit): OFF_HAND SHIELDS
+    // The off_hand slot had ZERO items - players could equip off_hand
+    // but had nothing to put there. Now shields fill this slot.
+    // ═══════════════════════════════════════════════════════════════
+
+    // --- OFF_HAND SHIELDS ---
+    'wooden_shield': { name: 'Wooden Shield', description: 'A basic wooden shield. (+5 DEF)', rarity: 'COMMON', value: 800, type: 'EQUIPMENT', stats: { def: 5 }, slot: 'off_hand', reqLevel: 1 },
+    'iron_shield': { name: 'Iron Shield', description: 'A sturdy iron shield. (+15 DEF)', rarity: 'UNCOMMON', value: 4000, type: 'EQUIPMENT', stats: { def: 15 }, slot: 'off_hand', reqLevel: 5 },
+    'kite_shield': { name: 'Kite Shield', description: 'A knight\'s shield. (+25 DEF, +10 HP)', rarity: 'RARE', value: 16000, type: 'EQUIPMENT', stats: { def: 25, hp: 10 }, slot: 'off_hand', reqLevel: 12 },
+    'tower_shield': { name: 'Tower Shield', description: 'A massive shield that blocks everything. (+40 DEF, +30 HP)', rarity: 'EPIC', value: 38000, type: 'EQUIPMENT', stats: { def: 40, hp: 30 }, slot: 'off_hand', reqLevel: 22 },
+    'abyssal_shield': { name: 'Abyssal Shield', description: 'Absorbs impacts into nothingness. (+70 DEF, +80 HP, +10 SPD)', rarity: 'LEGENDARY', value: 120000, type: 'EQUIPMENT', stats: { def: 70, hp: 80, spd: 10 }, slot: 'off_hand', reqLevel: 45 },
+    'null_ward': { name: 'Null Ward', description: 'A shield that exists partially outside reality. (+100 DEF, +100 HP, +20 LUCK)', rarity: 'MYTHIC', value: 500000, type: 'EQUIPMENT', stats: { def: 100, hp: 100, luck: 20 }, slot: 'off_hand', reqLevel: 70 },
+
+    // ═══════════════════════════════════════════════════════════════
+    // 💡 AUDIT FIX 2026-08-01 (Equipment Audit): ADDITIONAL SLOT COVERAGE
+    // Fill remaining gaps: boots/amulet/cloak/gloves need more variety
+    // across rarities so players have progression options per slot.
+    // ═══════════════════════════════════════════════════════════════
+
+    // --- ADDITIONAL BOOTS ---
+    'steel_boots': { name: 'Steel Boots', description: 'Sturdy steel protection. (+10 DEF, +5 SPD)', rarity: 'UNCOMMON', value: 3500, type: 'EQUIPMENT', stats: { def: 10, spd: 5 }, slot: 'boots', reqLevel: 6 },
+    'dragonhide_boots': { name: 'Dragonhide Boots', description: 'Scaled boots from a dragon. (+25 DEF, +20 SPD, +30 HP)', rarity: 'LEGENDARY', value: 85000, type: 'EQUIPMENT', stats: { def: 25, spd: 20, hp: 30 }, slot: 'boots', reqLevel: 40 },
+    'voidwalk_boots': { name: 'Voidwalk Boots', description: 'Step through the void. (+60 SPD, +30 LUCK)', rarity: 'MYTHIC', value: 400000, type: 'EQUIPMENT', stats: { spd: 60, luck: 30 }, slot: 'boots', reqLevel: 70 },
+
+    // --- ADDITIONAL AMULETS ---
+    'lucky_charm': { name: 'Lucky Charm', description: 'A simple charm. (+5 LUCK)', rarity: 'COMMON', value: 1000, type: 'EQUIPMENT', stats: { luck: 5 }, slot: 'amulet', reqLevel: 1 },
+    'warrior_pendant': { name: 'Warrior Pendant', description: 'Boosts combat prowess. (+20 ATK, +10 HP)', rarity: 'EPIC', value: 36000, type: 'EQUIPMENT', stats: { atk: 20, hp: 10 }, slot: 'amulet', reqLevel: 22 },
+    'abyssal_amulet': { name: 'Abyssal Amulet', description: 'Whispers of the deep. (+100 MAG, +50 HP)', rarity: 'MYTHIC', value: 450000, type: 'EQUIPMENT', stats: { mag: 100, hp: 50 }, slot: 'amulet', reqLevel: 70 },
+
+    // --- ADDITIONAL CLOAKS ---
+    'traveler_cloak': { name: 'Traveler Cloak', description: 'A weathered cloak. (+5 DEF, +10 SPD)', rarity: 'UNCOMMON', value: 3000, type: 'EQUIPMENT', stats: { def: 5, spd: 10 }, slot: 'cloak', reqLevel: 5 },
+    'shadow_cloak': { name: 'Shadow Cloak', description: 'Woven from darkness. (+40 DEF, +30 SPD, +20 LUCK)', rarity: 'LEGENDARY', value: 90000, type: 'EQUIPMENT', stats: { def: 40, spd: 30, luck: 20 }, slot: 'cloak', reqLevel: 40 },
+    'abyssal_cloak': { name: 'Abyssal Cloak', description: 'Existing partially outside reality. (+80 DEF, +100 HP, +40 SPD)', rarity: 'MYTHIC', value: 550000, type: 'EQUIPMENT', stats: { def: 80, hp: 100, spd: 40 }, slot: 'cloak', reqLevel: 75 },
+
+    // --- ADDITIONAL GLOVES ---
+    'leather_gloves': { name: 'Leather Gloves', description: 'Basic hand protection. (+3 DEF, +3 SPD)', rarity: 'COMMON', value: 600, type: 'EQUIPMENT', stats: { def: 3, spd: 3 }, slot: 'gloves', reqLevel: 1 },
+    'chain_gloves': { name: 'Chain Gloves', description: 'Metal-linked gloves. (+12 DEF, +5 ATK)', rarity: 'UNCOMMON', value: 3500, type: 'EQUIPMENT', stats: { def: 12, atk: 5 }, slot: 'gloves', reqLevel: 8 },
+    'dragon_gauntlets': { name: 'Dragon Gauntlets', description: 'Scaled from a dragon. (+45 DEF, +25 ATK, +30 HP)', rarity: 'LEGENDARY', value: 80000, type: 'EQUIPMENT', stats: { def: 45, atk: 25, hp: 30 }, slot: 'gloves', reqLevel: 35 },
+    'abyssal_gauntlets': { name: 'Abyssal Gauntlets', description: 'Crush reality in your fists. (+80 ATK, +60 DEF, +30 CRIT)', rarity: 'MYTHIC', value: 500000, type: 'EQUIPMENT', stats: { atk: 80, def: 60, crit: 30 }, slot: 'gloves', reqLevel: 75 },
+
+    // --- ADDITIONAL HELMETS ---
+    'war_helm': { name: 'War Helm', description: 'A seasoned warrior\'s helm. (+18 DEF, +5 ATK)', rarity: 'RARE', value: 14000, type: 'EQUIPMENT', stats: { def: 18, atk: 5 }, slot: 'helmet', reqLevel: 12 },
+    'archmage_hat': { name: 'Archmage Hat', description: 'Amplifies magical resonance. (+50 MAG, +15 HP)', rarity: 'LEGENDARY', value: 75000, type: 'EQUIPMENT', stats: { mag: 50, hp: 15 }, slot: 'helmet', reqLevel: 35 },
+    'void_crown': { name: 'Void Crown', description: 'A crown of nothing. (+100 MAG, +50 DEF, +30 LUCK)', rarity: 'MYTHIC', value: 600000, type: 'EQUIPMENT', stats: { mag: 100, def: 50, luck: 30 }, slot: 'helmet', reqLevel: 80 },
+
+    // --- ADDITIONAL RINGS ---
+    'mana_ring': { name: 'Mana Ring', description: 'Pulses with magical energy. (+15 MAG)', rarity: 'RARE', value: 14000, type: 'EQUIPMENT', stats: { mag: 15 }, slot: 'ring', reqLevel: 12 },
+    'cursed_ring': { name: 'Cursed Ring', description: 'Great power at a cost. (+40 ATK, -20 HP)', rarity: 'EPIC', value: 30000, type: 'EQUIPMENT', stats: { atk: 40, hp: -20 }, slot: 'ring', reqLevel: 25 },
+    'abyssal_ring': { name: 'Abyssal Ring', description: 'A band of the deep void. (+50 ATK, +50 MAG, +30 HP)', rarity: 'MYTHIC', value: 400000, type: 'EQUIPMENT', stats: { atk: 50, mag: 50, hp: 30 }, slot: 'ring', reqLevel: 70 },
+
     // 💡 Phase 3: Rune system consumables
     'rune_removal_scroll': { name: 'Rune Removal Scroll', description: 'Safely removes a socketed rune without destroying it.', rarity: 'RARE', value: 50000, type: 'CONSUMABLE', usable: true },
 
@@ -833,17 +1017,83 @@ const ITEM_DATABASE = {
     'repair_kit_master': { name: 'Master Repair Kit', description: 'Fully restores durability to one equipped item.', rarity: 'RARE', value: 3000, type: 'CONSUMABLE', usable: true },
     
     // --- SPECIALS ---
+    // 💡 NEW RUINS REWARD (2026-10-03, owner request): an item that HIDES the
+    // player's level. Using it toggles a persistent veil state (user.levelVeil);
+    // while veiled, every card/caption/image shows "??" instead of the level.
+    // The effect is intentional (player-chosen) and tied to the item/state -
+    // not a hardcoded exception anywhere.
+    'silver_veil': { name: 'Silver Veil Charm', description: 'A whisper-thin silver charm. Use it to veil (or unveil) your level from every card and chart.', rarity: 'MYTHIC', value: 12000, type: 'SPECIAL', usable: true, effect: 'toggle_level_veil' },
     'essence_mirror': { name: 'Essence Mirror', description: 'Mirror skills from other classes.', rarity: 'LEGENDARY', value: 50000, type: 'ITEM' },
     'mirror_essence': { name: 'Mirror Essence', description: 'Crystallized dark power.', rarity: 'LEGENDARY', value: 5000, type: 'MATERIAL' },
 
-    // --- HIGH-RANK BOSS TROPHIES (previously missing — were falling back to 10-zeni stubs) ---
+    // --- HIGH-RANK BOSS TROPHIES (previously missing - were falling back to 10-zeni stubs) ---
     'elder_chaos_essence': { name: 'Elder Chaos Essence', description: 'Crystallized chaos from the Elder Chaos boss. Humming with unstable reality.', rarity: 'MYTHIC', value: 80000, type: 'MATERIAL' },
     'void_titan_heart':    { name: 'Void Titan Heart',    description: 'A still-beating heart ripped from the Void Titan. Pulses with dimensional energy.', rarity: 'MYTHIC', value: 120000, type: 'MATERIAL' },
     'godshard':            { name: 'Godshard',            description: 'A fragment of the Abyssal God\'s divine essence. Reality bends around it.', rarity: 'MYTHIC', value: 250000, type: 'MATERIAL' },
     'mythic_enhancement_stone': { name: 'Mythic Enhancement Stone', description: 'Boosts gear stats by 60%. The pinnacle of enhancement.', rarity: 'MYTHIC', value: 80000, type: 'MATERIAL' },
     'dragon_heart':        { name: 'Dragon Heart',        description: 'A still-warm dragon heart. Pumping ancient fire magic.', rarity: 'LEGENDARY', value: 35000, type: 'MATERIAL' },
 
-    // --- MINING ORES (previously mined but undefined — were falling back to 10-zeni stubs) ---
+    // ═══════════════════════════════════════════════════════════════
+    // 💡 SUMMON PROGRESSION SYSTEM (2026-08-01): EGGS + FRAGMENTS
+    // Eggs are consumables that hatch into summons. Fragments are
+    // crafting materials dropped by wild summons in the Abyss.
+    // Combine fragments → craft higher-tier eggs → hatch better summons.
+    // ═══════════════════════════════════════════════════════════════
+
+    // --- SUMMON EGGS ---
+    'basic_summon_egg':    { name: 'Basic Summon Egg',    description: 'A common egg that hatches one of 4 starter summons. (Tank/DPS/Mage/Support)', rarity: 'COMMON', value: 5000, type: 'ITEM', usable: true },
+    'rare_summon_egg':     { name: 'Rare Summon Egg',     description: 'Hatches a random RARE-tier summon. Crafted from 10 Common Fragments.', rarity: 'RARE', value: 25000, type: 'ITEM', usable: true },
+    'epic_summon_egg':     { name: 'Epic Summon Egg',     description: 'Hatches a random EPIC-tier summon. Crafted from 10 Rare Fragments.', rarity: 'EPIC', value: 80000, type: 'ITEM', usable: true },
+    'legendary_summon_egg':{ name: 'Legendary Summon Egg',description: 'Hatches a random LEGENDARY-tier summon. Crafted from 10 Epic Fragments.', rarity: 'LEGENDARY', value: 250000, type: 'ITEM', usable: true },
+    'mythic_summon_egg':   { name: 'Mythic Summon Egg',   description: 'Hatches a random MYTHIC-tier summon. The rarest egg. Crafted from 10 Legendary Fragments.', rarity: 'MYTHIC', value: 1000000, type: 'ITEM', usable: true },
+
+    // --- SUMMON FRAGMENTS (dropped by wild summons in the Abyss) ---
+    'common_fragment':     { name: 'Common Summon Fragment',  description: 'A faint soul fragment from a defeated wild summon. Collect 10 to craft a Rare Egg.', rarity: 'COMMON', value: 500, type: 'MATERIAL' },
+    'rare_fragment':       { name: 'Rare Summon Fragment',    description: 'A glowing soul fragment from a stronger wild summon. Collect 10 to craft an Epic Egg.', rarity: 'RARE', value: 3000, type: 'MATERIAL' },
+    'epic_fragment':       { name: 'Epic Summon Fragment',    description: 'A pulsing soul fragment radiating power. Collect 10 to craft a Legendary Egg.', rarity: 'EPIC', value: 12000, type: 'MATERIAL' },
+    'legendary_fragment':  { name: 'Legendary Summon Fragment',description: 'A blinding fragment of immense power. Collect 10 to craft a Mythic Egg.', rarity: 'LEGENDARY', value: 50000, type: 'MATERIAL' },
+    'mythic_fragment':     { name: 'Mythic Summon Fragment',  description: 'A fragment of pure divine essence. Only obtainable from the deepest Abyss floors + raids.', rarity: 'MYTHIC', value: 200000, type: 'MATERIAL' },
+
+    // --- SUMMON EVOLUTION STONES (Phase 3) ---
+    'summon_essence_t2':   { name: 'Summon Essence (T2)',    description: 'Crystallized essence used to evolve a summon to its 2nd form. Dropped by Abyss bosses floor 5+.', rarity: 'RARE', value: 15000, type: 'MATERIAL' },
+    'summon_essence_t3':   { name: 'Summon Essence (T3)',    description: 'Pure crystallized essence used to evolve a summon to its final form. Dropped by Abyss bosses floor 21+.', rarity: 'EPIC', value: 60000, type: 'MATERIAL' },
+    'skill_respec_scroll': { name: 'Skill Respec Scroll',    description: 'Resets a summon\'s skill tree, refunding all skill points. The path choice is also reset.', rarity: 'EPIC', value: 40000, type: 'CONSUMABLE', usable: true },
+
+    // ═══════════════════════════════════════════════════════════════
+    // 💡 PHASE 5 (2026-08-01): SUMMON EQUIPMENT
+    // Separate from player gear - 5 slots: Claw, Core, Armor, Crest, Relic.
+    // Dropped by wild summons in the Abyss + craftable from fragments.
+    // ═══════════════════════════════════════════════════════════════
+
+    // --- CLAWS (ATK bonus) ---
+    'rusty_claw':         { name: 'Rusty Claw',         description: 'A worn claw. (+5 ATK for summon)', rarity: 'COMMON', value: 2000, type: 'SUMMON_GEAR', summonSlot: 'claw', stats: { atk: 5 } },
+    'iron_claw':          { name: 'Iron Claw',          description: 'A sturdy iron claw. (+15 ATK for summon)', rarity: 'UNCOMMON', value: 8000, type: 'SUMMON_GEAR', summonSlot: 'claw', stats: { atk: 15 } },
+    'dragon_claw':        { name: 'Dragon Claw',        description: 'A claw from a slain dragon. (+35 ATK, +5 CRIT for summon)', rarity: 'RARE', value: 25000, type: 'SUMMON_GEAR', summonSlot: 'claw', stats: { atk: 35, crit: 5 } },
+    'abyssal_claw':       { name: 'Abyssal Claw',       description: 'A claw that tears reality. (+60 ATK, +10 CRIT for summon)', rarity: 'EPIC', value: 80000, type: 'SUMMON_GEAR', summonSlot: 'claw', stats: { atk: 60, crit: 10 } },
+
+    // --- CORES (MAG bonus) ---
+    'cracked_core':       { name: 'Cracked Core',       description: 'A cracked mana core. (+5 MAG for summon)', rarity: 'COMMON', value: 2000, type: 'SUMMON_GEAR', summonSlot: 'core', stats: { mag: 5 } },
+    'mana_core':          { name: 'Mana Core',          description: 'A pulsing mana core. (+15 MAG for summon)', rarity: 'UNCOMMON', value: 8000, type: 'SUMMON_GEAR', summonSlot: 'core', stats: { mag: 15 } },
+    'elemental_core':     { name: 'Elemental Core',     description: 'A core of pure elemental power. (+35 MAG, +10 HP for summon)', rarity: 'RARE', value: 25000, type: 'SUMMON_GEAR', summonSlot: 'core', stats: { mag: 35, hp: 10 } },
+    'abyssal_core':       { name: 'Abyssal Core',       description: 'A core drawn from the abyss itself. (+60 MAG, +20 HP for summon)', rarity: 'EPIC', value: 80000, type: 'SUMMON_GEAR', summonSlot: 'core', stats: { mag: 60, hp: 20 } },
+
+    // --- ARMOR (DEF + HP bonus) ---
+    'leather_summon_armor': { name: 'Leather Barding',  description: 'Simple leather armor for a summon. (+5 DEF, +20 HP for summon)', rarity: 'COMMON', value: 2000, type: 'SUMMON_GEAR', summonSlot: 'armor', stats: { def: 5, hp: 20 } },
+    'iron_summon_armor':  { name: 'Iron Barding',       description: 'Sturdy iron armor for a summon. (+15 DEF, +50 HP for summon)', rarity: 'UNCOMMON', value: 8000, type: 'SUMMON_GEAR', summonSlot: 'armor', stats: { def: 15, hp: 50 } },
+    'dragon_scale_barding': { name: 'Dragon Scale Barding', description: 'Armor from dragon scales. (+30 DEF, +100 HP for summon)', rarity: 'RARE', value: 25000, type: 'SUMMON_GEAR', summonSlot: 'armor', stats: { def: 30, hp: 100 } },
+    'abyssal_barding':    { name: 'Abyssal Barding',    description: 'Armor that absorbs the void. (+50 DEF, +200 HP for summon)', rarity: 'EPIC', value: 80000, type: 'SUMMON_GEAR', summonSlot: 'armor', stats: { def: 50, hp: 200 } },
+
+    // --- CRESTS (Special effects) ---
+    'crit_crest':         { name: 'Crest of Crits',     description: 'Grants +10% crit chance to a summon.', rarity: 'RARE', value: 20000, type: 'SUMMON_GEAR', summonSlot: 'crest', stats: { crit: 10 } },
+    'evasion_crest':      { name: 'Crest of Evasion',   description: 'Grants +15% evasion to a summon.', rarity: 'RARE', value: 20000, type: 'SUMMON_GEAR', summonSlot: 'crest', stats: { evasion: 15 } },
+    'lifesteal_crest':    { name: 'Crest of Vampirism', description: 'Grants 8% lifesteal to a summon.', rarity: 'EPIC', value: 50000, type: 'SUMMON_GEAR', summonSlot: 'crest', stats: { lifestealPct: 8 } },
+    'swift_crest':        { name: 'Crest of Swiftness', description: 'Grants +20 SPD to a summon.', rarity: 'RARE', value: 20000, type: 'SUMMON_GEAR', summonSlot: 'crest', stats: { spd: 20 } },
+
+    // --- RELICS (Ultimate bonus - very rare) ---
+    'ancient_relic':      { name: 'Ancient Relic',      description: 'A relic of immense power. (+10% all stats for summon)', rarity: 'LEGENDARY', value: 200000, type: 'SUMMON_GEAR', summonSlot: 'relic', stats: { allStatsMult: 0.10 } },
+    'abyssal_relic':      { name: 'Abyssal Relic',      description: 'A relic from the deepest abyss. (+15% all stats, +5% lifesteal for summon)', rarity: 'MYTHIC', value: 500000, type: 'SUMMON_GEAR', summonSlot: 'relic', stats: { allStatsMult: 0.15, lifestealPct: 5 } },
+
+    // --- MINING ORES (previously mined but undefined - were falling back to 10-zeni stubs) ---
     'silver_ore':          { name: 'Silver Ore',          description: 'A chunk of unrefined silver. Mildly conductive to magic.', rarity: 'UNCOMMON', value: 350, type: 'MATERIAL' },
     'gold_ore':            { name: 'Gold Ore',            description: 'A heavy nugget of unrefined gold. Worth a small fortune.', rarity: 'RARE',     value: 900, type: 'MATERIAL' },
     'obsidian_chunk':      { name: 'Obsidian Chunk',      description: 'A jagged piece of volcanic glass. Edges sharper than steel.', rarity: 'EPIC',    value: 2200, type: 'MATERIAL' },
@@ -858,9 +1108,9 @@ const ITEM_DATABASE = {
     // (see craftingSystem.js Phase B2 commit). This gives S/SS/SSS players a
     // reliable long-tail drop to chase beyond just boss trophies.
     //
-    // S-rank:  chaos_ore        — LEGENDARY, ~5% drop weight in S_RANK_COMMON
-    // SS-rank: null_shard       — MYTHIC,    ~5% drop weight in SS_RANK_COMMON
-    // SSS-rank: abyssal_heartstone — MYTHIC, ~4% drop weight in SSS_RANK_COMMON
+    // S-rank:  chaos_ore        - LEGENDARY, ~5% drop weight in S_RANK_COMMON
+    // SS-rank: null_shard       - MYTHIC,    ~5% drop weight in SS_RANK_COMMON
+    // SSS-rank: abyssal_heartstone - MYTHIC, ~4% drop weight in SSS_RANK_COMMON
     'chaos_ore':           { name: 'Chaos Ore',            description: 'Raw chaos crystallized into an unstable metallic ore. Tingles when held.', rarity: 'LEGENDARY', value: 35000, type: 'MATERIAL' },
     'null_shard':          { name: 'Null Shard',           description: 'A fragment of pure negation. Light entering it does not come back.', rarity: 'MYTHIC', value: 90000, type: 'MATERIAL' },
     'abyssal_heartstone':  { name: 'Abyssal Heartstone',   description: 'A warm, dense gem pulsing in sync with the Abyssal God\'s heartbeat. Theorized to be unmaking made solid.', rarity: 'MYTHIC', value: 220000, type: 'MATERIAL' },
@@ -874,11 +1124,35 @@ const ITEM_DATABASE = {
     // --- FORGED EQUIPMENT FROM NEW RARE MATERIALS (consumes the refined forms) ---
     // Each tier produces one weapon + one armor. Stats scale to reqLevel 50/70/90.
     'chaos_blade':         { name: 'Chaos Blade',          description: 'A two-handed sword forged from a chaos ingot. Reality fractures with every swing. (+95 ATK, +15 SPD, +10 CRIT)', rarity: 'LEGENDARY', value: 180000, type: 'EQUIPMENT', stats: { atk: 95, spd: 15, crit: 10 }, slot: 'main_hand', reqLevel: 50, isTwoHanded: true },
-    'chaos_cloak':         { name: 'Chaos Cloak',          description: 'A cloak woven from chaos-tainted thread. Shifts subtly out of phase with attacks. (+55 DEF, +90 HP, +20 SPD)', rarity: 'LEGENDARY', value: 160000, type: 'EQUIPMENT', stats: { def: 55, hp: 90, spd: 20 }, slot: 'armor', reqLevel: 50 },
+    'chaos_cloak':         { name: 'Chaos Cloak',          description: 'A cloak woven from chaos-tainted thread. Shifts subtly out of phase with attacks. (+80 DEF, +140 HP, +25 SPD)', rarity: 'LEGENDARY', value: 160000, type: 'EQUIPMENT', stats: { def: 80, hp: 140, spd: 25 }, slot: 'armor', reqLevel: 50 },
     'null_staff':          { name: 'Null Staff',           description: 'A staff tipped with a null matrix. Spells cast through it simply unmake their targets. (+135 MAG, +35 HP, +15 CRIT)', rarity: 'MYTHIC', value: 380000, type: 'EQUIPMENT', stats: { mag: 135, hp: 35, crit: 15 }, slot: 'main_hand', reqLevel: 70, isTwoHanded: true },
     'null_aegis':          { name: 'Null Aegis',           description: 'A shield that absorbs impacts into a pocket of nothingness. (+130 DEF, +110 HP, +15 LUCK)', rarity: 'MYTHIC', value: 360000, type: 'EQUIPMENT', stats: { def: 130, hp: 110, luck: 15 }, slot: 'armor', reqLevel: 70 },
     'abyssal_blade':       { name: 'Abyssal Blade',        description: 'A blade with an abyssal core at its pommel. The edge exists partially outside reality. (+210 ATK, +50 MAG, +20 CRIT)', rarity: 'MYTHIC', value: 950000, type: 'EQUIPMENT', stats: { atk: 210, mag: 50, crit: 20 }, slot: 'main_hand', reqLevel: 90, isTwoHanded: true },
-    'abyssal_crown':       { name: 'Abyssal Crown',        description: 'A circlet set with a polished abyssal core. Whispers of every defeated boss echo within. (+200 DEF, +200 HP, +40 LUCK, +20 MAG)', rarity: 'MYTHIC', value: 1100000, type: 'EQUIPMENT', stats: { def: 200, hp: 200, luck: 40, mag: 20 }, slot: 'helmet', reqLevel: 90 }
+    'abyssal_crown':       { name: 'Abyssal Crown',        description: 'A circlet set with a polished abyssal core. Whispers of every defeated boss echo within. (+200 DEF, +200 HP, +40 LUCK, +20 MAG)', rarity: 'MYTHIC', value: 1100000, type: 'EQUIPMENT', stats: { def: 200, hp: 200, luck: 40, mag: 20 }, slot: 'helmet', reqLevel: 90 },
+
+    // ── SUMMONER SYSTEM ITEMS (Phase 4) ──────────────────────────
+    // Summon eggs - hatch via `.summon hatch <eggId>`. Drop from bosses, raids, abyss.
+    // Common egg = random COMMON species. Species-specific eggs = that species.
+    'summon_egg_common':       { name: 'Common Summon Egg',   description: 'A pulsating egg. Hatches into a random common summon. Use `.summon hatch summon_egg_common`.', rarity: 'UNCOMMON', value: 5000, type: 'ITEM', usable: false },
+    'summon_egg_skeleton':     { name: 'Skeleton Egg',         description: 'A bone-white egg. Hatches into a Skeleton summon.', rarity: 'UNCOMMON', value: 8000, type: 'ITEM', usable: false },
+    'summon_egg_flame_elemental': { name: 'Flame Elemental Egg', description: 'A warm, flickering egg. Hatches into a Flame Elemental.', rarity: 'RARE', value: 15000, type: 'ITEM', usable: false },
+    'summon_egg_frost_elemental': { name: 'Frost Elemental Egg', description: 'A cold, crystalline egg. Hatches into a Frost Elemental.', rarity: 'RARE', value: 15000, type: 'ITEM', usable: false },
+    'summon_egg_wolf':         { name: 'Wolf Egg',              description: 'A furry, warm egg. Hatches into a Gray Wolf summon.', rarity: 'UNCOMMON', value: 8000, type: 'ITEM', usable: false },
+    'summon_egg_bear':         { name: 'Bear Egg',              description: 'A heavy, thick-shelled egg. Hatches into a Cave Bear summon.', rarity: 'UNCOMMON', value: 10000, type: 'ITEM', usable: false },
+    'summon_egg_imp':          { name: 'Imp Egg',               description: 'A mischievously quivering egg. Hatches into an Imp summon.', rarity: 'UNCOMMON', value: 8000, type: 'ITEM', usable: false },
+    'summon_egg_void_walker':  { name: 'Void Walker Egg',       description: 'An egg of pure darkness. Hatches into a Void Walker summon.', rarity: 'RARE', value: 18000, type: 'ITEM', usable: false },
+    'summon_egg_wyrmling':     { name: 'Wyrmling Egg',          description: 'A scaled, warm egg. Hatches into a Wyrmling summon.', rarity: 'EPIC', value: 50000, type: 'ITEM', usable: false },
+    'summon_egg_turret_mk1':   { name: 'Turret MK-I Egg',       description: 'A mechanical egg full of gears. Hatches into an Auto-Turret MK-I.', rarity: 'UNCOMMON', value: 10000, type: 'ITEM', usable: false },
+    'summon_egg_lich_minion':  { name: 'Lich Minion Egg',       description: 'A necrotic egg radiating dark energy. Hatches into a Lich Minion.', rarity: 'RARE', value: 20000, type: 'ITEM', usable: false },
+    'summon_egg_storm_elemental': { name: 'Storm Elemental Egg', description: 'A crackling, electric egg. Hatches into a Storm Elemental.', rarity: 'RARE', value: 18000, type: 'ITEM', usable: false },
+
+    // Summon consumables
+    'loyalty_crystal':         { name: 'Loyalty Crystal',       description: 'Restores a summon\'s loyalty to 100. Use via the summon system.', rarity: 'RARE', value: 5000, type: 'CONSUMABLE', usable: false },
+    'summon_rename_tag':       { name: 'Summon Rename Tag',     description: 'Renames a summon. Cosmetic.', rarity: 'UNCOMMON', value: 2000, type: 'CONSUMABLE', usable: false },
+    'memory_tonic':            { name: 'Memory Tonic',          description: 'Resets a summon\'s personality to STOIC. Rare drop.', rarity: 'EPIC', value: 15000, type: 'CONSUMABLE', usable: false },
+    // 💡 NEW 2026-08-05: Summon Healing Pill - mid-battle heal for summon duels.
+    // Restores 30% of max HP when used via `.s pvp item` during a summon duel.
+    'summon_healing_pill':     { name: 'Summon Healing Pill',   description: 'Heals 30% of max HP mid-battle. Used in summon duels via .s pvp item.', rarity: 'UNCOMMON', value: 3000, type: 'CONSUMABLE', usable: false, summonItem: true }
 };
 
 function getItemInfo(itemId) {

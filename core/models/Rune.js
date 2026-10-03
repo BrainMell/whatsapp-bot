@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-// 💡 Phase 3: Rune model — socketable skill augments.
+// 💡 Phase 3: Rune model - socketable skill augments.
 // Each rune is owned by a user, has a type + tier, and may be socketed
 // into a specific skill. Unsocketed runes live in the user's rune inventory.
 const RuneSchema = new mongoose.Schema({

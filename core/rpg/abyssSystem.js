@@ -1,23 +1,104 @@
 // ═══════════════════════════════════════════════════════════════════════════
-//  ABYSS SYSTEM (Phase 4 — Endless Dungeon)
+//  ABYSS SYSTEM (Phase 4 - Endless Dungeon)
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // Procedural endless dungeon. Each floor gets harder. Death = lose 90% of
 // run loot. Retreat = keep 100%. Weekly leaderboard resets every Monday.
 //
+// LORE:
+//   The Abyss is a vast underground network of caverns and ruins that predates
+//   recorded history. Long before the Infection spread, these depths were home
+//   to natural creatures - cave bats, rats, slimes, and territorial beasts that
+//   evolved in darkness. When the Infection seeped up from below, it twisted
+//   some creatures into monstrous versions of themselves (Infected Colossus,
+//   Corrupted Guardian) while others remained unchanged, coexisting with the
+//   infected in a strange ecological balance. Deeper floors hold ancient
+//   constructs and void-touched entities that predate even the natural life.
+//
 // Floor structure:
-//   1-10:   F→A rank enemies, normal bosses every 5th floor
-//   11-20:  S rank, mini-bosses every 3rd floor
-//   21-49:  SS+ rank, every floor has a boss
-//   50+:    SSS rank, every floor is a boss + environmental hazard
+//   1-2:    F-rank natural mobs (rats, bats, slimes)
+//   3-6:    C-rank, stone hulks, golems, boss every 5th floor
+//   7-10:   A-rank, storm callers, void harbingers
+//   11-20:  S-rank, mini-boss every 3rd floor
+//   21-49:  SS+ rank, boss every 5th floor
+//   50+:    SSS rank, brutal difficulty
 //   100:    The Abyssal God (final boss, unique drops)
 //
 // Entry: free, but only 1 run per 12 hours (anti-farm).
 // Score = deepestFloor × 100 + monstersKilled × 5
+//
+// 💡 2026-09-17: PACK FIGHTS - non-boss combat floors (5+) can spawn a
+// 2-3 enemy pack (adds at 55% stats, +25% rewards each). Rewards rebalanced
+// to fit the new XP curve: getFloorRewards now uses getFloorRewardMultiplier
+// (flat, capped) instead of the enemy difficulty curve.
 
 const AbyssRun = require('../models/AbyssRun');
 const AbyssLeaderboard = require('../models/AbyssLeaderboard');
 const mongoose = require('mongoose');
+const botConfig = require('../../botConfig');
+const P = () => botConfig.getPrefix();
+
+// 💡 CROSS-BOT STATE LEAK FIX 2026-09-20: AbyssRun lives in SHARED MongoDB,
+// so a run started on Joker was fully visible (and attackable) from Subaru.
+// Player-facing run actions now resolve THIS bot's runs only; legacy runs
+// (created before the botId field) stay reachable so nobody's in-flight run
+// breaks on deploy. Run CREATION stamps the owning bot; startRun's stale-
+// run check intentionally stays unscoped (auto-retreating a stale run and
+// blocking on a fresh one is correct regardless of which bot owns it).
+// Leaderboards remain global by design.
+function botScope() {
+  try { return botConfig.getBotId() || 'global'; } catch (e) { return 'global'; }
+}
+function activeRunFilter(userId) {
+  return {
+    userId,
+    status: 'active',
+    $or: [{ botId: botScope() }, { botId: { $exists: false } }, { botId: null }],
+  };
+}
+
+// 💡 COSMOLOGY PASS (2026-09-19): lore drops + player-variant enemies.
+// Owner-approved systems from the design package (implementation/
+// lore_drop_system.md, enemy_variants.md, abyss.md). In-memory only.
+const loreDrops = require('./loreDrops');
+const enemyVariants = require('./enemyVariants');
+
+// ─── ENCOUNTER LORE (one drop per reply, never on failure) ───────────────
+// Chooses at most ONE drop for a floor-intro/next-floor block:
+//   humanoid variant enemy -> bark (15%) or opener (10%)
+//   regular combat         -> opener (10%)
+//   treasure/event         -> npc sighting (8%) or general world (12%)
+// 💡 FIX (tester issue ef0fa0): event floors reached via
+// applyNextEncounter / processSkip printed only the event NAME and the
+// "choose" hint, never the desc or the choice texts (floor 1 did). Every
+// event floor now renders the same block: name, desc, choices, hint.
+function _eventFloorText(event, floorLabel) {
+  let t = `${event.icon} *Floor ${floorLabel}* - ${event.name}\n_${event.desc}_\n\n`;
+  (event.choices || []).forEach(c => {
+    t += `\`${c.id}\` - ${c.text}\n`;
+  });
+  t += `\n_Choose with \`${P()} abyss choose <1/2>\`_`;
+  return t;
+}
+
+function _encounterIntroDrop(encounter) {
+  try {
+    if (!encounter) return '';
+    if (encounter.type === 'combat' && encounter.enemy) {
+      const e = encounter.enemy;
+      if (e.humanoid && Math.random() < 0.15) {
+        return loreDrops.maybeDrop('encounters_bark', { chance: 1 }) || '';
+      }
+      return loreDrops.maybeDrop('encounters_opener', { chance: 0.10 }) || '';
+    }
+    if (encounter.type === 'treasure' || encounter.type === 'event') {
+      const r = Math.random();
+      if (r < 0.08) return loreDrops.maybeDrop('encounters_npc', { chance: 1 }) || '';
+      if (r < 0.20) return loreDrops.maybeDrop('general_world', { chance: 1 }) || '';
+    }
+    return '';
+  } catch (e) { return ''; }
+}
 
 // ─── FLOOR TIER DEFINITIONS ───────────────────────────────────────────────
 function getFloorTier(floor) {
@@ -33,9 +114,14 @@ function getFloorTier(floor) {
 }
 
 function isBossFloor(floor) {
-  if (floor >= 21) return true;        // every floor 21+ is a boss
-  if (floor >= 11) return floor % 3 === 0; // mini-boss every 3rd floor
-  return floor % 5 === 0;              // boss every 5th floor in 1-10
+  // 💡 FIX 2026-08-15: Removed "every floor 21+ is a boss" - that caused
+  // the player to face the same boss repeatedly with no regular mob breaks.
+  // New pattern: boss every 5th floor (5, 10, 15, 20, 25, ...) with
+  // mini-bosses every 3rd floor in the S-tier range (11-20) for extra
+  // challenge. Deeper floors (21+) still get a boss every 5th floor but
+  // the in-between floors are regular mobs - so the player gets breaks.
+  if (floor >= 11 && floor <= 20) return floor % 3 === 0; // mini-boss every 3rd floor in S-tier
+  return floor % 5 === 0;              // boss every 5th floor everywhere else
 }
 
 // ─── ENEMY SCALING ────────────────────────────────────────────────────────
@@ -45,10 +131,23 @@ function getFloorMultiplier(floor) {
   return 1.0 + (floor - 1) * 0.15 + Math.pow(floor - 1, 1.5) * 0.05;
 }
 
+// 💡 2026-09-17 REBALANCE: rewards use their own curve - much flatter
+// than the enemy difficulty curve above, with a hard ceiling. Keeps deep
+// floors meaningful without printing millions of XP/Zeni per room.
+function getFloorRewardMultiplier(floor) {
+  if (floor <= 100) return 1 + (floor - 1) * 0.12;          // 1 -> 12.88
+  return Math.min(15, 12.88 + Math.log2(floor / 100) * 4);  // soft cap 15
+}
+
 // ─── ENEMY POOLS BY FLOOR TIER ────────────────────────────────────────────
+// 💡 FIX 2026-08-15: Rebalanced F-tier - was spawning STONE_HULK (a big rock
+// golem) on Floor 1. F-tier should be weak introductory mobs (rats, bats,
+// small slimes). STONE_HULK moved to C-tier where it belongs.
+// Also: lore mentions natural monsters that existed before the infection,
+// so some pools now include natural creatures alongside infected ones.
 const ABYSS_ENEMY_POOLS = {
-  F: ['FLAME', 'DROWNED_ONE', 'STONE_HULK', 'FROST_WISP', 'EMBER_SPAWN'],
-  C: ['MUTATED_HOUND', 'CRYSTAL_GOLEM', 'SHADOW_STALKER', 'VENOM_SPIDER'],
+  F: ['RABID_RAT', 'CAVE_BAT', 'EMBER_SPAWN', 'FROST_WISP', 'SLIME'],
+  C: ['STONE_HULK', 'MUTATED_HOUND', 'CRYSTAL_GOLEM', 'SHADOW_STALKER', 'VENOM_SPIDER'],
   B: ['INFERNO_KNIGHT', 'TIDAL_FURY', 'BOULDER_TITAN', 'GLACIAL_WRAITH'],
   A: ['STORM_CALLER', 'VOID_HARBINGER', 'BLOOD_REAVER', 'ANCIENT_GUARDIAN'],
   S: ['ELDER_CHAOS', 'PRIMORDIAL_CHAOS', 'VOID_CORRUPTED'],
@@ -58,27 +157,37 @@ const ABYSS_ENEMY_POOLS = {
   GOD: ['ABYSSAL_GOD', 'VOID_TITAN', 'ELEMENTAL_ARCHON'],
 };
 
+// 💡 FIX 2026-08-15: Boss pools now have MULTIPLE bosses per tier so the
+// player doesn't face the same boss every time. Previously each tier had
+// exactly one boss (e.g. F-tier always = INFECTED_COLOSSUS). Now each tier
+// has 2-3 bosses and generateFloorEnemy picks one randomly.
 const ABYSS_BOSS_POOL = {
-  F: 'INFECTED_COLOSSUS',
-  C: 'CORRUPTED_GUARDIAN',
-  B: 'MUTATION_PRIME',
-  A: 'ELEMENTAL_ARCHON',
-  S: 'ELDER_CHAOS',
-  SS: 'VOID_TITAN',
-  SSS: 'ABYSSAL_GOD',
-  ABYSSAL_GOD: 'ABYSSAL_GOD',
-  GOD: 'ABYSSAL_GOD',
+  F: ['INFECTED_COLOSSUS', 'CORRUPTED_GUARDIAN', 'MUTATED_OVERSEER'],
+  C: ['CORRUPTED_GUARDIAN', 'MUTATION_PRIME', 'STONE_HULK'],
+  B: ['MUTATION_PRIME', 'BOULDER_TITAN', 'INFERNO_LORD'],
+  A: ['ELEMENTAL_ARCHON', 'STORM_CALLER', 'VOID_HARBINGER'],
+  S: ['ELDER_CHAOS', 'PRIMORDIAL_CHAOS', 'VOID_CORRUPTED'],
+  SS: ['VOID_TITAN', 'MUTATION_PRIME', 'ELEMENTAL_ARCHON'],
+  SSS: ['ABYSSAL_GOD', 'ELDER_CHAOS', 'VOID_TITAN'],
+  ABYSSAL_GOD: ['ABYSSAL_GOD', 'VOID_TITAN', 'ELEMENTAL_ARCHON'],
+  GOD: ['ABYSSAL_GOD', 'VOID_TITAN', 'ELEMENTAL_ARCHON'],
 };
 
 // ─── REWARDS PER FLOOR ────────────────────────────────────────────────────
-function getFloorRewards(floor, isBoss) {
+function getFloorRewards(floor, isBoss, rewardMult = 1) {
   const tier = getFloorTier(floor);
-  const tierMult = { F: 1, C: 2, B: 4, A: 8, S: 20, SS: 50, SSS: 150, ABYSSAL_GOD: 1000, GOD: 5000 };
+  // 💡 2026-09-17 REBALANCE: the old tier mults (1000/5000) stacked with the
+  // enemy difficulty curve (~74x at floor 110) paid ~3.7M XP / 7.4M Zeni per
+  // room - 1.85x the ENTIRE 0-100 XP curve (2M total) in ONE floor. New
+  // table (~1.35x per tier) + rewards-only curve: floor 100 now pays ~18.5K
+  // XP / ~12K Zeni, boss ~37K. rewardMult < 1 for pack-fight adds.
+  const tierMult = { F: 1, C: 2, B: 3, A: 4, S: 6, SS: 8, SSS: 10, ABYSSAL_GOD: 12, GOD: 15 };
   const mult = tierMult[tier] || 1;
-  const bossMult = isBoss ? 5 : 1;
+  const bossMult = isBoss ? 2 : 1;
+  const xp = Math.floor(120 * mult * bossMult * getFloorRewardMultiplier(floor) * rewardMult);
   return {
-    xp: Math.floor(50 * mult * bossMult * getFloorMultiplier(floor)),
-    gold: Math.floor(100 * mult * bossMult * getFloorMultiplier(floor)),
+    xp,
+    gold: Math.floor(xp * 0.65),
   };
 }
 
@@ -86,36 +195,91 @@ function getFloorRewards(floor, isBoss) {
 const RUN_COOLDOWN_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 // ─── START A NEW ABYSS RUN ────────────────────────────────────────────────
-async function startRun(userId, playerStats) {
-  // 💡 QA FIX: atomic check-and-create to prevent race condition.
-  // Use findOneAndUpdate with upsert — if a run already exists for this user
-  // with status 'active', it returns the existing run (upserted=false).
-  // If not, it creates a new one (upserted=true).
-  // First check for existing active run (non-atomic but catches 99% of cases)
+// ctx { playerClassId } enables player-variant enemy rolls (enemy_variants §5)
+async function startRun(userId, playerStats, ctx = {}) {
+  // 💡 AUTO-RETREAT: if the player has an existing active run that's been
+  // inactive for more than 30 minutes, auto-retreat it so they can start
+  // a new one. Previously, stale runs would block new entries indefinitely
+  // - the player had to manually run .g abyss retreat first.
+  const ABYSS_STALE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
   const existing = await AbyssRun.findOne({ userId, status: 'active' });
   if (existing) {
-    return {
-      success: false,
-      message: `❌ You already have an active Abyss run on floor ${existing.currentFloor}.\n_Continue with \`.g abyss status\` or retreat with \`.g abyss retreat\`._`,
-    };
+    const lastActivity = new Date(existing.updatedAt).getTime();
+    const age = Date.now() - lastActivity;
+    if (age > ABYSS_STALE_TIMEOUT_MS) {
+      // 💡 FIX 2026-07-31 Bug #4: Auto-retreat stale runs properly -
+      // award loot, add to leaderboard, zero accumulator. Previously
+      // just set status='completed' without paying out loot or recording
+      // on the leaderboard.
+      console.log(`[Abyss] Auto-retreating stale run for ${userId} (age: ${Math.floor(age / 60000)}min)`);
+      try {
+        // Award full loot (same as manual retreat)
+        // 💡 FIX 2026-08-15: require progression + economy locally - they
+        // were referenced but never imported at this scope, causing
+        // "progression is not defined" ReferenceError.
+        const progression = require('./progression');
+        const economy = require('./economy');
+        const loot = existing.lootAccumulator || {};
+        if (loot.xp > 0) progression.awardXP(userId, loot.xp, 'Abyss (auto-retreat)');
+        if (loot.gold > 0) economy.addMoney(userId, loot.gold, 'Abyss (auto-retreat)', 'abyss');
+        // Add to leaderboard
+        const score = existing.currentFloor * 100 + (existing.monstersKilled || 0) * 5;
+        await addToLeaderboard(userId, existing.currentFloor, existing.monstersKilled, existing.bossesKilled, score, 'retreat');
+        // Mark as completed
+        existing.status = 'completed';
+        existing.finalScore = score;
+        existing.finalFloor = existing.currentFloor;
+        existing.lootAccumulator = { xp: 0, gold: 0, runes: [], items: [] };
+        await existing.save();
+      } catch (retreatErr) {
+        console.error('[Abyss] Auto-retreat error:', retreatErr.message);
+        // Force-complete even if loot payout fails
+        existing.status = 'completed';
+        await existing.save();
+      }
+    } else {
+      return {
+        success: false,
+        message: `❌ You already have an active Abyss run on floor ${existing.currentFloor}.\n_Continue with \`${P()} abyss status\` or retreat with \`${P()} abyss retreat\`._`,
+      };
+    }
   }
 
-  // Check cooldown — look at most recent completed/failed run
+  // Check cooldown - look at most recent completed/failed run
+  // 💡 RPG Mods AND the bot owner are immune to the Abyss cooldown.
+  // Owner bypass added 2026-08-03 per user request: owner account should
+  // be able to test Abyss at any time without waiting 12h.
   const lastRun = await AbyssRun.findOne({ userId, status: { $in: ['completed', 'failed'] } }).sort({ updatedAt: -1 });
   if (lastRun) {
     const elapsed = Date.now() - new Date(lastRun.updatedAt).getTime();
     if (elapsed < RUN_COOLDOWN_MS) {
-      const remaining = Math.ceil((RUN_COOLDOWN_MS - elapsed) / 3600000);
-      return {
-        success: false,
-        message: `❌ Abyss cooldown. Try again in ${remaining}h.\n_The Abyss needs time to reform between challenges._`,
-      };
+      // Check if user is the bot owner OR an RPG mod - bypass cooldown if so
+      let isOwner = false;
+      let isRpgMod = false;
+      try {
+        const engine = require('../engine');
+        if (typeof engine.isBotOwner === 'function') {
+          isOwner = engine.isBotOwner(userId);
+        }
+        if (typeof engine.isRpgMod === 'function') {
+          isRpgMod = engine.isRpgMod(userId);
+        }
+      } catch (e) {}
+
+      if (!isOwner && !isRpgMod) {
+        const remaining = Math.ceil((RUN_COOLDOWN_MS - elapsed) / 3600000);
+        return {
+          success: false,
+          message: `❌ Abyss cooldown. Try again in ${remaining}h.\n_The Abyss needs time to reform between challenges._`,
+        };
+      }
     }
   }
 
   // Create new run
   const run = new AbyssRun({
     userId,
+    botId: botScope(), // 💡 CROSS-BOT LEAK FIX: stamp the owning bot
     currentFloor: 1,
     lootAccumulator: { xp: 0, gold: 0, runes: [], items: [] },
     playerSnapshot: {
@@ -123,17 +287,30 @@ async function startRun(userId, playerStats) {
       maxHp: playerStats.maxHp,
       energy: playerStats.energy,
       maxEnergy: playerStats.maxEnergy,
+      // 💡 FIX 2026-08-31: snapshot atk/def/spd too - TRAP events roll
+      // against these (playerStats[choice.stat]); previously they were
+      // dropped here, so def/spd checks always failed.
+      atk: playerStats.atk || 10,
+      def: playerStats.def || 5,
+      spd: playerStats.spd || 5,
     },
     currentHp: playerStats.hp,
     currentEnergy: playerStats.energy,
     status: 'active',
   });
 
-  // Generate first floor encounter (may be combat, treasure, or event)
-  const encounter = generateFloorEncounter(1);
-  if (encounter.type === 'combat') {
+  // Generate first floor encounter (may be combat, treasure, event, or wild_summon)
+  const encounter = generateFloorEncounter(1, { playerClassId: ctx.playerClassId });
+  if (encounter.type === 'combat' || encounter.type === 'wild_summon') {
     run.currentEnemy = encounter.enemy;
-    run.currentEncounterType = 'combat';
+    run.currentEncounterType = encounter.type;
+    run.packQueue = Array.isArray(encounter.packQueue) ? encounter.packQueue : [];
+    if (encounter.type === 'wild_summon') {
+      run.currentEncounterData = {
+        species: encounter.wildSummonSpecies,
+        rarity: encounter.wildSummonRarity,
+      };
+    }
   } else {
     run.currentEnemy = null;
     run.currentEncounterType = encounter.type;
@@ -141,49 +318,109 @@ async function startRun(userId, playerStats) {
   }
   await run.save();
 
-  let startMsg = `🕳️ *ABYSS RUN STARTED*\n\nYou descend into the Abyss...\n\n`;
+  let startMsg = '🕳️ *ABYSS RUN STARTED*\n\nYou descend into the Abyss...\n\n';
   if (encounter.type === 'combat') {
-    startMsg += `⚔️ *Floor 1 — ${encounter.enemy.name}*\n_HP: ${encounter.enemy.hp}/${encounter.enemy.maxHp}_\n\n_Attack with \`.g abyss attack\`_\n_Retreat with \`.g abyss retreat\`_`;
+    startMsg += '⚔️ *Floor 1 - ' + encounter.enemy.name + '*\n_HP: ' + (encounter.enemy.stats?.hp ?? encounter.enemy.hp) + '/' + (encounter.enemy.stats?.maxHp ?? encounter.enemy.maxHp) + '_\n\n_Attack with `' + P() + ' combat attack`_\n_Retreat with `' + P() + ' abyss retreat`_';
+  } else if (encounter.type === 'wild_summon') {
+    const species = encounter.wildSummonSpecies;
+    startMsg += '🐉 *Floor 1 - Wild ' + species + ' appeared!*\n_HP: ' + encounter.enemy.stats.hp + '/' + encounter.enemy.stats.maxHp + '_\n⚠️ _Defeat it to earn Summon Fragments!_\n\n_Attack with `' + P() + ' combat attack`_\n_Retreat with `' + P() + ' abyss retreat`_';
   } else if (encounter.type === 'treasure') {
-    startMsg += `${encounter.treasure.icon} *Floor 1 — ${encounter.treasure.name}*\n_${encounter.treasure.desc}_\n\n_Collect with \`.g abyss collect\`_\n_Skip with \`.g abyss skip\`_`;
+    startMsg += `${encounter.treasure.icon} *Floor 1 - ${encounter.treasure.name}*\n_${encounter.treasure.desc}_\n\n_Collect with \`${P()} abyss collect\`_\n_Skip with \`${P()} abyss skip\`_`;
   } else if (encounter.type === 'event') {
-    startMsg += `${encounter.event.icon} *Floor 1 — ${encounter.event.name}*\n_${encounter.event.desc}_\n\n`;
-    encounter.event.choices.forEach(c => {
-      startMsg += `\`${c.id}\` — ${c.text}\n`;
-    });
-    startMsg += `\n_Choose with \`.g abyss choose <1/2>\`_`;
+    startMsg += _eventFloorText(encounter.event, 1);
   }
+
+  // 💡 LORE DROP (occasional plain text, one max): fight-opener beat on the
+  // starting floor, or a general-world line on non-hostile floors. Carried
+  // out-of-band on result.loreDrop - the handler sends it as its own message.
+  const startLoreDrop = _encounterIntroDrop(encounter) || null;
 
   return {
     success: true,
     run,
     message: startMsg,
+    loreDrop: startLoreDrop,
   };
 }
 
 // ─── GENERATE FLOOR ENCOUNTER ─────────────────────────────────────────────
 // 20% chance of treasure/event instead of combat on non-boss floors.
-function generateFloorEncounter(floor) {
+// ctx { playerClassId } enables player-variant rolls (floors 31+ per design).
+function generateFloorEncounter(floor, ctx = {}) {
   const isBoss = isBossFloor(floor);
-  
+
   // Boss floors are always combat
-  if (isBoss) return { type: 'combat', enemy: generateFloorEnemy(floor) };
-  
-  // Non-boss floors: 20% chance of treasure, 10% chance of event, 70% combat
+  if (isBoss) return { type: 'combat', enemy: generateFloorEnemy(floor, ctx) };
+
+  // 💡 SUMMON PROGRESSION SYSTEM (2026-08-01): 10% chance of wild summon encounter.
+  // When triggered, the player fights a wild summon species. Winning drops
+  // summon fragments (tiered by floor depth) which can be crafted into eggs.
+  // This is the primary source of summon fragments - the core progression loop.
+  const WILD_SUMMON_CHANCE = 0.10; // 10% per non-boss floor
+  if (Math.random() < WILD_SUMMON_CHANCE) {
+    try {
+      const summonEggSystem = require('./summonEggSystem');
+      const wildEncounter = summonEggSystem.generateWildSummonEncounter(floor);
+      if (wildEncounter) {
+        return {
+          type: 'wild_summon',
+          enemy: wildEncounter.enemy,
+          wildSummonSpecies: wildEncounter.speciesId,
+          wildSummonRarity: wildEncounter.species.rarity,
+        };
+      }
+    } catch (e) {
+      console.error('[Abyss] Wild summon encounter failed:', e.message);
+    }
+  }
+
+  // Non-boss floors: 20% chance of treasure, 10% chance of event, remaining combat
   const roll = Math.random();
   if (roll < 0.20) {
     return generateTreasureEncounter(floor);
   } else if (roll < 0.30) {
     return generateEventEncounter(floor);
   }
-  return { type: 'combat', enemy: generateFloorEnemy(floor) };
+
+  // 💡 2026-09-17 PACK FIGHTS: not every floor has to be a 1v1 duel. From
+  // floor 5 there is a 35% chance a combat floor spawns a PACK: the primary
+  // enemy fights at full strength, then 1-2 weakened (55% stats) pack
+  // members jump in one after another while your HP stays where it was.
+  // Boss floors and wild summons stay solo duels.
+  const primary = generateFloorEnemy(floor, ctx);
+  if (floor >= 5 && Math.random() < 0.35) {
+    const maxPack = floor >= 15 ? 3 : 2;
+    const packSize = 2 + Math.floor(Math.random() * (maxPack - 1)); // 2..maxPack
+    const packQueue = [];
+    for (let i = 1; i < packSize; i++) {
+      const member = generateFloorEnemy(floor, ctx);
+      member.isPackMember = true;
+      member.packIndex = i + 1;
+      member.packSize = packSize;
+      member.name = `${member.name} (pack ${i + 1}/${packSize})`;
+      for (const k of ['hp', 'maxHp', 'atk', 'def', 'spd']) {
+        if (typeof member[k] === 'number') member[k] = Math.max(1, Math.floor(member[k] * 0.55));
+      }
+      if (member.stats) {
+        for (const k of ['hp', 'maxHp', 'atk', 'def', 'spd']) {
+          if (typeof member.stats[k] === 'number') member.stats[k] = Math.max(1, Math.floor(member.stats[k] * 0.55));
+        }
+      }
+      packQueue.push(member);
+    }
+    return { type: 'combat', enemy: primary, packQueue };
+  }
+  return { type: 'combat', enemy: primary };
 }
 
 // ─── TREASURE ENCOUNTERS ──────────────────────────────────────────────────
 function generateTreasureEncounter(floor) {
   const tier = getFloorTier(floor);
-  const mult = getFloorMultiplier(floor);
-  const tierMult = { F: 1, C: 2, B: 4, A: 8, S: 20, SS: 50, SSS: 150, ABYSSAL_GOD: 1000, GOD: 5000 };
+  // 💡 2026-09-17 REBALANCE: use the rewards curve (not the enemy difficulty
+  // curve) + the flattened tier table - treasure rooms now pay ~2-3x a
+  // combat floor instead of ~1000x.
+  const rm = getFloorRewardMultiplier(floor);
+  const tierMult = { F: 1, C: 2, B: 3, A: 4, S: 6, SS: 8, SSS: 10, ABYSSAL_GOD: 12, GOD: 15 };
   const tm = tierMult[tier] || 1;
   
   const treasures = [
@@ -192,14 +429,14 @@ function generateTreasureEncounter(floor) {
       name: 'Gold Cache',
       icon: '💰',
       desc: 'A glittering pile of ancient coins!',
-      gold: Math.floor(200 * tm * mult),
+      gold: Math.floor(100 * tm * rm),
     },
     {
       type: 'XP_SHRINE',
       name: 'Experience Shrine',
       icon: '✨',
       desc: 'A mystical shrine radiating power.',
-      xp: Math.floor(100 * tm * mult),
+      xp: Math.floor(50 * tm * rm),
     },
     {
       type: 'HEALING_FOUNTAIN',
@@ -219,12 +456,19 @@ function generateTreasureEncounter(floor) {
       type: 'MYSTERY_CHEST',
       name: 'Mystery Chest',
       icon: '🎁',
-      desc: 'An ornate chest — what could be inside?',
+      desc: 'An ornate chest - what could be inside?',
       // Random reward: gold, XP, or rune drop chance
       randomReward: true,
-      gold: Math.floor(500 * tm * mult),
-      xp: Math.floor(300 * tm * mult),
+      gold: Math.floor(200 * tm * rm),
+      xp: Math.floor(120 * tm * rm),
       runeDropChance: floor >= 11 ? 0.25 : 0,
+    },
+    {
+      type: 'RUNE_SHRINE',
+      name: 'Rune Shrine',
+      icon: '💎',
+      desc: 'A glowing shrine radiating ancient power. A rune is guaranteed!',
+      guaranteedRune: true,
     },
   ];
   
@@ -256,10 +500,10 @@ function generateEventEncounter(floor) {
       desc: 'Two paths lie before you.',
       choices: [
         { id: '1', text: 'Left path (risky, better rewards)', risk: 'high',
-          rewards: { gold: Math.floor(300 * getFloorMultiplier(floor)), xp: Math.floor(200 * getFloorMultiplier(floor)) },
+          rewards: { gold: Math.floor(600 * getFloorRewardMultiplier(floor)), xp: Math.floor(400 * getFloorRewardMultiplier(floor)) },
           danger: Math.floor(100 * getFloorMultiplier(floor)) },
         { id: '2', text: 'Right path (safe, lesser rewards)', risk: 'low',
-          rewards: { gold: Math.floor(100 * getFloorMultiplier(floor)), xp: Math.floor(50 * getFloorMultiplier(floor)) },
+          rewards: { gold: Math.floor(200 * getFloorRewardMultiplier(floor)), xp: Math.floor(100 * getFloorRewardMultiplier(floor)) },
           danger: 0 },
       ],
     },
@@ -267,10 +511,10 @@ function generateEventEncounter(floor) {
       type: 'SHRINE',
       name: 'Forgotten Shrine',
       icon: '⛪',
-      desc: 'A shrine offers a blessing — for a price.',
+      desc: 'A shrine offers a blessing - for a price.',
       choices: [
         { id: '1', text: 'Pray (sacrifice HP for XP)', sacrifice: 'hp', amount: '20%',
-          reward: { xp: Math.floor(500 * getFloorMultiplier(floor)) } },
+          reward: { xp: Math.floor(800 * getFloorRewardMultiplier(floor)) } },
         { id: '2', text: 'Leave it', nothing: true },
       ],
     },
@@ -281,16 +525,29 @@ function generateEventEncounter(floor) {
 }
 
 // ─── GENERATE FLOOR ENEMY ─────────────────────────────────────────────────
-function generateFloorEnemy(floor) {
+function generateFloorEnemy(floor, ctx = {}) {
   const tier = getFloorTier(floor);
   const isBoss = isBossFloor(floor);
   const mult = getFloorMultiplier(floor);
 
-  let name, baseStats;
+  // 💡 PLAYER-VARIANT ENEMIES (owner-confirmed, enemy_variants.md §5):
+  // floors 31+ add player-variant weights (escalation by depth), floor 90+
+  // adds TIMELINE_DRIFTER, MIRROR can replace boss-floor enemies from 31+.
+  // Variants use the regular enemy-generation process end to end.
+  const variant = enemyVariants.rollAbyssVariant(floor, isBoss, ctx.playerClassId);
+  if (variant) return variant;
+
+  let name, baseStats, enemyId;
   if (isBoss) {
-    const bossId = ABYSS_BOSS_POOL[tier] || 'INFECTED_COLOSSUS';
+    // 💡 FIX 2026-08-15: ABYSS_BOSS_POOL[tier] is now an ARRAY of boss IDs.
+    // Pick one randomly so the player doesn't face the same boss every time.
+    const bossPool = ABYSS_BOSS_POOL[tier] || ABYSS_BOSS_POOL.F;
+    const bossId = Array.isArray(bossPool)
+      ? bossPool[Math.floor(Math.random() * bossPool.length)]
+      : bossPool;
+    enemyId = bossId;
     name = bossId.replace(/_/g, ' ');
-    // Boss base stats — scaled hard
+    // Boss base stats - scaled hard
     baseStats = {
       hp: 2000 * mult,
       maxHp: 2000 * mult,
@@ -300,8 +557,9 @@ function generateFloorEnemy(floor) {
     };
   } else {
     const pool = ABYSS_ENEMY_POOLS[tier] || ABYSS_ENEMY_POOLS.F;
-    const enemyId = pool[Math.floor(Math.random() * pool.length)];
-    name = enemyId.replace(/_/g, ' ');
+    const poolId = pool[Math.floor(Math.random() * pool.length)];
+    enemyId = poolId;
+    name = poolId.replace(/_/g, ' ');
     baseStats = {
       hp: Math.floor(500 * mult),
       maxHp: Math.floor(500 * mult),
@@ -321,116 +579,27 @@ function generateFloorEnemy(floor) {
     spd: baseStats.spd,
     isBoss,
     level: Math.max(1, floor),
+    // 💡 SPRITE FIX (UI-CB-15): abyss enemies previously never set
+    // spriteIndex, so EVERY abyss mob rendered as enemy sheet slot 0 (the
+    // same bat). Map enemy ids -> element-family sheet indices, and give
+    // bosses a clean bossId key for the Go boss-sprite map.
+    spriteIndex: enemyVariants.abyssSpriteIndex(enemyId),
+    bossId: isBoss ? String(enemyId || '').toUpperCase().replace(/\s+/g, '_') : undefined,
   };
 }
 
-// ─── PROCESS ATTACK ───────────────────────────────────────────────────────
-// Player attacks the current floor's enemy. Returns result with messages.
-// Damage is calculated from the player's stats (passed in).
-async function processAttack(userId, playerDamage, playerStats) {
-  const run = await AbyssRun.findOne({ userId, status: 'active' });
-  if (!run) {
-    return { success: false, message: '❌ No active Abyss run. Start one with `.g abyss enter`.' };
-  }
-
-  run.lastActionAt = new Date();
-  const enemy = run.currentEnemy;
-  if (!enemy) {
-    run.status = 'failed';
-    await run.save();
-    return { success: false, message: '⚠️ Run data corrupted — auto-failed. Cooldown applies.' };
-  }
-
-  // Player attacks first
-  let attackMsg = `⚔️ You attack ${enemy.name} for ${playerDamage} damage!\n`;
-  enemy.hp = Math.max(0, enemy.hp - playerDamage);
-
-  // Check if enemy died
-  if (enemy.hp <= 0) {
-    attackMsg += `💀 ${enemy.name} defeated!\n`;
-    run.monstersKilled += 1;
-    if (enemy.isBoss) run.bossesKilled += 1;
-
-    // 💡 QA FIX: track kills for rank missions (was missing entirely)
-    try {
-      const economy = require('./economy');
-      economy.trackMissionStat(userId, 'kills', 1);
-      if (enemy.isBoss) economy.trackMissionStat(userId, 'bossesDefeated', 1);
-    } catch (e) {}
-
-    // Award loot
-    const rewards = getFloorRewards(run.currentFloor, enemy.isBoss);
-    run.lootAccumulator.xp += rewards.xp;
-    run.lootAccumulator.gold += rewards.gold;
-    attackMsg += `🎁 +${rewards.xp} XP, +${rewards.gold} Zeni\n`;
-
-    // Rune drop chance on boss floors 21+
-    if (enemy.isBoss && run.currentFloor >= 21) {
-      try {
-        const runeSystem = require('./runeSystem');
-        const dropChance = run.currentFloor >= 50 ? 0.30 : 0.15;
-        const drop = runeSystem.rollRuneDrop(dropChance);
-        if (drop) {
-          const runeResult = await runeSystem.awardRune(userId, drop.type, drop.tier, `abyss_floor_${run.currentFloor}`);
-          if (runeResult.success) {
-            run.lootAccumulator.runes.push(runeResult.rune.runeId);
-            attackMsg += runeResult.message + '\n';
-          }
-        }
-      } catch (e) {
-        console.error('[Abyss] Rune drop failed:', e.message);
-      }
-    }
-
-    // Advance to next floor using encounter system
-    run.currentFloor += 1;
-    const nextEncounter = generateFloorEncounter(run.currentFloor);
-    if (nextEncounter.type === 'combat') {
-      run.currentEnemy = nextEncounter.enemy;
-      run.currentEncounterType = 'combat';
-      run.currentEncounterData = null;
-    } else {
-      run.currentEnemy = null;
-      run.currentEncounterType = nextEncounter.type;
-      run.currentEncounterData = nextEncounter.treasure || nextEncounter.event;
-    }
-    // Restore some energy between floors
-    run.currentEnergy = Math.min(run.playerSnapshot.maxEnergy, run.currentEnergy + 20);
-    
-    if (nextEncounter.type === 'combat') {
-      attackMsg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${nextEncounter.enemy.hp}/${nextEncounter.enemy.maxHp}\n_Attack with \`.g abyss attack\`_`;
-    } else if (nextEncounter.type === 'treasure') {
-      attackMsg += `\n${nextEncounter.treasure.icon} *Floor ${run.currentFloor}* — ${nextEncounter.treasure.name}\n_${nextEncounter.treasure.desc}_\n\n_Collect with \`.g abyss collect\`_`;
-    } else if (nextEncounter.type === 'event') {
-      attackMsg += `\n${nextEncounter.event.icon} *Floor ${run.currentFloor}* — ${nextEncounter.event.name}\n_${nextEncounter.event.desc}_\n\n`;
-      nextEncounter.event.choices.forEach(c => {
-        attackMsg += `\`${c.id}\` — ${c.text}\n`;
-      });
-      attackMsg += `_Choose with \`.g abyss choose <1/2>\`_`;
-    }
-    await run.save();
-    return { success: true, message: attackMsg, run, enemyDefeated: true };
-  }
-
-  // Enemy survives — counterattack
-  const enemyDamage = Math.max(1, Math.floor(enemy.atk * (1 - (playerStats.def || 0) / 200)));
-  run.currentHp = Math.max(0, run.currentHp - enemyDamage);
-  attackMsg += `💥 ${enemy.name} counterattacks for ${enemyDamage} damage!\n`;
-  attackMsg += `❤️ Your HP: ${run.currentHp}/${run.playerSnapshot.maxHp}\n`;
-  attackMsg += `👹 ${enemy.name} HP: ${enemy.hp}/${enemy.maxHp}\n`;
-
-  // Check if player died
-  if (run.currentHp <= 0) {
-    return await processDeath(userId, run, attackMsg);
-  }
-
-  await run.save();
-  return { success: true, message: attackMsg, run, enemyDefeated: false };
-}
+// ─── PROCESS ATTACK [REMOVED - DEAD CODE] ─────────────────────────────────
+// 💡 REMOVED 2026-08-03: processAttack() was legacy code from the old
+// Abyss system. It was never called by any module - the real Abyss combat
+// path goes through guildAdventure.startAbyssCombat() → calculateDamage().
+// Keeping it caused confusion and potential conflicts with the new system.
+// All Abyss combat now uses the standard combat commands:
+//   `${P()} combat attack` / `${P()} combat skill <#>` / `${P()} combat item`
+// ──────────────────────────────────────────────────────────────────────────
 
 // ─── PROCESS TREASURE COLLECTION ──────────────────────────────────────────
 async function processTreasure(userId) {
-  const run = await AbyssRun.findOne({ userId, status: 'active' });
+  const run = await AbyssRun.findOne(activeRunFilter(userId));
   if (!run) return { success: false, message: '❌ No active Abyss run.' };
   if (run.currentEncounterType !== 'treasure') {
     return { success: false, message: '❌ There is no treasure to collect on this floor.' };
@@ -490,33 +659,84 @@ async function processTreasure(userId) {
     }
   }
 
+  if (treasure.guaranteedRune) {
+    try {
+      const runeSystem = require('./runeSystem');
+      const drop = (run.currentFloor >= 50 && typeof runeSystem.rollAbyssalRuneDrop === 'function') 
+        ? runeSystem.rollAbyssalRuneDrop(run.currentFloor)
+        : { type: Object.keys(runeSystem.RUNE_TYPES)[Math.floor(Math.random() * 6)], tier: 'GREATER' };
+        
+      const runeResult = await runeSystem.awardRune(userId, drop.type, drop.tier, `abyss_shrine_floor_${run.currentFloor}`);
+      if (runeResult.success) {
+        run.lootAccumulator.runes.push(runeResult.rune.runeId);
+        msg += runeResult.message + '\n';
+      }
+    } catch (e) {
+      msg += `💎 The shrine is dormant. (Rune system error)\n`;
+    }
+  }
+
   // Advance to next floor
   run.currentFloor += 1;
   const nextEncounter = generateFloorEncounter(run.currentFloor);
+  // 💡 FIX 2026-08-31: shared applier - adds the missing wild_summon branch
+  // (previously a wild-summon roll left the PREVIOUS floor's encounter data
+  // in place, allowing repeated treasure collection = loot duplication).
+  const __next = applyNextEncounter(run, nextEncounter);
+  msg += __next.msg;
+
+  await run.save();
+  return { success: true, message: msg, run, loreDrop: __next.loreDrop };
+}
+
+// ─── PROCESS EVENT CHOICE ─────────────────────────────────────────────────
+// 💡 FIX 2026-08-31: shared next-encounter applier. The three advance
+// functions (processTreasure / processEventChoice / processSkip) each had
+// if/else-if chains covering only combat|treasure|event - a 'wild_summon'
+// roll (10% of non-boss floors) fell through WITHOUT setting anything, so
+// the run kept the PREVIOUS floor's encounterType/data: the same treasure
+// could be collected again (loot duplication) and the wild-summon floor was
+// silently skipped. handleAbyssVictory already handled wild_summon correctly
+// - this helper mirrors its logic for all advance paths.
+function applyNextEncounter(run, nextEncounter) {
+  let msg = '';
+  let loreDrop = null; // 💡 2026-09-20: out-of-band, own message box
   if (nextEncounter.type === 'combat') {
     run.currentEnemy = nextEncounter.enemy;
     run.currentEncounterType = 'combat';
     run.currentEncounterData = null;
-    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${nextEncounter.enemy.hp}/${nextEncounter.enemy.maxHp}\n_Attack with \`.g abyss attack\`_`;
+    run.packQueue = Array.isArray(nextEncounter.packQueue) ? nextEncounter.packQueue : [];
+    msg += `\n🕳️ *Floor ${run.currentFloor}* - ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n${run.packQueue.length ? `👥 *PACK FIGHT* - ${run.packQueue.length + 1} enemies, one after another (no HP reset between them)!\n` : ''}_Attack with \`${P()} combat attack\`_`;
+    // 💡 LORE DROP: opener beat / humanoid bark (one max per reply)
+    loreDrop = _encounterIntroDrop(nextEncounter) || null;
+  } else if (nextEncounter.type === 'wild_summon') {
+    run.currentEnemy = nextEncounter.enemy;
+    run.currentEncounterType = 'wild_summon';
+    run.currentEncounterData = {
+      species: nextEncounter.wildSummonSpecies,
+      rarity: nextEncounter.wildSummonRarity,
+    };
+    msg += `\n🐉 *Floor ${run.currentFloor}* - Wild ${nextEncounter.wildSummonSpecies} appeared!\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n⚠️ _Defeat it to earn Summon Fragments!_\n_Attack with \`${P()} combat attack\`_`;
   } else if (nextEncounter.type === 'treasure') {
     run.currentEnemy = null;
     run.currentEncounterType = 'treasure';
     run.currentEncounterData = nextEncounter.treasure;
-    msg += `\n${nextEncounter.treasure.icon} *Floor ${run.currentFloor}* — ${nextEncounter.treasure.name}\n_Collect with \`.g abyss collect\`_`;
+    msg += `\n${nextEncounter.treasure.icon} *Floor ${run.currentFloor}* - ${nextEncounter.treasure.name}\n_Collect with \`${P()} abyss collect\`_`;
+    // 💡 LORE DROP: npc sighting / general world on non-hostile floors
+    loreDrop = _encounterIntroDrop(nextEncounter) || null;
   } else if (nextEncounter.type === 'event') {
     run.currentEnemy = null;
     run.currentEncounterType = 'event';
     run.currentEncounterData = nextEncounter.event;
-    msg += `\n${nextEncounter.event.icon} *Floor ${run.currentFloor}* — ${nextEncounter.event.name}\n_Choose with \`.g abyss choose <1/2>\`_`;
+    msg += `\n${_eventFloorText(nextEncounter.event, run.currentFloor)}`;
+    // 💡 LORE DROP: npc sighting / general world on non-hostile floors
+    loreDrop = _encounterIntroDrop(nextEncounter) || null;
   }
-
-  await run.save();
-  return { success: true, message: msg, run };
+  return { msg, loreDrop };
 }
 
-// ─── PROCESS EVENT CHOICE ─────────────────────────────────────────────────
 async function processEventChoice(userId, choiceId) {
-  const run = await AbyssRun.findOne({ userId, status: 'active' });
+  const run = await AbyssRun.findOne(activeRunFilter(userId));
   if (!run) return { success: false, message: '❌ No active Abyss run.' };
   if (run.currentEncounterType !== 'event') {
     return { success: false, message: '❌ There is no event to respond to on this floor.' };
@@ -528,7 +748,7 @@ async function processEventChoice(userId, choiceId) {
   const choice = event.choices.find(c => c.id === String(choiceId));
   if (!choice) return { success: false, message: `❌ Invalid choice. Use 1 or 2.` };
 
-  let msg = `${event.icon} *${event.name}* — You chose: ${choice.text}\n\n`;
+  let msg = `${event.icon} *${event.name}* - You chose: ${choice.text}\n\n`;
 
   // Handle TRAP event
   if (event.type === 'TRAP') {
@@ -546,7 +766,7 @@ async function processEventChoice(userId, choiceId) {
       run.currentHp = Math.max(0, run.currentHp - choice.failure.damage);
       msg += `💥 ${choice.failure.damage} damage taken.\n`;
     }
-    msg += `❤️ HP: ${run.currentHp}/${run.playerSnapshot.maxHp}\n`;
+    msg += `❤️ HP: ${Math.floor(run.currentHp)}/${Math.floor(run.playerSnapshot.maxHp)}\n`;
   }
 
   // Handle CROSSROADS event
@@ -565,7 +785,7 @@ async function processEventChoice(userId, choiceId) {
     run.lootAccumulator.gold += choice.rewards.gold;
     run.lootAccumulator.xp += choice.rewards.xp;
     msg += `💰 +${choice.rewards.gold} Zeni, ✨ +${choice.rewards.xp} XP\n`;
-    msg += `❤️ HP: ${run.currentHp}/${run.playerSnapshot.maxHp}\n`;
+    msg += `❤️ HP: ${Math.floor(run.currentHp)}/${Math.floor(run.playerSnapshot.maxHp)}\n`;
   }
 
   // Handle SHRINE event
@@ -577,7 +797,7 @@ async function processEventChoice(userId, choiceId) {
       run.currentHp = Math.max(1, run.currentHp - sacrifice);
       run.lootAccumulator.xp += choice.reward.xp;
       msg += `🩸 Sacrificed ${sacrifice} HP for ✨ ${choice.reward.xp} XP\n`;
-      msg += `❤️ HP: ${run.currentHp}/${run.playerSnapshot.maxHp}\n`;
+      msg += `❤️ HP: ${Math.floor(run.currentHp)}/${Math.floor(run.playerSnapshot.maxHp)}\n`;
     }
   }
 
@@ -586,33 +806,27 @@ async function processEventChoice(userId, choiceId) {
     return await processDeath(userId, run, msg);
   }
 
+  // 💡 FIX 2026-07-31 Bug #2: Removed orphaned `treasure.guaranteedRune`
+  // block - `treasure` was undefined in processEventChoice (copy-paste
+  // from processTreasure). This would throw ReferenceError after Bug #1
+  // fix made event floors actually reachable.
+
   // Advance to next floor
   run.currentFloor += 1;
   const nextEncounter = generateFloorEncounter(run.currentFloor);
-  if (nextEncounter.type === 'combat') {
-    run.currentEnemy = nextEncounter.enemy;
-    run.currentEncounterType = 'combat';
-    run.currentEncounterData = null;
-    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${nextEncounter.enemy.hp}/${nextEncounter.enemy.maxHp}\n_Attack with \`.g abyss attack\`_`;
-  } else if (nextEncounter.type === 'treasure') {
-    run.currentEnemy = null;
-    run.currentEncounterType = 'treasure';
-    run.currentEncounterData = nextEncounter.treasure;
-    msg += `\n${nextEncounter.treasure.icon} *Floor ${run.currentFloor}* — ${nextEncounter.treasure.name}\n_Collect with \`.g abyss collect\`_`;
-  } else if (nextEncounter.type === 'event') {
-    run.currentEnemy = null;
-    run.currentEncounterType = 'event';
-    run.currentEncounterData = nextEncounter.event;
-    msg += `\n${nextEncounter.event.icon} *Floor ${run.currentFloor}* — ${nextEncounter.event.name}\n_Choose with \`.g abyss choose <1/2>\`_`;
-  }
+  // 💡 FIX 2026-08-31: shared applier - adds the missing wild_summon branch
+  // (previously a wild-summon roll left the PREVIOUS floor's encounter data
+  // in place, allowing repeated treasure collection = loot duplication).
+  const __next = applyNextEncounter(run, nextEncounter);
+  msg += __next.msg;
 
   await run.save();
-  return { success: true, message: msg, run };
+  return { success: true, message: msg, run, loreDrop: __next.loreDrop };
 }
 
 // ─── PROCESS SKIP (skip treasure/event floor) ─────────────────────────────
 async function processSkip(userId) {
-  const run = await AbyssRun.findOne({ userId, status: 'active' });
+  const run = await AbyssRun.findOne(activeRunFilter(userId));
   if (!run) return { success: false, message: '❌ No active Abyss run.' };
   if (run.currentEncounterType === 'combat') {
     return { success: false, message: '❌ Cannot skip a combat floor. Attack or retreat!' };
@@ -621,34 +835,41 @@ async function processSkip(userId) {
   let msg = `⏭️ You skip floor ${run.currentFloor}.\n`;
   run.currentFloor += 1;
   const nextEncounter = generateFloorEncounter(run.currentFloor);
+  let skipLoreDrop = null; // 💡 2026-09-20: out-of-band, own message box
   if (nextEncounter.type === 'combat') {
     run.currentEnemy = nextEncounter.enemy;
     run.currentEncounterType = 'combat';
     run.currentEncounterData = null;
-    msg += `\n🕳️ *Floor ${run.currentFloor}* — ${nextEncounter.enemy.name}\nHP: ${nextEncounter.enemy.hp}/${nextEncounter.enemy.maxHp}\n_Attack with \`.g abyss attack\`_`;
+    run.packQueue = Array.isArray(nextEncounter.packQueue) ? nextEncounter.packQueue : [];
+    msg += `\n🕳️ *Floor ${run.currentFloor}* - ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n${run.packQueue.length ? `👥 *PACK FIGHT* - ${run.packQueue.length + 1} enemies, one after another (no HP reset between them)!\n` : ''}_Attack with \`${P()} combat attack\`_`;
+    // 💡 LORE DROP: opener beat / humanoid bark (one max per reply)
+    skipLoreDrop = _encounterIntroDrop(nextEncounter) || null;
   } else if (nextEncounter.type === 'treasure') {
     run.currentEnemy = null;
     run.currentEncounterType = 'treasure';
     run.currentEncounterData = nextEncounter.treasure;
-    msg += `\n${nextEncounter.treasure.icon} *Floor ${run.currentFloor}* — ${nextEncounter.treasure.name}\n_Collect with \`.g abyss collect\`_`;
+    msg += `\n${nextEncounter.treasure.icon} *Floor ${run.currentFloor}* - ${nextEncounter.treasure.name}\n_Collect with \`${P()} abyss collect\`_`;
+    skipLoreDrop = _encounterIntroDrop(nextEncounter) || null;
   } else if (nextEncounter.type === 'event') {
     run.currentEnemy = null;
     run.currentEncounterType = 'event';
     run.currentEncounterData = nextEncounter.event;
-    msg += `\n${nextEncounter.event.icon} *Floor ${run.currentFloor}* — ${nextEncounter.event.name}\n_Choose with \`.g abyss choose <1/2>\`_`;
+    msg += `\n${_eventFloorText(nextEncounter.event, run.currentFloor)}`;
+    skipLoreDrop = _encounterIntroDrop(nextEncounter) || null;
   }
 
   await run.save();
-  return { success: true, message: msg, run };
+  return { success: true, message: msg, run, loreDrop: skipLoreDrop };
 }
 
 // ─── PROCESS DEATH ────────────────────────────────────────────────────────
-// Player died — lose 90% of loot, keep 10%, run ends as 'failed'
+// Player died - lose 90% of loot, keep 10%, run ends as 'failed'
 async function processDeath(userId, run, deathMsg) {
   if (run.status !== 'active') return { success: false, message: 'Run already ended.' };
   const keptXp = Math.floor(run.lootAccumulator.xp * 0.10);
   const keptGold = Math.floor(run.lootAccumulator.gold * 0.10);
   const score = run.currentFloor * 100 + run.monstersKilled * 5;
+  const runesCount = (run.lootAccumulator.runes || []).length;
 
   deathMsg += `\n💀 *YOU DIED IN THE ABYSS*\n\n`;
   deathMsg += `🕳️ Reached Floor: ${run.currentFloor}\n`;
@@ -685,16 +906,31 @@ async function processDeath(userId, run, deathMsg) {
   try {
     const guildPerks = require('./guildPerks');
     guildPerks.awardGuildXp(userId, Math.floor(score / 100), `Abyss run (death, F${run.currentFloor})`);
-    guildPerks.awardWarPoints(userId, Math.floor(score / 50), 'abyss');
   } catch (e) { console.error('[Abyss] Guild perks failed:', e.message); }
 
-  return { success: true, message: deathMsg, run, died: true };
+  return {
+    success: true,
+    message: deathMsg,
+    run,
+    died: true,
+    // 2026-09-15: payload for the ABYSS_RESULT (FALLEN) card
+    card: {
+      outcome: 'FALLEN',
+      floor: run.currentFloor,
+      monstersKilled: run.monstersKilled,
+      bossesKilled: run.bossesKilled,
+      score,
+      keptXp,
+      keptGold,
+      runes: runesCount,
+    },
+  };
 }
 
 // ─── RETREAT ──────────────────────────────────────────────────────────────
-// Player retreats — keep 100% of loot, run ends as 'completed'
+// Player retreats - keep 100% of loot, run ends as 'completed'
 async function retreat(userId) {
-  const run = await AbyssRun.findOne({ userId, status: 'active' });
+  const run = await AbyssRun.findOne(activeRunFilter(userId));
   if (!run) {
     return { success: false, message: '❌ No active Abyss run to retreat from.' };
   }
@@ -704,6 +940,7 @@ async function retreat(userId) {
   const keptGold = run.lootAccumulator.gold;
   const score = run.currentFloor * 100 + run.monstersKilled * 5;
 
+  const runesCount = (run.lootAccumulator.runes || []).length;
   let msg = `🏃 *ABYSS RETREAT*\n\n`;
   msg += `You extract safely from the Abyss.\n\n`;
   msg += `🕳️ Reached Floor: ${run.currentFloor}\n`;
@@ -744,10 +981,24 @@ async function retreat(userId) {
   try {
     const guildPerks = require('./guildPerks');
     guildPerks.awardGuildXp(userId, Math.floor(score / 50), `Abyss run (retreat, F${run.currentFloor})`);
-    guildPerks.awardWarPoints(userId, Math.floor(score / 25), 'abyss');
   } catch (e) {}
 
-  return { success: true, message: msg, run };
+  return {
+    success: true,
+    message: msg,
+    run,
+    // 2026-09-15: payload for the ABYSS_RESULT (EXTRACTED) card
+    card: {
+      outcome: 'EXTRACTED',
+      floor: run.currentFloor,
+      monstersKilled: run.monstersKilled,
+      bossesKilled: run.bossesKilled,
+      score,
+      keptXp,
+      keptGold,
+      runes: runesCount,
+    },
+  };
 }
 
 // ─── ADD TO LEADERBOARD ───────────────────────────────────────────────────
@@ -774,7 +1025,7 @@ async function addToLeaderboard(userId, deepestFloor, monstersKilled, bossesKill
 
 // ─── GET RUN STATUS ───────────────────────────────────────────────────────
 async function getRunStatus(userId) {
-  const run = await AbyssRun.findOne({ userId, status: 'active' });
+  const run = await AbyssRun.findOne(activeRunFilter(userId));
   if (!run) return null;
   return run;
 }
@@ -798,18 +1049,17 @@ async function getPlayerBest(userId) {
 }
 
 // ─── RESET WEEKLY LEADERBOARD ─────────────────────────────────────────────
-// Called by the weekly scheduler. Doesn't delete old entries — just marks
+// Called by the weekly scheduler. Doesn't delete old entries - just marks
 // them as previous week. New entries will use the new week key automatically.
 async function resetWeeklyLeaderboard() {
   console.log('[Abyss] Weekly leaderboard reset (new week started).');
-  // No deletion needed — entries are scoped by weekKey.
+  // No deletion needed - entries are scoped by weekKey.
   // Future enhancement: archive old week entries to a separate collection.
   return { success: true };
 }
 
 module.exports = {
   startRun,
-  processAttack,
   retreat,
   processDeath,
   getRunStatus,
@@ -820,6 +1070,8 @@ module.exports = {
   isBossFloor,
   getFloorMultiplier,
   getFloorRewards,
+  getFloorRewardMultiplier,
+  applyNextEncounter,
   generateFloorEnemy,
   generateFloorEncounter,
   generateTreasureEncounter,
@@ -837,10 +1089,10 @@ module.exports = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  ADMIN FUNCTIONS (Phase 4 — moderation)
+//  ADMIN FUNCTIONS (Phase 4 - moderation)
 // ═══════════════════════════════════════════════════════════════════════════
 // All admin functions are caller-permission-checked in the engine command
-// handler — these functions assume the caller is authorized.
+// handler - these functions assume the caller is authorized.
 
 // ─── RESET COOLDOWN ───────────────────────────────────────────────────────
 // Clears a user's Abyss cooldown by deleting their most recent
@@ -911,7 +1163,7 @@ async function adminSetFloor(userId, floor) {
 }
 
 // ─── PURGE ALL ACTIVE RUNS ────────────────────────────────────────────────
-// Emergency admin function — ends ALL active Abyss runs without rewards.
+// Emergency admin function - ends ALL active Abyss runs without rewards.
 // Use when something is broken and runs are stuck.
 async function adminPurgeAllRuns() {
   try {

@@ -102,23 +102,45 @@ function getTotalDebt() {
   }, 0);
 }
 
+// 💡 FIX 2026-09-12 (full command audit): MIN_LOAN/MAX_LOAN were accidentally
+// declared INSIDE requestLoan() AFTER the line that reads them - a guaranteed
+// TDZ ReferenceError on EVERY loan request since the 2026-08-17 rebalance
+// ("Cannot access 'MIN_LOAN' before initialization"). Moved to module scope.
+const MIN_LOAN = 1000; // 💡 Rebalanced 2026-08-17: prevent spammy micro-loans.
+const MAX_LOAN = 5000000; // 💡 Rebalanced 2026-08-17: a single loan can't exceed MAX_WALLET or absorb a chunk of the community cap.
+
 // Request a loan
 function requestLoan(borrowerJid, lenderJid, amount, interestRate, durationMinutes) {
   // Basic validation
-  // Coerce all numeric inputs — same JS-comparison-coercion trap as in
-  // investment.startInvestment: a non-numeric string would slip past every
-  // numeric comparison below (NaN < x is always false) and then break the
-  // transfer logic.
   const amt = Number(amount);
   const interest = Number(interestRate);
   const duration = Number(durationMinutes);
   if (!Number.isFinite(amt) || amt <= 0) return { success: false, msg: `❌ Amount must be a positive number.` };
+  if (amt < MIN_LOAN || amt > MAX_LOAN) return { success: false, msg: `❌ Loan amount must be between ${MIN_LOAN.toLocaleString()} and ${MAX_LOAN.toLocaleString()}.` };
+
+  // 💡 EMERGENCY FIX (2026-08-16): Hard interest cap - 50% max.
+  // Reasoning: real-world predatory lending caps at 36% (US federal).
+  // A game economy has no consumer protection, so 50% is generous while
+  // still preventing the 999999999900% exploit that corrupted 2 quintillion
+  // in fake debt. A 50% interest rate on a 100M loan = 150M repayment,
+  // which is meaningful but not economy-destroying.
+  const MAX_INTEREST_RATE = 50;
   if (!Number.isFinite(interest) || interest < 0) return { success: false, msg: `❌ Interest cannot be negative.` };
+  if (interest > MAX_INTEREST_RATE) {
+    return { success: false, msg: `❌ Interest rate cannot exceed ${MAX_INTEREST_RATE}%. (You entered ${interest}%).\n💡 This cap prevents predatory lending exploits.` };
+  }
+
   if (!Number.isFinite(duration) || duration < 1) return { success: false, msg: `❌ Duration must be at least 1 minute.` };
   if (borrowerJid === lenderJid) return { success: false, msg: `❌ You can't loan money to yourself.` };
 
+  // Also cap duration to prevent absurd timeframes
+  const MAX_DURATION_MINUTES = 30 * 24 * 60;
+  if (duration > MAX_DURATION_MINUTES) {
+    return { success: false, msg: `❌ Duration cannot exceed 30 days (43,200 minutes).` };
+  }
+
   // Check if lender has liquid wallet funds. We use `wallet` (not `total`)
-  // because economy.removeMoney only deducts from the wallet — a previous
+  // because economy.removeMoney only deducts from the wallet - a previous
   // version of this check used `lenderBal.total` (wallet+bank), which let
   // requests succeed when the lender had bank funds but no wallet funds,
   // then the accept step would fail. Better to fail upfront.
@@ -143,7 +165,7 @@ function requestLoan(borrowerJid, lenderJid, amount, interestRate, durationMinut
 
   return { 
     success: true, 
-    msg: `📝 *LOAN REQUEST SENT*\n\nTo: @${lenderJid.split('@')[0]}
+    msg: `📝 *LOAN REQUEST SENT*\n\nTo: @${economy.getDisplayName(lenderJid)}
 Amount: ${getZENI()}${amount}
 Interest: ${interestRate}%
 Duration: ${durationMinutes} mins
@@ -165,14 +187,14 @@ function acceptLoan(lenderJid) {
       return { success: false, msg: `❌ Loan request expired! (120s limit)` };
   }
 
-  // Cleanup helper — same UX bug as PvP: previously failed accepts left
+  // Cleanup helper - same UX bug as PvP: previously failed accepts left
   // the request in pendingLoans and blocked all future loan requests for 2 min.
   const failAndCleanup = (msg) => {
     pendingLoans.delete(lenderJid);
     return { success: false, msg };
   };
 
-  // Double check funds (wallet only — removeMoney doesn't touch bank)
+  // Double check funds (wallet only - removeMoney doesn't touch bank)
   const lenderBal = economy.getBankBalance(lenderJid);
   if ((lenderBal.wallet || 0) < request.amount) {
       return failAndCleanup(`❌ You don't have enough money in your wallet. Withdraw it first.`);
@@ -182,21 +204,21 @@ function acceptLoan(lenderJid) {
   const totalRepayment = Math.floor(request.amount * (1 + request.interest / 100));
   const dueTime = Date.now() + (request.duration * 60 * 1000);
 
-  // Execute transfer — verify both legs succeeded before recording the loan.
+  // Execute transfer - verify both legs succeeded before recording the loan.
   // Previously the return values were ignored, so if removeMoney failed
   // (e.g. wallet dropped between check and call) but addMoney succeeded,
-  // the borrower got free money and the lender lost nothing — but the loan
+  // the borrower got free money and the lender lost nothing - but the loan
   // was still recorded as active, so the borrower would later be forced to
   // repay money they never received.
-  const deductOk = economy.removeMoney(lenderJid, request.amount, `Loan to @${request.borrowerJid.split('@')[0]}`);
+  const deductOk = economy.removeMoney(lenderJid, request.amount, `Loan to @${economy.getDisplayName(request.borrowerJid)}`);
   if (!deductOk) {
-    return failAndCleanup(`❌ Failed to deduct funds — your wallet may have changed.`);
+    return failAndCleanup(`❌ Failed to deduct funds - your wallet may have changed.`);
   }
-  const creditOk = economy.addMoney(request.borrowerJid, request.amount, `Loan from @${lenderJid.split('@')[0]}`);
+  const creditOk = economy.addMoney(request.borrowerJid, request.amount, `Loan from @${economy.getDisplayName(lenderJid)}`);
   if (!creditOk) {
     // Roll back the deduction so the lender doesn't lose money
     economy.addMoney(lenderJid, request.amount, `Loan rollback (borrower credit failed)`);
-    return failAndCleanup(`❌ Failed to send money to borrower — loan cancelled.`);
+    return failAndCleanup(`❌ Failed to send money to borrower - loan cancelled.`);
   }
 
   // Save active loan
@@ -219,7 +241,7 @@ function acceptLoan(lenderJid) {
 
   return { 
     success: true, 
-    msg: `🤝 *LOAN ACTIVE*\n\nSent ${getZENI()}${request.amount} to @${request.borrowerJid.split('@')[0]}
+    msg: `🤝 *LOAN ACTIVE*\n\nSent ${getZENI()}${request.amount} to @${economy.getDisplayName(request.borrowerJid)}
 
 They must repay ${getZENI()}${totalRepayment} in ${request.duration} minutes.
 
@@ -242,7 +264,7 @@ function declineLoan(lenderJid) {
 
   return { 
     success: true, 
-    msg: `❌ *LOAN DECLINED*\n\nYou rejected the loan request from @${request.borrowerJid.split('@')[0]}.`
+    msg: `❌ *LOAN DECLINED*\n\nYou rejected the loan request from @${economy.getDisplayName(request.borrowerJid)}.`
   };
 }
 
@@ -250,7 +272,7 @@ function declineLoan(lenderJid) {
 // CRITICAL FIX: Previously this function only matched by `borrowerJid`,
 // but engine.js's `.j accept` handler passes the LENDER's JID (the
 // person typing accept). The lookup always returned null, so loans
-// could never be accepted via the `accept` command — the lender would
+// could never be accepted via the `accept` command - the lender would
 // always see "no pending invitations". Now we check both sides.
 function getPendingRequest(userJid) {
   // Direct lookup: is `userJid` the lender? (pendingLoans is keyed by lender)

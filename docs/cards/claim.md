@@ -158,7 +158,7 @@ async function cmdClaim(args, senderJid, reply, chatId) {
     inst.activeSpawns.delete(`${chatId}_${spawn.card.id}`);
 
     const rarity = getRarityLabel(spawn.copyNumber, spawn.stat.maxCopies);
-    return reply(`${rarity.emoji}  *CLAIMED!*\n\n*${spawn.card.cardName}* — _${spawn.card.animeName}_\n📋 Copy *#${spawn.copyNumber}* (${rarity.label})\n\n_Added to your collection!_`);
+    return reply(`${rarity.emoji}  *CLAIMED!*\n\n*${spawn.card.cardName}* - _${spawn.card.animeName}_\n📋 Copy *#${spawn.copyNumber}* (${rarity.label})\n\n_Added to your collection!_`);
   } catch (err) {
     console.error('[Claim Error]', err);
     return reply('❌ Claim failed.');

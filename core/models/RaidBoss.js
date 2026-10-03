@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-// 💡 Phase 5: RaidBoss — server-wide weekly raid.
+// 💡 Phase 5: RaidBoss - server-wide weekly raid.
 // Spawns every Sunday 00:00 UTC. Players join and merge into "The Avatar".
 // Each round, players vote on which skill the Avatar uses. Boss responds.
 // Continues until boss dies (win) or all players dead (loss) or 24h elapsed.
@@ -31,7 +31,7 @@ const RaidBossSchema = new mongoose.Schema({
   bossDef: { type: Number, default: 0 },
   bossLevel: { type: Number, default: 100 },
   bossPhase: { type: Number, default: 1 }, // 1, 2, 3 (phases trigger at HP thresholds)
-  // Avatar state — the merged player entity
+  // Avatar state - the merged player entity
   avatar: {
     class: { type: String, default: null },      // most common class among participants
     className: { type: String, default: 'Avatar' },
@@ -44,7 +44,7 @@ const RaidBossSchema = new mongoose.Schema({
     maxEnergy: { type: Number, default: 100 },
     skills: [{ type: mongoose.Schema.Types.Mixed }], // 5 skills from top 5 classes
   },
-  // Attackers — all joined players
+  // Attackers - all joined players
   attackers: [RaidAttackerSchema],
   attackerCount: { type: Number, default: 0 },
   // Current round's votes
@@ -57,7 +57,7 @@ const RaidBossSchema = new mongoose.Schema({
   spawnedAt: { type: Date, default: Date.now },
   endsAt: { type: Date, required: true }, // 24h after spawn
   resolvedAt: { type: Date, default: null },
-  // Combat log — last N rounds for display
+  // Combat log - last N rounds for display
   combatLog: [{ type: String }],
 }, { timestamps: true });
 

@@ -6,6 +6,9 @@ const inventorySystem = require('../rpg/inventorySystem');
 const durabilitySystem = require('../rpg/durabilitySystem');
 const economy = require('../rpg/economy');
 const botConfig = require('../../botConfig');
+// 💡 COSMOLOGY PASS: occasional blacksmith lore drops (plain text, never on
+// failure, 30-min per-user cooldown handled inside the module).
+const loreDrops = require('../rpg/loreDrops');
 
 const getZENI = () => botConfig.getCurrency().symbol;
 const getPrefix = () => botConfig.getPrefix();
@@ -67,8 +70,13 @@ async function displayBlacksmith(sock, chatId, userId) {
         msg += `  Example: \`${getPrefix()}repair main_hand\` or \`${getPrefix()}repair 1\`\n`;
         msg += `- Repair all items: \`${getPrefix()}repair all\`\n`;
     }
-    
+
+    // 💡 LORE DROP: blacksmith voice on the menu view (10%) - its own
+    // message box (owner ruling: a drop is a distinct lore event).
+    let __loreDrop = null;
+    try { __loreDrop = loreDrops.maybeDrop('blacksmith', { userId, chatId, chance: 0.10 }); } catch (e) {}
     await sock.sendMessage(chatId, { text: msg });
+    await loreDrops.sendOwn(sock, chatId, __loreDrop);
 }
 
 /**
@@ -118,8 +126,13 @@ async function repair(sock, chatId, userId, target) {
         let successMsg = `🔨 *REPAIRS COMPLETE!* 🔨\n━━━━━━━━━━━━━━━━━━━━\n`;
         successMsg += `Successfully repaired all equipped items for 💰 ${getZENI()}${totalCost.toLocaleString()}.\n`;
         successMsg += `Your gear is now in pristine condition! ✨`;
-        
-        return await sock.sendMessage(chatId, { text: successMsg });
+
+        // 💡 LORE DROP: blacksmith voice (12%) - own message box
+        let __loreDrop = null;
+        try { __loreDrop = loreDrops.maybeDrop('blacksmith', { userId, chatId, chance: 0.12 }); } catch (e) {}
+
+        await sock.sendMessage(chatId, { text: successMsg });
+        await loreDrops.sendOwn(sock, chatId, __loreDrop);
     }
     
     // Repair single item
@@ -170,8 +183,13 @@ async function repair(sock, chatId, userId, target) {
     let successMsg = `🔨 *REPAIRS COMPLETE!* 🔨\n━━━━━━━━━━━━━━━━━━━━\n`;
     successMsg += `Successfully repaired *${selectedItem.name}* (${selectedSlot.toUpperCase()}) for 💰 ${getZENI()}${cost.toLocaleString()}.\n`;
     successMsg += `Remaining Wallet: 💰 ${getZENI()}${(user.wallet || 0).toLocaleString()}`;
-    
+
+    // 💡 LORE DROP: blacksmith voice (12%) - own message box
+    let __loreDrop = null;
+    try { __loreDrop = loreDrops.maybeDrop('blacksmith', { userId, chatId, chance: 0.12 }); } catch (e) {}
+
     await sock.sendMessage(chatId, { text: successMsg });
+    await loreDrops.sendOwn(sock, chatId, __loreDrop);
 }
 
 /**
@@ -233,8 +251,8 @@ async function inspectItem(sock, chatId, userId, target) {
     
     // Try rendering image card via Go Service profile card endpoint
     try {
-        const GoImageService = require('../utils/goImageService');
-        const goService = new GoImageService();
+        // 💡 singleton (PERF PATCH 2026-07-27): reuse shared instance
+        const goService = require('../utils/goImageService');
         
         const cardData = {
             nickname: item.name || itemInfo.name || item.id,
@@ -288,7 +306,7 @@ async function inspectItem(sock, chatId, userId, target) {
             }
             caption += `\n📝 _${cardData.guildName}_\n━━━━━━━━━━━━━━━━━━━━`;
             
-            await sock.sendMessage(chatId, { image: buffer, caption });
+            await sock.sendMessage(chatId, { image: buffer, caption, mimetype: 'image/jpeg' });
             return;
         }
     } catch (err) {

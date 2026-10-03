@@ -60,7 +60,7 @@ module.exports = {
                 if (obj.ephemeralMessage) found.push(...extractAllText(obj.ephemeralMessage.message));
                 // 💡 FIX: Add missing message types that can carry captions/text.
                 // Previously audio, sticker, contact, and liveLocation messages
-                // were not scanned — antilink could be bypassed by sending a
+                // were not scanned - antilink could be bypassed by sending a
                 // link in an audio/sticker caption.
                 if (obj.audioMessage) found.push(...extractAllText(obj.audioMessage));
                 if (obj.stickerMessage) found.push(...extractAllText(obj.stickerMessage));
@@ -155,6 +155,16 @@ module.exports = {
             // Admins are exempt
             if (senderIsAdmin) return;
 
+            // 👑 GC OWNER IMMUNITY (2026-09-22): the marked GC owner
+            // (`.j gcowner @user`, stored in _shared_gc_owners) is exempt
+            // from the antilink warn/kick actions as well. Lazy require -
+            // engine.js loads this module, so a top-level require would be
+            // circular (same pattern cardSystem.js uses).
+            try {
+                const engine = require('../engine');
+                if (typeof engine.isGcOwner === 'function' && engine.isGcOwner(normalizedSender, chatId)) return;
+            } catch (e) { /* engine not ready - proceed as normal */ }
+
             // ============================================
             // ACTION PHASE
             // ============================================
@@ -164,6 +174,20 @@ module.exports = {
 
             // Delete first
             try { await sock.sendMessage(chatId, { delete: msg.key }); } catch {}
+
+            // 📊 DAILY GC ACTIVITY (2026-09-22): count this deletion so
+            // `.j activity [day]` can report links deleted in this GC.
+            // chatId is normalized to match the engine's ActivityLog keys.
+            try {
+                const ActivityLog = require('../models/ActivityLog');
+                const { jidNormalizedUser: _jnu } = require('@whiskeysockets/baileys');
+                ActivityLog.create({
+                    chatId: _jnu(chatId),
+                    userId: resolvedSender || normalizedSender,
+                    type: 'link_deleted',
+                    timestamp: new Date()
+                }).catch(() => {});
+            } catch (e) { /* logging never blocks moderation */ }
 
                 const participantJid = groupMetadata.participants.find(
                     p => lidResolver.resolveToPhone(jidNormalizedUser(p.id), authPath) === senderPhone

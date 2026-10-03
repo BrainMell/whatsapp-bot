@@ -8,10 +8,10 @@ The Admin and Moderation Controls subsystem provides group moderators, global bo
 
 ## How it works
 
-**Group Warnings and Auto-Kick** — [`engine.js` L7952–7989](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L7952-L7989)
+**Group Warnings and Auto-Kick** - [`engine.js` L7952-7989](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L7952-L7989)
 
 ```javascript
-// core/engine.js L7952–7989
+// core/engine.js L7952-7989
 const targetUser = getMentionOrReply(m);
 if (targetUser) {
   // Remove command and mention from text to get reason
@@ -57,10 +57,10 @@ This snippet handles issuing warning strikes to group members. When a moderator 
 
 ---
 
-**Warning Strike Storage and Resets** — [`engine.js` L995–1017](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L995-L1017)
+**Warning Strike Storage and Resets** - [`engine.js` L995-1017](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L995-L1017)
 
 ```javascript
-// core/engine.js L995–1017
+// core/engine.js L995-1017
 function addWarning(userId, groupId, reason) {
   const key = userId + "_" + groupId;
   if (!userWarnings.has(key)) {
@@ -85,10 +85,10 @@ Warnings are mapped in a key-value format utilizing a combination of `userId` an
 
 ---
 
-**Owner-Only Gating (Moderator & Block Administration)** — [`engine.js` L7233–7257](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L7233-L7257)
+**Owner-Only Gating (Moderator & Block Administration)** - [`engine.js` L7233-7257](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L7233-L7257)
 
 ```javascript
-// core/engine.js L7233–7257
+// core/engine.js L7233-7257
 if (
   lowerTxt.startsWith(
     `${botConfig.getPrefix().toLowerCase()} addmod`,
@@ -107,15 +107,57 @@ if (
 ```
 
 This gating mechanism controls the following administrative commands:
-- **`addmod` / `delmod`**: Add or delete global bot moderators (Owner OR global mod — global mods can manage other global mods).
+- **`addmod` / `delmod`**: Add or delete global bot moderators (Owner OR global mod - global mods can manage other global mods).
 - **`block` / `unblock`**: Prevent users from using bot commands, or lift the command block.
 - **`cardmod`**: Add or delete card moderators (Owner OR global mod) for approving eshop deck listings.
-- **`t2edeck`**: Manage the eShop event-card deck — add/remove slots, set prices, clear (Owner OR global mod).
+- **`t2edeck`**: Manage the eShop event-card deck - add/remove slots, set prices, clear (Owner OR global mod).
 - **`event start/stop`**: Start or stop the token event (Owner OR global mod).
 - **`setprice`**: Set the zeni price of an eShop slot (Owner OR global mod).
 - **`updateall`**: Broadcast a custom message to every enabled chat (Owner OR global mod).
 
 As of audit Task ID 2, global mods are owner-equivalent across all of these commands. Global mods also bypass antispam detection and gambling-command cooldowns (same as owner).
+
+---
+
+**GM Admin Console & RPG Moderation Console** - [`core/commands/adminConsole.js`](file:///home/mellow/Desktop/Projects/Joker/whatsapp-bot/core/commands/adminConsole.js)
+
+The RPG GM Admin Console allows owners, global moderators, and RPG moderators to perform administrative actions on player accounts and manage or test game content.
+
+### Entry Points & Permission Gating
+- Command Prefix: `.j` (or the configured bot prefix)
+- Entry Command: `.j mod <subcommand>` (permission level: Owner, Global Mod, RPG Mod)
+- Aliases: `.j modcom`, `.j admin`, `.j admin <subcommand>`
+- Lightweight self class switch: `.j modclass <class_name_or_id>` (permission level: Owner, Global Mod, RPG Mod)
+
+### Targeting Modes
+When executing player commands, the target user can be specified in three ways:
+1. **@mention**: Tag the target user (e.g. `.j admin setlevel @friend 50`).
+2. **Quoted Reply**: Reply to a message sent by the target user and omit the mention (e.g. `.j admin setlevel 50`).
+3. **Self-Targeting**: Omit both mention and quoted reply to target your own account (e.g. `.j admin setlevel 50` targets the mod running the command).
+
+### Available Admin Console Commands
+
+| Category | Command Syntax | Description | Example |
+| :--- | :--- | :--- | :--- |
+| **Player Management** | `setlevel <@user> <1-100>` | Directly sets user level, recalculates level XP, and awards stat points. | `.j admin setlevel 75` |
+| | `setstat <@user> <stat> <value>` | Manually sets an individual stat (`hp`, `atk`, `def`, `mag`, `spd`, `luck`, `crit`). | `.j admin setstat @friend hp 5000` |
+| | `setwallet <@user> <amount>` | Sets the player's wallet balance directly. | `.j admin setwallet 100000` |
+| | `giveitem <@user> <item_name> [qty]` | Gives the specified item by name or ID. Default quantity is 1. | `.j admin giveitem legendary_enhancement_stone 10` |
+| | `takeitem <@user> <item_name> [qty]` | Removes the specified quantity of an item from the player's bag. | `.j admin takeitem @friend healing_potion 5` |
+| | `giveskill <@user> <skill_name> [level]` | Grants a skill directly, bypassing class/level requirements. | `.j admin giveskill @friend meteor 3` |
+| | `revokeskill <@user> <skill_name>` | Removes the specified skill from the player. | `.j admin revokeskill flame_strike` |
+| | `resetplayer <@user>` | Resets player stats to 0, revokes all skills, and refunds stat points. | `.j admin resetplayer` |
+| | `forceevolve <@user> <class_name>` | Forces evolution to the specified class, bypassing prerequisites. | `.j admin forceevolve @friend Warlord` |
+| | `givepoints <@user> <amount>` | Awards unspent stat points. | `.j admin givepoints 20` |
+| | `givezeni <@user> <amount>` | Adds Zeni to the player's wallet (accumulates with existing balance). | `.j admin givezeni 50000` |
+| | `setrank <@user> <rank>` | Direct override for adventurer rank (`F` through `GOD`). | `.j admin setrank SSS` |
+| | `unstick <@user>` | Resets a player's stuck combat/action state. | `.j admin unstick @friend` |
+| | `inspect <@user>` | Inspects the target's stats, active equipment, wallet, and skills. | `.j admin inspect` |
+| **Content Tools** | `createskill` | Sends an interactive, fill-in-the-blank skill creation template. | `.j admin createskill` |
+| | `createclass` | Sends an interactive, fill-in-the-blank class creation template. | `.j admin createclass` |
+| | `disableskill <skill_name>` | Disables a skill node globally so players cannot learn or use it. | `.j admin disableskill barrage` |
+| | `enableskill <skill_name>` | Re-enables a previously disabled skill. | `.j admin enableskill barrage` |
+| **Mod Testing** | `modclass <class_name>` | Instantly switches the mod's own class. | `.j modclass Archmage` |
 
 ---
 
@@ -138,15 +180,20 @@ Insert a new condition checking the `isOwner` flag within the command dispatcher
 ---
 
 ## Common tasks
+ 
+ - **Modify warning strike limits** - Change the warning threshold checks at [engine.js L7978](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L7978).
+ - **Add a global bot moderator** - Edit moderator arrays using `addmod` or `addGlobalMod` in [engine.js L7257](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L7257).
+ - **Remove a global bot moderator** - Use the `delmod` command to strip moderator rights.
+ - **Manage user access (block/unblock)** - Use `block @user` or `unblock @user` to toggle command access.
+ - **Set card moderators** - Use `cardmod add @user` or `cardmod del @user` to manage card approvals.
+ - **Clear a user's warnings** - Call `resetWarnings` as shown in [engine.js L1013](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L1013).
+ - **Configure commands prefix** - Edit prefix mappings inside `botConfig.js` and reload contexts.
+ - **Force evolve a player's character** - Use `.j admin forceevolve <@user> <class_name>` to bypass all criteria and transition their class.
+ - **Compensate player level / stats / points** - Adjust individual properties using `.j admin setlevel`, `.j admin setstat`, or `.j admin givepoints`.
+ - **Unstick a combat session** - If a group combat is locked/hanging, run `.j admin unstick <@user>` on the stuck player to clear their locks.
+ - **Audit / Inspect player data** - Use `.j admin inspect <@user>` to get a complete dump of active inventory, levels, wallet, and skills.
+ - **Change database warnings persistence key** - Modify the system key name mapping inside [engine.js L1007](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L1007) and Mongoose schemas.
 
-- **Modify warning strike limits** — Change the warning threshold checks at [engine.js L7978](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L7978).
-- **Add a global bot moderator** — Edit moderator arrays using `addmod` or `addGlobalMod` in [engine.js L7257](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L7257).
-- **Remove a global bot moderator** — Use the `delmod` command to strip moderator rights.
-- **Manage user access (block/unblock)** — Use `block @user` or `unblock @user` to toggle command access.
-- **Set card moderators** — Use `cardmod add @user` or `cardmod del @user` to manage card approvals.
-- **Clear a user's warnings** — Call `resetWarnings` as shown in [engine.js L1013](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L1013).
-- **Configure commands prefix** — Edit prefix mappings inside `botConfig.js` and reload contexts.
-- **Change database warnings persistence key** — Modify the system key name mapping inside [engine.js L1007](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L1007) and Mongoose schemas.
 
 
 

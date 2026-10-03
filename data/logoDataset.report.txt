@@ -1,0 +1,308 @@
+LOGO DATASET AUDIT - 2026-09-28T02:41:22.737Z
+pool: 627 brands | verified: 501 | rejected: 126 (79.9% pass)
+elapsed: 462s
+
+rejections by reason:
+  no-P154-logo: 38
+  stageC-miss:no-wikidata-item: 7
+  no-wikidata-item-after-search: 7
+  aspect:4.50: 3
+  aspect:8.47: 2
+  aspect:3.40: 2
+  aspect:3.88: 2
+  aspect:4.00: 2
+  aspect:5.10: 2
+  aspect:5.43: 2
+  aspect:5.26: 2
+  aspect:5.38: 2
+  aspect:2.86: 2
+  aspect:2.70: 1
+  aspect:3.25: 1
+  aspect:3.82: 1
+  aspect:3.73: 1
+  aspect:4.17: 1
+  wordmark-filename:Nespresso logo (monogram + wordmark).svg: 1
+  aspect:3.79: 1
+  wordmark-filename:Little Caesars wordmark.svg: 1
+  aspect:2.93: 1
+  aspect:2.76: 1
+  aspect:6.10: 1
+  aspect:3.23: 1
+  aspect:3.60: 1
+  wordmark-filename:Panera Bread wordmark.svg: 1
+  aspect:3.18: 1
+  aspect:6.02: 1
+  aspect:4.03: 1
+  aspect:3.94: 1
+  gate:tiny(500x37): 1
+  aspect:8.93: 1
+  wordmark-filename:Hermes wordmark.svg: 1
+  aspect:5.75: 1
+  aspect:5.56: 1
+  aspect:4.81: 1
+  aspect:10.20: 1
+  wordmark-filename:Logo wordmark Hollister Co. (2025) USA.png: 1
+  aspect:9.09: 1
+  wordmark-filename:Golden State Warriors wordmark logo.svg: 1
+  aspect:5.81: 1
+  aspect:5.68: 1
+  aspect:7.46: 1
+  aspect:3.27: 1
+  aspect:6.25: 1
+  aspect:3.70: 1
+  aspect:3.68: 1
+  outdated-filename:Goldman Sachs logo.svg: 1
+  aspect:6.94: 1
+  aspect:4.72: 1
+  wordmark-filename:Ryanair wordmark.svg: 1
+  wordmark-filename:Singapore Airlines wordmark.svg: 1
+  wordmark-filename:American Airlines wordmark (2013).svg: 1
+  aspect:4.27: 1
+  aspect:4.42: 1
+  aspect:2.81: 1
+  wordmark-filename:Qantas wordmark 2016.svg: 1
+  aspect:7.14: 1
+  outdated-filename:Logo of Booking Holdings Inc,(lock up, stacked with Brands, full color).PNG: 1
+  aspect:7.35: 1
+  aspect:10.64: 1
+  aspect:5.49: 1
+  wordmark-filename:Old Spice wordmark.svg: 1
+  aspect:2.78: 1
+  aspect:4.35: 1
+
+rejected brands (runtime falls back to live Wikipedia search for these):
+  [Tech] Acer: no-P154-logo
+  [Tech] Texas Instruments: aspect:2.70:TexasInstruments-Logo.svg
+  [Tech] GoPro: aspect:3.25:GoPro logo light.svg
+  [Tech] Fitbit: aspect:3.82:Fitbit logo16.svg
+  [Apps & Social] Discord: no-P154-logo
+  [Apps & Social] WeChat: no-P154-logo
+  [Apps & Social] Duolingo: no-P154-logo
+  [Apps & Social] Uber: no-P154-logo
+  [Apps & Social] Deliveroo: aspect:3.73:Deliveroo logo.svg
+  [Apps & Social] DoorDash: aspect:8.47:DoorDash Logo.svg
+  [Apps & Social] OnlyFans: aspect:4.17:OnlyFans logo.svg
+  [Food & Drink] Nutella: aspect:3.40:Logo Nutella.svg
+  [Food & Drink] Nespresso: wordmark-filename:Nespresso logo (monogram + wordmark).svg
+  [Food & Drink] Ben & Jerry's: aspect:3.40:Ben & Jerry's.svg
+  [Food & Drink] Costa Coffee: aspect:3.79:Costa Coffee Logo white on red.png
+  [Food & Drink] Five Guys: aspect:3.88:Five Guys logo.svg
+  [Food & Drink] Little Caesars: wordmark-filename:Little Caesars wordmark.svg
+  [Food & Drink] M&M's: no-P154-logo
+  [Food & Drink] Milky Way: aspect:2.93:Milky way brand logo.png
+  [Food & Drink] Hershey's: aspect:2.76:HersheyCo.svg
+  [Food & Drink] Toblerone: aspect:6.10:Toblerone logo22.svg
+  [Food & Drink] Haribo: aspect:3.23:Haribo Logo 2024.svg
+  [Food & Drink] Cheerios: aspect:3.60:Cheerios brand logo.svg
+  [Food & Drink] Froot Loops: no-P154-logo
+  [Food & Drink] Chobani: aspect:4.00:Chobani logo 2017.png
+  [Food & Drink] In-N-Out Burger: no-P154-logo
+  [Food & Drink] Panera Bread: wordmark-filename:Panera Bread wordmark.svg
+  [Food & Drink] Jack Daniel's: no-P154-logo
+  [Food & Drink] Smirnoff: no-P154-logo
+  [Food & Drink] Budweiser: no-P154-logo
+  [Food & Drink] Bud Light: no-P154-logo
+  [Food & Drink] Miller Lite: no-P154-logo
+  [Food & Drink] Coors Light: aspect:3.18:Coors Light logo.svg
+  [Food & Drink] Dos Equis: no-P154-logo
+  [Food & Drink] Modelo: no-P154-logo
+  [Cars] Toyota: aspect:6.02:Toyota.svg
+  [Cars] Suzuki: aspect:5.10:Suzuki logo 2025.svg
+  [Cars] Rimac: aspect:4.03:Rimac Automobili logo.svg
+  [Cars] Castrol: aspect:3.94:Castrol logo 2023.svg
+  [Fashion] Burberry: no-P154-logo
+  [Fashion] Ralph Lauren: gate:tiny(500x37)
+  [Fashion] Versace: no-P154-logo
+  [Fashion] Dolce & Gabbana: aspect:8.93:Dolce & Gabbana - logo (Italy, 1985-).svg
+  [Fashion] Balenciaga: no-P154-logo
+  [Fashion] Hermès: wordmark-filename:Hermes wordmark.svg
+  [Fashion] Miu Miu: aspect:5.75:Miu Miu - logo (Italy, 1993).svg
+  [Fashion] Off-White: aspect:5.56:Off-White Logo.svg
+  [Fashion] Champion: aspect:5.43:Champion USA logo.svg
+  [Fashion] Patagonia: aspect:5.10:Patagonia (Unternehmen) logo.svg
+  [Fashion] Shein: aspect:4.81:Shein Logo 2017.svg
+  [Fashion] Primark: no-P154-logo
+  [Fashion] Abercrombie & Fitch: aspect:10.20:Abercrombie & Fitch logo.svg
+  [Fashion] Hollister: wordmark-filename:Logo wordmark Hollister Co. (2025) USA.png
+  [Fashion] Urban Outfitters: aspect:9.09:Urban Outfitters logo.svg
+  [Fashion] Pull & Bear: no-P154-logo
+  [Fashion] Bershka: no-P154-logo
+  [Sports] Formula 1: aspect:4.00:Formula One logo.svg
+  [Sports] Chelsea FC: no-P154-logo
+  [Sports] Inter Milan: no-P154-logo
+  [Sports] MotoGP: no-P154-logo
+  [Sports] Golden State Warriors: wordmark-filename:Golden State Warriors wordmark logo.svg
+  [Entertainment & Gaming] Minecraft: aspect:5.81:Minecraft Logo-en.svg
+  [Entertainment & Gaming] Electronic Arts: no-P154-logo
+  [Entertainment & Gaming] Riot Games: no-P154-logo
+  [Entertainment & Gaming] Among Us: aspect:3.88:Among Us Logo.svg
+  [Entertainment & Gaming] Pac-Man: no-P154-logo
+  [Entertainment & Gaming] IMAX: aspect:5.26:IMAX blue logo.svg
+  [Entertainment & Gaming] StudioCanal: aspect:5.68:Studiocanal 2011 logo.svg
+  [Entertainment & Gaming] Funimation: aspect:7.46:Funimation 2016.svg
+  [Entertainment & Gaming] GameStop: no-P154-logo
+  [Entertainment & Gaming] Pop Mart: aspect:3.27:Pop Mart logo.svg
+  [Retail & Banking] Sainsbury's: aspect:5.26:Sainsbury's Logo.svg
+  [Retail & Banking] Macy's: no-P154-logo
+  [Retail & Banking] Kohl's: aspect:6.25:Kohl's logo.svg
+  [Retail & Banking] Dollar General: aspect:5.38:Dollar General logo.svg
+  [Retail & Banking] Tractor Supply: aspect:3.70:TractorSupplyCompanylogo.svg
+  [Retail & Banking] Citibank: aspect:3.68:Citibank.svg
+  [Retail & Banking] Goldman Sachs: outdated-filename:Goldman Sachs logo.svg
+  [Retail & Banking] Morgan Stanley: aspect:6.94:Morgan Stanley Logo 2024.png
+  [Retail & Banking] MoneyGram: aspect:4.72:MoneyGram Logo.svg
+  [Airlines & Travel] Qatar Airways: aspect:2.86:Qatar Airways logo.svg
+  [Airlines & Travel] Ryanair: wordmark-filename:Ryanair wordmark.svg
+  [Airlines & Travel] Turkish Airlines: no-P154-logo
+  [Airlines & Travel] Singapore Airlines: wordmark-filename:Singapore Airlines wordmark.svg
+  [Airlines & Travel] American Airlines: wordmark-filename:American Airlines wordmark (2013).svg
+  [Airlines & Travel] Air France: no-P154-logo
+  [Airlines & Travel] Boeing: aspect:4.27:Boeing full logo.svg
+  [Airlines & Travel] EasyJet: aspect:4.42:EasyJet logo.svg
+  [Airlines & Travel] Etihad Airways: aspect:2.81:Etihad-airways-logo.svg
+  [Airlines & Travel] Qantas: wordmark-filename:Qantas wordmark 2016.svg
+  [Airlines & Travel] Cathay Pacific: aspect:7.14:Cathay Pacific Ltd. logo.svg
+  [Airlines & Travel] Booking Holdings: outdated-filename:Logo of Booking Holdings Inc,(lock up, stacked with Brands, full color).PNG
+  [Media & TV] Peacock: no-P154-logo
+  [Media & TV] Reuters: no-P154-logo
+  [Media & TV] The New York Times: aspect:7.35:NewYorkTimes.svg
+  [Fintech & Crypto] Revolut: aspect:4.50:Revolut logo.svg
+  [Health & Beauty] Johnson & Johnson: aspect:10.64:JNJ Logo New.svg
+  [Health & Beauty] Oral-B: aspect:2.86:Oral-B Logo 2024.svg
+  [Health & Beauty] Listerine: aspect:5.38:Listerine logo.svg
+  [Health & Beauty] L'Oréal: aspect:5.49:L'Oréal logo.svg
+  [Health & Beauty] MAC Cosmetics: aspect:8.47:MAC Cosmetics logo.png
+  [Health & Beauty] Pantene: aspect:5.43:Pantene.svg
+  [Health & Beauty] Old Spice: wordmark-filename:Old Spice wordmark.svg
+  [Health & Beauty] Sensodyne: no-P154-logo
+  [Health & Beauty] Band-Aid: no-P154-logo
+  [Health & Beauty] Neutrogena: aspect:4.50:Neutrogena logo.svg
+  [Health & Beauty] CeraVe: no-P154-logo
+  [Industry & Energy] DeWalt: aspect:2.78:DeWalt Logo.svg
+  [Industry & Energy] ExxonMobil: no-P154-logo
+  [Industry & Energy] DHL: aspect:4.50:DHL Logo.svg
+  [Industry & Energy] Maersk: aspect:4.35:Maersk Group Logo.svg
+  [Industry & Energy] Tupperware: no-P154-logo
+  [Tech] Yahoo!: stageC-miss:no-wikidata-item
+  [Tech] Palantir: stageC-miss:no-wikidata-item
+  [Apps & Social] Bumble: no-wikidata-item-after-search
+  [Food & Drink] Snickers: no-wikidata-item-after-search
+  [Food & Drink] Lindt: stageC-miss:no-wikidata-item
+  [Food & Drink] Uncle Ben's: stageC-miss:no-wikidata-item
+  [Cars] Pagani: no-wikidata-item-after-search
+  [Fashion] Calvin Klein: no-wikidata-item-after-search
+  [Fashion] Yves Saint Laurent: no-wikidata-item-after-search
+  [Entertainment & Gaming] Lionsgate: stageC-miss:no-wikidata-item
+  [Media & TV] Apple TV+: stageC-miss:no-wikidata-item
+  [Fintech & Crypto] Chipper Cash: no-wikidata-item-after-search
+  [Health & Beauty] Maybelline: stageC-miss:no-wikidata-item
+  [Health & Beauty] The Ordinary: no-wikidata-item-after-search
+
+REFINEMENT PASS - 2026-09-28T02:55:29.327Z
+kept: 402 | dropped: 99 | symbol-upgraded: 66
+
+dropped entries:
+  [Tech] Philips: outdated-year(2013) (Philips shield (2013).svg)
+  [Apps & Social] Telegram: outdated-year(2019) (Telegram 2019 Logo.svg)
+  [Food & Drink] Wendy's: outdated-year(2012) (Wendy's logo 2012.svg)
+  [Food & Drink] Dunkin': photo-or-noise (Dunkin1.JPG)
+  [Food & Drink] Baskin-Robbins: outdated-year(2022) (Baskin-Robbins logo 2022.svg)
+  [Food & Drink] Lavazza: outdated-year(1995) (Lavazza - logo (Italy, 1995).svg)
+  [Food & Drink] Dr Pepper: photo-or-noise (Dr Pepper trade mark 1910.jpg)
+  [Food & Drink] Jack in the Box: outdated-year(2009) (Jack in the Box 2009 logo.svg)
+  [Food & Drink] Guinness: photo-or-noise (Guinness-Werbung (Görlitz).jpg)
+  [Cars] Porsche: photo-or-noise (Newporschecrest.jpg)
+  [Cars] Cadillac: photo-or-noise (Cadillac emblem.jpg)
+  [Cars] Alfa Romeo: photo-or-noise (ALFA ROMEO badge on a car (cropped).jpg)
+  [Cars] Peugeot: photo-or-noise (2021 - Peugeot 308 III (C) - 42.jpg)
+  [Cars] Renault: outdated-year(2021) (2021 Renault Group logo.svg)
+  [Cars] Vauxhall: photo-or-noise (Vauxhall lichtreclame.JPG)
+  [Cars] Lotus: photo-or-noise (Lotus Eletre S Type 132 Blossum Grey (8).jpg)
+  [Cars] Polestar: outdated-year(2020) (Polestar logo 2020.svg)
+  [Fashion] Adidas: outdated-year(2022) (Adidas 2022 logo.svg)
+  [Sports] Juventus: outdated-year(2020) (Juventus FC - logo black (Italy, 2020).svg)
+  [Sports] FIFA World Cup: photo-or-noise (FIFA World Cup Trophy photo by Djuradj Vujcic.jpg)
+  [Entertainment & Gaming] Universal Pictures: photo-or-noise (Universal Pictures 2021 (Blue).svg)
+  [Entertainment & Gaming] MTV: outdated-year(2021) (MTV-2021.svg)
+  [Entertainment & Gaming] Blizzard Entertainment: outdated-year(2015) (Blizzard Entertainment Logo 2015.svg)
+  [Entertainment & Gaming] Tetris: outdated-year(2019) (Tetris logo 2019.svg)
+  [Retail & Banking] Walgreens: outdated-year(2020) (Walgreens 2020 initial W logo.svg)
+  [Media & TV] CNN: outdated-year(2014) (CNN Logo (2014).svg)
+  [Media & TV] Fox: outdated-year(2019) (Fox Broadcasting Company logo (2019).svg)
+  [Fintech & Crypto] Stripe: outdated-year(2016) (Stripe Logo, revised 2016.svg)
+  [Fintech & Crypto] Nubank: outdated-year(2021) (Nubank logo 2021.svg)
+  [Industry & Energy] Fisher-Price: outdated-year(2019) (Fisher-Price 2019.svg)
+  [Telecom] MTN: outdated-year(2022) (MTN 2022 logo.svg)
+  [Tech] LG: outdated-year(2014) (LG logo (2014).svg)
+  [Tech] Sony: photo-or-noise (Sony Pictures logo.svg)
+  [Tech] Cisco: outdated-year(2016) (Cisco logo blue 2016.svg)
+  [Tech] HP: outdated-year(2016) (HP alternatives Logo 2016.svg)
+  [Tech] Mozilla Firefox: outdated-year(2004) (Mozilla Firefox logo 2004.svg)
+  [Tech] Google Chrome: outdated-year(2022) (Google Chrome icon (February 2022).svg)
+  [Tech] Windows: outdated-year(2012) (Windows logo - 2012 (dark blue).svg)
+  [Tech] HDMI: photo-or-noise (HDMI connector with logo on TechniSat DigiPal T2 HD-0034.jpg)
+  [Tech] Siemens: outdated-year(1925) (Siemens & Halske Logo (1925).svg)
+  [Tech] Alibaba: photo-or-noise (Alibaba Marketplace Logo.jpg)
+  [Apps & Social] Twitter: outdated-year(2012) (Twitter 2012 logo.svg)
+  [Apps & Social] Facebook: outdated-year(2013) (Facebook icon 2013.svg)
+  [Apps & Social] Booking.com: outdated-year(2022) (Booking.com Icon 2022.svg)
+  [Apps & Social] Chrome Remote Desktop: outdated-year(2022) (Google Chrome icon (February 2022).svg)
+  [Apps & Social] Gmail: outdated-year(2020) (Gmail icon (2020).svg)
+  [Apps & Social] Google Maps: outdated-year(2020) (Google Maps icon (2020).svg)
+  [Food & Drink] Starbucks: outdated-year(2011) (Starbucks Corporation Logo 2011.svg)
+  [Food & Drink] Pepsi: outdated-year(2014) (Pepsi logo 2014.svg)
+  [Food & Drink] Heineken: outdated-year(1991) (Heineken Beer - logo vertical (Netherlands, 1991).svg)
+  [Food & Drink] Oreo: outdated-year(2014) (Oreo Logo 2014.svg)
+  [Food & Drink] Krispy Kreme: photo-or-noise (Krispy Kreme Challenge logo.jpg)
+  [Food & Drink] Papa John's: outdated-year(1994) (Papa John's Pizza 1994 logo.svg)
+  [Food & Drink] Doritos: outdated-year(2013) (Doritos Logo (2013).png)
+  [Food & Drink] Quaker: outdated-year(2015) (Quaker State Oil Logo as of 2015.png)
+  [Food & Drink] Knorr: outdated-year(2020) (Knorr Logo 2020.svg)
+  [Food & Drink] Bacardi: photo-or-noise (Bacardi museum emblem.jpg)
+  [Cars] Nissan: outdated-year(2001) (Nissan logo 2001.svg)
+  [Cars] Hyundai: photo-or-noise (Hyundai logo.jpg)
+  [Cars] Jeep: photo-or-noise (JeepEagle logo.jpg)
+  [Cars] Dodge: outdated-year(1910) (Dodge 1910 logo.svg)
+  [Cars] Buick: outdated-year(1913) (Buick 1913 logo.png)
+  [Cars] Opel: outdated-year(2002) (OPEL 2002 logo.png)
+  [Cars] Lucid: photo-or-noise (LUCID logo.jpg)
+  [Fashion] Reebok: outdated-year(2006) (Reebok 2006 logo.png)
+  [Fashion] Lacoste: photo-or-noise (Lacoste logos 02.jpg)
+  [Fashion] Givenchy: outdated-year(2003) (Givenchy - logo (France, 2003).svg)
+  [Fashion] American Eagle: photo-or-noise (American Eagle Foundation logo.jpg)
+  [Sports] FC Barcelona: outdated-year(1910) (FC Barcelona 1910 logo.png)
+  [Sports] Bundesliga: outdated-year(2012) (Bundesliga logo (2012).svg)
+  [Sports] Cricket World Cup: outdated-year(2003) (Cricket World Cup Logo 2003.svg)
+  [Sports] Wimbledon: outdated-year(2003) (Wimbledon FC logo (2003).png)
+  [Entertainment & Gaming] Warner Bros.: photo-or-noise (Warner Bros. Discovery (symbol).svg)
+  [Entertainment & Gaming] Cartoon Network: outdated-year(2010) (Cartoon Network 2010 logo.svg)
+  [Entertainment & Gaming] Xbox: outdated-year(2019) (Xbox logo (2019).svg)
+  [Entertainment & Gaming] Valve: photo-or-noise (Valve-logo.jpg)
+  [Entertainment & Gaming] The Sims: outdated-year(2019) (The Sims Mobile logo (2019).svg)
+  [Entertainment & Gaming] Columbia Pictures: photo-or-noise (Columbia Pictures Logo - Nov 1925 MPW.jpg)
+  [Retail & Banking] Tesco: photo-or-noise (Tesco Direct Logo.jpg)
+  [Retail & Banking] Wells Fargo: outdated-year(2020) (Wells Fargo Logo (2020).png)
+  [Retail & Banking] Barclays: outdated-year(2010) (Barclays New York Challenge 2010 logo.png)
+  [Airlines & Travel] Lufthansa: photo-or-noise (Lufthansa Crane Logo 1964.jpg)
+  [Airlines & Travel] Delta Air Lines: outdated-year(1963) (Delta Air Lines 1963 Logo.png)
+  [Airlines & Travel] United Airlines: outdated-year(1940) (United airlines 1940 logo.svg)
+  [Media & TV] Discovery: photo-or-noise (Warner Bros. Discovery (symbol).svg)
+  [Media & TV] Comedy Central: outdated-year(2018) (Comedy Central Extra Logo 2018.svg)
+  [Media & TV] Hulu: photo-or-noise (Hulu Concept (logo).jpg)
+  [Media & TV] Rolling Stone: photo-or-noise (Rolling Stones logo geograph-5813436-by-Philip-Halling.jpg)
+  [Media & TV] Forbes: photo-or-noise (Forbes company logo in New York City.jpg)
+  [Fintech & Crypto] Chime: photo-or-noise (CHIME-logo.jpg)
+  [Health & Beauty] Bayer: photo-or-noise (Bayer HealthCare Pharmaceuticals Logo 2011-2016.jpg)
+  [Health & Beauty] Sephora: photo-or-noise (Sephora-logo-in-black-5e3190d84gxhuatx.jpg)
+  [Health & Beauty] The Body Shop: outdated-year(2020) (The Body Shop logo 2020.svg)
+  [Industry & Energy] Makita: photo-or-noise (Makita logo.jpg)
+  [Industry & Energy] Dyson: photo-or-noise (Dyson Perrins Church of England Academy logo.jpg)
+  [Industry & Energy] Oakley: photo-or-noise (Oakley High School logo.jpg)
+  [Telecom] Verizon: outdated-year(2015) (Verizon Logo 2000 to 2015.svg)
+  [Telecom] T-Mobile: outdated-year(2022) (T-Mobile logo 2022.svg)
+  [Health & Beauty] Gillette: outdated-year(2018) (Gillette ODI series Aus v Eng 2018 logo.png)
+
+REFINEMENT PASS - 2026-09-28T03:04:49.888Z
+kept: 402 | dropped: 0 | symbol-upgraded: 29
+
+dropped entries:

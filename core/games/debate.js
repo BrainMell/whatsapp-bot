@@ -6,21 +6,73 @@ const fs = require('fs');
 const path = require('path');
 const botConfig = require('../../botConfig');
 const system = require('../utils/system'); // NEW: Database System Module
+const economy = require('../rpg/economy');
 
 // Active debates storage
 let activeDebates = {};
 let debateLeaderboard = {};
 let spectators = new Map(); // chatId -> Map(userId -> { expiry, msgCount })
 
-// Load debates and leaderboard from system cache
-function loadDebates() {
-    activeDebates = system.get('active_debates', {});
-    debateLeaderboard = system.get('debate_leaderboard', {});
+// 💡 CROSS-BOT FIX 2026-09-20: Joker and Subaru share this process (and the
+// system KV collection). A single `active_debates` key meant a debate
+// started on one bot was visible (and judge-able/cancellable) from the
+// other. Debate SESSIONS are per-bot; the leaderboard stays global.
+function debatesKey() {
+    let id = 'global';
+    try { id = botConfig.getBotId() || 'global'; } catch (e) {}
+    return `active_debates_${id}`;
 }
 
-// Save data to MongoDB
+// 💡 CROSS-BOT FIX (in-memory half): the module object is a singleton shared
+// by both bot instances in this process, so even per-bot DB keys alone would
+// leak live sessions across bots. Every access goes through these scoped
+// keys (per-bot in memory AND per-bot in the persisted KV).
+function _dkey(chatId) {
+    let id = 'global';
+    try { id = botConfig.getBotId() || 'global'; } catch (e) {}
+    return `${id}|${chatId}`;
+}
+
+// Load debates and leaderboard from system cache
+function loadDebates() {
+    activeDebates = system.get(debatesKey(), {}) || {};
+    // 💡 STALE-SESSION PRUNE (Issue #31ff98): sessions whose 2h window
+    // expired while the process was down must not block new debates
+    // forever (their setTimeout died with the old process).
+    let pruned = false;
+    const now = Date.now();
+    for (const [k, d] of Object.entries(activeDebates)) {
+        if (!d || !d.expirationTime || d.expirationTime <= now) {
+            delete activeDebates[k];
+            pruned = true;
+        }
+    }
+    if (pruned) saveDebates();
+    debateLeaderboard = system.get('debate_leaderboard', {}) || {};
+}
+
+// 💡 BSON FIX 2026-10-02 (Issue #31ff98 "debate isn't working"): the live
+// setTimeout handle was stored INSIDE the session object, so every
+// saveDebates() hit "Cannot convert circular structure to BSON" (110+
+// logged occurrences) - debate state never persisted and the pipeline
+// logged an error on EVERY recorded argument. Timer handles now live in
+// this side Map; sessions stay plain JSON-able data.
+const _debateTimers = new Map(); // dkey -> Timeout
+function _clearTimer(dk) {
+    const t = _debateTimers.get(dk);
+    if (t) { clearTimeout(t); _debateTimers.delete(dk); }
+}
+
+// Save data to MongoDB (defensive: a non-serializable value must never
+// crash the message pipeline - log and skip instead).
 function saveDebates() {
-    system.set('active_debates', activeDebates);
+    try {
+        JSON.stringify(activeDebates);
+    } catch (e) {
+        console.error('Debate session not serializable - skipping KV save:', e.message);
+        return;
+    }
+    system.set(debatesKey(), activeDebates);
 }
 
 function saveLeaderboard() {
@@ -33,7 +85,9 @@ function updateLeaderboard(winnerJid, score) {
         debateLeaderboard[winnerJid] = { wins: 0, totalScore: 0, debates: 0 };
     }
     debateLeaderboard[winnerJid].wins += 1;
-    debateLeaderboard[winnerJid].totalScore += score;
+    // 💡 JUDGE FIX: Number() re-base - a historical string score (the old
+    // bug concatenated strings) would keep poisoning the average forever.
+    debateLeaderboard[winnerJid].totalScore = (Number(debateLeaderboard[winnerJid].totalScore) || 0) + score;
     debateLeaderboard[winnerJid].debates += 1;
     saveLeaderboard();
 }
@@ -42,7 +96,7 @@ function recordParticipation(jid, score) {
     if (!debateLeaderboard[jid]) {
         debateLeaderboard[jid] = { wins: 0, totalScore: 0, debates: 0 };
     }
-    debateLeaderboard[jid].totalScore += score;
+    debateLeaderboard[jid].totalScore = (Number(debateLeaderboard[jid].totalScore) || 0) + score;
     debateLeaderboard[jid].debates += 1;
     saveLeaderboard();
 }
@@ -50,10 +104,185 @@ function recordParticipation(jid, score) {
 // Initial load
 loadDebates();
 
+// ═══ IDENTITY HELPERS (LID-aware) ═══════════════════════════════════════
+// 💡 DEBATE FIX 2026-09-20 (owner: ".j debate says the bot isn't an admin"):
+// the old check built the bot id as "<phone>@s.whatsapp.net" and compared it
+// EXACTLY against groupMetadata.participants[].id - but in LID-privacy
+// groups participant ids are "<num>@lid", so the check failed even when the
+// bot IS an admin and can lock/promote perfectly well. Match by user part
+// across BOTH bot identities (sock.user.id = phone, sock.user.lid = LID).
+const _userPart = (jid) => String(jid || '').split('@')[0].split(':')[0];
+
+function _botUserParts(sock) {
+    const parts = new Set();
+    for (const src of [sock?.user?.id, sock?.user?.lid]) {
+        const u = _userPart(src);
+        if (u) parts.add(u);
+    }
+    return parts;
+}
+
+function _participantIsAdmin(p) {
+    return p?.admin === 'admin' || p?.admin === 'superadmin';
+}
+
+function botIsGroupAdmin(groupMetadata, sock) {
+    if (!groupMetadata?.participants || !groupMetadata.participants.length) return false;
+    const bots = _botUserParts(sock);
+    if (!bots.size) return false;
+    return groupMetadata.participants.some((p) => _participantIsAdmin(p) && bots.has(_userPart(p.id)));
+}
+
+function userIsGroupAdmin(groupMetadata, jid) {
+    if (!groupMetadata?.participants || !groupMetadata.participants.length) return false;
+    const target = _userPart(jid);
+    return groupMetadata.participants.some((p) => _participantIsAdmin(p) && _userPart(p.id) === target);
+}
+
+// ═══ LID/PHONE-AWARE SAME-USER MATCH (Issue #31ff98) ═══════════════
+// A debate is started from a MENTION (usually <phone>@s.whatsapp.net) but
+// arguments arrive as senderJid (<num>@lid in LID-privacy groups). The old
+// full-JID comparison silently DROPPED those arguments, so .j judge always
+// answered "Both debaters must make at least 1 argument" - the debate
+// looked broken. Same user = equal user part (covers :device suffixes) OR
+// linked LID/phone numbers via the auth-dir maps.
+const _lidMaps = () => { try { return require('../utils/lidResolver'); } catch { return {}; } };
+function _sameUser(a, b) {
+    const part = (j) => String(j || '').split('@')[0].split(':')[0];
+    const dom = (j) => (String(j || '').split('@')[1] || '').split(':')[0];
+    const pa = part(a), pb = part(b);
+    if (!pa || !pb) return false;
+    if (pa === pb) return true;
+    try {
+        const { lidCache, phoneCache } = _lidMaps();
+        if (!lidCache || !phoneCache) return false;
+        const phoneOfLid = (p) => lidCache.get(p);
+        const lidOfPhone = (p) => phoneCache.get(p);
+        const ca = dom(a) === 'lid' ? phoneOfLid(pa) : lidOfPhone(pa);
+        const cb = dom(b) === 'lid' ? phoneOfLid(pb) : lidOfPhone(pb);
+        return (ca && ca === pb) || (cb && cb === pa) || (ca && cb && ca === cb);
+    } catch { return false; }
+}
+
+// ═══ VERDICT PARSING HELPERS (JUDGE FIX 2026-09-22) ═════════════════
+// Owner report: ".j judge doesnt work it sends this error message that has
+// json something in it and score ...". Root causes: (a) the extractor regex
+// /\{[\s\S]*\}/ is GREEDY - it swallows prose and any later brace pairs,
+// poisoning JSON.parse; (b) the failure path sent err.message to the chat
+// VERBATIM, and modern Node embeds a snippet of the malformed input in
+// JSON.parse errors - so the group literally saw raw JSON; (c) scores and
+// winner were never validated, so string scores concatenated in the
+// leaderboard and missing scores rendered as undefined.
+
+// Extract the first COMPLETE top-level JSON object from an AI reply.
+// Order: whole-body parse (fences stripped) -> balanced-brace scan ->
+// truncated-JSON repair. Returns null when nothing parses.
+function extractVerdictJson(raw) {
+    if (!raw) return null;
+    const unfenced = String(raw).trim()
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/```\s*$/i, '')
+        .trim();
+    const attempts = [unfenced];
+    const start = unfenced.indexOf('{');
+    if (start !== -1) {
+        let depth = 0, inStr = false, esc = false, end = -1;
+        for (let i = start; i < unfenced.length; i++) {
+            const ch = unfenced[i];
+            if (inStr) {
+                if (esc) esc = false;
+                else if (ch === '\\') esc = true;
+                else if (ch === '"') inStr = false;
+                continue;
+            }
+            if (ch === '"') inStr = true;
+            else if (ch === '{') depth++;
+            else if (ch === '}') {
+                depth--;
+                if (depth === 0) { end = i; break; }
+            }
+        }
+        if (end !== -1) attempts.push(unfenced.slice(start, end + 1));
+        // Truncated reply (token cap): close an open string, then balance
+        // braces/brackets so JSON.parse gets a well-formed object.
+        if (inStr || depth > 0) {
+            let repaired = unfenced.slice(start);
+            if (inStr) repaired += '"';
+            repaired = repaired.replace(/,\s*$/, '');
+            const stack = [];
+            let s = false, e = false;
+            for (const ch of repaired) {
+                if (s) { if (e) e = false; else if (ch === '\\') e = true; else if (ch === '"') s = false; continue; }
+                if (ch === '"') s = true;
+                else if (ch === '{' || ch === '[') stack.push(ch);
+                else if (ch === '}' || ch === ']') stack.pop();
+            }
+            if (s) repaired += '"';
+            while (stack.length) repaired += stack.pop() === '{' ? '}' : ']';
+            attempts.push(repaired);
+        }
+    }
+    for (const attempt of attempts) {
+        try {
+            const parsed = JSON.parse(attempt);
+            if (parsed && typeof parsed === 'object') return parsed;
+        } catch (e) { /* try the next strategy */ }
+    }
+    return null;
+}
+
+// Validate + coerce the parsed verdict so downstream code can never see
+// string scores (leaderboard concatenation), missing scores (undefined
+// rendered into the card) or an unrecognized winner (wrong JID crowned).
+function coerceVerdict(verdict) {
+    const toScore = (v) => {
+        const n = Number(v);
+        if (!Number.isFinite(n)) return 0;
+        return Math.max(0, Math.min(100, Math.round(n)));
+    };
+    const out = {
+        debater1_score: toScore(verdict.debater1_score),
+        debater2_score: toScore(verdict.debater2_score),
+        reasoning: typeof verdict.reasoning === 'string' ? verdict.reasoning : '',
+        fallacies: verdict.fallacies && typeof verdict.fallacies === 'object' ? verdict.fallacies : { d1: '', d2: '' },
+        best_arg_d1: verdict.best_arg_d1 && typeof verdict.best_arg_d1 === 'object' ? verdict.best_arg_d1 : { text: '', impact: '' },
+        best_arg_d2: verdict.best_arg_d2 && typeof verdict.best_arg_d2 === 'object' ? verdict.best_arg_d2 : { text: '', impact: '' },
+    };
+    // Winner normalization: accept "Debater 1"/"Debater 2" in any casing or
+    // spacing, bare 1/2, d1/d2, first/second - even glued into a sentence.
+    const wNorm = String(verdict.winner || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const saysOne = /^(1|d1|debater1|debaterone|first)/.test(wNorm);
+    const saysTwo = /^(2|d2|debater2|debatertwo|second)/.test(wNorm);
+    if (saysOne && !saysTwo) out.winner = 'Debater 1';
+    else if (saysTwo && !saysOne) out.winner = 'Debater 2';
+    // Missing/unrecognizable winner: the higher coerced score decides; a
+    // dead tie defaults to Debater 1 so the debate can always close.
+    else out.winner = out.debater1_score >= out.debater2_score ? 'Debater 1' : 'Debater 2';
+    return out;
+}
+
+// Re-arm the 2h expiry timers after a process restart (the old process's
+// setTimeout died with it). Engine calls this lazily on the first group
+// message; only THIS bot's sessions are touched (dkey is bot-scoped).
+let _rearmed = false;
+async function rearmTimers(sock, BOT_MARKER) {
+    if (_rearmed) return;
+    _rearmed = true;
+    const now = Date.now();
+    for (const [dk, d] of Object.entries(activeDebates)) {
+        if (!dk.startsWith(`${botConfig.getBotId?.() || 'global'}|`)) continue;
+        if (_debateTimers.has(dk)) continue;
+        const remaining = (d.expirationTime || 0) - now;
+        if (remaining <= 0) continue; // loader prunes already-expired ones
+        _debateTimers.set(dk, setTimeout(() => module.exports.handleDebateTimeout(sock, dk.split('|')[1], BOT_MARKER), remaining));
+    }
+}
+
 module.exports = {
+    rearmTimers,
     startDebate: async (sock, chatId, topic, debater1Jid, debater2Jid, groupMetadata, BOT_MARKER, smartGroqCall, MODELS) => {
         // Check if debate already active
-        if (activeDebates[chatId]) {
+        if (activeDebates[_dkey(chatId)]) {
             return { 
                 success: false, 
                 message: BOT_MARKER + `❌ A debate is already in progress! Use \`${botConfig.getPrefix()} judge\` to end it.` 
@@ -61,24 +290,31 @@ module.exports = {
         }
 
         // 🛡️ Admin Check: Bot must be admin to lock group and promote
-        const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
-        const botIsAdmin = groupMetadata.participants.some(p => p.id === botId && (p.admin === 'admin' || p.admin === 'superadmin'));
-        if (!botIsAdmin) {
+        // (LID-aware - see the DEBATE FIX note above the helpers)
+        if (!chatId || !String(chatId).endsWith('@g.us') || !groupMetadata) {
+            return {
+                success: false,
+                message: BOT_MARKER + '❌ Debates run in *groups* only.'
+            };
+        }
+        if (!botIsGroupAdmin(groupMetadata, sock)) {
             return {
                 success: false,
                 message: BOT_MARKER + "❌ I need to be an *Admin* to manage the debate (lock group/promote debaters)!"
             };
         }
 
-        // Check if debaters were already admins
-        const debater1WasAdmin = groupMetadata.participants.some(p => p.id === debater1Jid && (p.admin === 'admin' || p.admin === 'superadmin'));
-        const debater2WasAdmin = groupMetadata.participants.some(p => p.id === debater2Jid && (p.admin === 'admin' || p.admin === 'superadmin'));
+        // Check if debaters were already admins (LID-aware user-part match -
+        // the old exact match always missed LID-group admins, so real admins
+        // got DEMOTED at the end of their own debate)
+        const debater1WasAdmin = userIsGroupAdmin(groupMetadata, debater1Jid);
+        const debater2WasAdmin = userIsGroupAdmin(groupMetadata, debater2Jid);
 
         // Create debate session
         const DEBATE_DURATION_MS = 2 * 60 * 60 * 1000; // 2 hours
         const expirationTime = Date.now() + DEBATE_DURATION_MS;
 
-        activeDebates[chatId] = {
+        activeDebates[_dkey(chatId)] = {
             topic: topic,
             debater1: debater1Jid,
             debater2: debater2Jid,
@@ -87,9 +323,10 @@ module.exports = {
             arguments: [],
             startTime: Date.now(),
             expirationTime: expirationTime, // Store expiration time
-            locked: true,
-            timeoutId: setTimeout(() => module.exports.handleDebateTimeout(sock, chatId, BOT_MARKER), DEBATE_DURATION_MS) // Set timeout
+            locked: true
         };
+        // timer handle lives OUTSIDE the session (BSON fix - see _debateTimers)
+        _debateTimers.set(_dkey(chatId), setTimeout(() => module.exports.handleDebateTimeout(sock, chatId, BOT_MARKER), DEBATE_DURATION_MS));
 
         saveDebates();
 
@@ -101,22 +338,23 @@ module.exports = {
             await sock.groupParticipantsUpdate(chatId, [debater1Jid], 'promote');
             await sock.groupParticipantsUpdate(chatId, [debater2Jid], 'promote');
 
-            const message = BOT_MARKER + `━━━━━━━━━━━━━━━
-🎭 *DEBATE STARTED* 🎭
-━━━━━━━━━━━━━━━
+            const message = BOT_MARKER + `┏━━━━━━━━━━━━━━━━━┓
+┃ 🎭 *DEBATE STARTED*
+┗━━━━━━━━━━━━━━━━━┛
 
 📌 *Topic:* ${topic}
 
 ⚔️ *Debaters:*
-@${debater1Jid.split('@')[0]} vs @${debater2Jid.split('@')[0]}
+@${economy.getDisplayName(debater1Jid)} vs @${economy.getDisplayName(debater2Jid)}
 
-━━━━━━━━━━━━━━━
-🔒 Group locked
+🔒 Group locked to debaters
 👑 Debaters promoted
-🤖 AI recording...
+🤖 AI is recording every argument
 
-Type \`${botConfig.getPrefix()} judge\` for verdict!
-━━━━━━━━━━━━━━━`;
+💬 Debate freely - the group reopens at the verdict.
+⚖️ Type \`${botConfig.getPrefix()} judge\` when you're done!
+
+🙋 _Spectators: react 🙋 to any message for a 1-message spectator pass._`;
 
             await sock.sendMessage(chatId, {
                 text: message,
@@ -126,7 +364,7 @@ Type \`${botConfig.getPrefix()} judge\` for verdict!
             return { success: true };
         } catch (err) {
             console.error('Debate start error:', err);
-            delete activeDebates[chatId];
+            delete activeDebates[_dkey(chatId)];
             saveDebates();
             return { 
                 success: false, 
@@ -136,18 +374,12 @@ Type \`${botConfig.getPrefix()} judge\` for verdict!
     },
 
     recordArgument: (chatId, senderJid, message) => {
-        const debate = activeDebates[chatId];
+        const debate = activeDebates[_dkey(chatId)];
         if (!debate) return;
 
-        // 💡 FIX: Normalize JIDs before comparison — previously strict !==
-        // was used, which failed if senderJid had a device suffix (e.g.
-        // 123:12@s.whatsapp.net) but the stored JID didn't.
-        const normJid = (jid) => {
-            if (!jid) return '';
-            return jid.split('@')[0].split(':')[0] + '@' + (jid.split('@')[1] || 's.whatsapp.net');
-        };
-        const sender = normJid(senderJid);
-        if (sender !== normJid(debate.debater1) && sender !== normJid(debate.debater2)) {
+        // 💡 LID/phone-aware match (see _sameUser) - device suffixes and
+        // @lid vs @s.whatsapp.net spellings must never drop an argument.
+        if (!_sameUser(senderJid, debate.debater1) && !_sameUser(senderJid, debate.debater2)) {
             return;
         }
 
@@ -162,7 +394,7 @@ Type \`${botConfig.getPrefix()} judge\` for verdict!
     },
 
     judgeDebate: async (sock, chatId, BOT_MARKER, smartGroqCall, MODELS) => {
-        const debate = activeDebates[chatId];
+        const debate = activeDebates[_dkey(chatId)];
         
         if (!debate) {
             return { 
@@ -178,15 +410,10 @@ Type \`${botConfig.getPrefix()} judge\` for verdict!
             };
         }
 
-        // 💡 FIX: Check that BOTH debaters have at least 1 argument —
-        // previously the check was total count >= 2, which allowed one
-        // debater to make 2 arguments while the other made 0.
-        const normJid = (jid) => {
-            if (!jid) return '';
-            return jid.split('@')[0].split(':')[0] + '@' + (jid.split('@')[1] || 's.whatsapp.net');
-        };
-        const d1Count = debate.arguments.filter(a => normJid(a.debater) === normJid(debate.debater1)).length;
-        const d2Count = debate.arguments.filter(a => normJid(a.debater) === normJid(debate.debater2)).length;
+        // 💡 FIX: Check that BOTH debaters have at least 1 argument (LID/
+        // phone-aware via _sameUser).
+        const d1Count = debate.arguments.filter(a => _sameUser(a.debater, debate.debater1)).length;
+        const d2Count = debate.arguments.filter(a => _sameUser(a.debater, debate.debater2)).length;
         if (d1Count < 1 || d2Count < 1) {
             return {
                 success: false,
@@ -198,14 +425,15 @@ Type \`${botConfig.getPrefix()} judge\` for verdict!
         const debater1Name = debate.debater1.split('@')[0];
         const debater2Name = debate.debater2.split('@')[0];
 
-        // Organize arguments by debater
+        // Organize arguments by debater (LID/phone-aware - one debater's
+        // arguments must not split across @lid/@s.whatsapp.net spellings)
         const debater1Args = debate.arguments
-            .filter(arg => arg.debater === debate.debater1)
+            .filter(arg => _sameUser(arg.debater, debate.debater1))
             .map(arg => arg.message)
             .join('\n\n');
         
         const debater2Args = debate.arguments
-            .filter(arg => arg.debater === debate.debater2)
+            .filter(arg => _sameUser(arg.debater, debate.debater2))
             .map(arg => arg.message)
             .join('\n\n');
 
@@ -242,26 +470,42 @@ Respond ONLY in this JSON format:
 }`;
 
         try {
-            // Get AI judgment
-            const completion = await smartGroqCall({
-                model: MODELS.SMART,
-                messages: [
-                    { role: "system", content: "You are a professional debate judge. Respond only in valid JSON format." },
-                    { role: "user", content: judgePrompt }
-                ]
-            });
+            // Get AI judgment (ONE strict retry when the first reply is malformed)
+            const runJudgeCall = async (systemNote) => {
+                const completion = await smartGroqCall({
+                    model: MODELS.SMART,
+                    messages: [
+                        { role: "system", content: systemNote },
+                        { role: "user", content: judgePrompt }
+                    ]
+                });
+                return completion?.choices?.[0]?.message?.content || '';
+            };
 
-            let judgeResponse = completion.choices[0].message.content.trim();
-            
-            // Robust JSON extraction
-            const jsonMatch = judgeResponse.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                judgeResponse = jsonMatch[0];
-            } else {
-                judgeResponse = judgeResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            // 💡 JUDGE FIX 2026-09-22: parse via extractVerdictJson (fence-
+            // strip -> balanced-brace scan -> truncated repair) instead of
+            // the old greedy regex + bare JSON.parse, then coerceVerdict so
+            // scores are always numbers and the winner always resolvable.
+            const firstRaw = String(await runJudgeCall("You are a professional debate judge. Respond only in valid JSON format.")).trim();
+            let verdict = extractVerdictJson(firstRaw);
+            if (!verdict) {
+                const retryRaw = String(await runJudgeCall("You are a professional debate judge. Your ENTIRE reply must be ONE valid JSON object and nothing else: no prose, no markdown fences, no trailing commas.")).trim();
+                verdict = extractVerdictJson(retryRaw);
             }
-            
-            const verdict = JSON.parse(judgeResponse);
+            if (!verdict) {
+                // NEVER leak the raw AI reply into the chat - the old
+                // `"Failed to judge debate: " + err.message` embedded a
+                // snippet of the malformed JSON (that is the JSON the owner
+                // kept seeing). Log server-side; keep the debate OPEN so the
+                // group can simply run .j judge again.
+                console.error('Judging error: unparseable AI verdict. First 400 chars:', firstRaw.slice(0, 400));
+                return {
+                    success: false,
+                    message: BOT_MARKER + `❌ The judge could not read its own verdict sheet (malformed AI reply). The debate is still open - run \`${botConfig.getPrefix()} judge\` again in a moment.`
+                };
+            }
+
+            verdict = coerceVerdict(verdict);
 
             // Determine winner JID
             const winnerJid = verdict.winner === "Debater 1" ? debate.debater1 : debate.debater2;
@@ -274,22 +518,22 @@ Respond ONLY in this JSON format:
             recordParticipation(loserJid, loserScore);
 
             // Build verdict message
-            const verdictMessage = BOT_MARKER + `━━━━━━━━━━━━━━━
-⚖️ *DEBATE VERDICT* ⚖️
-━━━━━━━━━━━━━━━
+            const verdictMessage = BOT_MARKER + `┏━━━━━━━━━━━━━━━━━┓
+┃ ⚖️ *DEBATE VERDICT*
+┗━━━━━━━━━━━━━━━━━┛
 
 📌 *Topic:* ${debate.topic}
 
-🏆 *WINNER:* @${winnerJid.split('@')[0]}
+🏆 *WINNER:* @${economy.getDisplayName(winnerJid)}
 
 📊 *SCORES:*
-@${debater1Name}: ${verdict.debater1_score}
-@${debater2Name}: ${verdict.debater2_score}
+@${economy.getDisplayName(debate.debater1)}: ${verdict.debater1_score}
+@${economy.getDisplayName(debate.debater2)}: ${verdict.debater2_score}
 
-━━━━━━━━━━━━━━━
-Total Args: ${debate.arguments.length}
-Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
-━━━━━━━━━━━━━━━`;
+💬 Arguments heard: *${debate.arguments.length}*
+⏱️ Duration: *${Math.round((Date.now() - debate.startTime) / 60000)}m*
+
+_the group is unlocked. debate again anytime._`;
 
             // Unlock group and demote debaters if they weren't admins before
             try {
@@ -305,10 +549,10 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
             }
 
             // Clear the timeout for the debate as it's ending
-            clearTimeout(debate.timeoutId);
+            _clearTimer(_dkey(chatId));
 
             // Clear debate
-            delete activeDebates[chatId];
+            delete activeDebates[_dkey(chatId)];
             saveDebates();
 
             await sock.sendMessage(chatId, {
@@ -320,15 +564,21 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
 
         } catch (err) {
             console.error('Judging error:', err);
+            // 💡 JUDGE FIX: strip any JSON-looking blob from the error before
+            // it reaches the chat (Node embeds input snippets in JSON.parse
+            // errors - that was the raw JSON the owner saw).
+            const safeMsg = String(err?.message || 'unexpected judge failure')
+                .replace(/\{[\s\S]*\}/g, '')
+                .trim() || 'unexpected judge failure';
             return {
                 success: false,
-                message: BOT_MARKER + "❌ Failed to judge debate: " + err.message
+                message: BOT_MARKER + "❌ Failed to judge debate: " + safeMsg
             };
         }
     },
 
     isDebateActive: (chatId) => {
-        return !!activeDebates[chatId];
+        return !!activeDebates[_dkey(chatId)];
     },
 
     getDebateLeaderboard: (BOT_MARKER) => {
@@ -341,28 +591,32 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
             .sort((a, b) => b.wins - a.wins || b.totalScore - a.totalScore)
             .slice(0, 10);
 
-        let msg = BOT_MARKER + "🏆 *DEBATE LEADERBOARD* 🏆\n\n";
+        let msg = BOT_MARKER + `┏━━━━━━━━━━━━━━━━━┓
+┃ 🏆 *DEBATE LEADERBOARD*
+┗━━━━━━━━━━━━━━━━━┛
+
+`;
         sorted.forEach((u, i) => {
             const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "👤";
-            msg += `${medal} @${u.jid.split('@')[0]}\n`;
-            msg += `   Wins: ${u.wins} | Avg Score: ${Math.round(u.totalScore / u.debates)}\n\n`;
+            msg += `${medal} @${economy.getDisplayName(u.jid)}\n`;
+            msg += `   Wins: *${u.wins}* | Avg Score: *${Math.round(u.totalScore / u.debates)}*\n\n`;
         });
 
         return { text: msg, mentions: sorted.map(u => u.jid) };
     },
 
     getActiveDebate: (chatId) => {
-        return activeDebates[chatId] || null;
+        return activeDebates[_dkey(chatId)] || null;
     },
 
     cancelDebate: async (sock, chatId, BOT_MARKER) => {
-        const debate = activeDebates[chatId];
+        const debate = activeDebates[_dkey(chatId)];
 
         if (!debate) {
             return { success: false, message: BOT_MARKER + "❌ No active debate!" };
         }
 
-        if (debate.timeoutId) clearTimeout(debate.timeoutId);
+        _clearTimer(_dkey(chatId));
 
         try {
             // Unlock and demote if they weren't admins before
@@ -373,22 +627,22 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
             if (!debate.debater2WasAdmin) {
                 await sock.groupParticipantsUpdate(chatId, [debate.debater2], 'demote').catch(() => {});
             }
-            // 💡 FIX: Clean up spectators — previously only handleDebateTimeout
+            // 💡 FIX: Clean up spectators - previously only handleDebateTimeout
             // did this, leaving spectators promoted after cancel/judge.
-            if (spectators.has(chatId)) {
-                const groupSpectators = spectators.get(chatId);
+            if (spectators.has(_dkey(chatId))) {
+                const groupSpectators = spectators.get(_dkey(chatId));
                 for (const [jid, data] of groupSpectators.entries()) {
                     if (!data.wasAdmin) {
                         await sock.groupParticipantsUpdate(chatId, [jid], 'demote').catch(() => {});
                     }
                 }
-                spectators.delete(chatId);
+                spectators.delete(_dkey(chatId));
             }
         } catch (err) {
             console.log('⚠️ Error during cleanup:', err.message);
         }
 
-        delete activeDebates[chatId];
+        delete activeDebates[_dkey(chatId)];
         saveDebates();
 
         return {
@@ -398,8 +652,9 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
     },
 
     handleDebateTimeout: async (sock, chatId, BOT_MARKER) => {
-        const debate = activeDebates[chatId];
+        const debate = activeDebates[_dkey(chatId)];
         if (!debate) return; // Debate might have been cleared already
+        _clearTimer(_dkey(chatId)); // fired timer must leave the side Map
 
         console.log(`Debate for chat ${chatId} timed out.`);
 
@@ -414,14 +669,14 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
             }
             
             // Cleanup spectators
-            if (spectators.has(chatId)) {
-                const groupSpectators = spectators.get(chatId);
+            if (spectators.has(_dkey(chatId))) {
+                const groupSpectators = spectators.get(_dkey(chatId));
                 for (const [jid, data] of groupSpectators.entries()) {
                     if (!data.wasAdmin) {
                         await sock.groupParticipantsUpdate(chatId, [jid], 'demote').catch(() => {});
                     }
                 }
-                spectators.delete(chatId);
+                spectators.delete(_dkey(chatId));
             }
         } catch (err) {
             console.log('⚠️ Error during timeout cleanup:', err.message);
@@ -433,30 +688,26 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
         });
 
         // Clear debate
-        delete activeDebates[chatId];
+        delete activeDebates[_dkey(chatId)];
         saveDebates();
     },
 
     addSpectator: async (sock, chatId, userId, wasAdmin, BOT_MARKER) => {
-        const debate = activeDebates[chatId];
+        const debate = activeDebates[_dkey(chatId)];
         if (!debate) return;
 
-        // 💡 FIX: Don't allow debaters to be added as spectators — they
+        // 💡 FIX: Don't allow debaters to be added as spectators - they
         // would get a 2-minute spectator timeout that demotes them
         // mid-debate, losing their ability to post in the locked group.
-        const normJid = (jid) => {
-            if (!jid) return '';
-            return jid.split('@')[0].split(':')[0] + '@' + (jid.split('@')[1] || 's.whatsapp.net');
-        };
-        if (normJid(userId) === normJid(debate.debater1) || normJid(userId) === normJid(debate.debater2)) {
+        if (_sameUser(userId, debate.debater1) || _sameUser(userId, debate.debater2)) {
             return { success: false, message: "❌ Debaters cannot be spectators!" };
         }
 
-        if (!spectators.has(chatId)) {
-            spectators.set(chatId, new Map());
+        if (!spectators.has(_dkey(chatId))) {
+            spectators.set(_dkey(chatId), new Map());
         }
 
-        const groupSpectators = spectators.get(chatId);
+        const groupSpectators = spectators.get(_dkey(chatId));
         
         // Prevent spam adding
         if (groupSpectators.has(userId)) return;
@@ -488,13 +739,13 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
 
         return { 
             success: true, 
-            message: `🎫 @${userId.split('@')[0]} is now a temporary spectator! You have 2 minutes to contribute 1 relevant message.` 
+            message: `🎫 @${economy.getDisplayName(userId)} is now a temporary spectator! You have 2 minutes to contribute 1 relevant message.` 
         };
     },
 
     removeSpectator: async (sock, chatId, userId, BOT_MARKER, reason = "") => {
-        if (!spectators.has(chatId)) return;
-        const groupSpectators = spectators.get(chatId);
+        if (!spectators.has(_dkey(chatId))) return;
+        const groupSpectators = spectators.get(_dkey(chatId));
         const data = groupSpectators.get(userId);
         
         if (!data) return;
@@ -506,19 +757,19 @@ Duration: ${Math.round((Date.now() - debate.startTime) / 60000)}m
         }
 
         groupSpectators.delete(userId);
-        if (groupSpectators.size === 0) spectators.delete(chatId);
+        if (groupSpectators.size === 0) spectators.delete(_dkey(chatId));
 
         if (reason) {
             await sock.sendMessage(chatId, { 
-                text: BOT_MARKER + `🎫 @${userId.split('@')[0]}'s spectator pass revoked: ${reason}`,
+                text: BOT_MARKER + `🎫 @${economy.getDisplayName(userId)}'s spectator pass revoked: ${reason}`,
                 contextInfo: { mentionedJid: [userId] }
             });
         }
     },
 
     isSpectator: (chatId, userId) => {
-        if (!spectators.has(chatId)) return false;
-        return spectators.get(chatId).has(userId);
+        if (!spectators.has(_dkey(chatId))) return false;
+        return spectators.get(_dkey(chatId)).has(userId);
     },
 
     logModeration: (chatId, userId, content, approved, reasoning) => {

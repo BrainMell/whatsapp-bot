@@ -75,7 +75,17 @@ class ContextEngine {
 
         for (const userData of data.users) {
             const jid = userData.userId;
-            
+
+            // 🧩 FIX 2026-09-17 (QA): Groq extraction sometimes emits a user
+            // entry with a null/missing userId. `jid.includes` then threw
+            // "Cannot read properties of null (reading 'includes')" and the
+            // catch in processBatch dropped the ENTIRE batch ("Batch
+            // processing failed" spam in pm2 logs). Skip the bad entry so the
+            // rest of the batch still saves.
+            if (!jid || typeof jid !== 'string') {
+                continue;
+            }
+
             // 1. Resolve JID (if AI returned a name instead of JID, which it shouldn`t but safety first)
             let finalJid = jid;
             if (!jid.includes('@')) {

@@ -2,21 +2,70 @@
 const fs = require('fs');
 const botConfig = require('../../botConfig');
 const classSystem = require('./classSystem');
+// 💡 P4 (2026-08-16): Settlement record system - canonical audit log
+// for every currency-moving action. Lazy-loaded to avoid circular dep.
+let _Settlement = null;
+function getSettlementModel() {
+  if (!_Settlement) _Settlement = require('../models/Settlement');
+  return _Settlement;
+}
 
 // NEW: Database Imports
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const connectDB = require('../../db');
+// 💡 FIX 2026-08-06: Removed self-require `const economy = require('./economy')`.
+// This created a circular dependency: at require time, module.exports was
+// still the default empty {}, so the `economy` variable pointed to that
+// empty object. When module.exports was reassigned later (line ~1987),
+// the `economy` variable still pointed to the OLD empty object.
+// Result: economy.getDisplayName was undefined → TypeError on rob/transfer
+// → misreported as "0.0s timeout".
+// Fix: call getDisplayName() directly (it's a hoisted function declaration).
 
 // currency shi
 const getCurrency = () => botConfig.getCurrency();
 const getZENI = () => getCurrency().symbol;
 const getPlaceholderPFP = () => botConfig.getAssetPath("placeholder.png");
 const STARTING_BALANCE = 1000;
-const DAILY_REWARD = 500;
+const DAILY_REWARD = 2000; // 💡 Rebalanced 2026-08-17: 500 was below common-item floor; 2K = 2× common potion, fits daily bonus band.
 
 function getTodayKey() {
   return new Date().toISOString().slice(0, 10);
+}
+
+// 💡 P4 Item 5 (2026-08-16): Daily quest cap - was 5, raised to 8 per owner request (2026-09-12).
+// Enforced server-side at quest entry. Resets at UTC midnight.
+const DAILY_QUEST_CAP = 8;
+function checkDailyQuestCap(userId) {
+  const user = getUser(userId);
+  if (!user) return { allowed: true }; // fail open if user not loaded yet
+
+  const today = getTodayKey();
+  if (!user.dailyQuests || user.dailyQuests.date !== today) {
+    user.dailyQuests = { date: today, count: 0 };
+  }
+  if (user.dailyQuests.count >= DAILY_QUEST_CAP) {
+    return {
+      allowed: false,
+      count: user.dailyQuests.count,
+      cap: DAILY_QUEST_CAP,
+      message: `❌ *DAILY QUEST CAP REACHED*\n\nYou've completed ${DAILY_QUEST_CAP} quests/raids today.\n📊 Cap resets at UTC midnight.\n\n💡 Come back tomorrow or play other game modes (PvP, Abyss, Cards).`
+    };
+  }
+  return { allowed: true, count: user.dailyQuests.count, cap: DAILY_QUEST_CAP };
+}
+
+function incrementDailyQuestCount(userId) {
+  const user = getUser(userId);
+  if (!user) return;
+  const today = getTodayKey();
+  if (!user.dailyQuests || user.dailyQuests.date !== today) {
+    user.dailyQuests = { date: today, count: 0 };
+  }
+  user.dailyQuests.count += 1;
+  scheduleSave(userId);
+  return user.dailyQuests.count;
 }
 
 // CACHE: Stores all active user data in memory for instant access
@@ -27,7 +76,16 @@ const pendingSaves = new Set();
 let saveTimer = null;
 
 function scheduleSave(userId) {
-  pendingSaves.add(userId);
+  // 💡 SANDBOX: skip sandbox JIDs - they're not in the User collection
+  if (typeof userId === 'string' && userId.startsWith('sandbox_')) {
+    return;
+  }
+  // 💡 FIX (tester issue a335e9): resolve to the canonical cache key here
+  // too - pendingSaves + saveUser both operate on raw jids otherwise, and
+  // an unresolved jid would silently no-op inside saveUser.
+  let saveKey = userId;
+  try { saveKey = resolveJidHelper(userId) || userId; } catch (e) { saveKey = userId; }
+  pendingSaves.add(saveKey);
   if (!saveTimer) {
     saveTimer = setTimeout(async () => {
       const toSave = [...pendingSaves];
@@ -62,6 +120,16 @@ async function loadEconomy() {
       economyData.set(user.userId, user);
     }
     console.log(`✅ Loaded ${users.length} users from MongoDB`);
+    // 💡 FIX 2026-08-31: warm the market-cap cache at startup. addMoney() gates
+    // rewards on _marketCap, which was ONLY initialized by getMarketCap() -
+    // and getMarketCap has zero runtime callers, so _marketCap stayed null
+    // forever and the 500M anti-inflation circuit breaker never armed.
+    try {
+      await getMarketCap();
+      console.log(`💰 Market cap circuit breaker armed: ${_marketCap !== null ? getZENI() + _marketCap.toLocaleString() : 'default ' + getZENI() + DEFAULT_MARKET_CAP.toLocaleString()}`);
+    } catch (capErr) {
+      console.warn('⚠️ Could not load market cap (breaker uses default):', capErr.message);
+    }
   } catch (err) {
     console.error("Error loading economy from DB:", err.message);
   }
@@ -74,17 +142,73 @@ function saveEconomy() {
 
 // NEW: Save specific user to MongoDB (Background Sync)
 async function saveUser(userId) {
-    const data = economyData.get(userId);
+    // 💡 FIX (tester issue a335e9): saveUser never resolved the JID, while
+    // getUser DOES. For LID/phone JID mismatches, getUser returned the
+    // canonical cached object (so in-memory edits like cardStyle worked)
+    // but saveUser looked the RAW jid up in the cache, found nothing and
+    // SILENTLY DROPPED the save. Style/settings persisted only until the
+    // cache reloaded, then "reset". Resolve at this choke point so every
+    // save path (direct + scheduleSave) persists to the canonical doc.
+    const resolvedId = resolveJidHelper(userId);
+    const data = economyData.get(resolvedId);
     if (!data) return;
 
+    // 💡 SANDBOX: never persist sandbox users to the User collection -
+    // they're stored in the AdminSandbox collection instead. Without this
+    // guard, every economy.saveUser('sandbox_...') call creates a junk
+    // document in the users collection that pollutes the cache on restart.
+    if (typeof resolvedId === 'string' && resolvedId.startsWith('sandbox_')) {
+        return;
+    }
+
     try {
+        // 💡 LOAN-BUG FIX 2026-09-20: after a cross-format heal (LID incoming,
+        // account stored under phone, or vice versa) the cache holds the doc
+        // under BOTH keys, but the account's CANONICAL key is data.userId -
+        // the key the User collection actually knows. Upserting under the
+        // resolved (incoming-format) key birthed a SECOND account document
+        // for the same player, splitting their wallet across two docs
+        // depending on which bot/prefix they typed at.
+        const canonicalId = (typeof data.userId === 'string' && data.userId) ? data.userId : resolvedId;
         await User.findOneAndUpdate(
-            { userId: userId },
+            { userId: canonicalId },
             { $set: data },
             { upsert: true, returnDocument: 'after' }
         );
     } catch (err) {
-        console.error(`❌ Failed to save user ${userId}:`, err.message);
+        console.error(`❌ Failed to save user ${resolvedId}:`, err.message);
+    }
+}
+
+// 💡 Force-reload a user from MongoDB, overwriting the in-memory cache.
+// Used when an external script modifies the DB directly (e.g. stat point
+// grants, enhancement recovery) and the bot's in-memory cache is stale.
+// Without this, any saveUser() call would overwrite the DB change with
+// the stale in-memory value.
+async function reloadUserFromDB(userId) {
+    const resolvedId = resolveJidHelper(userId);
+    try {
+        // 💡 LOAN-BUG FIX 2026-09-20: single-key lookup missed users stored
+        // under the OTHER jid format (lid vs phone). Use the shared variant
+        // lookup (incl. LidMapping-resolved numbers) - see jidLookupVariants.
+        let dbUser = null;
+        for (const variant of jidLookupVariants(userId)) {
+            dbUser = await User.findOne({ userId: variant });
+            if (dbUser) break;
+        }
+        if (!dbUser) return false;
+        const userData = dbUser.toObject();
+        economyData.set(resolvedId, userData);
+        // 💡 Also alias under the account's own DB key so later lookups in
+        // either format hit the same cached object (same as syncUserFromDB).
+        if (userData.userId && userData.userId !== resolvedId) {
+            economyData.set(userData.userId, userData);
+        }
+        console.log(`🔄 Reloaded user ${resolvedId} from DB (statPoints: ${userData?.progression?.statPoints})`);
+        return true;
+    } catch (err) {
+        console.error(`❌ Failed to reload user ${resolvedId} from DB:`, err.message);
+        return false;
     }
 }
 //========================================
@@ -94,7 +218,27 @@ function resolveJidHelper(userId) {
   if (!userId) return userId;
   try {
     const lidResolver = require('../utils/lidResolver');
-    return lidResolver.resolveJid(userId);
+    const resolved = lidResolver.resolveJid(userId);
+    // 💡 FIX: if resolveJid returned the original (mapping miss), try the
+    // OTHER format directly in the economy cache. This fixes PvP after
+    // Oracle migration where LID mapping files may be incomplete - when
+    // someone tags a user in a group, WhatsApp sends a LID JID, but the
+    // user may have registered with a phone JID (or vice versa).
+    if (resolved === userId || !economyData.has(resolved)) {
+      // Try converting between LID and phone formats
+      if (typeof userId === 'string') {
+        if (userId.endsWith('@lid')) {
+          // LID → try phone format
+          const phoneJid = userId.replace('@lid', '@s.whatsapp.net');
+          if (economyData.has(phoneJid)) return phoneJid;
+        } else if (userId.endsWith('@s.whatsapp.net')) {
+          // Phone → try LID format
+          const lidJid = userId.replace('@s.whatsapp.net', '@lid');
+          if (economyData.has(lidJid)) return lidJid;
+        }
+      }
+    }
+    return resolved;
   } catch (e) {
     console.error("Error resolving JID in resolveJidHelper:", e.message);
     return userId;
@@ -217,23 +361,21 @@ function registerUser(userId, nickname) {
   
   return {
     success: true,
-    message: `🌌 *THE AWAKENING* 🌌
+    message: `🌌 *WELCOME, ${nickname.toUpperCase()}* 🌌
 
-"Long ago, the realms were forged in a delicate balance between the *Divine Architect* and *Primordial Chaos*. For eons they coexisted, but the Chaos grew envious, seeping into the world and twisting living beings into mindless husks—*The Infected*.
+The Divine Architect has awakened you as one of the chosen *Adventurers* of the Realms.
 
-To save creation, the Divine bestowed fragments of celestial power upon chosen mortals. You, ${nickname}, are one of those chosen *Adventurers*."
+${starterClass.icon} *Class:* ${starterClass.name} - ${starterClass.desc}
+💰 *Starter Zeni:* ${getZENI()}${STARTING_BALANCE.toLocaleString()}
+🏆 *Rank:* F-Rank Adventurer
 
-👤 *Player:* ${nickname}
-💰 *Starting Balance:* ${getZENI()}${STARTING_BALANCE.toLocaleString()}
+🚀 *Try these first:*
+• \`${botConfig.getPrefix()} quest\` - fight enemies, earn XP & Zeni
+• \`${botConfig.getPrefix()} shop\` - buy your first gear
+• \`${botConfig.getPrefix()} daily\` - free daily reward
+• \`${botConfig.getPrefix()} menu\` - see everything else
 
-${starterClass.icon} *Class Assigned:* ${starterClass.name}
-📝 ${starterClass.desc}
-🏆 *Adventurer Rank:* F-Rank
-
-━━━━━━━━━━━━━━━
-⚔️ *MISSION:*
-Cleanse the corruption!
-━━━━━━━━━━━━━━━`
+📜 Want the story of this world? \`${botConfig.getPrefix()} lore\``
   };
 }
 //========================================
@@ -260,6 +402,39 @@ function logTransaction(userId, description, amount, newBalance) {
   }
 }
 
+// 💡 P4 (2026-08-16): Canonical settlement record - persists to MongoDB.
+// Every currency-moving function should call this AFTER updating balances.
+//
+// @param {string} userId - The user whose balance changed
+// @param {string} type - 'source' (reward), 'sink' (spent/lost), 'transfer' (P2P)
+// @param {string} category - e.g. 'quest', 'tax', 'gambling', 'card_sale', 'deposit'
+// @param {number} amount - Positive if user gained, negative if lost
+// @param {object} opts - { counterpartyId, description, preWallet, postWallet, preBank, postBank, chatId }
+function recordSettlement(userId, type, category, amount, opts = {}) {
+  try {
+    const Settlement = getSettlementModel();
+    const entry = new Settlement({
+      userId,
+      counterpartyId: opts.counterpartyId || null,
+      type,
+      category,
+      description: opts.description || '',
+      amount,
+      preWallet: opts.preWallet ?? null,
+      postWallet: opts.postWallet ?? null,
+      preBank: opts.preBank ?? null,
+      postBank: opts.postBank ?? null,
+      botId: botConfig.getBotId ? botConfig.getBotId() : null,
+      chatId: opts.chatId || null,
+    });
+    // Fire-and-forget - don't block the calling function
+    entry.save().catch(e => console.error('[Settlement] save failed:', e.message));
+  } catch (e) {
+    // Non-fatal - settlement logging should never break a transaction
+    console.error('[Settlement] recordSettlement error:', e.message);
+  }
+}
+
 function getUser(userId) {
   const resolvedId = resolveJidHelper(userId);
   if (!economyData.has(resolvedId)) {
@@ -269,6 +444,7 @@ function getUser(userId) {
   if (user && user.registered !== true) {
     return null;
   }
+  healAdventurerNickname(user);
   
   // 💡 Ensure all fields exist (Lazy Migration)
   if (!user.stats) {
@@ -317,10 +493,55 @@ function getUser(userId) {
   if (!user.stats) user.stats = {};
   if (user.stats.questsWon === undefined) user.stats.questsWon = user.questsWon || 0;
   if (user.stats.bossesDefeated === undefined) user.stats.bossesDefeated = 0;
+
+  // Lazy migration: Summoner System (added 2026-07-28)
+  // See: /home/z/my-project/download/SUMMONER_SYSTEM_DESIGN.md
+  if (user.summonSlots === undefined) user.summonSlots = 5; // 💡 FIX 2026-08-07: 5 slots (was 3)
+  if (user.activeSummonId === undefined) user.activeSummonId = null;
+  if (!user.unlockedSummonPassives) user.unlockedSummonPassives = [];
+  if (!user.activeResonances) user.activeResonances = [];
+  if (user.lastSummonTrained === undefined) user.lastSummonTrained = 0;
+  if (user.lastForgedAt === undefined) user.lastForgedAt = 0;
+  if (!user.summonAchievements) user.summonAchievements = [];
+
+  // 💡 Phase 6: Alt detection - ensure phoneHash is set for all users
+  try {
+    const altDetection = require('./altDetection');
+    altDetection.ensurePhoneHash(user);
+  } catch (e) {}
+  if (!user.summonStats) {
+    user.summonStats = {
+      captured: 0, forged: 0, evolved: 0,
+      trialsCompleted: 0, echoesAbsorbed: 0,
+      arenaWins: 0, arenaLosses: 0
+    };
+  }
+  if (!user.tamingProgress) user.tamingProgress = {};
+
+  // 💡 ANTI-INFLATION: clamp wallet/bank/stats on every user load.
+  // This catches any inflated values from past exploits or bugs.
+  clampWallet(user);
+  clampStats(user);
   if (user.stats.itemsCrafted === undefined) user.stats.itemsCrafted = 0;
   if (user.stats.itemsEquipped === undefined) user.stats.itemsEquipped = 0;
 
   return user;
+}
+
+// 💡 OWNER FIX 2026-09-11: never show the placeholder name "Adventurer" when
+// we know the player's real WhatsApp name (pushName is stored on every
+// message). Self-heals legacy users on load, so unregistered players' cards
+// and captions show THEIR username instead of "Adventurer".
+function healAdventurerNickname(user) {
+  try {
+    if (!user) return;
+    const wa = user.profile && user.profile.whatsappName;
+    if (wa && (!user.nickname || user.nickname === "Adventurer")) {
+      user.nickname = wa;
+      if (user.profile) user.profile.nickname = wa;
+      scheduleSave(user.userId);
+    }
+  } catch (e) {}
 }
 
 function getOrCreateUser(userId, defaultNickname = "Adventurer") {
@@ -355,6 +576,7 @@ function getOrCreateUser(userId, defaultNickname = "Adventurer") {
     scheduleSave(resolvedId);
   }
   const user = economyData.get(resolvedId);
+  healAdventurerNickname(user);
   
   // 💡 Ensure all fields exist (Lazy Migration)
   if (!user.profile) {
@@ -414,7 +636,31 @@ function getOrCreateUser(userId, defaultNickname = "Adventurer") {
       reason: ""
     };
   }
-  
+
+  // Lazy migration: Summoner System (added 2026-07-28)
+  // See: /home/z/my-project/download/SUMMONER_SYSTEM_DESIGN.md
+  if (user.summonSlots === undefined) user.summonSlots = 5; // 💡 FIX 2026-08-07: 5 slots (was 3)
+  if (user.activeSummonId === undefined) user.activeSummonId = null;
+  if (!user.unlockedSummonPassives) user.unlockedSummonPassives = [];
+  if (!user.activeResonances) user.activeResonances = [];
+  if (user.lastSummonTrained === undefined) user.lastSummonTrained = 0;
+  if (user.lastForgedAt === undefined) user.lastForgedAt = 0;
+  if (!user.summonAchievements) user.summonAchievements = [];
+
+  // 💡 Phase 6: Alt detection - ensure phoneHash is set for all users
+  try {
+    const altDetection = require('./altDetection');
+    altDetection.ensurePhoneHash(user);
+  } catch (e) {}
+  if (!user.summonStats) {
+    user.summonStats = {
+      captured: 0, forged: 0, evolved: 0,
+      trialsCompleted: 0, echoesAbsorbed: 0,
+      arenaWins: 0, arenaLosses: 0
+    };
+  }
+  if (!user.tamingProgress) user.tamingProgress = {};
+
   return user;
 }
 
@@ -423,19 +669,117 @@ function getBalance(userId) {
   return user ? user.wallet : 0;
 }
 
+// 💡 ANTI-INFLATION CAPS: hard ceilings on wallet, bank, and stat values.
+// 💡 OWNER REQUEST 2026-09-12: wallet & bank caps REMOVED - both set to
+// Infinity so every `> MAX_WALLET` / `> MAX_BANK` comparison (clampWallet,
+// addMoney clamp, transfer clamp, deposit cap, withdraw cap) is naturally
+// false and the balances grow unbounded. MAX_STAT_VALUE stays in force.
+const MAX_WALLET = Infinity; // 💡 2026-09-12: cap removed by owner (was 5M)
+const MAX_BANK = Infinity;   // 💡 2026-09-12: cap removed by owner (was 100M)
+const MAX_STAT_VALUE = 1_000_000;  // 1 million per individual stat
+
+function clampWallet(user) {
+    if (!user) return;
+    if (typeof user.wallet === 'number' && user.wallet > MAX_WALLET) {
+        console.log(`[AntiInflation] Clamped wallet from ${user.wallet} to ${MAX_WALLET} for ${user.userId}`);
+        user.wallet = MAX_WALLET;
+    }
+    if (typeof user.bank === 'number' && user.bank > MAX_BANK) {
+        console.log(`[AntiInflation] Clamped bank from ${user.bank} to ${MAX_BANK} for ${user.userId}`);
+        user.bank = MAX_BANK;
+    }
+}
+
+function clampStats(user) {
+    if (!user || !user.progression || !user.progression.allocatedStats) return;
+    for (const stat of ['hp', 'atk', 'def', 'mag', 'spd', 'luck', 'crit']) {
+        const val = user.progression.allocatedStats[stat];
+        if (typeof val === 'number' && val > MAX_STAT_VALUE) {
+            console.log(`[AntiInflation] Clamped ${stat} from ${val} to ${MAX_STAT_VALUE} for ${user.userId}`);
+            user.progression.allocatedStats[stat] = MAX_STAT_VALUE;
+        }
+    }
+}
+
 function addMoney(userId, amount, description = "Money Added") {
   const user = getUser(userId);
   if (!user) return false;
 
-  // Floor to integer — Zeni doesn't have fractional units, and floating-point
+  // Floor to integer - Zeni doesn't have fractional units, and floating-point
   // math would otherwise accumulate rounding errors over many transactions.
-  const val = Math.floor(Number(amount));
+  let val = Math.floor(Number(amount));
   if (!Number.isFinite(val) || val <= 0) return false;
 
+  // 💡 P4 Item 5: Market cap circuit breaker.
+  // 💡 ROOT-CAUSE FIX 2026-09-20 (owner: "Gold delivery failed, your account
+  // could not be credited"): this breaker used to RETURN false here, and it
+  // was the real killer behind "quest money not increasing". Two facts made
+  // it a permanent economy-wide freeze:
+  //   1. DEFAULT_MARKET_CAP (500M) was calibrated to the size of the CURRENT
+  //      economy ("~3700 players × ~135K avg = ~500M"), so a grown economy
+  //      sits at/over the cap at all times.
+  //   2. Wallet/bank caps were REMOVED by owner request (2026-09-12), so the
+  //      total only ever grows.
+  // Once total >= cap, EVERY addMoney failed forever - quest payouts, shop
+  // sales, bounties, refunds, dailies - while the balance display stayed
+  // frozen. A hard freeze that eats players' earnings is not anti-inflation,
+  // it's a game-breaking bug. The breaker is now ADVISORY: it logs loudly
+  // (throttled) so the operator can raise the cap, but it NEVER blocks a
+  // payout. Reward-table tuning is the correct anti-inflation lever.
+  if (_marketCap !== null) {
+    let quickTotal = 0;
+    for (const [jid, u] of economyData) {
+      quickTotal += (u.wallet || 0) + (u.bank || 0);
+      if (quickTotal >= _marketCap) break;
+    }
+    if (quickTotal >= _marketCap && Date.now() - _capAlertLast > 60000) {
+      _capAlertLast = Date.now();
+      console.warn(`[MarketCap] ⚠️ ECONOMY AT CAP: total ~${Math.round(quickTotal).toLocaleString()} >= cap ${Number(_marketCap).toLocaleString()} - payouts still deliver (breaker is advisory). Raise the cap via economy.setMarketCap() if this is unexpected.`);
+    }
+  }
+
+  // 💡 P4 (2026-08-16): Auto-debt deduction - if the player has an active
+  // debt, ALL money they earn is automatically deducted to pay it off.
+  // This replaces the old P2P loan system with a simpler debt-to-system
+  // model. When a player earns 1000 zeni and has 5000 debt, they receive
+  // 0 zeni and the debt drops to 4000. When debt reaches 0, normal
+  // earnings resume. This prevents debt-dodging - players can't just
+  // ignore the debt and keep earning.
+  if (user.debt && user.debt.amount > 0) {
+    const deducted = Math.min(val, user.debt.amount);
+    user.debt.amount -= deducted;
+    const remainingEarned = val - deducted;
+    if (deducted > 0) {
+      console.log(`[Debt] Auto-deducted ${deducted} from ${userId} (debt: ${user.debt.amount} remaining)`);
+      recordSettlement(userId, 'sink', 'debt_repayment', -deducted, {
+        preWallet: user.wallet, postWallet: user.wallet,
+        description: `Auto-debt repayment (debt: ${user.debt.amount} remaining)`
+      });
+    }
+    // If there's still earned money left after debt, add it to wallet
+    // 💡 FIX 2026-09-20: this path returned user.wallet - which is 0 when the
+    // wallet is empty, a FALSY value every caller reads as "delivery failed"
+    // (e.g. raidSystem paid = addMoney(...) -> "reward failed"). The money
+    // WAS delivered (to debt). Return an unambiguous truthy success.
+    if (remainingEarned <= 0) {
+      scheduleSave(userId);
+      return true; // All earnings went to debt - payout did happen
+    }
+    // Partial - add remaining to wallet
+    val = remainingEarned;
+  }
+
+  const preWallet = user.wallet;
   user.wallet += val;
+  // 💡 ANTI-INFLATION: clamp wallet to hard ceiling
+  if (user.wallet > MAX_WALLET) user.wallet = MAX_WALLET;
   user.stats.totalEarned += val;
 
   logTransaction(userId, description, val, user.wallet);
+  // 💡 P4: Record canonical settlement (source = zeni created from nothing)
+  recordSettlement(userId, 'source', description.toLowerCase().replace(/\s+/g, '_'), val, {
+    preWallet, postWallet: user.wallet, description
+  });
 
   scheduleSave(userId);
   return user.wallet;
@@ -449,10 +793,15 @@ function removeMoney(userId, amount, description = "Money Removed") {
   if (!Number.isFinite(val) || val <= 0) return false;
   if (user.wallet < val) return false;
 
+  const preWallet = user.wallet;
   user.wallet -= val;
   user.stats.totalSpent += val;
 
   logTransaction(userId, description, -val, user.wallet);
+  // 💡 P4: Record canonical settlement (sink = zeni destroyed)
+  recordSettlement(userId, 'sink', description.toLowerCase().replace(/\s+/g, '_'), -val, {
+    preWallet, postWallet: user.wallet, description
+  });
 
   scheduleSave(userId);
   return true;
@@ -469,15 +818,20 @@ function getGold(userId) {
 function addGold(userId, amount) {
   const user = getUser(userId);
   if (!user) return false;
-  user.questGold = (user.questGold || 0) + amount;
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) return false;
+  user.questGold = (user.questGold || 0) + val;
   scheduleSave(userId);
   return true;
 }
 
 function removeGold(userId, amount) {
   const user = getUser(userId);
-  if (!user || (user.questGold || 0) < amount) return false;
-  user.questGold -= amount;
+  if (!user) return false;
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) return false;
+  if ((user.questGold || 0) < val) return false;
+  user.questGold -= val;
   scheduleSave(userId);
   return true;
 }
@@ -533,6 +887,8 @@ const ITEMS = {
 function addItem(userId, itemId, quantity = 1) {
     const user = getUser(userId);
     if (!user) return false;
+    const qty = Math.floor(Number(quantity));
+    if (!Number.isFinite(qty) || qty <= 0) return false;
     
     if (!user.inventory) user.inventory = {};
     
@@ -571,21 +927,26 @@ function addItem(userId, itemId, quantity = 1) {
 function removeItem(userId, itemId, quantity = 1) {
     const user = getUser(userId);
     if (!user || !user.inventory || !user.inventory[itemId]) return false;
-    
+
+    // 💡 FIX: reject negative/zero/NaN quantity - was exploitable to GAIN items
+    // by passing quantity=-N (the < check would pass, then -= would ADD)
+    const qty = Math.floor(Number(quantity));
+    if (!Number.isFinite(qty) || qty <= 0) return false;
+
     let currentQty = 0;
     if (typeof user.inventory[itemId] === 'number') {
         currentQty = user.inventory[itemId];
     } else {
         currentQty = user.inventory[itemId].quantity || 0;
     }
-    
-    if (currentQty < quantity) return false;
-    
+
+    if (currentQty < qty) return false;
+
     if (typeof user.inventory[itemId] === 'number') {
-        user.inventory[itemId] -= quantity;
+        user.inventory[itemId] -= qty;
         if (user.inventory[itemId] <= 0) delete user.inventory[itemId];
     } else {
-        user.inventory[itemId].quantity -= quantity;
+        user.inventory[itemId].quantity -= qty;
         if (user.inventory[itemId].quantity <= 0) delete user.inventory[itemId];
     }
     
@@ -597,6 +958,11 @@ function removeItem(userId, itemId, quantity = 1) {
 function sellItem(userId, itemId, quantity = 1) {
     const user = getUser(userId);
     if (!user || !ITEMS[itemId]) return { success: false, msg: "❌ Invalid item." };
+
+    // 💡 FIX: reject negative/zero/NaN quantity - was exploitable to gain items
+    // AND drain money by passing quantity=-N
+    const qty = Math.floor(Number(quantity));
+    if (!Number.isFinite(qty) || qty <= 0) return { success: false, msg: '❌ Invalid quantity.' };
     
     if (itemId === 'all') {
         if (!user.inventory || Object.keys(user.inventory).length === 0) return { success: false, msg: "❌ Inventory is empty!" };
@@ -632,7 +998,7 @@ function sellItem(userId, itemId, quantity = 1) {
         currentQty = user.inventory[itemId].quantity || 0;
     }
 
-    if (currentQty < quantity) {
+    if (currentQty < qty) {
         return { success: false, msg: "❌ You don't have enough of that item!" };
     }
 
@@ -642,7 +1008,7 @@ function sellItem(userId, itemId, quantity = 1) {
       const guildPerks = require('./guildPerks');
       sellMult = guildPerks.getSellMultiplier(userId);
     } catch (e) {}
-    const value = Math.floor(ITEMS[itemId].value * quantity * sellMult);
+    const value = Math.floor(ITEMS[itemId].value * qty * sellMult);
     user.wallet += value;
     user.stats.totalEarned += value;
     
@@ -651,23 +1017,25 @@ function sellItem(userId, itemId, quantity = 1) {
     const userGuild = guilds.getUserGuild(userId);
     let guildMsg = "";
     if (userGuild) {
-        const contribution = Math.floor(value * 0.05); // 5% goes to guild
-        guilds.addGuildPoints(userGuild, contribution, `item sold: ${itemId}`);
-        guilds.addGuildBalance(userGuild, Math.floor(contribution / 2));
+        // 💡 GW-OVERHAUL 2026-10-03: money→guild-XP conversion REMOVED (owner ban:
+        // Guild Points are earned, not bought). Sales still contribute 0.05% of
+        // value to the guild bank as passive support.
+        const bankCut = Math.floor(value * 0.0005);
+        guilds.addGuildBalance(userGuild, bankCut);
         guilds.updateBoardProgress(userGuild, 'EARN_ZENI', value); // Track earning progress
-        guildMsg = `\n🏛️ *${userGuild}* bought your loot for the guild house! (+${contribution} XP)`;
+        guildMsg = `\n🏛️ *${userGuild}* bought your loot for the guild house!`;
     }
 
     if (typeof user.inventory[itemId] === 'number') {
-        user.inventory[itemId] -= quantity;
+        user.inventory[itemId] -= qty;
         if (user.inventory[itemId] <= 0) delete user.inventory[itemId];
     } else {
-        user.inventory[itemId].quantity -= quantity;
+        user.inventory[itemId].quantity -= qty;
         if (user.inventory[itemId].quantity <= 0) delete user.inventory[itemId];
     }
     
     scheduleSave(userId);
-    return { success: true, msg: `💰 Sold ${quantity}x ${ITEMS[itemId].icon} ${ITEMS[itemId].name} for ${getZENI()}${value.toLocaleString()}${guildMsg}` };
+    return { success: true, msg: `💰 Sold ${qty}x ${ITEMS[itemId].icon} ${ITEMS[itemId].name} for ${getZENI()}${value.toLocaleString()}${guildMsg}` };
 }
 
 // get user's bag
@@ -690,6 +1058,18 @@ function transferMoney(fromUserId, toUserId, amount) {
     return { success: false, message: `❌ *TRANSFER FAILED*\n\n⚠️ Both users must be registered to transfer money!` };
   }
   
+  // 💡 Phase 6: Alt-account detection - block transfers between same-phone accounts
+  try {
+    const altDetection = require('./altDetection');
+    const altCheck = altDetection.checkTransfer(fromUserId, toUserId);
+    if (altCheck.blocked) {
+      return { success: false, message: `❌ *TRANSFER BLOCKED*\n\n${altCheck.reason}` };
+    }
+  } catch (e) {
+    console.error('[AltDetection] checkTransfer failed:', e?.message || e);
+    // Fail open - allow transfer if alt detection module is broken
+  }
+  
   const val = Number(amount);
   if (isNaN(val) || val <= 0) {
     return { success: false, message: `❌ *INVALID AMOUNT*\n\n💢 Amount must be a valid positive number.` };
@@ -698,31 +1078,75 @@ function transferMoney(fromUserId, toUserId, amount) {
   if (sender.wallet < val) {
     return { success: false, message: `❌ *INSUFFICIENT FUNDS*\n\n💰 Your wallet: ${getZENI()}${sender.wallet.toLocaleString()}\n📊 Needed: ${getZENI()}${val.toLocaleString()}\n⚠️ Short by: ${getZENI()}${(val - sender.wallet).toLocaleString()}` };
   }
-  
+
+  // 💡 P4 Item 6 (2026-08-16): Universal 10% tax on all currency movement.
+  // Sender pays 100, receiver gets 90, 10 evaporates from circulation (genuine sink).
+  const taxRate = 0.10;
+  const taxAmount = Math.floor(val * taxRate);
+  const receiverGets = val - taxAmount;
+
+  const senderPreWallet = sender.wallet;
+  const receiverPreWallet = receiver.wallet;
+
   sender.wallet -= val;
-  receiver.wallet += val;
-  
-  logTransaction(fromUserId, `Transfer to @${toUserId.split('@')[0]}`, -val, sender.wallet);
-  logTransaction(toUserId, `Transfer from @${fromUserId.split('@')[0]}`, val, receiver.wallet);
+  receiver.wallet += receiverGets;
+  // Clamp receiver to MAX_WALLET
+  if (receiver.wallet > MAX_WALLET) receiver.wallet = MAX_WALLET;
+
+  logTransaction(fromUserId, `Transfer to @${getDisplayName(toUserId)}`, -val, sender.wallet);
+  logTransaction(toUserId, `Transfer from @${getDisplayName(fromUserId)}`, receiverGets, receiver.wallet);
+
+  // 💡 P4: Settlement records (3 entries: sender transfer, tax sink, receiver transfer)
+  recordSettlement(fromUserId, 'transfer', 'p2p_transfer', -val, {
+    counterpartyId: toUserId,
+    preWallet: senderPreWallet, postWallet: sender.wallet,
+    description: `Transfer to ${getDisplayName(toUserId)}`
+  });
+  if (taxAmount > 0) {
+    recordSettlement(fromUserId, 'sink', 'transfer_tax', -taxAmount, {
+      preWallet: sender.wallet, postWallet: sender.wallet,
+      description: `10% tax on ${val} zeni transfer`
+    });
+  }
+  recordSettlement(toUserId, 'transfer', 'p2p_transfer', receiverGets, {
+    counterpartyId: fromUserId,
+    preWallet: receiverPreWallet, postWallet: receiver.wallet,
+    description: `Transfer from ${getDisplayName(fromUserId)}`
+  });
 
   scheduleSave(fromUserId);
   scheduleSave(toUserId);
   
+  // 💡 LORE DROP: trading voice (10%) - out-of-band on result.loreDrop
+  // (owner 2026-09-20: a drop is its own message box, never baked into
+  // the transfer summary text). The economy layer has no socket, so the
+  // command handler delivers it.
+  let __trDrop = null;
+  try {
+    const loreDrops = require('./loreDrops');
+    __trDrop = loreDrops.maybeDrop('trading', { userId: fromUserId, chance: 0.10 });
+  } catch (e) {}
+
   return {
     success: true,
     message: `✅ *TRANSFER SUCCESSFUL!*
 
 ━━━━━━━━━━━━━━━━
-💸 *Sent:* ${getZENI()}${amount.toLocaleString()}
-👤 *To:* @${toUserId.split('@')[0]}
+💸 *Sent:* ${getZENI()}${val.toLocaleString()}
+👤 *To:* @${getDisplayName(toUserId)}
+📊 *Tax (10%):* ${getZENI()}${taxAmount.toLocaleString()}
+💵 *Received by ${getDisplayName(toUserId)}:* ${getZENI()}${receiverGets.toLocaleString()}
 ━━━━━━━━━━━━━━━━
 
 💰 *Your New Balance:* ${getZENI()}${sender.wallet.toLocaleString()}`,
+    loreDrop: __trDrop,
     receiver: toUserId,
     amount: val,
+    taxAmount,
+    receiverGets,
     wallet: sender.wallet,
     bank: sender.bank,
-    nickname: sender.nickname || sender.userId.split('@')[0]
+    nickname: sender.nickname || getDisplayName(sender.userId)
   };
 }
 
@@ -742,12 +1166,54 @@ function deposit(userId, amount) {
     return { success: false, message: `❌ *INSUFFICIENT FUNDS*\n\n💰 Wallet balance: ${getZENI()}${user.wallet.toLocaleString()}\n📊 Attempting to deposit: ${getZENI()}${val.toLocaleString()}` };
   }
 
+  // 💡 FIX P4 (2026-08-16): Deposit cap bug - check MAX_BANK BEFORE
+  // deducting from wallet. Previously, deposit added to bank without
+  // checking the cap, then clampWallet() ran on next user load and
+  // silently clamped the bank down - the wallet was already deducted
+  // but the bank excess vanished. Now we reject the deposit if it
+  // would exceed the cap, or partial-deposit up to the cap.
+  const newBankTotal = user.bank + val;
+  if (newBankTotal > MAX_BANK) {
+    const canDeposit = MAX_BANK - user.bank;
+    if (canDeposit <= 0) {
+      return {
+        success: false,
+        message: `❌ *BANK CAP REACHED*\n\n🏦 Your bank is at the maximum capacity of ${getZENI()}${MAX_BANK.toLocaleString()}.\n💡 Withdraw some funds first or keep zeni in your wallet.`
+      };
+    }
+    // Partial deposit - only deposit up to the cap
+    user.wallet -= canDeposit;
+    user.bank += canDeposit;
+    logTransaction(userId, "Bank Deposit (capped)", -canDeposit, user.wallet);
+    scheduleSave(userId);
+    return {
+      success: true,
+      message: `⚠️ *PARTIAL DEPOSIT (BANK CAP)*\n\n━━━━━━━━━━━━━━━\n💵 *Deposited:* ${getZENI()}${canDeposit.toLocaleString()} (of ${getZENI()}${val.toLocaleString()} requested)\n━━━━━━━━━━━━━━━\n\n💰 *Wallet:* ${getZENI()}${user.wallet.toLocaleString()}\n🏦 *Bank:* ${getZENI()}${user.bank.toLocaleString()} (MAX)\n📊 *Total:* ${getZENI()}${(user.wallet + user.bank).toLocaleString()}\n\n💡 Your bank is now at maximum capacity. The remaining ${getZENI()}${(val - canDeposit).toLocaleString()} stayed in your wallet.`,
+      amount: canDeposit,
+      wallet: user.wallet,
+      bank: user.bank,
+      nickname: user.nickname || getDisplayName(user.userId)
+    };
+  }
+
   user.wallet -= val;
   user.bank += val;
 
   logTransaction(userId, "Bank Deposit", -val, user.wallet);
+  // 💡 P4: Settlement record for deposit (transfer between wallet↔bank, same user)
+  recordSettlement(userId, 'transfer', 'deposit', -val, {
+    preWallet: user.wallet + val, postWallet: user.wallet,
+    preBank: user.bank - val, postBank: user.bank, description: 'Bank Deposit'
+  });
 
   scheduleSave(userId);
+
+  // 💡 LORE DROP: trading voice (10%) - out-of-band on result.loreDrop
+  let __depDrop = null;
+  try {
+    const loreDrops = require('./loreDrops');
+    __depDrop = loreDrops.maybeDrop('trading', { userId, chance: 0.10 });
+  } catch (e) {}
 
   return {
     success: true,
@@ -760,10 +1226,11 @@ function deposit(userId, amount) {
 💰 *Wallet:* ${getZENI()}${user.wallet.toLocaleString()}
 🏦 *Bank:* ${getZENI()}${user.bank.toLocaleString()}
 📊 *Total:* ${getZENI()}${(user.wallet + user.bank).toLocaleString()}`,
+    loreDrop: __depDrop,
     amount: val,
     wallet: user.wallet,
     bank: user.bank,
-    nickname: user.nickname || user.userId.split('@')[0]
+    nickname: user.nickname || getDisplayName(user.userId)
   };
 }
 
@@ -771,7 +1238,7 @@ function withdraw(userId, amount) {
   const user = getUser(userId);
   if (!user) return { success: false, message: `❌ *NOT REGISTERED*\n\n🎮 Join the game first!\n💡 Use: _${botConfig.getPrefix()} register <nickname>_` };
 
-  // Same coercion as deposit — protects against NaN corruption.
+  // Same coercion as deposit - protects against NaN corruption.
   const val = Math.floor(Number(amount));
   if (!Number.isFinite(val) || val <= 0) {
     return { success: false, message: `❌ *INVALID AMOUNT*\n\n💢 Amount must be a positive whole number greater than ${getZENI()}0` };
@@ -779,6 +1246,32 @@ function withdraw(userId, amount) {
 
   if (user.bank < val) {
     return { success: false, message: `❌ *INSUFFICIENT FUNDS*\n\n🏦 Bank balance: ${getZENI()}${user.bank.toLocaleString()}\n📊 Attempting to withdraw: ${getZENI()}${val.toLocaleString()}` };
+  }
+
+  // 💡 FIX P4 (2026-08-16): Withdraw cap bug - same as deposit cap but
+  // for wallet. Check MAX_WALLET before withdrawing. If withdrawal would
+  // exceed wallet cap, partial-withdraw up to the cap.
+  const newWalletTotal = user.wallet + val;
+  if (newWalletTotal > MAX_WALLET) {
+    const canWithdraw = MAX_WALLET - user.wallet;
+    if (canWithdraw <= 0) {
+      return {
+        success: false,
+        message: `❌ *WALLET CAP REACHED*\n\n💰 Your wallet is at the maximum capacity of ${getZENI()}${MAX_WALLET.toLocaleString()}.\n💡 Deposit some funds to your bank first.`
+      };
+    }
+    user.bank -= canWithdraw;
+    user.wallet += canWithdraw;
+    logTransaction(userId, "Bank Withdrawal (capped)", canWithdraw, user.wallet);
+    scheduleSave(userId);
+    return {
+      success: true,
+      message: `⚠️ *PARTIAL WITHDRAWAL (WALLET CAP)*\n\n━━━━━━━━━━━━━━━\n💵 *Withdrawn:* ${getZENI()}${canWithdraw.toLocaleString()} (of ${getZENI()}${val.toLocaleString()} requested)\n━━━━━━━━━━━━━━━\n\n💰 *Wallet:* ${getZENI()}${user.wallet.toLocaleString()} (MAX)\n🏦 *Bank:* ${getZENI()}${user.bank.toLocaleString()}\n📊 *Total:* ${getZENI()}${(user.wallet + user.bank).toLocaleString()}\n\n💡 Your wallet is at maximum capacity. The remaining ${getZENI()}${(val - canWithdraw).toLocaleString()} stayed in your bank.`,
+      amount: canWithdraw,
+      wallet: user.wallet,
+      bank: user.bank,
+      nickname: user.nickname || getDisplayName(user.userId)
+    };
   }
 
   user.bank -= val;
@@ -804,8 +1297,20 @@ function withdraw(userId, amount) {
   user.gamblingProfile.withdrawnToday = (user.gamblingProfile.withdrawnToday || 0) + val;
 
   logTransaction(userId, "Bank Withdrawal", val, user.wallet);
+  // 💡 P4: Settlement record for withdrawal (transfer between bank↔wallet, same user)
+  recordSettlement(userId, 'transfer', 'withdrawal', val, {
+    preWallet: user.wallet - val, postWallet: user.wallet,
+    preBank: user.bank + val, postBank: user.bank, description: 'Bank Withdrawal'
+  });
 
   scheduleSave(userId);
+
+  // 💡 LORE DROP: trading voice (10%) - out-of-band on result.loreDrop
+  let __wdDrop = null;
+  try {
+    const loreDrops = require('./loreDrops');
+    __wdDrop = loreDrops.maybeDrop('trading', { userId, chance: 0.10 });
+  } catch (e) {}
 
   return {
     success: true,
@@ -818,10 +1323,11 @@ function withdraw(userId, amount) {
 💰 *Wallet:* ${getZENI()}${user.wallet.toLocaleString()}
 🏦 *Bank:* ${getZENI()}${user.bank.toLocaleString()}
 📊 *Total:* ${getZENI()}${(user.wallet + user.bank).toLocaleString()}`,
+    loreDrop: __wdDrop,
     amount: val,
     wallet: user.wallet,
     bank: user.bank,
-    nickname: user.nickname || user.userId.split('@')[0]
+    nickname: user.nickname || getDisplayName(user.userId)
   };
 }
 
@@ -861,7 +1367,7 @@ function claimDaily(userId) {
     };
   }
 
-  // 💡 MEMBERSHIP DAILY BONUS — previously the membership tiers defined
+  // 💡 MEMBERSHIP DAILY BONUS - previously the membership tiers defined
   // a `dailyBonus` field (1000 for PREMIUM, 5000 for DIAMOND) but it was
   // never actually granted. Players paid 50k-250k for membership and got
   // the same daily reward as free players.
@@ -874,7 +1380,7 @@ function claimDaily(userId) {
       membershipLabel = ` (${tier.name})`;
     }
   } else if (user.membership) {
-    // Membership expired — reset to BASIC
+    // Membership expired - reset to BASIC
     user.membership.tier = 'BASIC';
     user.membership.expires = 0;
   }
@@ -942,11 +1448,13 @@ function getUserClass(userId) {
 function addProfessionXP(userId, profession, amount) {
     const user = getUser(userId);
     if (!user || !user.professions) return null;
+    const val = Math.floor(Number(amount));
+    if (!Number.isFinite(val) || val <= 0) return null;
     
     const prof = user.professions[profession];
     if (!prof) return null;
     
-    prof.xp += amount;
+    prof.xp += val;
     
     // Leveling logic: 100 * level^1.5
     const nextLevelXP = Math.floor(100 * Math.pow(prof.level, 1.5));
@@ -974,8 +1482,11 @@ const MEMBERSHIP_TIERS = {
 
 function buyMembership(userId, tierId) {
     const user = getUser(userId);
+    // 💡 FIX 2026-08-31: unregistered users crashed with TypeError (user is
+    // null) instead of getting the standard register-first message.
+    if (!user) return { success: false, message: `❌ You need to register first!` };
     const tier = MEMBERSHIP_TIERS[tierId.toUpperCase()];
-    
+
     if (!tier) return { success: false, message: "❌ Invalid membership tier!" };
     if (user.wallet < tier.cost) return { success: false, message: `❌ Need ${getZENI()}${tier.cost.toLocaleString()} to upgrade!` };
     
@@ -1040,11 +1551,11 @@ function changeClass(userId) {
   };
 }
 
-// 💡 DELETED: evolveClass(userId, evolutionId) — was dead code (zero callers
+// 💡 DELETED: evolveClass(userId, evolutionId) - was dead code (zero callers
 // in the entire codebase). The actual evolution logic lives inline in
 // skillCommands.handleEvolve (non-trial path) and guildAdventure.endAdventure
 // (trial path), both of which were hardened in prior commits. Keeping this
-// orphan function around was a maintenance hazard — anyone reading economy.js
+// orphan function around was a maintenance hazard - anyone reading economy.js
 // might assume it was the canonical evolution entry point.
 
 function resetClass(userId) {
@@ -1102,13 +1613,13 @@ async function updateAdventurerRank(userId) {
   if (newIdx > oldIdx) {
     // 💡 RANK MISSION GATE: Check if the promotion from oldRank requires
     // a rank mission to be completed. If it does and the player hasn't
-    // completed it yet, DON'T promote — they need to finish the mission first.
+    // completed it yet, DON'T promote - they need to finish the mission first.
     const completedMissions = user.completedRankMissions || [];
     const eligibility = classSystem.checkRankPromotionEligibility(oldRank, completedMissions);
 
     if (!eligibility.canPromote) {
       // Player meets level/quest requirements but hasn't completed the
-      // rank mission. Don't promote — they need to finish the mission.
+      // rank mission. Don't promote - they need to finish the mission.
       return {
         ranked_up: false,
         rank: oldRank,
@@ -1124,22 +1635,56 @@ async function updateAdventurerRank(userId) {
     // debounced save fires, the rank promotion is lost.
     await saveUser(userId);
 
+    // 💡 AUDIT FIX (Item #5): Implement the L7 guild perk - "Guild L7+
+    // grants +1 skill point (GP) on adventurer rank-up". Previously the
+    // perk was declared in guildPerks.GUILD_LEVEL_PERKS[7] and shown in
+    // `.g guild info` / `.g guild perks`, but nothing actually awarded
+    // the GP. Now: if the user is in a guild whose level >= 7, they
+    // receive +1 GP on every rank promotion.
+    let guildBonusGP = 0;
+    try {
+      const guilds = require('./guilds');
+      const userGuildName = guilds.getUserGuild(userId);
+      if (userGuildName) {
+        const userGuild = guilds.getGuild(userGuildName);
+        if (userGuild && (userGuild.level || 1) >= 7) {
+          const progression = require('./progression');
+          const gpUser = progression.getUser ? progression.getUser(userId) : null;
+          // Use the same shape as progression.awardGP: bump gp + totalGP.
+          // We touch the user object directly here because progression
+          // caches its own copy and we already have `user` from this
+          // module's getUser - but GP lives in the progression cache.
+          if (gpUser) {
+            gpUser.gp = (gpUser.gp || 0) + 1;
+            gpUser.totalGP = (gpUser.totalGP || 0) + 1;
+            if (typeof progression.saveProgression === 'function') {
+              progression.saveProgression(userId);
+            }
+            guildBonusGP = 1;
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[economy] L7 guild perk GP award failed:', e.message);
+    }
+
     const rankData = classSystem.ADVENTURER_RANKS[calculatedRank];
     return {
       ranked_up: true,
       old_rank: oldRank,
       new_rank: calculatedRank,
-      rank_data: rankData
+      rank_data: rankData,
+      guild_bonus_gp: guildBonusGP
     };
   }
 
-  // No upgrade (rank stays the same, or calculated rank is lower —
+  // No upgrade (rank stays the same, or calculated rank is lower -
   // in which case we PRESERVE the existing rank, not downgrade).
   return { ranked_up: false, rank: oldRank };
 }
 
 /**
- * Get the player's current rank mission status — what mission they need
+ * Get the player's current rank mission status - what mission they need
  * to complete next, their progress on each objective, and whether they
  * can claim it.
  */
@@ -1192,7 +1737,7 @@ function getRankMissionStatus(userId) {
     canClaim: complete,
     alreadyCompleted: false,
     message: complete
-      ? `✅ You have completed all objectives for the ${gateMission.name}! Use \`.g rank mission claim\` to claim your reward and unlock promotion.`
+      ? `✅ You have completed all objectives for the ${gateMission.name}! Use \`${botConfig.getPrefix()} rank mission claim\` to claim your reward and unlock promotion.`
       : `📊 Progress for ${gateMission.name}:`,
   };
 }
@@ -1241,7 +1786,7 @@ async function claimRankMission(userId) {
   // 💡 FIX #50: immediate save, same as rank promotion
   await saveUser(userId);
 
-  // Now try to promote (this will check mission eligibility — which should pass now)
+  // Now try to promote (this will check mission eligibility - which should pass now)
   const rankResult = await updateAdventurerRank(userId);
 
   let msg = `🎉 *MISSION COMPLETE!* 🎉\n\n`;
@@ -1267,13 +1812,15 @@ async function claimRankMission(userId) {
 function trackMissionStat(userId, statKey, amount = 1) {
   const user = getUser(userId);
   if (!user || !user.stats) return;
-  user.stats[statKey] = (user.stats[statKey] || 0) + amount;
-  // 💡 FIX: was scheduleSave(userId) — debounced 500ms. If the bot
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) return;
+  user.stats[statKey] = (user.stats[statKey] || 0) + val;
+  // 💡 FIX: was scheduleSave(userId) - debounced 500ms. If the bot
   // restarted within 500ms of the stat increment, the DB write was
   // lost and the player's progress vanished on next load. Rank-mission
   // stats (itemsCrafted, itemsEquipped, bossesDefeated, etc.) are
-  // high-stakes — losing them means re-doing the work. Use immediate
-  // saveUser (which is async but we don't need to await it here — the
+  // high-stakes - losing them means re-doing the work. Use immediate
+  // saveUser (which is async but we don't need to await it here - the
   // in-memory mutation is already done, the DB write is just persistence).
   saveUser(userId).catch(e => console.error(`[trackMissionStat] saveUser failed for ${userId}:`, e.message));
 }
@@ -1314,18 +1861,22 @@ function incrementQuestCounter(userId, won = true) {
 function incrementDragonKills(userId, amount = 1) {
   const user = getUser(userId);
   if (!user) return;
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) return;
   if (!user.stats) user.stats = {};
-  user.stats.dragonsKilled = (user.stats.dragonsKilled || 0) + amount;
+  user.stats.dragonsKilled = (user.stats.dragonsKilled || 0) + val;
   scheduleSave(userId);
 }
 
 async function addQuestProgress(userId, amount, won = true) {
   const user = getUser(userId);
   if (!user) return;
+  const val = Number(amount);
+  if (!Number.isFinite(val)) return;
 
   // 💡 FIX #41: Use Math.round instead of Math.ceil for fractional
   // quest progress. Math.ceil(0.05) = 1, meaning every combat
-  // encounter in a dungeon added 1 to questsCompleted — the same
+  // encounter in a dungeon added 1 to questsCompleted - the same
   // as completing a full quest. This caused inconsistent rank
   // calculations between players who did the same dungeon but had
   // different numbers of combat encounters (more encounters = more
@@ -1334,11 +1885,11 @@ async function addQuestProgress(userId, amount, won = true) {
   // ⚠️ NOTE: Because the rounded value is written back to
   // user.questsCompleted each call, the running total is ALWAYS an
   // integer. Each call recomputes Math.round(integer + 0.05) = integer.
-  // The fractional part is discarded every call — it does NOT
+  // The fractional part is discarded every call - it does NOT
   // accumulate. 20 × addQuestProgress(0.05) yields 0, not 1. Only
   // calls with amount >= 0.5 (e.g. 1.0 for boss kills, 0.2 doesn't
   // round up) actually move the counter. This is under-counting
-  // fractional progress, which is acceptable — questsCompleted is
+  // fractional progress, which is acceptable - questsCompleted is
   // meant to track COMPLETED quests, not partial progress. The
   // questsWon counter (incremented by 1 on every win) is the
   // authoritative metric for rank missions.
@@ -1379,7 +1930,7 @@ function getMoneyLeaderboard(limit = 10) {
     .filter(([_, data]) => data.registered)
     .map(([userId, data]) => ({
       userId,
-      nickname: data.nickname || userId.split('@')[0],
+      nickname: data.nickname || getDisplayName(userId),
       wallet: data.wallet || 0,
       bank: data.bank || 0,
       total: (data.wallet || 0) + (data.bank || 0)
@@ -1441,7 +1992,7 @@ function getGamblingLeaderboard(limit = 10) {
     .filter(([_, data]) => data.registered && data.stats)
     .map(([userId, data]) => ({
       userId,
-      nickname: data.nickname || userId.split('@')[0],
+      nickname: data.nickname || getDisplayName(userId),
       stats: data.stats
     }))
     .sort((a, b) => (b.stats.gamesWon || 0) - (a.stats.gamesWon || 0))
@@ -1509,14 +2060,14 @@ function robUser(thiefId, victimId) {
     victim.wallet -= amount;
     thief.wallet += amount;
     
-    logTransaction(thiefId, `Robbed @${victimId.split('@')[0]}`, amount, thief.wallet);
-    logTransaction(victimId, `Robbed by @${thiefId.split('@')[0]}`, -amount, victim.wallet);
+    logTransaction(thiefId, `Robbed @${getDisplayName(victimId)}`, amount, thief.wallet);
+    logTransaction(victimId, `Robbed by @${getDisplayName(thiefId)}`, -amount, victim.wallet);
 
     scheduleSave(thiefId);
     scheduleSave(victimId);
     return { 
       success: true, 
-      message: `🥷 *ROBBERY SUCCESSFUL*\n\nYou stole ${getZENI()}${amount.toLocaleString()} from @${victimId.split('@')[0]}!` 
+      message: `🥷 *ROBBERY SUCCESSFUL*\n\nYou stole ${getZENI()}${amount.toLocaleString()} from @${getDisplayName(victimId)}!` 
     };
   } else {
     const fine = Math.max(500, Math.floor(thief.wallet * 0.01));
@@ -1561,6 +2112,41 @@ function getPunishmentStatus(userId) {
   return { blocked: false };
 }
 
+// 💡 LOAN-BUG FIX 2026-09-20 (ROOT CAUSE of "could not credit your wallet"):
+// the DB-heal lookups only swapped the JID DOMAIN (@lid <-> @s.whatsapp.net)
+// and never consulted the LidMapping for the OTHER NUMBER. A player
+// registered as `2348012345678@s.whatsapp.net` whose messages arrive as
+// `105712667648066@lid` was looked up as: <lid>@lid, <lid>@s.whatsapp.net -
+// but NEVER as the mapped phone `2348012345678@s.whatsapp.net`. The heal
+// missed, getUser stayed null, addMoney returned false - the loan/wallet
+// "registration or JID issue". This builds every sensible variant,
+// INCLUDING the LidMapping-resolved ones, in priority order.
+function jidLookupVariants(userId) {
+  const variants = [];
+  const push = (v) => { if (v && !variants.includes(v)) variants.push(v); };
+  let resolvedId = userId;
+  try { resolvedId = resolveJidHelper(userId) || userId; } catch (e) { resolvedId = userId; }
+  push(resolvedId);
+  push(userId);
+  const lidResolver = (() => { try { return require('../utils/lidResolver'); } catch (e) { return null; } })();
+  const expand = (jid) => {
+    if (typeof jid !== 'string' || !jid.includes('@')) return;
+    const num = jid.split('@')[0].split(':')[0];
+    if (!num) return;
+    push(`${num}@s.whatsapp.net`);
+    push(`${num}@lid`);
+    if (lidResolver) {
+      try {
+        if (lidResolver.lidCache.has(num)) push(`${lidResolver.lidCache.get(num)}@s.whatsapp.net`);
+        if (lidResolver.phoneCache.has(num)) push(`${lidResolver.phoneCache.get(num)}@lid`);
+      } catch (e) { /* cache unavailable - variants above still apply */ }
+    }
+  };
+  expand(userId);
+  expand(resolvedId);
+  return variants;
+}
+
 async function syncUserFromDB(userId) {
   const resolvedId = resolveJidHelper(userId);
   const cachedUser = economyData.get(resolvedId);
@@ -1569,7 +2155,14 @@ async function syncUserFromDB(userId) {
   }
 
   try {
-    const user = await User.findOne({ userId: resolvedId }).lean();
+    // 💡 LOAN-BUG FIX 2026-09-20: query the User collection under EVERY
+    // jid variant (resolved, raw, domain-swapped, LidMapping-resolved).
+    // The old queries missed users stored under the mapped number.
+    let user = null;
+    for (const variant of jidLookupVariants(userId)) {
+      user = await User.findOne({ userId: variant }).lean();
+      if (user) break;
+    }
     if (user) {
       if (user.inventory && user.inventory instanceof Map) {
           user.inventory = Object.fromEntries(user.inventory);
@@ -1580,7 +2173,14 @@ async function syncUserFromDB(userId) {
       if (user.portfolio && user.portfolio instanceof Map) {
           user.portfolio = Object.fromEntries(user.portfolio);
       }
-      economyData.set(resolvedId, user);
+      // 💡 Store under the user's actual userId from DB, not the resolved ID
+      // (which might be a different format). This ensures future lookups
+      // with either JID format will find the user in cache.
+      economyData.set(user.userId, user);
+      // Also store under the resolved ID as an alias
+      if (user.userId !== resolvedId) {
+        economyData.set(resolvedId, user);
+      }
     }
   } catch (err) {
     console.error("Error syncing user from DB:", err.message);
@@ -1588,14 +2188,14 @@ async function syncUserFromDB(userId) {
 }
 
 //========================================
-// 💡 WEALTH TAX (Phase 1 — Economy Rebalance)
+// 💡 WEALTH TAX (Phase 1 - Economy Rebalance)
 //========================================
 // Weekly auto-deduction on bank balances to combat Zeni inflation.
 // - 1% on bank balances over 10M
 // - 2% on bank balances over 50M
-// Wallet (cash on hand) is NOT taxed — only bank. This encourages spending
+// Wallet (cash on hand) is NOT taxed - only bank. This encourages spending
 // or investing rather than hoarding. Tax revenue is deleted from the economy
-// (not redistributed) — it's a pure sink.
+// (not redistributed) - it's a pure sink.
 //
 // Runs automatically every Monday 00:00 UTC via the scheduler in index.js.
 // Can also be triggered manually by the owner via `.g wealthtax run` for
@@ -1614,15 +2214,21 @@ async function runWealthTax() {
 
   for (const [userId, user] of economyData.entries()) {
     if (!user) continue;
+    // 💡 AUDIT FIX 2026-08-01 (Round 3): tax TOTAL wealth (wallet + bank),
+    // not just bank. Previously players could avoid the wealth tax entirely
+    // by keeping everything in wallet - defeating the purpose of a "hoarded
+    // wealth" tax. Now both wallet and bank are included.
+    const walletBalance = user.wallet || 0;
     const bankBalance = user.bank || 0;
-    if (bankBalance < 10000000) continue; // below first bracket
+    const totalBalance = walletBalance + bankBalance;
+    if (totalBalance < 10000000) continue; // below first bracket
 
     // Find applicable bracket (highest first)
     let tax = 0;
     let bracketLabel = '';
     for (const bracket of WEALTH_TAX_BRACKETS) {
-      if (bankBalance >= bracket.threshold) {
-        tax = Math.floor(bankBalance * bracket.rate);
+      if (totalBalance >= bracket.threshold) {
+        tax = Math.floor(totalBalance * bracket.rate);
         bracketLabel = `${(bracket.rate * 100).toFixed(0)}% over ${bracket.threshold.toLocaleString()}`;
         break;
       }
@@ -1630,8 +2236,17 @@ async function runWealthTax() {
 
     if (tax <= 0) continue;
 
-    // Deduct
-    user.bank = Math.max(0, bankBalance - tax);
+    // Deduct proportionally from wallet first, then bank
+    // (wallet is "liquid" - easier to tax. Bank is "hoarded" - harder.)
+    let remaining = tax;
+    const walletTax = Math.min(walletBalance, remaining);
+    if (walletTax > 0) {
+      user.wallet = Math.max(0, walletBalance - walletTax);
+      remaining -= walletTax;
+    }
+    if (remaining > 0) {
+      user.bank = Math.max(0, bankBalance - remaining);
+    }
     scheduleSave(userId);
     totalTaxed += tax;
     playersTaxed++;
@@ -1649,7 +2264,7 @@ async function runWealthTax() {
   };
 }
 
-// Schedule the weekly tax — call from index.js on bot startup.
+// Schedule the weekly tax - call from index.js on bot startup.
 // Runs every Monday at 00:00 UTC.
 function scheduleWealthTax() {
   const now = new Date();
@@ -1671,21 +2286,224 @@ function scheduleWealthTax() {
 }
 //========================================
 
+// ════════════════════════════════════════════════════════════════
+// 💡 FIX 2026-08-03: MENTION DISPLAY HELPERS
+// ════════════════════════════════════════════════════════════════
+// Problem: @-mentions showed raw LID numbers (e.g., "@251453323092189")
+// instead of readable names. LID JIDs are 17-18 digit random numbers
+// that nobody recognizes - broken UX.
+//
+// Solution: these helpers resolve LID→phone JID and use the user's
+// nickname from the economy cache when available.
+//
+// Usage in bot messages:
+//   `@${getDisplayName(jid)} has been blocked.`
+//   mentions: [economy.getMentionJid(jid)]
+//
+// getDisplayName returns the NICKNAME (without @) if available,
+// otherwise the phone number (without @), otherwise the raw ID.
+// The caller should prepend "@" in the template string.
+//
+// getMentionJid returns the resolved phone JID for the mentions array.
+// ════════════════════════════════════════════════════════════════
+
+function getDisplayName(jid) {
+  if (!jid) return 'Unknown';
+  try {
+    // Step 1: resolve to the economy cache key (handles LID↔phone swap)
+    const resolvedId = resolveJidHelper(jid);
+    const user = economyData.get(resolvedId);
+    if (user && user.nickname && user.nickname !== 'Adventurer') return user.nickname;
+    if (user && user.profile && user.profile.whatsappName) return user.profile.whatsappName;
+  } catch (e) {}
+  // Step 2: fall back to phone number (resolve LID → phone)
+  try {
+    const lidResolver = require('../utils/lidResolver');
+    const phoneJid = lidResolver.resolveToPhone(jid);
+    if (phoneJid && phoneJid !== jid) {
+      return phoneJid.split('@')[0];
+    }
+  } catch (e) {}
+  // Step 3: last resort - raw ID part (could be LID or phone)
+  return String(jid).split('@')[0];
+}
+
+function getMentionJid(jid) {
+  if (!jid) return jid;
+  try {
+    // 💡 FIX: Return the JID format the user is REGISTERED as in the economy
+    // cache. In LID-privacy groups, users register as @lid - WhatsApp matches
+    // LID mentions in those groups. In regular groups, users register as
+    // @s.whatsapp.net - WhatsApp matches phone mentions there.
+    //
+    // Using the economy cache key ensures the mention JID matches the format
+    // WhatsApp expects for that user's group context.
+    const resolvedId = resolveJidHelper(jid);
+    if (resolvedId && economyData.has(resolvedId)) {
+      return resolvedId;
+    }
+    // Fallback: try phone resolution (for non-LID groups)
+    const lidResolver = require('../utils/lidResolver');
+    const phoneJid = lidResolver.resolveToPhone(jid);
+    if (phoneJid) return phoneJid;
+  } catch (e) {}
+  return jid;
+}
+
+// 💡 P4 Items 10-11 (2026-08-16): Economy monitoring + market cap circuit breaker.
+// Default cap: 500 million total zeni across all players.
+// Reasoning: ~3700 players × ~135K avg wallet = ~500M. The new rank-based
+// reward table (F=1K, SSS=50K) means a player doing 8 quests/day at SSS
+// earns ~250K/day. With 3700 active players, that's ~925M/day if everyone
+// maxes out - the cap prevents runaway inflation. Admin can adjust live.
+const DEFAULT_MARKET_CAP = 500_000_000;
+let _marketCap = null; // cached from DB
+let _marketCapChecked = 0; // timestamp of last check
+let _capAlertLast = 0; // 💡 2026-09-20: throttle for the advisory cap warning (1/min)
+
+async function getMarketCap() {
+  // Cache for 60 seconds to avoid hitting MongoDB on every reward
+  if (_marketCap !== null && Date.now() - _marketCapChecked < 60000) {
+    return _marketCap;
+  }
+  try {
+    const System = require('../models/System');
+    const doc = await System.findOne({ key: 'economy_market_cap' }).lean();
+    _marketCap = doc?.value || DEFAULT_MARKET_CAP;
+    _marketCapChecked = Date.now();
+    return _marketCap;
+  } catch (e) {
+    return DEFAULT_MARKET_CAP;
+  }
+}
+
+async function setMarketCap(amount) {
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val < 1) return { success: false, message: '❌ Invalid amount.' };
+  try {
+    const System = require('../models/System');
+    await System.findOneAndUpdate(
+      { key: 'economy_market_cap' },
+      { value: val },
+      { upsert: true }
+    );
+    _marketCap = val;
+    _marketCapChecked = Date.now();
+    return { success: true, message: `✅ Market cap set to ${getZENI()}${val.toLocaleString()}` };
+  } catch (e) {
+    return { success: false, message: `❌ Failed: ${e.message}` };
+  }
+}
+
+// 💡 QA hook (2026-09-20): arm/disarm the in-memory breaker without touching
+// the DB, so tests can simulate the tripped-breaker state that froze payouts.
+function _testSetMarketCap(val) {
+  _marketCap = (val === null || val === undefined) ? null : Math.floor(Number(val));
+  _marketCapChecked = Date.now();
+}
+
+// Check if the economy is at the cap. Called at reward-grant time.
+// Returns true if rewards should be BLOCKED (cap reached).
+async function isMarketCapReached() {
+  const cap = await getMarketCap();
+  let totalZeni = 0;
+  for (const [jid, user] of economyData) {
+    totalZeni += (user.wallet || 0) + (user.bank || 0);
+  }
+  return { reached: totalZeni >= cap, total: totalZeni, cap };
+}
+
+// Get total community zeni across all players
+function getTotalCommunityZeni() {
+  let totalWallet = 0, totalBank = 0, playerCount = 0;
+  for (const [jid, user] of economyData) {
+    totalWallet += (user.wallet || 0);
+    totalBank += (user.bank || 0);
+    playerCount++;
+  }
+  return {
+    totalWallet,
+    totalBank,
+    total: totalWallet + totalBank,
+    playerCount,
+  };
+}
+
+// 💡 P4 (2026-08-16): Debt management functions.
+// Replaces the old P2P loan system. Admins can set debt on a player;
+// all earnings auto-deduct until debt is cleared.
+function setDebt(userId, amount, reason = '') {
+  const user = getUser(userId);
+  if (!user) return { success: false, message: '❌ User not found.' };
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val < 0) return { success: false, message: '❌ Invalid amount.' };
+  const oldDebt = user.debt?.amount || 0;
+  user.debt = { amount: val, reason: reason || 'Admin-set debt', setAt: Date.now() };
+  scheduleSave(userId);
+  return {
+    success: true,
+    message: `✅ Debt set for ${getDisplayName(userId)}: ${getZENI()}${val.toLocaleString()}\n📊 Previous: ${getZENI()}${oldDebt.toLocaleString()}\n💡 All future earnings will auto-deduct until debt is cleared.`
+  };
+}
+
+function getDebt(userId) {
+  const user = getUser(userId);
+  if (!user) return { amount: 0, reason: '' };
+  return user.debt || { amount: 0, reason: '' };
+}
+
+function clearDebt(userId) {
+  const user = getUser(userId);
+  if (!user) return { success: false, message: '❌ User not found.' };
+  const oldDebt = user.debt?.amount || 0;
+  user.debt = { amount: 0, reason: '', setAt: 0 };
+  scheduleSave(userId);
+  return {
+    success: true,
+    message: `✅ Debt cleared for ${getDisplayName(userId)}. Was: ${getZENI()}${oldDebt.toLocaleString()}`
+  };
+}
+
+//========================================
+
 module.exports = {
   getZENI,
   STARTING_BALANCE,
   getPlaceholderPFP,
-  
+  // 💡 2026-08-31: exported so callers (e.g. raidSystem reward retry) can
+  // canonicalize JIDs before paying - addMoney fails silently for
+  // wrong-format JIDs.
+  resolveJid: resolveJidHelper,
+
   isRegistered,
   registerUser,
   syncUserFromDB,
   
   loadEconomy,
   saveUser,
+  reloadUserFromDB,
+  clampWallet,
+  clampStats,
+  MAX_WALLET,
+  MAX_BANK,
+  MAX_STAT_VALUE,
   scheduleSave,
   getUser,
   getOrCreateUser,
   logTransaction,
+  recordSettlement,
+  checkDailyQuestCap,
+  incrementDailyQuestCount,
+  DAILY_QUEST_CAP,
+  getMarketCap,
+  setMarketCap,
+  _testSetMarketCap,
+  isMarketCapReached,
+  getTotalCommunityZeni,
+  DEFAULT_MARKET_CAP,
+  setDebt,
+  getDebt,
+  clearDebt,
   
   getBalance,
   addMoney,
@@ -1727,7 +2545,7 @@ module.exports = {
       addProfessionXP,
       getProfessionLevel,
       getUserStats,  changeClass,
-  // 💡 evolveClass removed — was dead code (zero callers)
+  // 💡 evolveClass removed - was dead code (zero callers)
   resetClass,
   updateAdventurerRank,
   addStatBonus,
@@ -1748,7 +2566,263 @@ module.exports = {
   getRankMissionStatus,
   claimRankMission,
   trackMissionStat,
+
+  // 💡 Persistent HP System (2026-07-31)
+  getPersistentHP,
+  setPersistentHP,
+  getPersistentEnergy,
+  setPersistentEnergy,
+  healToFull,
+
+  // 💡 Persistent temp effects (2026-10-03, elixir lifecycle fix)
+  grantEffect,
+  getActiveEffect,
+  hasActiveEffect,
+  grantFullRestore,
+
+  // 💡 Silver Veil (2026-10-03, level hiding)
+  displayLevel,
+
+  // 💡 FIX 2026-08-03: Mention display helpers - resolve LID→phone, use nicknames
+  getDisplayName,
+  getMentionJid,
 };
+
+// ════════════════════════════════════════════════════════════════
+// 💡 PERSISTENT HP SYSTEM (2026-07-31)
+// HP persists across combat. Lost HP remains after combat ends.
+// Players heal via .g hospital (free) or rest events.
+// ════════════════════════════════════════════════════════════════
+
+/**
+ * Get the player's persistent current HP.
+ * If currentHP is -1 (uninitialized), sets it to maxHP and returns maxHP.
+ * @param {string} userId - Player JID
+ * @param {number} maxHP - The player's max HP (from getBaseStats)
+ * @returns {number} Current HP (1 to maxHP)
+ */
+function getPersistentHP(userId, maxHP) {
+  const user = getUser(userId);
+  if (!user) return maxHP; // fallback for unregistered users
+
+  const max = Math.max(1, Math.floor(Number(maxHP) || 100));
+  const now = Date.now();
+
+  // Lazy migration: if currentHP is -1 (default), initialize to maxHP
+  if (user.stats.currentHP === undefined || user.stats.currentHP === -1) {
+    user.stats.currentHP = max;
+    user.stats.hpTs = now;
+    scheduleSave(userId);
+    return max;
+  }
+
+  // Defeated / invalid HP: restore to 1 so players can always act (0 HP =
+  // defeated, handled by combat) and re-anchor the regen clock.
+  const raw = Math.floor(Number(user.stats.currentHP) || 0);
+  if (raw < 1) {
+    user.stats.currentHP = 1;
+    user.stats.hpTs = now;
+    scheduleSave(userId);
+    return 1;
+  }
+
+  // 💡 PASSIVE HP REGEN (2026-10-02, owner bug #fec95c): the hospital
+  // cooldown message promises out-of-combat regen, but NO such system
+  // existed - hurt players had ZERO healing for the whole 12h hospital
+  // cooldown ("some players cannot regain HP"). Time regen like energy:
+  // a full bar recharges in 24h, scaled to max, fractional progress
+  // accumulates via stats.hpTs. Damage re-anchors via setPersistentHP.
+  let hp = raw;
+  const last = Number(user.stats.hpTs) || now;
+  const elapsed = Math.max(0, now - last);
+  if (hp >= max) {
+    hp = max;
+    user.stats.hpTs = now;
+  } else if (elapsed > 0) {
+    const regen = Math.floor((elapsed / HP_REGEN_FULL_MS) * max);
+    if (regen > 0) {
+      hp = Math.min(max, hp + regen);
+      user.stats.hpTs = now;
+    }
+    // regen === 0: keep hpTs so fractional regen keeps accumulating
+  }
+  user.stats.currentHP = hp;
+  scheduleSave(userId);
+  return hp;
+}
+
+/**
+ * Save the player's current HP back to the persistent store.
+ * Called after combat ends (victory or defeat) to persist damage taken.
+ * @param {string} userId - Player JID
+ * @param {number} hp - The HP value to save
+ * @param {number} maxHP - The player's max HP (for clamping)
+ */
+function setPersistentHP(userId, hp, maxHP) {
+  const user = getUser(userId);
+  if (!user) return;
+
+  // Clamp: 0 to maxHP. 0 means defeated (will be restored to 1 on next access).
+  user.stats.currentHP = Math.max(0, Math.min(maxHP, Math.floor(hp)));
+  user.stats.hpTs = Date.now(); // damage re-anchors the passive regen clock
+  scheduleSave(userId);
+}
+
+// ============================================
+// ⏳ PERSISTENT TEMP EFFECTS (2026-10-03)
+// ============================================
+// 💡 FIX (owner class-change / elixir report): timed effects now have ONE
+// clearly defined lifecycle on the player document: granted with an absolute
+// expiry, validated by timestamp on every read, pruned lazily. They are
+// NEVER cleared or preserved because of quest/raid/class state changes -
+// a Full Restore Elixir bought before a raid keeps working (and keeps
+// auto-restoring) until its timer runs out, exactly what players expect.
+const FULL_RESTORE_EFFECT_MS = 60 * 60 * 1000; // 60 minutes of auto-full-heal
+
+function grantEffect(userId, effectId, durationMs) {
+  const user = getUser(userId);
+  if (!user) return 0;
+  if (!user.activeEffects || typeof user.activeEffects !== 'object' || Array.isArray(user.activeEffects)) {
+    user.activeEffects = {};
+  }
+  const expiresAt = Date.now() + Math.max(1000, Math.floor(Number(durationMs) || 0));
+  user.activeEffects[effectId] = expiresAt;
+  scheduleSave(userId);
+  return expiresAt;
+}
+
+// Returns the expiry timestamp (ms) of an active effect, or 0 if absent/expired.
+// Expired entries are pruned on read so the object never grows unbounded.
+function getActiveEffect(userId, effectId) {
+  const user = getUser(userId);
+  if (!user) return 0;
+  const fx = user.activeEffects;
+  if (!fx || typeof fx !== 'object' || Array.isArray(fx)) return 0;
+  const expiresAt = Number(fx[effectId]) || 0;
+  if (!expiresAt) return 0;
+  if (expiresAt <= Date.now()) {
+    delete fx[effectId];
+    scheduleSave(userId);
+    return 0;
+  }
+  return expiresAt;
+}
+
+function hasActiveEffect(userId, effectId) {
+  return getActiveEffect(userId, effectId) > 0;
+}
+
+// Convenience for the Full Restore Elixir: grants (or tops up) the 60-minute
+// auto-restore window and returns a player-facing description.
+function grantFullRestore(userId) {
+  const expiresAt = grantEffect(userId, 'full_restore', FULL_RESTORE_EFFECT_MS);
+  if (!expiresAt) return null;
+  const mins = Math.max(1, Math.round((expiresAt - Date.now()) / 60000));
+  return `✨ *Full Restore active!* HP auto-restores to full at the start and end of every fight for the next *${mins} minute${mins === 1 ? '' : 's'}* (survives quest ends - it runs on its own timer).`;
+}
+
+// 💡 SILVER VEIL (2026-10-03): single source of truth for "is this player's
+// level hidden?" - every caption/card/image renderer calls this instead of
+// improvising. Returns the level to DISPLAY, or null when veiled (renderers
+// show "??").
+function displayLevel(userId, level) {
+  const u = getUser(userId);
+  if (u && u.levelVeil) return null;
+  const n = Number(level);
+  return Number.isFinite(n) ? n : 1;
+}
+
+/**
+ * PERSISTENT ENERGY SYSTEM (2026-09-17): the canonical energy pool, mirroring
+ * the persistent-HP helpers above.
+ * - Lazy migration: -1/undefined initializes to FULL maxEnergy (same rule as
+ *   adventures, which always started players at full energy).
+ * - Time regen: a full bar recharges in 6h, scaled to max, so every rank
+ *   refills at the same pace. Fractional regen accumulates via energyTs.
+ * - Mining drains this pool; adventures read it at start (floor 50%).
+ */
+const ENERGY_REGEN_FULL_MS = 6 * 60 * 60 * 1000; // full recharge in 6 hours
+
+function getPersistentEnergy(userId, maxEnergy) {
+  const user = getUser(userId);
+  if (!user || !user.stats) return maxEnergy; // fallback for unregistered users
+  const max = Math.max(1, Math.floor(Number(maxEnergy) || 100));
+  const now = Date.now();
+
+  if (user.stats.currentEnergy === undefined || user.stats.currentEnergy === -1) {
+    user.stats.currentEnergy = max;
+    user.stats.energyTs = now;
+    scheduleSave(userId);
+    return max;
+  }
+
+  let energy = Math.floor(Number(user.stats.currentEnergy) || 0);
+  const last = Number(user.stats.energyTs) || now;
+  const elapsed = Math.max(0, now - last);
+  if (energy >= max) {
+    energy = max;
+    user.stats.energyTs = now;
+  } else if (elapsed > 0) {
+    const regen = Math.floor((elapsed / ENERGY_REGEN_FULL_MS) * max);
+    if (regen > 0) {
+      energy = Math.min(max, energy + regen);
+      user.stats.energyTs = now;
+    }
+    // regen === 0: keep energyTs so fractional regen keeps accumulating
+  }
+  user.stats.currentEnergy = energy;
+  scheduleSave(userId);
+  return energy;
+}
+
+function setPersistentEnergy(userId, energy, maxEnergy) {
+  const user = getUser(userId);
+  if (!user || !user.stats) return;
+  const max = Math.max(1, Math.floor(Number(maxEnergy) || 100));
+  const val = Math.max(0, Math.min(max, Math.floor(Number(energy) || 0)));
+  user.stats.currentEnergy = val;
+  user.stats.energyTs = Date.now();
+  scheduleSave(userId);
+  return val;
+}
+
+/**
+ * Heal the player to full HP.
+ * Called by the .g hospital command.
+ * 💡 AUDIT FIX 2026-08-01: added 12-hour cooldown. Without a cooldown, the
+ * persistent HP system was meaningless - players could spam .g hospital
+ * after every fight for free full heals. Now: 12h cooldown, tracked on
+ * user.lastHospitalUse. Out-of-combat passive regen (Soul of the Deep,
+ * Druid regen, etc.) handles healing between hospital visits.
+ * @param {string} userId - Player JID
+ * @param {number} maxHP - The player's max HP
+ * @returns {{healed: number, onCooldown: boolean, cooldownRemainingMs?: number}}
+ */
+const HOSPITAL_COOLDOWN_MS = 12 * 60 * 60 * 1000; // 12 hours
+const HP_REGEN_FULL_MS = 24 * 60 * 60 * 1000; // passive regen: full bar in 24h
+function healToFull(userId, maxHP) {
+  const user = getUser(userId);
+  if (!user) return { healed: 0, onCooldown: false };
+
+  // Cooldown check
+  const lastUse = user.lastHospitalUse ? new Date(user.lastHospitalUse).getTime() : 0;
+  const elapsed = Date.now() - lastUse;
+  if (elapsed < HOSPITAL_COOLDOWN_MS) {
+    return {
+      healed: 0,
+      onCooldown: true,
+      cooldownRemainingMs: HOSPITAL_COOLDOWN_MS - elapsed,
+    };
+  }
+
+  const currentHP = getPersistentHP(userId, maxHP);
+  const healed = maxHP - currentHP;
+  user.stats.currentHP = maxHP;
+  user.stats.hpTs = Date.now(); // full heal re-anchors the regen clock
+  user.lastHospitalUse = new Date();
+  scheduleSave(userId);
+  return { healed, onCooldown: false };
+}
 
 // Auto-load disabled - now called by index.js startBot()
 // loadEconomy();

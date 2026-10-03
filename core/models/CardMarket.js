@@ -14,7 +14,7 @@ const CardMarketSchema = new mongoose.Schema({
   userCardId: { type: mongoose.Schema.Types.ObjectId, ref: 'UserCard', required: false },
   deckId:     { type: mongoose.Schema.Types.ObjectId, ref: 'CardDeck', required: false },
 
-  // 💡 Phase 3e: Rune listings — runeId references the Rune model
+  // 💡 Phase 3e: Rune listings - runeId references the Rune model
   runeId: { type: String, required: false },
 
   // Convenience copies so we don't always need a join

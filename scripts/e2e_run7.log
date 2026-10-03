@@ -1,0 +1,57 @@
+◇ injected env (11) from .env // tip: ⌘ suppress logs { quiet: true }
+◇ injected env (0) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+✅ MongoDB Connected: ac-a1ycpnn-shard-00-02.drpztk6.mongodb.net
+PASS :: S-1 purge leftovers :: clean already
+📡 [GoService] Using Base URL: http://127.0.0.1:7860 (concurrency=3)
+PASS :: S0 db+modules load :: mongo connected, 12 modules required
+PASS :: S1 register P1+P2 :: class=SCOUT zeni=1000
+PASS :: S2 XP curve 200*L^2 :: L10=20000 L100=2000000
+PASS :: S2b base stats + level :: class=SCOUT hp=90 atk=10
+PASS :: S3 claimDaily :: {"success":true,"message":"🎁 *DAILY REWARD CLAIMED!*\n\n━━━━━━━━━━━━━━━\n💰 *Reward:* +Ꞩ2,000\n*Total:* +Ꞩ2,000\n━━━━━━
+PASS :: S4 wallet add/remove :: bal 53000 -> 52000
+PASS :: S5 addItem+equip :: equip ok; equipStats atk bonus present=true
+PASS :: S6 initAdventure solo F-rank :: active=true inCombat=false encounter=0/3
+[GoService] Health: ✅ {"engine":"synchronous","status":"ready"}
+[Quest] nextStage triggered for 120399988877660@g.us_19998887761@s.whatsapp.net. isProcessing: false, Encounter: 0/3
+[GoService] Combat image: 185091 bytes in 0.22s
+[GoService] Combat image: 185046 bytes in 0.30s
+[GoService] Combat image: 184896 bytes in 0.17s
+[GoService] Combat image: 184796 bytes in 0.16s
+[GoService] Combat image: 184771 bytes in 0.15s
+[GoService] Combat image: 181476 bytes in 0.21s
+[GoService] Combat image: 180345 bytes in 0.15s
+[Quest] Combat ended. Victory: false, Encounter: 1/3
+PASS :: S6b combat loop to victory :: iters=7 inCombat=no-state
+PASS :: S7 def leak: defend-shield leaks ~2%, ability-shield full absorbs :: raw=472.6 defendLeak=8.4 (~1.8%) abilityAbsorb=100%
+PASS :: S8 abyss startRun (leveled hero) :: lvl=40 floor=1 encounter=wild_summon
+[GoService] Combat image: 114210 bytes in 0.21s
+[Quest] Combat ended. Victory: true, Encounter: 1/1
+[GoService] Combat image: 114210 bytes in 0.15s
+[GoService] Combat image: 113316 bytes in 0.20s
+[GoService] Combat image: 113143 bytes in 0.19s
+[Quest] Combat ended. Victory: true, Encounter: 1/1
+[GoService] Combat image: 113316 bytes in 0.15s
+[GoService] Combat image: 113629 bytes in 0.18s
+[GoService] Combat image: 113431 bytes in 0.13s
+[Quest] Combat ended. Victory: true, Encounter: 1/1
+[GoService] Combat image: 113629 bytes in 0.15s
+[GoService] Combat image: 114065 bytes in 0.19s
+[GoService] Combat image: 113881 bytes in 0.19s
+[Quest] Combat ended. Victory: true, Encounter: 1/1
+PASS :: S8b abyss drive to floor 4 :: reached floor 4
+[GoService] Combat image: 114065 bytes in 0.18s
+[GoService] Combat image: 116172 bytes in 0.20s
+PASS :: S9 MID-COMBAT retreat (defuse contract) :: extracted from floor 5, loot 424 kept, re-enter OK
+PASS :: S10 allocateStatPoint :: {"success":true,"stat":"ATK","pointsSpent":2,"valueGained":6,"remainingPoints":223}
+PASS :: S11 skill tree :: class=SCOUT pts=48 skills=9 abilities=9
+PASS :: S12 craft leg :: recipes=247 first=steel_sabre canCraft={"canCraft":false,"reason":"Missing ingredients:\n- Iron Swo craft=OK 
+PASS :: S13 rune leg :: created=true inventoryCount=1
+PASS :: S14 summon create+deploy :: species=slime id=6aa8c830847970d9ddc14852 active=false
+[GoService] Combat image (direct): 110888 bytes in 0.2s
+PASS :: S15 pvp challenge->accept->attack :: duel driven 1 actions ended=true
+PASS :: S16 leaderboards read-only :: abyssLb=657ch progLb=531ch
+PASS :: S17 ABYSS_RESULT card via Go svc :: ABYSS_RESULT 147966B
+
+===== E2E REPORT: 22/22 PASS =====
+sock messages captured: 65
+CLEANUP removed: abyssruns:1, abyssleaderboards:2, summons:1, settlements:4, runes:1, users:2

@@ -1,60 +1,247 @@
 const axios = require("axios");
 
+// 💡 FIX 2026-07-26 (INVESTIGATION.md):
+// The Go service URL resolution was silently falling back to 127.0.0.1:7860
+// when GO_IMAGE_SERVICE_URL was unset. This made every image command fail
+// with ECONNREFUSED, but because goService.* methods catch their own errors
+// and return null, the failure was invisible - callers silently fell through
+// to text-only paths or hung on await forever. 12 prior "ROOT CAUSE" commits
+// chased symptoms (sharp, Baileys, LID, contextInfo) without ever checking
+// whether the Go service was actually reachable.
+//
+// Now: if GO_IMAGE_SERVICE_URL is unset, scream about it at startup so the
+// operator knows immediately. The default stays 127.0.0.1:7860 because that
+// IS the correct value when the Go service is co-located on Oracle - but
+// the default should never be relied upon silently.
+const _DEFAULT_GO_URL = "http://127.0.0.1:7860";
+const _explicitGoUrl = process.env.GO_IMAGE_SERVICE_URL;
+if (!_explicitGoUrl && !global._goUrlWarned) {
+  global._goUrlWarned = true;
+  console.error("⚠️  [GoService] GO_IMAGE_SERVICE_URL is NOT SET in the environment.");
+  console.error("    Falling back to default: " + _DEFAULT_GO_URL);
+  console.error("    This only works if the Go service (bot-generation-go) is running on the same host.");
+  console.error("    If image commands fail, verify: curl -s -m 5 " + _DEFAULT_GO_URL + "/health");
+}
+
+// 💡 Module-level health cache for isHealthy() - avoids hitting the Go service
+// more than once per 60s. When the service is down, this prevents every
+// image-gen call from wasting 10s on axios timeouts.
+const _healthCache = { value: null, expiresAt: 0 };
+
 class GoImageService {
   constructor(overrideUrl = null) {
-    this.baseUrl =
-      overrideUrl ||
-      process.env.GO_IMAGE_SERVICE_URL ||
-      "https://mellow2006-mellowbotbackend.hf.space";
-    
-    if (!global.goServiceInitialized) {
-      global.goServiceInitialized = true;
-      console.log(`📡 [GoService] Using Base URL: ${this.baseUrl}`);
-      // Startup health check — confirms Go service is reachable on boot
-      this.healthCheck()
-        .then((h) => console.log("[GoService] Health:", JSON.stringify(h)))
-        .catch((e) => console.error("[GoService] Health FAIL:", e.message));
-    }
+    this.baseUrl = overrideUrl || _explicitGoUrl || _DEFAULT_GO_URL;
+
+    // 💡 FIX 2026-07-26 (CRITICAL):
+    // this.client MUST be created BEFORE this.healthCheck() is called.
+    // The previous code called this.healthCheck() at line 36, but
+    // this.client wasn't set until line 50. Inside healthCheck(),
+    // `this.client.get(...)` threw `TypeError: Cannot read properties of
+    // undefined (reading 'get')` - which was caught and returned null,
+    // making it look like the Go service was unreachable when it was
+    // actually fine. This was the root cause of ALL the "Health: null"
+    // logs. The Go service was never down; the healthCheck code was broken.
+    // 💡 PERF 2026-09-14 (owner: "image cards should feel instant"):
+    // keep-alive HTTP agents. Every card used to open a fresh TCP connection
+    // to the Go service (and tear it down after) - on the Box1→Box2 VCN hop
+    // that added tens of ms per card plus TIME_WAIT socket churn under load.
+    // A shared keepAlive agent reuses warm connections; combined with the
+    // Go-side asset/font caches and fmt=jpeg this is the cheap half of the
+    // latency win (no behavioral change otherwise).
+    const http = require('http');
+    const keepAliveAgent = new http.Agent({
+      keepAlive: true,
+      keepAliveMsecs: 30000,
+      maxSockets: 8,
+      maxFreeSockets: 4,
+    });
 
     this.client = axios.create({
       baseURL: this.baseUrl,
-      timeout: 120000, // 120s timeout for browser ops
+      timeout: 120000, // 120s timeout for browser ops (scrapes, GIFs)
       maxBodyLength: Infinity,
       maxContentLength: Infinity,
+      httpAgent: keepAliveAgent,
+      httpsAgent: keepAliveAgent, // harmless for http:// URLs, useful if the URL is ever https
     });
 
-    // Queue for sequential processing
-    this.heavyOpQueue = Promise.resolve();
+    // 💡 PERF PATCH 2026-07-27:
+    // The previous queue was a single chained Promise - every "heavy" op
+    // (combat image, card GIF, burn GIF, chess board, ludo board, TTT,
+    // boss splash, convert) ran strictly one at a time. If two users
+    // ran `.jk coll` simultaneously, the second waited for the first to
+    // finish (10-15s) before even starting - visible as doubled response
+    // latency under load.
+    //
+    // New implementation: a counting semaphore with CONCURRENCY=3 slots.
+    // The Go service on Oracle (0.1 CPU, 954MB RAM) already tolerates
+    // concurrent requests - `generateCardGrid` and `generateEconomyCard`
+    // bypass the queue entirely and have been running concurrently in
+    // production for months with no Go-service OOM. So 3 concurrent slots
+    // is a conservative bump that roughly halves image-command latency
+    // under multi-user load without risking the Go service's RAM.
+  this._concurrency = parseInt(process.env.GO_SERVICE_CONCURRENCY, 10) || 6; // 💡 2026-10-02: 3 -> 6 (#fec95a load test)
+    this._activeOps = 0;
+    this._waiters = [];
+    // 💡 #fec95a 2026-10-02 (load-test round 2): animated (ffmpeg) combat
+    // renders are the heaviest op on this 2-core box. Measured: 10
+    // simultaneous animated renders thrash both cores, pushing individual
+    // encodes past the 60s axios timeout AND starving the queued static
+    // fallbacks behind them (4/20 users ended with NO image in the mixed
+    // wave). Animated renders now run through a DEDICATED semaphore
+    // (default 2, GO_ANIMATED_CONCURRENCY) instead of _enqueue, and give
+    // up after GO_ANIMATED_WAIT_MS (default 15s) so the caller falls back
+    // to the static express lane early - in interactive combat a fast PNG
+    // beats a slow MP4.
+    this._animMax = parseInt(process.env.GO_ANIMATED_CONCURRENCY, 10) || 2;
+    this._animWaitMs = parseInt(process.env.GO_ANIMATED_WAIT_MS, 10) || 15000;
+    this._animActive = 0;
+    this._animWaiters = [];
+    if (!global.goServiceInitialized) {
+      global.goServiceInitialized = true;
+      console.log(`📡 [GoService] Using Base URL: ${this.baseUrl} (concurrency=${this._concurrency})`);
+      // Startup health check - confirms Go service is reachable on boot.
+      // Uses a SHORT 5s timeout (not the 120s axios default) so a dead
+      // Go service doesn't hang the boot log for 2 minutes.
+      // Now that this.client is set before this call, it actually works.
+      this.healthCheck()
+        .then((h) => {
+          if (h) {
+            console.log("[GoService] Health: ✅", JSON.stringify(h));
+          } else {
+            console.error("[GoService] Health: ❌ null (service unreachable at " + this.baseUrl + ")");
+            console.error("    Image commands (.char/.coll/.deck/.bal/combat) will FAIL silently.");
+            console.error("    Fix: ssh into Oracle, run: cd ~/bot_generation && pm2 restart bot-generation-go");
+            console.error("    Then verify: curl -s -m 5 " + this.baseUrl + "/health");
+          }
+        })
+        .catch((e) => console.error("[GoService] Health FAIL:", e.message));
+    }
   }
 
   /*
-   * Helper to queue heavy operations sequentially
+   * Helper to queue heavy operations with a concurrency limit.
+   *
+   * 💡 PERF PATCH 2026-07-27:
+   * Replaced the single-chained-Promise queue with a counting semaphore.
+   * Up to `_concurrency` (3) operations may run in parallel; the (N+1)th
+   * waits in `_waiters` until a slot frees up. This halves multi-user
+   * image-command latency on Oracle without risking Go-service OOM
+   * (the Go service already tolerates concurrent requests - see comment
+   * on `generateCardGrid` which bypasses this queue).
+   *
+   * Each op still gets its own try/catch - one failure doesn't poison
+   * the queue (a previous bug fixed in 2026-07-26 by ensuring the catch
+   * chain always resolved). The semaphore implementation here preserves
+   * that property: resolve/reject happens on the caller's promise, and
+   * the slot-release happens in `finally` regardless of outcome.
    */
-  async _enqueue(op) {
+  async _enqueue(op, opts = {}) {
+    const waitBudget = opts.waitMs || 8000;
+    const priority = !!opts.priority;
     return new Promise((resolve, reject) => {
-      this.heavyOpQueue = this.heavyOpQueue
-        .then(async () => {
-          try {
-            const result = await op();
-            resolve(result);
-          } catch (err) {
-            reject(err);
-          }
-        })
-        .catch((err) => {
-          // Propagate rejection AND keep the chain alive for next ops
+      // 💡 FIX 2026-08-03: Queue wait timeout.
+      // If all 3 concurrency slots are busy with 10s timeouts, a 4th request
+      // would wait 30s+ in the queue before even starting - and the outer
+      // command timeout (45s) would fire, leaving the request orphaned.
+      // Now: if we wait > 8s in the queue just to START, reject immediately
+      // so the caller can fall back to text-only. The op itself still has
+      // its own axios timeout (10s for combat, etc).
+      let queueTimer = null;
+      let started = false;
+      const run = async () => {
+        if (started) return;
+        started = true;
+        if (queueTimer) clearTimeout(queueTimer);
+        this._activeOps++;
+        try {
+          const result = await op();
+          resolve(result);
+        } catch (err) {
           reject(err);
-        });
+        } finally {
+          this._activeOps--;
+          // If anyone is waiting, hand off our slot to the next waiter.
+          if (this._waiters.length > 0) {
+            const next = this._waiters.shift();
+            next();
+          }
+        }
+      };
+      if (this._activeOps < this._concurrency) {
+        run();
+      } else {
+        // Queue wait timeout - if we don't get a slot within the wait
+        // budget, reject so the caller can fall back gracefully instead
+        // of hanging the outer command for 45s.
+        // 💡 2026-10-02 LOAD-TEST FIX (#fec95a): 24 simultaneous users with
+        // animated (ffmpeg) renders in the mix starved static combat
+        // renders past the fixed 8s budget (measured: 13/20 success).
+        // Combat ops now get (a) FRONT-OF-QUEUE priority and (b) a 20s
+        // budget; bulk renders keep 8s. Concurrency raised 3 -> 6
+        // (GO_SERVICE_CONCURRENCY env; Go RSS peaked 259MB of ~400MB
+        // available during the 24-user flood - measured safe).
+        queueTimer = setTimeout(() => {
+          if (started) return;
+          // Remove our `run` from the waiters list so it doesn't fire later.
+          const idx = this._waiters.indexOf(run);
+          if (idx !== -1) this._waiters.splice(idx, 1);
+          reject(new Error(`GoService queue timeout (${Math.round(waitBudget / 1000)}s wait for slot)`));
+        }, waitBudget);
+        if (priority) this._waiters.unshift(run);
+        else this._waiters.push(run);
+      }
     });
   }
 
   async healthCheck() {
+    // 💡 FIX: use a SHORT 5s timeout. The axios client default is 120s,
+    // which means a dead Go service hangs healthCheck for 2 full minutes.
+    // Health checks should be fast - if it doesn't respond in 5s, it's down.
     try {
-      const res = await this.client.get("/health");
+      const res = await this.client.get("/health", { timeout: 5000 });
       return res.data;
     } catch (error) {
+      // 💡 FIX 2026-07-26: log the ACTUAL error, not just "null". The
+      // deploy's curl + axios + node-http tests ALL succeed, but the bot's
+      // axios healthCheck returns null. We need to see the exact error.
+      console.error(`[GoService] healthCheck ERROR:`);
+      console.error(`  code: ${error.code || 'N/A'}`);
+      console.error(`  message: ${error.message}`);
+      console.error(`  syscall: ${error.syscall || 'N/A'}`);
+      console.error(`  errno: ${error.errno || 'N/A'}`);
+      console.error(`  address: ${error.address || 'N/A'}`);
+      console.error(`  port: ${error.port || 'N/A'}`);
+      if (error.response) {
+        console.error(`  response status: ${error.response.status}`);
+        console.error(`  response data: ${JSON.stringify(error.response.data).slice(0, 200)}`);
+      }
+      if (error.request) {
+        console.error(`  request method: ${error.request.method || 'N/A'}`);
+        console.error(`  request path: ${error.request.path || 'N/A'}`);
+      }
       return null;
     }
+  }
+
+  /*
+   * Cached health check - returns true/false without hitting the Go service
+   * more than once per 60s. Used to gate image-gen calls so commands don't
+   * waste 10s on axios timeouts when the service is known-down.
+   *
+   * 💡 FIX 2026-08-05: Prevents cascading timeouts when Go service is down.
+   * Without this, every image-gen call waits its full timeout (10-30s)
+   * even when the service has been down for minutes.
+   */
+  async isHealthy() {
+    const now = Date.now();
+    if (now < _healthCache.expiresAt) {
+      return _healthCache.value;
+    }
+    const h = await this.healthCheck();
+    _healthCache.value = !!h;
+    _healthCache.expiresAt = now + 60000; // cache for 60s
+    return _healthCache.value;
   }
 
   /*
@@ -62,31 +249,261 @@ class GoImageService {
    */
   async generateCombatImage(data) {
     return this._enqueue(async () => {
+      const startTime = Date.now();
       try {
-        const response = await this.client.post("/api/combat", data, {
+        // 💡 2026-09-15 PERF: fmt=jpeg - combat scenes were the largest PNGs
+        // in the bot (1-3MB); JPEG q90 cuts WhatsApp upload time accordingly.
+        // Canvas is opaque (baked background), so no alpha is lost.
+        const response = await this.client.post("/api/combat?fmt=jpeg", data, {
           responseType: "arraybuffer",
-          timeout: 5000, // 5s timeout for fast fallback
+          timeout: 10000, // 💡 FIX: was 5000ms - too aggressive, caused recurring
+                          // "GoService Combat Error: timeout of 5000ms exceeded".
+                          // The Go service on Render (0.1 CPU) can take 6-8s for
+                          // complex combat scenes with multiple combatants. 10s
+                          // gives enough headroom while still falling back to
+                          // text-only if the service is truly unresponsive.
         });
-        return Buffer.from(response.data);
+        const buf = Buffer.from(response.data);
+        console.log(`[GoService] Combat image: ${buf.length} bytes in ${((Date.now() - startTime) / 1000).toFixed(2)}s`);
+        return buf;
       } catch (error) {
         console.error("GoService Combat Error:", error.message);
         throw error;
+      }
+    }, { priority: true, waitMs: 20000 }); // 💡 #fec95a: interactive combat jumps the queue
+  }
+
+  /*
+   * Generate Combat Image (DIRECT - bypasses _enqueue)
+   *
+   * 💡 FIX 2026-08-04: PvP duel images are static PNGs (fast ~1-3s render).
+   * Routing them through _enqueue caused them to stall behind slow GIF
+   * renders in the 3-slot queue - the roster/detail GIF calls already
+   * bypass _enqueue (they take 8-15s), and when 3 of those were in flight,
+   * a duel PNG waited up to 8s in the queue and then hit the 5s race
+   * timeout in acceptChallenge, falling back to text-only.
+   *
+   * A static PNG is lighter than any GIF, so bypassing the queue is safe.
+   * This mirrors the generateSummonRosterGIF / generateSummonDetailGIF
+   * pattern: direct axios POST with an explicit timeout.
+   *
+   * Used by PvP acceptChallenge + handlePvPAction turn images.
+   */
+  async generateCombatImageDirect(data) {
+    const startTime = Date.now();
+    try {
+      const axios = require('axios');
+      const baseURL = this.client.defaults.baseURL;
+      const response = await axios.post(baseURL + '/api/combat?fmt=jpeg', data, {
+        responseType: 'arraybuffer',
+        // 💡 #fec95a 2026-10-02: 10s -> 20s. This is also the animated->static
+        // FALLBACK lane now; under a 20-user flood direct statics measured up
+        // to ~7s when animated renders saturate the CPU - 10s was too tight.
+        timeout: 20000,
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      const buffer = Buffer.from(response.data);
+      console.log(`[GoService] Combat image (direct): ${buffer.length} bytes in ${elapsed}s`);
+      return buffer;
+    } catch (error) {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.error(`[GoService] Combat image (direct) FAILED after ${elapsed}s:`, error.message);
+      throw error;
+    }
+  }
+
+  /*
+   * Animated-render semaphore (dedicated; does NOT use _enqueue slots).
+   * Throws on wait-budget expiry so the caller falls back to the static
+   * express lane early instead of queueing behind stalled encodes.
+   */
+  _animAcquire() {
+    if (this._animActive < this._animMax) {
+      this._animActive++;
+      return Promise.resolve();
+    }
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const idx = this._animWaiters.indexOf(waiter);
+        if (idx !== -1) this._animWaiters.splice(idx, 1);
+        reject(new Error(`animated throttle: no render slot within ${Math.round(this._animWaitMs / 1000)}s`));
+      }, this._animWaitMs);
+      const waiter = () => {
+        clearTimeout(timer);
+        this._animActive++;
+        resolve();
+      };
+      this._animWaiters.push(waiter);
+    });
+  }
+
+  _animRelease() {
+    this._animActive = Math.max(0, this._animActive - 1);
+    if (this._animWaiters.length > 0) {
+      const next = this._animWaiters.shift();
+      next();
+    }
+  }
+
+  /*
+   * Generate ANIMATED Combat Video (MP4) - NEW 2026-07-29
+   * Renders a 12-frame animation as an MP4 with VFX overlays, sprite reactions,
+   * HP interpolation, and defeated fade-out. Falls back to static PNG on failure.
+   * Payload extends generateCombatImage with an `action` field.
+   *
+   * 💡 #fec95a 2026-10-02: was routed through _enqueue (1 of 6 shared slots
+   * + 25s queue-wait). Measured under a 20-user flood: 10 simultaneous
+   * ffmpeg encodes thrash 2 CPU cores -> 60s axios timeouts, and the
+   * shared queue stayed blocked so static fallbacks starved too. Now:
+   * dedicated 2-slot animated semaphore + direct axios call. Exceeding the
+   * semaphore wait budget throws fast -> caller falls back to static.
+   */
+  async generateAnimatedCombat(data) {
+    await this._animAcquire();
+    try {
+      const axios = require('axios');
+      const baseURL = this.client.defaults.baseURL;
+      const response = await axios.post(baseURL + "/api/combat/animated", data, {
+        responseType: "arraybuffer",
+        timeout: 60000, // MP4 encoding via ffmpeg can take 10-30s on slow CPU
+        headers: { 'Content-Type': 'application/json' },
+      });
+      return Buffer.from(response.data);
+    } catch (error) {
+      console.error("GoService Animated Combat Error:", error.message);
+      throw error;
+    } finally {
+      this._animRelease();
+    }
+  }
+
+  /*
+   * Generate Hunt Card - NEW 2026-07-29
+   * Renders a hunting result image card (player + animal + loot).
+   * Payload: { playerName, playerClass, biome, animal, animalSprite, item, itemRarity, xp, zeni, rank }
+   */
+  async generateHuntCard(data) {
+    return this._enqueue(async () => {
+      try {
+        // 💡 2026-09-14 PERF: fmt=jpeg (see generatePortraitCard)
+        const response = await this.client.post("/api/hunt/card?fmt=jpeg", data, {
+          responseType: "arraybuffer",
+          timeout: 10000,
+        });
+        return Buffer.from(response.data);
+      } catch (error) {
+        console.error("GoService Hunt Card Error:", error.message);
+        return null; // non-fatal - caller falls back to text
       }
     });
   }
 
   /*
-   * Generate Combat End Screen
+   * 💡 2026-09-15 PERF: thumbFromBuffer - WhatsApp preview thumbnail via the
+   * Go service's POST /api/thumb. The old jimp path (pure-JS full-image
+   * decode) measured 400-900ms per image on Box 1's CPU, paid inline on EVERY
+   * image send; the Go endpoint does the same work in ~10-20ms on localhost.
+   * Returns a ≤120px JPEG Buffer, or null on ANY failure (caller falls back
+   * to jimp - this must never throw).
    */
-  async generateCombatEndScreen(text) {
+  async thumbFromBuffer(imageBuffer) {
+    try {
+      if (!Buffer.isBuffer(imageBuffer) || imageBuffer.length < 64) return null;
+      const response = await this.client.post("/api/thumb", imageBuffer, {
+        responseType: "arraybuffer",
+        timeout: 2000, // localhost render is ~10-20ms; 2s covers a cold CPU
+        headers: { "Content-Type": "application/octet-stream" },
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+      });
+      const buf = Buffer.from(response.data);
+      if (buf.length < 50) return null; // jpegThumb is ~2-3KB when healthy
+      return buf;
+    } catch (error) {
+      return null; // silent - jimp fallback handles it
+    }
+  }
+
+  /*
+   * Generate Summon Roster GIF - NEW 2026-08-03
+   * Renders an animated GIF showing the player's summons doing their
+   * idle.gif animations on a sparklinlabs background, with an info hub.
+   * Payload: { userNickname, slotsUsed, slotsMax, summons[], activeIndex }
+   *
+   * 💡 NOTE: This bypasses _enqueue (the 8s queue timeout is too short
+   * for GIF rendering which takes 8-15s). Uses a direct axios call with
+   * a 30s timeout instead.
+   */
+  async generateSummonRosterGIF(data) {
+    const startTime = Date.now();
+    console.log('[GoService] Summon roster GIF: generating...');
+    try {
+      const axios = require('axios');
+      const baseURL = this.client.defaults.baseURL;
+      const response = await axios.post(baseURL + '/api/summons/roster', data, {
+        responseType: 'arraybuffer',
+        timeout: 30000,
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      const buffer = Buffer.from(response.data);
+      console.log(`[GoService] Summon roster GIF: success! ${buffer.length} bytes in ${elapsed}s`);
+      return buffer;
+    } catch (error) {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.error(`[GoService] Summon roster GIF: FAILED after ${elapsed}s:`, error.message);
+      throw error;
+    }
+  }
+
+  /*
+   * Generate Summon Detail GIF - NEW 2026-08-04
+   * Renders a single summon's idle.gif large + detailed info hub.
+   * Used by .summon <#> command.
+   */
+  async generateSummonDetailGIF(data) {
+    const startTime = Date.now();
+    console.log('[GoService] Summon detail GIF: generating...');
+    try {
+      const axios = require('axios');
+      const baseURL = this.client.defaults.baseURL;
+      const response = await axios.post(baseURL + '/api/summons/detail', data, {
+        responseType: 'arraybuffer',
+        timeout: 30000,
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      const buffer = Buffer.from(response.data);
+      console.log(`[GoService] Summon detail GIF: success! ${buffer.length} bytes in ${elapsed}s`);
+      return buffer;
+    } catch (error) {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.error(`[GoService] Summon detail GIF: FAILED after ${elapsed}s:`, error.message);
+      throw error;
+    }
+  }
+
+  /*
+   * Generate Combat End Screen
+   * 💡 UPDATED 2026-07-29: Now accepts a richer payload {text, victory, gold, xp, items}
+   * for the new gradient + rewards panel end screen. The text-only path is still
+   * supported as a fallback (just pass {text}).
+   */
+  async generateCombatEndScreen(payload) {
+    // Backward-compat: accept a plain string
+    if (typeof payload === 'string') payload = { text: payload };
+    // 💡 2026-09-14 PERF: fmt=jpeg - the end cards render ~800KB-1MB as PNG;
+    // JPEG q90 is 4-6x smaller so WhatsApp upload (the dominant latency)
+    // drops accordingly. Callers must send mimetype image/jpeg.
     return this._enqueue(async () => {
       try {
         const response = await this.client.post(
-          "/api/combat/endscreen",
-          { text },
+          "/api/combat/endscreen?fmt=jpeg",
+          payload,
           {
             responseType: "arraybuffer",
-            timeout: 5000, // 5s timeout for fast fallback
+            timeout: 10000,
           },
         );
         return Buffer.from(response.data);
@@ -98,7 +515,7 @@ class GoImageService {
   }
 
   /*
-   * Generate Boss Splash Screen (new — Phase 0 of RPG expansion)
+   * Generate Boss Splash Screen (new - Phase 0 of RPG expansion)
    * Renders a full-screen boss intro image with sprite, name, flavor text,
    * tier-colored background. Returns PNG buffer.
    * Payload: { name, spriteFilename, flavorText, tier }
@@ -107,8 +524,9 @@ class GoImageService {
   async generateBossSplash(data) {
     return this._enqueue(async () => {
       try {
+        // 💡 2026-09-15 PERF: fmt=jpeg (see generateCombatImage)
         const response = await this.client.post(
-          "/api/combat/splash",
+          "/api/combat/splash?fmt=jpeg",
           data,
           {
             responseType: "arraybuffer",
@@ -118,7 +536,7 @@ class GoImageService {
         return Buffer.from(response.data);
       } catch (error) {
         console.error("GoService Boss Splash Error:", error.message);
-        return null; // non-fatal — splash is optional
+        return null; // non-fatal - splash is optional
       }
     });
   }
@@ -129,8 +547,9 @@ class GoImageService {
   async generateChessBoard(data) {
     return this._enqueue(async () => {
       try {
-        const response = await this.client.post("/api/chess", data, {
+        const response = await this.client.post("/api/chess?fmt=jpeg", data, {
           responseType: "arraybuffer",
+          timeout: 10000, // 💡 FIX 2026-08-05: was missing - inherited 120s default
         });
         return Buffer.from(response.data);
       } catch (error) {
@@ -152,7 +571,7 @@ class GoImageService {
             pfpUrl: p.pfpUrl || pfpUrls[p.jid] || "",
           }));
         }
-        const response = await this.client.post("/api/ludo", data, {
+        const response = await this.client.post("/api/ludo?fmt=jpeg", data, {
           responseType: "arraybuffer",
           timeout: 15000,
         });
@@ -170,8 +589,9 @@ class GoImageService {
   async renderTicTacToeBoard(data) {
     return this._enqueue(async () => {
       try {
-        const response = await this.client.post("/api/ttt", data, {
+        const response = await this.client.post("/api/ttt?fmt=jpeg", data, {
           responseType: "arraybuffer",
+          timeout: 10000, // 💡 FIX 2026-08-05: was missing - inherited 120s default
         });
         return Buffer.from(response.data);
       } catch (error) {
@@ -188,7 +608,7 @@ class GoImageService {
     return this._enqueue(async () => {
       try {
         const response = await this.client.post(
-          "/api/ttt/leaderboard",
+          "/api/ttt/leaderboard?fmt=jpeg",
           { scores },
           {
             responseType: "arraybuffer",
@@ -200,6 +620,40 @@ class GoImageService {
         throw error;
       }
     });
+  }
+
+  /*
+   * Generate Card Collection/Deck Grid (static PNG, same style as eShop)
+   * Uses /api/cards/grid endpoint - no GIF/MP4, just a 4×4 PNG grid.
+   * Works on 500MB/0.1CPU servers (sequential downloads, NearestNeighbor).
+   */
+  async generateCardGrid(imageUrls, title) {
+    try {
+      const response = await this.client.post(
+        "/api/cards/grid",
+        {
+          images: imageUrls,
+          title: title,
+        },
+        {
+          responseType: "arraybuffer",
+          // 💡 FIX 2026-07-26: was 60000 (60s). When the Go service is
+          // unreachable or slow, this 60s hang blocks the message handler
+          // for a full minute, backing up the entire bot (user saw 80s
+          // pong response times). 15s is enough for the grid to render
+          // on a working Go service (typical: 2-5s for 12 cards). If it
+          // takes longer than 15s, something is wrong and we should bail
+          // to the text fallback immediately.
+          timeout: 15000,
+        },
+      );
+      const buf = Buffer.from(response.data);
+      if (buf.length < 100) return null;
+      return buf;
+    } catch (error) {
+      console.error("GoService Card Grid Error:", error.message);
+      return null;
+    }
   }
 
   /*
@@ -216,6 +670,7 @@ class GoImageService {
           },
           {
             responseType: "arraybuffer",
+            timeout: 15000, // 💡 FIX 2026-08-05: was missing - inherited 120s default
           },
         );
         return Buffer.from(response.data);
@@ -241,6 +696,7 @@ class GoImageService {
           },
           {
             responseType: "arraybuffer",
+            timeout: 10000, // 💡 FIX 2026-08-05: was missing - inherited 120s default
           },
         );
         return Buffer.from(response.data);
@@ -264,6 +720,10 @@ class GoImageService {
           },
           {
             responseType: "arraybuffer",
+            timeout: 10000, // 💡 FIX 2026-08-05: CRITICAL - was missing (120s default).
+            // This is called by background doSpawn timer. When Go service is down,
+            // each call held a queue slot for 120s, clogging _enqueue and causing
+            // ALL other image commands to timeout with "queue timeout (8s)".
           },
         );
         return Buffer.from(response.data);
@@ -305,7 +765,7 @@ class GoImageService {
   }
 
   /*
-   * Powerscale Search — returns list of matching characters
+   * Powerscale Search - returns list of matching characters
    */
   async searchPowerscale(query) {
     try {
@@ -327,7 +787,7 @@ class GoImageService {
   }
 
   /*
-   * Powerscale Fetch — scrapes specific character page after user selects
+   * Powerscale Fetch - scrapes specific character page after user selects
    */
   async fetchPowerscalePage(pageUrl) {
     try {
@@ -364,18 +824,75 @@ class GoImageService {
     }
   }
 
+  // P28 (quiz box-offload): Jikan theme-song lists via the Go service.
+  // Node->Jikan is CDN-blocked on some networks (measured 504 x5 on Box 1
+  // while curl and Go pass); the service also caches lists for 24h.
+  async getThemeSongs(animeId) {
+    const base = process.env.GO_AUDIO_SERVICE_URL || this.baseUrl;
+    try {
+      const r = await axios.get(base + "/api/scrape/themes", {
+        params: { mal_id: String(animeId) },
+        timeout: 20000,
+      });
+      if (r.data && Array.isArray(r.data.openings)) {
+        return { openings: r.data.openings, endings: r.data.endings || [] };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   /*
    * YouTube Audio Info & direct URL (Go Service)
    */
-  async getAudioInfo(query) {
-    try {
-      const response = await this.client.get("/api/scrape/audio", {
-        params: { query },
+  async getAudioInfo(query, opts = {}) {
+    // 💡 FIX (tester issue 5268cb): every failure (service down, timeout,
+    // empty search) collapsed to null, so the bot always said "No results
+    // found or service unavailable" and testers could not tell whether the
+    // query or the service was at fault. Now: one retry for transient
+    // network errors, and the failure REASON is surfaced to the caller.
+    const base = process.env.GO_AUDIO_SERVICE_URL || this.baseUrl;
+    // P25 (quiz box-offload): optional server-side clip. When the caller passes
+    // { clipSeconds, clipBitrate }, the service trims the mp3 itself and points
+    // audioURL at the clip (response gains clipped/clipSeconds/fullBytes).
+    // Callers WITHOUT opts get the exact legacy response shape.
+    const params = { query };
+    if (opts && Number.isInteger(opts.clipSeconds) && opts.clipSeconds > 0) {
+      params.clip_seconds = String(opts.clipSeconds);
+      if (opts.clipBitrate) params.clip_bitrate = String(opts.clipBitrate);
+    }
+    const attempt = async () => {
+      const response = await axios.get(base + "/api/scrape/audio", {
+        params,
+        // 💡 OWNER SPEC §3 (2026-09-28): per-call budget. Quiz audio builders
+        // pass timeoutMs: 120000 (the Go service self-budgets ~95s on the
+        // YouTube branch) - the old hardcoded 180s x1 retry meant one dead
+        // candidate could burn 6 minutes of a 5-minute section budget.
+        timeout: Math.max(30000, parseInt(opts.timeoutMs, 10) || 180000),
       });
       return response.data;
+    };
+    // 2026-09-14 audio v3: 180s budget per attempt (see note above).
+    // 💡 OWNER SPEC §3: quiz callers pass noRetry - the Go chain already
+    // retries internally, so a Node-side retry just doubles the per-candidate
+    // budget and overshoots the section deadline.
+    try {
+      return await attempt();
     } catch (error) {
+      const status = error && error.response ? error.response.status : null;
+      const transient = !status || status >= 500 || error.code === 'ECONNABORTED' || error.code === 'ECONNRESET';
+      if (transient && !opts.noRetry) {
+        try {
+          console.warn(`[GoService] Audio transient failure (${error.message}), retrying once...`);
+          return await attempt();
+        } catch (retryError) {
+          console.error("GoService Audio Info Error (retry):", retryError.message);
+          return { error: 'service_unreachable', detail: retryError.message };
+        }
+      }
       console.error("GoService Audio Info Error:", error.message);
-      return null;
+      return { error: 'service_unreachable', detail: error.message };
     }
   }
 
@@ -427,12 +944,15 @@ class GoImageService {
    * Returns a beautiful PNG buffer of the user's balance card
    */
   async generateEconomyCard(data) {
+    const startTime = Date.now();
     try {
-      const response = await this.client.post("/api/cards/economy", data, {
+      // 💡 2026-09-15 PERF: fmt=jpeg (see generateCombatImage)
+      const response = await this.client.post("/api/cards/economy?fmt=jpeg", data, {
         responseType: "arraybuffer",
-        timeout: 45000,
+        timeout: 10000,
       });
       const buf = Buffer.from(response.data);
+      console.log(`[GoService] Economy card: ${buf.length} bytes in ${((Date.now() - startTime) / 1000).toFixed(2)}s`);
       // Validate buffer (PNG header check + minimum size)
       if (buf.length < 100) return null;
       return buf;
@@ -446,12 +966,15 @@ class GoImageService {
    * Generate Transaction Card Image
    */
   async generateTransactionCard(data) {
+    const startTime = Date.now();
     try {
-      const response = await this.client.post("/api/cards/transaction", data, {
+      // 💡 2026-09-15 PERF: fmt=jpeg (see generateCombatImage)
+      const response = await this.client.post("/api/cards/transaction?fmt=jpeg", data, {
         responseType: "arraybuffer",
-        timeout: 45000,
+        timeout: 10000,
       });
       const buf = Buffer.from(response.data);
+      console.log(`[GoService] Transaction card: ${buf.length} bytes in ${((Date.now() - startTime) / 1000).toFixed(2)}s`);
       if (buf.length < 100) return null;
       return buf;
     } catch (error) {
@@ -461,13 +984,41 @@ class GoImageService {
   }
 
   /*
+   * Generate PORTRAIT event card (600x1000) - NEW 2026-09-12
+   * Same lamoot parchment family as craft/hunt/fish/decree, but portrait
+   * orientation. kind: "DUEL" (pvp result) | "QUEST" (dungeon tally).
+   * Payload: {kind, nickname, caption, sealText, ledger[{label,value}],
+   *           players[{name,xp,zeni}], winnerClass, winnerIndex,
+   *           loserClass, loserIndex}
+   * Returns PNG buffer or null (callers fall back to text).
+   */
+  async generatePortraitCard(data) {
+    try {
+      // 💡 2026-09-14 PERF: fmt=jpeg (q90) - 4-6x smaller than PNG for the
+      // parchment family, cutting WhatsApp upload time. Callers send it
+      // with mimetype image/jpeg.
+      const response = await this.client.post("/api/cards/portrait?fmt=jpeg", data, {
+        responseType: "arraybuffer",
+        timeout: 10000,
+      });
+      const buf = Buffer.from(response.data);
+      if (buf.length < 100) return null;
+      return buf;
+    } catch (error) {
+      console.error("GoService Portrait Card Error:", error.message);
+      return null;
+    }
+  }
+
+  /*
    * Generate Profile Card Image
    */
   async generateProfileCard(data) {
     try {
-      const response = await this.client.post("/api/cards/profile", data, {
+      // 💡 2026-09-14 PERF: fmt=jpeg (see generatePortraitCard)
+      const response = await this.client.post("/api/cards/profile?fmt=jpeg", data, {
         responseType: "arraybuffer",
-        timeout: 45000,
+        timeout: 10000,
       });
       const buf = Buffer.from(response.data);
       if (buf.length < 100) return null;
@@ -487,7 +1038,7 @@ class GoImageService {
     try {
       const response = await this.client.post("/api/cards/eshop", data, {
         responseType: "arraybuffer",
-        timeout: 30000, // 30s — needs to fetch up to 16 card images
+        timeout: 30000, // 30s - needs to fetch up to 16 card images
       });
       const buf = Buffer.from(response.data);
       if (buf.length < 100) return null;
@@ -497,6 +1048,93 @@ class GoImageService {
       return null;
     }
   }
+
+  /**
+   * Generate a TRUE hybrid grid MP4 - animated cards cycle in place,
+   * static cards stay still, grid layout preserved (540×1080).
+   *
+   * Added 2026-07-27 per benchmark results showing Mode D (true hybrid via
+   * ffmpeg) is the right architecture for `.jk coll --anim` / `.jk deck --anim`.
+   *
+   * Benchmark on Oracle (0.1 OCPU, 954MB RAM):
+   *   8s @ 15fps: 3.3s render, 34 KB output, 0 MB RAM delta (SWEET SPOT)
+   *
+   * Returns an MP4 buffer, or null on failure (callers should fall back
+   * to the static generateCardGrid() in that case).
+   *
+   * @param {Array<{url, animated, name, tier}>} images - same shape as generateCardGrid,
+   *   but the `animated` field is now honored (T6/S/Event cards should be marked animated:true)
+   * @param {string} title - currently unused by the Go renderer, kept for API symmetry
+   * @param {object} opts - { duration: seconds, fps: framerate }, defaults to 8s @ 15fps
+   */
+  async generateHybridGrid(images, title, opts = {}) {
+    try {
+      const duration = opts.duration || 5;
+      // 💡 AUDIT FIX 2026-08-01 (Round 2): raised default fps from 10 to 15.
+      // 10fps looks choppy. 15fps is the sweet spot (20fps doubles render
+      // time with marginal gain). Matches the onboarding doc's note.
+      const fps = opts.fps || 15;
+      const response = await this.client.post(
+        "/api/cards/hybrid-grid",
+        { images, title, duration, fps },
+        {
+          responseType: "arraybuffer",
+          // 💡 FIX 2026-09-10: was 45s. With the 5MB GIF cap raised (real
+          // shoob GIFs run up to ~40MB), heavy decks legitimately take
+          // 60-90s to download + composite. Timing out here meant the bot
+          // fell back to a STATIC grid - i.e. the exact "animated cards
+          // render as stills" bug. 150s covers the observed worst case
+          // (12 heavy GIFs ≈ 200MB CDN-side ≈ 70s + render).
+          timeout: 150000,
+        },
+      );
+      const buf = Buffer.from(response.data);
+      if (buf.length < 100) return null;
+      // 💡 The hybrid endpoint may return either:
+      //   - video/mp4 (when ≥1 card is animated - the styled static grid + GIF overlays)
+      //   - image/png (when NO cards are animated - just the styled static grid)
+      // The caller needs to know which so it can send as { video } or { image }.
+      const contentType = response.headers['content-type'] || '';
+      return { buffer: buf, contentType };
+    } catch (error) {
+      console.error("GoService Hybrid Grid Error:", error.message);
+      return null;
+    }
+  }
 }
 
-module.exports = GoImageService;
+// 💡 PERF PATCH 2026-07-27 (singleton):
+// Previously every module did `const goService = new GoImageService()` at the
+// top of the file. There were 12 such callsites (engine.js x2, rpgCommands,
+// shopCommands, repairCommands, cardSystem, combatImageGenerator, chess, ttt,
+// ludo, news, powerscale). Each one created:
+//   - Its own axios client (with its own connection pool - ~5-10 TCP sockets)
+//   - Its own _enqueue queue (independent concurrency=3 cap per instance)
+//   - Its own startup healthCheck log line
+// Net effect: 12 × (~3-5 MB) = ~40-60 MB of duplicate state, AND the
+// concurrency=3 cap was effectively 3×12=36 concurrent requests to the Go
+// service (could overwhelm it under load - the cap was meant to be a
+// GLOBAL limit, not per-instance).
+//
+// Fix: export a single shared instance. All callsites now do:
+//   const goService = require('../utils/goImageService');
+// instead of:
+//   const GoImageService = require('../utils/goImageService');
+//   const goService = new GoImageService();
+//
+// The class is still exported as `.GoImageService` for tests that construct
+// their own instance with a custom overrideUrl.
+const _sharedInstance = new GoImageService();
+
+module.exports = _sharedInstance;
+module.exports.GoImageService = GoImageService;
+module.exports.getShared = () => _sharedInstance;
+
+// 💡 Manual reload support (`<prefix> reloadservers`): drop the 60s isHealthy()
+// memo so the next image command re-probes the Go service immediately after a
+// reload/restart instead of trusting a pre-reload cached verdict.
+function resetHealthCache() {
+  _healthCache.value = null;
+  _healthCache.expiresAt = 0;
+}
+module.exports.resetHealthCache = resetHealthCache;

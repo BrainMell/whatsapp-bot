@@ -1,5 +1,9 @@
 require("dotenv").config();
 
+// Force IPv4 first to eliminate 60-90s IPv6 connection hangs on WhatsApp servers
+const dns = require('dns');
+try { dns.setDefaultResultOrder('ipv4first'); } catch (e) {}
+
 /*
  * GLOBAL RAM TRAP - ULTRA AGGRESSIVE
  * Intercepts hardcoded library logs that serialize large Buffer objects.
@@ -52,12 +56,14 @@ app.get('/', (req, res) => {
     let activeCount = 0;
     let disconnectedCount = 0;
     let qrCount = 0;
+    let otherCount = 0; // connecting / logged_out / needs_pairing / unknown
 
     for (const [botId, health] of healthMap.entries()) {
         instances.push({ botId, ...health });
         if (health.status === 'connected') activeCount++;
         else if (health.status === 'disconnected') disconnectedCount++;
-        else if (health.status === 'needs_qr') qrCount++;
+        else if (health.status === 'needs_qr' || health.status === 'needs_pairing') qrCount++;
+        else otherCount++; // connecting, logged_out, unknown, etc.
     }
 
     let overallStatus = 'Healthy';
@@ -66,7 +72,11 @@ app.get('/', (req, res) => {
         if (disconnectedCount === instances.length) {
             overallStatus = 'Offline';
             overallClass = 'down';
-        } else if (disconnectedCount > 0 || qrCount > 0) {
+        } else if (disconnectedCount > 0 || qrCount > 0 || otherCount > 0) {
+            // 💡 FIX: any non-connected bot (including `connecting`, `logged_out`,
+            // `needs_pairing`) makes the fleet Degraded. Previously these fell
+            // through and the dashboard reported "Healthy" while bots were
+            // crash-looping.
             overallStatus = 'Degraded';
             overallClass = 'degraded';
         }
@@ -482,6 +492,22 @@ async function boot() {
         process.exit(0);
     }
 
+    // 💡 SANDBOX AUTO-SAVE: save all active sandboxes on process exit
+    // so data isn't lost when the bot restarts.
+    async function gracefulShutdown() {
+        try {
+            const engine = require('./core/engine');
+            if (typeof engine.saveAllSandboxes === 'function') {
+                await engine.saveAllSandboxes();
+            }
+        } catch (e) {
+            console.error('🧪 [Sandbox] Graceful shutdown save failed:', e.message);
+        }
+        process.exit(0);
+    }
+    process.on('SIGTERM', gracefulShutdown);
+    process.on('SIGINT', gracefulShutdown);
+
     console.log(" Multi-Tenant Manager Booting...");
     
     // 1. Connect to Shared Database once
@@ -504,8 +530,9 @@ async function boot() {
         .filter(Boolean);
 
     if (selectedInstances.length > 0) {
-        const selected = new Set(selectedInstances);
-        folders = folders.filter(folder => selected.has(folder));
+        // Case-insensitive match so BOT_INSTANCE=subaru matches the Subaru folder
+        const selectedLower = new Set(selectedInstances.map(n => n.toLowerCase()));
+        folders = folders.filter(folder => selectedLower.has(folder.toLowerCase()));
         console.log(`🎯 Instance filter active: ${selectedInstances.join(', ')}`);
     }
 
@@ -514,7 +541,7 @@ async function boot() {
         return;
     }
 
-    // 3. Schedule weekly wealth tax (Phase 1 — Economy Rebalance)
+    // 3. Schedule weekly wealth tax (Phase 1 - Economy Rebalance)
     try {
       const economy = require('./core/rpg/economy');
       if (typeof economy.scheduleWealthTax === 'function') {
@@ -525,33 +552,10 @@ async function boot() {
       console.error("Failed to init wealth tax scheduler:", e.message);
     }
 
-    // 3b. Schedule daily guild bank interest + loan processing (Phase 2 — Guild Polish)
-    try {
-      const guildPerks = require('./core/rpg/guildPerks');
-      if (typeof guildPerks.runDailyInterest === 'function') {
-        // Run every 24 hours
-        const ONE_DAY = 24 * 60 * 60 * 1000;
-        // First run in 1 hour (so it doesn't fire immediately on boot), then daily
-        setTimeout(() => {
-          guildPerks.runDailyInterest().catch(e => console.error('[GuildInterest] Run failed:', e.message));
-          // 💡 Phase 2: also process overdue loans daily
-          if (typeof guildPerks.runDailyLoanProcessing === 'function') {
-            guildPerks.runDailyLoanProcessing().catch(e => console.error('[GuildLoans] Run failed:', e.message));
-          }
-          setInterval(() => {
-            guildPerks.runDailyInterest().catch(e => console.error('[GuildInterest] Run failed:', e.message));
-            if (typeof guildPerks.runDailyLoanProcessing === 'function') {
-              guildPerks.runDailyLoanProcessing().catch(e => console.error('[GuildLoans] Run failed:', e.message));
-            }
-          }, ONE_DAY);
-        }, 60 * 60 * 1000);
-        console.log("🏛️ Guild bank interest + loan scheduler initialized (runs every 24h).");
-      }
-    } catch (e) {
-      console.error("Failed to init guild interest scheduler:", e.message);
-    }
+    // 3b. (REMOVED 2026-10-03, GW overhaul: bank interest + auto loan
+    // penalties are gone — loans are no-interest, GM-approved support.)
 
-    // 3c. Schedule weekly raid spawn + voting round resolver (Phase 5 — Avatar Raid)
+    // 3c. Schedule weekly raid spawn + voting round resolver (Phase 5 - Avatar Raid)
     try {
       const raidSystem = require('./core/rpg/raidSystem');
       // Spawn raid boss if it doesn't exist for this week (runs on boot + every hour)
@@ -576,12 +580,12 @@ async function boot() {
       setTimeout(checkAndSpawnRaid, 2 * 60 * 1000);
       setInterval(checkAndSpawnRaid, 60 * 60 * 1000);
 
-      // Voting round resolver — runs every 30s to check if voting window closed
+      // Voting round resolver - runs every 30s to check if voting window closed
       const resolveRaidRound = async () => {
         try {
           await raidSystem.resolveVotingRound();
         } catch (e) {
-          // Silent — raid may not exist yet
+          // Silent - raid may not exist yet
         }
       };
       setInterval(resolveRaidRound, 30 * 1000);
@@ -591,7 +595,7 @@ async function boot() {
       console.error("Failed to init raid scheduler:", e.message);
     }
 
-    // 3d. Schedule daily bounty expiry (Phase 6 — Bounty System)
+    // 3d. Schedule daily bounty expiry (Phase 6 - Bounty System)
     try {
       const bountySystem = require('./core/rpg/bountySystem');
       const ONE_DAY = 24 * 60 * 60 * 1000;
@@ -607,37 +611,205 @@ async function boot() {
       console.error("Failed to init bounty scheduler:", e.message);
     }
 
-    // 3e. Schedule weekly guild war spawn + resolve (Phase 7 — Multi-Event Guild Wars)
+
+    // 3f. Out-of-combat passive regen scheduler (AUDIT FIX 2026-08-01)
+    // Skill-tree passives (e.g. Dragon God's "Soul of the Deep": +2-6% HP/turn,
+    // +5-13% MP/turn) and class passives with effect:'regen' (e.g. Druid's
+    // Nature's Wrath: +5 HP/turn) were ONLY applied during combat rounds.
+    // Outside combat, players had no regen at all - they could only heal via
+    // .g hospital. Now a global tick runs every 60s and applies passive regen
+    // to ALL users with persistent HP below max.
+    //
+    // Design notes:
+    //   - 60s tick = "1 turn" out of combat (combat turns are ~1-5s).
+    //   - Regen is CAPPED at maxHP - no overheal.
+    //   - Only users with currentHP < maxHP are touched (efficient).
+    //   - Reads the same passive definitions the combat engine uses, so
+    //     there's ONE source of truth.
+    //   - Non-fatal: any error for one user doesn't break the tick.
     try {
-      const guildWars = require('./core/rpg/guildWars');
-      // Check on boot (delayed 3 min so DB is ready), then every 1h
-      // — spawns new war if missing for current week, resolves if expired
-      const checkAndSpawnWar = async () => {
+      const economy = require('./core/rpg/economy');
+      const classSystem = require('./core/rpg/classSystem');
+      const progression = require('./core/rpg/progression');
+      const skillTreeMod = require('./core/rpg/skillTree');
+
+      const OUT_OF_COMBAT_TICK_MS = 60 * 1000; // 60s = 1 "turn"
+
+      // 💡 AUDIT FIX 2026-08-01 (Round 5): comprehensive rewrite of the
+      // out-of-combat regen scheduler. Fixes 4 bugs from the Round 1 version:
+      //
+      // BUG 1: user.class is a STRING (e.g. 'FIGHTER'), not an object. The
+      //   old code did `user.class?.passive` which is undefined for strings.
+      //   Class passive regen (Fighter Tenacity +3, Druid Nature's Wrath +5)
+      //   was NEVER applied out of combat. Now resolves via getUserClass().
+      //
+      // BUG 2: No in-combat check. Users in combat got DOUBLE regen - once
+      //   from the combat tick (applySkillPassivesPerTurn) and once from
+      //   this scheduler. Now skips users with an active game state.
+      //
+      // BUG 3: manaRegenPerTurn was ignored. Soul of the Deep grants +5-13%
+      //   MP/turn but the out-of-combat scheduler only healed HP. Now also
+      //   restores MP (stored on user.stats.currentMP, same as HP).
+      //
+      // BUG 4: Performance - getBaseStats() is expensive (calls
+      //   getEquipmentStats + summon trial passives). Calling it for every
+      //   user every 60s caused event loop lag on 3400+ users. Now caches
+      //   maxHP per user + invalidates on level-up (detected via user.level
+      //   change). Falls back to a lightweight maxHP estimate if cache miss.
+      const maxHPCache = new Map(); // userId → { level, maxHP }
+      let guildAdventureRef = null;
+      try { guildAdventureRef = require('./core/rpg/guildAdventure'); } catch (e) {}
+
+      // ⚔️ Guild War boot (overhaul 2026-10-03): combat hooks + recovery
+      try {
+        const gw = require('./core/rpg/guildWar');
+        gw.installCombatHooks();
+        gw.state.recoverOnBoot().then((n) => {
+          if (n.length) console.log(`⚔️ [GuildWar] recovered in-flight events: ${n.map((e) => `${e.eventId}:${e.state}`).join(', ')}`);
+        }).catch(() => {});
+      } catch (e) { console.error('[GuildWar] boot init failed:', e.message); }
+
+      const applyOutOfCombatPassiveRegen = async () => {
         try {
-          const existing = await guildWars.getWarStatus();
-          if (!existing) {
-            const result = await guildWars.spawnWeeklyWar();
-            if (result.success) {
-              console.log(`[GuildWars] Spawned weekly war: ${result.war.eventName}`);
-            }
-          } else if (existing.status === 'active' && new Date() > new Date(existing.endsAt)) {
-            // War has expired — resolve it
-            const result = await guildWars.resolveWeeklyWar();
-            if (result.action === 'resolved') {
-              console.log(`[GuildWars] Resolved expired war: ${result.war.eventName}`);
-              // Spawn next week's war
-              await guildWars.spawnWeeklyWar();
+          const economyData = economy.economyData;
+          if (!economyData || typeof economyData.entries !== 'function') return;
+          let touched = 0;
+          let skipped = 0;
+          for (const [userId, user] of economyData.entries()) {
+            try {
+              if (!user) continue;
+              // BUG 2 FIX: skip users in active combat
+              // 💡 CROSS-BOT FIX 2026-09-20: battle state is now bot-scoped
+              // (Joker battles are invisible to Subaru and vice versa), so
+              // the regen pass uses an explicit any-bot check instead of a
+              // scoped lookup - a player fighting on EITHER bot must not be
+              // passively healed mid-battle.
+              if (guildAdventureRef && typeof guildAdventureRef.isUserInAnyCombat === 'function') {
+                if (guildAdventureRef.isUserInAnyCombat(userId)) { skipped++; continue; }
+                // Group combat covered by the same scan (solo + group states)
+              }
+
+              // BUG 1 FIX: resolve class properly. user.class is a STRING.
+              const userClass = economy.getUserClass(userId);
+              if (!userClass) continue; // no class = can't have passives
+              const classId = userClass.id || userClass.name?.toUpperCase() || 'FIGHTER';
+
+              // BUG 4 FIX: cache maxHP, invalidate on level change
+              const userLevel = user.level || 1;
+              let maxHP;
+              const cached = maxHPCache.get(userId);
+              if (cached && cached.level === userLevel) {
+                maxHP = cached.maxHP;
+              } else {
+                // Cache miss - compute + cache. This is the expensive path
+                // but only runs on first tick or after level-up.
+                const baseStats = progression.getBaseStats(userId, classId);
+                maxHP = baseStats?.hp || 100;
+                maxHPCache.set(userId, { level: userLevel, maxHP });
+              }
+
+              const currentHP = economy.getPersistentHP(userId, maxHP);
+              if (currentHP >= maxHP) continue; // full HP, skip
+
+              // Compute regen rate from:
+              //   1. Class passive effect:'regen' (flat HP/turn)
+              //   2. Skill-tree passiveEffects.hpRegenPerTurn (% of maxHP/turn)
+              let flatRegen = 0;
+              let pctRegen = 0;
+              let manaPctRegen = 0;
+
+              // BUG 1 FIX: read passive from the resolved class object
+              const classPassive = userClass.passive;
+              if (classPassive && classPassive.effect === 'regen') {
+                flatRegen += Number(classPassive.value) || 0;
+              }
+
+              // Skill-tree passives (iterate lineage + learned skills)
+              if (user.skills) {
+                const lineage = classSystem.getLineage(classId) || [];
+                const seen = new Set();
+                for (const cId of lineage) {
+                  const tree = skillTreeMod.SKILL_TREES[cId.toUpperCase()];
+                  if (!tree) continue;
+                  for (const [, treeData] of Object.entries(tree.trees || {})) {
+                    for (const [skillId, skill] of Object.entries(treeData.skills || {})) {
+                      if (!skill.passive) continue;
+                      const level = user.skills[skillId] || 0;
+                      if (level < 1) continue;
+                      if (seen.has(skillId)) continue;
+                      seen.add(skillId);
+                      const pe = skill.passiveEffects;
+                      if (!pe) continue;
+                      if (Array.isArray(pe.hpRegenPerTurn)) {
+                        const idx = Math.min(level - 1, pe.hpRegenPerTurn.length - 1);
+                        const val = pe.hpRegenPerTurn[idx];
+                        if (typeof val === 'number' && val > pctRegen) pctRegen = val;
+                      }
+                      // BUG 3 FIX: also read manaRegenPerTurn
+                      if (Array.isArray(pe.manaRegenPerTurn)) {
+                        const idx = Math.min(level - 1, pe.manaRegenPerTurn.length - 1);
+                        const val = pe.manaRegenPerTurn[idx];
+                        if (typeof val === 'number' && val > manaPctRegen) manaPctRegen = val;
+                      }
+                    }
+                  }
+                }
+              }
+
+              const pctHeal = Math.floor(maxHP * pctRegen);
+              const totalHeal = flatRegen + pctHeal;
+              if (totalHeal <= 0 && manaPctRegen <= 0) continue; // no regen passive, skip
+
+              // Apply HP regen
+              if (totalHeal > 0) {
+                const newHP = Math.min(maxHP, currentHP + totalHeal);
+                const actualHeal = newHP - currentHP;
+                if (actualHeal > 0) {
+                  economy.setPersistentHP(userId, newHP, maxHP);
+                  touched++;
+                }
+              }
+
+              // BUG 3 FIX: apply MP regen (out-of-combat)
+              // MP is stored on user.stats.currentMP (same pattern as HP).
+              // maxMP = 100 + level bonuses (mirrors getBaseStats maxEnergy formula).
+              if (manaPctRegen > 0) {
+                try {
+                  const maxMP = 100 + ((userLevel - 1) * 15);
+                  const currentMP = typeof user.stats?.currentMP === 'number'
+                    ? user.stats.currentMP
+                    : maxMP; // lazy-init to max
+                  if (currentMP < maxMP) {
+                    const mpHeal = Math.floor(maxMP * manaPctRegen);
+                    const newMP = Math.min(maxMP, currentMP + mpHeal);
+                    if (newMP > currentMP) {
+                      if (!user.stats) user.stats = {};
+                      user.stats.currentMP = newMP;
+                      economy.scheduleSave(userId);
+                    }
+                  }
+                } catch (mpErr) {
+                  // Non-fatal - MP regen is best-effort
+                }
+              }
+            } catch (userErr) {
+              // Non-fatal - one user's error shouldn't break the tick
             }
           }
-        } catch (e) {
-          console.error('[GuildWars] Check failed:', e.message);
+          if (touched > 0) {
+            console.log(`🌊 [PassiveRegen] Out-of-combat regen: ${touched} user(s) healed, ${skipped} in combat (skipped).`);
+          }
+        } catch (tickErr) {
+          console.error('[PassiveRegen] Tick failed:', tickErr.message);
         }
       };
-      setTimeout(checkAndSpawnWar, 3 * 60 * 1000);
-      setInterval(checkAndSpawnWar, 60 * 60 * 1000);
-      console.log("⚔️ Guild war scheduler initialized (spawn check every 1h).");
+
+      // First run in 5 min (let DB settle), then every 60s
+      setTimeout(applyOutOfCombatPassiveRegen, 5 * 60 * 1000);
+      setInterval(applyOutOfCombatPassiveRegen, OUT_OF_COMBAT_TICK_MS);
+      console.log("🌊 Out-of-combat passive regen scheduler initialized (runs every 60s).");
     } catch (e) {
-      console.error("Failed to init guild war scheduler:", e.message);
+      console.error("Failed to init passive regen scheduler:", e.message);
     }
 
     // 4. Start each instance with a stagger delay
@@ -669,4 +841,17 @@ async function boot() {
 
 if (require.main === module) {
     boot();
+
+    // 💡 SPRITE WARM-UP: fetch all missing Digimon sprites in the background
+    // 30s after boot. This ensures the codex/roster/profile card renderers
+    // have sprites cached before any user views them. Non-blocking, non-fatal.
+    setTimeout(() => {
+        try {
+            const summonSprites = require('./core/rpg/summonSprites');
+            const registry = require('./core/rpg/summonRegistry');
+            summonSprites.warmupCache(registry);
+        } catch (e) {
+            console.error('[SpriteWarmup] Failed to start (non-fatal):', e.message);
+        }
+    }, 30000);
 }

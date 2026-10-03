@@ -8,9 +8,7 @@ const path = require('path');
 const botConfig = require('../../botConfig');
 const economy = require('../rpg/economy');
 const system = require('../utils/system'); // NEW: Database System Module
-const GoImageService = require('../utils/goImageService');
-
-const goService = new GoImageService();
+const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
 
 // ============================================
 // SCOREBOARD MANAGEMENT (UPGRADED)
@@ -55,7 +53,7 @@ function getLeaderboardText() {
     return sorted.map(([jid, data], i) => {
         const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
         const score = data.score >= 0 ? `+${data.score}` : data.score;
-        return `${medal} @${jid.split('@')[0]} • ${score} pts`;
+        return `${medal} @${economy.getDisplayName(jid)} • ${score} pts`;
     }).join('\n');
 }
 
@@ -358,7 +356,7 @@ function getBoardText(board, gridSize, lastMoveIndex = null, winPattern = null) 
 module.exports = {
   getAllScores,
   handleStartGame: async (sock, chatId, senderJid, mentionedJids, botMarker, m, gridSize = 3) => {
-    // 💡 FIX: Validate grid size — only 3, 8, and 16 have win patterns defined.
+    // 💡 FIX: Validate grid size - only 3, 8, and 16 have win patterns defined.
     // Previously any value would pass and crash on the first move when
     // WINNING_PATTERNS[gridSize] returned undefined.
     if (![3, 8, 16].includes(gridSize)) {

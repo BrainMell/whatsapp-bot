@@ -7,6 +7,7 @@ const mongoose = require('mongoose');
 const GuildModel = require('../models/Guild');
 const System = require('../models/System');
 const connectDB = require('../../db');
+const economy = require('./economy');
 
 const BOT_MARKER = `*${botConfig.getBotName()}*\n\n`;
 
@@ -30,7 +31,12 @@ const GUILD_ARCHETYPES = {
     name: 'Merchants Guild',
     icon: '💰',
     description: 'Focuses on commerce and wealth.',
-    perks: 'Increases item sell value by 10%.',
+    // 💡 AUDIT FIX: was "Increases item sell value by 10%" - only mentioned
+    // half the perk. ARCHETYPE_PERKS.MERCHANT in guildPerks.js gives BOTH
+    // +10% dungeon gold AND +10% sell value. Flavor text now matches the
+    // actual implementation so `.g guild info` doesn't contradict the
+    // multipliers shown by `.g guild perks`.
+    perks: 'Increases item sell value by 10% and dungeon gold by 10%.',
     questType: 'EARN'
   },
   RESEARCH: {
@@ -42,30 +48,23 @@ const GUILD_ARCHETYPES = {
   }
 };
 
-const activeChallenges = new Map();
-
-// types of challenges guilds can throw at each other
-const CHALLENGE_TYPES = {
-// ... existing challenge types ...
-};
-
 const GUILD_UPGRADES = {
   hall: {
     name: 'Guild Hall',
     maxLevel: 5,
-    baseCost: 500,
+    baseCost: 25000, // 💡 Rebalanced 2026-08-17
     benefit: 'Increases max member capacity by +5 per level.'
   },
   training: {
     name: 'Training Ground',
     maxLevel: 5,
-    baseCost: 1000,
+    baseCost: 50000, // 💡 Rebalanced 2026-08-17
     benefit: 'Gives all members +5% XP bonus per level.'
   },
   treasury: {
     name: 'Treasury',
     maxLevel: 5,
-    baseCost: 1500,
+    baseCost: 100000, // 💡 Rebalanced 2026-08-17
     benefit: 'Gives all members +10% Zeni bonus from quests per level.'
   }
 };
@@ -101,8 +100,7 @@ async function loadGuilds() {
         }
 
         // 💡 QA FIX: load ALL new fields from the schema. Previously only
-        // a subset was loaded, causing loans/warPoints/emblem/recruits to
-        // be missing from the in-memory cache — which broke guild loans,
+        // be missing from the in-memory cache - which broke guild loans,
         // war points, emblems, and the 4-tier role system after restart.
         // Also handle legacy buildings stored as `upgrades` (Map<Number>).
         let buildings = { hall: { level: 1 }, training: { level: 0 }, treasury: { level: 0 } };
@@ -133,13 +131,11 @@ async function loadGuilds() {
             buildings,
             // 💡 QA FIX: load new fields that were missing
             loans: g.loans || [],
-            warPoints: g.warPoints || 0,
-            warPointsWeek: g.warPointsWeek || null,
             lastInterestPayout: g.lastInterestPayout || null,
             emblem: g.emblem || { icon: null, color: '#FFD700' },
         };
 
-        // Clean up memberGuilds — make sure every member is mapped
+        // Clean up memberGuilds - make sure every member is mapped
         for (const m of members) {
           if (!globalGuildData.memberGuilds[m]) {
             globalGuildData.memberGuilds[m] = g.guildId;
@@ -160,7 +156,7 @@ async function loadGuilds() {
       }
     }
 
-    // 💡 QA FIX: normalize guild XP on load — process any pending level-ups
+    // 💡 QA FIX: normalize guild XP on load - process any pending level-ups
     // that weren't consumed (e.g. from the old single-if level-up bug or
     // from large donations that the old code couldn't handle).
     for (const [guildName, guild] of Object.entries(globalGuildData.guilds)) {
@@ -209,9 +205,12 @@ async function syncGuildSystem() {
 }
 
 // NEW: Sync specific guild
+// 💡 LOAN-BUG FIX 2026-09-20: now returns true/false so money-critical
+// callers (guild loan borrow/repay) can detect a FAILED persist and claw
+// the transaction back instead of silently desyncing memory vs MongoDB.
 async function syncGuild(guildName) {
     const g = globalGuildData.guilds[guildName];
-    if (!g) return;
+    if (!g) return false;
 
     try {
         await GuildModel.updateOne(
@@ -231,7 +230,7 @@ async function syncGuild(guildName) {
                 motto: g.motto || "Adapt or be Infected.",
                 // 💡 QA FIX: write to BOTH `buildings` (new schema field) AND
                 // `upgrades` (legacy field). Previously only wrote to `upgrades`,
-                // but loadGuilds reads `buildings` first — which has schema
+                // but loadGuilds reads `buildings` first - which has schema
                 // defaults (L1/L0/L0), so building levels reset every restart.
                 buildings: g.buildings || { hall: { level: 1 }, training: { level: 0 }, treasury: { level: 0 } },
                 upgrades: g.buildings || {},
@@ -240,16 +239,16 @@ async function syncGuild(guildName) {
                 // loans to vanish on restart (borrower keeps Zeni, guild bank
                 // drained) and war points to reset to 0 every restart.
                 loans: g.loans || [],
-                warPoints: g.warPoints || 0,
-                warPointsWeek: g.warPointsWeek || null,
                 lastInterestPayout: g.lastInterestPayout || null,
                 emblem: g.emblem || { icon: null, color: '#FFD700' },
                 recruits: g.recruits || []
             },
             { upsert: true }
         );
+        return true;
     } catch (err) {
         console.error(`Error syncing guild ${guildName}:`, err.message);
+        return false;
     }
 }
 
@@ -257,32 +256,11 @@ function saveGuilds() {
   // No-op: We now use syncGuildSystem and syncGuild
 }
 
-async function loadChallenges() {
-  try {
-    const sys = await System.findOne({ key: 'guild_challenges' }).lean();
-    if (sys && sys.value) {
-      for (const [id, chall] of Object.entries(sys.value)) {
-        activeChallenges.set(id, chall);
-      }
-      console.log("✅ Loaded guild challenges from MongoDB");
-    }
-  } catch (err) {
-    console.error("Error loading challenges:", err.message);
-  }
-}
-
-async function saveChallenges() {
-  try {
-    const data = Object.fromEntries(activeChallenges);
-    await System.updateOne(
-        { key: 'guild_challenges' },
-        { $set: { value: data } },
-        { upsert: true }
-    );
-  } catch (err) {
-    console.error("Error saving challenges:", err.message);
-  }
-}
+// 💡 REMOVED 2026-09-12 (audit): loadChallenges/saveChallenges + the dead
+// guild-vs-guild challenge system (CHALLENGE_TYPES was an empty placeholder,
+// createChallenge had zero callers, and the "accept challenge" command it
+// advertised never existed). Guild-vs-guild competition is served by the
+// real `.guild war` system (guildWars.js). Startup callers in engine.js removed.
 //========================================
 
 //==================this part handles core guild operations like creating and joining==================
@@ -531,8 +509,7 @@ function leaveGuild(userJid) {
   if (guild) {
     // 💡 QA FIX: loose JID matching for member removal
     const memberJid = (guild.members || []).find(m =>
-      m === userJid ||
-      m.split('@')[0] === userJid.split('@')[0] ||
+      m === userJid || economy.getDisplayName(m) === userJid.split('@')[0] ||
       m.includes(userJid.split('@')[0]) ||
       userJid.includes(m.split('@')[0])
     );
@@ -587,7 +564,7 @@ function inviteToGuild(inviterJid, inviteeJid) {
 
   return {
     success: true,
-    message: `✅ Invited @${inviteeJid.split('@')[0]} to "${guildName}"!
+    message: `✅ Invited @${economy.getDisplayName(inviteeJid)} to "${guildName}"!
 
 ⏳ *Time:* 1 hour to accept.
 They can accept with: ${botConfig.getPrefix()} accept`
@@ -724,8 +701,7 @@ async function promoteToAdmin(ownerJid, targetJid) {
   // 💡 QA FIX: try to match targetJid against members using loose matching
   // (LID vs phone format may differ)
   const memberJid = guild.members.find(m =>
-    m === targetJid ||
-    m.split('@')[0] === targetJid.split('@')[0] ||
+    m === targetJid || economy.getDisplayName(m) === targetJid.split('@')[0] ||
     m.includes(targetJid.split('@')[0]) ||
     targetJid.includes(m.split('@')[0])
   );
@@ -744,7 +720,7 @@ async function promoteToAdmin(ownerJid, targetJid) {
 
   return {
     success: true,
-    message: `✅ @${memberJid.split('@')[0]} promoted to officer!`,
+    message: `✅ @${economy.getDisplayName(memberJid)} promoted to officer!`,
     targetJid: memberJid,
     guildName: guildName
   };
@@ -766,8 +742,7 @@ async function demoteAdmin(ownerJid, targetJid) {
 
   // 💡 QA FIX: loose JID matching (same as promoteToAdmin)
   const adminJid = guild.admins.find(a =>
-    a === targetJid ||
-    a.split('@')[0] === targetJid.split('@')[0] ||
+    a === targetJid || economy.getDisplayName(a) === targetJid.split('@')[0] ||
     a.includes(targetJid.split('@')[0]) ||
     targetJid.includes(a.split('@')[0])
   );
@@ -781,7 +756,7 @@ async function demoteAdmin(ownerJid, targetJid) {
 
   return {
     success: true,
-    message: `✅ @${adminJid.split('@')[0]} demoted from officer!`,
+    message: `✅ @${economy.getDisplayName(adminJid)} demoted from officer!`,
     targetJid: adminJid,
     guildName: guildName
   };
@@ -809,8 +784,7 @@ async function kickFromGuild(ownerOrAdminJid, targetJid) {
 
   // 💡 QA FIX: loose JID matching
   const memberJid = guild.members.find(m =>
-    m === targetJid ||
-    m.split('@')[0] === targetJid.split('@')[0] ||
+    m === targetJid || economy.getDisplayName(m) === targetJid.split('@')[0] ||
     m.includes(targetJid.split('@')[0]) ||
     targetJid.includes(m.split('@')[0])
   );
@@ -835,7 +809,7 @@ async function kickFromGuild(ownerOrAdminJid, targetJid) {
 
   return {
     success: true,
-    message: `✅ @${memberJid.split('@')[0]} has been kicked from "${guildName}"!`,
+    message: `✅ @${economy.getDisplayName(memberJid)} has been kicked from "${guildName}"!`,
     targetJid: memberJid,
     guildName: guildName
   };
@@ -861,7 +835,7 @@ function setMemberTitle(ownerJid, targetJid, title) {
 
   return {
     success: true,
-    message: `✅ @${targetJid.split('@')[0]} title set to: ${title}`
+    message: `✅ @${economy.getDisplayName(targetJid)} title set to: ${title}`
   };
 }
 
@@ -885,8 +859,7 @@ function getGuildMember(guildName, userJid) {
 
   // 💡 QA FIX: loose JID matching for member lookup
   const memberJid = (guild.members || []).find(m =>
-    m === userJid ||
-    m.split('@')[0] === userJid.split('@')[0] ||
+    m === userJid || economy.getDisplayName(m) === userJid.split('@')[0] ||
     m.includes(userJid.split('@')[0]) ||
     userJid.includes(m.split('@')[0])
   );
@@ -921,8 +894,7 @@ async function setMemberRole(ownerJid, targetJid, newRole) {
 
   // 💡 QA FIX: loose JID matching
   const memberJid = (guild.members || []).find(m =>
-    m === targetJid ||
-    m.split('@')[0] === targetJid.split('@')[0] ||
+    m === targetJid || economy.getDisplayName(m) === targetJid.split('@')[0] ||
     m.includes(targetJid.split('@')[0]) ||
     targetJid.includes(m.split('@')[0])
   );
@@ -949,7 +921,7 @@ async function setMemberRole(ownerJid, targetJid, newRole) {
   await syncGuild(guildName);
   return {
     success: true,
-    message: `✅ @${targetJid.split('@')[0]} is now a *${newRole}*.`,
+    message: `✅ @${economy.getDisplayName(targetJid)} is now a *${newRole}*.`,
   };
 }
 
@@ -1011,12 +983,20 @@ function getGuildLeaderboard(wordle, tictactoe, economyModule) {
       tttWins,
       gamblingWins,
       totalWins: wordleWins + tttWins + gamblingWins,
-      memberCount: members.length
+      memberCount: members.length,
+      level: guild.level || 1,
+      points: guild.points || 0
     };
   });
 
   return Object.entries(guildScores)
-    .sort((a, b) => b[1].score - a[1].score)
+    .sort((a, b) => {
+      const la = a[1].level || 1, lb2 = b[1].level || 1;
+      if (lb2 !== la) return lb2 - la;
+      const pa = a[1].points || 0, pb = b[1].points || 0;
+      if (pb !== pa) return pb - pa;
+      return b[1].score - a[1].score;
+    })
     .map(([name, data]) => ({ name, ...data }));
 }
 
@@ -1053,7 +1033,10 @@ ${message || 'Guild members, gather!'}
     const authPath = sock.authState?.creds?.me
       ? (sock.user?.id?.split('@')[0] ? null : null) // can't easily get authPath here
       : null;
-    const mentionJids = members.filter(j => j && typeof j === 'string' && j.includes('@'));
+    const mentionJids = members.map(j => {
+      if (!j || typeof j !== 'string') return null;
+      return j.includes('@') ? j : `${j}@s.whatsapp.net`;
+    }).filter(Boolean);
 
     await sock.sendMessage(chatId, {
       text: BOT_MARKER + announcement,
@@ -1067,8 +1050,78 @@ ${message || 'Guild members, gather!'}
 //========================================
 
 //==================this part handles guild points and activity rewards==================
+// 💡 LOAN-BUG FIX 2026-09-20: this was a RAW exact-key lookup - the only
+// member lookup in the guild system with zero JID tolerance (getGuildMember
+// and isGuildOwner both loose-match). A user whose membership is keyed by
+// phone JID but whose incoming messages arrive as LID (or with a device
+// suffix) resolved to "not in a guild" / wrong-bank failures even though
+// the guild system knows them. Exact key stays first; canonical resolver
+// and bare-number fallbacks follow the same convention as getGuildMember.
 function getUserGuild(userJid) {
-  return globalGuildData.memberGuilds[userJid];
+  if (!userJid) return undefined;
+  let guildName = globalGuildData.memberGuilds[userJid];
+  if (guildName) return guildName;
+  // 1. economy's canonical resolver (lidCache/phoneCache + format swap)
+  try {
+    const resolved = economy.resolveJid(userJid);
+    if (resolved && resolved !== userJid) {
+      guildName = globalGuildData.memberGuilds[resolved];
+      if (guildName) return guildName;
+    }
+  } catch (e) { /* resolver unavailable - fall through */ }
+  // 2. bare-number loose match (device-suffix / format tolerance)
+  const bare = String(userJid).split('@')[0].split(':')[0];
+  if (bare) {
+    for (const [jid, gName] of Object.entries(globalGuildData.memberGuilds)) {
+      if (jid.split('@')[0].split(':')[0] === bare) return gName;
+    }
+  }
+  return undefined;
+}
+
+// 💡 LOAN-BUG FIX 2026-09-20: Joker and Subaru are separate processes, each
+// with its own guild cache loaded at boot - and every syncGuild writes the
+// FULL document, so the instances clobber each other's bank balance. A loan
+// computed from stale memory either refuses ("max loan = 0") against money
+// the guild actually has, or lends against money that is already gone.
+// refreshGuildMoney re-reads the guild document from MongoDB (the shared
+// source of truth) and merges the MONEY fields into the in-memory object
+// right before anything money-critical runs. Read-only on miss/error.
+async function refreshGuildMoney(guildName) {
+  const guild = globalGuildData.guilds[guildName];
+  if (!guild) return null;
+  try {
+    const doc = await GuildModel.findOne({ guildId: guildName }).lean();
+    if (doc) {
+      if (typeof doc.balance === 'number') guild.balance = doc.balance;
+      if (Array.isArray(doc.loans)) guild.loans = doc.loans;
+    }
+  } catch (err) {
+    console.error(`[Guild] refreshGuildMoney(${guildName}) DB read failed, using cached money fields:`, err.message);
+  }
+  return guild;
+}
+
+// 💡 OWNER RULE 2026-09-11: character cards show "[guild title] of [guild name]".
+// Resolves the player's guild name + display title in one call - custom title
+// wins; when the player has no custom title, their guild ROLE is used
+// (Leader / Officer / Recruit / Member). Returns { name:'', title:'' } when
+// the player has no guild, so the card simply omits the line (never shows a
+// placeholder name like "Void Walkers").
+function getCardGuildInfo(userJid) {
+  try {
+    const guildName = globalGuildData.memberGuilds[userJid];
+    if (!guildName) return { name: '', title: '' };
+    const info = getGuildMember(guildName, userJid);
+    if (!info) return { name: guildName, title: 'Member' };
+    const ROLE_LABELS = { leader: 'Leader', officer: 'Officer', recruit: 'Recruit', member: 'Member' };
+    const title = (info.title && info.title !== 'Member')
+      ? info.title
+      : (ROLE_LABELS[info.role] || 'Member');
+    return { name: guildName, title };
+  } catch (e) {
+    return { name: '', title: '' };
+  }
 }
 
 function addGuildBalance(guildName, amount) {
@@ -1188,8 +1241,8 @@ function addGuildPoints(guildName, points, reason) {
   // type. Functional but fragile.
   guild.points += val;
 
-  // 💡 LEVEL UP LOGIC — must loop in case a large XP grant covers multiple levels.
-  // Previously was a single `if` — depositing 500M Zeni (500K XP) at L1 would
+  // 💡 LEVEL UP LOGIC - must loop in case a large XP grant covers multiple levels.
+  // Previously was a single `if` - depositing 500M Zeni (500K XP) at L1 would
   // only trigger ONE level-up (L1→L2, spending 1000 XP), leaving 499K XP stuck
   // at L2. The leaderboard then showed "Lv 2 | XP 499000/2000" which looked
   // broken. Now loops until all level-ups are consumed.
@@ -1240,7 +1293,6 @@ function getGuildPointsLeaderboard(limit = 10) {
       balance: guild.balance || 0,
       members: Array.isArray(guild.members) ? guild.members.length : 0,
       type: guild.type || 'ADVENTURER',
-      warPoints: guild.warPoints || 0,
     }))
     .sort((a, b) => {
       // Sort by level first, then by XP within same level
@@ -1251,7 +1303,7 @@ function getGuildPointsLeaderboard(limit = 10) {
 }
 
 function awardPointsForActivity(userJid, activity) {
-  // 💡 QA FIX: was an empty stub — daily claims never awarded guild XP
+  // 💡 QA FIX: was an empty stub - daily claims never awarded guild XP
   const info = globalGuildData;
   const guildName = info.memberGuilds[userJid];
   if (!guildName) return;
@@ -1304,69 +1356,17 @@ function upgradeGuildBuilding(userJid, buildingId) {
 }
 //========================================
 
-//==================this part handles guild vs guild challenges==================
-function getChallengeTypes() {
-  return CHALLENGE_TYPES;
-}
-
-function createChallenge(challengerJid, targetGuildName, type) {
-  const info = globalGuildData;
-  const challengerGuild = info.memberGuilds[challengerJid];
-
-  if (!challengerGuild) {
-    return { success: false, message: "❌ You must be in a guild to issue a challenge!" };
-  }
-
-  if (!CHALLENGE_TYPES[type]) {
-    return { success: false, message: "❌ Invalid challenge type!" };
-  }
-
-  const targetGuild = Object.keys(info.guilds).find(
-    g => g.toLowerCase() === targetGuildName.toLowerCase()
-  );
-
-  if (!targetGuild) {
-    return { success: false, message: "❌ Target guild doesn't exist!" };
-  }
-
-  if (targetGuild === challengerGuild) {
-    return { success: false, message: "❌ You can't challenge your own guild!" };
-  }
-
-  const challengeId = `${challengerGuild}_vs_${targetGuild}_${Date.now()}`;
-  const challenge = {
-    id: challengeId,
-    challenger: challengerGuild,
-    target: targetGuild,
-    type: type,
-    status: 'pending',
-    createdAt: Date.now(),
-    expiresAt: Date.now() + (24 * 60 * 60 * 1000)
-  };
-
-  activeChallenges.set(challengeId, challenge);
-  saveChallenges();
-
-  return {
-    success: true,
-    message: `┏━━━━━━━━━━━━━━━┓\n┃   ⚔️ CHALLENGE  ┃\n┗━━━━━━━━━━━━━━━┛\n\n🏰 *${challengerGuild}* has challenged *${targetGuild}* to a *${CHALLENGE_TYPES[type].name}*!\n\nTarget guild members must accept with: \n${botConfig.getPrefix()} guild accept challenge ${challengeId}`
-  };
-}
-
-function getChallenges() {
-  return Array.from(activeChallenges.values());
-}
-//========================================
+// 💡 REMOVED 2026-09-12 (audit): getChallengeTypes / createChallenge / getChallenges -
+// half-built stub (empty CHALLENGE_TYPES, no accept/resolve mechanic). See note above.
 
 // setup - now explicitly called during boot in engine.js
 // loadGuilds();
-// loadChallenges();
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  GUILD PURGE + GUILD GUIDE (QA — fix legacy conflicts)
+//  GUILD PURGE + GUILD GUIDE (QA - fix legacy conflicts)
 // ═══════════════════════════════════════════════════════════════════════════
 
-// 💡 Purges ALL guild data — both MongoDB GuildModel documents AND the
+// 💡 Purges ALL guild data - both MongoDB GuildModel documents AND the
 // System collection mappings (memberGuilds, guildOwners, guildInvites).
 // Also clears the in-memory cache. Used to fix legacy guild conflicts.
 async function purgeAllGuilds() {
@@ -1397,16 +1397,16 @@ function getGuildGuide(prefix) {
   msg += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
 
   msg += `*GETTING STARTED*\n`;
-  msg += `• \`${prefix} guild create <name>\` — Create a new guild\n`;
-  msg += `• \`${prefix} guild join <name>\` — Join an existing guild\n`;
-  msg += `• \`${prefix} guild leave\` — Leave your current guild\n`;
-  msg += `• \`${prefix} guild list\` — See all guilds\n\n`;
+  msg += `• \`${prefix} guild create <name>\` - Create a new guild\n`;
+  msg += `• \`${prefix} guild join <name>\` - Join an existing guild\n`;
+  msg += `• \`${prefix} guild leave\` - Leave your current guild\n`;
+  msg += `• \`${prefix} guild list\` - See all guilds\n\n`;
 
   msg += `*GUILD ARCHETYPES*\n`;
   msg += `Choose an archetype when creating (default: ADVENTURER):\n`;
-  msg += `• ⚔️ ADVENTURER — +15% XP from dungeons\n`;
-  msg += `• 💰 MERCHANT — +10% gold + 10% sell value\n`;
-  msg += `• 🧪 RESEARCH — -10% crafting material cost\n\n`;
+  msg += `• ⚔️ ADVENTURER - +15% XP from dungeons\n`;
+  msg += `• 💰 MERCHANT - +10% gold + 10% sell value\n`;
+  msg += `• 🧪 RESEARCH - -10% crafting material cost\n\n`;
 
   msg += `*GUILD LEVELS & XP*\n`;
   msg += `Guilds level up by earning XP from member activities:\n`;
@@ -1429,51 +1429,51 @@ function getGuildGuide(prefix) {
   msg += `• Treasury: +10% gold per level (max +50%) + bank interest\n\n`;
 
   msg += `*GUILD ROLES (4-tier system)*\n`;
-  msg += `• 👑 Leader — full control (can disband, set roles, emblem)\n`;
-  msg += `• ⚔️ Officer — can kick/invite/manage\n`;
-  msg += `• 🌿 Member — full guild access (loans, board, etc.)\n`;
-  msg += `• 💤 Recruit — limited (cannot borrow from bank)\n`;
+  msg += `• 👑 Leader - full control (can disband, set roles, emblem)\n`;
+  msg += `• ⚔️ Officer - can kick/invite/manage\n`;
+  msg += `• 🌿 Member - full guild access (loans, board, etc.)\n`;
+  msg += `• 💤 Recruit - limited (cannot borrow from bank)\n`;
   msg += `Set roles: \`${prefix} guild role @user <recruit|member|officer>\`\n\n`;
 
   msg += `*GUILD BANK & LOANS*\n`;
-  msg += `• \`${prefix} guild donate <amount>\` — Donate Zeni to guild bank\n`;
-  msg += `• \`${prefix} guild loan <amount>\` — Borrow (max 10% of bank, 7-day repayment)\n`;
-  msg += `• \`${prefix} guild loan list\` — View your active loans\n`;
-  msg += `• \`${prefix} guild loan repay <amount>\` — Repay early\n`;
+  msg += `• \`${prefix} guild donate <amount>\` - Donate Zeni to guild bank\n`;
+  msg += `• \`${prefix} guild loan <amount>\` - Borrow (max 10% of bank, 7-day repayment)\n`;
+  msg += `• \`${prefix} guild loan list\` - View your active loans\n`;
+  msg += `• \`${prefix} guild loan repay <amount>\` - Repay early\n`;
   msg += `Overdue loans: 10% auto-deducted daily from wallet, or 5% penalty compounds.\n`;
   msg += `Bank interest (L5+): 0.5%/treasury level daily, capped at 1M/day.\n\n`;
 
   msg += `*GUILD PERKS*\n`;
-  msg += `• \`${prefix} guild perks\` — View your active multipliers\n`;
-  msg += `• \`${prefix} guild info\` — Full guild status dashboard\n\n`;
+  msg += `• \`${prefix} guild perks\` - View your active multipliers\n`;
+  msg += `• \`${prefix} guild info\` - Full guild status dashboard\n\n`;
 
   msg += `*GUILD MANAGEMENT*\n`;
-  msg += `• \`${prefix} guild invite @user\` — Send invite (1 hour to accept)\n`;
-  msg += `• \`${prefix} accept\` — Accept a pending invite\n`;
-  msg += `• \`${prefix} decline\` — Decline a pending invite\n`;
-  msg += `• \`${prefix} guild promote @user\` — Promote to officer\n`;
-  msg += `• \`${prefix} guild demote @user\` — Demote officer\n`;
-  msg += `• \`${prefix} guild kick @user\` — Remove member\n`;
-  msg += `• \`${prefix} guild title @user <title>\` — Set custom title\n`;
-  msg += `• \`${prefix} guild motto <text>\` — Set guild motto\n`;
-  msg += `• \`${prefix} guild emblem <emoji> [hexColor]\` — Set guild emblem\n`;
-  msg += `• \`${prefix} guild delete\` — Disband guild (Leader only)\n\n`;
+  msg += `• \`${prefix} guild invite @user\` - Send invite (1 hour to accept)\n`;
+  msg += `• \`${prefix} accept\` - Accept a pending invite\n`;
+  msg += `• \`${prefix} decline\` - Decline a pending invite\n`;
+  msg += `• \`${prefix} guild promote @user\` - Promote to officer\n`;
+  msg += `• \`${prefix} guild demote @user\` - Demote officer\n`;
+  msg += `• \`${prefix} guild kick @user\` - Remove member\n`;
+  msg += `• \`${prefix} guild title @user <title>\` - Set custom title\n`;
+  msg += `• \`${prefix} guild motto <text>\` - Set guild motto\n`;
+  msg += `• \`${prefix} guild emblem <emoji> [h<hexColor>\` - Set guild emblem\n`;
+  msg += `• \`${prefix} guild delete\` - Disband guild (Leader only)\n\n`;
 
   msg += `*GUILD WAR (weekly)*\n`;
-  msg += `• \`${prefix} war\` — View this week's event\n`;
+  msg += `• \`${prefix} war\` - View this week's event\n`;
   msg += `• Earn points from dungeons, bosses, PvP, raids, Abyss\n`;
   msg += `• 4 rotating events: Tournament, Clash, Hunt, Siege\n`;
   msg += `• Rewards: 1st=5M Zeni + buff, 2nd-3rd=2M, 4th-8th=500K\n\n`;
 
   msg += `*OTHER COMMANDS*\n`;
-  msg += `• \`${prefix} guild members\` — View roster\n`;
-  msg += `• \`${prefix} guild ranks\` — Members by adventurer rank\n`;
-  msg += `• \`${prefix} guild titles\` — Roster with titles\n`;
-  msg += `• \`${prefix} guild board\` — Daily monster hunting board\n`;
-  msg += `• \`${prefix} guild tag <msg>\` — Mention all guild members\n`;
-  msg += `• \`${prefix} guild leaderboard\` — Top guilds by level/XP\n`;
-  msg += `• \`${prefix} guild points\` — Your guild's XP\n`;
-  msg += `• \`${prefix} guild upgrade\` — Upgrade buildings menu\n`;
+  msg += `• \`${prefix} guild members\` - View roster\n`;
+  msg += `• \`${prefix} guild ranks\` - Members by adventurer rank\n`;
+  msg += `• \`${prefix} guild titles\` - Roster with titles\n`;
+  msg += `• \`${prefix} guild board\` - Daily monster hunting board\n`;
+  msg += `• \`${prefix} guild tag <msg>\` - Mention all guild members\n`;
+  msg += `• \`${prefix} guild leaderboard\` - Top guilds by level/XP\n`;
+  msg += `• \`${prefix} guild points\` - Your guild's XP\n`;
+  msg += `• \`${prefix} guild upgrade\` - Upgrade buildings menu\n`;
 
   return msg;
 }
@@ -1481,8 +1481,6 @@ function getGuildGuide(prefix) {
 module.exports = {
   loadGuilds,
   saveGuilds,
-  loadChallenges,
-  saveChallenges,
   syncGuild,
   syncGuildSystem,
 
@@ -1507,8 +1505,10 @@ module.exports = {
   setMemberTitle,
   getMemberTitle,
   getUserGuild,
+  getCardGuildInfo,
   getGuild,
   getGuildMember,
+  refreshGuildMoney,
   isGuildOwner,
   isGuildAdmin,
 
@@ -1523,14 +1523,10 @@ module.exports = {
   getGuildPointsLeaderboard,
   awardPointsForActivity,
 
-  getChallengeTypes,
-  createChallenge,
-  getChallenges,
   upgradeGuildBuilding,
   GUILD_UPGRADES,
 
-  globalGuildData,
-  activeChallenges
+  globalGuildData
 };
 
 // Periodic sweeper for memory optimization

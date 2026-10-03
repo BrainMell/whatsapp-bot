@@ -7,9 +7,8 @@ const { Chess } = require('chess.js');
 const economy = require('../rpg/economy');
 const system = require('../utils/system');
 const botConfig = require('../../botConfig');
-const GoImageService = require('../utils/goImageService');
+const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
 
-const goService = new GoImageService();
 // ============================================
 // AI LOGIC (BASIC EVALUATION + MINIMAX)
 // ============================================
@@ -603,7 +602,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         // Normalize JIDs for permission check
         const isPlayer = state && (cleanJid(senderJid) === cleanJid(state.playerW) || cleanJid(senderJid) === cleanJid(state.playerB));
         const isAdmin = m.key.fromMe || mentionedJids.includes(sock.user.id);
-        // 💡 FIX: 'reset'/'force-reset' should also require admin — previously
+        // 💡 FIX: 'reset'/'force-reset' should also require admin - previously
         // any user could grief ongoing games (including bet matches) by typing
         // '.chess reset'. Now only players in the game or admins can clear it.
         const isForce = (cmd === 'reset' || cmd === 'force-reset') && isAdmin;
@@ -711,9 +710,9 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
             `• *Check:* Add \`+\` (e.g., \`Bb5+\`)\n` +
             `• *Promotion:* Square + \`=\` + Piece (e.g., \`e8=Q\`)\n\n` +
             `*3. How to Play* 🎮\n` +
-            `1. Challenge someone: \`.g chess @user [bet]\`\n` +
+            `1. Challenge someone: \`${prefix} chess @user [bet]\`\n` +
             `2. The board will be rendered. White moves first.\n` +
-            `3. Type \`.g move e4\` to make your opening move.\n` +
+            `3. Type \`${prefix} move e4\` to make your opening move.\n` +
             `4. The bot will highlight the last move on the board.\n\n` +
             `*4. Pro Tips* ⚖️\n` +
             `• The goal is to put the opponent's King in *Checkmate*.\n` +

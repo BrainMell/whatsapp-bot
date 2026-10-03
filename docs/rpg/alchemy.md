@@ -456,7 +456,7 @@ const addResult = await inventorySystem.addItem(userId, resultItem.id, 1, {
 
 ## 5. Reference Manual
 
-> All values below are extracted directly from `BREWING_RECIPES` in `core/rpg/craftingSystem.js`. Alchemy and Brew share the same recipe system — both use `station: 'alchemy'`.
+> All values below are extracted directly from `BREWING_RECIPES` in `core/rpg/craftingSystem.js`. Alchemy and Brew share the same recipe system - both use `station: 'alchemy'`.
 
 ---
 
@@ -465,7 +465,7 @@ const addResult = await inventorySystem.addItem(userId, resultItem.id, 1, {
 | Command | Station | Recipe Source |
 |---|---|---|
 | `.j brew` | alchemy | `BREWING_RECIPES` in `craftingSystem.js` |
-| `.j alchemy` | alchemy | Same — `BREWING_RECIPES` |
+| `.j alchemy` | alchemy | Same - `BREWING_RECIPES` |
 
 Both commands are aliases for the same station. The recipe IDs are identical between both.
 
@@ -497,7 +497,7 @@ To add a new alchemy recipe to `BREWING_RECIPES` in `core/rpg/craftingSystem.js`
     name: 'Display Name',
     result: 'output_item_id',      // Must match key
     quantity: 1,
-    station: 'alchemy',            // Required — links to brew/alchemy commands
+    station: 'alchemy',            // Required - links to brew/alchemy commands
     ingredients: [
         { id: 'healing_herb', quantity: 3 },
         { id: 'mana_crystal', quantity: 1 }

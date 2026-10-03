@@ -77,9 +77,9 @@ async function displayClasses(sock, chatId) {
     
     msg += `━━━━━━━━━━━━━━━━━\n`;
     msg += `💡 *Commands:*\n`;
-    msg += `• \`${getPrefix()} evolve\` — Check your evolution options\n`;
-    msg += `• \`${getPrefix()} char\` — View your character sheet\n`;
-    msg += `• \`${getPrefix()} skill tree\` — View your skills`;
+    msg += `• \`${getPrefix()} evolve\` - Check your evolution options\n`;
+    msg += `• \`${getPrefix()} char\` - View your character sheet\n`;
+    msg += `• \`${getPrefix()} skill tree\` - View your skills`;
     
     await sock.sendMessage(chatId, { text: msg });
 }

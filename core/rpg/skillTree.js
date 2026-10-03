@@ -46,7 +46,7 @@ const SKILL_TREES = {
                         tier: 2,
                         maxLevel: 5,
                         cost: 15,
-                        cooldown: 2,
+                        cooldown: 1,
                         desc: 'Strike multiple enemies',
                         requires: { slash: 3 },
                         effect: (level) => ({
@@ -63,7 +63,7 @@ const SKILL_TREES = {
                         tier: 3,
                         maxLevel: 3,
                         cost: 25,
-                        cooldown: 5,
+                        cooldown: 1,
                         desc: 'Finish off low HP enemies',
                         requires: { cleave: 3 },
                         effect: (level) => ({
@@ -87,7 +87,7 @@ const SKILL_TREES = {
                         tier: 1,
                         maxLevel: 5,
                         cost: 8,
-                        cooldown: 2,
+                        cooldown: 1,
                         desc: 'Raise shield to block damage',
                         requires: null,
                         effect: (level) => ({
@@ -104,7 +104,7 @@ const SKILL_TREES = {
                         tier: 2,
                         maxLevel: 5,
                         cost: 12,
-                        cooldown: 3,
+                        cooldown: 1,
                         desc: 'Bash with shield, chance to stun',
                         requires: { guard: 3 },
                         effect: (level) => ({
@@ -123,7 +123,7 @@ const SKILL_TREES = {
                         tier: 3,
                         maxLevel: 3,
                         cost: 20,
-                        cooldown: 6,
+                        cooldown: 1,
                         desc: 'Become nearly invincible',
                         requires: { shield_bash: 3 },
                         effect: (level) => ({
@@ -143,12 +143,12 @@ const SKILL_TREES = {
                 skills: {
                     rally: {
                         id: 'rally',
-                        name: 'Battle Cry',
+                        name: 'Rally',
                         tier: 1,
                         maxLevel: 5,
                         cost: 12,
-                        cooldown: 4,
-                        desc: 'Inspire allies with a war cry',
+                        cooldown: 1,
+                        desc: 'Inspire allies with a war cry, boosting ATK',
                         requires: null,
                         effect: (level) => ({
                             type: 'buff_team',
@@ -164,7 +164,7 @@ const SKILL_TREES = {
                         tier: 2,
                         maxLevel: 5,
                         cost: 18,
-                        cooldown: 5,
+                        cooldown: 1,
                         desc: 'Stomp the ground, damaging all enemies',
                         requires: { rally: 3 },
                         effect: (level) => ({
@@ -237,7 +237,7 @@ const SKILL_TREES = {
                         tier: 2,
                         maxLevel: 5,
                         cost: 12,
-                        cooldown: 2,
+                        cooldown: 1,
                         desc: 'Massive damage from behind',
                         requires: { quick_strike: 3 },
                         effect: (level) => ({
@@ -254,7 +254,7 @@ const SKILL_TREES = {
                         tier: 3,
                         maxLevel: 3,
                         cost: 35,
-                        cooldown: 7,
+                        cooldown: 1,
                         desc: 'Instantly kill low HP enemies',
                         requires: { backstab: 3 },
                         effect: (level) => ({
@@ -279,7 +279,7 @@ const SKILL_TREES = {
                         tier: 1,
                         maxLevel: 5,
                         cost: 10,
-                        cooldown: 2,
+                        cooldown: 1,
                         desc: 'Dodge the next attack',
                         requires: null,
                         effect: (level) => ({
@@ -296,7 +296,7 @@ const SKILL_TREES = {
                         tier: 2,
                         maxLevel: 5,
                         cost: 15,
-                        cooldown: 3,
+                        cooldown: 1,
                         desc: 'Blind enemies, increasing your evasion',
                         requires: { evade: 3 },
                         effect: (level) => ({
@@ -313,7 +313,7 @@ const SKILL_TREES = {
                         tier: 3,
                         maxLevel: 3,
                         cost: 20,
-                        cooldown: 4,
+                        cooldown: 1,
                         desc: 'Teleport behind enemy and strike',
                         requires: { smoke_bomb: 3 },
                         effect: (level) => ({
@@ -338,7 +338,7 @@ const SKILL_TREES = {
                         tier: 1,
                         maxLevel: 5,
                         cost: 10,
-                        cooldown: 2,
+                        cooldown: 1,
                         desc: 'Aim for weak points',
                         requires: null,
                         effect: (level) => ({
@@ -355,7 +355,7 @@ const SKILL_TREES = {
                         tier: 2,
                         maxLevel: 5,
                         cost: 15,
-                        cooldown: 4,
+                        cooldown: 1,
                         desc: 'Mark enemy, increasing damage taken',
                         requires: { vital_strike: 3 },
                         effect: (level) => ({
@@ -423,7 +423,7 @@ const SKILL_TREES = {
                         tier: 2,
                         maxLevel: 5,
                         cost: 18,
-                        cooldown: 2,
+                        cooldown: 1,
                         desc: 'Explosive fireball with burn',
                         requires: { fire_bolt: 3 },
                         effect: (level) => ({
@@ -442,21 +442,16 @@ const SKILL_TREES = {
                         name: 'Meteor Strike',
                         tier: 3,
                         maxLevel: 3,
-                        cost: 35,
-                        cooldown: 6,
-                        desc: 'Call down a meteor',
-                        requires: { fireball: 3 },
-                        effect: (level) => ({
-                            type: 'aoe',
-                            multiplier: 2.5 + (level * 0.5),
-                            targets: 99,
-                            dot: 'burn',
-                            dotDamage: 15 + (level * 10),
-                            dotDuration: 4,
-                            damageType: 'magic',
-                            element: 'fire',
-                            animation: '🔥☄️'
-                        })
+                        energyCost: [35, 32, 28],
+                        cooldown: 1,
+                        damageMultiplier: [5.5, 6.0, 6.5],
+                        damageType: 'MAGICAL',
+                        targeting: 'AOE',
+                        effects: { burn: { value: [25, 35, 45], duration: 3 } },
+                        description: 'Call down a meteor, burning all enemies',
+                        animation: '🔥☄️',
+                        skillPointCost: [4, 6, 8],
+                        requires: { fireball: 3 }
                     }
                 }
             },
@@ -491,7 +486,7 @@ const SKILL_TREES = {
                         tier: 2,
                         maxLevel: 5,
                         cost: 15,
-                        cooldown: 2,
+                        cooldown: 1,
                         desc: 'Sharp ice with chance to freeze',
                         requires: { frost_bolt: 3 },
                         effect: (level) => ({
@@ -511,7 +506,7 @@ const SKILL_TREES = {
                         tier: 3,
                         maxLevel: 3,
                         cost: 30,
-                        cooldown: 6,
+                        cooldown: 1,
                         desc: 'Freezing storm hits all enemies',
                         requires: { ice_shard: 3 },
                         effect: (level) => ({
@@ -539,7 +534,7 @@ const SKILL_TREES = {
                         tier: 1,
                         maxLevel: 5,
                         cost: 15,
-                        cooldown: 3,
+                        cooldown: 1,
                         desc: 'Shield that absorbs damage',
                         requires: null,
                         effect: (level) => ({
@@ -556,7 +551,7 @@ const SKILL_TREES = {
                         tier: 2,
                         maxLevel: 5,
                         cost: 20,
-                        cooldown: 2,
+                        cooldown: 1,
                         desc: 'Multiple magic missiles',
                         requires: { mana_shield: 3 },
                         effect: (level) => ({
@@ -574,7 +569,7 @@ const SKILL_TREES = {
                         tier: 3,
                         maxLevel: 3,
                         cost: 25,
-                        cooldown: 8,
+                        cooldown: 1,
                         desc: 'Slow time, team gets extra turns',
                         requires: { arcane_missiles: 3 },
                         effect: (level) => ({
@@ -626,7 +621,7 @@ const SKILL_TREES = {
                         tier: 2,
                         maxLevel: 5,
                         cost: 15,
-                        cooldown: 2,
+                        cooldown: 1,
                         desc: 'Divine flames that heal allies',
                         requires: { smite: 3 },
                         effect: (level) => ({
@@ -644,7 +639,7 @@ const SKILL_TREES = {
                         tier: 3,
                         maxLevel: 3,
                         cost: 30,
-                        cooldown: 6,
+                        cooldown: 1,
                         desc: 'Massive holy damage, stuns undead',
                         requires: { holy_fire: 3 },
                         effect: (level) => ({
@@ -672,7 +667,7 @@ const SKILL_TREES = {
                         tier: 1,
                         maxLevel: 5,
                         cost: 15,
-                        cooldown: 2,
+                        cooldown: 1,
                         desc: 'Restore ally HP',
                         requires: null,
                         effect: (level) => ({
@@ -687,7 +682,7 @@ const SKILL_TREES = {
                         tier: 2,
                         maxLevel: 5,
                         cost: 25,
-                        cooldown: 4,
+                        cooldown: 1,
                         desc: 'Heal all allies',
                         requires: { heal: 3 },
                         effect: (level) => ({
@@ -702,7 +697,7 @@ const SKILL_TREES = {
                         tier: 3,
                         maxLevel: 3,
                         cost: 40,
-                        cooldown: 10,
+                        cooldown: 1,
                         desc: 'Revive fallen ally',
                         requires: { group_heal: 3 },
                         effect: (level) => ({
@@ -724,7 +719,7 @@ const SKILL_TREES = {
                         tier: 1,
                         maxLevel: 5,
                         cost: 12,
-                        cooldown: 3,
+                        cooldown: 1,
                         desc: 'Bless ally with protection',
                         requires: null,
                         effect: (level) => ({
@@ -741,7 +736,7 @@ const SKILL_TREES = {
                         tier: 2,
                         maxLevel: 5,
                         cost: 20,
-                        cooldown: 5,
+                        cooldown: 1,
                         desc: 'Protect team with holy barrier',
                         requires: { blessing: 3 },
                         effect: (level) => ({
@@ -792,12 +787,12 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [15, 14, 13, 12, 10],
-                        cooldown: 2,
+                        energyCost: [18, 17, 16, 15, 12],
+                        cooldown: 1,
                         damageMultiplier: [1.2, 1.35, 1.5, 1.65, 1.8],
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
-                        effects: { stun: { chance: [30, 35, 40, 45, 50], duration: 1 } },
+                        effects: { stun: { chance: [25, 29, 34, 38, 42], duration: 1 } },
                         description: 'Bash enemy with shield, scaling stun chance',
                         animation: '🛡️💥',
                         skillPointCost: [1, 2, 3, 4, 5]
@@ -808,8 +803,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [10, 9, 8, 7, 6],
-                        cooldown: 3,
+                        energyCost: [14, 13, 11, 10, 8],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             shield: { value: [50, 60, 70, 80, 100], duration: 2 },
@@ -826,8 +821,8 @@ const SKILL_TREES = {
                         requiredLevel: 3,
                         maxLevel: 5,
                         prerequisite: ['shield_bash'],
-                        energyCost: [20, 19, 18, 16, 15],
-                        cooldown: 3,
+                        energyCost: [28, 26, 25, 22, 21],
+                        cooldown: 1,
                         damageMultiplier: [1.4, 1.55, 1.7, 1.85, 2.0],
                         damageType: 'PHYSICAL',
                         targeting: 'CLEAVE',
@@ -842,12 +837,16 @@ const SKILL_TREES = {
                         requiredLevel: 3,
                         maxLevel: 5,
                         prerequisite: ['defensive_stance'],
-                        energyCost: [25, 24, 22, 20, 18],
-                        cooldown: 4,
+                        energyCost: [38, 36, 33, 30, 27],
+                        cooldown: 1,
                         targeting: 'TEAM',
                         effects: {
-                            atkBuff: { value: [20, 25, 30, 35, 40], duration: 3 },
-                            defBuff: { value: [10, 12, 15, 18, 20], duration: 3 }
+                            // 💡 POLISH 2026-07-17: was atkBuff/defBuff (non-standard
+                            // effect IDs that no handler recognized). Changed to
+                            // buff_team with stat field so applyAbilityEffect can
+                            // process them. Applies BOTH ATK and DEF buffs to team.
+                            buff_team_atk: { stat: 'attack', value: [20, 25, 30, 35, 40], duration: 3 },
+                            buff_team_def: { stat: 'defense', value: [10, 12, 15, 18, 20], duration: 3 }
                         },
                         description: 'Rally team, boost ATK and DEF',
                         animation: '📢✨',
@@ -860,12 +859,12 @@ const SKILL_TREES = {
                         requiredLevel: 5,
                         maxLevel: 5,
                         prerequisite: ['cleave'],
-                        energyCost: [35, 33, 30, 28, 25],
-                        cooldown: 4,
+                        energyCost: [53, 50, 45, 42, 38],
+                        cooldown: 1,
                         damageMultiplier: [1.1, 1.25, 1.4, 1.55, 1.7],
                         damageType: 'PHYSICAL',
                         targeting: 'AOE_LARGE',
-                        effects: { bleed: { chance: [40, 50, 60, 70, 80], duration: 3, value: [15, 18, 21, 24, 28] } },
+                        effects: { bleed: { chance: [28, 35, 42, 49, 57], duration: 3, value: [15, 18, 21, 24, 28] } },
                         description: 'Spin attack hitting all enemies with bleed',
                         animation: '🌪️⚔️',
                         skillPointCost: [3, 4, 5, 6, 7]
@@ -877,8 +876,8 @@ const SKILL_TREES = {
                         requiredLevel: 5,
                         maxLevel: 5,
                         prerequisite: ['battle_cry'],
-                        energyCost: [30, 28, 26, 24, 22],
-                        cooldown: 5,
+                        energyCost: [49, 45, 42, 39, 36],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             defBuff: { value: [50, 60, 70, 80, 100], duration: 2 },
@@ -896,8 +895,8 @@ const SKILL_TREES = {
                         requiredLevel: 8,
                         maxLevel: 3,
                         prerequisite: ['whirlwind'],
-                        energyCost: [50, 45, 40],
-                        cooldown: 6,
+                        energyCost: [70, 63, 56],
+                        cooldown: 2,
                         damageMultiplier: [2.5, 3.0, 3.5],
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
@@ -927,8 +926,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [15, 14, 13, 12, 10],
-                        cooldown: 2,
+                        energyCost: [18, 17, 16, 15, 12],
+                        cooldown: 1,
                         damageMultiplier: [2.2, 2.4, 2.6, 2.8, 3.0],
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
@@ -943,12 +942,12 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [20, 19, 18, 16, 15],
-                        cooldown: 3,
+                        energyCost: [28, 26, 25, 22, 21],
+                        cooldown: 1,
                         damageMultiplier: [0.5, 0.6, 0.7, 0.8, 0.9],
                         damageType: 'PHYSICAL',
                         targeting: 'AOE_SMALL',
-                        effects: { blind: { chance: [70, 75, 80, 85, 90], duration: 2 } },
+                        effects: { blind: { chance: [53, 57, 61, 65, 68], duration: 2 } },
                         description: 'Blind enemies and evade next attack',
                         animation: '💨😵',
                         skillPointCost: [1, 2, 3, 4, 5]
@@ -960,8 +959,8 @@ const SKILL_TREES = {
                         requiredLevel: 3,
                         maxLevel: 5,
                         prerequisite: ['backstab'],
-                        energyCost: [18, 17, 16, 15, 13],
-                        cooldown: 2,
+                        energyCost: [22, 21, 20, 18, 16],
+                        cooldown: 1,
                         damageMultiplier: [1.3, 1.45, 1.6, 1.75, 1.9],
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
@@ -977,13 +976,13 @@ const SKILL_TREES = {
                         requiredLevel: 3,
                         maxLevel: 5,
                         prerequisite: ['smoke_bomb'],
-                        energyCost: [25, 23, 21, 19, 17],
-                        cooldown: 4,
+                        energyCost: [38, 35, 32, 29, 26],
+                        cooldown: 1,
                         damageMultiplier: [0.9, 1.0, 1.1, 1.2, 1.3],
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
                         multiHit: 4,
-                        effects: { bleed: { chance: [60, 65, 70, 75, 80], duration: 3, value: [12, 14, 16, 18, 20] } },
+                        effects: { bleed: { chance: [42, 46, 49, 53, 57], duration: 3, value: [12, 14, 16, 18, 20] } },
                         description: '4 rapid strikes causing bleed',
                         animation: '🗡️🗡️🗡️🗡️',
                         skillPointCost: [2, 3, 4, 5, 6]
@@ -995,8 +994,8 @@ const SKILL_TREES = {
                         requiredLevel: 5,
                         maxLevel: 5,
                         prerequisite: ['shadow_step'],
-                        energyCost: [30, 28, 26, 24, 22],
-                        cooldown: 5,
+                        energyCost: [49, 45, 42, 39, 36],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             stealth: { duration: 2 },
@@ -1014,8 +1013,8 @@ const SKILL_TREES = {
                         requiredLevel: 8,
                         maxLevel: 3,
                         prerequisite: ['shadow_step'],
-                        energyCost: [60, 55, 50],
-                        cooldown: 7,
+                        energyCost: [87, 80, 73],
+                        cooldown: 2,
                         damageMultiplier: [4.5, 5.0, 5.5],
                         damageType: 'TRUE',
                         targeting: 'SINGLE',
@@ -1045,12 +1044,12 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [20, 19, 18, 17, 15],
-                        cooldown: 2,
+                        energyCost: [25, 23, 22, 21, 18],
+                        cooldown: 1,
                         damageMultiplier: [3.5, 3.8, 4.1, 4.4, 4.8], // Buffed from 3.0-4.2
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
-                        effects: { burn: { chance: [75, 80, 85, 90, 100], duration: 3, value: [30, 35, 40, 45, 60] } },
+                        effects: { burn: { chance: [63, 67, 71, 76, 84], duration: 3, value: [30, 35, 40, 45, 60] } },
                         description: 'Launch blazing fireball',
                         animation: '🔥💥',
                         skillPointCost: [1, 2, 3, 4, 5]
@@ -1061,12 +1060,12 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [18, 17, 16, 15, 13],
-                        cooldown: 2,
+                        energyCost: [22, 21, 20, 18, 16],
+                        cooldown: 1,
                         damageMultiplier: [2.8, 3.1, 3.4, 3.7, 4.1], // Buffed from 2.5-3.4
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
-                        effects: { freeze: { chance: [55, 60, 65, 70, 85], duration: 1 } },
+                        effects: { freeze: { chance: [46, 50, 55, 59, 71], duration: 1 } },
                         description: 'Freeze enemy in their tracks',
                         animation: '❄️💎',
                         skillPointCost: [1, 2, 3, 4, 5]
@@ -1078,8 +1077,8 @@ const SKILL_TREES = {
                         requiredLevel: 3,
                         maxLevel: 5,
                         prerequisite: ['fireball'],
-                        energyCost: [25, 23, 21, 19, 17],
-                        cooldown: 3,
+                        energyCost: [35, 32, 29, 26, 24],
+                        cooldown: 1,
                         damageMultiplier: [4.2, 4.6, 5.0, 5.4, 6.0], // Buffed from 3.5-4.8
                         damageType: 'MAGICAL',
                         targeting: 'CHAIN',
@@ -1096,8 +1095,8 @@ const SKILL_TREES = {
                         requiredLevel: 3,
                         maxLevel: 5,
                         prerequisite: ['frost_bolt'],
-                        energyCost: [30, 28, 26, 24, 22],
-                        cooldown: 3,
+                        energyCost: [42, 39, 36, 33, 31],
+                        cooldown: 1,
                         damageMultiplier: [1.5, 1.7, 1.9, 2.1, 2.4], // 5 hits total
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
@@ -1113,12 +1112,12 @@ const SKILL_TREES = {
                         requiredLevel: 5,
                         maxLevel: 5,
                         prerequisite: ['frost_bolt'],
-                        energyCost: [40, 38, 35, 32, 30],
-                        cooldown: 5,
+                        energyCost: [65, 62, 57, 52, 49],
+                        cooldown: 1,
                         damageMultiplier: [2.0, 2.2, 2.4, 2.6, 3.0], // Buffed from 1.4-2.0
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
-                        effects: { freeze: { chance: [60, 65, 70, 75, 90], duration: 1 } },
+                        effects: { freeze: { chance: [40, 43, 47, 50, 60], duration: 1 } },
                         description: 'Freeze all enemies',
                         animation: '❄️🌨️',
                         skillPointCost: [3, 4, 5, 6, 7]
@@ -1130,14 +1129,14 @@ const SKILL_TREES = {
                         requiredLevel: 8,
                         maxLevel: 3,
                         prerequisite: ['blizzard'],
-                        energyCost: [70, 65, 60],
-                        cooldown: 6,
+                        energyCost: [97, 90, 83],
+                        cooldown: 2,
                         damageMultiplier: [5.5, 6.5, 8.0], // Massive Ultimate Buff
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
                         effects: {
-                            burn: { chance: [90, 95, 100], duration: 4, value: [40, 50, 75] },
-                            stun: { chance: [50, 60, 75], duration: 1 }
+                            burn: { chance: [68, 72, 76], duration: 4, value: [40, 50, 75] },
+                            stun: { chance: [38, 46, 57], duration: 1 }
                         },
                         description: 'Rain destruction from the sky',
                         animation: '☄️💥💥',
@@ -1150,8 +1149,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 2,
                         maxLevel: 5,
-                        energyCost: [25, 23, 21, 19, 17],
-                        cooldown: 4,
+                        energyCost: [38, 35, 32, 29, 26],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: { 
                             shield: { value: [60, 80, 100, 120, 150], duration: 3 },
@@ -1168,8 +1167,8 @@ const SKILL_TREES = {
                         requiredLevel: 4,
                         maxLevel: 5,
                         prerequisite: ['arcane_missiles'],
-                        energyCost: [10, 8, 6, 4, 2],
-                        cooldown: 3,
+                        energyCost: [14, 11, 8, 6, 3],
+                        cooldown: 1,
                         damageMultiplier: [1.1, 1.25, 1.4, 1.55, 1.7],
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
@@ -1188,8 +1187,8 @@ const SKILL_TREES = {
                         requiredLevel: 5,
                         maxLevel: 5,
                         prerequisite: ['fireball'],
-                        energyCost: [35, 32, 29, 26, 23],
-                        cooldown: 3,
+                        energyCost: [49, 44, 40, 36, 32],
+                        cooldown: 1,
                         damageMultiplier: [2.2, 2.4, 2.6, 2.8, 3.0],
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
@@ -1207,8 +1206,8 @@ const SKILL_TREES = {
                         requiredLevel: 7,
                         maxLevel: 5,
                         prerequisite: ['arcane_shield'],
-                        energyCost: [40, 36, 32, 28, 24],
-                        cooldown: 5,
+                        energyCost: [65, 58, 52, 45, 39],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: { 
                             evasion: { value: [50, 60, 70, 80, 100], duration: 2 },
@@ -1225,14 +1224,14 @@ const SKILL_TREES = {
                         requiredLevel: 9,
                         maxLevel: 5,
                         prerequisite: ['blizzard'],
-                        energyCost: [50, 46, 42, 38, 35],
-                        cooldown: 4,
+                        energyCost: [76, 70, 64, 58, 53],
+                        cooldown: 1,
                         damageMultiplier: [1.8, 2.0, 2.2, 2.4, 2.6],
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
                         effects: { 
                             slow: { value: [40, 50, 60, 70, 80], duration: 2 },
-                            stun: { chance: [20, 25, 30, 35, 40], duration: 1 }
+                            stun: { chance: [14, 18, 21, 25, 28], duration: 1 }
                         },
                         description: 'Crush enemies with intense gravitational force',
                         animation: '🌑🌀💥',
@@ -1278,8 +1277,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [15, 14, 13, 12, 10],
-                        cooldown: 3,
+                        energyCost: [21, 19, 18, 17, 14],
+                        cooldown: 1,
                         damageMultiplier: [2.2, 2.4, 2.6, 2.8, 3.0],
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
@@ -1298,8 +1297,8 @@ const SKILL_TREES = {
                         requiredLevel: 3,
                         maxLevel: 5,
                         prerequisite: ['rage_strike'],
-                        energyCost: [25, 24, 22, 20, 18],
-                        cooldown: 4,
+                        energyCost: [38, 36, 33, 30, 27],
+                        cooldown: 1,
                         damageMultiplier: [1.4, 1.55, 1.7, 1.85, 2.0],
                         damageType: 'PHYSICAL',
                         targeting: 'RANDOM',
@@ -1316,8 +1315,8 @@ const SKILL_TREES = {
                         requiredLevel: 3,
                         maxLevel: 5,
                         prerequisite: ['blood_frenzy'],
-                        energyCost: [20, 18, 16, 14, 12],
-                        cooldown: 4,
+                        energyCost: [30, 27, 24, 21, 18],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             berserk: { duration: 3 },
@@ -1336,8 +1335,8 @@ const SKILL_TREES = {
                         requiredLevel: 5,
                         maxLevel: 5,
                         prerequisite: ['rampage'],
-                        energyCost: [35, 33, 30, 28, 25],
-                        cooldown: 5,
+                        energyCost: [57, 53, 49, 45, 41],
+                        cooldown: 1,
                         damageMultiplier: [3.0, 3.3, 3.6, 3.9, 4.2],
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
@@ -1357,8 +1356,8 @@ const SKILL_TREES = {
                         requiredLevel: 7,
                         maxLevel: 5,
                         prerequisite: ['warcry'],
-                        energyCost: [40, 38, 36, 34, 30],
-                        cooldown: 5,
+                        energyCost: [65, 62, 58, 55, 49],
+                        cooldown: 1,
                         damageMultiplier: [3.5, 3.8, 4.1, 4.4, 5.0],
                         damageType: 'TRUE',
                         targeting: 'SINGLE',
@@ -1377,8 +1376,8 @@ const SKILL_TREES = {
                         requiredLevel: 8,
                         maxLevel: 3,
                         prerequisite: ['rampage'],
-                        energyCost: [50, 45, 40],
-                        cooldown: 6,
+                        energyCost: [70, 63, 56],
+                        cooldown: 2,
                         damageMultiplier: [5.0, 5.5, 6.0],
                         damageType: 'TRUE',
                         targeting: 'AOE_LARGE',
@@ -1408,8 +1407,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [15, 14, 13, 12, 10],
-                        cooldown: 2,
+                        energyCost: [18, 17, 16, 15, 12],
+                        cooldown: 1,
                         damageMultiplier: [1.4, 1.55, 1.7, 1.85, 2.0],
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
@@ -1425,8 +1424,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [25, 24, 22, 20, 18],
-                        cooldown: 4,
+                        energyCost: [38, 36, 33, 30, 27],
+                        cooldown: 1,
                         targeting: 'TEAM',
                         effects: {
                             shield: { value: [40, 48, 56, 64, 72], duration: 2 },
@@ -1443,8 +1442,8 @@ const SKILL_TREES = {
                         requiredLevel: 3,
                         maxLevel: 5,
                         prerequisite: ['holy_strike'],
-                        energyCost: [22, 20, 18, 16, 14],
-                        cooldown: 3,
+                        energyCost: [31, 28, 25, 22, 19],
+                        cooldown: 1,
                         damageMultiplier: [1.2, 1.35, 1.5, 1.65, 1.8],
                         damageType: 'MAGICAL',
                         targeting: 'AOE_SMALL',
@@ -1464,8 +1463,8 @@ const SKILL_TREES = {
                         requiredLevel: 3,
                         maxLevel: 5,
                         prerequisite: ['divine_shield'],
-                        energyCost: [35, 32, 29, 26, 23],
-                        cooldown: 5,
+                        energyCost: [57, 52, 47, 42, 37],
+                        cooldown: 1,
                         targeting: 'SINGLE_ALLY',
                         effects: {
                             heal: { value: [80, 100, 120, 140, 160] },
@@ -1483,8 +1482,8 @@ const SKILL_TREES = {
                         requiredLevel: 5,
                         maxLevel: 5,
                         prerequisite: ['consecration'],
-                        energyCost: [40, 37, 34, 31, 28],
-                        cooldown: 6,
+                        energyCost: [68, 63, 58, 53, 48],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             atkBuff: { value: [50, 60, 70, 80, 100], duration: 3 },
@@ -1502,12 +1501,12 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 8,
                         maxLevel: 3,
-                        energyCost: [65, 60, 55],
-                        cooldown: 7,
+                        energyCost: [95, 87, 80],
+                        cooldown: 2,
                         damageMultiplier: [3.5, 4.0, 4.5],
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
-                        effects: { stun: { chance: [70, 80, 90], duration: 2 } },
+                        effects: { stun: { chance: [51, 58, 66], duration: 2 } },
                         bonusVsUndead: [3.0, 3.5, 4.0],
                         description: 'Smite all evil with holy power',
                         animation: '⚡✨💥',
@@ -1534,8 +1533,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [18, 17, 16, 15, 13],
-                        cooldown: 2,
+                        energyCost: [22, 21, 20, 18, 16],
+                        cooldown: 1,
                         damageMultiplier: [1.9, 2.1, 2.3, 2.5, 2.7],
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
@@ -1550,8 +1549,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [20, 18, 16, 14, 12],
-                        cooldown: 2,
+                        energyCost: [25, 22, 20, 17, 15],
+                        cooldown: 1,
                         damageMultiplier: [1.6, 1.75, 1.9, 2.05, 2.2],
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
@@ -1567,8 +1566,8 @@ const SKILL_TREES = {
                         requiredLevel: 3,
                         maxLevel: 5,
                         prerequisite: ['death_bolt'],
-                        energyCost: [30, 28, 26, 24, 22],
-                        cooldown: 5,
+                        energyCost: [49, 45, 42, 39, 36],
+                        cooldown: 1,
                         targeting: 'CORPSE',
                         effects: { summon: { unit: 'skeleton', duration: 4, stats: { hp: [80, 100, 120, 140, 160], atk: [15, 20, 25, 30, 35] } } },
                         requiresCorpse: true,
@@ -1583,8 +1582,8 @@ const SKILL_TREES = {
                         requiredLevel: 3,
                         maxLevel: 5,
                         prerequisite: ['drain_life'],
-                        energyCost: [25, 23, 21, 19, 17],
-                        cooldown: 3,
+                        energyCost: [35, 32, 29, 26, 24],
+                        cooldown: 1,
                         damageMultiplier: [2.5, 2.7, 2.9, 3.1, 3.3],
                         damageType: 'MAGICAL',
                         targeting: 'CORPSE_AOE',
@@ -1600,8 +1599,8 @@ const SKILL_TREES = {
                         requiredLevel: 5,
                         maxLevel: 5,
                         prerequisite: ['raise_skeleton'],
-                        energyCost: [40, 37, 34, 31, 28],
-                        cooldown: 5,
+                        energyCost: [65, 60, 55, 50, 45],
+                        cooldown: 1,
                         damageMultiplier: [1.2, 1.35, 1.5, 1.65, 1.8],
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
@@ -1619,8 +1618,8 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 8,
                         maxLevel: 3,
-                        energyCost: [75, 70, 65],
-                        cooldown: 8,
+                        energyCost: [114, 106, 99],
+                        cooldown: 2,
                         targeting: 'ALL_CORPSES',
                         effects: { summon: { unit: 'skeleton_warrior', count: [3, 4, 5], duration: 5 } },
                         description: 'Raise massive undead army',
@@ -1648,8 +1647,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [16, 15, 14, 13, 12],
-                        cooldown: 2,
+                        energyCost: [20, 18, 17, 16, 15],
+                        cooldown: 1,
                         damageMultiplier: [1.7, 1.85, 2.0, 2.15, 2.3],
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
@@ -1664,8 +1663,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [20, 18, 16, 14, 12],
-                        cooldown: 4,
+                        energyCost: [30, 27, 24, 21, 18],
+                        cooldown: 1,
                         targeting: 'TEAM',
                         effects: {
                             haste: { value: [40, 45, 50, 55, 60], duration: 3 },
@@ -1682,8 +1681,8 @@ const SKILL_TREES = {
                         requiredLevel: 3,
                         maxLevel: 5,
                         prerequisite: ['haste'],
-                        energyCost: [30, 28, 26, 24, 22],
-                        cooldown: 5,
+                        energyCost: [49, 45, 42, 39, 36],
+                        cooldown: 1,
                         targeting: 'SINGLE_ALLY',
                         effects: {
                             extraTurn: true,
@@ -1700,13 +1699,13 @@ const SKILL_TREES = {
                         requiredLevel: 3,
                         maxLevel: 5,
                         prerequisite: ['time_bolt'],
-                        energyCost: [35, 33, 31, 29, 27],
-                        cooldown: 4,
+                        energyCost: [53, 50, 47, 44, 41],
+                        cooldown: 1,
                         damageMultiplier: [2.4, 2.6, 2.8, 3.0, 3.2],
                         damageType: 'MAGICAL',
                         targeting: 'AOE_SMALL',
                         effects: {
-                            stun: { chance: [50, 55, 60, 65, 70], duration: 1 },
+                            stun: { chance: [35, 39, 42, 46, 49], duration: 1 },
                             ageDamage: { percent: [15, 17, 19, 21, 23] }
                         },
                         description: 'Tear fabric of time damaging enemies',
@@ -1720,8 +1719,8 @@ const SKILL_TREES = {
                         requiredLevel: 5,
                         maxLevel: 5,
                         prerequisite: ['time_warp'],
-                        energyCost: [45, 42, 39, 36, 33],
-                        cooldown: 6,
+                        energyCost: [77, 72, 67, 62, 56],
+                        cooldown: 1,
                         targeting: 'TEAM',
                         effects: {
                             restoreHp: { percent: [30, 35, 40, 45, 50] },
@@ -1738,8 +1737,8 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 8,
                         maxLevel: 3,
-                        energyCost: [80, 75, 70],
-                        cooldown: 7,
+                        energyCost: [116, 109, 102],
+                        cooldown: 2,
                         targeting: 'ALL_ENEMIES',
                         effects: { freeze: { duration: 2 } },
                         description: 'Freeze time, team acts freely',
@@ -1782,13 +1781,13 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [15, 14, 13, 12, 10],
+                        energyCost: [23, 21, 20, 18, 15],
                         goldCost: [300, 250, 200, 150, 100],
-                        cooldown: 4,
+                        cooldown: 1,
                         targeting: 'SINGLE',
                         effects: {
-                            charm: { chance: [60, 65, 70, 75, 80], duration: 2 },
-                            pacify: { chance: [80, 85, 90, 95, 100], duration: 3 }
+                            charm: { chance: [42, 46, 49, 53, 57], duration: 2 },
+                            pacify: { chance: [57, 60, 64, 67, 71], duration: 3 }
                         },
                         description: 'Pay enemy to stop fighting',
                         animation: '💰😊',
@@ -1801,9 +1800,9 @@ const SKILL_TREES = {
                         requiredLevel: 3,
                         maxLevel: 5,
                         prerequisite: ['gold_throw'],
-                        energyCost: [20, 18, 16, 14, 12],
+                        energyCost: [28, 25, 22, 19, 17],
                         goldCost: [200, 180, 160, 140, 120],
-                        cooldown: 3,
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             goldReturn: { multiplier: [1.5, 1.6, 1.7, 1.8, 2.0], delay: 2 },
@@ -1820,9 +1819,9 @@ const SKILL_TREES = {
                         requiredLevel: 3,
                         maxLevel: 5,
                         prerequisite: ['bribe'],
-                        energyCost: [25, 23, 21, 19, 17],
+                        energyCost: [41, 37, 34, 31, 28],
                         goldCost: [500, 450, 400, 350, 300],
-                        cooldown: 5,
+                        cooldown: 1,
                         targeting: 'SUMMON',
                         effects: { summon: { unit: 'mercenary', duration: 4, stats: { hp: [120, 140, 160, 180, 200], atk: [25, 30, 35, 40, 45] } } },
                         description: 'Hire fighter to aid in battle',
@@ -1836,8 +1835,8 @@ const SKILL_TREES = {
                         requiredLevel: 5,
                         maxLevel: 5,
                         prerequisite: ['investment'],
-                        energyCost: [30, 27, 24, 21, 18],
-                        cooldown: 5,
+                        energyCost: [49, 44, 39, 34, 29],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             findItems: { count: 3, rarity: 'random' },
@@ -1854,12 +1853,12 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 8,
                         maxLevel: 3,
-                        energyCost: [40, 38, 35],
-                        cooldown: 6,
+                        energyCost: [56, 53, 49],
+                        cooldown: 2,
                         damageMultiplier: [3.5, 4.0, 4.5],
                         damageType: 'TRUE',
                         targeting: 'AOE_LARGE',
-                        effects: { stun: { chance: [70, 80, 90], duration: 2 } },
+                        effects: { stun: { chance: [53, 61, 68], duration: 2 } },
                         description: 'Bury enemies in gold coins',
                         animation: '💰💰💰💥',
                         isUltimate: true,
@@ -1885,8 +1884,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [20, 19, 18, 17, 15],
-                        cooldown: 2,
+                        energyCost: [25, 23, 22, 21, 18],
+                        cooldown: 1,
                         targeting: 'SINGLE_ALLY',
                         effects: { heal: { value: [60, 72, 84, 96, 108] } },
                         description: 'Restore ally health',
@@ -1899,17 +1898,65 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 8,
                         maxLevel: 3,
-                        energyCost: [60, 55, 50],
-                        cooldown: 6,
+                        energyCost: [83, 76, 70],
+                        cooldown: 2,
                         damageMultiplier: [3.2, 3.6, 4.0],
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
-                        effects: { stun: { chance: [60, 70, 80], duration: 1 } },
+                        effects: { stun: { chance: [46, 53, 61], duration: 1 } },
                         bonusVsUndead: [4.0, 4.5, 5.0],
                         description: 'Smite enemies while healing allies',
                         animation: '⚡✨💥😇',
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
+                    },
+                    // 💡 PHASE 2 2026-07-17: 3 new Cleric skills (was 2 - only Heal + ult)
+                    smite: {
+                        id: 'smite',
+                        name: 'Smite',
+                        tier: 1,
+                        requiredLevel: 3,
+                        maxLevel: 5,
+                        energyCost: [18, 17, 16, 15, 13],
+                        cooldown: 1,
+                        damageMultiplier: [2.0, 2.2, 2.4, 2.6, 2.8],
+                        damageType: 'MAGICAL',
+                        targeting: 'SINGLE',
+                        bonusVsUndead: [3.0, 3.3, 3.6, 4.0, 4.5],
+                        description: 'Call down divine light to strike a single foe. Deals bonus damage to undead.',
+                        animation: '✨⚡',
+                        skillPointCost: [1, 2, 3, 4, 5]
+                    },
+                    blessing: {
+                        id: 'blessing',
+                        name: 'Blessing',
+                        tier: 2,
+                        requiredLevel: 5,
+                        maxLevel: 3,
+                        energyCost: [40, 36, 32],
+                        cooldown: 1,
+                        targeting: 'TEAM',
+                        effects: { buff_team: { stat: 'all', value: [15, 20, 25], duration: 3 } },
+                        description: 'Bless the entire party, boosting all stats.',
+                        animation: '✨🙏',
+                        skillPointCost: [3, 5, 7]
+                    },
+                    cleanse: {
+                        id: 'cleanse',
+                        name: 'Cleanse',
+                        tier: 2,
+                        requiredLevel: 6,
+                        maxLevel: 3,
+                        energyCost: [30, 26, 22],
+                        cooldown: 1,
+                        targeting: 'TEAM_ALLY',
+                        effects: {
+                            cleanse: { value: 1 },
+                            heal: { value: [40, 55, 70] }
+                        },
+                        description: 'Purify all negative status effects from the party and restore a small amount of HP.',
+                        animation: '💧✨',
+                        skillPointCost: [3, 5, 7]
                     }
                 }
             }
@@ -1946,8 +1993,8 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 8,
                         maxLevel: 3,
-                        energyCost: [65, 60, 55],
-                        cooldown: 8,
+                        energyCost: [99, 91, 83],
+                        cooldown: 2,
                         damageMultiplier: [5.0, 5.5, 6.0],
                         damageType: 'TRUE',
                         targeting: 'AOE_LARGE',
@@ -1956,6 +2003,55 @@ const SKILL_TREES = {
                         animation: '🌑💀⚡✨',
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
+                    },
+                    // 💡 PHASE 2 2026-07-17: 3 new Ninja skills (was 2 - only Shuriken + ult)
+                    shadow_clone_jutsu: {
+                        id: 'shadow_clone_jutsu',
+                        name: 'Shadow Clone Jutsu',
+                        tier: 2,
+                        requiredLevel: 3,
+                        maxLevel: 3,
+                        energyCost: [35, 32, 28],
+                        cooldown: 1,
+                        targeting: 'SELF',
+                        effects: {
+                            evasion: { value: [40, 50, 60], duration: 2 },
+                            counterattack: { chance: [15, 20, 25], value: [1.0, 1.2, 1.4] }
+                        },
+                        description: 'Create a shadow clone that boosts evasion and has a chance to counterattack when struck.',
+                        animation: '🥷👥',
+                        skillPointCost: [3, 5, 7]
+                    },
+                    poison_kunai: {
+                        id: 'poison_kunai',
+                        name: 'Poison Kunai',
+                        tier: 1,
+                        requiredLevel: 5,
+                        maxLevel: 5,
+                        energyCost: [22, 20, 18, 16, 14],
+                        cooldown: 1,
+                        damageMultiplier: [1.4, 1.55, 1.7, 1.85, 2.0],
+                        damageType: 'PHYSICAL',
+                        targeting: 'SINGLE',
+                        effects: { poison: { value: [25, 35, 45, 60, 80], duration: 4 } },
+                        description: 'Throw a poisoned kunai that deals damage over time.',
+                        animation: '🗡️🧪',
+                        skillPointCost: [1, 2, 3, 4, 5]
+                    },
+                    kunai_storm: {
+                        id: 'kunai_storm',
+                        name: 'Kunai Storm',
+                        tier: 3,
+                        requiredLevel: 7,
+                        maxLevel: 3,
+                        energyCost: [55, 50, 45],
+                        cooldown: 1,
+                        damageMultiplier: [1.5, 1.7, 1.9],
+                        damageType: 'PHYSICAL',
+                        targeting: 'AOE',
+                        description: 'Unleash a storm of kunai at all enemies.',
+                        animation: '🗡️🌪️',
+                        skillPointCost: [4, 6, 8]
                     }
                 }
             }
@@ -1993,14 +2089,63 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 8,
                         maxLevel: 3,
-                        energyCost: [50, 45, 40],
-                        cooldown: 7,
+                        energyCost: [73, 66, 58],
+                        cooldown: 2,
                         targeting: 'SELF',
                         effects: { buff_self: { stat: 'all', value: [80, 100, 120], duration: 4 } },
                         description: 'Achieve perfect enlightened state',
                         animation: '🧘✨🌟💫',
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
+                    },
+                    // 💡 PHASE 2 2026-07-17: 3 new Monk skills (was 2 - only Palm Strike + ult)
+                    ki_blast: {
+                        id: 'ki_blast',
+                        name: 'Ki Blast',
+                        tier: 1,
+                        requiredLevel: 3,
+                        maxLevel: 5,
+                        energyCost: [20, 18, 16, 14, 12],
+                        cooldown: 1,
+                        damageMultiplier: [1.8, 2.0, 2.2, 2.4, 2.6],
+                        damageType: 'MAGICAL',
+                        targeting: 'SINGLE',
+                        description: 'Release a concentrated burst of inner ki energy.',
+                        animation: '👊💥',
+                        skillPointCost: [1, 2, 3, 4, 5]
+                    },
+                    whirlwind_kick: {
+                        id: 'whirlwind_kick',
+                        name: 'Whirlwind Kick',
+                        tier: 2,
+                        requiredLevel: 5,
+                        maxLevel: 3,
+                        energyCost: [38, 34, 30],
+                        cooldown: 1,
+                        damageMultiplier: [1.4, 1.6, 1.8],
+                        damageType: 'PHYSICAL',
+                        targeting: 'AOE',
+                        effects: { slow: { chance: [30, 40, 50], value: 30, duration: 2 } },
+                        description: 'Spin in a wide arc, striking all enemies with a chance to slow them.',
+                        animation: '🦵🌀',
+                        skillPointCost: [3, 5, 7]
+                    },
+                    meditation: {
+                        id: 'meditation',
+                        name: 'Meditation',
+                        tier: 2,
+                        requiredLevel: 6,
+                        maxLevel: 3,
+                        energyCost: [25, 22, 18],
+                        cooldown: 1,
+                        targeting: 'SELF',
+                        effects: {
+                            buff_self: { stat: 'crit', value: [30, 40, 50], duration: 3 },
+                            energyRestore: { value: [20, 30, 40] }
+                        },
+                        description: 'Focus your mind to restore energy and sharpen your critical strikes.',
+                        animation: '🧘💭',
+                        skillPointCost: [3, 5, 7]
                     }
                 }
             }
@@ -2022,8 +2167,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [18, 17, 16, 15, 13],
-                        cooldown: 2,
+                        energyCost: [22, 21, 20, 18, 16],
+                        cooldown: 1,
                         damageMultiplier: [1.6, 1.75, 1.9, 2.05, 2.2],
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
@@ -2038,13 +2183,13 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 3,
                         maxLevel: 5,
-                        energyCost: [25, 24, 23, 22, 20],
-                        cooldown: 4,
+                        energyCost: [38, 36, 35, 33, 30],
+                        cooldown: 1,
                         damageMultiplier: [1.2, 1.3, 1.4, 1.5, 1.6],
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
                         effects: [
-                            { type: 'stun', chance: [40, 50, 60, 70, 80], duration: 1 }
+                            { type: 'stun', chance: [28, 35, 42, 49, 57], duration: 1 }
                         ],
                         description: 'Grounds a dragon, potentially stunning it.',
                         animation: '✂️🐲',
@@ -2056,8 +2201,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 5,
                         maxLevel: 5,
-                        energyCost: [30, 28, 26, 24, 22],
-                        cooldown: 3,
+                        energyCost: [42, 39, 36, 33, 31],
+                        cooldown: 1,
                         damageMultiplier: [2.0, 2.2, 2.4, 2.6, 2.8],
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
@@ -2072,8 +2217,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 6,
                         maxLevel: 5,
-                        energyCost: [35, 33, 31, 29, 27],
-                        cooldown: 4,
+                        energyCost: [53, 50, 47, 44, 41],
+                        cooldown: 1,
                         damageMultiplier: [1.5, 1.7, 1.9, 2.1, 2.3],
                         damageType: 'PHYSICAL',
                         targeting: 'AOE',
@@ -2087,8 +2232,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 7,
                         maxLevel: 5,
-                        energyCost: [20, 18, 16, 14, 12],
-                        cooldown: 5,
+                        energyCost: [32, 29, 26, 23, 19],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             critBuff: { value: [20, 30, 40, 50, 60], duration: 3 }
@@ -2103,8 +2248,8 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 10,
                         maxLevel: 3,
-                        energyCost: [70, 65, 60],
-                        cooldown: 8,
+                        energyCost: [106, 99, 91],
+                        cooldown: 2,
                         damageMultiplier: [6.0, 6.5, 7.0],
                         damageType: 'TRUE',
                         targeting: 'SINGLE',
@@ -2126,8 +2271,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [10, 9, 8, 7, 5],
-                        cooldown: 6,
+                        energyCost: [17, 15, 14, 12, 9],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             heal: { value: [15, 25, 35, 45, 60] }
@@ -2142,8 +2287,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 2,
                         maxLevel: 5,
-                        energyCost: [15, 14, 13, 12, 10],
-                        cooldown: 5,
+                        energyCost: [24, 23, 21, 19, 16],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             buff_self: { stat: 'defense', value: [20, 30, 40, 50, 60], duration: 3 }
@@ -2158,8 +2303,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 4,
                         maxLevel: 5,
-                        energyCost: [20, 18, 16, 14, 12],
-                        cooldown: 6,
+                        energyCost: [34, 31, 27, 24, 21],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             buff_self: { stat: 'mag_def', value: [30, 45, 60, 75, 90], duration: 4 }
@@ -2174,8 +2319,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 6,
                         maxLevel: 5,
-                        energyCost: [40, 38, 36, 34, 32],
-                        cooldown: 6,
+                        energyCost: [68, 65, 62, 58, 55],
+                        cooldown: 1,
                         targeting: 'TEAM',
                         effects: {
                             buff_team: { stat: 'attack', value: [15, 20, 25, 30, 40], duration: 3 }
@@ -2190,8 +2335,8 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 9,
                         maxLevel: 5,
-                        energyCost: [45, 43, 41, 39, 37],
-                        cooldown: 7,
+                        energyCost: [81, 77, 74, 70, 66],
+                        cooldown: 1,
                         targeting: 'AOE',
                         effects: {
                             debuff: { stat: 'defense', value: [20, 25, 30, 35, 45], duration: 3 }
@@ -2235,8 +2380,8 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 8,
                         maxLevel: 3,
-                        energyCost: [75, 70, 65],
-                        cooldown: 8,
+                        energyCost: [114, 106, 99],
+                        cooldown: 2,
                         damageMultiplier: [4.5, 5.0, 5.5],
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
@@ -2244,6 +2389,54 @@ const SKILL_TREES = {
                         animation: '🌋🌊⚡🧊💥',
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
+                    },
+                    // 💡 PHASE 2 2026-07-17: 3 new Elementalist skills (was 2 - only Elemental Bolt + ult)
+                    flame_burst: {
+                        id: 'flame_burst',
+                        name: 'Flame Burst',
+                        tier: 1,
+                        requiredLevel: 3,
+                        maxLevel: 5,
+                        energyCost: [25, 23, 21, 19, 16],
+                        cooldown: 1,
+                        damageMultiplier: [1.6, 1.75, 1.9, 2.05, 2.2],
+                        damageType: 'MAGICAL',
+                        targeting: 'AOE_SMALL',
+                        effects: { burn: { value: [15, 20, 25, 30, 40], duration: 3 } },
+                        description: 'Erupt a burst of flame at 2 enemies, applying burn.',
+                        animation: '🔥💥',
+                        skillPointCost: [1, 2, 3, 4, 5]
+                    },
+                    frost_nova: {
+                        id: 'frost_nova',
+                        name: 'Frost Nova',
+                        tier: 2,
+                        requiredLevel: 5,
+                        maxLevel: 3,
+                        energyCost: [42, 38, 34],
+                        cooldown: 1,
+                        damageMultiplier: [1.2, 1.4, 1.6],
+                        damageType: 'MAGICAL',
+                        targeting: 'AOE',
+                        effects: { freeze: { chance: [25, 35, 45], duration: 1 } },
+                        description: 'Explode frost outward, damaging all enemies with a chance to freeze.',
+                        animation: '❄️💥',
+                        skillPointCost: [3, 5, 7]
+                    },
+                    chain_lightning: {
+                        id: 'chain_lightning',
+                        name: 'Chain Lightning',
+                        tier: 3,
+                        requiredLevel: 7,
+                        maxLevel: 3,
+                        energyCost: [55, 50, 45],
+                        cooldown: 1,
+                        damageMultiplier: [1.8, 2.0, 2.2],
+                        damageType: 'MAGICAL',
+                        targeting: 'CHAIN',
+                        description: 'Fire a bolt of lightning that arcs between up to 3 enemies.',
+                        animation: '⚡🔗',
+                        skillPointCost: [4, 6, 8]
                     }
                 }
             }
@@ -2265,8 +2458,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 30,
                         maxLevel: 5,
-                        energyCost: [20, 19, 18, 17, 15],
-                        cooldown: 2,
+                        energyCost: [25, 23, 22, 21, 18],
+                        cooldown: 1,
                         damageMultiplier: [2.5, 2.75, 3.0, 3.25, 3.5],
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
@@ -2280,8 +2473,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 32,
                         maxLevel: 5,
-                        energyCost: [25, 23, 21, 19, 17],
-                        cooldown: 5,
+                        energyCost: [35, 32, 29, 26, 24],
+                        cooldown: 1,
                         targeting: 'TEAM',
                         effects: {
                             buff_team: { stat: 'defense', value: [30, 40, 50, 65, 80], duration: 3 }
@@ -2296,8 +2489,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 34,
                         maxLevel: 5,
-                        energyCost: [30, 28, 26, 24, 22],
-                        cooldown: 6,
+                        energyCost: [42, 39, 36, 33, 31],
+                        cooldown: 1,
                         targeting: 'TEAM',
                         effects: {
                             buff_team: { stat: 'attack', value: [20, 25, 30, 35, 45], duration: 3 },
@@ -2313,8 +2506,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 37,
                         maxLevel: 5,
-                        energyCost: [35, 32, 29, 26, 23],
-                        cooldown: 4,
+                        energyCost: [43, 39, 36, 32, 28],
+                        cooldown: 1,
                         targeting: 'TEAM',
                         effects: {
                             haste: { value: [20, 25, 30, 35, 45], duration: 3 }
@@ -2331,14 +2524,74 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         isUltimate: true,
                         isAscended: true,
-                        energyCost: [100, 90, 80],
-                        cooldown: 10,
+                        energyCost: [139, 125, 111],
+                        cooldown: 2,
                         damageMultiplier: [7.0, 8.0, 9.0],
                         damageType: 'TRUE',
                         targeting: 'ALL_ENEMIES',
                         description: 'Unleash total warfare upon all enemies.',
+                        description: 'Unleash total warfare upon all enemies. Party gains +50% ATK for 3 turns.',
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 7.0 + (level * 1.0),
+                            damageType: 'true',
+                            targeting: 'ALL_ENEMIES',
+                            partyBuff: { type: 'atk', value: 30 + (level * 10), duration: 3 },
+                            animation: '⚔️🎖️💥🔥✨'
+                        }),
                         animation: '⚔️🎖️💥🔥✨',
                         skillPointCost: [8, 12, 15]
+                    },
+                    // 💡 PHASE 2 2026-07-17: 3 new Warlord skills (class had only 2 damaging skills - Tactical Strike + Total War ult)
+                    wide_cleave: {
+                        id: 'wide_cleave',
+                        name: 'Wide Cleave',
+                        tier: 3,
+                        requiredLevel: 33,
+                        maxLevel: 3,
+                        energyCost: [70, 65, 60],
+                        cooldown: 1,
+                        damageMultiplier: [2.5, 2.8, 3.1],
+                        damageType: 'PHYSICAL',
+                        targeting: 'AOE',
+                        description: 'A sweeping cleave that strikes ALL enemies at once.',
+                        animation: '⚔️🌀',
+                        skillPointCost: [4, 6, 8]
+                    },
+                    shield_bash: {
+                        id: 'shield_bash',
+                        name: 'Shield Bash',
+                        tier: 2,
+                        requiredLevel: 35,
+                        maxLevel: 3,
+                        energyCost: [55, 50, 45],
+                        cooldown: 1,
+                        damageMultiplier: [2.0, 2.3, 2.6],
+                        damageType: 'PHYSICAL',
+                        targeting: 'SINGLE',
+                        effects: {
+                            stun: { chance: [40, 50, 60], duration: 1 },
+                            shield: { value: [50, 75, 100], duration: 2 }
+                        },
+                        description: 'Bash with your shield, stunning the target and gaining a shield.',
+                        animation: '🛡️💥',
+                        skillPointCost: [4, 6, 8]
+                    },
+                    banner_charge: {
+                        id: 'banner_charge',
+                        name: 'Banner Charge',
+                        tier: 3,
+                        requiredLevel: 38,
+                        maxLevel: 3,
+                        energyCost: [90, 82, 73],
+                        cooldown: 1,
+                        damageMultiplier: [3.0, 3.4, 3.8],
+                        damageType: 'PHYSICAL',
+                        targeting: 'AOE',
+                        effects: { buff_team: { stat: 'attack', value: [15, 20, 25], duration: 2 } },
+                        description: 'Plant your banner and charge, dealing AOE damage and inspiring your party.',
+                        animation: '🚩⚔️',
+                        skillPointCost: [6, 8, 10]
                     }
                 }
             }
@@ -2375,8 +2628,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 32,
                         maxLevel: 5,
-                        energyCost: [20, 18, 16, 14, 12],
-                        cooldown: 5,
+                        energyCost: [32, 29, 26, 23, 19],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             berserk: { value: [50, 70, 90, 110, 150], duration: 3 }
@@ -2391,8 +2644,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 34,
                         maxLevel: 5,
-                        energyCost: [35, 33, 31, 29, 27],
-                        cooldown: 4,
+                        energyCost: [53, 50, 47, 44, 41],
+                        cooldown: 1,
                         damageMultiplier: [3.5, 3.8, 4.1, 4.4, 4.8],
                         damageType: 'MAGICAL',
                         targeting: 'AOE',
@@ -2409,8 +2662,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 37,
                         maxLevel: 5,
-                        energyCost: [30, 28, 26, 24, 22],
-                        cooldown: 5,
+                        energyCost: [49, 45, 42, 39, 36],
+                        cooldown: 1,
                         damageMultiplier: [2.5, 2.8, 3.1, 3.4, 3.8],
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
@@ -2427,12 +2680,21 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [100, 92, 83],
-                        cooldown: 8,
+                        energyCost: [152, 139, 126],
+                        cooldown: 2,
                         damageMultiplier: [10.0, 12.0, 15.0],
                         damageType: 'TRUE',
                         targeting: 'ALL_ENEMIES',
                         description: 'Ancient weapon of pure destruction.',
+                        description: 'Ancient weapon of pure destruction. Self: +100% ATK for 2 turns (bloodlust).',
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 10.0 + (level * 2.5),
+                            damageType: 'true',
+                            targeting: 'ALL_ENEMIES',
+                            selfBuff: { type: 'berserk', value: 100, duration: 2 },
+                            animation: '⚔️🔥💀⚡💥'
+                        }),
                         animation: '⚔️🔥💀⚡💥',
                         isUltimate: true,
                         isAscended: true,
@@ -2471,8 +2733,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 33,
                         maxLevel: 5,
-                        energyCost: [25, 23, 21, 19, 17],
-                        cooldown: 5,
+                        energyCost: [41, 37, 34, 31, 28],
+                        cooldown: 1,
                         targeting: 'TEAM',
                         effects: {
                             shield: { value: [30, 40, 50, 60, 80], duration: 3 }
@@ -2487,8 +2749,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 36,
                         maxLevel: 5,
-                        energyCost: [40, 38, 36, 34, 32],
-                        cooldown: 4,
+                        energyCost: [61, 58, 55, 52, 49],
+                        cooldown: 1,
                         damageMultiplier: [3.5, 4.0, 4.5, 5.0, 6.0],
                         damageType: 'MAGICAL',
                         targeting: 'AOE',
@@ -2502,15 +2764,28 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [100, 90, 80],
-                        cooldown: 12,
-                        damageMultiplier: [5.0, 6.5, 8.0], // was [15.0, 20.0, 30.0] — nerfed AOE ult
+                        energyCost: [171, 154, 137],
+                        cooldown: 2,
+                        damageMultiplier: [5.0, 6.5, 8.0], // was [15.0, 20.0, 30.0] - nerfed AOE ult
                         damageType: 'MAGICAL',
                         targeting: 'ALL_ENEMIES',
                         description: 'The ultimate elemental collapse.',
                         animation: '🌋🌊⚡🌪️💥💀',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 9.0 + (level * 2.0),
+                            damageType: 'magic',
+                            targeting: 'ALL_ENEMIES',
+                            element: 'all',
+                            debuff: { type: 'vulnerability', value: 25 + (level * 10), duration: 3 },
+                            cc: 'burn',
+                            ccChance: 50 + (level * 15),
+                            ccDuration: 3,
+                            ccValue: 30 + (level * 15),
+                            animation: '🌊🔥⚡🌍💥✨'
+                        }),
                         skillPointCost: [10, 15, 20]
                     }
                 }
@@ -2533,8 +2808,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [18, 17, 16, 15, 13],
-                        cooldown: 2,
+                        energyCost: [22, 21, 20, 18, 16],
+                        cooldown: 1,
                         damageMultiplier: [1.9, 2.05, 2.2, 2.35, 2.5],
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
@@ -2548,8 +2823,8 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 8,
                         maxLevel: 3,
-                        energyCost: [60, 55, 50],
-                        cooldown: 7,
+                        energyCost: [87, 80, 73],
+                        cooldown: 2,
                         damageMultiplier: [4.5, 5.0, 5.5],
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
@@ -2557,6 +2832,54 @@ const SKILL_TREES = {
                         animation: '💀🌑✨',
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
+                    },
+                    // 💡 PHASE 2 2026-07-17: 3 new Warlock skills (was 2 - only Shadow Bolt + ult)
+                    curse_of_agony: {
+                        id: 'curse_of_agony',
+                        name: 'Curse of Agony',
+                        tier: 2,
+                        requiredLevel: 3,
+                        maxLevel: 3,
+                        energyCost: [35, 30, 26],
+                        cooldown: 1,
+                        targeting: 'SINGLE',
+                        effects: { vulnerability: { value: [15, 20, 25], duration: 3 } },
+                        description: 'Curse a foe with agonizing pain, increasing all damage they take.',
+                        animation: '💀🔮',
+                        skillPointCost: [3, 5, 7]
+                    },
+                    demon_armor: {
+                        id: 'demon_armor',
+                        name: 'Demon Armor',
+                        tier: 2,
+                        requiredLevel: 5,
+                        maxLevel: 3,
+                        energyCost: [40, 35, 30],
+                        cooldown: 1,
+                        targeting: 'SELF',
+                        effects: {
+                            buff_self: { stat: 'def', value: [40, 55, 70], duration: 3 },
+                            thorns: { value: [15, 20, 25], duration: 3 }
+                        },
+                        description: 'Encase yourself in demonic armor, boosting DEF and reflecting melee damage.',
+                        animation: '👹🛡️',
+                        skillPointCost: [3, 5, 7]
+                    },
+                    hellfire: {
+                        id: 'hellfire',
+                        name: 'Hellfire',
+                        tier: 3,
+                        requiredLevel: 7,
+                        maxLevel: 3,
+                        energyCost: [60, 55, 50],
+                        cooldown: 1,
+                        damageMultiplier: [1.7, 1.9, 2.1],
+                        damageType: 'MAGICAL',
+                        targeting: 'AOE',
+                        effects: { burn: { value: [25, 35, 45], duration: 3 } },
+                        description: 'Call down hellfire that scorches all enemies and applies burn.',
+                        animation: '🔥👹',
+                        skillPointCost: [4, 6, 8]
                     }
                 }
             }
@@ -2578,8 +2901,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [18, 17, 16, 15, 13],
-                        cooldown: 2,
+                        energyCost: [22, 21, 20, 18, 16],
+                        cooldown: 1,
                         damageMultiplier: [1.6, 1.75, 1.9, 2.05, 2.2],
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
@@ -2593,8 +2916,8 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 8,
                         maxLevel: 3,
-                        energyCost: [65, 60, 55],
-                        cooldown: 7,
+                        energyCost: [95, 87, 80],
+                        cooldown: 2,
                         damageMultiplier: [4.0, 4.5, 5.0],
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
@@ -2602,6 +2925,54 @@ const SKILL_TREES = {
                         animation: '🌿🌳⚡💚',
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
+                    },
+                    // 💡 PHASE 2 2026-07-17: 3 new Druid skills (was 2 - only Nature's Wrath + ult)
+                    entangle: {
+                        id: 'entangle',
+                        name: 'Entangle',
+                        tier: 2,
+                        requiredLevel: 3,
+                        maxLevel: 3,
+                        energyCost: [32, 28, 24],
+                        cooldown: 1,
+                        targeting: 'AOE',
+                        effects: { root: { chance: [40, 55, 70], duration: 2 } },
+                        description: 'Summon vines to entangle all enemies, rooting many in place.',
+                        animation: '🌿🔗',
+                        skillPointCost: [3, 5, 7]
+                    },
+                    healing_bloom: {
+                        id: 'healing_bloom',
+                        name: 'Healing Bloom',
+                        tier: 2,
+                        requiredLevel: 5,
+                        maxLevel: 3,
+                        energyCost: [40, 35, 30],
+                        cooldown: 1,
+                        targeting: 'TEAM_ALLY',
+                        effects: {
+                            heal: { value: [80, 110, 140] },
+                            regen: { value: [15, 20, 25], duration: 3 }
+                        },
+                        description: 'Bloom healing flowers across the party, restoring HP now and over time.',
+                        animation: '🌸💚',
+                        skillPointCost: [3, 5, 7]
+                    },
+                    thorn_surge: {
+                        id: 'thorn_surge',
+                        name: 'Thorn Surge',
+                        tier: 3,
+                        requiredLevel: 7,
+                        maxLevel: 3,
+                        energyCost: [50, 45, 40],
+                        cooldown: 1,
+                        damageMultiplier: [1.6, 1.8, 2.0],
+                        damageType: 'MAGICAL',
+                        targeting: 'AOE',
+                        effects: { bleed: { value: [15, 20, 30], duration: 3 } },
+                        description: 'Erupt a wave of thorns at all enemies, causing bleed.',
+                        animation: '🌿💥',
+                        skillPointCost: [4, 6, 8]
                     }
                 }
             }
@@ -2623,8 +2994,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [18, 17, 16, 15, 13],
-                        cooldown: 2,
+                        energyCost: [22, 21, 20, 18, 16],
+                        cooldown: 1,
                         damageMultiplier: [1.8, 2.0, 2.2, 2.4, 2.6],
                         damageType: 'PHYSICAL',
                         targeting: 'AOE_SMALL',
@@ -2638,8 +3009,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [25, 23, 21, 19, 17],
-                        cooldown: 4,
+                        energyCost: [38, 35, 32, 29, 26],
+                        cooldown: 1,
                         targeting: 'SUMMON',
                         effects: { summon: { unit: 'turret', duration: 4, stats: { hp: [60, 75, 90, 105, 120], atk: [18, 22, 26, 30, 35] }, autoAttack: true } },
                         description: 'Deploy automated turret',
@@ -2653,8 +3024,8 @@ const SKILL_TREES = {
                         requiredLevel: 3,
                         maxLevel: 5,
                         prerequisite: ['turret'],
-                        energyCost: [28, 26, 24, 22, 20],
-                        cooldown: 4,
+                        energyCost: [42, 39, 36, 33, 30],
+                        cooldown: 1,
                         targeting: 'TEAM',
                         effects: {
                             shield: { value: [35, 45, 55, 65, 80], duration: 3 },
@@ -2671,8 +3042,8 @@ const SKILL_TREES = {
                         requiredLevel: 3,
                         maxLevel: 5,
                         prerequisite: ['grenade'],
-                        energyCost: [30, 28, 26, 24, 22],
-                        cooldown: 4,
+                        energyCost: [45, 42, 39, 36, 33],
+                        cooldown: 1,
                         damageMultiplier: [1.5, 1.7, 1.9, 2.1, 2.3],
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
@@ -2692,8 +3063,8 @@ const SKILL_TREES = {
                         requiredLevel: 5,
                         maxLevel: 5,
                         prerequisite: ['shield_generator'],
-                        energyCost: [45, 42, 39, 36, 33],
-                        cooldown: 7,
+                        energyCost: [81, 75, 70, 65, 59],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             transform: { form: 'mech', duration: 4 },
@@ -2712,8 +3083,8 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 8,
                         maxLevel: 3,
-                        energyCost: [70, 65, 60],
-                        cooldown: 8,
+                        energyCost: [106, 99, 91],
+                        cooldown: 2,
                         damageMultiplier: [4.0, 4.5, 5.0],
                         damageType: 'TRUE',
                         targeting: 'AOE_LARGE',
@@ -2742,8 +3113,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [15, 14, 13, 12, 10],
-                        cooldown: 3,
+                        energyCost: [21, 19, 18, 17, 14],
+                        cooldown: 1,
                         targeting: 'TEAM',
                         effects: { atkBuff: { value: [25, 30, 35, 40, 45], duration: 3 } },
                         description: 'Inspire allies with heroic song',
@@ -2756,10 +3127,10 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [20, 18, 16, 14, 12],
-                        cooldown: 4,
+                        energyCost: [30, 27, 24, 21, 18],
+                        cooldown: 1,
                         targeting: 'AOE_SMALL',
-                        effects: { sleep: { chance: [65, 70, 75, 80, 85], duration: 2 } },
+                        effects: { sleep: { chance: [46, 49, 53, 57, 60], duration: 2 } },
                         description: 'Put enemies to sleep',
                         animation: '🎵😴',
                         skillPointCost: [1, 2, 3, 4, 5]
@@ -2771,8 +3142,8 @@ const SKILL_TREES = {
                         requiredLevel: 3,
                         maxLevel: 5,
                         prerequisite: ['inspire'],
-                        energyCost: [22, 20, 18, 16, 14],
-                        cooldown: 3,
+                        energyCost: [31, 28, 25, 22, 19],
+                        cooldown: 1,
                         damageMultiplier: [1.2, 1.3, 1.4, 1.5, 1.6],
                         damageType: 'MAGICAL',
                         targeting: 'AOE_SMALL',
@@ -2791,15 +3162,15 @@ const SKILL_TREES = {
                         requiredLevel: 3,
                         maxLevel: 5,
                         prerequisite: ['lullaby'],
-                        energyCost: [18, 16, 14, 12, 10],
-                        cooldown: 3,
+                        energyCost: [25, 22, 19, 17, 14],
+                        cooldown: 1,
                         damageMultiplier: [0.8, 0.9, 1.0, 1.1, 1.2],
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
                         effects: {
                             taunt: { duration: 2 },
                             atkDebuff: { value: [30, 35, 40, 45, 50], duration: 2 },
-                            blind: { chance: [50, 55, 60, 65, 70], duration: 1 }
+                            blind: { chance: [38, 42, 46, 49, 53], duration: 1 }
                         },
                         description: 'Taunt and weaken enemy',
                         animation: '🎭😠',
@@ -2812,8 +3183,8 @@ const SKILL_TREES = {
                         requiredLevel: 5,
                         maxLevel: 5,
                         prerequisite: ['battle_hymn'],
-                        energyCost: [40, 37, 34, 31, 28],
-                        cooldown: 5,
+                        energyCost: [65, 60, 55, 50, 45],
+                        cooldown: 1,
                         targeting: 'TEAM',
                         effects: {
                             allBuff: { value: [30, 35, 40, 45, 50], duration: 3 },
@@ -2831,8 +3202,8 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 8,
                         maxLevel: 3,
-                        energyCost: [55, 50, 45],
-                        cooldown: 6,
+                        energyCost: [76, 70, 63],
+                        cooldown: 2,
                         damageMultiplier: [2.8, 3.2, 3.6],
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
@@ -2861,8 +3232,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [16, 15, 14, 13, 12],
-                        cooldown: 2,
+                        energyCost: [20, 18, 17, 16, 15],
+                        cooldown: 1,
                         damageMultiplier: [2.0, 2.2, 2.4, 2.6, 2.8],
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
@@ -2876,8 +3247,8 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 8,
                         maxLevel: 3,
-                        energyCost: [60, 55, 50],
-                        cooldown: 7,
+                        energyCost: [87, 80, 73],
+                        cooldown: 2,
                         damageMultiplier: [5.5, 6.0, 6.5],
                         damageType: 'TRUE',
                         targeting: 'AOE_LARGE',
@@ -2885,6 +3256,52 @@ const SKILL_TREES = {
                         animation: '⚔️✨💫🌸',
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
+                    },
+                    // 💡 PHASE 2 2026-07-17: 3 new Samurai skills (was 2 - only Iaido + ult)
+                    frontal_cut: {
+                        id: 'frontal_cut',
+                        name: 'Frontal Cut',
+                        tier: 1,
+                        requiredLevel: 3,
+                        maxLevel: 5,
+                        energyCost: [20, 18, 16, 14, 12],
+                        cooldown: 1,
+                        damageMultiplier: [1.5, 1.7, 1.9, 2.1, 2.3],
+                        damageType: 'PHYSICAL',
+                        targeting: 'SINGLE',
+                        effects: { ignoreDefense: { value: 30 } },
+                        description: 'A clean downward cut that ignores 30% of target DEF.',
+                        animation: '⚔️⬇️',
+                        skillPointCost: [1, 2, 3, 4, 5]
+                    },
+                    mindful_stance: {
+                        id: 'mindful_stance',
+                        name: 'Mindful Stance',
+                        tier: 2,
+                        requiredLevel: 5,
+                        maxLevel: 3,
+                        energyCost: [30, 26, 22],
+                        cooldown: 1,
+                        targeting: 'SELF',
+                        effects: { counterattack: { chance: [35, 45, 55], value: [1.0, 1.2, 1.4], duration: 3 } },
+                        description: 'Enter a defensive stance with a high chance to counterattack when struck.',
+                        animation: '🧘⚔️',
+                        skillPointCost: [3, 5, 7]
+                    },
+                    whirlwind_blade: {
+                        id: 'whirlwind_blade',
+                        name: 'Whirlwind Blade',
+                        tier: 3,
+                        requiredLevel: 7,
+                        maxLevel: 3,
+                        energyCost: [55, 50, 45],
+                        cooldown: 1,
+                        damageMultiplier: [1.4, 1.6, 1.8],
+                        damageType: 'PHYSICAL',
+                        targeting: 'AOE',
+                        description: 'Spin with blade outstretched, striking all enemies.',
+                        animation: '🌪️⚔️',
+                        skillPointCost: [4, 6, 8]
                     }
                 }
             }
@@ -2934,8 +3351,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 34,
                         maxLevel: 5,
-                        energyCost: [35, 33, 31, 29, 27],
-                        cooldown: 5,
+                        energyCost: [57, 53, 50, 47, 44],
+                        cooldown: 1,
                         targeting: 'AOE',
                         effects: {
                             curse: { value: [20, 30, 40, 50, 65], duration: 3 }
@@ -2950,8 +3367,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 37,
                         maxLevel: 5,
-                        energyCost: [30, 28, 26, 24, 22],
-                        cooldown: 6,
+                        energyCost: [51, 48, 45, 41, 38],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             evasion: { value: [30, 40, 50, 60, 80], duration: 3 }
@@ -2966,8 +3383,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 38,
                         maxLevel: 5,
-                        energyCost: [40, 38, 36, 34, 32],
-                        cooldown: 5,
+                        energyCost: [65, 62, 58, 55, 52],
+                        cooldown: 1,
                         targeting: 'SINGLE',
                         effects: {
                             taunt: { duration: 3 }, // Force enemy to attack Lich (who is tanky/revives)
@@ -2983,11 +3400,11 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 39,
                         maxLevel: 5,
-                        energyCost: [50, 47, 44, 41, 38],
-                        cooldown: 7,
+                        energyCost: [90, 84, 79, 74, 68],
+                        cooldown: 1,
                         targeting: 'AOE',
                         effects: {
-                            sleep: { chance: [40, 55, 70, 85, 100], duration: 2 }
+                            sleep: { chance: [25, 34, 43, 52, 61], duration: 2 }
                         },
                         description: 'Lull all enemies into a deep, magical sleep.',
                         animation: '😴🌑✨',
@@ -2999,9 +3416,13 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [100, 87, 73],
-                        cooldown: 12,
-                        damageMultiplier: [4.0, 5.0, 6.0], // was [12.0, 16.0, 22.0] — nerfed AOE ult
+                        energyCost: [171, 149, 125],
+                        cooldown: 2,
+                        // 💡 FIX 2026-08-05: Rebalanced from [4,5,6] (underpowered - Lich ult
+                        // was weaker than inherited Apprentice Meteor Strike [6.5] despite
+                        // 4.5x energy cost). Now [8,10,12] - Lv.3 = 1200% MAG, ~1.85x Meteor
+                        // Strike, justifying the 125 energy + curse + summon bonuses.
+                        damageMultiplier: [8.0, 10.0, 12.0],
                         damageType: 'MAGICAL',
                         targeting: 'ALL_ENEMIES',
                         effects: {
@@ -3011,6 +3432,19 @@ const SKILL_TREES = {
                         animation: '💀☄️💥🌑🌌',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'aoe',
+                            // 💡 FIX 2026-08-05: Matches damageMultiplier [8,10,12].
+                            multiplier: 6.0 + (level * 2.0),
+                            damageType: 'magic',
+                            targeting: 'ALL_ENEMIES',
+                            cc: 'curse',
+                            ccChance: 60 + (level * 10),
+                            ccDuration: 3,
+                            ccValue: 20 + (level * 10),
+                            summon: { type: 'undead', count: level, stats: 0.5 },
+                            animation: '💀👑💥🧟💀✨'
+                        }),
                         skillPointCost: [10, 15, 20]
                     }
                 }
@@ -3046,8 +3480,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 32,
                         maxLevel: 5,
-                        energyCost: [20, 19, 18, 17, 15],
-                        cooldown: 2,
+                        energyCost: [25, 23, 22, 21, 18],
+                        cooldown: 1,
                         damageMultiplier: [3.0, 3.3, 3.6, 3.9, 4.5],
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
@@ -3064,11 +3498,11 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 35,
                         maxLevel: 5,
-                        energyCost: [35, 32, 29, 26, 23],
-                        cooldown: 6,
+                        energyCost: [60, 55, 50, 45, 39],
+                        cooldown: 1,
                         targeting: 'SINGLE',
                         effects: {
-                            stun: { chance: [50, 60, 70, 80, 100], duration: 2 }
+                            stun: { chance: [32, 38, 45, 51, 64], duration: 2 }
                         },
                         description: 'Trap an enemy in a localized time loop, stunning them for multiple turns.',
                         animation: '🌀⏳💫',
@@ -3080,8 +3514,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 37,
                         maxLevel: 5,
-                        energyCost: [25, 23, 21, 19, 17],
-                        cooldown: 5,
+                        energyCost: [41, 37, 34, 31, 28],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             evasion: { value: [30, 45, 60, 75, 95], duration: 3 }
@@ -3096,15 +3530,27 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [100, 92, 83],
-                        cooldown: 10,
-                        damageMultiplier: [4.0, 5.0, 6.0], // was [10.0, 14.0, 20.0] — nerfed AOE ult
+                        energyCost: [162, 149, 135],
+                        cooldown: 2,
+                        damageMultiplier: [4.0, 5.0, 6.0], // was [10.0, 14.0, 20.0] - nerfed AOE ult
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
                         description: 'Unleash a wave of temporal paradoxes that ravage all enemies.',
                         animation: '🌌⏳🌊💥💀',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 7.0 + (level * 1.5),
+                            damageType: 'magic',
+                            targeting: 'ALL_ENEMIES',
+                            cc: 'slow',
+                            ccChance: 80 + (level * 5),
+                            ccDuration: 2,
+                            resetCooldowns: true,
+                            extraTurn: level >= 3,
+                            animation: '⏳🌀💥⏰✨💫'
+                        }),
                         skillPointCost: [10, 15, 20]
                     }
                 }
@@ -3140,8 +3586,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 32,
                         maxLevel: 5,
-                        energyCost: [25, 23, 21, 19, 17],
-                        cooldown: 3,
+                        energyCost: [35, 32, 29, 26, 24],
+                        cooldown: 1,
                         targeting: 'TEAM',
                         effects: {
                             heal_team: { value: [100, 150, 200, 250, 350] },
@@ -3157,8 +3603,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 35,
                         maxLevel: 3,
-                        energyCost: [80, 70, 60],
-                        cooldown: 8,
+                        energyCost: [149, 131, 112],
+                        cooldown: 1,
                         targeting: 'SINGLE_DEAD',
                         effects: {
                             revive: { value: [50, 75, 100] }
@@ -3173,8 +3619,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 37,
                         maxLevel: 5,
-                        energyCost: [40, 37, 34, 31, 28],
-                        cooldown: 6,
+                        energyCost: [68, 63, 58, 53, 48],
+                        cooldown: 1,
                         targeting: 'SINGLE',
                         effects: {
                             shield: { value: [50, 70, 90, 120, 150], duration: 3 }
@@ -3189,18 +3635,30 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [100, 92, 83],
-                        cooldown: 10,
+                        energyCost: [162, 149, 135],
+                        cooldown: 2,
                         damageMultiplier: [10.0, 12.5, 15.0],
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
                         effects: {
-                            stun: { chance: [50, 70, 90], duration: 1 }
+                            stun: { chance: [33, 47, 60], duration: 1 }
                         },
                         description: 'Smite all enemies with divine fire, potentially stunning them.',
                         animation: '⚡🔥⚖️☄️',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 7.0 + (level * 1.5),
+                            damageType: 'magic',
+                            targeting: 'ALL_ENEMIES',
+                            element: 'holy',
+                            lifeSteal: 0.50 + (level * 0.15),
+                            cc: 'blind',
+                            ccChance: 50 + (level * 10),
+                            ccDuration: 2,
+                            animation: '😇✨💥🙏💫'
+                        }),
                         skillPointCost: [10, 15, 20]
                     }
                 }
@@ -3223,8 +3681,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 30,
                         maxLevel: 5,
-                        energyCost: [30, 28, 26, 24, 22],
-                        cooldown: 4,
+                        energyCost: [45, 42, 39, 36, 33],
+                        cooldown: 1,
                         damageMultiplier: [3.5, 4.0, 4.5, 5.0, 5.5],
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
@@ -3238,8 +3696,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 32,
                         maxLevel: 5,
-                        energyCost: [20, 18, 16, 14, 12],
-                        cooldown: 5,
+                        energyCost: [32, 29, 26, 23, 19],
+                        cooldown: 1,
                         targeting: 'SINGLE',
                         effects: {
                             buff_target: { stat: 'attack', value: [20, 30, 40, 50, 65], duration: 3 },
@@ -3255,8 +3713,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 34,
                         maxLevel: 5,
-                        energyCost: [25, 23, 21, 19, 17],
-                        cooldown: 4,
+                        energyCost: [38, 35, 32, 29, 26],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             shield: { value: [40, 60, 80, 100, 130], duration: 3 },
@@ -3272,8 +3730,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 37,
                         maxLevel: 5,
-                        energyCost: [40, 37, 34, 31, 28],
-                        cooldown: 6,
+                        energyCost: [68, 63, 58, 53, 48],
+                        cooldown: 1,
                         targeting: 'TEAM',
                         effects: {
                             regen: { value: [20, 30, 40, 50, 70], duration: 4 }
@@ -3288,18 +3746,31 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [100, 92, 83],
-                        cooldown: 10,
-                        damageMultiplier: [3.5, 4.5, 5.5], // was [12.0, 15.0, 18.0] — nerfed AOE ult w/ root
+                        energyCost: [162, 149, 135],
+                        cooldown: 2,
+                        damageMultiplier: [3.5, 4.5, 5.5], // was [12.0, 15.0, 18.0] - nerfed AOE ult w/ root
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
                         effects: {
-                            root: { chance: [60, 80, 100], duration: 2 }
+                            root: { chance: [40, 53, 67], duration: 2 }
                         },
                         description: 'The earth rises to swallow your foes, dealing massive damage and rooting them.',
                         animation: '🌍💥🌋🌿',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 6.0 + (level * 1.5),
+                            damageType: 'magic',
+                            targeting: 'ALL_ENEMIES',
+                            element: 'nature',
+                            cc: 'stun',
+                            ccChance: 50 + (level * 10),
+                            ccDuration: 1,
+                            partyHeal: 0.10 + (level * 0.05),
+                            partyRegen: 5 + (level * 3),
+                            animation: '🌳👑🌱💥🌍✨'
+                        }),
                         skillPointCost: [10, 15, 20]
                     }
                 }
@@ -3335,8 +3806,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 32,
                         maxLevel: 5,
-                        energyCost: [20, 18, 16, 14, 12],
-                        cooldown: 5,
+                        energyCost: [32, 29, 26, 23, 19],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             shield: { value: [60, 85, 110, 140, 180], duration: 3 }
@@ -3351,12 +3822,12 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 34,
                         maxLevel: 5,
-                        energyCost: [10, 10, 10, 10, 10],
+                        energyCost: [15, 15, 15, 15, 15],
                         goldCost: [1000, 2000, 3000, 4000, 5000],
-                        cooldown: 4,
+                        cooldown: 1,
                         targeting: 'SINGLE',
                         effects: {
-                            charm: { chance: [40, 50, 60, 75, 90], duration: 2 }
+                            charm: { chance: [28, 35, 42, 53, 64], duration: 2 }
                         },
                         description: 'Pay an enemy to look the other way (Charm).',
                         animation: '💸🤝💖',
@@ -3368,8 +3839,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 37,
                         maxLevel: 5,
-                        energyCost: [40, 38, 36, 34, 32],
-                        cooldown: 6,
+                        energyCost: [68, 65, 62, 58, 55],
+                        cooldown: 1,
                         targeting: 'AOE',
                         effects: {
                             debuff: { stat: 'all', value: [15, 20, 25, 30, 40], duration: 3 }
@@ -3384,16 +3855,28 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [50, 45, 40],
+                        energyCost: [76, 68, 61],
                         goldCost: [5000, 10000, 20000],
-                        cooldown: 8,
-                        damageMultiplier: [4.0, 5.0, 6.0], // was [15.0, 25.0, 40.0] — nerfed TRUE dmg AOE ult
+                        cooldown: 2,
+                        damageMultiplier: [4.0, 5.0, 6.0], // was [15.0, 25.0, 40.0] - nerfed TRUE dmg AOE ult
                         damageType: 'TRUE',
                         targeting: 'AOE_LARGE',
                         description: 'Rain down heavy gold coins, dealing massive true damage.',
                         animation: '💰⛈️🌪️💥',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 5.0 + (level * 1.5),
+                            damageType: 'true',
+                            targeting: 'ALL_ENEMIES',
+                            walletScaling: 0.001,
+                            goldSteal: 1000 + (level * 500),
+                            cc: 'blind',
+                            ccChance: 40 + (level * 10),
+                            ccDuration: 1,
+                            animation: '💰👑💥💸✨'
+                        }),
                         skillPointCost: [10, 15, 20]
                     }
                 }
@@ -3416,8 +3899,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 30,
                         maxLevel: 5,
-                        energyCost: [20, 19, 18, 17, 15],
-                        cooldown: 2,
+                        energyCost: [25, 23, 22, 21, 18],
+                        cooldown: 1,
                         damageMultiplier: [3.5, 3.8, 4.1, 4.4, 4.7],
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
@@ -3431,8 +3914,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 32,
                         maxLevel: 5,
-                        energyCost: [30, 28, 26, 24, 22],
-                        cooldown: 5,
+                        energyCost: [49, 45, 42, 39, 36],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             haste: { value: [20, 25, 30, 35, 40], duration: 3 }
@@ -3447,8 +3930,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 34,
                         maxLevel: 5,
-                        energyCost: [25, 23, 21, 19, 17],
-                        cooldown: 4,
+                        energyCost: [38, 35, 32, 29, 26],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             shield: { value: [30, 40, 50, 60, 80], duration: 3 }
@@ -3463,11 +3946,11 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 36,
                         maxLevel: 5,
-                        energyCost: [40, 38, 36, 34, 32],
-                        cooldown: 6,
+                        energyCost: [68, 65, 62, 58, 55],
+                        cooldown: 1,
                         targeting: 'AOE',
                         effects: {
-                            confusion: { chance: [30, 40, 50, 60, 75], duration: 2 }
+                            confusion: { chance: [19, 26, 32, 38, 48], duration: 2 }
                         },
                         description: 'Distort reality, confusing all enemies.',
                         animation: '🌀✨',
@@ -3479,8 +3962,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 38,
                         maxLevel: 5,
-                        energyCost: [50, 47, 44, 41, 38],
-                        cooldown: 5,
+                        energyCost: [81, 76, 71, 66, 62],
+                        cooldown: 1,
                         damageMultiplier: [2.5, 2.8, 3.1, 3.4, 3.8],
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
@@ -3495,7 +3978,7 @@ const SKILL_TREES = {
                         requiredLevel: 39,
                         maxLevel: 5,
                         energyCost: [0, 0, 0, 0, 0],
-                        cooldown: 8,
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             restore_energy: { value: [30, 45, 60, 80, 100] }
@@ -3510,15 +3993,26 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [100, 87, 73],
-                        cooldown: 10,
-                        damageMultiplier: [3.5, 4.0, 5.0], // was [20.0, 25.0, 30.0] — nerfed ALL_ENEMIES TRUE ult
+                        energyCost: [162, 141, 118],
+                        cooldown: 2,
+                        damageMultiplier: [7.0, 8.0, 9.0],
                         damageType: 'MAGICAL',
                         targeting: 'ALL_ENEMIES',
-                        description: 'Create singularity consuming all',
+                        description: 'Create a singularity consuming all enemies',
                         animation: '⚫🔮✨',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 8.0 + (level * 2.0),
+                            damageType: 'magic',
+                            targeting: 'ALL_ENEMIES',
+                            cc: 'stun',
+                            ccChance: 60 + (level * 10),
+                            ccDuration: 1,
+                            manaDrain: 50 + (level * 25),
+                            animation: '🧙✨🌀黑洞💥'
+                        }),
                         skillPointCost: [8, 12, 15]
                     }
                 }
@@ -3556,8 +4050,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 32,
                         maxLevel: 5,
-                        energyCost: [25, 23, 21, 19, 17],
-                        cooldown: 5,
+                        energyCost: [41, 37, 34, 31, 28],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             shield: { value: [40, 50, 60, 70, 90], duration: 3 }
@@ -3572,8 +4066,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 34,
                         maxLevel: 5,
-                        energyCost: [30, 28, 26, 24, 22],
-                        cooldown: 4,
+                        energyCost: [45, 42, 39, 36, 33],
+                        cooldown: 1,
                         damageMultiplier: [2.0, 2.3, 2.6, 2.9, 3.2],
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
@@ -3590,8 +4084,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 37,
                         maxLevel: 5,
-                        energyCost: [45, 42, 39, 36, 33],
-                        cooldown: 7,
+                        energyCost: [81, 75, 70, 65, 59],
+                        cooldown: 1,
                         targeting: 'AOE',
                         effects: {
                             vulnerability: { value: [20, 25, 30, 35, 45], duration: 3 }
@@ -3606,11 +4100,11 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 38,
                         maxLevel: 5,
-                        energyCost: [35, 32, 29, 26, 23],
-                        cooldown: 5,
+                        energyCost: [57, 52, 47, 42, 37],
+                        cooldown: 1,
                         targeting: 'SINGLE',
                         effects: {
-                            root: { chance: [50, 65, 80, 100, 100], duration: 2 },
+                            root: { chance: [33, 43, 53, 67, 67], duration: 2 },
                             dot: { value: [15, 20, 25, 30, 40], duration: 3, element: 'void' }
                         },
                         description: 'Summon shadowy hands to entangle and drain an enemy.',
@@ -3623,8 +4117,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 39,
                         maxLevel: 5,
-                        energyCost: [55, 52, 49, 46, 43],
-                        cooldown: 6,
+                        energyCost: [94, 89, 84, 79, 74],
+                        cooldown: 1,
                         damageMultiplier: [2.8, 3.2, 3.6, 4.0, 4.5],
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
@@ -3638,15 +4132,26 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [100, 92, 83],
-                        cooldown: 10,
-                        damageMultiplier: [5.0, 6.0, 7.0], // was [18.0, 22.0, 25.0] — nerfed ALL targets ult (stays higher, single-ish)
+                        energyCost: [162, 149, 135],
+                        cooldown: 2,
+                        damageMultiplier: [5.0, 6.0, 7.0], // was [18.0, 22.0, 25.0] - nerfed ALL targets ult (stays higher, single-ish)
                         damageType: 'MAGICAL',
                         targeting: 'ALL',
                         description: 'Erase all from existence',
                         animation: '🌑💀⚫✨',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 7.0 + (level * 1.5),
+                            damageType: 'magic',
+                            targeting: 'ALL_ENEMIES',
+                            dispel: true,
+                            cc: 'silence',
+                            ccChance: 70 + (level * 10),
+                            ccDuration: 2,
+                            animation: '🌑🧙💫💀✨'
+                        }),
                         skillPointCost: [8, 12, 15]
                     }
                 }
@@ -3669,8 +4174,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 30,
                         maxLevel: 5,
-                        energyCost: [15, 14, 13, 12, 10],
-                        cooldown: 4,
+                        energyCost: [23, 21, 20, 18, 15],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             buff_self: { stat: 'defense', value: [40, 55, 70, 85, 100], duration: 3 }
@@ -3685,8 +4190,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 33,
                         maxLevel: 5,
-                        energyCost: [25, 23, 21, 19, 17],
-                        cooldown: 3,
+                        energyCost: [35, 32, 29, 26, 24],
+                        cooldown: 1,
                         damageMultiplier: [3.0, 3.3, 3.6, 3.9, 4.2],
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
@@ -3703,8 +4208,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 36,
                         maxLevel: 5,
-                        energyCost: [40, 37, 34, 31, 28],
-                        cooldown: 6,
+                        energyCost: [68, 63, 58, 53, 48],
+                        cooldown: 1,
                         targeting: 'TEAM',
                         effects: {
                             buff_team: { stat: 'defense', value: [20, 25, 30, 35, 45], duration: 3 }
@@ -3719,8 +4224,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 38,
                         maxLevel: 5,
-                        energyCost: [30, 28, 26, 24, 22],
-                        cooldown: 5,
+                        energyCost: [49, 45, 42, 39, 36],
+                        cooldown: 1,
                         targeting: 'TEAM',
                         effects: {
                             buff_team: { stat: 'attack', value: [15, 20, 25, 30, 40], duration: 3 }
@@ -3735,8 +4240,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 39,
                         maxLevel: 5,
-                        energyCost: [45, 42, 39, 36, 33],
-                        cooldown: 7,
+                        energyCost: [81, 75, 70, 65, 59],
+                        cooldown: 1,
                         targeting: 'TEAM',
                         effects: {
                             regen: { value: [25, 35, 45, 60, 80], duration: 4 }
@@ -3751,8 +4256,8 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [100, 90, 80],
-                        cooldown: 10,
+                        energyCost: [162, 146, 130],
+                        cooldown: 2,
                         targeting: 'TEAM',
                         effects: {
                             heal_team: { value: [150, 250, 400] },
@@ -3760,6 +4265,15 @@ const SKILL_TREES = {
                         },
                         description: 'Create a sanctuary of light, healing and buffing the team.',
                         animation: '🏰✨👼',
+                        effect: (level) => ({
+                            type: 'buff_team',
+                            buffType: 'shield',
+                            value: 200 + (level * 100),
+                            duration: 3,
+                            partyHeal: 0.20 + (level * 0.05),
+                            cleanse: true,
+                            animation: '⛪✨🛡️🙏💫'
+                        }),
                         isUltimate: true,
                         isAscended: true,
                         skillPointCost: [8, 12, 15]
@@ -3770,8 +4284,8 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 42,
                         maxLevel: 1,
-                        energyCost: [100],
-                        cooldown: 15,
+                        energyCost: [183],
+                        cooldown: 2,
                         targeting: 'TEAM',
                         effects: {
                             revive_all: { hp: 50 },
@@ -3779,6 +4293,14 @@ const SKILL_TREES = {
                         },
                         description: 'A miraculous intervention that revives all fallen allies and shields the survivors.',
                         animation: '✨👼🕊️🛡️',
+                        effect: (level) => ({
+                            type: 'revive_team',
+                            reviveHP: 0.50 + (level * 0.10),
+                            partyHeal: 0.30,
+                            cleanse: true,
+                            partyBuff: { type: 'shield', value: 100 + (level * 50), duration: 2 },
+                            animation: '⛪✨😇🙏💫🌟'
+                        }),
                         isUltimate: true,
                         skillPointCost: [20]
                     }
@@ -3817,8 +4339,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 32,
                         maxLevel: 5,
-                        energyCost: [20, 18, 16, 14, 12],
-                        cooldown: 4,
+                        energyCost: [30, 27, 24, 21, 18],
+                        cooldown: 1,
                         targeting: 'SINGLE',
                         effects: {
                             poison: { value: [30, 45, 60, 80, 110], duration: 4 }
@@ -3833,8 +4355,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 34,
                         maxLevel: 5,
-                        energyCost: [25, 23, 21, 19, 17],
-                        cooldown: 5,
+                        energyCost: [41, 37, 34, 31, 28],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             evasion: { value: [35, 45, 55, 70, 90], duration: 2 }
@@ -3849,8 +4371,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 37,
                         maxLevel: 5,
-                        energyCost: [35, 32, 29, 26, 23],
-                        cooldown: 4,
+                        energyCost: [53, 49, 44, 39, 35],
+                        cooldown: 1,
                         damageMultiplier: [4.0, 4.5, 5.0, 5.5, 6.5],
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
@@ -3867,8 +4389,8 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [100, 90, 80],
-                        cooldown: 9,
+                        energyCost: [157, 141, 126],
+                        cooldown: 2,
                         damageMultiplier: [12.0, 14.0, 16.0],
                         damageType: 'TRUE',
                         targeting: 'ALL_ENEMIES',
@@ -3876,6 +4398,18 @@ const SKILL_TREES = {
                         animation: '🌑💀⚔️✨',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'execute',
+                            multiplier: 8.0 + (level * 2.0),
+                            damageType: 'physical',
+                            targeting: 'SINGLE',
+                            executeThreshold: 0.30,
+                            executeMultiplier: 3.0,
+                            cc: 'blind',
+                            ccChance: 75,
+                            ccDuration: 2,
+                            animation: '🌑🌑🌑🗡️'
+                        }),
                         skillPointCost: [8, 12, 15]
                     }
                 }
@@ -3914,7 +4448,7 @@ const SKILL_TREES = {
                         requiredLevel: 32,
                         maxLevel: 5,
                         energyCost: [0, 0, 0, 0, 0],
-                        cooldown: 5,
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             heal: { value: [60, 100, 150, 200, 300] },
@@ -3930,8 +4464,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 34,
                         maxLevel: 5,
-                        energyCost: [5, 5, 5, 5, 5],
-                        cooldown: 4,
+                        energyCost: [8, 8, 8, 8, 8],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             evasion: { value: [40, 55, 70, 85, 100], duration: 2 }
@@ -3946,13 +4480,13 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 37,
                         maxLevel: 5,
-                        energyCost: [10, 10, 10, 10, 10],
-                        cooldown: 4,
+                        energyCost: [15, 15, 15, 15, 15],
+                        cooldown: 1,
                         damageMultiplier: [3.5, 4.0, 4.5, 5.0, 6.0],
                         damageType: 'TRUE',
                         targeting: 'AOE',
                         effects: {
-                            stun: { chance: [30, 45, 60, 75, 90], duration: 1 }
+                            stun: { chance: [21, 32, 42, 53, 64], duration: 1 }
                         },
                         description: 'A calm but forceful wave that stuns and damages all enemies.',
                         animation: '🧘🌊💥⚡',
@@ -3965,14 +4499,24 @@ const SKILL_TREES = {
                         requiredLevel: 40,
                         maxLevel: 3,
                         energyCost: [0, 0, 0],
-                        cooldown: 10,
-                        damageMultiplier: [6.0, 7.0, 8.0], // was [15.0, 18.0, 20.0] — nerfed TRUE ALL ult
+                        cooldown: 2,
+                        damageMultiplier: [6.0, 7.0, 8.0], // was [15.0, 18.0, 20.0] - nerfed TRUE ALL ult
                         damageType: 'TRUE',
                         targeting: 'ALL',
                         description: 'Transcend mortality achieving oneness.',
                         animation: '🧘✨🌌💫',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'buff_team',
+                            buffType: 'invulnerable',
+                            value: 1,
+                            duration: 1,
+                            counterattack: true,
+                            counterMultiplier: 3.0 + level,
+                            healing: 0.15 + (level * 0.05),
+                            animation: '🧘✨🌌🙏💫'
+                        }),
                         skillPointCost: [8, 12, 15]
                     }
                 }
@@ -3995,8 +4539,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 30,
                         maxLevel: 5,
-                        energyCost: [30, 28, 26, 24, 22],
-                        cooldown: 2,
+                        energyCost: [37, 34, 32, 30, 27],
+                        cooldown: 1,
                         damageMultiplier: [4.5, 5.0, 5.5, 6.0, 6.5],
                         damageType: 'MAGICAL',
                         targeting: 'AOE_SMALL',
@@ -4010,8 +4554,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 50,
                         maxLevel: 5,
-                        energyCost: [40, 38, 36, 34, 32],
-                        cooldown: 3,
+                        energyCost: [56, 53, 50, 47, 44],
+                        cooldown: 1,
                         damageMultiplier: [5.5, 6.0, 6.5, 7.0, 7.5],
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
@@ -4025,19 +4569,22 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 70,
                         maxLevel: 3,
-                        energyCost: [80, 75, 70],
-                        cooldown: 6,
-                        buffType: 'TRANSFORM',
-                        buffDuration: [3, 4, 5],
-                        buffs: [
-                            { stat: 'atk', multiplier: 1.5 },
-                            { stat: 'def', multiplier: 1.5 },
-                            { stat: 'mag', multiplier: 1.5 },
-                        ],
+                        energyCost: [137, 128, 120],
+                        cooldown: 1,
                         targeting: 'SELF',
                         description: 'Transform into full dragon form for 3-5 turns. +50% ATK/DEF/MAG. All attacks gain fire element.',
                         animation: '🐲✨🔥',
-                        skillPointCost: [6, 8, 10]
+                        skillPointCost: [6, 8, 10],
+                        // 💡 FIX 2026-08-01: Added effect callback - previously had
+                        // unrecognized buffType/buffs fields that the engine couldn't read.
+                        // Now uses standard 'all' buff type with 50% value.
+                        effect: (level) => ({
+                            type: 'buff_self',
+                            buffType: 'all',
+                            value: 50,
+                            duration: 2 + level,  // 3/4/5 turns
+                            elementOverride: 'fire',  // all attacks gain fire element
+                        })
                     },
                     apocalypse_wing: {
                         id: 'apocalypse_wing',
@@ -4045,8 +4592,8 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 80,
                         maxLevel: 3,
-                        energyCost: [120, 110, 100],
-                        cooldown: 8,
+                        energyCost: [182, 167, 152],
+                        cooldown: 2,
                         damageMultiplier: [9.0, 10.0, 11.0],
                         damageType: 'MAGICAL',
                         targeting: 'AOE_ALL',
@@ -4054,6 +4601,36 @@ const SKILL_TREES = {
                         isAscended: true,
                         description: 'UNLEASH the Leviathan\'s stored apocalypse. Hits ALL enemies for 9-11× MAG damage. Inflicts Burn, Stun, and Drown. The sky breaks.',
                         animation: '🌋🌊🐉🔥',
+                        // 💡 FIX 2026-08-01: Fixed multiplier (was 12/14/16, should be 9/10/11),
+                        // fixed CC2 (was 'fear', should be 'stun' per description),
+                        // added stun field that the engine actually reads,
+                        // added drown as a separate DoT effect.
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 8.0 + level,  // 9/10/11 - matches description
+                            damageType: 'magic',
+                            targeting: 'ALL_ENEMIES',
+                            element: 'fire',
+                            cc: 'burn',
+                            ccChance: 80,
+                            ccDuration: 3,
+                            ccValue: 50 + (level * 20),  // 70/90/110 burn damage per turn
+                            // Stun (was cc2:'fear' which was never read by engine)
+                            stun: true,
+                            stunChance: 40 + (level * 10),  // 50/60/70%
+                            stunDuration: 1,
+                            // 💡 AUDIT FIX 2026-08-01: added drown DoT.
+                            // Description says "Burn, Stun, and Drown" but
+                            // drown was missing - no effect.drown field and
+                            // no `drown` entry in STATUS_EFFECTS. Both are
+                            // now added; engine reads effect.drown + applies
+                            // via applyStatusEffect('drown', ...).
+                            drown: true,
+                            drownChance: 60 + (level * 10),  // 70/80/90%
+                            drownDuration: 2,
+                            drownValue: 40 + (level * 20),   // 60/80/100 drown dmg/turn
+                            animation: '🐲👑🔥💥🌪️✨'
+                        }),
                         skillPointCost: [8, 10, 12]
                     }
                 }
@@ -4068,8 +4645,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 35,
                         maxLevel: 5,
-                        energyCost: [25, 23, 21, 19, 17],
-                        cooldown: 4,
+                        energyCost: [38, 35, 32, 29, 26],
+                        cooldown: 1,
                         buffType: 'SHIELD',
                         shieldMultiplier: [2.0, 2.5, 3.0, 3.5, 4.0],
                         buffDuration: [2, 2, 3, 3, 4],
@@ -4099,14 +4676,27 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 75,
                         maxLevel: 3,
-                        energyCost: [60, 55, 50],
-                        cooldown: 5,
-                        debuffType: 'SUPPRESS',
-                        debuffDuration: [2, 3, 4],
+                        energyCost: [97, 89, 81],
+                        cooldown: 1,
                         targeting: 'AOE_ALL',
                         description: 'All enemies are silenced and pacified for 2-4 turns. Their buffs are stripped. "Kneel," you say. They kneel.',
                         animation: '🐲👑⚡',
-                        skillPointCost: [7, 9, 11]
+                        skillPointCost: [7, 9, 11],
+                        // 💡 FIX 2026-08-01: Added effect callback - previously had
+                        // unrecognized debuffType:'SUPPRESS' that did nothing.
+                        // Now applies silence + strips buffs via standard engine fields.
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 0,  // no damage - pure CC
+                            damageType: 'magic',
+                            targeting: 'ALL_ENEMIES',
+                            // Silence all enemies
+                            silence: true,
+                            silenceChance: 100,
+                            silenceDuration: 1 + level,  // 2/3/4 turns
+                            // Strip buffs
+                            stripBuffs: true,
+                        })
                     }
                 }
             }
@@ -4114,7 +4704,7 @@ const SKILL_TREES = {
     },
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  DRAGON LORD — successor class skill tree.
+    //  DRAGON LORD - successor class skill tree.
     //  Distinct identity: where Dragon God channels the slain Leviathan's
     //  oceanic apocalypse, Dragon Lord COMMANDS its surviving children.
     //  Dragon God = solitary divine power. Dragon Lord = pack leader.
@@ -4135,8 +4725,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 30,
                         maxLevel: 5,
-                        energyCost: [28, 26, 24, 22, 20],
-                        cooldown: 3,
+                        energyCost: [39, 36, 33, 31, 28],
+                        cooldown: 1,
                         summon: {
                             type: 'WYRMLING',
                             count: [1, 1, 2, 2, 3],
@@ -4155,8 +4745,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 50,
                         maxLevel: 5,
-                        energyCost: [38, 36, 34, 32, 30],
-                        cooldown: 3,
+                        energyCost: [53, 50, 47, 44, 42],
+                        cooldown: 1,
                         damageMultiplier: [4.0, 4.5, 5.0, 5.5, 6.0],
                         damageType: 'PHYSICAL',
                         targeting: 'AOE_SMALL',
@@ -4172,8 +4762,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 70,
                         maxLevel: 3,
-                        energyCost: [70, 65, 60],
-                        cooldown: 5,
+                        energyCost: [113, 105, 97],
+                        cooldown: 1,
                         buffType: 'PARTY_BUFF',
                         buffDuration: [3, 4, 5],
                         buffs: [
@@ -4192,8 +4782,8 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 80,
                         maxLevel: 3,
-                        energyCost: [110, 100, 90],
-                        cooldown: 8,
+                        energyCost: [167, 152, 136],
+                        cooldown: 2,
                         damageMultiplier: [8.5, 9.5, 10.5],
                         damageType: 'PHYSICAL',
                         targeting: 'AOE_ALL',
@@ -4208,6 +4798,20 @@ const SKILL_TREES = {
                         },
                         description: 'Call down a flight of wyrms. 8.5-10.5× PHYS to all enemies + 3 wyrmlings join you. The sky IS yours.',
                         animation: '🐉🐉🐉🔥',
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 8.0 + (level * 1.5),
+                            damageType: 'physical',
+                            targeting: 'ALL_ENEMIES',
+                            element: 'fire',
+                            cc: 'burn',
+                            ccChance: 60,
+                            ccDuration: 2,
+                            ccValue: 30 + (level * 10),
+                            summon: { type: 'dragon', count: level, stats: 0.6 },
+                            partyBuff: { type: 'atk', value: 20 + (level * 10), duration: 2 },
+                            animation: '🐉⚔️🐲🔥💥✨'
+                        }),
                         skillPointCost: [8, 10, 12]
                     }
                 }
@@ -4237,8 +4841,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 55,
                         maxLevel: 5,
-                        energyCost: [30, 28, 26, 24, 22],
-                        cooldown: 4,
+                        energyCost: [45, 42, 39, 36, 33],
+                        cooldown: 1,
                         buffType: 'DAMAGE_SHARE',
                         buffDuration: [2, 2, 3, 3, 4],
                         damageRedirection: [0.30, 0.35, 0.40, 0.45, 0.50],
@@ -4253,8 +4857,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 75,
                         maxLevel: 3,
-                        energyCost: [50, 45, 40],
-                        cooldown: 5,
+                        energyCost: [81, 73, 65],
+                        cooldown: 1,
                         buffType: 'COUNTER',
                         buffDuration: [2, 3, 4],
                         counterDamageMultiplier: [1.5, 2.0, 2.5],
@@ -4283,8 +4887,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 30,
                         maxLevel: 5,
-                        energyCost: [25, 24, 23, 22, 20],
-                        cooldown: 3,
+                        energyCost: [35, 33, 32, 31, 28],
+                        cooldown: 1,
                         damageMultiplier: [3.5, 3.8, 4.1, 4.4, 4.7],
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
@@ -4298,8 +4902,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 32,
                         maxLevel: 5,
-                        energyCost: [18, 17, 16, 15, 13],
-                        cooldown: 2,
+                        energyCost: [22, 21, 20, 18, 16],
+                        cooldown: 1,
                         damageMultiplier: [3.2, 3.5, 3.8, 4.1, 4.5],
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
@@ -4316,8 +4920,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 35,
                         maxLevel: 5,
-                        energyCost: [30, 28, 26, 24, 22],
-                        cooldown: 5,
+                        energyCost: [49, 45, 42, 39, 36],
+                        cooldown: 1,
                         targeting: 'TEAM',
                         effects: {
                             buff_team: { stat: 'attack', value: [20, 25, 30, 35, 45], duration: 3 }
@@ -4332,15 +4936,26 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [100, 91, 82],
-                        cooldown: 9,
-                        damageMultiplier: [4.0, 5.0, 6.0], // was [12.0, 15.0, 18.0] — nerfed AOE physical ult
+                        energyCost: [157, 143, 129],
+                        cooldown: 2,
+                        damageMultiplier: [4.0, 5.0, 6.0], // was [12.0, 15.0, 18.0] - nerfed AOE physical ult
                         damageType: 'PHYSICAL',
                         targeting: 'AOE',
                         description: 'An ultimate strike that decimates all enemies in your wake.',
                         animation: '🏯⚔️💥💨',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 6.0 + (level * 1.5),
+                            damageType: 'physical',
+                            targeting: 'ALL_ENEMIES',
+                            debuff: { type: 'weak', value: 30 + (level * 10), duration: 3 },
+                            cc: 'fear',
+                            ccChance: 40 + (level * 10),
+                            ccDuration: 1,
+                            animation: '🏯⚔️💥🏹🗡️'
+                        }),
                         skillPointCost: [8, 12, 15]
                     }
                 }
@@ -4363,8 +4978,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 30,
                         maxLevel: 5,
-                        energyCost: [20, 18, 16, 14, 12],
-                        cooldown: 2,
+                        energyCost: [25, 22, 20, 17, 15],
+                        cooldown: 1,
                         damageMultiplier: [5.0, 5.5, 6.0, 6.5, 7.0],
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
@@ -4378,8 +4993,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 33,
                         maxLevel: 5,
-                        energyCost: [15, 14, 13, 12, 10],
-                        cooldown: 4,
+                        energyCost: [23, 21, 20, 18, 15],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             evasion: { value: [30, 40, 50, 65, 80], duration: 3 }
@@ -4394,8 +5009,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 35,
                         maxLevel: 5,
-                        energyCost: [25, 23, 21, 19, 17],
-                        cooldown: 3,
+                        energyCost: [35, 32, 29, 26, 24],
+                        cooldown: 1,
                         damageMultiplier: [1.5, 1.7, 1.9, 2.1, 2.3],
                         damageType: 'PHYSICAL',
                         targeting: 'SINGLE',
@@ -4412,8 +5027,8 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [100, 90, 80],
-                        cooldown: 10,
+                        energyCost: [162, 146, 130],
+                        cooldown: 2,
                         damageMultiplier: [8.0, 10.0, 12.0],
                         damageType: 'PHYSICAL',
                         targeting: 'AOE',
@@ -4421,6 +5036,18 @@ const SKILL_TREES = {
                         animation: '🌑🥷⚔️🌀',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'multi_hit',
+                            hits: 8 + level,
+                            multiplier: 1.5 + (level * 0.3),
+                            damageType: 'physical',
+                            targeting: 'SINGLE',
+                            comboBonus: 0.15,
+                            cc: 'stun',
+                            ccChance: 20 + (level * 10),
+                            ccDuration: 1,
+                            animation: '🌑🥷👤👤👤👤💀'
+                        }),
                         skillPointCost: [8, 12, 15]
                     }
                 }
@@ -4443,8 +5070,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 30,
                         maxLevel: 5,
-                        energyCost: [30, 28, 26, 24, 22],
-                        cooldown: 3,
+                        energyCost: [42, 39, 36, 33, 31],
+                        cooldown: 1,
                         type: 'heal_team',
                         value: [150, 180, 210, 240, 270],
                         description: 'Heal the entire party with music',
@@ -4457,8 +5084,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 32,
                         maxLevel: 5,
-                        energyCost: [25, 23, 21, 19, 17],
-                        cooldown: 5,
+                        energyCost: [41, 37, 34, 31, 28],
+                        cooldown: 1,
                         targeting: 'TEAM',
                         effects: {
                             buff_team: { stat: 'attack', value: [30, 40, 50, 65, 80], duration: 3 }
@@ -4473,11 +5100,11 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 34,
                         maxLevel: 5,
-                        energyCost: [20, 18, 16, 14, 12],
-                        cooldown: 4,
+                        energyCost: [30, 27, 24, 21, 18],
+                        cooldown: 1,
                         targeting: 'AOE',
                         effects: {
-                            sleep: { chance: [30, 45, 60, 75, 90], duration: 2 }
+                            sleep: { chance: [21, 32, 42, 53, 64], duration: 2 }
                         },
                         description: 'A soothing serenade that lulls enemies into a deep sleep.',
                         animation: '🎻💤🌙',
@@ -4489,8 +5116,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 37,
                         maxLevel: 5,
-                        energyCost: [45, 42, 39, 36, 33],
-                        cooldown: 6,
+                        energyCost: [77, 72, 67, 62, 56],
+                        cooldown: 1,
                         damageMultiplier: [4.0, 4.5, 5.0, 5.5, 6.5],
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
@@ -4507,8 +5134,8 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [100, 92, 83],
-                        cooldown: 10,
+                        energyCost: [162, 149, 135],
+                        cooldown: 2,
                         damageMultiplier: [10.0, 12.5, 15.0],
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
@@ -4519,6 +5146,17 @@ const SKILL_TREES = {
                         animation: '🎻🌑💀🌌',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'aoe',
+                            multiplier: 6.0 + (level * 1.5),
+                            damageType: 'magic',
+                            targeting: 'ALL_ENEMIES',
+                            cc: 'sleep',
+                            ccChance: 50 + (level * 10),
+                            ccDuration: 2,
+                            partyBuff: { type: 'haste', value: 30 + (level * 10), duration: 3 },
+                            animation: '🎻✨🌌🎶💫'
+                        }),
                         skillPointCost: [10, 15, 20]
                     }
                 }
@@ -4541,8 +5179,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 30,
                         maxLevel: 5,
-                        energyCost: [35, 33, 31, 29, 27],
-                        cooldown: 2,
+                        energyCost: [43, 41, 38, 36, 33],
+                        cooldown: 1,
                         damageMultiplier: [5.5, 6.0, 6.5, 7.0, 7.5],
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
@@ -4556,8 +5194,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 32,
                         maxLevel: 5,
-                        energyCost: [25, 23, 21, 19, 17],
-                        cooldown: 5,
+                        energyCost: [41, 37, 34, 31, 28],
+                        cooldown: 1,
                         targeting: 'TEAM',
                         effects: {
                             shield: { value: [20, 30, 40, 50, 65], duration: 3 }
@@ -4572,8 +5210,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 34,
                         maxLevel: 5,
-                        energyCost: [40, 38, 36, 34, 32],
-                        cooldown: 4,
+                        energyCost: [61, 58, 55, 52, 49],
+                        cooldown: 1,
                         damageMultiplier: [1.5, 1.8, 2.1, 2.4, 2.8],
                         damageType: 'PHYSICAL',
                         targeting: 'AOE',
@@ -4587,8 +5225,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 37,
                         maxLevel: 5,
-                        energyCost: [30, 28, 26, 24, 22],
-                        cooldown: 6,
+                        energyCost: [51, 48, 45, 41, 38],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             haste: { value: [40, 55, 70, 85, 100], duration: 3 },
@@ -4604,15 +5242,26 @@ const SKILL_TREES = {
                         tier: 4,
                         requiredLevel: 40,
                         maxLevel: 3,
-                        energyCost: [100, 87, 73],
-                        cooldown: 12,
-                        damageMultiplier: [4.0, 5.0, 6.0], // was [20.0, 25.0, 35.0] — nerfed AOE large ult
+                        energyCost: [171, 149, 125],
+                        cooldown: 2,
+                        damageMultiplier: [4.0, 5.0, 6.0], // was [20.0, 25.0, 35.0] - nerfed AOE large ult
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
                         description: 'Call down a devastating laser from space.',
                         animation: '🛰️⚡☄️💥',
                         isUltimate: true,
                         isAscended: true,
+                        effect: (level) => ({
+                            type: 'damage',
+                            multiplier: 12.0 + (level * 3.0),
+                            damageType: 'true',
+                            targeting: 'SINGLE',
+                            cc: 'stun',
+                            ccChance: 70 + (level * 10),
+                            ccDuration: 1,
+                            debuff: { type: 'defense_break', value: 50 + (level * 15), duration: 3 },
+                            animation: '🦾⚙️🛰️💥💀✨'
+                        }),
                         skillPointCost: [10, 15, 20]
                     }
                 }
@@ -4635,14 +5284,65 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 30,
                         maxLevel: 5,
-                        energyCost: [40, 38, 36, 34, 32],
-                        cooldown: 2,
+                        energyCost: [49, 47, 44, 42, 39],
+                        cooldown: 1,
                         damageMultiplier: [6.0, 6.5, 7.0, 7.5, 8.0],
                         damageType: 'TRUE',
                         targeting: 'SINGLE',
                         description: 'A punch that can break the stars',
                         animation: '👊🌌💥',
                         skillPointCost: [4, 5, 6, 7, 8]
+                    },
+                    // 💡 PHASE 2 2026-07-17: 3 new Divine Fist skills (was 1 - only Star Shatterer ult)
+                    iron_palm: {
+                        id: 'iron_palm',
+                        name: 'Iron Palm',
+                        tier: 1,
+                        requiredLevel: 30,
+                        maxLevel: 5,
+                        energyCost: [60, 55, 50, 45, 40],
+                        cooldown: 1,
+                        damageMultiplier: [3.5, 3.8, 4.1, 4.4, 4.7],
+                        damageType: 'PHYSICAL',
+                        targeting: 'SINGLE',
+                        effects: { stun: { chance: [20, 25, 30, 35, 40], duration: 1 } },
+                        description: 'A devastating palm strike with a chance to stun.',
+                        animation: '✋💥',
+                        skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    heavenly_step: {
+                        id: 'heavenly_step',
+                        name: 'Heavenly Step',
+                        tier: 2,
+                        requiredLevel: 33,
+                        maxLevel: 3,
+                        energyCost: [50, 45, 40],
+                        cooldown: 1,
+                        targeting: 'SELF',
+                        effects: {
+                            evasion: { value: [50, 65, 80], duration: 2 },
+                            cleanse: { value: 1 }
+                        },
+                        description: 'Step between dimensions, boosting evasion and cleansing negative effects.',
+                        animation: '👣✨',
+                        skillPointCost: [4, 6, 8]
+                    },
+                    eight_gates: {
+                        id: 'eight_gates',
+                        name: 'Eight Gates',
+                        tier: 3,
+                        requiredLevel: 37,
+                        maxLevel: 3,
+                        energyCost: [80, 70, 60],
+                        cooldown: 1,
+                        targeting: 'SELF',
+                        effects: {
+                            buff_self: { stat: 'attack', value: [80, 110, 140], duration: 3 },
+                            selfDamage: { value: [10, 12, 15] }
+                        },
+                        description: 'Open the eight inner gates, massively boosting ATK but losing HP each turn.',
+                        animation: '🚪💥',
+                        skillPointCost: [6, 8, 10]
                     }
                 }
             }
@@ -4664,8 +5364,8 @@ const SKILL_TREES = {
                         tier: 1,
                         requiredLevel: 1,
                         maxLevel: 5,
-                        energyCost: [15, 14, 13, 12, 10],
-                        cooldown: 2,
+                        energyCost: [18, 17, 16, 15, 12],
+                        cooldown: 1,
                         damageMultiplier: [1.8, 2.0, 2.2, 2.4, 2.6],
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
@@ -4682,8 +5382,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 3,
                         maxLevel: 5,
-                        energyCost: [20, 18, 16, 14, 12],
-                        cooldown: 4,
+                        energyCost: [30, 27, 24, 21, 18],
+                        cooldown: 1,
                         targeting: 'SINGLE',
                         effects: {
                             vulnerability: { value: [15, 20, 25, 30, 40], duration: 3 }
@@ -4698,8 +5398,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 5,
                         maxLevel: 5,
-                        energyCost: [15, 14, 13, 12, 10],
-                        cooldown: 5,
+                        energyCost: [24, 23, 21, 19, 16],
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             shield: { value: [25, 35, 45, 60, 80], duration: 3 }
@@ -4714,8 +5414,8 @@ const SKILL_TREES = {
                         tier: 3,
                         requiredLevel: 7,
                         maxLevel: 5,
-                        energyCost: [35, 33, 31, 29, 27],
-                        cooldown: 4,
+                        energyCost: [53, 50, 47, 44, 41],
+                        cooldown: 1,
                         damageMultiplier: [2.5, 2.8, 3.1, 3.4, 3.8],
                         damageType: 'PHYSICAL',
                         targeting: 'AOE',
@@ -4758,11 +5458,11 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 4,
                         maxLevel: 5,
-                        energyCost: [25, 23, 21, 19, 17],
-                        cooldown: 4,
+                        energyCost: [38, 35, 32, 29, 26],
+                        cooldown: 1,
                         targeting: 'SINGLE',
                         effects: {
-                            stun: { chance: [30, 40, 50, 65, 80], duration: 1 }
+                            stun: { chance: [21, 28, 35, 46, 57], duration: 1 }
                         },
                         description: 'Strike a precise point to disable the enemy.',
                         animation: '🎯👊💫',
@@ -4774,8 +5474,8 @@ const SKILL_TREES = {
                         tier: 2,
                         requiredLevel: 6,
                         maxLevel: 5,
-                        energyCost: [20, 19, 18, 17, 15],
-                        cooldown: 2,
+                        energyCost: [25, 23, 22, 21, 18],
+                        cooldown: 1,
                         damageMultiplier: [2.0, 2.3, 2.6, 2.9, 3.2],
                         damageType: 'MAGICAL',
                         targeting: 'SINGLE',
@@ -4790,7 +5490,7 @@ const SKILL_TREES = {
                         requiredLevel: 8,
                         maxLevel: 5,
                         energyCost: [0, 0, 0, 0, 0],
-                        cooldown: 6,
+                        cooldown: 1,
                         targeting: 'SELF',
                         effects: {
                             heal: { value: [40, 60, 85, 110, 150] },
@@ -4828,6 +5528,54 @@ const SKILL_TREES = {
                         description: 'Reap the souls of the living',
                         animation: '💀⌛🌑',
                         skillPointCost: [3, 4, 5, 6, 7]
+                    },
+                    // 💡 PHASE 2 2026-07-17: 3 new Death Lord skills (was 1 - only Soul Reaping)
+                    raise_dead: {
+                        id: 'raise_dead',
+                        name: 'Raise Dead',
+                        tier: 2,
+                        requiredLevel: 30,
+                        maxLevel: 3,
+                        energyCost: [70, 60, 50],
+                        cooldown: 1,
+                        targeting: 'SELF',
+                        effects: { summon: { type: 'skeleton', count: [1, 2, 2], atkPercent: [30, 35, 40], duration: 4 } },
+                        description: 'Raise skeleton allies from the grave to fight alongside you.',
+                        animation: '💀Summon',
+                        skillPointCost: [4, 6, 8]
+                    },
+                    death_aura: {
+                        id: 'death_aura',
+                        name: 'Death Aura',
+                        tier: 2,
+                        requiredLevel: 33,
+                        maxLevel: 3,
+                        energyCost: [60, 55, 50],
+                        cooldown: 1,
+                        targeting: 'AOE',
+                        effects: { debuff_enemies: { stat: 'all', value: [15, 20, 25], duration: 3 } },
+                        description: 'Project an aura of decay that weakens all enemies.',
+                        animation: '💀🌫️',
+                        skillPointCost: [4, 6, 8]
+                    },
+                    soul_tether: {
+                        id: 'soul_tether',
+                        name: 'Soul Tether',
+                        tier: 3,
+                        requiredLevel: 37,
+                        maxLevel: 3,
+                        energyCost: [80, 72, 65],
+                        cooldown: 1,
+                        damageMultiplier: [4.0, 4.5, 5.0],
+                        damageType: 'MAGICAL',
+                        targeting: 'SINGLE',
+                        effects: {
+                            heal: { value: [60, 80, 100] },
+                            lifestealPercent: { value: 75 }
+                        },
+                        description: 'Tether a foe\'s soul to your own, draining 75% of damage dealt as HP.',
+                        animation: '💀🔗💚',
+                        skillPointCost: [6, 8, 10]
                     }
                 }
             }
@@ -4890,8 +5638,8 @@ const COMBO_ABILITIES = {
     spell_blade: {
         name: 'Spell Blade',
         requiredClasses: ['WARRIOR', 'MAGE'],
-        energyCost: 40,
-        cooldown: 5,
+        energyCost: 53,
+        cooldown: 2,
         damageMultiplier: 3.0,
         effects: [
             { type: 'hybrid_damage', physical: 0.5, magical: 0.5 },
@@ -4905,8 +5653,8 @@ const COMBO_ABILITIES = {
     dual_strike: {
         name: 'Dual Strike',
         requiredClasses: ['ROGUE', 'MONK'],
-        energyCost: 35,
-        cooldown: 4,
+        energyCost: 43,
+        cooldown: 2,
         damageMultiplier: 2.5,
         multiHit: 2,
         effects: [
@@ -4921,8 +5669,8 @@ const COMBO_ABILITIES = {
     divine_intervention: {
         name: 'Divine Intervention',
         requiredClasses: ['PALADIN', 'CLERIC'],
-        energyCost: 50,
-        cooldown: 6,
+        energyCost: 70,
+        cooldown: 2,
         effects: [
             { type: 'team_full_heal' },
             { type: 'revive_all', hp: 50 },
@@ -5206,7 +5954,19 @@ function calculateSpentPoints(user, userClassId) {
 
     for (const [skillId, level] of Object.entries(user.skills)) {
         if (level <= 0) continue;
-        
+
+        // 💡 FIX 2026-08-31: prefer the ACTUAL spend ledger. The heuristic
+        // below resolves the skill against the CURRENT lineage (evolved class
+        // first) - shared starter/evolved skills (cleave, fireball, smite...)
+        // defined WITHOUT skillPointCost in the starter tree but WITH
+        // escalating arrays in the evolved tree refunded MORE than was paid.
+        if (user.skillSpend && typeof user.skillSpend === 'object' &&
+            user.skillSpend[skillId] !== undefined &&
+            Number.isFinite(Number(user.skillSpend[skillId]))) {
+            totalSpent += Number(user.skillSpend[skillId]);
+            continue;
+        }
+
         // Find skill definition in lineage
         let targetSkill = null;
         for (const classId of lineage) {
@@ -5263,6 +6023,79 @@ function ensureSkillPointsInitialized(user, userClassId, level) {
 // 📤 EXPORTS
 // ==========================================
 
+// ─── CUSTOM CLASS SKILL TREES (2026-09-14) ───
+// Persisted companion to classSystem's CUSTOM_CLASSES (the createclass mod
+// command): handleClassCreationReply adds an entry to SKILL_TREES in memory
+// AND saves it under System key custom_skilltrees_v1; this loader re-applies
+// those entries on boot so .j skills / .skill up keep working after restarts.
+// Same durability policy: best-effort persistence, live memory always wins.
+const CUSTOM_TREES_KEY = 'custom_skilltrees_v1';
+const CUSTOM_SKILLS_KEY = 'custom_skills_v1';
+
+(async function _loadCustomSkillData() {
+    try {
+        const System = require('../models/System');
+        const treeDoc = await System.findOne({ key: CUSTOM_TREES_KEY }).lean();
+        if (treeDoc && treeDoc.value && typeof treeDoc.value === 'object') {
+            let added = 0;
+            for (const [classId, tree] of Object.entries(treeDoc.value)) {
+                if (!SKILL_TREES[classId] && tree && typeof tree === 'object') {
+                    SKILL_TREES[classId] = tree;
+                    added++;
+                }
+            }
+            if (added) console.log(`🌳 [skillTree] re-applied ${added} custom class skill tree(s) from DB`);
+        }
+        const skillDoc = await System.findOne({ key: CUSTOM_SKILLS_KEY }).lean();
+        if (skillDoc && skillDoc.value && typeof skillDoc.value === 'object') {
+            let added = 0;
+            for (const [classId, trees] of Object.entries(skillDoc.value)) {
+                if (!SKILL_TREES[classId]) continue;
+                if (!SKILL_TREES[classId].trees) SKILL_TREES[classId].trees = {};
+                for (const [treeName, skills] of Object.entries(trees || {})) {
+                    if (!SKILL_TREES[classId].trees[treeName]) {
+                        SKILL_TREES[classId].trees[treeName] = { name: treeName, icon: '✨', skills: {} };
+                    }
+                    if (!SKILL_TREES[classId].trees[treeName].skills) SKILL_TREES[classId].trees[treeName].skills = {};
+                    Object.assign(SKILL_TREES[classId].trees[treeName].skills, skills || {});
+                    added += Object.keys(skills || {}).length;
+                }
+            }
+            if (added) console.log(`🌳 [skillTree] re-applied ${added} custom skill(s) from DB`);
+        }
+    } catch (e) {
+        console.error('[skillTree] custom skill data load failed (continuing without):', e.message);
+    }
+})();
+
+/** Persist one mod-created class's whole skill-tree entry (createclass). */
+async function saveCustomSkillTree(classId, treeEntry) {
+    try {
+        const System = require('../models/System');
+        const doc = await System.findOne({ key: CUSTOM_TREES_KEY }).lean();
+        const value = (doc && doc.value && typeof doc.value === 'object') ? doc.value : {};
+        value[classId] = treeEntry;
+        await System.updateOne({ key: CUSTOM_TREES_KEY }, { $set: { value } }, { upsert: true });
+    } catch (e) {
+        console.error('[skillTree] custom skill tree persist failed:', e.message);
+    }
+}
+
+/** Persist one mod-created skill (createskill) under its class + tree. */
+async function saveCustomSkill(classId, treeName, skillId, skill) {
+    try {
+        const System = require('../models/System');
+        const doc = await System.findOne({ key: CUSTOM_SKILLS_KEY }).lean();
+        const value = (doc && doc.value && typeof doc.value === 'object') ? doc.value : {};
+        if (!value[classId]) value[classId] = {};
+        if (!value[classId][treeName]) value[classId][treeName] = {};
+        value[classId][treeName][skillId] = skill;
+        await System.updateOne({ key: CUSTOM_SKILLS_KEY }, { $set: { value } }, { upsert: true });
+    } catch (e) {
+        console.error('[skillTree] custom skill persist failed:', e.message);
+    }
+}
+
 module.exports = {
     SKILL_TREES,
     EVOLUTION_SYSTEM,
@@ -5277,5 +6110,7 @@ module.exports = {
     checkComboAvailable,
     getAllAbilitiesForClass,
     calculateSpentPoints,
-    ensureSkillPointsInitialized
+    ensureSkillPointsInitialized,
+    saveCustomSkillTree,
+    saveCustomSkill
 };

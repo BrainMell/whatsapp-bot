@@ -1,17 +1,23 @@
 const mongoose = require('mongoose');
 
-// 💡 Phase 4: AbyssRun — tracks a single player's active Abyss run.
+// 💡 Phase 4: AbyssRun - tracks a single player's active Abyss run.
 // One active run per user at a time. Deleted on death or retreat.
 // Leaderboard entries (AbyssLeaderboard) persist after the run ends.
 const AbyssRunSchema = new mongoose.Schema({
-  // 💡 QA FIX: removed `unique: true` — it prevented players from starting
+  // 💡 QA FIX: removed `unique: true` - it prevented players from starting
   // new runs after their first run completed/died (E11000 duplicate key).
   // Now multiple AbyssRun documents can exist per user (active + history).
   userId: { type: String, required: true, index: true },
+  // 💡 CROSS-BOT STATE LEAK FIX 2026-09-20: which bot instance (Joker /
+  // Subaru) owns this run. Runs live in SHARED MongoDB - without this, a
+  // run started on one bot was attackable from the other. Optional +
+  // defaulting to null so pre-existing in-flight runs stay reachable
+  // (activeRunFilter in abyssSystem matches null-botId runs for both bots).
+  botId: { type: String, default: null },
   currentFloor: { type: Number, default: 1 },
   monstersKilled: { type: Number, default: 0 },
   bossesKilled: { type: Number, default: 0 },
-  // Loot accumulator — tracks XP + gold earned during the run.
+  // Loot accumulator - tracks XP + gold earned during the run.
   // On death: player keeps 10%. On retreat: player keeps 100%.
   lootAccumulator: {
     xp: { type: Number, default: 0 },
@@ -19,24 +25,36 @@ const AbyssRunSchema = new mongoose.Schema({
     runes: [{ type: String }], // runeIds dropped during the run
     items: [{ type: String }], // itemIds dropped during the run
   },
-  // Combat state — the current floor's enemy/boss
-  currentEnemy: {
-    id: { type: String, default: null },
-    name: { type: String, default: null },
-    hp: { type: Number, default: 0 },
-    maxHp: { type: Number, default: 0 },
-    atk: { type: Number, default: 0 },
-    def: { type: Number, default: 0 },
-    spd: { type: Number, default: 0 },
-    isBoss: { type: Boolean, default: false },
-    level: { type: Number, default: 1 },
-  },
+  // Combat state - the current floor's enemy/boss
+  // 💡 FIX 2026-08-31: changed from a strict flat sub-schema to Mixed.
+  // Wild-summon encounters store their stats NESTED (enemy.stats.{hp,...})
+  // plus extra fields (isWildSummon, icon, abilities, xpReward, goldReward)
+  // - the strict sub-schema stripped all of them on save, feeding NaN-HP
+  // unkillable enemies into startAbyssCombat. Readers already handle both
+  // shapes (`enemy.stats?.hp ?? enemy.hp`), so Mixed is safe for regular
+  // flat enemies too.
+  currentEnemy: { type: mongoose.Schema.Types.Mixed, default: null },
+  // 💡 FIX 2026-07-31 Bug #1: These fields were referenced in code but NOT
+  // in the schema. Mongoose strict mode silently stripped them on save,
+  // causing treasure/event floors to be completely broken (the encounter
+  // type was lost between commands). Now properly defined.
+  currentEncounterType: { type: String, default: 'combat' }, // 'combat' | 'treasure' | 'event' | 'wild_summon'
+  currentEncounterData: { type: mongoose.Schema.Types.Mixed, default: null },
+  // 💡 2026-09-17: pack fights - weakened pack members queued for the
+  // current floor (empty on solo floors). Same shape as currentEnemy.
+  packQueue: { type: [mongoose.Schema.Types.Mixed], default: [] },
   // Player state snapshot at run start (so we can restore on death)
+  // 💡 FIX 2026-08-31: added atk/def/spd - TRAP events roll against these
+  // stats (playerStats[choice.stat]), but only hp/energy were snapshotted,
+  // so def/spd checks always fell back to 10 and ALWAYS failed.
   playerSnapshot: {
     hp: { type: Number, default: 0 },
     maxHp: { type: Number, default: 0 },
     energy: { type: Number, default: 0 },
     maxEnergy: { type: Number, default: 0 },
+    atk: { type: Number, default: 10 },
+    def: { type: Number, default: 5 },
+    spd: { type: Number, default: 5 },
   },
   // Current player HP/energy during the run (separate from playerSnapshot
   // so we can track damage taken during the run)

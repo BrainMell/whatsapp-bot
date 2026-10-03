@@ -8,6 +8,7 @@ const skillTree = require('../rpg/skillTree');
 const botConfig = require('../../botConfig');
 
 const getPrefix = () => botConfig.getPrefix();
+const getBotMarker = () => `🃏 *${botConfig.getBotName()}*\n\n`;
 
 // ==========================================
 // 📊 DISPLAY SKILL TREE
@@ -19,99 +20,160 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
     const userClass = economy.getUserClass(senderJid);
     const level = progression.getLevel(senderJid);
     const classSystem = require('../rpg/classSystem');
-    
+
     if (!userClass) {
-        await sock.sendMessage(chatId, { 
-            text: `❌ No class assigned! Register first with \`${getPrefix()} register\`` 
+        await sock.sendMessage(chatId, {
+            text: `❌ No class assigned! Register first with \`${getPrefix()} register\``
         });
         return;
     }
-    
+
     if (!user.skills) {
         user.skills = {};
     }
     if (skillTree.ensureSkillPointsInitialized(user, userClass.id, level)) {
         economy.saveUser(senderJid);
     }
-    
-    const lineage = classSystem.getLineage(userClass.id); // e.g. [ARCHMAGE, MAGE, APPRENTICE]
 
-    let msg = `╔═════════════════════════╗\n`;
-    msg += `  🌳 *SKILL TREE: ${userClass.name.toUpperCase()}*\n`;
-    msg += `╚═════════════════════════╝\n\n`;
-    msg += `${userClass.icon} *${senderName}* — Lv.${level}\n`;
-    msg += `📊 *Skill Points Available:* ${user.skillPoints || 0}\n\n`;
-
-    // --- Current class tree (SPECIALIZATION) ---
-    const currentTree = skillTree.SKILL_TREES[userClass.id.toUpperCase()];
-    if (currentTree) {
-        msg += `┏━━━✨ *SPECIALIZATION* ━━━┓\n`;
-        for (const [, treeData] of Object.entries(currentTree.trees)) {
-            msg += `┃  ${treeData.icon} *${treeData.name}*\n`;
-            for (const [skillId, skill] of Object.entries(treeData.skills)) {
-                const curLevel = user.skills[skillId] || 0;
-                const canLearn = skillTree.canLearnSkill(user.skills, skill);
-                const maxed = curLevel >= skill.maxLevel;
-
-                let icon = '🔒';
-                if (maxed) icon = '✅'; // Changed to ✅ for David's style
-                else if (curLevel > 0) icon = '✅';
-                else if (canLearn) icon = '⭕';
-
-                msg += `┃  ${icon} *${skill.name}*`;
-                if (curLevel > 0) msg += ` [${curLevel}/${skill.maxLevel}]`;
-                msg += `\n`;
-                msg += `┃     ╰─ ${skill.desc || skill.description}\n`;
-                if (!maxed && canLearn && (user.skillPoints || 0) > 0) {
-                    msg += `┃     ✨ \`${getPrefix()} skill up ${skillId}\`\n`;
+    // ── SKILLTREE card (primary, 2026-09-14 owner: "make the skill tree an
+    // image card … take inspiration from other RPG skill trees") - a real
+    // tree layout: 3 branch columns, tier fan-out, medallion states
+    // (maxed/learned/open/locked), cur/max pips, class root. Falls back to
+    // the legacy text layout below on any Go failure.
+    let treeBuf = null;
+    try {
+        const goService = require('../utils/goImageService');
+        const currentTree0 = skillTree.SKILL_TREES[userClass.id.toUpperCase()];
+        const branches = [];
+        if (currentTree0) {
+            for (const [, treeData] of Object.entries(currentTree0.trees)) {
+                const skills = [];
+                for (const [skillId, skill] of Object.entries(treeData.skills)) {
+                    const cur = user.skills[skillId] || 0;
+                    const canLearn = skillTree.canLearnSkill(user.skills, skill);
+                    const maxed = cur >= skill.maxLevel;
+                    skills.push({
+                        name: String(skill.name || skillId),
+                        cur,
+                        max: skill.maxLevel || 1,
+                        tier: skill.tier || 1,
+                        state: maxed ? 'maxed' : cur > 0 ? 'learned' : canLearn ? 'open' : 'locked',
+                    });
                 }
+                branches.push({ name: String(treeData.name || 'Path'), skills });
             }
         }
-        msg += `┗━━━━━━━━━━━━━━━━┛\n\n`;
+        if (branches.length) {
+            treeBuf = await goService.generatePortraitCard({
+                kind: 'SKILLTREE',
+                // 🧩 SPRITE CONSISTENCY 2026-09-17: hero sprite fields.
+                playerClass: String((userClass && userClass.id) || '').toUpperCase(),
+                playerIndex: Math.max(0, Math.floor(Number(user && user.spriteIndex) || 0)),
+                style: (() => { try { return (user && user.cardStyle) || 0; } catch (e) { return 0; } })(),
+                nickname: senderName,
+                className: userClass.name,
+                level,
+                skillPoints: user.skillPoints || 0,
+                branches,
+                sealText: String(user.adventurerRank || 'F').toUpperCase(),
+                caption: `${user.skillPoints || 0} points - spend with .skill up <name>`,
+            });
+        }
+    } catch (e) {
+        console.error('[skilltree] card render failed:', e?.message || e);
     }
 
-    // --- Lineage / heritage trees ---
-    if (lineage.length > 1) {
-        const parents = lineage.slice(1); // skip current class
-        for (const parentId of parents) {
-            const parentClass = classSystem.getClassById(parentId);
-            const parentTree = skillTree.SKILL_TREES[parentId.toUpperCase()];
-            if (!parentTree || !parentClass) continue;
+    // 💡 2026-09-14 owner: "attach the old skill tree text as the caption -
+    // no info may be lost". The legacy text layout is now ALWAYS built and
+    // rides along as the image caption (capped to WhatsApp's 1024-char
+    // caption limit); when the card fails it is still sent standalone.
+    const lineage = classSystem.getLineage(userClass.id); // e.g. [ARCHMAGE, MAGE, APPRENTICE]
 
-            let inheritedSection = '';
-            for (const [, treeData] of Object.entries(parentTree.trees)) {
+    const buildTreeText = () => {
+        let t = `🌳 *SKILL TREE: ${userClass.name.toUpperCase()}*\n`;
+        t += `${userClass.icon} *${senderName}* - Lv.${level} | 📊 Points: *${user.skillPoints || 0}*\n\n`;
+
+        // --- Current class tree (SPECIALIZATION) ---
+        const currentTree = skillTree.SKILL_TREES[userClass.id.toUpperCase()];
+        if (currentTree) {
+            t += `✨ *SPECIALIZATION*\n`;
+            for (const [, treeData] of Object.entries(currentTree.trees)) {
+                t += `${treeData.icon || '▪️'} *${treeData.name}*\n`;
                 for (const [skillId, skill] of Object.entries(treeData.skills)) {
                     const curLevel = user.skills[skillId] || 0;
                     const canLearn = skillTree.canLearnSkill(user.skills, skill);
                     const maxed = curLevel >= skill.maxLevel;
 
-                    if (curLevel > 0) {
-                        const icon = maxed ? '✅' : '✅';
-                        inheritedSection += `┃  ${icon} *${skill.name}* [${curLevel}/${skill.maxLevel}]\n`;
-                    } else if (canLearn && (user.skillPoints || 0) > 0) {
-                        inheritedSection += `┃  ⭕ *${skill.name}* _(Inherited)_\n`;
-                        inheritedSection += `┃     ✨ \`${getPrefix()} skill up ${skillId}\`\n`;
-                    } else {
-                        inheritedSection += `┃  🔒 *${skill.name}*\n`;
+                    let icon = '🔒';
+                    if (maxed) icon = '✅';
+                    else if (curLevel > 0) icon = '✅';
+                    else if (canLearn) icon = '⭕';
+
+                    t += `${icon} *${skill.name}*`;
+                    if (curLevel > 0) t += ` [${curLevel}/${skill.maxLevel}]`;
+                    t += `\n`;
+                    t += `  ╰─ ${skill.desc || skill.description}\n`;
+                    if (!maxed && canLearn && (user.skillPoints || 0) > 0) {
+                        t += `  ✨ \`${getPrefix()} skill up ${skillId}\`\n`;
                     }
                 }
             }
+            t += `\n`;
+        }
 
-            if (inheritedSection) {
-                msg += `┏━━━ 🔰 *${parentClass.name.toUpperCase()} PATH* ━━┓\n`;
-                msg += inheritedSection;
-                msg += `┗━━━━━━━━━━━━━━━━┛\n\n`;
+        // --- Lineage / heritage trees ---
+        if (lineage.length > 1) {
+            const parents = lineage.slice(1); // skip current class
+            for (const parentId of parents) {
+                const parentClass = classSystem.getClassById(parentId);
+                const parentTree = skillTree.SKILL_TREES[parentId.toUpperCase()];
+                if (!parentTree || !parentClass) continue;
+
+                let inheritedSection = '';
+                for (const [, treeData] of Object.entries(parentTree.trees)) {
+                    for (const [skillId, skill] of Object.entries(parentTree.skills || treeData.skills)) {
+                        const curLevel = user.skills[skillId] || 0;
+                        const canLearn = skillTree.canLearnSkill(user.skills, skill);
+                        const maxed = curLevel >= skill.maxLevel;
+
+                        if (curLevel > 0) {
+                            inheritedSection += `✅ *${skill.name}* [${curLevel}/${skill.maxLevel}]\n`;
+                        } else if (canLearn && (user.skillPoints || 0) > 0) {
+                            inheritedSection += `⭕ *${skill.name}* _(Inherited)_ - \`${getPrefix()} skill up ${skillId}\`\n`;
+                        } else {
+                            inheritedSection += `🔒 *${skill.name}*\n`;
+                        }
+                    }
+                }
+
+                if (inheritedSection) {
+                    t += `🔰 *${parentClass.name.toUpperCase()} PATH*\n`;
+                    t += inheritedSection;
+                    t += `\n`;
+                }
             }
         }
+
+        t += `💡 \`${getPrefix()} skill up <name>\` invest • \`${getPrefix()} skill reset\` refund • \`${getPrefix()} abilities\` list`;
+        return t;
+    };
+    const treeText = buildTreeText();
+
+    if (treeBuf && treeBuf.length > 100) {
+        // WhatsApp hard-caps image captions at 1024 chars - keep the most
+        // valuable head of the legacy text and mark the cut.
+        const head = treeText.length > 980 ? treeText.slice(0, 977) + '…' : treeText;
+        await sock.sendMessage(chatId, {
+            image: treeBuf,
+            caption: getBotMarker() + head,
+            mimetype: 'image/jpeg',
+        });
+        return;
     }
 
-    msg += `💡 *Commands:*\n`;
-    msg += `• \`${getPrefix()} skill up <name>\` — Invest a point\n`;
-    msg += `• \`${getPrefix()} skill reset\` — Refund all points (500 Zeni)\n`;
-    msg += `• \`${getPrefix()} abilities\` — View combat ability list`;
-    
-    await sock.sendMessage(chatId, { text: msg });
+    await sock.sendMessage(chatId, { text: getBotMarker() + treeText });
 }
+
 
 // ==========================================
 // ⬆️ UPGRADE SKILL
@@ -140,9 +202,20 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
     const lineage = classSystem.getLineage(userClass.id);
     let targetSkill = null;
     let foundInClassName = null;
-    
+
     const cleanSearch = skillId.replace(/[\s_]/g, "").toLowerCase();
-    
+
+    // 💡 FIX (BUG 5: "skill up rally" skilled up "rallying cry"):
+    // The old matcher used `cleanName.includes(cleanSearch)` which is a
+    // SUBSTRING match. "rally" matches "rallyingcry" (from "Rallying Cry"),
+    // so the wrong skill was returned. Now we do TWO passes:
+    //   Pass 1: EXACT match on skill id OR skill name (case-insensitive,
+    //           whitespace-insensitive).
+    //   Pass 2: Only if pass 1 finds nothing, fall back to substring match.
+    // This ensures `.g skill up rally` finds the skill literally named
+    // "Rally" before it considers "Rallying Cry".
+
+    // ── Pass 1: exact match ──
     for (const classId of lineage) {
         const tree = skillTree.SKILL_TREES[classId.toUpperCase()];
         if (!tree) continue;
@@ -150,7 +223,7 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
             for (const [sId, skill] of Object.entries(treeData.skills)) {
                 const cleanSId = sId.replace(/[\s_]/g, "").toLowerCase();
                 const cleanName = skill.name.replace(/[\s_]/g, "").toLowerCase();
-                if (cleanSId === cleanSearch || cleanName.includes(cleanSearch)) {
+                if (cleanSId === cleanSearch || cleanName === cleanSearch) {
                     targetSkill = { ...skill, id: sId };
                     foundInClassName = classSystem.getClassById(classId)?.name || classId;
                     break;
@@ -159,6 +232,27 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
             if (targetSkill) break;
         }
         if (targetSkill) break;
+    }
+
+    // ── Pass 2: substring fallback (only if no exact match) ──
+    if (!targetSkill) {
+        for (const classId of lineage) {
+            const tree = skillTree.SKILL_TREES[classId.toUpperCase()];
+            if (!tree) continue;
+            for (const [, treeData] of Object.entries(tree.trees)) {
+                for (const [sId, skill] of Object.entries(treeData.skills)) {
+                    const cleanSId = sId.replace(/[\s_]/g, "").toLowerCase();
+                    const cleanName = skill.name.replace(/[\s_]/g, "").toLowerCase();
+                    if (cleanSId.includes(cleanSearch) || cleanName.includes(cleanSearch)) {
+                        targetSkill = { ...skill, id: sId };
+                        foundInClassName = classSystem.getClassById(classId)?.name || classId;
+                        break;
+                    }
+                }
+                if (targetSkill) break;
+            }
+            if (targetSkill) break;
+        }
     }
     
     if (!targetSkill) {
@@ -189,7 +283,7 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
     
     // 🏆 RANK GATE: T3 skills require B rank, T4/Ascended skills require A rank
     // Grace period: if already unlocked (currentLevel > 0), allow use but block upgrades
-    // 💡 QA FIX: was missing 'GOD' — GOD-rank players got indexOf=-1, treated
+    // 💡 QA FIX: was missing 'GOD' - GOD-rank players got indexOf=-1, treated
     // as below F-rank, and were blocked from learning ANY T3/T4 skills.
     const RANK_ORDER = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'GOD'];
     const userRank = user.adventurerRank || 'F';
@@ -205,9 +299,9 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
             });
             return;
         } else {
-            // Grace period: already unlocked, warn but allow use — block further upgrades
+            // Grace period: already unlocked, warn but allow use - block further upgrades
             await sock.sendMessage(chatId, {
-                text: `⚠️ *${targetSkill.name}* is a Tier 4 Ascended skill.\n\nYou unlocked it before the rank system was enforced, so you can still use it — but upgrades are locked until you reach *A rank*.\n\n📊 *Your Rank:* ${userRank} (need A)`
+                text: `⚠️ *${targetSkill.name}* is a Tier 4 Ascended skill.\n\nYou unlocked it before the rank system was enforced, so you can still use it - but upgrades are locked until you reach *A rank*.\n\n📊 *Your Rank:* ${userRank} (need A)`
             });
             return;
         }
@@ -221,7 +315,7 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
             return;
         } else {
             await sock.sendMessage(chatId, {
-                text: `⚠️ *${targetSkill.name}* is a Tier 3 skill.\n\nYou unlocked it before the rank system was enforced — upgrades are locked until you reach *B rank*.\n\n📊 *Your Rank:* ${userRank} (need B)`
+                text: `⚠️ *${targetSkill.name}* is a Tier 3 skill.\n\nYou unlocked it before the rank system was enforced - upgrades are locked until you reach *B rank*.\n\n📊 *Your Rank:* ${userRank} (need B)`
             });
             return;
         }
@@ -240,20 +334,81 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
     
     user.skills[targetSkill.id] = currentLevel + 1;
     user.skillPoints -= cost;
+    // 💡 FIX 2026-08-31: record the ACTUAL cost paid so respec refunds are
+    // exact. Without this ledger, calculateSpentPoints recomputed costs from
+    // the CURRENT (evolved) class schedule - starter-class prices (1pt/level)
+    // refunded at evolved-class rates ([2,3,4,5,6]...) = free skill points.
+    if (!user.skillSpend || typeof user.skillSpend !== 'object') user.skillSpend = {};
+    user.skillSpend[targetSkill.id] = (user.skillSpend[targetSkill.id] || 0) + cost;
     economy.saveUser(senderJid);
     
     const newLevel = currentLevel + 1;
     const effect = skillTree.getSkillEffect(targetSkill, newLevel);
-    
+
     const heritageNote = (foundInClassName !== userClass?.name) ? `_(${foundInClassName} Heritage)_\n` : '';
-    
+
+    // ── SKILLUP card (primary, 2026-09-14 owner: "make the skill upgrade an
+    // image card as well") - giant tier-accented skill medallion, level pips,
+    // THE PATH effect rows. Falls back to the plain text below.
+    let upBuf = null;
+    try {
+        const goService = require('../utils/goImageService');
+        const rows = [];
+        if (effect?.type === 'damage' && effect.multiplier) {
+            rows.push({ label: 'DAMAGE', value: `${Math.floor(effect.multiplier * 100)}% ${String(effect.damageType || 'atk').toUpperCase()}` });
+        } else if (effect?.type === 'heal') {
+            rows.push({ label: 'HEALING', value: `${effect.value} HP` });
+        } else if (effect?.type === 'buff_self' || effect?.type === 'buff_team') {
+            rows.push({ label: 'BUFF', value: `+${effect.value || '?'}% ${String(effect.buffType || '').toUpperCase()}`.trim() });
+            if (effect.duration) rows.push({ label: 'DURATION', value: `${effect.duration} TURNS` });
+        }
+        rows.push({ label: 'POINTS LEFT', value: String(user.skillPoints) });
+        if (foundInClassName !== userClass?.name) {
+            rows.push({ label: 'HERITAGE', value: String(foundInClassName).toUpperCase() });
+        } else if (newLevel === targetSkill.maxLevel) {
+            rows.push({ label: 'MASTERY', value: 'COMPLETE' });
+        }
+        upBuf = await goService.generatePortraitCard({
+            kind: 'SKILLUP',
+            // 🧩 SPRITE CONSISTENCY 2026-09-17: hero sprite fields.
+            playerClass: String((userClass && userClass.id) || '').toUpperCase(),
+            playerIndex: Math.max(0, Math.floor(Number(user && user.spriteIndex) || 0)),
+            style: (() => { try { const _su = economy.getUser(senderJid); return (_su && _su.cardStyle) || 0; } catch (e) { return 0; } })(),
+            nickname: economy.getDisplayName(senderJid),
+            skillName: targetSkill.name,
+            tier: targetSkill.tier || 1,
+            ascended: targetSkill.isAscended === true,
+            cur: newLevel,
+            skillMax: targetSkill.maxLevel || 1,
+            sealText: `T${targetSkill.tier || 1}`,
+            caption: newLevel === targetSkill.maxLevel ? 'fully mastered' : 'the path sharpens',
+            rows: rows.slice(0, 3),
+        });
+    } catch (e) {
+        console.error('[skillup] card render failed:', e?.message || e);
+    }
+
+    if (upBuf && upBuf.length > 100) {
+        await sock.sendMessage(chatId, {
+            image: upBuf,
+            caption: getBotMarker() +
+                `✨ *SKILL UPGRADED!*\n` +
+                (heritageNote.replace(/_/g, '')) +
+                `🌟 *${targetSkill.name}* → Lv.${newLevel}/${targetSkill.maxLevel}\n` +
+                `📊 Points Remaining: *${user.skillPoints}*` +
+                (newLevel === targetSkill.maxLevel ? `\n⭐ *FULLY MASTERED!*` : ``),
+            mimetype: 'image/jpeg',
+        });
+        return;
+    }
+
     let msg = `✨ *SKILL UPGRADED!*\n\n`;
     msg += heritageNote;
     msg += `🌟 *${targetSkill.name}* → Lv.${newLevel}/${targetSkill.maxLevel}\n\n`;
     msg += `📊 Points Remaining: ${user.skillPoints}\n\n`;
     
     if (effect?.type === 'damage' && effect.multiplier) {
-        msg += `💥 Damage: ${Math.floor(effect.multiplier * 100)}% ATK\n`;
+        msg += `💥 Damage: ${Math.floor(effect.multiplier * 100)}% ${effect.damageType === 'magic' ? 'MAG' : effect.damageType === 'true' ? 'TRUE' : 'ATK'}\n`;
     } else if (effect?.type === 'heal') {
         msg += `💚 Healing: ${effect.value} HP\n`;
     } else if (effect?.type === 'buff_self' || effect?.type === 'buff_team') {
@@ -292,8 +447,14 @@ async function resetSkills(sock, chatId, senderJid) {
         await sock.sendMessage(chatId, { text: '❌ You have no skills to reset!' });
         return;
     }
-    
-    const RESET_COST = 500;
+
+    // 💡 ECONOMY SINK (Item #4): scale reset cost with level². Previously
+    // a flat 500 Zeni - trivially cheap for a level-100 player with
+    // millions of Zeni. Now: level 10 = 50K, level 50 = 1.25M, level 100
+    // = 5M. This makes skill resets a meaningful Zeni sink at high levels
+    // while staying accessible for low-level players experimenting with
+    // their first class.
+    const RESET_COST = 500 * Math.max(1, level * level);
     const balance = economy.getBalance(senderJid);
     
     if (balance < RESET_COST) {
@@ -307,6 +468,9 @@ async function resetSkills(sock, chatId, senderJid) {
     const spentPoints = skillTree.calculateSpentPoints(user, userClass.id);
     const totalPoints = (user.skillPoints || 0) + spentPoints;
     user.skills = {};
+    // 💡 FIX 2026-08-31: clear the spend ledger with the skills - the refund
+    // already credited every recorded point.
+    user.skillSpend = {};
     user.skillPoints = totalPoints;
     economy.removeMoney(senderJid, RESET_COST);
     economy.saveUser(senderJid);
@@ -317,14 +481,129 @@ async function resetSkills(sock, chatId, senderJid) {
 }
 
 // ==========================================
+// 📝 ABILITY EFFECT TEXT (2026-09-16)
+//    effect object -> one short readable line. This helper was referenced
+//    by the abilities text/card builders but never defined, which made
+//    every .abilities call die with "abilityEffectText is not defined".
+// ==========================================
+const ABILITY_CC_NAME = {
+    stun: 'Stun', slow: 'Slow', freeze: 'Freeze', silence: 'Silence',
+    sleep: 'Sleep', paralyze: 'Paralyze', petrify: 'Petrify', blind: 'Blind',
+};
+const ABILITY_DOT_NAME = { burn: 'Burn', poison: 'Poison', bleed: 'Bleed' };
+
+function abilityEffectText(effect) {
+    if (!effect || typeof effect !== 'object') return '';
+    const t = String(effect.type || '').toLowerCase();
+    const num = (x) => {
+        const n = Number(x);
+        return (x === undefined || x === null || x === '' || !Number.isFinite(n)) ? null : Math.round(n);
+    };
+    const v = num(effect.value);
+    const dur = num(effect.duration);
+    const durTxt = dur && dur > 0 ? ` for ${dur} turn${dur > 1 ? 's' : ''}` : '';
+    const human = (s) => String(s || '').replace(/_/g, ' ').toLowerCase();
+    const cc = ABILITY_CC_NAME[String(effect.cc || '').toLowerCase()] || human(effect.cc);
+    const dot = ABILITY_DOT_NAME[String(effect.dot || '').toLowerCase()] || human(effect.dot);
+    const buff = human(effect.buffType);
+    const debuff = human(effect.debuffType);
+    // 💡 FIX (tester issue 1c4322): damage skills carry their power in
+    // `effect.multiplier` (a fraction of ATK/MAG), not `effect.value` - the
+    // abilities list showed "Deals damage" with no numbers. Render the
+    // multiplier whenever present, falling back to flat value.
+    const mult = Number(effect.multiplier);
+    const atkWord = effect.damageType === 'magic' ? 'MAG' : effect.damageType === 'true' ? 'TRUE' : 'ATK';
+    const powerTxt = (Number.isFinite(mult) && mult > 0)
+        ? `${Math.round(mult * 100)}% ${atkWord}`
+        : (v != null ? `${v}` : null);
+    const join = (parts, fallback) => {
+        const out = parts.filter(Boolean).join(' + ');
+        return out || fallback;
+    };
+
+    switch (t) {
+        case 'damage':
+            return powerTxt ? `Deals ${powerTxt} damage${durTxt}` : 'Deals damage';
+        case 'damage_cc':
+        case 'crowd_control':
+            return join([powerTxt ? `${powerTxt} damage` : '', cc ? `${cc}${durTxt}` : ''], 'Control effect');
+        case 'damage_dot':
+        case 'damage_over_time':
+            return join([powerTxt ? `${powerTxt} damage` : '', dot ? `${dot}${durTxt}` : 'damage over time'], 'Damage over time');
+        case 'damage_heal':
+            return powerTxt ? `${powerTxt} damage, heals the user for part of it` : 'Damage that heals the user';
+        case 'hybrid_damage':
+            return powerTxt ? `${powerTxt} hybrid damage (phys + magic)` : 'Hybrid damage';
+        case 'chain':
+            return powerTxt ? `${powerTxt} damage that chains to nearby foes` : 'Chained damage';
+        case 'heal':
+            return v != null ? `Restores ${v} HP` : 'Restores HP';
+        case 'heal_over_time':
+            return v != null ? `Restores ${v} HP over time${durTxt}` : 'Heals over time';
+        case 'heal_team':
+            return v != null ? `Heals the whole team ${v} HP` : 'Heals the whole team';
+        case 'revive':
+            return v != null ? `Revives a fallen ally at ${v}% HP` : 'Revives a fallen ally';
+        case 'revive_team':
+        case 'revive_all':
+            return 'Revives the whole team';
+        case 'buff':
+        case 'buff_self':
+            return join([buff ? `+${v != null ? v : ''}${buff ? `% ${buff}` : ''}` : '', durTxt ? `lasts${durTxt.replace(' for ', ' ')}` : ''], 'Self buff');
+        case 'buff_team':
+            return buff ? `Team +${v != null ? v : ''}% ${buff}${durTxt}` : 'Team buff';
+        case 'buff_target':
+            return buff ? `Ally +${v != null ? v : ''}% ${buff}${durTxt}` : 'Ally buff';
+        case 'shield':
+            return v != null ? `Grants a ${v} point shield${durTxt}` : 'Grants a shield';
+        case 'debuff_target':
+            return debuff ? `-${v != null ? v : ''}% ${debuff} on the target${durTxt}` : 'Debuffs the target';
+        case 'debuff_enemies':
+            return debuff ? `-${v != null ? v : ''}% ${debuff} on all enemies${durTxt}` : 'Debuffs all enemies';
+        case 'defense_break':
+            return 'Shreds the target\'s defense';
+        case 'ignore_armor':
+            return v != null ? `Ignores ${v}% of armor` : 'Ignores armor';
+        case 'guaranteed_crit':
+            return 'Next hit is a guaranteed crit';
+        case 'haste':
+            return v != null ? `+${v}% speed${durTxt}` : 'Raises speed';
+        case 'berserk':
+            return v != null ? `Berserk: +${v}% damage at low HP${durTxt}` : 'Berserk state';
+        case 'aoe':
+            return powerTxt ? `${powerTxt} damage to all enemies` : 'Hits all enemies';
+        case 'execute':
+            return v != null ? `Executes foes below ${v}% HP` : 'Executes weakened foes';
+        case 'drain':
+            return powerTxt ? `Drains ${powerTxt} from the target` : 'Drains HP';
+        case 'summon':
+            return 'Summons an ally to fight';
+        case 'passive':
+        case 'positive':
+        case 'negative':
+            return 'Passive effect';
+        case 'dragon':
+            return powerTxt ? `${powerTxt} draconic damage` : 'Draconic damage';
+        default: {
+            const name = human(t) || 'Special effect';
+            return v != null ? `${name} (${v})${durTxt}` : name;
+        }
+    }
+}
+
+// ==========================================
 // 📋 VIEW ABILITIES (COMBAT LIST)
 // ==========================================
 
-async function viewAbilities(sock, chatId, senderJid, senderName) {
+async function viewAbilities(sock, chatId, senderJid, senderName, pageArg) {
     economy.initializeClass(senderJid);
     const user = economy.getUser(senderJid);
     const userClass = economy.getUserClass(senderJid);
     const classSystem = require('../rpg/classSystem');
+    // r6 fix: the card payload used `level` but this function never defined
+    // it - every .j abilities card render threw "level is not defined" and
+    // silently fell back to the text list.
+    const level = progression.getLevel(senderJid);
     
     if (!userClass) {
         await sock.sendMessage(chatId, { text: '❌ No class assigned!' });
@@ -373,7 +652,13 @@ async function viewAbilities(sock, chatId, senderJid, senderName) {
         }
     }
 
-    const mirroredAbilities = (user.borrowedSkills || []).map(s => ({ ...s, level: 1, isMirrored: true }));
+    // 💡 FIX §2.11: Deduplicate mirrored/borrowed abilities against learned ones.
+    // Previously, borrowedSkills were added without checking the `seen` Set,
+    // so a skill that was both learned (via skill tree) AND borrowed (via mirror)
+    // would appear twice in the abilities list.
+    const mirroredAbilities = (user.borrowedSkills || [])
+        .filter(s => !seen.has(s.id))  // Skip if already in learned abilities
+        .map(s => ({ ...s, level: 1, isMirrored: true }));
     const totalCount = abilityGroups.reduce((sum, g) => sum + g.skills.length, 0) + mirroredAbilities.length;
 
     if (totalCount === 0) {
@@ -383,66 +668,203 @@ async function viewAbilities(sock, chatId, senderJid, senderName) {
         return;
     }
     
-    let msg = `╔═══════════════════════════╗\n`;
-    msg += `    ⚡ *ABILITIES: ${senderName}*\n`;
-    msg += `╚═══════════════════════════╝\n\n`;
-    msg += `${userClass.icon} *${userClass.name}* • ${totalCount} total abilities\n\n`;
+    // ── ABILITIES card (2026-09-16 redesign) ──
+    // The card is the player's CODEX: identity comes from the BEGINNER class
+    // (Combat Codex / Hunter's Ledger / Ability Grimoire / Practitioner's
+    // Codex), effect runes come from the REAL skill schema, and pagination
+    // keeps 20+ skill collections readable (12 rows/page).
+    const BEGINNER_DOC = {
+        FIGHTER: { title: 'COMBAT CODEX', quote: '"Every scar is a lesson. Every battle, a page."' },
+        SCOUT: { title: "HUNTER'S LEDGER", quote: '"The prey is already dead. It simply hasn\'t realized it yet."' },
+        APPRENTICE: { title: 'ABILITY GRIMOIRE', quote: '"Every spell is a question the world must answer."' },
+        ACOLYTE: { title: "PRACTITIONER'S CODEX", quote: '"Faith is the first armor. Devotion is the blade."' },
+    };
+    // DejaVu-safe symbols only (verified glyph coverage on the renderer host).
+    const RUNE_MAP = {
+        stun: '✦', slow: '✺', freeze: '❄', burn: '♨', bleed: '⚔', poison: '☠',
+        dot: '✥', heal: '✚', buff: '▲', debuff: '▼', shield: '◈', aoe: '✷',
+        execute: '⚡', passive: '❖', drain: '⨀', summon: '⚑',
+    };
+    // CARD payload tags: theme card faces carry no emoji glyphs, so the
+    // card gets ASCII effect tags while the text message keeps the runes.
+    const CARD_TAGS = {
+        stun: 'STUN', slow: 'SLOW', freeze: 'FRZ', burn: 'BURN', bleed: 'BLD', poison: 'PSN',
+        dot: 'DOT', heal: 'HEAL', buff: 'BUFF', debuff: 'DBF', shield: 'SHLD', aoe: 'AOE',
+        execute: 'EXEC', passive: 'PASV', drain: 'DRN', summon: 'SUMN',
+    };
+    const effectTags = (ability) => {
+        const out = [];
+        const push = (t) => { if (t && !out.includes(t) && out.length < 4) out.push(t); };
+        const e = ability.effect || {};
+        for (const k of Object.keys(ability.effects || {})) push(CARD_TAGS[k]);
+        if (e.cc && CARD_TAGS[e.cc]) push(CARD_TAGS[e.cc]);
+        if (e.dot && CARD_TAGS[e.dot]) push(CARD_TAGS[e.dot]);
+        if (e.buffType === 'shield') push(CARD_TAGS.shield);
+        switch (e.type) {
+            case 'heal': case 'heal_team': case 'heal_over_time': push(CARD_TAGS.heal); break;
+            case 'buff_self': case 'buff_team': case 'buff_target': push(CARD_TAGS.buff); break;
+            case 'debuff_target': case 'debuff_enemies': push(CARD_TAGS.debuff); break;
+            case 'aoe': push(CARD_TAGS.aoe); break;
+            case 'execute': push(CARD_TAGS.exec || CARD_TAGS.execute); break;
+            case 'damage_dot': case 'damage_over_time': push(CARD_TAGS.dot); break;
+            case 'passive': push(CARD_TAGS.passive); break;
+        }
+        if (ability.type === 'passive') push(CARD_TAGS.passive);
+        return out.join(' ');
+    };
+    const effectRunes = (ability) => {
+        const out = [];
+        const push = (r) => { if (r && !out.includes(r) && out.length < 4) out.push(r); };
+        const e = ability.effect || {};
+        for (const k of Object.keys(ability.effects || {})) push(RUNE_MAP[k]);
+        if (e.cc && RUNE_MAP[e.cc]) push(RUNE_MAP[e.cc]);
+        if (e.dot && RUNE_MAP[e.dot]) push(RUNE_MAP[e.dot]);
+        if (e.buffType === 'shield') push(RUNE_MAP.shield);
+        if (e.type === 'damage_cc' && e.cc && RUNE_MAP[e.cc]) push(RUNE_MAP[e.cc]);
+        switch (e.type) {
+            case 'heal': case 'heal_team': push(RUNE_MAP.heal); break;
+            case 'buff_self': case 'buff_team': push(RUNE_MAP.buff); break;
+            case 'aoe': push(RUNE_MAP.aoe); break;
+            case 'execute': push(RUNE_MAP.execute); break;
+            case 'passive': push(RUNE_MAP.passive); break;
+        }
+        if (ability.type === 'passive') push(RUNE_MAP.passive);
+        return out.join('');
+    };
 
-    let count = 1;
+    const beginnerId = String(lineage[lineage.length - 1] || '').toUpperCase();
+    const doc = BEGINNER_DOC[beginnerId] || { title: 'ABILITY GRIMOIRE', quote: '"Every skill is a story the body remembers."' };
 
+    // ── pagination: flatten groups → 12 rows per page ──
+    const PAGE_SIZE = 12;
+    const allRows = [];
     for (const group of abilityGroups) {
-        const label = group.isCurrentClass
-            ? `${group.classIcon} *${group.className}*`
-            : `${group.classIcon} _${group.className} Heritage_`;
-        msg += `━━━ ${label} ━━━\n`;
-        for (const ability of group.skills) {
-            const costDisplay = ability.cost > 0 ? `⚡ ${ability.cost}` : `✨ Passive`;
-            const cdDisplay = ability.cooldown > 0 ? ` | ⏱️ CD:${ability.cooldown}` : '';
-            const animation = ability.animation || ability.effect?.animation || '🔮';
-            
-            msg += `*${count}.* ${animation} *${ability.name}* [Lv.${ability.level}/${ability.maxLevel}]\n`;
-            msg += `   ${costDisplay}${cdDisplay}\n`;
-            
-            const e = ability.effect;
-            if (e) {
-                if (e.type === 'damage' && e.multiplier) {
-                    msg += `   💥 ${Math.floor(e.multiplier * 100)}% ${e.damageType === 'magic' ? 'MAG' : 'ATK'} damage\n`;
-                } else if (e.type === 'aoe' && e.multiplier) {
-                    msg += `   💥 ${Math.floor(e.multiplier * 100)}% ATK — ALL ENEMIES\n`;
-                } else if (e.type === 'heal' || e.type === 'heal_team') {
-                    msg += `   💚 Heals ${e.value} HP${e.type === 'heal_team' ? ' (Party)' : ''}\n`;
-                } else if (e.type === 'buff_self' && e.value) {
-                    msg += `   ✨ +${e.value}% ${e.buffType || 'stats'} for ${e.duration}t\n`;
-                } else if (e.type === 'buff_team' && e.value) {
-                    msg += `   ✨ Party +${e.value}% ${e.buffType || 'stats'} for ${e.duration}t\n`;
-                } else if (e.type === 'damage_cc') {
-                    msg += `   💥 ${Math.floor((e.multiplier || 1) * 100)}% ATK + ${e.ccChance}% ${e.cc || 'CC'}\n`;
-                } else if (e.type === 'execute') {
-                    msg += `   ⚡ ${Math.floor((e.multiplier || 2) * 100)}% dmg (Executes <${e.threshold}% HP)\n`;
-                } else if (e.type === 'passive') {
-                    msg += `   🔹 Passive: ${e.trigger || ''}\n`;
+        for (const ability of group.skills) allRows.push({ group, ability });
+    }
+    for (const ability of mirroredAbilities) allRows.push({ group: null, ability });
+
+    const totalPages = Math.max(1, Math.ceil(allRows.length / PAGE_SIZE));
+    let page = parseInt(pageArg, 10);
+    if (!Number.isFinite(page) || page < 1) page = 1;
+    if (page > totalPages) page = totalPages;
+    const pageRows = allRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+    const buildAbilitiesText = () => {
+        let t = `⚡ *${doc.title}* - ${senderName}\n`;
+        t += `${userClass.icon} *${userClass.name}* • ${totalCount} total abilities`;
+        if (totalPages > 1) t += ` • Page ${page}/${totalPages}`;
+        t += `\n\n`;
+        let lastGroupKey = null;
+        let count = (page - 1) * PAGE_SIZE;
+        for (const row of pageRows) {
+            const gKey = row.group ? row.group.className : '__MIRRORED__';
+            if (gKey !== lastGroupKey) {
+                lastGroupKey = gKey;
+                if (row.group) {
+                    t += row.group.isCurrentClass
+                        ? `━━ ${row.group.classIcon} *${row.group.className}* ━━\n`
+                        : `━━ ${row.group.classIcon} _${row.group.className} Heritage_ ━━\n`;
+                } else {
+                    t += `━━ 🪞 *Mirrored Skills* ━━\n`;
                 }
             }
-            msg += `\n`;
             count++;
+            const ability = row.ability;
+            if (row.group) {
+                const costDisplay = ability.cost > 0 ? `⚡ ${ability.cost}` : (ability.effect?.type === 'passive' || ability.type === 'passive' ? `✨ Passive` : `⚡ 0`);
+                const cdDisplay = ability.cooldown > 0 ? ` | ⏱️ CD:${ability.cooldown}` : '';
+                const animation = ability.animation || ability.effect?.animation || '🔮';
+                t += `*${count}.* ${animation} *${ability.name}* [Lv.${ability.level}/${ability.maxLevel}]\n`;
+                t += `   ${costDisplay}${cdDisplay}\n`;
+                const effectLine = abilityEffectText(ability.effect);
+                if (effectLine) t += `   ${effectLine}\n`;
+                t += `\n`;
+            } else {
+                const energyCost = ability.cost || (Array.isArray(ability.energyCost) ? ability.energyCost[0] : ability.energyCost) || 0;
+                t += `*${count}.* 🪞 *${ability.name}* _(from ${ability.sourceClass})_\n`;
+                t += `   ⚡ ${Math.floor(energyCost * 1.5)} (mirrored cost)\n\n`;
+            }
         }
+        if (totalPages > 1) {
+            const nextPage = page < totalPages ? page + 1 : 1;
+            t += `📄 \`${getPrefix()} abilities ${nextPage}\` for page ${nextPage}/${totalPages}\n`;
+        }
+        t += `💡 \`${getPrefix()} combat ability <num>\` in battle\n`;
+        t += `📊 \`${getPrefix()} skill tree\` to learn more skills`;
+        return t;
+    };
+    const abilitiesText = buildAbilitiesText();
+
+    let abBuf = null;
+    try {
+        const goService = require('../utils/goImageService');
+        // group the PAGE slice - the card never overflows, 20+ skills OK
+        const pageGroups = [];
+        for (const row of pageRows) {
+            const key = row.group ? row.group.className : '__MIRRORED__';
+            let g = pageGroups.find((x) => x.__key === key);
+            if (!g) {
+                g = row.group
+                    ? { __key: key, name: String(row.group.className || '').toUpperCase(), sub: row.group.isCurrentClass ? 'CURRENT' : 'HERITAGE', items: [] }
+                    : { __key: key, name: 'MIRRORED', sub: 'BORROWED', items: [] };
+                pageGroups.push(g);
+            }
+            if (row.group) {
+                const ability = row.ability;
+                const costPart = ability.cost > 0 ? `EN ${ability.cost}` : (ability.effect?.type === 'passive' || ability.type === 'passive' ? 'PASSIVE' : 'EN 0');
+                const cdPart = ability.cooldown > 0 ? ` · CD${ability.cooldown}` : '';
+                g.items.push({
+                    title: String(ability.name || ''),
+                    sub: `Lv.${ability.level}/${ability.maxLevel} · ${costPart}${cdPart}`,
+                    value: abilityEffectText(ability.effect),
+                    runes: effectTags(ability),
+                });
+            } else {
+                const energyCost = row.ability.cost || (Array.isArray(row.ability.energyCost) ? row.ability.energyCost[0] : row.ability.energyCost) || 0;
+                g.items.push({
+                    title: String(row.ability.name || ''),
+                    sub: `from ${row.ability.sourceClass || '?'} · ⚡${Math.floor(energyCost * 1.5)} mirrored`,
+                    value: '',
+                    runes: '',
+                });
+            }
+        }
+        if (pageGroups.length) {
+            abBuf = await goService.generatePortraitCard({
+                kind: 'ABILITIES',
+                // 🧩 SPRITE CONSISTENCY 2026-09-17: hero sprite fields.
+                playerClass: String((userClass && userClass.id) || '').toUpperCase(),
+                playerIndex: Math.max(0, Math.floor(Number(user && user.spriteIndex) || 0)),
+                style: (() => { try { return (user && user.cardStyle) || 0; } catch (e) { return 0; } })(),
+                nickname: senderName,
+                className: userClass.name,
+                level,
+                groups: pageGroups,
+                sealText: String(user.adventurerRank || 'F').toUpperCase(),
+                docTitle: doc.title,
+                docQuote: doc.quote,
+                pageLabel: totalPages > 1 ? `PAGE ${page}/${totalPages}` : '',
+                startNumber: (page - 1) * PAGE_SIZE + 1,
+                caption: `cast with .combat ability <num>`,
+            });
+        }
+    } catch (e) {
+        console.error('[abilities] card render failed:', e?.message || e);
     }
 
-    if (mirroredAbilities.length > 0) {
-        msg += `━━━ 🪞 *Mirrored Skills* ━━━\n`;
-        for (const ability of mirroredAbilities) {
-            const energyCost = ability.cost || (Array.isArray(ability.energyCost) ? ability.energyCost[0] : ability.energyCost) || 0;
-            msg += `*${count}.* 🪞 *${ability.name}* _(from ${ability.sourceClass})_\n`;
-            msg += `   ⚡ ${Math.floor(energyCost * 1.5)} (mirrored cost)\n\n`;
-            count++;
-        }
+    if (abBuf && abBuf.length > 100) {
+        // WhatsApp hard-caps image captions at 1024 chars - same rule as the
+        // skill tree: the full legacy list rides along, cut only if huge.
+        const head = abilitiesText.length > 980 ? abilitiesText.slice(0, 977) + '…' : abilitiesText;
+        await sock.sendMessage(chatId, {
+            image: abBuf,
+            caption: getBotMarker() + head,
+            mimetype: 'image/jpeg',
+        });
+        return;
     }
 
-    msg += `━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-    msg += `💡 \`${getPrefix()} combat ability <num>\` in battle\n`;
-    msg += `📊 \`${getPrefix()} skill tree\` to learn more skills`;
-    
-    await sock.sendMessage(chatId, { text: msg });
+    await sock.sendMessage(chatId, { text: getBotMarker() + abilitiesText });
 }
 
 // ==========================================
@@ -469,14 +891,20 @@ async function learnSkill(sock, chatId, senderJid, skillId) {
 
     const cleanSearch = skillId.replace(/[\s_]/g, "").toLowerCase();
 
-    // Search ALL trees OUTSIDE the player's own lineage
+    // 💡 BUG-06 fix: apply the same two-pass matcher (exact-then-substring)
+    // as upgradeSkill. The old single-pass matcher used `cleanName.includes(cleanSearch)`
+    // which matched 'Rallying Cry' when the user typed 'rally', 'Holy Fire' when
+    // the user typed 'fire', etc. Now Pass 1 tries exact match on skill id OR
+    // name; Pass 2 falls back to substring only if no exact match.
+
+    // ── Pass 1: exact match across non-lineage classes ──
     for (const [classId, classData] of Object.entries(skillTree.SKILL_TREES)) {
         if (lineage.includes(classId)) continue;
         for (const [, treeData] of Object.entries(classData.trees)) {
             for (const [sId, skill] of Object.entries(treeData.skills)) {
                 const cleanSId = sId.replace(/[\s_]/g, "").toLowerCase();
                 const cleanName = skill.name.replace(/[\s_]/g, "").toLowerCase();
-                if (cleanSId === cleanSearch || cleanName.includes(cleanSearch)) {
+                if (cleanSId === cleanSearch || cleanName === cleanSearch) {
                     targetSkill = { ...skill, id: sId };
                     sourceClassId = classId;
                     break;
@@ -485,6 +913,26 @@ async function learnSkill(sock, chatId, senderJid, skillId) {
             if (targetSkill) break;
         }
         if (targetSkill) break;
+    }
+
+    // ── Pass 2: substring fallback (only if no exact match) ──
+    if (!targetSkill) {
+        for (const [classId, classData] of Object.entries(skillTree.SKILL_TREES)) {
+            if (lineage.includes(classId)) continue;
+            for (const [, treeData] of Object.entries(classData.trees)) {
+                for (const [sId, skill] of Object.entries(treeData.skills)) {
+                    const cleanSId = sId.replace(/[\s_]/g, "").toLowerCase();
+                    const cleanName = skill.name.replace(/[\s_]/g, "").toLowerCase();
+                    if (cleanSId.includes(cleanSearch) || cleanName.includes(cleanSearch)) {
+                        targetSkill = { ...skill, id: sId };
+                        sourceClassId = classId;
+                        break;
+                    }
+                }
+                if (targetSkill) break;
+            }
+            if (targetSkill) break;
+        }
     }
 
     if (!targetSkill) {
@@ -554,7 +1002,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     if (!evolutionCheck.canEvolve) {
         if (currentClass?.tier === 'ASCENDED') {
             return sock.sendMessage(chatId, { 
-                text: `✨ *${currentClass.name}* — You stand at the very peak of power.\n\nNo higher path exists. Your legend is written.` 
+                text: `✨ *${currentClass.name}* - You stand at the very peak of power.\n\nNo higher path exists. Your legend is written.` 
             });
         }
         return sock.sendMessage(chatId, { text: `❌ *Evolution Not Available*\n\n${evolutionCheck.reason}` });
@@ -640,7 +1088,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
 
         // ───────────────────────────────────────────────────────────────────
         //  💡 DRAGON GOD UNIQUENESS GATE
-        //  Only ONE player may ever hold the DRAGON_GOD class — the first
+        //  Only ONE player may ever hold the DRAGON_GOD class - the first
         //  to defeat the Leviathan. Once crowned, the path closes forever
         //  and all future Dragon-class ascenders become DRAGON_LORD instead.
         //  We check here BEFORE the trial starts so we can redirect them
@@ -656,11 +1104,11 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
                     // Find the Dragon Lord class definition so we can show
                     // the player their alternative path.
                     const dragonLord = classSystem.getClassById('DRAGON_LORD');
-                    const godName = existing.dragonGodName || existing.dragonGodJid.split('@')[0];
+                    const godName = existing.dragonGodName || economy.getDisplayName(existing.dragonGodJid);
                     let redirectMsg = `┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
                     redirectMsg    += `┃  🌊 *THE LEVIATHAN HAS FALLEN*  🌊 ┃\n`;
                     redirectMsg    += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
-                    redirectMsg    += `The Leviathan's soul recognized a single champion — *${godName}* — the one true Dragon God. The path has closed forever.\n\n`;
+                    redirectMsg    += `The Leviathan's soul recognized a single champion - *${godName}* - the one true Dragon God. The path has closed forever.\n\n`;
                     redirectMsg    += `Those who seek its power may instead ascend as a *Dragon Lord*, commanding the Leviathan's surviving children.\n\n`;
                     if (dragonLord) {
                         redirectMsg += `🐉 *Dragon Lord* ${dragonLord.icon}\n`;
@@ -677,14 +1125,14 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
                     }
                     return sock.sendMessage(chatId, { text: redirectMsg });
                 }
-                // No existing Dragon God — this player is attempting the
+                // No existing Dragon God - this player is attempting the
                 // FIRST ascension. Let them proceed, but flag it.
                 await sock.sendMessage(chatId, {
-                    text: `🌊 *FIRST ASCENSION ATTEMPT* 🌊\n\nNo Dragon God has yet been crowned. If you defeat the *Leviathan*, you will become the *one and only* Dragon God — forever. The path will close for all who follow.\n\nThe Leviathan stirs...`
+                    text: `🌊 *FIRST ASCENSION ATTEMPT* 🌊\n\nNo Dragon God has yet been crowned. If you defeat the *Leviathan*, you will become the *one and only* Dragon God - forever. The path will close for all who follow.\n\nThe Leviathan stirs...`
                 });
             } catch (e) {
                 console.error('[DragonGod] Uniqueness check failed:', e.message);
-                // Fail-open is dangerous here — if the DB check errors, we
+                // Fail-open is dangerous here - if the DB check errors, we
                 // could accidentally let two players race to Dragon God.
                 // Fail-closed: block the trial until the check works.
                 return sock.sendMessage(chatId, {
@@ -699,7 +1147,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
         // 💡 FIX: wrap trial kickoff in try/catch. If initAdventure throws
         // (transient state issue, corrupted gameStates entry, downstream
         // startCombat error), the player would otherwise see "CLASS TRIAL
-        // INITIATED" then nothing — no error reply, no follow-up. The
+        // INITIATED" then nothing - no error reply, no follow-up. The
         // unhandled promise rejection was silently swallowed by the
         // engine's outer try/catch (engine.js:20355-20366).
         setTimeout(async () => {
@@ -737,7 +1185,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     }
 
     // === EVOLUTION: PRESERVE SKILLS MODEL (If no trial or trial already won) ===
-    // Verify all resource deductions succeed before mutating class — otherwise
+    // Verify all resource deductions succeed before mutating class - otherwise
     // the user could end up evolved without paying the cost (or losing the
     // stone). Previously the return values of removeItem and removeMoney
     // were ignored, so a race condition or stale inventory could let users
@@ -745,7 +1193,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     const stoneRemoved = inventorySystem.removeItem(senderJid, requiredStone, 1);
     if (!stoneRemoved.success) {
         return sock.sendMessage(chatId, {
-            text: `❌ Failed to consume ${stoneName} — it may have been used elsewhere. Evolution cancelled.`
+            text: `❌ Failed to consume ${stoneName} - it may have been used elsewhere. Evolution cancelled.`
         });
     }
     if (chosen.requirement?.item) {
@@ -754,7 +1202,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
             // Roll back the stone removal
             await inventorySystem.addItem(senderJid, requiredStone, 1);
             return sock.sendMessage(chatId, {
-                text: `❌ Failed to consume required item ${chosen.requirement.item} — evolution cancelled.`
+                text: `❌ Failed to consume required item ${chosen.requirement.item} - evolution cancelled.`
             });
         }
     }
@@ -770,7 +1218,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
             await inventorySystem.addItem(senderJid, chosen.requirement.item, 1);
         }
         return sock.sendMessage(chatId, {
-            text: `❌ Failed to deduct ${chosen.evolutionCost.toLocaleString()} Zeni — your wallet may have changed. Evolution cancelled.`
+            text: `❌ Failed to deduct ${chosen.evolutionCost.toLocaleString()} Zeni - your wallet may have changed. Evolution cancelled.`
         });
     }
     
@@ -829,11 +1277,49 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     successMsg += `📊 *Total Points Available:* ${user.skillPoints}\n\n`;
     
     if (chosen.passive) {
-        successMsg += `⚡ *New Passive — ${chosen.passive.name}:*\n`;
+        successMsg += `⚡ *New Passive - ${chosen.passive.name}:*\n`;
         successMsg += `_${chosen.passive.desc}_\n\n`;
     }
     
     successMsg += `🌳 \`${getPrefix()} skill tree\` to continue your path!`;
+
+    // 🎴 2026-09-12: TRIAL portrait card (kind=TRIAL) - same lamoot assets,
+    // portrait orientation ("same assets but a different orientation").
+    // Non-fatal - text fallback below.
+    try {
+        const goService = require('../utils/goImageService');
+        if (await goService.isHealthy()) {
+            const evolveBuf = await goService.generatePortraitCard({
+                kind: 'TRIAL',
+                // 🧩 SPRITE CONSISTENCY 2026-09-17: show the NEW class sprite.
+                playerClass: String((chosen && chosen.id) || '').toUpperCase(),
+                playerIndex: Math.max(0, Math.floor(Number(user && user.spriteIndex) || 0)),
+                nickname: economy.getDisplayName(senderJid),
+                caption: 'proven in the crucible of trial',
+                sealText: String(nextTier || 'E').slice(0, 3),
+                ledger: [
+                    { label: 'Was', value: oldClassName },
+                    { label: 'Now', value: chosen.name },
+                    { label: 'Tier', value: nextTier || 'EVOLVED' },
+                ],
+                players: [
+                    { name: 'Skill Points', xp: `+${bonusPoints}`, zeni: '' },
+                    ...(user?.adventurerRank
+                        ? [{ name: 'Guild Rank', xp: user.adventurerRank, zeni: '' }]
+                        : []),
+                ],
+            });
+            if (evolveBuf) {
+                return sock.sendMessage(chatId, {
+                    image: evolveBuf,
+                    caption: successMsg,
+                    mimetype: 'image/jpeg',
+                });
+            }
+        }
+    } catch (cardErr) {
+        console.error('[Evolve] Portrait trial card failed (non-fatal):', cardErr.message);
+    }
 
     return sock.sendMessage(chatId, { text: successMsg });
 }

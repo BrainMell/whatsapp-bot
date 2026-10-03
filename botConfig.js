@@ -60,6 +60,11 @@ class BotConfig {
     return path.join(this.instancePath, 'database', subPath); 
   }
   getRPGAssetPath(subPath = '') { return path.join(__dirname, 'core', 'rpgasset', subPath); }
+
+  // 💡 PAIRING CODE: if set in botConfig.json as "pairingPhone": "2348086616347",
+  // the bot will use phone-number pairing instead of QR code on fresh login.
+  // Returns null if not set (falls back to QR).
+  get pairingPhone() { return this.config.pairingPhone || null; }
 }
 
 // Export a Proxy that always points to the current instance in storage

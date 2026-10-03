@@ -101,7 +101,18 @@ function getRepairCost(item) {
         MYTHIC: 4.0
     };
     const rarityMult = rarityMults[rarity] || 1.0;
-    const reqLevel = item.reqLevel || 1;
+    // 💡 FIX 2026-08-01: reqLevel was never propagated to item instances.
+    // Look it up from the item database if missing.
+    let reqLevel = item.reqLevel;
+    if (!reqLevel) {
+        try {
+            const lootSystem = require('./lootSystem');
+            const itemInfo = lootSystem.getItemInfo(item.id);
+            reqLevel = itemInfo?.reqLevel || 1;
+        } catch (e) {
+            reqLevel = 1;
+        }
+    }
     const levelMult = 1 + (reqLevel / 25);
     const missingPct = missing / item.maxDurability;
     
@@ -183,7 +194,7 @@ function applyWear(entity, slotOrAll, opts = {}) {
         if (item.durability > 0 && item.durability <= (item.maxDurability * 0.15) && !item.warnedLow) {
             item.warnedLow = true;
             if (opts.combatHistory) {
-                opts.combatHistory.push(`⚠️ *${entity.name}*'s *${item.name || slot}* is badly worn (${Math.ceil(item.durability)}/${item.maxDurability}) — repair it soon!`);
+                opts.combatHistory.push(`⚠️ *${entity.name}*'s *${item.name || slot}* is badly worn (${Math.ceil(item.durability)}/${item.maxDurability}) - repair it soon!`);
             }
         }
     }

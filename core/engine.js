@@ -8,13 +8,13 @@ const loans = require('./rpg/loans');
 const ChatMessage = require("./models/ChatMessage");
 const ErrorLog = require("./models/ErrorLog");
 const Metric = require("./models/Metric");
-// Lazy loader — avoids circular dep with index.js
+// Lazy loader - avoids circular dep with index.js
 let _recordUpsert = null;
 function recordUpsert(botId) {
     try {
         if (!_recordUpsert) _recordUpsert = require('../index').recordUpsert;
         if (typeof _recordUpsert === 'function') _recordUpsert(botId);
-    } catch (e) { /* not running under index.js (e.g. local dev) — safe to skip */ }
+    } catch (e) { /* not running under index.js (e.g. local dev) - safe to skip */ }
 }
 const makeWASocket = require("@whiskeysockets/baileys").default;
 const {
@@ -25,6 +25,8 @@ const {
   downloadContentFromMessage,
   makeCacheableSignalKeyStore,
   jidNormalizedUser,
+  generateWAMessageContent,
+  generateWAMessageFromContent,
 } = require("@whiskeysockets/baileys");
 const {
   getPowerScale,
@@ -48,8 +50,7 @@ const { promisify } = require("util");
 const execPromise = promisify(exec);
 const axios = require("axios");
 const cheerio = require("cheerio");
-const GoImageService = require('./utils/goImageService');
-const goService = new GoImageService();
+const goService = require('./utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
 const play = require("play-dl");
 const yts = require("yt-search");
 const ytdl = require("@distube/ytdl-core");
@@ -61,6 +62,16 @@ const blockedUsersByBot = new Map();
 const globalModsByBot = new Map();
 const overrideUsersByBot = new Map();
 const busyUsersByBot = new Map();
+// 💡 POLISH 2026-07-17: 3-tier moderator role system
+//   - General Mod (globalMods) - unrestricted, all commands
+//   - RPG Mod (rpgMods) - RPG commands only (combat, classes, items, etc.)
+//   - Cards Mod (cardsMods) - Cards commands only (spawn, market, deck, etc.)
+// Each Set is instance-bound (per botId) just like globalMods.
+const rpgModsByBot = new Map();
+const cardsModsByBot = new Map();
+// 💡 QUIZ MODS (2026-09-27): dedicated quiz-system moderator class. Quiz Mods
+// can start/manage/configure quizzes without unrelated global mod powers.
+const quizModsByBot = new Map();
 
 function createInstanceBoundSet(map) {
   return {
@@ -108,8 +119,23 @@ const blockedUsers = createInstanceBoundSet(blockedUsersByBot);
 const globalMods = createInstanceBoundSet(globalModsByBot);
 const overrideUsers = createInstanceBoundSet(overrideUsersByBot);
 
-// Concurrency lock – prevents double-spend from firing two money commands at once
+// 💡 PERMA-BAN system: separate from block. Only mods (General/RPG/Cards)
+// can ban, and only mods can unban. WA group admins CANNOT unban. The ban
+// is global and permanent until a mod reverses it.
+const bannedUsersByBot = new Map();
+const bannedUsers = createInstanceBoundSet(bannedUsersByBot);
+
+// Concurrency lock - prevents double-spend from firing two money commands at once
 const busyUsers = createInstanceBoundSet(busyUsersByBot);
+
+// 💡 POLISH 2026-07-17: 3-tier mod role sets
+const rpgMods = createInstanceBoundSet(rpgModsByBot);
+const cardsMods = createInstanceBoundSet(cardsModsByBot);
+// 💡 QUIZ MODS (2026-09-27): 4th role set (quiz start/manage/config only)
+const quizMods = createInstanceBoundSet(quizModsByBot);
+// 💡 PHASE 7 2026-08-29: Game Tester role
+const gameTestersByBot = new Map();
+const gameTesters = createInstanceBoundSet(gameTestersByBot);
 
 function resolveLidToPhone(jid, authPath) {
   return lidResolver.resolveLidToPhone(jid, authPath);
@@ -117,13 +143,17 @@ function resolveLidToPhone(jid, authPath) {
 // Load blocked users from DB
 async function loadBlockedUsers() {
   const system = require('./utils/system');
-  const botConfig = require("../botConfig");
   try {
-    const data = system.get(botConfig.getBotId() + "_blocked_users", []);
-    data.forEach((userId) => blockedUsers.add(userId));
-    console.log(
-      `📛 [${botConfig.getBotId()}] Loaded ${blockedUsers.size} blocked users from MongoDB`,
-    );
+    // 💡 Shared key across all bot instances
+    const data = system.get("_shared_blocked_users", null);
+    if (data) {
+      data.forEach((userId) => blockedUsers.add(userId));
+    } else {
+      const oldData = system.get(botConfig.getBotId() + "_blocked_users", []);
+      oldData.forEach((userId) => blockedUsers.add(userId));
+      if (oldData.length > 0) system.set("_shared_blocked_users", oldData);
+    }
+    console.log(`📛 [${botConfig.getBotId()}] Loaded ${blockedUsers.size} blocked users`);
   } catch (err) {
     console.error("Error loading blocked users:", err.message);
   }
@@ -131,70 +161,676 @@ async function loadBlockedUsers() {
 
 function saveBlockedUsers() {
   const system = require('./utils/system');
-  const botConfig = require("../botConfig");
-  system.set(botConfig.getBotId() + "_blocked_users", Array.from(blockedUsers));
+  system.set("_shared_blocked_users", Array.from(blockedUsers));
 }
 
 function blockUser(userId) {
-  blockedUsers.add(userId);
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  blockedUsers.add(normalized);
+  // 💡 Also store the raw form for backwards compat with legacy checks
+  if (userId !== normalized) blockedUsers.add(userId);
   saveBlockedUsers();
 }
 
 function unblockUser(userId) {
-  blockedUsers.delete(userId);
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  blockedUsers.delete(normalized);
+  blockedUsers.delete(userId);  // also remove raw form if present
   saveBlockedUsers();
 }
 
 function isBlocked(userId) {
-  if (blockedUsers.has(userId)) return true;
-  const loans = require('./rpg/loans');
-  if (loans.isLoanBlocked(userId)) return true;
-  return false;
+  if (!userId) return false;
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  try {
+    const norm = jidNormalizedUser(userId);
+    // 💡 FIX: check both normalized AND raw - some legacy blocks were stored
+    // with raw JIDs. Also check the LID resolver for cross-format matches.
+    if (blockedUsers.has(norm) || blockedUsers.has(userId)) return true;
+    // Also try resolving LID ↔ phone
+    const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
+    // 💡 FIX 2026-08-31: `configInstance` is only a startBot() parameter - it
+    // does NOT exist at module scope, so this line threw ReferenceError on
+    // every call that reached it (swallowed below → return false). That
+    // silently disabled BOTH the cross-format block lookup AND the loan-block
+    // check. botConfig.getAuthPath() is ALS-aware and safe at module scope.
+    let authPath = null;
+    try { authPath = botConfig.getAuthPath ? botConfig.getAuthPath() : null; } catch (_) {}
+    const phone = resolveToPhone(userId, authPath);
+    if (phone && blockedUsers.has(jidNormalizedUser(phone))) return true;
+    const loans = require('./rpg/loans');
+    if (loans.isLoanBlocked(userId)) return true;
+    return false;
+  } catch (err) {
+    return false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 💡 PERMA-BAN SYSTEM - mod-only, global, permanent
+// ═══════════════════════════════════════════════════════════════════════════
+// Separate from block. WA group admins can block/unblock (per-group, can be
+// self-unblocked via the exploit we just patched). Perma-ban is stricter:
+//   - Only mods (General/RPG/Cards) or owner can ban
+//   - Only mods or owner can unban
+//   - WA group admins CANNOT ban or unban
+//   - Banned users cannot use ANY bot command, in ANY group
+//   - The ban persists across bot restarts (stored in MongoDB)
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function loadBannedUsers() {
+  const system = require('./utils/system');
+  try {
+    // 💡 Shared key across all bot instances
+    const data = system.get("_shared_banned_users", null);
+    if (data) {
+      data.forEach((userId) => bannedUsers.add(userId));
+    } else {
+      const oldData = system.get(botConfig.getBotId() + "_banned_users", []);
+      oldData.forEach((userId) => bannedUsers.add(userId));
+      if (oldData.length > 0) system.set("_shared_banned_users", oldData);
+    }
+    console.log(`🚫 [${botConfig.getBotId()}] Loaded ${bannedUsers.size} banned users`);
+  } catch (err) {
+    console.error("Error loading banned users:", err.message);
+  }
+}
+
+function saveBannedUsers() {
+  const system = require('./utils/system');
+  system.set("_shared_banned_users", Array.from(bannedUsers));
+}
+
+function banUser(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  bannedUsers.add(normalized);
+  saveBannedUsers();
+}
+
+function unbanUser(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  bannedUsers.delete(normalized);
+  saveBannedUsers();
+}
+
+// 💡 FIX 2026-08-31: shared cross-format membership test. Bans/hardmutes are
+// stored under whatever JID format the admin's mention produced (@lid or
+// @s.whatsapp.net), but the sender's messages can arrive in the OTHER
+// format - exact-match checks let banned users through whenever the formats
+// diverged. isBlocked already did this; isBanned/isHardBanned/isHardMuted
+// didn't. This helper resolves LID↔phone both ways before checking the Set.
+function crossFormatSetMatch(set, userId) {
+  if (!userId) return false;
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  try {
+    const norm = jidNormalizedUser(userId);
+    if (set.has(norm) || set.has(userId)) return true;
+    const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
+    let authPath = null;
+    try { authPath = botConfig.getAuthPath ? botConfig.getAuthPath() : null; } catch (_) {}
+    const phone = resolveToPhone(userId, authPath);
+    if (phone && set.has(jidNormalizedUser(phone))) return true;
+    const canonical = resolveJid(userId, authPath);
+    if (canonical && set.has(jidNormalizedUser(canonical))) return true;
+    return false;
+  } catch (err) {
+    return false;
+  }
+}
+
+function isBanned(userId) {
+  if (!userId) return false;
+  return crossFormatSetMatch(bannedUsers, userId);
+}
+
+// ════════════════════════════════════════════════════════════════
+// 💡 OWNER-ONLY HARD MUTE/BAN (2026-08-03, bug report #10)
+// ════════════════════════════════════════════════════════════════
+// Special moderation actions that ONLY the bot owner can apply AND
+// reverse. Regular moderators (global/rpg/cards mods) CANNOT:
+//   - Reverse a hard-ban (unhardban is owner-only)
+//   - Reverse a hard-mute (unhardmute is owner-only)
+// This gives the owner a moderation action that sticks even if a
+// mod tries to undo it.
+// ════════════════════════════════════════════════════════════════
+
+const hardBannedUsers = new Set();
+const hardMutedUsers = new Set(); // global hard-mute (all chats, no expiry)
+
+function saveHardBannedUsers() {
+  const system = require('./utils/system');
+  system.set("_shared_hard_banned_users", Array.from(hardBannedUsers));
+}
+
+function saveHardMutedUsers() {
+  const system = require('./utils/system');
+  system.set("_shared_hard_muted_users", Array.from(hardMutedUsers));
+}
+
+async function loadHardBannedUsers() {
+  const system = require('./utils/system');
+  try {
+    const data = system.get("_shared_hard_banned_users", []);
+    hardBannedUsers.clear();
+    if (Array.isArray(data)) data.forEach(u => hardBannedUsers.add(u));
+    console.log(`🚫 [Owner] Loaded ${hardBannedUsers.size} hard-banned users`);
+  } catch (e) {
+    console.error("Error loading hard-banned users:", e.message);
+  }
+}
+
+async function loadHardMutedUsers() {
+  const system = require('./utils/system');
+  try {
+    const data = system.get("_shared_hard_muted_users", []);
+    hardMutedUsers.clear();
+    if (Array.isArray(data)) data.forEach(u => hardMutedUsers.add(u));
+    console.log(`🔇 [Owner] Loaded ${hardMutedUsers.size} hard-muted users`);
+  } catch (e) {
+    console.error("Error loading hard-muted users:", e.message);
+  }
+}
+
+function hardBanUser(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  hardBannedUsers.add(normalized);
+  // Also add to regular ban so existing isBanned checks catch it
+  bannedUsers.add(normalized);
+  saveBannedUsers();
+  saveHardBannedUsers();
+}
+
+function unhardBanUser(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  hardBannedUsers.delete(normalized);
+  bannedUsers.delete(normalized);
+  saveBannedUsers();
+  saveHardBannedUsers();
+}
+
+function isHardBanned(userId) {
+  if (!userId) return false;
+  return crossFormatSetMatch(hardBannedUsers, userId);
+}
+
+function hardMuteUser(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  hardMutedUsers.add(normalized);
+  saveHardMutedUsers();
+}
+
+function unhardMuteUser(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  hardMutedUsers.delete(normalized);
+  saveHardMutedUsers();
+}
+
+function isHardMuted(userId) {
+  if (!userId) return false;
+  return crossFormatSetMatch(hardMutedUsers, userId);
 }
 
 // Load global mods from DB
 async function loadGlobalMods() {
   const system = require('./utils/system');
-  const botConfig = require("../botConfig");
   try {
-    const data = system.get(botConfig.getBotId() + "_global_mods", []);
-    data.forEach((userId) => globalMods.add(userId));
-    console.log(
-      `🛡️ [${botConfig.getBotId()}] Loaded ${globalMods.size} global moderators from MongoDB`,
-    );
+    // 💡 FIX: use SHARED key "_global_mods" (not botId + "_global_mods")
+    // so mods added on one bot instance (e.g. Goten) also apply to other
+    // instances (Esdeath, Joker, Subaru). Was per-bot - a mod added via
+    // .g addmod only worked on Goten, not Esdeath.
+    const data = system.get("_shared_global_mods", null);
+    if (data) {
+      data.forEach((userId) => globalMods.add(userId));
+    } else {
+      // Migration: try old per-bot key, then copy to shared
+      const oldData = system.get(botConfig.getBotId() + "_global_mods", []);
+      oldData.forEach((userId) => globalMods.add(userId));
+      if (oldData.length > 0) {
+        system.set("_shared_global_mods", oldData);
+        console.log(`🔄 [${botConfig.getBotId()}] Migrated ${oldData.length} global mods to shared key`);
+      }
+    }
+    console.log(`🛡️ [${botConfig.getBotId()}] Loaded ${globalMods.size} global moderators`);
   } catch (err) {
     console.error("Error loading global mods:", err.message);
   }
 }
 
-function saveGlobalMods() {
+async function saveGlobalMods() {
   const system = require('./utils/system');
-  const botConfig = require("../botConfig");
-  system.set(botConfig.getBotId() + "_global_mods", Array.from(globalMods));
+  await system.set("_shared_global_mods", Array.from(globalMods));
 }
 
-function addGlobalMod(userId) {
+async function addGlobalMod(userId) {
   const { jidNormalizedUser } = require("@whiskeysockets/baileys");
   const normalized = jidNormalizedUser(userId);
   globalMods.add(normalized);
-  saveGlobalMods();
+  await saveGlobalMods();
 }
 
-function delGlobalMod(userId) {
+async function delGlobalMod(userId) {
   const { jidNormalizedUser } = require("@whiskeysockets/baileys");
   const normalized = jidNormalizedUser(userId);
   globalMods.delete(normalized);
-  saveGlobalMods();
+  await saveGlobalMods();
 }
 
 function isGlobalMod(userId) {
   if (!userId || typeof userId !== "string") return false;
   const { jidNormalizedUser } = require("@whiskeysockets/baileys");
   try {
-    return globalMods.has(jidNormalizedUser(userId));
+    // 💡 SANDBOX: strip 'sandbox_' prefix so mod checks work on the real JID
+    const realJid = userId.startsWith('sandbox_') ? userId.substring(8) : userId;
+    return globalMods.has(jidNormalizedUser(realJid));
   } catch (err) {
     return false;
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 💡 POLISH 2026-07-17: 3-TIER MODERATOR ROLE SYSTEM
+// ═══════════════════════════════════════════════════════════════════════════
+// Three separate mod roles with cleanly separated permissions:
+//   - General Mod (globalMods)  - all commands, all systems
+//   - RPG Mod (rpgMods)         - RPG commands only (combat, classes, items,
+//                                  dungeons, abyss, runes, economy, etc.)
+//   - Cards Mod (cardsMods)     - Cards commands only (spawn, market, deck,
+//                                  eshop, espawn, einfo, etc.)
+//
+// hasModPermission(jid, category) is the single entry point for permission
+// checks. Category is 'rpg' or 'cards'. General Mods always return true.
+// Owner is treated as a General Mod (returns true for any category).
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function loadRpgMods() {
+  const system = require('./utils/system');
+  try {
+    // 💡 Shared key across all bot instances
+    const data = system.get("_shared_rpg_mods", null);
+    if (data) {
+      data.forEach((userId) => rpgMods.add(userId));
+    } else {
+      const oldData = system.get(botConfig.getBotId() + "_rpg_mods", []);
+      oldData.forEach((userId) => rpgMods.add(userId));
+      if (oldData.length > 0) system.set("_shared_rpg_mods", oldData);
+    }
+    console.log(`⚔️ [${botConfig.getBotId()}] Loaded ${rpgMods.size} RPG moderators`);
+  } catch (err) {
+    console.error("Error loading RPG mods:", err.message);
+  }
+}
+
+async function saveRpgMods() {
+  const system = require('./utils/system');
+  await system.set("_shared_rpg_mods", Array.from(rpgMods));
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 💡 PHASE 7 2026-08-29: Game Tester role (delegates to testerSystem)
+// ═══════════════════════════════════════════════════════════════════════
+const testerSystem = require('./rpg/testerSystem');
+
+// PHASE 7 FIX 2026-08-29: engine.js owns the gameTesters Set (mirrors rpgMods pattern).
+// testerSystem is now used only for tester GC + test mode + issue storage.
+// The Set lives in engine.js so .j listmods / listtesters / reloadmods can read it directly.
+async function loadGameTesters() {
+  const system = require('./utils/system');
+  try {
+    const data = system.get("_shared_game_testers", null);
+    if (Array.isArray(data)) data.forEach((userId) => gameTesters.add(userId));
+    console.log(`🎮 [${botConfig.getBotId()}] Loaded ${gameTesters.size} Game Testers`);
+  } catch (err) { console.error("Error loading Game Testers:", err.message); }
+}
+async function saveGameTesters() {
+  const system = require('./utils/system');
+  await system.set("_shared_game_testers", Array.from(gameTesters));
+}
+async function addGameTester(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  gameTesters.add(normalized);
+  await saveGameTesters();
+}
+async function delGameTester(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  gameTesters.delete(normalized);
+  await saveGameTesters();
+}
+function isGameTester(userId) {
+  if (!userId || typeof userId !== "string") return false;
+  try {
+    const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+    const realJid = userId.startsWith('sandbox_') ? userId.substring(8) : userId;
+    return gameTesters.has(jidNormalizedUser(realJid));
+  } catch (err) { return false; }
+}
+
+
+async function loadCardsMods() {
+  const system = require('./utils/system');
+  try {
+    // 💡 Shared key across all bot instances
+    const data = system.get("_shared_cards_mods", null);
+    if (data) {
+      data.forEach((userId) => cardsMods.add(userId));
+    } else {
+      const oldData = system.get(botConfig.getBotId() + "_cards_mods", []);
+      oldData.forEach((userId) => cardsMods.add(userId));
+      if (oldData.length > 0) system.set("_shared_cards_mods", oldData);
+    }
+    console.log(`🃏 [${botConfig.getBotId()}] Loaded ${cardsMods.size} Cards moderators`);
+  } catch (err) {
+    console.error("Error loading Cards mods:", err.message);
+  }
+}
+
+async function saveCardsMods() {
+  const system = require('./utils/system');
+  await system.set("_shared_cards_mods", Array.from(cardsMods));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 💡 FIX 2026-09-11 (stale mod lists - "mods aren't recognised across bots"):
+// The mod Sets above were only populated at instance boot from system.js's
+// boot-time cache. A mod added on one instance never reached the others (and
+// even ".j reloadmods" re-read the stale cache), so those instances denied
+// mods on EVERY mod-gated command - admin/sandbox setrank+setlevel, the full
+// .j health view, etc. This refresher reads the shared keys STRAIGHT from
+// MongoDB (system.getFresh) and atomically SWAPS the underlying per-bot Set
+// (map.set of a brand-new Set) so permission checks never see an empty set
+// and DB hiccups keep the previous lists. Called by a 45s per-instance timer
+// and by .j reloadmods.
+// ═══════════════════════════════════════════════════════════════════════════
+const modRefreshTimersByBot = new Map();
+let _modRefreshInFlight = null;
+async function refreshSharedModSets(botId) {
+  botId = botId || botConfig.getBotId();
+  if (_modRefreshInFlight) return _modRefreshInFlight;
+  _modRefreshInFlight = (async () => {
+    const system = require('./utils/system');
+    let jidNormalizedUser = (u) => u;
+    try { ({ jidNormalizedUser } = require('@whiskeysockets/baileys')); } catch (_) {}
+    const toSet = (arr) => {
+      const s = new Set();
+      (Array.isArray(arr) ? arr : []).forEach((u) => {
+        if (!u) return;
+        try { s.add(jidNormalizedUser(u)); } catch (_) { s.add(u); }
+      });
+      return s;
+    };
+    try {
+      const [g, r, c, t, q] = await Promise.all([
+        system.getFresh('_shared_global_mods'),
+        system.getFresh('_shared_rpg_mods'),
+        system.getFresh('_shared_cards_mods'),
+        system.getFresh('_shared_game_testers'),
+        system.getFresh('_shared_quiz_mods'),
+      ]);
+      const changed = [];
+      if (g !== null) {
+        const next = toSet(g);
+        if (JSON.stringify([...next].sort()) !== JSON.stringify([...(globalModsByBot.get(botId) || [])].sort())) {
+          globalModsByBot.set(botId, next);
+          changed.push(`global=${next.size}`);
+        }
+      }
+      if (r !== null) {
+        const next = toSet(r);
+        if (JSON.stringify([...next].sort()) !== JSON.stringify([...(rpgModsByBot.get(botId) || [])].sort())) {
+          rpgModsByBot.set(botId, next);
+          changed.push(`rpg=${next.size}`);
+        }
+      }
+      if (c !== null) {
+        const next = toSet(c);
+        if (JSON.stringify([...next].sort()) !== JSON.stringify([...(cardsModsByBot.get(botId) || [])].sort())) {
+          cardsModsByBot.set(botId, next);
+          changed.push(`cards=${next.size}`);
+        }
+      }
+      if (t !== null) {
+        const next = toSet(t);
+        if (JSON.stringify([...next].sort()) !== JSON.stringify([...(gameTestersByBot.get(botId) || [])].sort())) {
+          gameTestersByBot.set(botId, next);
+          changed.push(`testers=${next.size}`);
+        }
+      }
+      if (q !== null) {
+        const next = toSet(q);
+        if (JSON.stringify([...next].sort()) !== JSON.stringify([...(quizModsByBot.get(botId) || [])].sort())) {
+          quizModsByBot.set(botId, next);
+          changed.push(`quiz=${next.size}`);
+        }
+      }
+      if (changed.length) {
+        console.log(`🔄 [${botId}] Shared mod lists refreshed from DB: ${changed.join(' ')}`);
+      }
+    } catch (err) {
+      console.error(`⚠️ [${botId}] mod refresh failed (keeping current lists):`, err.message);
+    }
+  })().finally(() => { _modRefreshInFlight = null; });
+  return _modRefreshInFlight;
+}
+
+async function addRpgMod(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  rpgMods.add(normalized);
+  await saveRpgMods();
+}
+
+async function delRpgMod(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  rpgMods.delete(normalized);
+  await saveRpgMods();
+}
+
+function isRpgMod(userId) {
+  if (!userId || typeof userId !== "string") return false;
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  try {
+    const realJid = userId.startsWith('sandbox_') ? userId.substring(8) : userId;
+    return rpgMods.has(jidNormalizedUser(realJid));
+  } catch (err) {
+    return false;
+  }
+}
+
+function addCardsMod(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  cardsMods.add(normalized);
+  saveCardsMods();
+}
+
+function delCardsMod(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  cardsMods.delete(normalized);
+  saveCardsMods();
+}
+
+function isCardsMod(userId) {
+  if (!userId || typeof userId !== "string") return false;
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  try {
+    const realJid = userId.startsWith('sandbox_') ? userId.substring(8) : userId;
+    const normalized = jidNormalizedUser(realJid);
+    // Direct check
+    if (cardsMods.has(normalized)) return true;
+    // 💡 P3 (2026-08-16): LID ↔ phone resolution. Card mods may be stored
+    // as @lid but the user sends from @s.whatsapp.net (or vice versa).
+    // Use the LID resolver's caches to look up the actual mapping.
+    // The LID number and phone number are DIFFERENT - can't just swap suffixes.
+    try {
+      const lidResolver = require('./utils/lidResolver');
+      // Extract the number part (before @)
+      const numberPart = normalized.split('@')[0];
+      // Strip :device suffix
+      const colonIdx = numberPart.indexOf(':');
+      const cleanNumber = colonIdx > 0 ? numberPart.substring(0, colonIdx) : numberPart;
+
+      if (normalized.endsWith('@lid')) {
+        // Input is @lid → look up phone via lidCache
+        const phone = lidResolver.lidCache.get(cleanNumber);
+        if (phone) {
+          const phoneJid = `${phone}@s.whatsapp.net`;
+          if (cardsMods.has(phoneJid)) return true;
+        }
+      } else if (normalized.endsWith('@s.whatsapp.net')) {
+        // Input is @s.whatsapp.net → look up LID via phoneCache
+        const lid = lidResolver.phoneCache.get(cleanNumber);
+        if (lid) {
+          const lidJid = `${lid}@lid`;
+          if (cardsMods.has(lidJid)) return true;
+        }
+      }
+
+      // Also try resolveJid as a fallback (works when economy.economyData is populated)
+      const resolved = lidResolver.resolveJid(normalized);
+      if (resolved && resolved !== normalized && cardsMods.has(resolved)) return true;
+    } catch (e) {}
+    return false;
+  } catch (err) {
+    return false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 💡 QUIZ MODS (2026-09-27) - mirrors the RPG/Cards mod pattern exactly.
+// Storage: _shared_quiz_mods KV (instance-bound Set per botId).
+// Powers: start quizzes (.j quiz .../.j quiz go), manage (end/pick/config).
+// NOT included: global moderation, RPG, cards, economy or admin tools.
+// Owner + General Mods keep full access (hasModPermission shortcut below).
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadQuizMods() {
+  const system = require('./utils/system');
+  try {
+    const data = system.get("_shared_quiz_mods", null);
+    if (data) {
+      data.forEach((userId) => quizMods.add(userId));
+    } else {
+      const oldData = system.get(botConfig.getBotId() + "_quiz_mods", []);
+      oldData.forEach((userId) => quizMods.add(userId));
+      if (oldData.length > 0) system.set("_shared_quiz_mods", oldData);
+    }
+    console.log(`🎯 [${botConfig.getBotId()}] Loaded ${quizMods.size} Quiz moderators`);
+  } catch (err) {
+    console.error("Error loading Quiz mods:", err.message);
+  }
+}
+
+async function saveQuizMods() {
+  const system = require('./utils/system');
+  await system.set("_shared_quiz_mods", Array.from(quizMods));
+}
+
+async function addQuizMod(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  quizMods.add(normalized);
+  await saveQuizMods();
+}
+
+async function delQuizMod(userId) {
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  const normalized = jidNormalizedUser(userId);
+  quizMods.delete(normalized);
+  await saveQuizMods();
+}
+
+function isQuizMod(userId) {
+  if (!userId || typeof userId !== "string") return false;
+  const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+  try {
+    const realJid = userId.startsWith('sandbox_') ? userId.substring(8) : userId;
+    const normalized = jidNormalizedUser(realJid);
+    if (quizMods.has(normalized)) return true;
+    // LID ↔ phone resolution (same dual-representation problem cardsMods has)
+    try {
+      const lidResolver = require('./utils/lidResolver');
+      const numberPart = normalized.split('@')[0];
+      const colonIdx = numberPart.indexOf(':');
+      const cleanNumber = colonIdx > 0 ? numberPart.substring(0, colonIdx) : numberPart;
+      if (normalized.endsWith('@lid')) {
+        const phone = lidResolver.lidCache.get(cleanNumber);
+        if (phone && quizMods.has(`${phone}@s.whatsapp.net`)) return true;
+      } else if (normalized.endsWith('@s.whatsapp.net')) {
+        const lid = lidResolver.phoneCache.get(cleanNumber);
+        if (lid && quizMods.has(`${lid}@lid`)) return true;
+      }
+      const resolved = lidResolver.resolveJid(normalized);
+      if (resolved && resolved !== normalized && quizMods.has(resolved)) return true;
+    } catch (e) {}
+    return false;
+  } catch (err) {
+    return false;
+  }
+}
+
+// Unified permission check. Returns true if the user has the requested category
+// of mod permission. General Mods and the owner always pass.
+//
+// @param userId - the JID to check
+// @param category - 'rpg' | 'cards' | 'quiz' | 'general' (any other value
+//                   defaults to 'general' which means only General Mods / owner
+//                   can use it)
+//
+// 💡 NOTE: owner check uses the module-level isBotOwner() helper below.
+function hasModPermission(userId, category) {
+  if (!userId) return false;
+  if (isBotOwner(userId)) return true;
+  if (isGlobalMod(userId)) return true;  // General Mod = unrestricted
+  if (category === 'rpg') return isRpgMod(userId);
+  if (category === 'cards') return isCardsMod(userId);
+  if (category === 'quiz') return isQuizMod(userId);
+  // 'general' or unknown category - General Mods only (already checked above)
+  return false;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 👑 GC OWNER REGISTRY (2026-09-22) - .j gcowner immunity system.
+// Lives in core/utils/gcOwners.js (own module so QA can runtime-test the
+// real logic without booting the engine - same pattern as testerSystem).
+// The marked user is immune to mute, hardmute, kick, warn, demote, nuke,
+// antispam auto-mute, antibot actions and antilink security. Shared DB key
+// so BOTH bots enforce the same immunity.
+// ═══════════════════════════════════════════════════════════════════════════
+const gcOwnerRegistry = require('./utils/gcOwners');
+const {
+  loadGcOwners,
+  saveGcOwners,
+  setGcOwner,
+  clearGcOwner,
+  getGcOwner,
+  isGcOwner,
+} = gcOwnerRegistry;
+
+// 💡 POLISH 2026-07-17: moved owner check to module scope so it can be used
+// by hasModPermission and other module-level helpers. Previously was a
+// closure-local `_isBotOwner` inside spawnBot - couldn't be referenced from
+// module-scope functions. The closure-local version is kept as an alias
+// for backwards-compat with existing call sites.
+const BOT_OWNER_PHONES = [
+  '233201487480',  // primary owner
+  '251453323092189',
+  '105712667648066',
+];
+function isBotOwner(jid) {
+  if (!jid || typeof jid !== 'string') return false;
+  // 💡 SANDBOX: strip 'sandbox_' prefix so owner checks work on the real JID
+  const realJid = jid.startsWith('sandbox_') ? jid.substring(8) : jid;
+  return BOT_OWNER_PHONES.some(phone => realJid.startsWith(phone) || realJid.includes(phone));
 }
 
 // Helper for dynamic ESM import of got-scraping
@@ -205,7 +841,7 @@ async function getGot() {
 
 // 💡 Format milliseconds as "Xd Yh Zm" for uptime display in `.g instances`
 function formatUptime(ms) {
-  if (!ms || ms < 0 || !Number.isFinite(ms)) return '—';
+  if (!ms || ms < 0 || !Number.isFinite(ms)) return '-';
   const s = Math.floor(ms / 1000);
   const d = Math.floor(s / 86400);
   const h = Math.floor((s % 86400) / 3600);
@@ -219,11 +855,37 @@ const ffmpeg = require("fluent-ffmpeg");
 ffmpeg.setFfmpegPath(process.env.FFMPEG_PATH || "ffmpeg");
 const { getAnikaiBestMatch } = require('./utils/anikaiResolver');
 const runSecurity = require('./utils/security');
+const { fetchPfp: fetchPfpCached } = require('./utils/pfpCache'); // 💡 PERF PATCH 2026-07-27: cached + 8s-timeout PFP fetcher
 const tictactoe = require('./games/tictactoe');
 const chess = require('./games/chess');
 const debate = require('./games/debate');
 const ludo = require('./games/ludo');
 const wordle = require('./games/wordle');
+const murderMystery = require('./games/murdermystery'); // 🔪 Blackvale Manor - isolated social deduction module
+const quizGame = require('./games/quiz'); // 🎯 anime quiz - AniList/Jikan data + AI questions (2026-09-25)
+// 💡 AUDIT FIX 2026-09-26 (quiz P11): inject shared infra into the quiz module
+// (theme songs reuse the SAME goService.getAudioInfo retrieval the .j audio
+// command uses - no parallel song-fetch system; clipAudio reuses audioclip's
+// ffmpeg helper for the 30s preview trim).
+try {
+  quizGame.setDeps({
+    goService: require('./utils/goImageService'),
+    ffmpegPath: process.env.FFMPEG_PATH || 'ffmpeg',
+    // 💡 QUIZ MODS + start gate (2026-09-27): only Quiz Mods / Global Mods /
+    // the bot owner may START quizzes. Group admins no longer start quizzes
+    // (they can still END one). Quiz.js falls back to permissive when this
+    // hook is absent (tests/sandbox).
+    canStartQuiz: (jid) => isBotOwner(jid) || isGlobalMod(jid) || isQuizMod(jid),
+    canManageQuiz: (jid) => isBotOwner(jid) || isGlobalMod(jid) || isQuizMod(jid),
+    // 2026-09-28: one-shot fresh re-check before the gate denies - a mod
+    // added on a sibling instance lands in MongoDB instantly but this
+    // instance's Set refreshes on the 45s timer; without this the user gets
+    // a bogus "you are not a Quiz Mod" for up to 45s (seen live 22:08).
+    refreshModSets: () => refreshSharedModSets(botConfig.getBotId()),
+  });
+} catch (e) { console.log('[Quiz] deps injection failed:', e.message); }
+const stockChart = require('./utils/stockChart'); // 📈 real-world market charts - Yahoo Finance (2026-09-25)
+const trendsChart = require('./utils/trendsChart'); // 📊 Google Trends comparisons - got-scraping dance (2026-09-25)
 const news = require('./utils/news'); // ✅ Added news module
 const stockMarket = require('./rpg/stockMarket'); // ✅ Added stock market module
 const P = require("pino");
@@ -237,6 +899,9 @@ const shopCommands = require('./commands/shopCommands');
 const repairCommands = require('./commands/repairCommands');
 const skillCommands = require('./commands/skillCommands');
 const classCommands = require('./commands/classCommands');
+const opsCheckCommands = require('./commands/opsCheckCommands');
+// 💡 Summoner System (Phase 4) - see download/SUMMONER_SYSTEM_DESIGN.md
+const summonCommands = require('./commands/summonCommands');
 const pvpSystem = require('./rpg/pvpSystem');
 const cardSystem = require('./rpg/cardSystem');
 const contextEngine = require("./src/context_engine/Engine"); // NEW: Brain system
@@ -247,6 +912,568 @@ const { handleReaction } = require("../reactions/handler");
 // Global tracker for active WhatsApp connections (all instances share this)
 if (!global.waConnectionCount) global.waConnectionCount = 0;
 if (!global.waConnectionLog) global.waConnectionLog = true;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 💡 SANDBOX MODE - when active, the admin's commands use a test character
+// stored in the AdminSandbox collection instead of their real account.
+// Map: realJid → { backup: <cloned real user>, sandboxJid: <virtual JID> }
+// ═══════════════════════════════════════════════════════════════════════════
+const sandboxMode = new Map();
+
+// 💡 HELPER: strip 'sandbox_' prefix to get the real JID
+function stripSandboxPrefix(jid) {
+  if (!jid || typeof jid !== 'string') return jid;
+  return jid.startsWith('sandbox_') ? jid.substring(8) : jid;
+}
+
+// Check if a user has sandbox mode active. Returns the sandbox JID or null.
+function getSandboxJid(realJid) {
+  if (!realJid) return null;
+  // 💡 FIX: strip sandbox_ prefix in case this is called with an already-swapped JID
+  const real = stripSandboxPrefix(realJid);
+  return sandboxMode.has(real) ? sandboxMode.get(real).sandboxJid : null;
+}
+
+// Check if a JID is a sandbox JID
+function isSandboxJid(jid) {
+  if (!jid) return false;
+  return jid.startsWith('sandbox_');
+}
+
+// Initialize sandbox: back up real user, load sandbox data into cache
+async function enableSandbox(realJid, senderName) {
+  const AdminSandbox = require('./models/AdminSandbox');
+  const economy = require('./rpg/economy');
+
+  // 💡 FIX: strip sandbox_ prefix in case this is called with an already-swapped JID
+  realJid = stripSandboxPrefix(realJid);
+
+  // Don't double-enable
+  if (sandboxMode.has(realJid)) {
+    return sandboxMode.get(realJid).sandboxDoc || null;
+  }
+
+  // Get or create the sandbox document
+  const sb = await AdminSandbox.getOrCreate(realJid, senderName);
+
+  // Back up the real user data (deep clone)
+  const realUser = economy.getUser(realJid);
+  const backup = realUser ? JSON.parse(JSON.stringify(realUser)) : null;
+
+  // Build a FULLY STACKED sandbox user - no limitations whatsoever.
+  // Max level, max stats, unlimited Zeni, all classes available, GOD rank,
+  // all trials completed, massive inventory, etc. The goal is for admins
+  // to test EVERYTHING without grinding.
+  const sandboxJid = `sandbox_${realJid}`;
+  const sandboxUser = {
+    userId: sandboxJid,
+    registered: true,
+    nickname: sb.name || `Sandbox (${senderName})`,
+
+    // 💰 UNLIMITED ECONOMY
+    wallet: sb.wallet != null ? sb.wallet : 999999999,  // ~1B Zeni
+    bank: sb.bank != null ? sb.bank : 999999999,
+
+    // 📊 MAX PROGRESSION
+    class: sb.class || 'WARLORD',
+    adventurerRank: sb.adventurerRank || 'GOD',
+    spriteIndex: sb.spriteIndex || 0,
+    stats: sb.stats || {
+      hp: 99999, maxHp: 99999, xp: 0, level: 100,
+      totalEarned: 999999999, totalSpent: 0,
+      kills: 9999, undeadKills: 9999,
+      gamesPlayed: 0, gamesWon: 0, gamesLost: 0,
+      biggestWin: 0, biggestLoss: 0,
+      questsCompleted: 9999, questsWon: 9999,
+      bossesDefeated: 9999, dragonsKilled: 9999,
+      itemsCrafted: 9999, itemsEquipped: 9999,
+    },
+
+    // 💪 MAX STAT BONUSES (high values for testing)
+    statBonuses: sb.statBonuses || { hp: 5000, atk: 5000, def: 5000, mag: 5000, spd: 5000, luck: 5000, crit: 500 },
+
+    // 🔮 SKILLS - all maxed if previously set, otherwise empty (admin can use modclass to unlock)
+    skillPoints: sb.skillPoints != null ? sb.skillPoints : 999,
+    skills: sb.skills || {},
+    completedTrials: sb.completedTrials || [
+      'INFECTED_COLOSSUS', 'MUTATION_PRIME', 'CORRUPTED_GUARDIAN',
+      'SHADOW_STALKER', 'IRON_BODY_GRANDMASTER', 'ANCIENT_WURM',
+      'SHADOW_LORD', 'ARCANE_SENTINEL', 'SOUL_EATER',
+      'ELEMENTAL_PRIMORDIAL', 'GRAVEYARD_LORD', 'CHRONOS_WARDEN',
+      'GOLDEN_GOLEM', 'SOUND_REAPER', 'CLOCKWORK_TITAN',
+      'ELDER_FLAME', 'LEVIATHAN', 'LEVIATHAN_SPAWN_ALPHA',
+      'LICH_KING', 'VOID_ASSASSIN', 'ETERNAL_DRAGON',
+      'VOID_TITAN', 'PRIMORDIAL_EVIL', 'PRIMORDIAL_CHAOS',
+      'DEMON_LORD', 'VOID_CORRUPTED', 'ABYSSAL_WHISPER',
+      'PRIME_ELEMENT', 'TIME_EATER', 'SERAPHIM_PRIME',
+      'GAIA_SENTINEL', 'TREASURE_HOARDER', 'MAESTRO_OF_VOID',
+      'MECH_GOD', 'VOID_NECROMANCER',
+    ],
+    evolutionHistory: sb.evolutionHistory || [
+      { from: 'Fighter', to: 'Warrior', level: 15, timestamp: Date.now() },
+      { from: 'Warrior', to: 'Warlord', level: 50, timestamp: Date.now() },
+    ],
+    evolvedAt: sb.evolvedAt || 50,
+
+    // 🎒 MASSIVE INVENTORY
+    inventory: sb.inventory || {},
+    inventorySlots: 999,  // effectively unlimited
+    equipment: sb.equipment || {},
+
+    // 📈 PROGRESSION
+    progression: sb.progression || {
+      xp: 0, level: 100, gp: 99999, totalGP: 99999,
+      statPoints: 999, totalXPEarned: 999999999, totalLevelsGained: 99,
+      commandsUsed: 0,
+      allocatedStats: { hp: 100, atk: 100, def: 100, mag: 100, spd: 100, luck: 100, crit: 100 },
+      allocatedStatPoints: { hp: 100, atk: 100, def: 100, mag: 100, spd: 100, luck: 100, crit: 100 },
+      achievements: [],
+    },
+
+    // 📋 QUEST TRACKING
+    questsCompleted: sb.questsCompleted || 9999,
+    questsWon: sb.questsWon || 9999,
+    questsFailed: sb.questsFailed || 0,
+    questGold: 0,
+    bossesDefeated: sb.bossesDefeated || 9999,
+    dragonsKilled: sb.dragonsKilled || 9999,
+    pvpWins: sb.pvpWins || 999,
+    pvpLosses: sb.pvpLosses || 0,
+
+    // 🎫 EVENT TOKENS
+    eventTokens: 9999,
+
+    // 🏆 RANK MISSIONS - all completed
+    completedRankMissions: [1, 2, 3, 4],
+
+    // 💡 FIX: add ALL fields that economy.getUser() and other systems expect
+    history: [],
+    lastDaily: 0,
+    lastRob: 0,
+    jailUntil: 0,
+    prisonUntil: 0,
+    robberyStrikes: 0,
+    lastClassChange: 0,
+    lastFishReset: 0,
+    fishCount: 0,
+    classChangeCount: 0,
+    lastClassChangeReset: 0,
+    gamblingProfile: {
+      dayKey: new Date().toISOString().split('T')[0],
+      roundsToday: 0,
+      entryWalletToday: 999999999,
+      withdrawnToday: 0,
+      netToday: 0
+    },
+    gamblingLimits: { roulette: { count: 0, startTime: 0 } },
+    membership: { tier: 'PREMIUM', expires: 0 },
+    frozenAssets: { wallet: 0, bank: 0, reason: "" },
+    portfolio: {},
+    investments: [],
+    borrowedSkills: [],
+    professions: {
+      mining: { level: 100, xp: 999999 },
+      crafting: { level: 100, xp: 999999 },
+    },
+    profile: {
+      whatsappName: null,
+      nickname: sb.name || `Sandbox (${senderName})`,
+      notes: [],
+      memories: { likes: [], dislikes: [], hobbies: [], personal: [], other: [] },
+      stats: { firstSeen: new Date(), lastSeen: new Date(), messageCount: 0 },
+      relationships: {}
+    },
+  };
+
+  // Put the sandbox user in the economy cache under the sandbox JID
+  economy.economyData.set(sandboxJid, sandboxUser);
+
+  sandboxMode.set(realJid, { backup, sandboxJid, sandboxDoc: sb });
+  console.log(`🧪 [Sandbox] Enabled for ${realJid} → ${sandboxJid} (STACKED: Lv100, GOD rank, 1B Zeni)`);
+  return sb;
+}
+
+// Disable sandbox: save sandbox data back to AdminSandbox, restore real user
+// 💡 FIX: use try/finally so cleanup ALWAYS happens, even if MongoDB fails.
+// 💡 FIX: accept both real and sandbox JIDs (strip prefix).
+async function disableSandbox(jid) {
+  const AdminSandbox = require('./models/AdminSandbox');
+  const economy = require('./rpg/economy');
+
+  // 💡 FIX: the admin console passes senderJid which may already be swapped
+  // to sandbox_<realJid>. Strip the prefix to get the real JID.
+  const realJid = stripSandboxPrefix(jid);
+
+  const entry = sandboxMode.get(realJid);
+  if (!entry) {
+    console.log(`🧪 [Sandbox] disableSandbox: no active sandbox for ${realJid}`);
+    return false;
+  }
+
+  const { backup, sandboxJid } = entry;
+
+  try {
+    // Save sandbox data back to AdminSandbox document
+    const sandboxUser = economy.economyData.get(sandboxJid);
+    if (sandboxUser) {
+      try {
+        await AdminSandbox.patch(realJid, {
+          wallet: sandboxUser.wallet,
+          bank: sandboxUser.bank,
+          class: sandboxUser.class,
+          adventurerRank: sandboxUser.adventurerRank,
+          spriteIndex: sandboxUser.spriteIndex,
+          stats: sandboxUser.stats,
+          statBonuses: sandboxUser.statBonuses,
+          skillPoints: sandboxUser.skillPoints,
+          skills: sandboxUser.skills,
+          completedTrials: sandboxUser.completedTrials,
+          evolutionHistory: sandboxUser.evolutionHistory,
+          evolvedAt: sandboxUser.evolvedAt,
+          inventory: sandboxUser.inventory,
+          equipment: sandboxUser.equipment,
+          progression: sandboxUser.progression,
+          questsCompleted: sandboxUser.questsCompleted,
+          questsWon: sandboxUser.questsWon,
+          questsFailed: sandboxUser.questsFailed,
+          bossesDefeated: sandboxUser.bossesDefeated,
+          dragonsKilled: sandboxUser.dragonsKilled,
+          pvpWins: sandboxUser.pvpWins,
+          pvpLosses: sandboxUser.pvpLosses,
+        });
+        console.log(`🧪 [Sandbox] Saved sandbox data for ${realJid}`);
+      } catch (saveErr) {
+        console.error(`🧪 [Sandbox] Failed to save sandbox data: ${saveErr.message}`);
+        // Don't return - still clean up so the admin can revert
+      }
+    }
+
+    // Remove sandbox user from economy cache
+    economy.economyData.delete(sandboxJid);
+
+    // Restore real user data from backup
+    if (backup) {
+      economy.economyData.set(realJid, backup);
+      console.log(`🧪 [Sandbox] Restored real user data for ${realJid}`);
+    }
+  } finally {
+    // 💡 CRITICAL: ALWAYS remove from sandboxMode, even if save failed.
+    // This is the fix for "can't revert back" - the Map entry must be
+    // removed regardless of whether the MongoDB save succeeded.
+    sandboxMode.delete(realJid);
+    console.log(`🧪 [Sandbox] Disabled for ${realJid}`);
+  }
+
+  return true;
+}
+
+// 💡 Save all active sandbox data to MongoDB (called on bot shutdown/restart)
+async function saveAllSandboxes() {
+  const AdminSandbox = require('./models/AdminSandbox');
+  const economy = require('./rpg/economy');
+
+  for (const [realJid, entry] of sandboxMode.entries()) {
+    try {
+      const sandboxUser = economy.economyData.get(entry.sandboxJid);
+      if (sandboxUser) {
+        await AdminSandbox.patch(realJid, {
+          wallet: sandboxUser.wallet,
+          bank: sandboxUser.bank,
+          class: sandboxUser.class,
+          adventurerRank: sandboxUser.adventurerRank,
+          spriteIndex: sandboxUser.spriteIndex,
+          stats: sandboxUser.stats,
+          statBonuses: sandboxUser.statBonuses,
+          skillPoints: sandboxUser.skillPoints,
+          skills: sandboxUser.skills,
+          completedTrials: sandboxUser.completedTrials,
+          evolutionHistory: sandboxUser.evolutionHistory,
+          evolvedAt: sandboxUser.evolvedAt,
+          inventory: sandboxUser.inventory,
+          equipment: sandboxUser.equipment,
+          progression: sandboxUser.progression,
+          questsCompleted: sandboxUser.questsCompleted,
+          questsWon: sandboxUser.questsWon,
+          questsFailed: sandboxUser.questsFailed,
+          bossesDefeated: sandboxUser.bossesDefeated,
+          dragonsKilled: sandboxUser.dragonsKilled,
+          pvpWins: sandboxUser.pvpWins,
+          pvpLosses: sandboxUser.pvpLosses,
+        });
+      }
+    } catch (e) {
+      console.error(`🧪 [Sandbox] Auto-save failed for ${realJid}: ${e.message}`);
+    }
+  }
+  console.log(`🧪 [Sandbox] Auto-saved ${sandboxMode.size} active sandbox(es)`);
+}
+
+// 💡 AUTO-SAVE TIMER: save active sandboxes every 5 minutes so data
+// isn't lost if the bot crashes or loses connection.
+setInterval(() => {
+  if (sandboxMode.size > 0) {
+    saveAllSandboxes().catch(e => console.error('[Sandbox] Periodic save failed:', e.message));
+  }
+}, 5 * 60 * 1000); // 5 minutes
+
+// ════════════════════════════════════════════════════════════════════════
+// 💡 MEDIA PIPELINE (module scope)
+// ════════════════════════════════════════════════════════════════════════
+// These helpers used to live INSIDE the message-upsert callback (deeply
+// nested at indent 20), which meant that top-level handlers like
+// `handleAnimeTrending`, `handleImgCommand`, etc. (defined at indent 4
+// inside the storage.run callback) COULD NOT SEE them. Any call to
+// `sendImageSafe(...)` from those handlers silently threw
+// `ReferenceError: sendImageSafe is not defined` - caught by the
+// outer try/catch and surfaced to the user as a generic
+// "Could not fetch..." error, with no image ever being sent.
+//
+// Moving them to module scope fixes every anime/img/nsfw/adult command
+// in one shot. They have no closure dependencies - only `axios`
+// (module-level import) and the parameters passed in.
+//
+// Additional fixes:
+//   • Jimp fallback was using the v0.x API (Jimp.read / Jimp.AUTO /
+//     Jimp.MIME_JPEG / img.resize(w, AUTO) / img.getBufferAsync) on a
+//     v1.x install - every call threw. Updated to the v1.x API
+//     (Jimp.Jimp.read / Jimp.JimpMime.jpeg / img.resize({w}) /
+//     img.getBuffer).
+//   • sendImageSafe now tries the URL send FIRST (fastest path, lets
+//     WhatsApp fetch the image directly), then falls back to
+//     download+buffer+thumbnail. The previous "always download first"
+//     behaviour added a 15s latency to every anime command.
+//   • Diagnostic logging on every fallback so failures are visible
+//     in the PM2 log instead of being silently swallowed.
+// ════════════════════════════════════════════════════════════════════════
+
+// ════════════ WHATSAPP THUMBNAIL SYSTEM (rebuilt 2026-09-14) ════════════
+// WhatsApp renders the sender-supplied `jpegThumbnail` as the blurred
+// media preview before the full image downloads. The old system injected
+// a 1×1 JPEG as the thumbnail for EVERY image - and that hardcoded base64
+// actually decoded to a BLACK pixel, so every image in chat showed a
+// black box instead of a preview (owner: "the thumbnail is always black
+// instead of the blurry version").
+//
+// The fix: generate REAL thumbnails from the actual image bytes with
+// jimp (pure JS - sharp stays BANNED on Oracle: it segfaults natively
+// with GLib-GObject-CRITICAL and kills the whole process).
+//   • buildThumbnail(bytes)        - real JPEG preview (≤120px, aspect
+//     preserved, quality 60). Never throws.
+//   • buildThumbnailSmart(image)   - resolves Buffer / local path /
+//     http(s) URL (6s-bounded download + LRU cache) → buildThumbnail.
+//     Never throws - falls back to a LIGHT-GRAY placeholder (WhatsApp's
+//     standard "no preview yet" look, never black).
+//   • The sock.sendMessage monkey-patch (connection setup, ~line 6000)
+//     injects buildThumbnailSmart() into every image send that has no
+//     explicit jpegThumbnail, and the gray placeholder into videos.
+// ═════════════════════════════════════════════════════════════════════
+
+const jpegJs = require("jpeg-js");
+
+// Light-gray 24×24 JPEG placeholder (~470 bytes). Used ONLY when a real
+// thumbnail cannot be generated (download failed, undecodable bytes,
+// video). Replaces the old 1×1 BLACK fallback that rendered previews black.
+const FALLBACK_THUMB = (() => {
+  try {
+    const W = 24, H = 24, data = Buffer.alloc(W * H * 4);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = (y * W + x) * 4;
+        const v = 234 - Math.round((x / W + y / H) * 10); // soft gray
+        data[i] = data[i + 1] = data[i + 2] = v;
+        data[i + 3] = 255;
+      }
+    }
+    return jpegJs.encode({ data, width: W, height: H }, 70).data;
+  } catch (_) {
+    return Buffer.alloc(0);
+  }
+})();
+
+// LRU-ish cache: URL → thumbnail, so repeated sends (menus, news feeds)
+// don't re-download the same image just to build a preview.
+const _thumbCache = new Map();
+const _thumbCacheMax = 250;
+
+let _thumbWarnCount = 0;
+function _thumbWarnOnce(msg) {
+  if (_thumbWarnCount < 5) {
+    _thumbWarnCount++;
+    console.warn("[thumbnail]", msg);
+  }
+}
+
+/**
+ * Generate a REAL JPEG thumbnail (≤120px, quality 60) from image bytes.
+ * 💡 2026-09-15 PERF (owner: "make images get sent faster"): try the Go
+ * service's /api/thumb FIRST - the jimp path (pure-JS full-image decode)
+ * measured 400-900ms per image on Box 1's CPU, paid inline on EVERY image
+ * send before upload even starts; the Go endpoint does the same work in
+ * ~10-20ms of localhost time. Falls back to jimp automatically whenever the
+ * Go service is down/slow (thumbFromBuffer returns null and never throws).
+ * sharp stays BANNED on Oracle (native segfault). Never throws.
+ */
+async function buildThumbnail(imgBuffer) {
+  try {
+    if (!imgBuffer || !imgBuffer.length) return FALLBACK_THUMB;
+    try {
+      const goService = require("./goImageService");
+      const fast = await goService.thumbFromBuffer(imgBuffer);
+      if (fast && fast.length > 50) return fast;
+    } catch (_) {
+      // Go thumb unavailable (service down / timeout) - jimp fallback below.
+    }
+    const { Jimp } = require("jimp");
+    const img = await Jimp.read(imgBuffer);
+    img.scaleToFit({ w: 120, h: 120 });
+    if (!img.bitmap?.width) return FALLBACK_THUMB;
+    return await img.getBuffer("image/jpeg", { quality: 60 });
+  } catch (err) {
+    _thumbWarnOnce(
+      "buildThumbnail failed (" + (err?.message || err) + ") - using gray placeholder",
+    );
+    return FALLBACK_THUMB;
+  }
+}
+
+/**
+ * Resolve whatever a send call passed as `image` into thumbnail bytes.
+ * Accepts Buffer | { url: localPath } | { url: http(s) URL } | string.
+ * URL downloads are bounded (6s / 8MB) and LRU-cached. NEVER throws.
+ */
+async function buildThumbnailSmart(image) {
+  try {
+    if (!image) return FALLBACK_THUMB;
+    if (Buffer.isBuffer(image)) return await buildThumbnail(image);
+    const url = typeof image === "string" ? image : image?.url;
+    if (!url) return FALLBACK_THUMB;
+    if (/^https?:\/\//i.test(url)) {
+      if (_thumbCache.has(url)) return _thumbCache.get(url);
+      const resp = await axios.get(url, {
+        responseType: "arraybuffer",
+        headers: { "User-Agent": "Mozilla/5.0" },
+        timeout: 6000,
+        maxContentLength: 8 * 1024 * 1024,
+      });
+      const thumb = await buildThumbnail(Buffer.from(resp.data));
+      if (_thumbCache.size >= _thumbCacheMax) {
+        _thumbCache.delete(_thumbCache.keys().next().value); // drop oldest
+      }
+      _thumbCache.set(url, thumb);
+      return thumb;
+    }
+    // local file path
+    if (fs.existsSync(url)) {
+      return await buildThumbnail(fs.readFileSync(url));
+    }
+    return FALLBACK_THUMB;
+  } catch (err) {
+    _thumbWarnOnce(
+      "buildThumbnailSmart failed (" + (err?.message || err) + ") - using gray placeholder",
+    );
+    return FALLBACK_THUMB;
+  }
+}
+
+/**
+ * Send an image to a chat with multiple fallback layers.
+ *
+ * Flow:
+ *   1. Try sending by URL (fastest - WhatsApp fetches it directly).
+ *      The sock.sendMessage monkey-patch injects a REAL thumbnail via
+ *      buildThumbnailSmart (jimp, LRU-cached) - WhatsApp shows the
+ *      blurred preview of the actual image, never a black box.
+ *   2. If URL send fails, download the image ourselves, generate a
+ *      real JPEG thumbnail, and send as a buffer with jpegThumbnail
+ *      attached (so WhatsApp shows the blurred preview).
+ *   3. If the download also fails, retry the URL send (the patch
+ *      still attaches whatever thumbnail it could build - worst case
+ *      the light-gray placeholder).
+ *
+ * Never throws - always attempts at least one send. If ALL sends
+ * fail, the last error propagates so the caller's catch block can
+ * surface a user-visible message.
+ */
+async function sendImageSafe(sock, chatId, imageUrl, caption, quotedMsg) {
+  if (!imageUrl) throw new Error("No imageUrl provided");
+
+  // 💡 CRITICAL: wrap all image sends in a 15s timeout.
+  // Baileys' media upload to mmg.whatsapp.net can hang indefinitely.
+  // Text sends work (WebSocket), but image sends require HTTP upload.
+  const withTimeout = (promise, ms = 15000, label = 'image send') =>
+    Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms (media upload hung)`)), ms)
+      ),
+    ]);
+
+  // Path 1 - URL send (fastest). NO explicit thumbnail here: the
+  // sock.sendMessage patch injects a REAL preview (jimp, cached).
+  try {
+    return await withTimeout(
+      sock.sendMessage(
+        chatId,
+        { image: { url: imageUrl }, caption },
+        { quoted: quotedMsg },
+      ),
+      15000,
+      'sendImageSafe URL send'
+    );
+  } catch (urlErr) {
+    console.warn(
+      `[sendImageSafe] URL send failed (${imageUrl?.slice(0, 80)}):`,
+      urlErr.message,
+    );
+  }
+
+  // Path 2 - download + buffer + explicit jpegThumbnail
+  let imgBuffer = null;
+  try {
+    const resp = await axios.get(imageUrl, {
+      responseType: "arraybuffer",
+      headers: { "User-Agent": "Mozilla/5.0" },
+      timeout: 15000,
+      maxContentLength: 10 * 1024 * 1024,
+    });
+    imgBuffer = Buffer.from(resp.data);
+  } catch (dlErr) {
+    console.warn(
+      `[sendImageSafe] download failed (${imageUrl?.slice(0, 80)}):`,
+      dlErr.message,
+    );
+  }
+
+  if (imgBuffer) {
+    const thumb = await buildThumbnail(imgBuffer);
+    try {
+      return await withTimeout(
+        sock.sendMessage(
+          chatId,
+          { image: imgBuffer, caption, jpegThumbnail: thumb },
+          { quoted: quotedMsg },
+        ),
+        15000,
+        'sendImageSafe buffer send'
+      );
+    } catch (bufErr) {
+      console.warn("[sendImageSafe] buffer send failed:", bufErr.message);
+    }
+  }
+
+  // Path 3 - last resort: retry URL send without thumbnail
+  return await withTimeout(
+    sock.sendMessage(
+      chatId,
+      { image: { url: imageUrl }, caption },
+      { quoted: quotedMsg },
+    ),
+    15000,
+    'sendImageSafe last-resort URL send'
+  );
+}
+
+let _moduleSock = null;
 
 async function startBot(configInstance) {
   let sock;
@@ -284,7 +1511,7 @@ async function startBot(configInstance) {
     try {
       await ChatMessage.insertMany(batch, { ordered: false });
     } catch (err) {
-      // insertMany partial failures are fine — ordered:false lets good docs through
+      // insertMany partial failures are fine - ordered:false lets good docs through
     } finally {
       msgFlushing = false;
       // If more messages were added to the buffer while flushing was in progress,
@@ -305,7 +1532,7 @@ async function startBot(configInstance) {
   function queueMsgWrite(record) {
     msgWriteBuffer.push(record);
     if (msgWriteBuffer.length >= MSG_BATCH_SIZE) {
-      // Batch full — flush immediately
+      // Batch full - flush immediately
       if (msgFlushTimer) { clearTimeout(msgFlushTimer); msgFlushTimer = null; }
       flushMsgBuffer();
     } else if (!msgFlushTimer) {
@@ -339,6 +1566,33 @@ async function startBot(configInstance) {
     const CURRENCY = botConfig.getCurrency();
     const ZENI = CURRENCY.symbol;
     let BOT_MARKER = `\u200B`; // Invisible marker for messages
+
+    // 💡 SIBLING PREFIX AWARENESS (2026-08-14):
+    // Load sibling bot prefixes so this bot can ignore commands meant for a sibling.
+    // Problem: Jake's prefix is ".jk" and Joker's is ".j". When Joker sees ".jk char",
+    // it matches ".j" prefix and tries to run "k char" → error.
+    // Fix: Load each sibling's botConfig.json and collect their prefixes. When a message
+    // starts with a sibling's prefix (but NOT this bot's own prefix), skip it entirely.
+    const siblingPrefixes = [];
+    const instancesRoot = path.join(__dirname, '..', 'instances');
+    const siblingNames = botConfig.getSiblings() || [];
+    for (const sibId of siblingNames) {
+      try {
+        const sibConfigPath = path.join(instancesRoot, sibId, 'botConfig.json');
+        if (fs.existsSync(sibConfigPath)) {
+          const sibConfig = JSON.parse(fs.readFileSync(sibConfigPath, 'utf8'));
+          if (sibConfig.prefix && sibConfig.prefix !== PREFIX) {
+            siblingPrefixes.push(sibConfig.prefix.toLowerCase());
+          }
+        }
+      } catch (e) {}
+    }
+    if (siblingPrefixes.length > 0) {
+      console.log(`🔗 [${BOT_ID}] Sibling prefixes loaded: ${siblingPrefixes.join(', ')} - will ignore commands using these prefixes`);
+    }
+    // Sort by length DESCENDING so we match the LONGEST prefix first.
+    // e.g. ".jk" is checked before ".j" - prevents ".jk char" matching ".j" + "k char"
+    siblingPrefixes.sort((a, b) => b.length - a.length);
 
     // Initialize Search Caches
     global[`__${BOT_ID}_anime_search_cache_by_chat`] =
@@ -643,7 +1897,7 @@ async function startBot(configInstance) {
         // 3. AI Calculation
         const aiPrompt = `Analyze "${a.title}" market data: "${marketInfo}". OUTPUT ONLY JSON: {"status": "...", "score": 0, "market": "...", "market_val": 0.0}`;
         const aiRes = await groq.chat.completions.create({
-          model: "llama-3.1-8b-instant",
+          model: "openai/gpt-oss-20b",
           messages: [{ role: "user", content: aiPrompt }],
           response_format: { type: "json_object" },
         });
@@ -702,60 +1956,104 @@ async function startBot(configInstance) {
     }
 
     async function handleAudioCommand(sock, chatId, query, m) {
-      await sock.sendMessage(chatId, { react: { text: "🔎", key: m.key } });
-      // Audio download takes ~30-60s — tell the user immediately so they don't think it's broken
-      await sock.sendMessage(chatId, { text: BOT_MARKER + `⏳ Searching and downloading *${query}*... this takes about 30-60 seconds.` }, { quoted: m });
+      await sock.sendMessage(chatId, { react: { text: "🎵", key: m.key } });
       try {
+        console.log(`[Audio] Query: "${query}" | sender=${chatId}`);
         const data = await goService.getAudioInfo(query);
-        if (!data || !data.metadata || !data.audioURL) {
+        // 💡 FIX (tester issue 5268cb): distinguish "the service is down"
+        // from "nothing matched" so testers stop seeing one vague message.
+        if (data && data.error === 'service_unreachable') {
+          console.error(`[Audio] Service unreachable for "${query}": ${data.detail}`);
           return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + "❌ No results found or service unavailable.",
+            text: BOT_MARKER + "🎧 The music service is unreachable right now. It's usually back in a few minutes - please try again.",
+          });
+        }
+        if (!data || !data.metadata || !data.audioURL) {
+          console.error(`[Audio] No results for "${query}"`);
+          return await sock.sendMessage(chatId, {
+            text: BOT_MARKER + "🎧 Nothing matched that search. Try a different title or add the artist's name.",
           });
         }
 
         const { metadata, audioURL } = data;
-        await sock.sendMessage(chatId, { react: { text: "📥", key: m.key } });
+        const audioSource = data.audioSource || 'unknown';
+        const isPreview = data.isPreview || false;
+        console.log(`[Audio] Got URL: ${audioURL} | title: ${metadata.title} | source: ${audioSource} | preview: ${isPreview}`);
 
         // Download audio buffer from the direct URL
+        console.log(`[Audio] Downloading from Go service...`);
         const response = await axios.get(audioURL, {
           responseType: "arraybuffer",
           timeout: 60000,
         });
         const audioBuffer = Buffer.from(response.data);
+        console.log(`[Audio] Downloaded: ${audioBuffer.length} bytes | source: ${audioSource}`);
 
-        // Fetch thumbnail buffer
-        let thumbnailBuffer = null;
-        try {
-          const thumbRes = await axios.get(metadata.thumbnail, {
-            responseType: "arraybuffer",
+        if (audioBuffer.length < 1000) {
+          console.error(`[Audio] File too small (${audioBuffer.length} bytes) - download failed`);
+          return await sock.sendMessage(chatId, {
+            text: BOT_MARKER + "❌ Audio file was empty or corrupted. Try a different search term.",
           });
-          thumbnailBuffer = Buffer.from(thumbRes.data);
-        } catch (e) {}
+        }
 
-        await sock.sendMessage(
-          chatId,
-          {
+        // 💡 FIX 2026-07-31: Don't manually fetch/send thumbnail image.
+        // Instead, send the YouTube URL as a text message - WhatsApp
+        // automatically generates a rich link preview with the video
+        // thumbnail, title, and channel name. Much simpler and more reliable.
+        console.log(`[Audio] Sending song info + YouTube link (auto-preview)...`);
+        const previewTag = isPreview ? ' (30s preview)' : '';
+        const streamLabel = /youtube/i.test(audioSource || '') ? '▶️ Listen on YouTube:' : '▶️ Stream:';
+        const songInfo = `🎵 *${metadata.title || 'Audio'}*${metadata.author ? `\n🎤 ${metadata.author}` : ''}${previewTag}${metadata.url ? `\n\n${streamLabel}\n${metadata.url}` : ''}`;
+
+        try {
+          await sock.sendMessage(chatId, { text: BOT_MARKER + songInfo }, { quoted: m });
+          console.log(`[Audio] Song info sent`);
+        } catch (e) {
+          console.error(`[Audio] Song info send failed: ${e.message}`);
+        }
+
+        // Send audio as bare buffer (no contextInfo - this is what works)
+        console.log(`[Audio] Sending audio buffer...`);
+        let audioSent = false;
+
+        try {
+          console.log(`[Audio] Attempt 1: audio buffer...`);
+          const sendResult = await sock.sendMessage(chatId, {
             audio: audioBuffer,
             mimetype: "audio/mpeg",
-            fileName: `${metadata.title}.mp3`,
-            contextInfo: {
-              externalAdReply: {
-                title: metadata.title,
-                body: `${metadata.author} | ${metadata.duration}`,
-                thumbnail: thumbnailBuffer,
-                mediaType: 2,
-                mediaUrl: metadata.url,
-                sourceUrl: metadata.url,
-              },
-            },
-          },
-          { quoted: m },
-        );
-        await sock.sendMessage(chatId, { react: { text: "▶️", key: m.key } });
+            ptt: false,
+          }, { quoted: m });
+          console.log(`[Audio] Sent! Key: ${JSON.stringify(sendResult?.key?.id || 'none')}`);
+          audioSent = true;
+          await sock.sendMessage(chatId, { react: { text: "▶️", key: m.key } });
+        } catch (err1) {
+          console.error(`[Audio] Attempt 1 failed: ${err1.message}`);
+
+          // Fallback: send as document
+          try {
+            console.log(`[Audio] Attempt 2: document...`);
+            await sock.sendMessage(chatId, {
+              document: audioBuffer,
+              mimetype: "audio/mpeg",
+              fileName: `${(metadata.title || 'audio').slice(0, 50)}.mp3`,
+            }, { quoted: m });
+            console.log(`[Audio] Document sent!`);
+            audioSent = true;
+            await sock.sendMessage(chatId, { react: { text: "▶️", key: m.key } });
+          } catch (err2) {
+            console.error(`[Audio] Document failed: ${err2.message}`);
+          }
+        }
+
+        if (!audioSent) {
+          await sock.sendMessage(chatId, {
+            text: BOT_MARKER + `❌ Failed to send audio`,
+          });
+        }
       } catch (err) {
-        console.error("Audio Command Error:", err.message);
+        console.error("[Audio] Command Error:", err.message);
         await sock.sendMessage(chatId, {
-          text: BOT_MARKER + "❌ Audio processing failed.",
+          text: BOT_MARKER + `❌ Audio processing failed: ${err.message?.slice(0, 100)}`,
         });
       }
     }
@@ -770,11 +2068,9 @@ async function startBot(configInstance) {
             text: BOT_MARKER + "❌ No results found.",
           });
         for (const img of images.slice(0, 5)) {
-          await sock.sendMessage(
-            chatId,
-            { image: { url: img } },
-            { quoted: m },
-          );
+          // 💡 FIX: route through sendImageSafe (passes jpegThumbnail to
+          // skip Baileys' sharp/jimp thumbnail generation, has fallbacks)
+          await sendImageSafe(sock, chatId, img, "", m);
         }
         await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
       } catch (err) {
@@ -795,11 +2091,7 @@ async function startBot(configInstance) {
             text: BOT_MARKER + "❌ No results found.",
           });
         for (const img of images.slice(0, 3)) {
-          await sock.sendMessage(
-            chatId,
-            { image: { url: img } },
-            { quoted: m },
-          );
+          await sendImageSafe(sock, chatId, img, "", m);
         }
         await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
       } catch (err) {
@@ -820,11 +2112,7 @@ async function startBot(configInstance) {
             text: BOT_MARKER + "❌ No results found.",
           });
         for (const img of images.slice(0, 3)) {
-          await sock.sendMessage(
-            chatId,
-            { image: { url: img } },
-            { quoted: m },
-          );
+          await sendImageSafe(sock, chatId, img, "", m);
         }
         await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
       } catch (err) {
@@ -924,6 +2212,15 @@ async function startBot(configInstance) {
     if (!global.sharedGroupSettings) global.sharedGroupSettings = new Map();
     const groupSettings = global.sharedGroupSettings;
     const enabledChats = new Set();
+    // 🚫 MASTER GC GATE (2026-09-28): shared whitelist of group chats where
+    // the bot is allowed to operate AT ALL. Every GC is blacklisted by
+    // default - the bot does nothing in a group until the owner runs
+    // `.j bot on` inside that group. Shared across all sibling instances
+    // in this process (same global Set) + persisted to the system KV so it
+    // survives restarts. Keyed "_shared_" because the toggle from any one
+    // instance (Jake/Joker/...) enables the bot family in that group.
+    if (!global.sharedEnabledGcs) global.sharedEnabledGcs = new Set();
+    const enabledGcs = global.sharedEnabledGcs;
     const returnByDeathCounters = new Map();
     const returnByDeathCooldowns = new Map();
     const supportUsage = new Map();
@@ -982,6 +2279,43 @@ async function startBot(configInstance) {
     function saveEnabledChats() {
       system.set(BOT_ID + "_enabled_chats", Array.from(enabledChats));
     }
+
+    // 🚫 MASTER GC GATE - load/save for the shared group whitelist.
+    // Only @g.us IDs are ever stored (defense against DM pollution like the
+    // enabledChats purge had to fix). All instances read the same KV key.
+    function loadEnabledGcs() {
+      try {
+        const data = system.get("_shared_enabled_gcs", []);
+        enabledGcs.clear();
+        let _bad = 0;
+        for (const chatId of Array.isArray(data) ? data : []) {
+          if (typeof chatId === "string" && chatId.endsWith("@g.us")) {
+            enabledGcs.add(chatId);
+          } else {
+            _bad++;
+          }
+        }
+        if (_bad > 0) saveEnabledGcs(); // self-heal: drop malformed entries once
+        console.log(
+          `🚦 [${BOT_ID}] Master GC gate: ${enabledGcs.size} group(s) enabled, all other GCs blacklisted`,
+        );
+      } catch (err) {
+        console.error("Error loading enabled GCs:", err.message);
+      }
+    }
+
+    function saveEnabledGcs() {
+      system.set("_shared_enabled_gcs", Array.from(enabledGcs));
+    }
+
+    // Cross-process freshness: if a toggle happens in another process (or
+    // the KV is edited directly), pick it up within 30s. Cheap sync KV read.
+    // In-process siblings share the same Set object, so they see toggles
+    // instantly with zero extra reads.
+    const _enabledGcsRefresh = setInterval(() => {
+      try { loadEnabledGcs(); } catch (e) {}
+    }, 30000);
+    if (typeof _enabledGcsRefresh.unref === "function") _enabledGcsRefresh.unref();
 
     function loadGroupSettings() {
       try {
@@ -1091,7 +2425,10 @@ async function startBot(configInstance) {
       }
     }
 
-    const _isBotOwner = (jid) => typeof jid === 'string' && (jid.startsWith("233201487480") || jid.includes("251453323092189") || jid.includes("105712667648066"));
+    // 💡 POLISH 2026-07-17: _isBotOwner is now an alias of the module-scope
+    // isBotOwner(). Kept for backwards-compat with all existing call sites
+    // inside spawnBot that reference _isBotOwner directly.
+    const _isBotOwner = isBotOwner;
 
     function hasActionPermission(chatId, userJid, cmdKey) {
       if (!userJid || typeof userJid !== 'string') return false;
@@ -1145,11 +2482,75 @@ async function startBot(configInstance) {
       return false;
     }
 
+    // ⚡ MODE: updates-feed control shared by '.jmode' and the bare
+    // '.updates' alias. Returns the reply text (string).
+    async function handleModeUpdates(modeArgs) {
+      const p = botConfig.getPrefix().toLowerCase();
+      const sub = modeArgs[0] || '';
+      const sub2 = modeArgs[1] || '';
+
+      if (!sub) {
+        const settingsM = getGroupSettings(chatId);
+        let msg = `⚙️ *MODE*\n\n`;
+        msg += `📰 Updates feed (this chat): ${settingsM.animeNews ? '✅ ON' : '❌ OFF'}\n\n`;
+        msg += `• \`${p}mode updates on|off\` - feed for this chat\n`;
+        msg += `• \`${p}mode updates all\` - enable everywhere + broadcast (owner)\n`;
+        msg += `• \`${p}mode updates status\` - per-group summary`;
+        return msg;
+      }
+
+      if (sub === 'updates') {
+        if (sub2 === 'all') {
+          if (!isOwner && !isGlobalMod(senderJid)) {
+            return '❌ Only the bot owner or a global mod can broadcast updates to all groups.';
+          }
+          loadGroupSettings();
+          let enabled = 0;
+          for (const [gId, cfg] of groupSettings.entries()) {
+            if (gId.endsWith('@g.us') && !cfg.animeNews) {
+              cfg.animeNews = true;
+              enabled++;
+            }
+          }
+          saveGroupSettings();
+          const count = await broadcastUpdate(sock, null);
+          return `✅ *Updates enabled in all groups* (+${enabled} newly enabled).\n📢 Broadcast sent to ${count} groups.`;
+        }
+        if (sub2 === 'on' || sub2 === 'off') {
+          if (!canUseAdminCommands) {
+            return '❌ Only admins can toggle the updates feed for this chat.';
+          }
+          const settingsM = getGroupSettings(chatId);
+          settingsM.animeNews = sub2 === 'on';
+          saveGroupSettings();
+          return `📰 Updates feed ${settingsM.animeNews ? '✅ ON' : '❌ OFF'} for this chat.`;
+        }
+        loadGroupSettings();
+        let onCount = 0;
+        let total = 0;
+        for (const [gId, cfg] of groupSettings.entries()) {
+          if (gId.endsWith('@g.us')) {
+            total++;
+            if (cfg.animeNews) onCount++;
+          }
+        }
+        return `📰 *Updates feed:* ${onCount}/${total} groups enabled.\n_Use \`${p}mode updates all\` (owner) or \`${p}mode updates on/off\`._`;
+      }
+
+      return `⚙️ *MODE*\n\n• \`${p}mode\` - status\n• \`${p}mode updates on|off\` - feed for this chat\n• \`${p}mode updates all\` - enable everywhere + broadcast (owner)\n• \`${p}mode updates status\` - per-group summary`;
+    }
+
     function getGroupSettings(chatId) {
       if (!groupSettings.has(chatId)) {
         groupSettings.set(chatId, {
           antilink: false,
           antilinkAction: "delete",
+          antibot: false,           // 🤖 anti-bot detection (other bots) - off by default
+          antibotAction: "warn",    // warn | kick | delete
+          antibotMode: "smart",     // smart (scored, FP-safe) | strict (any fingerprint)
+          gstatusAnnounce: false,   // 📌 announce incoming group statuses
+          gstatusLock: false,       // 🔒 only admins/owner may post group statuses
+          announceAdmins: false,    // 📣 announce promote/demote events
           welcomeEnabled: false,   // welcome off by default
           welcomeMessage: null,   // null = use built-in default message
           byeEnabled: false,      // goodbye off by default (opt-in)
@@ -1157,6 +2558,12 @@ async function startBot(configInstance) {
           ranksEnabled: false,    // rank system off by default
           antispam: false,
           recording: false,
+          // 💡 ANTINUDE (2026-09-27): NSFW/gore image+sticker moderation.
+          // Classification runs on the Box 2 vision-worker - fail-open.
+          antinude: false,
+          antinudeAction: "delete", // delete | warn | kick
+          antinudeThreshold: 0.45,  // recalibrated v2: NudeNet part scores (safe ~0, real nudity 0.44-0.9)
+          antinudeWarnLimit: 10,    // owner directive 2026-09-28: removal at 10th nude warning (was 3)
           blacklist: [],
           rankLadder: [],
           memberRanks: {},
@@ -1170,7 +2577,24 @@ async function startBot(configInstance) {
       const settings = groupSettings.get(chatId);
       if (settings.welcomeEnabled === undefined) settings.welcomeEnabled = false;
       if (settings.byeEnabled === undefined) settings.byeEnabled = false;
+      if (settings.antibot === undefined) settings.antibot = false;
+      if (settings.antibotAction === undefined) settings.antibotAction = "warn";
+      if (settings.antibotMode === undefined) settings.antibotMode = "smart";
+      if (settings.gstatusAnnounce === undefined) settings.gstatusAnnounce = false;
+      if (settings.gstatusLock === undefined) settings.gstatusLock = false;
+      if (settings.announceAdmins === undefined) settings.announceAdmins = false;
       if (settings.ranksEnabled === undefined) settings.ranksEnabled = false;
+      // 💡 ANTINUDE lazy upgrade for pre-existing group settings
+      if (settings.antinude === undefined) settings.antinude = false;
+      if (settings.antinudeAction === undefined) settings.antinudeAction = "delete";
+      if (settings.antinudeThreshold === undefined) settings.antinudeThreshold = 0.45;
+      // 💡 OWNER DIRECTIVE (2026-09-28): nude-removal limit 10 (was hardcoded 3)
+      if (settings.antinudeWarnLimit === undefined) settings.antinudeWarnLimit = 10;
+      // 💡 v2 MIGRATION (2026-09-27): 0.7 was the default of the broken Falconsai-only
+      // pipeline (real nudity scored 0.000-0.003 there, so 0.7 meant "never fire").
+      // The threshold command itself was also broken (parseInt rejected its own
+      // documented 0.5-0.95 format) - nobody could ever have set 0.7 deliberately.
+      if (settings.antinudeThreshold === 0.7) settings.antinudeThreshold = 0.45;
       return settings;
     }
 
@@ -1211,7 +2635,7 @@ async function startBot(configInstance) {
         }
       }
 
-      // (Legacy resolver-based fallbacks removed — canonicalRankKey already
+      // (Legacy resolver-based fallbacks removed - canonicalRankKey already
       //  covers the device-suffix and LID→phone cases that these were
       //  trying to handle. Keeping the legacy resolveToPhone call would
       //  re-introduce the "@s.whatsapp.net short-circuit" bug.)
@@ -1219,7 +2643,7 @@ async function startBot(configInstance) {
       const phoneJid = canonJid;
       const canonicalJid = canonJid; // alias for code below
 
-      // Try the O(1) admin cache first — this is the critical fix.
+      // Try the O(1) admin cache first - this is the critical fix.
       // Previously this function only checked groupMetadataCache which may
       // be empty on first contact. The admin cache is populated when
       // canManageRanks runs (and by buildAdminCache during metadata fetch),
@@ -1240,7 +2664,7 @@ async function startBot(configInstance) {
       // Fall back to metadata if cache missed
       const meta = groupMetadataCache.get(chatId);
       if (!isGroupAdmin && meta && meta.participants) {
-        // Match multiple JID formats — bare phone numbers, @lid, @s.whatsapp.net
+        // Match multiple JID formats - bare phone numbers, @lid, @s.whatsapp.net
         const bareJid = jid.split('@')[0];
         const barePhone = phoneJid ? phoneJid.split('@')[0] : null;
         const p = meta.participants.find(x => {
@@ -1455,7 +2879,7 @@ async function startBot(configInstance) {
 
       // 2. If groupMetadata wasn't passed in or is missing participants,
       //    FETCH IT. Previously this function would silently fail admin
-      //    detection when metadata wasn't already cached — meaning the
+      //    detection when metadata wasn't already cached - meaning the
       //    group creator running `.g rank setup` for the first time
       //    would always get "You do not have permission" because the
       //    metadata cache was empty on first contact.
@@ -1473,7 +2897,7 @@ async function startBot(configInstance) {
       }
 
       if (meta?.participants) {
-        // Try every possible JID variant for the sender — WhatsApp may
+        // Try every possible JID variant for the sender - WhatsApp may
         // return participant IDs as @lid or @s.whatsapp.net depending
         // on the group's privacy mode, and we need to match either.
         const normSender = jidNormalizedUser(senderJid);
@@ -1662,6 +3086,54 @@ async function startBot(configInstance) {
     const pendingTagRequests = new Map();
     const activeTrivias = new Map();
     const pendingNameRequests = new Map();
+
+    // ⚡ CROSS-INSTANCE ELECTION (2026-09-17): prefix-less aliases like
+    // '.lore' / '.updates' are visible to EVERY sibling instance. A tiny
+    // shared-Mongo claim ensures exactly ONE instance replies instead of
+    // 3-4 duplicates. Fail-open: on any error we reply anyway.
+    function electOnce(lockName, msgKey) {
+      try {
+        const sys = require('./utils/system');
+        const now = Date.now();
+        const cur = sys.get('shared_command_elections', {}) || {};
+        for (const k of Object.keys(cur)) {
+          if (now - (cur[k] && cur[k].ts ? cur[k].ts : 0) > 90000) delete cur[k];
+        }
+        const id = lockName + '|' + msgKey;
+        if (cur[id]) return false;
+        cur[id] = { bot: botConfig.getBotId(), ts: now };
+        sys.set('shared_command_elections', cur);
+        return true;
+      } catch (e) {
+        console.error('[electOnce] election failed, fail-open:', e.message);
+        return true;
+      }
+    }
+
+    // ⚡ SIBLING-BOT REGISTRY (ticket #b4fa57, 2026-09-21): all enabled
+    // instances share ONE process. Every bot registers its JID + LID here on
+    // its first message so any bot can recognize a message SENT BY a sibling
+    // bot. Bots must never react to each other's messages (AI fallback,
+    // no-prefix reply handlers) - only human users drive those responses.
+    // This kills the bot-to-bot echo half of the duplicate-response bug.
+    if (!globalThis.__activeBotIdentities) globalThis.__activeBotIdentities = new Set();
+    function registerBotIdentity(jid, lid) {
+      try {
+        if (jid) globalThis.__activeBotIdentities.add(String(jid));
+        if (lid) globalThis.__activeBotIdentities.add(String(lid));
+      } catch (e) {}
+    }
+    function isSiblingBot(jid) {
+      if (!jid) return false;
+      const j = String(jid);
+      if (!globalThis.__activeBotIdentities.has(j)) return false;
+      // it's a known bot identity - sibling UNLESS it is THIS bot itself
+      // (the caller checks isSelf separately before this point).
+      return !(j === botJidOfSelf() );
+    }
+    function botJidOfSelf() {
+      try { return jidNormalizedUser(sock.user ? sock.user.id : ''); } catch (e) { return null; }
+    }
     const spamTracker = new Map();
     const menuSessions = new Map();
 
@@ -1689,7 +3161,44 @@ async function startBot(configInstance) {
       return userWarnings.has(key) ? userWarnings.get(key).length : 0;
     }
 
-    function trackActivity(chatId, userId) {
+    // 📊 DAILY GC ACTIVITY (2026-09-22): classify a message by WHAT it is so
+    // `.j activity [day]` can break a day down (messages/images/videos/
+    // stickers/audio/documents/contacts/locations/polls). Deep-unwraps the
+    // ephemeral / view-once / doc-with-caption wrappers first (same layer
+    // convention as the reply-targeting unwrap at ~line 4219), so media sent
+    // in disappearing-message chats is still counted as media.
+    function detectActivityType(message) {
+      try {
+        let cur = message && message.message;
+        for (let i = 0; cur && i < 5; i++) {
+          const inner =
+            cur.ephemeralMessage?.message ||
+            cur.viewOnceMessage?.message ||
+            cur.viewOnceMessageV2?.message ||
+            cur.viewOnceMessageV2Extension?.message ||
+            cur.documentWithCaptionMessage?.message;
+          if (!inner) break;
+          cur = inner;
+        }
+        if (!cur) return "message";
+        if (cur.imageMessage) return "image";
+        if (cur.videoMessage) return "video";
+        if (cur.audioMessage) return "audio";
+        if (cur.stickerMessage) return "sticker";
+        if (cur.documentMessage) return "document";
+        if (cur.contactMessage || cur.contactsArrayMessage) return "contact";
+        if (cur.locationMessage || cur.liveLocationMessage) return "location";
+        if (
+          cur.pollCreationMessage || cur.pollCreationMessageV2 ||
+          cur.pollCreationMessageV3
+        ) return "poll";
+        return "message";
+      } catch {
+        return "message";
+      }
+    }
+
+    function trackActivity(chatId, userId, type) {
       const key = `${chatId}_${userId}`;
       const now = Date.now();
       const ChatActivity = require('./models/ChatActivity');
@@ -1703,11 +3212,13 @@ async function startBot(configInstance) {
         { upsert: true }
       ).catch((err) => console.error(`Error saving activity for ${key}:`, err.message));
 
-      // Also log in ActivityLog for time-windowed active queries
+      // Also log in ActivityLog for time-windowed active queries - now with
+      // the message type so the daily GC breakdown has real media/event data.
       const ActivityLog = require('./models/ActivityLog');
       ActivityLog.create({
         chatId,
         userId,
+        type: type || "message",
         timestamp: new Date()
       }).catch((err) => console.error(`Error saving ActivityLog for ${chatId}/${userId}:`, err.message));
     }
@@ -1746,24 +3257,35 @@ async function startBot(configInstance) {
     }
 
     async function getChatActivityForPeriod(chatId, periodMs) {
+      // Kept for compatibility - delegates to the explicit-range variant.
+      return getChatActivityBetween(
+        chatId,
+        periodMs !== null && periodMs !== undefined ? new Date(Date.now() - periodMs) : null,
+        new Date(),
+      );
+    }
+
+    // 📊 DAILY GC ACTIVITY: explicit [start, end) window over ActivityLog.
+    // Powers `.j activity [day]` (midnight-based days) and the midnight
+    // defaults the owner ordered for `.j active/inactive/tagactive`.
+    async function getChatActivityBetween(chatId, start, end) {
       const ActivityLog = require('./models/ActivityLog');
       try {
-        const query = { chatId };
-        if (periodMs !== null) {
-          query.timestamp = { $gte: new Date(Date.now() - periodMs) };
+        const match = { chatId };
+        if (start) {
+          match.timestamp = { $gte: start };
+          if (end) match.timestamp.$lt = end;
         }
-
         const results = await ActivityLog.aggregate([
-          { $match: query },
+          { $match: match },
           { $group: { _id: '$userId', count: { $sum: 1 } } }
         ]);
-
         return results.map(r => ({
           userId: r._id,
           count: r.count
         }));
       } catch (err) {
-        console.error(`Error getting chat activity for period in ${chatId}:`, err.message);
+        console.error(`Error getting chat activity window for ${chatId}:`, err.message);
         return [];
       }
     }
@@ -1836,7 +3358,7 @@ What to do:
 3. Keep it direct.`,
             },
           ],
-          model: "llama-3.1-8b-instant",
+          model: "openai/gpt-oss-20b",
         });
 
         let summaryText = res.choices[0].message.content;
@@ -1989,13 +3511,82 @@ What to do:
             continue;
           }
 
+          // per-item flag shared by the try/catch below: did the race
+          // timeout drop this send while Baileys was still working on it?
+          let __droppedByTimeout = false;
           try {
-            const res = await rawSend(item.jid, item.content, item.options);
+            // 💡 ROOT CAUSE FIX (owner 2026-09-21: "a command fails with
+            // rawSend timed out - fix the timeout, don't hide the error").
+            // The old race gave EVERY send 15s while Baileys' own media
+            // upload budget is 20s (mediaUploadTimeoutMs on the socket) and
+            // the relay/ACK phase adds more. Any upload needing 15-20s was
+            // GUARANTEED to be dropped mid-flight by this queue and reported
+            // as "rawSend timed out after 15s" even though Baileys was about
+            // to succeed - the queue was manufacturing the very timeout it
+            // was guarding against. Now:
+            //   · MEDIA (image/video/audio/sticker/document) gets a 60s race
+            //     budget - the same upload budget the status-post path uses
+            //     (#b4fa05), comfortably above Baileys' 20s abort + relay.
+            //   · TEXT keeps the tight 15s (it rides the WebSocket; slow
+            //     text means the connection is already broken).
+            //   · The race timer is CLEARED when the send settles (the old
+            //     code leaked one 15s timer per message forever).
+            //   · The losing promise is guarded - a late Baileys rejection
+            //     can never surface as an unhandledRejection, and a late
+            //     RESOLUTION is logged as "delivered after the drop" so the
+            //     log tells the truth instead of hiding the outcome.
+            const __isMediaSend = !!(item.content && (item.content.image || item.content.video || item.content.audio || item.content.sticker || item.content.document));
+            const SEND_TIMEOUT_MS = __isMediaSend ? 60000 : 15000;
+            const tSend0 = Date.now();
+            const sendPromise = rawSend(item.jid, item.content, item.options);
+            // the race loser must never become an unhandledRejection
+            sendPromise.catch(() => {});
+            sendPromise
+              .then(() => {
+                if (__droppedByTimeout) {
+                  console.log(`📨 [${BOT_ID}] send to ${item.jid?.split("@")[0]} completed AFTER the timeout drop - the message WAS likely delivered`);
+                }
+              })
+              .catch(() => {});
+            let __raceTimer = null;
+            let res;
+            try {
+              res = await Promise.race([
+                sendPromise,
+                new Promise((_, reject) => {
+                  __raceTimer = setTimeout(
+                    () => reject(new Error(`rawSend timed out after ${SEND_TIMEOUT_MS / 1000}s (media upload hung - queue was blocked)`)),
+                    SEND_TIMEOUT_MS,
+                  );
+                }),
+              ]);
+            } finally {
+              if (__raceTimer) clearTimeout(__raceTimer);
+            }
             queue.shift();
             item.resolve(res);
+            // 💡 2026-09-15 PERF: per-send timing - makes WhatsApp media-upload
+            // latency visible in the pm2 log so "images are slow" reports can
+            // be split into render vs thumbnail vs upload vs relay.
+            const sendMs = Date.now() - tSend0;
+            const mediaKind = item.content?.image ? "image" : item.content?.video ? "video" : item.content?.audio ? "audio" : item.content?.document ? "document" : "text";
+            if (mediaKind !== "text" || sendMs > 1000) {
+              console.log(`📨 [${BOT_ID}] send ${mediaKind} ok in ${sendMs}ms → ${item.jid?.split("@")[0]}`);
+            }
             await sleep(SEND_GAP_MS);
           } catch (err) {
             item.retries += 1;
+
+            // 💡 Timeout errors are NOT connection errors - don't retry.
+            // The send is stuck beyond its race budget. Drop the message
+            // so the queue can process subsequent sends.
+            if (err.message?.includes('timed out')) {
+              __droppedByTimeout = true; // a late completion will be logged as delivered
+              console.error(`⏰ [${BOT_ID}] Send queue: TIMEOUT for message to ${item.jid?.split('@')[0]}. Content preview: ${JSON.stringify(item.content?.text || item.content?.caption || '[non-text]').slice(0, 80)}. DROPPING to unblock queue.`);
+              queue.shift();
+              item.reject(err);
+              continue;
+            }
 
             // Connection issues: pause and wait for reconnect; keep message at front
             if (isConnError(err)) {
@@ -2067,6 +3658,30 @@ What to do:
       } catch (e) {}
     });
 
+    // 💡 OOM FORENSICS 2026-09-27: this box has 1GB RAM and Node sizes its
+    // heap accordingly (~408MB) - the 2026-09-26 crash was a heap OOM with
+    // zero breadcrumb trail. One line every 5 minutes makes the growth curve
+    // visible in the pm2 log, and the quiz media cache size is included so a
+    // leaky asset cache is caught in the act.
+    const __heapTick = setInterval(() => {
+      try {
+        const m = process.memoryUsage();
+        const mb = (n) => Math.round(n / 1024 / 1024);
+        let qAssets = "";
+        try {
+          const qs = require("./games/quizBank").assetCacheStats();
+          qAssets = ` quizAssets=${qs.entries}/${mb(qs.bytes)}MB`;
+        } catch { /* quiz module optional for telemetry */ }
+        let sChild = "";
+        try {
+          const ss = require("./utils/sharpChild").stats();
+          sChild = ` sharp[up=${ss.up ? 1 : 0} jobs=${ss.jobs} done=${ss.done} respawns=${ss.respawns} poison=${ss.poisonedCached}${ss.circuitOpen ? " CB!" : ""}]`;
+        } catch { /* sharpChild optional for telemetry */ }
+        console.log(`🧠 [mem] rss=${mb(m.rss)}MB heap=${mb(m.heapUsed)}/${mb(m.heapTotal)}MB external=${mb(m.external)}MB${qAssets}${sChild}`);
+      } catch { /* telemetry must never throw */ }
+    }, 5 * 60 * 1000);
+    __heapTick.unref?.();
+
     // --- DYNAMIC TITLE LOGIC ---
     function getDynamicTitle(userId) {
       const user = economy.getUser(userId);
@@ -2114,7 +3729,7 @@ What to do:
 
       // 6. QUEST & HARDCORE
       const graveyard = system.get("graveyard", []);
-      const name = profile.nickname || userId.split("@")[0];
+      const name = profile.nickname || economy.getDisplayName(userId);
       const deathCount = graveyard.filter((h) => h.name === name).length;
 
       if (deathCount > 5) return "🦴 The Immortal (Noob)";
@@ -2132,7 +3747,7 @@ What to do:
     // --- GRAVEYARD LOGIC ---
     function addToGraveyard(userId, level, className, cause) {
       const graveyard = system.get("graveyard", []);
-      const name = getUserProfile(userId)?.nickname || userId.split("@")[0];
+      const name = getUserProfile(userId)?.nickname || economy.getDisplayName(userId);
 
       graveyard.push({
         name,
@@ -2196,28 +3811,13 @@ What to do:
      * Helper to update bot profile picture
      */
     async function updateBotPFP(sock) {
-      const pfpJpg = botConfig.getAssetPath("pfp.jpg");
-
-      if (fs.existsSync(pfpJpg)) {
-        try {
-          console.log(`🖼️  [${BOT_ID}] Updating PFP from: ${pfpJpg}...`);
-          const buffer = fs.readFileSync(pfpJpg);
-          await sock.updateProfilePicture(sock.user.id, buffer);
-          console.log(`✅ [${BOT_ID}] Bot profile picture updated.`);
-          
-          try {
-            console.log(`🔒 [${BOT_ID}] Setting PFP privacy to 'Everyone'...`);
-            await sock.updateProfilePicturePrivacy('all');
-            console.log(`✅ [${BOT_ID}] PFP privacy set to 'Everyone'.`);
-          } catch (privErr) {
-            console.log(`⚠️  [${BOT_ID}] Could not set PFP privacy:`, privErr.message);
-          }
-        } catch (e) {
-          console.error(`❌ [${BOT_ID}] PFP Helper Error:`, e.message);
-        }
-      } else {
-        console.log(`⚠️  [${BOT_ID}] No pfp.jpg found in assets, skipping PFP sync.`);
-      }
+      // 💡 CRITICAL FIX 2026-07-26: DISABLED - sock.updateProfilePicture
+      // calls sharp internally to resize the image, which crashes with
+      // GLib-GObject-CRITICAL on Oracle, killing the entire process.
+      // The PFP is already set on WhatsApp from the previous session.
+      // Re-enable only after sharp is fixed or removed from the system.
+      console.log(`⏭️  [${BOT_ID}] PFP update SKIPPED (sharp crashes on Oracle). PFP stays as-is.`);
+      return;
     }
 
     /*
@@ -2299,6 +3899,35 @@ What to do:
     // Checks for due loans every 60 seconds
     setInterval(async () => {
       try {
+        // 🌍 World-alignment event monitor (owner brief #fec956): fires the
+        // DM encounter once per triune alignment window (~4-day cadence).
+        // Cheap no-op unless the alignment window is live.
+        if (sock) {
+          require("./rpg/worldAlignment")
+            .tick(sock, BOT_MARKER)
+            .catch(() => {});
+        }
+        // ⚔️ GUILD WAR sweeper: registration expiry, hard end times,
+        // inactivity relic drops, feed flush. Cheap no-op without events.
+        if (sock) {
+          require("./rpg/guildWar")
+            .state.tick(sock, BOT_MARKER)
+            .then(async (out) => {
+              // Wars auto-deployed on registration expiry: DM every champion
+              // the start card ("the war has begun + how you play").
+              const started = (out || []).filter((o) => o && o.auto === "started");
+              for (const s of started) {
+                try {
+                  const gw = require("./rpg/guildWar");
+                  const ev = await gw.state.getEvent(s.eventId, { fresh: true });
+                  if (ev) await gw.dmWarStartCards(sock, BOT_MARKER, ev, botConfig.getPrefix());
+                } catch (e) {
+                  console.error("[GuildWar] start-card DM:", e?.message);
+                }
+              }
+            })
+            .catch((e) => console.error("[GuildWar] sweeper:", e?.message));
+        }
         const results = loans.checkDueLoans();
         if (results.length > 0) {
           console.log(
@@ -2311,11 +3940,11 @@ What to do:
                 if (res.type === "paid") {
                   // Notify both parties
                   await sock.sendMessage(res.borrower, {
-                    text: `💸 Your loan of ${ZENI}${res.amount.toLocaleString()} has been auto-repaid to @${res.lender.split("@")[0]}.`,
+                    text: `💸 Your loan of ${ZENI}${res.amount.toLocaleString()} has been auto-repaid to @${economy.getDisplayName(res.lender)}.`,
                     contextInfo: { mentionedJid: [res.lender] },
                   });
                   await sock.sendMessage(res.lender, {
-                    text: `💰 @${res.borrower.split("@")[0]} has auto-repaid their loan of ${ZENI}${res.amount.toLocaleString()}.`,
+                    text: `💰 @${economy.getDisplayName(res.borrower)} has auto-repaid their loan of ${ZENI}${res.amount.toLocaleString()}.`,
                     contextInfo: { mentionedJid: [res.borrower] },
                   });
                 } else if (res.type === "defaulted") {
@@ -2324,7 +3953,7 @@ What to do:
                     text: `🚨 *LOAN DEFAULT!* 🚨\n\nYou couldn't repay your debt. Your entire balance has been seized and given to the lender.\n\n🚫 You are now BLOCKED from using the bot for ${res.blockTime} minutes.`,
                   });
                   await sock.sendMessage(res.lender, {
-                    text: `🏦 *LOAN DEFAULT!* 🏦\n\n@${res.borrower.split("@")[0]} defaulted on their loan. You have been paid ${ZENI}${res.seized.toLocaleString()} (their entire remaining balance).`,
+                    text: `🏦 *LOAN DEFAULT!* 🏦\n\n@${economy.getDisplayName(res.borrower)} defaulted on their loan. You have been paid ${ZENI}${res.seized.toLocaleString()} (their entire remaining balance).`,
                     contextInfo: { mentionedJid: [res.borrower] },
                   });
                 }
@@ -2428,8 +4057,8 @@ What to do:
     const groq = getNextGroqClient();
 
     const MODELS = {
-      FAST: "llama-3.1-8b-instant",
-      SMART: "llama-3.3-70b-versatile",
+      FAST: "openai/gpt-oss-20b",
+      SMART: "openai/gpt-oss-120b",
     };
 
     function selectModel(messageLength, isComplex = false) {
@@ -2447,7 +4076,23 @@ What to do:
         } catch (error) {
           markKeyFailure();
           console.error(`⚠️️ Groq API error on Key #${currentKeyIndex + 1} (attempt ${attempt + 1}/${retries + 1}):`, error.message);
-          
+
+          // 💡 RELIABILITY FIX 2026-09-27: deterministic request errors can
+          // never succeed on retry, but the old loop still rotated ALL keys
+          // x ALL attempts against the identical doomed payload (measured:
+          // json_validate_failed storms = 5 keys x 3 attempts of 400s per
+          // slot, minutes of dead latency per quiz). Non-retryable classes:
+          //   - 400 invalid_request_error (json_validate_failed, bad params)
+          //   - 401/403 (auth) - other keys share the org, they cannot help
+          // Transient classes (429 rate limit, 5xx, network) keep the
+          // existing key-rotation + backoff behavior unchanged.
+          const __status = error.status || error.response?.status || 0;
+          const __nonRetryable =
+            __status === 400 || __status === 401 || __status === 403 ||
+            error.message?.includes("json_validate_failed") ||
+            error.message?.includes("invalid_request_error");
+          if (__nonRetryable) throw error;
+
           if (attempt < retries) {
             if (GROQ_API_KEYS.length > 1) {
               currentKeyIndex = (currentKeyIndex + 1) % GROQ_API_KEYS.length;
@@ -2654,8 +4299,8 @@ What to do:
     }
 
     // ---------- scraper (Hybrid Node/Go Service) ----------
-    const GoImageService = require('./utils/goImageService');
-    const goService = new GoImageService();
+    // 💡 singleton (PERF PATCH 2026-07-27): reuse the shared instance instead of creating a new one
+    const goService = require('./utils/goImageService');
 
     async function scrapePornPics(searchTerm, count = 10, options = {}) {
       try {
@@ -2802,27 +4447,169 @@ What to do:
 
     // Helper to get target user from mention or reply
     function getMentionOrReply(m) {
-      // Check mentions
-      const mentioned =
-        m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-      if (mentioned.length > 0) return resolveLidToPhone(jidNormalizedUser(mentioned[0]), configInstance.getAuthPath());
+      // 💡 FIX 2026-08-03: Centralized resolution + fallback.
+      // Previously, if `resolveLidToPhone()` returned null (LID→phone mapping
+      // miss - common after Oracle migration and in LID-privacy groups),
+      // the whole function returned null - even though we KNEW the target's
+      // JID from the reply/mention. This made `.s pvp` (via reply) show the
+      // usage message instead of challenging the replied-to user.
+      // Now: if resolution fails, fall back to the raw JID AND try the
+      // @lid ↔ @s.whatsapp.net swap in the economy cache.
+      //
+      // 💡 FIX 2026-09-12 (owner: ".j rob tagging/reply doesn't work"):
+      // 1) The function only read `m.message.extendedTextMessage.contextInfo`.
+      //    In chats with disappearing-messages ON, EVERY incoming message is
+      //    wrapped in `ephemeralMessage` (and media can be wrapped in
+      //    viewOnce*/documentWithCaption), so contextInfo was invisible and
+      //    reply-targeting silently failed → "tag someone" error.
+      //    Now: deep-unwrap ALL wrapper layers, then scan contextInfo on
+      //    EVERY message type (text, image, sticker, video, ...).
+      // 2) JID resolution now also matches by user part across the economy
+      //    cache (@lid ↔ @s.whatsapp.net), so LID-privacy groups can't
+      //    break targeting either.
+      const economy = require('./rpg/economy');
+      const findByUserPart = (jid) => {
+        if (typeof jid !== 'string' || !jid.includes('@')) return null;
+        const userPart = jid.split('@')[0].split(':')[0];
+        if (!userPart) return null;
+        for (const key of economy.economyData.keys()) {
+          if (typeof key !== 'string') continue;
+          if (key.split('@')[0].split(':')[0] === userPart) return key;
+        }
+        return null;
+      };
+      const resolveWithFallback = (rawJid) => {
+        if (!rawJid) return null;
+        const resolved = resolveLidToPhone(rawJid, configInstance.getAuthPath());
+        // If resolved and in economy cache, use it
+        if (resolved && economy.economyData.has(resolved)) return resolved;
+        // Try the swap: @lid ↔ @s.whatsapp.net
+        const candidates = [resolved, rawJid].filter(Boolean);
+        for (const c of candidates) {
+          if (typeof c !== 'string') continue;
+          if (c.endsWith('@lid')) {
+            const phoneJid = c.replace('@lid', '@s.whatsapp.net');
+            if (economy.economyData.has(phoneJid)) return phoneJid;
+          } else if (c.endsWith('@s.whatsapp.net')) {
+            const lidJid = c.replace('@s.whatsapp.net', '@lid');
+            if (economy.economyData.has(lidJid)) return lidJid;
+          }
+        }
+        // Exact key misses - match on the numeric user part regardless of
+        // @lid / @s.whatsapp.net domain (handles LID-privacy groups where
+        // the mapping table has no entry for this user yet).
+        for (const c of candidates) {
+          const hit = findByUserPart(c);
+          if (hit) return hit;
+        }
+        // Last resort: return whichever we have (resolved or rawJid).
+        // Better to return a JID than null - the caller can still check
+        // registration and proceed.
+        return resolved || rawJid;
+      };
 
-      // Check direct reply participant
-      const replyParticipant =
-        m.message?.extendedTextMessage?.contextInfo?.participant;
-      if (replyParticipant) return resolveLidToPhone(jidNormalizedUser(replyParticipant), configInstance.getAuthPath());
+      // Deep-unwrap ephemeral / view-once / doc-with-caption wrappers.
+      const unwrapMessage = (node) => {
+        let cur = node;
+        for (let i = 0; cur && i < 5; i++) {
+          const inner =
+            cur.ephemeralMessage?.message ||
+            cur.viewOnceMessage?.message ||
+            cur.viewOnceMessageV2?.message ||
+            cur.viewOnceMessageV2Extension?.message ||
+            cur.documentWithCaptionMessage?.message;
+          if (!inner) break;
+          cur = inner;
+        }
+        return cur;
+      };
 
-      // Baileys sometimes wraps the quoted message differently
-      const quotedMessage =
-        m.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-      if (quotedMessage) {
-        // If we have a quoted message, the participant JID should be in contextInfo
-        const participant =
-          m.message?.extendedTextMessage?.contextInfo?.participant;
-        return participant ? resolveLidToPhone(jidNormalizedUser(participant), configInstance.getAuthPath()) : null;
+      // Collect mention/participant candidates from EVERY message type that
+      // carries a contextInfo (extendedText, image, video, sticker, ...).
+      const collectContext = (msg) => {
+        const mentions = [];
+        let participant = null;
+        if (!msg || typeof msg !== 'object') return { mentions, participant };
+        for (const type of Object.keys(msg)) {
+          const node = msg[type];
+          if (!node || typeof node !== 'object' || !node.contextInfo) continue;
+          const ci = node.contextInfo;
+          if (Array.isArray(ci.mentionedJid)) mentions.push(...ci.mentionedJid);
+          if (!participant && ci.participant) participant = ci.participant;
+        }
+        return { mentions, participant };
+      };
+
+      const core = unwrapMessage(m?.message);
+      const { mentions, participant } = collectContext(core);
+
+      // 1. Check explicit @-mentions
+      if (mentions.length > 0) {
+        for (const raw of mentions) {
+          const r = resolveWithFallback(jidNormalizedUser(raw));
+          if (r) return r;
+        }
+      }
+
+      // 2. Check reply/quote participant (swipe-reply targets the author)
+      if (participant) {
+        const r = resolveWithFallback(jidNormalizedUser(participant));
+        if (r) return r;
       }
 
       return null;
+    }
+
+    // Helper: get the FIRST explicitly @-mentioned user ONLY.
+    // Unlike getMentionOrReply(), this does NOT fall back to a quoted/replied
+    // message's author. Use this to decide whether to ping someone - a player
+    // who replies to (quotes) someone's message to target them should NOT be
+    // @-tagged/pinged by the bot, but a player who explicitly @-tags someone
+    // has already notified them, so the bot may also ping.
+    function getExplicitMention(m) {
+      const mentioned =
+        m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+      if (mentioned.length > 0) {
+        const rawJid = jidNormalizedUser(mentioned[0]);
+        return resolveLidToPhone(rawJid, configInstance.getAuthPath()) || rawJid;
+      }
+      return null;
+    }
+
+    // Helper: was `jid` explicitly @-mentioned in the incoming command?
+    // Returns true only for real @-tags, NOT for reply/quote participants.
+    function wasExplicitlyMentioned(m, jid) {
+      if (!jid) return false;
+      const mentioned =
+        m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+      if (mentioned.length === 0) return false;
+      const target = jidNormalizedUser(jid);
+      return mentioned.some((mj) => {
+        const resolved = resolveLidToPhone(
+          jidNormalizedUser(mj),
+          configInstance.getAuthPath(),
+        ) || jidNormalizedUser(mj);
+        return (
+          resolved === target ||
+          jidNormalizedUser(mj) === target
+        );
+      });
+    }
+
+    // Helper: build the outgoing `mentions` array so that a target user is
+    // only pinged if they were explicitly @-mentioned in the command.
+    // `alwaysPingJids` = jids to always ping (e.g. the command sender).
+    // `conditionalJid` + `m` = a target that should only be pinged if the
+    // commander explicitly @-tagged them (not if resolved via a reply).
+    function buildMentions(m, alwaysPingJids, conditionalJid) {
+      const out = new Set();
+      (alwaysPingJids || []).forEach((j) => {
+        if (j) out.add(j);
+      });
+      if (conditionalJid && wasExplicitlyMentioned(m, conditionalJid)) {
+        out.add(conditionalJid);
+      }
+      return Array.from(out);
     }
 
     // ✅ Blacklist - banned words or blocked users
@@ -2940,9 +4727,15 @@ What to do:
 
     // Helper to get chat-specific mute key
     function getMuteKey(userId, chatId) {
-      // If it's a private chat (DM), just use userId. Otherwise, use composite key.
-      if (!chatId || !chatId.endsWith("@g.us")) return userId;
-      return `${userId}_${chatId}`;
+      // 💡 FIX: normalize userId so mute works across LID/phone JID formats.
+      // Was using raw userId - if muted with @lid JID but message comes in
+      // with @s.whatsapp.net JID (or vice versa), the mute check would fail.
+      const { jidNormalizedUser } = require("@whiskeysockets/baileys");
+      let normUser = userId;
+      try { normUser = jidNormalizedUser(userId); } catch (e) {}
+      // Also try LID resolver for cross-format matching
+      if (!chatId || !chatId.endsWith("@g.us")) return normUser;
+      return `${normUser}_${chatId}`;
     }
 
     // ✅ FIXED: Check if user is muted and auto-cleanup expired mutes
@@ -2966,6 +4759,14 @@ What to do:
 
     // ✅ FIXED: Mute user with proper persistence
     function muteUser(userId, chatId, duration) {
+      // 👑 GC OWNER IMMUNITY (defense in depth, 2026-09-22): the marked
+      // owner of a group can never be muted through ANY code path. The
+      // commands already refuse with feedback; this guard catches every
+      // other caller (auto-muters, future features).
+      if (isGcOwner(userId, chatId)) {
+        console.log(`👑 [GC Owner] mute suppressed for the marked owner in ${chatId}`);
+        return;
+      }
       const key = getMuteKey(userId, chatId);
       mutedUsers.set(key, {
         until: Date.now() + duration,
@@ -3098,7 +4899,7 @@ What to do:
       return updateUserProfile(jid, { note });
     }
 
-    // Pure regex-based tag intent detection — saves an API call on every group message
+    // Pure regex-based tag intent detection - saves an API call on every group message
     function detectTagIntent(message) {
       const tagPatterns = [
         /\btell\s+everyone\b/i,
@@ -3152,8 +4953,7 @@ What to do:
           context.personJid = mentionedJid;
           context.personName =
             profile?.nickname ||
-            profile?.whatsappName ||
-            mentionedJid.split("@")[0];
+            profile?.whatsappName || economy.getDisplayName(mentionedJid);
           context.personProfile = profile;
           context.isMention = true;
 
@@ -3166,7 +4966,7 @@ What to do:
         // Safety check: Ensure economy cache is initialized
         if (!economy.economyData) return context;
 
-        // Only search users who have spoken in THIS chat — prevents cross-GC name bleed
+        // Only search users who have spoken in THIS chat - prevents cross-GC name bleed
         const activePeople = chatId
           ? (chatParticipants.get(chatId) || new Set())
           : new Set(economy.economyData.keys());
@@ -3301,16 +5101,19 @@ What to do:
         if (isBot) {
           return botConfig.getBotName();
         }
+        // 💡 FIX 2026-08-07 (#6): Prefer pushName (real WhatsApp name) over
+        // user.nickname (bot-set nickname like "jk off"). The pushName is the
+        // player's actual display name on WhatsApp - it should take priority.
+        if (pName && pName.trim() && pName !== 'undefined') return pName;
         const userObj = economy.getOrCreateUser ? economy.getOrCreateUser(jid) : economy.getUser(jid);
         const profile = userObj?.profile;
         if (userObj?.nickname && userObj.nickname !== "Adventurer") return userObj.nickname;
         if (profile?.nickname && profile.nickname !== "Adventurer") return profile.nickname;
-        if (pName) return pName;
         if (profile?.whatsappName) return profile.whatsappName;
         return jid.split("@")[0];
       }
 
-      // Scope memory to this specific chat — DM vs group memories don't bleed.
+      // Scope memory to this specific chat - DM vs group memories don't bleed.
       // For groups, we use a single unified memory key so the bot understands group conversation flow.
       const isGroup = chatId && chatId.endsWith("@g.us");
       const memKey = isGroup ? chatId : `${senderJid}_${chatId || 'dm'}`;
@@ -3386,7 +5189,7 @@ What to do:
       const _hr = _nowDt.getHours();
       const _vibe = _hr < 6 ? 'dead of night' : _hr < 12 ? 'morning' : _hr < 17 ? 'afternoon' : _hr < 21 ? 'evening' : 'late night';
       const _timeStr = _nowDt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-      const _timeCtx = `\n\n[Right now it's ${_timeStr} on ${_weekDays[_nowDt.getDay()]} — ${_vibe}. Respond naturally to time if relevant.]`;
+      const _timeCtx = `\n\n[Right now it's ${_timeStr} on ${_weekDays[_nowDt.getDay()]} - ${_vibe}. Respond naturally to time if relevant.]`;
 
       // Conversational grounding safeguards (Priority 1 Core Chat Fix + Conversational Upgrades)
       const groundingSafeguards = `
@@ -3397,7 +5200,7 @@ What to do:
 4. COREFERENCE & SPEAKER RESOLUTION: In group chats, pay close attention to speaker markers in the transcript. If a user refers to someone else, resolve the pronouns (like "she", "he", "they") correctly against active group participants instead of assuming they refer to you (${botConfig.getBotName()}).
 5. STANCE & PERSONALITY STABILITY: Maintain a consistent, stable, and loyal character identity. Do not passively flip-flop your stance, become submissive, or sound confused. Keep your cool, casual, characteristic voice stable according to your persona.
 6. NO AGGRESSIVE PARROT-ECHOING: Do not mirror or copy the user's specific vocabulary or insults too aggressively (e.g., if a user calls you a name or says "dumby", do not submissively echo "lol." or parrot their exact phrases). Keep your own distinct verbal voice and slang.
-7. NO UNSOLICITED LORE/ROLEPLAY INTRUSION: Do NOT invent unsolicited lore or random off-screen roleplay elements as a substitute for an actual reply. Fictional flavor and personality should be used purely as conversational seasoning on top of a direct and relevant response — never replace the direct response with random character lore. Keep the response natural, brief, in character, and completely anchored to the ongoing conversation.
+7. NO UNSOLICITED LORE/ROLEPLAY INTRUSION: Do NOT invent unsolicited lore or random off-screen roleplay elements as a substitute for an actual reply. Fictional flavor and personality should be used purely as conversational seasoning on top of a direct and relevant response - never replace the direct response with random character lore. Keep the response natural, brief, in character, and completely anchored to the ongoing conversation.
 8. EXPLICIT TOPIC ACKNOWLEDGMENT: When a user brings up a specific topic, question, or request (e.g., "popcorn", "time", "how are you"), your response MUST explicitly refer to, acknowledge, or directly answer that topic. Never pivot to character-flavor monologues without first addressing and validating their topic.
 9. NO PEDANTIC CORRECTIONS: Never correct the user's typos, spelling errors, grammar, or casual chat slang/shorthand (such as "yh", "rn", "u", "r", "lmao"). Respond to what they meant naturally and casually, matching their casual texting style without calling out how they wrote it.
 ------------------------------------------------`;
@@ -3488,7 +5291,7 @@ What to do:
                   let summaryPrompt = "Summarize the key topics and vibe of this WhatsApp group chat conversation in a single, short sentence (max 20 words):\n\n";
                   for (const msg of oldMessages) {
                     const userObj = economy.getUser(msg.sender);
-                    const name = userObj?.nickname || msg.sender.split("@")[0];
+                    const name = userObj?.nickname || economy.getDisplayName(msg.sender);
                     summaryPrompt += `${name}: ${msg.body || "Media"}\n`;
                   }
 
@@ -3687,7 +5490,7 @@ What to do:
       // Use AI for nuanced cases
       try {
         const res = await smartGroqCall({
-          model: "llama-3.1-8b-instant",
+          model: "openai/gpt-oss-20b",
           messages: [
             {
               role: "system",
@@ -3752,6 +5555,59 @@ What to do:
             },
             { quoted: m },
           );
+        }
+
+        // 4. 💡 2026-09-12: adventurer RANK-UP → ROYAL DECREE parchment card
+        // (same family as the Royal Decree profile card). updateAdventurerRank is
+        // promote-if-higher, so whichever system checks first (dungeon summary,
+        // mission claim, or this hook) is the ONLY announcer - no duplicates.
+        try {
+          const rankUp = await economy.updateAdventurerRank(userId);
+          if (rankUp && rankUp.ranked_up) {
+            const rd = rankUp.rank_data || {};
+            const cap =
+              `👑 *ROYAL DECREE*\n` +
+              `-----------\n` +
+              `${rd.icon || '⚜️'} By decree of the Adventurers' Guild,\n` +
+              `you are elevated to *${rankUp.new_rank}-Rank*!\n` +
+              `▫️ Promotion: ${rankUp.old_rank} → ${rankUp.new_rank}` +
+              (rankUp.guild_bonus_gp ? `\n🎁 Guild perk: +1 GP` : ``);
+            let decreeSent = false;
+            try {
+              const decreeCard = await goService.generateTransactionCard({
+                nickname: economy.getDisplayName(userId),
+                type: "DECREE",
+                style: (() => { try { return (economy.getUser(userId) || {}).cardStyle || 0; } catch (e) { return 0; } })(),
+                amount: 1,
+                newWallet: 0,
+                newBank: 0,
+                zeniSymbol: economy.getZENI(),
+                itemName: rd.name || `${rankUp.new_rank}-Rank`,
+                sealText: rankUp.new_rank,
+                details: `${rankUp.old_rank} -> ${rankUp.new_rank}`,
+                item: "keep rising - the guild watches"
+              });
+              if (decreeCard) {
+                await sock.sendMessage(
+                  chatId,
+                  { image: decreeCard, caption: BOT_MARKER + cap },
+                  { quoted: m },
+                );
+                decreeSent = true;
+              }
+            } catch (decreeErr) {
+              console.error('[DecreeCard] Render failed (non-fatal):', decreeErr.message);
+            }
+            if (!decreeSent) {
+              await sock.sendMessage(
+                chatId,
+                { text: BOT_MARKER + cap },
+                { quoted: m },
+              );
+            }
+          }
+        } catch (rankErr) {
+          console.error('❌ awardProgression rank check:', rankErr.message);
         }
       } catch (err) {
         console.error("❌ awardProgression error:", err.message);
@@ -3822,7 +5678,10 @@ What to do:
 
     // Replace with your own Channel JID (found by forwarding a message from channel to bot)
 
-    const NEWSLETTER_JID = "120363425532756870@newsletter";
+    const NEWSLETTER_JID = null; // 💡 FIX: was hardcoded "120363425532756870@newsletter"
+    // If Jake's WA account doesn't have access to that newsletter, WhatsApp
+    // silently rejects the ENTIRE message (not just the newsletter part).
+    // Setting to null disables the newsletter forwarding contextInfo entirely.
 
     /*
 
@@ -3833,8 +5692,12 @@ What to do:
  */
 
     async function sendMenuWithBanner(sock, chatId, text, mentions = []) {
+      console.log(`[sendMenuWithBanner] CALLED for chatId=${chatId?.split('@')[0]}, text length=${text?.length}`);
       const imagePath = botConfig.getAssetPath("banner.png");
-      const contextInfo = {
+      console.log(`[sendMenuWithBanner] imagePath=${imagePath}, exists=${fs.existsSync(imagePath)}`);
+
+      // 💡 FIX: only include contextInfo if NEWSLETTER_JID is valid.
+      const contextInfo = NEWSLETTER_JID ? {
         forwardingScore: 1,
         isForwarded: true,
         forwardedNewsletterMessageInfo: {
@@ -3842,24 +5705,49 @@ What to do:
           newsletterName: botConfig.getBotName() + " Official",
           serverMessageId: -1,
         },
-      };
+      } : null;
 
       if (fs.existsSync(imagePath)) {
-        return await sock.sendMessage(chatId, {
-          image: { url: imagePath },
-          caption: text,
-          mentions,
-          contextInfo,
-        });
+        try {
+          console.log(`[sendMenuWithBanner] sending IMAGE...`);
+          // 💡 2026-09-14: buildThumbnail is now REAL (jimp, pure JS - no
+          // sharp, no hang). Menus get a proper blurred banner preview
+          // instead of the old black 1×1 placeholder.
+          const thumb = await buildThumbnail(fs.readFileSync(imagePath));
+          console.log(`[sendMenuWithBanner] real thumbnail built: ${thumb.length} bytes`);
+          const msg = {
+            image: { url: imagePath },
+            caption: text,
+            mentions,
+            jpegThumbnail: thumb,
+          };
+          if (contextInfo) msg.contextInfo = contextInfo;
+
+          // 💡 CRITICAL FIX: wrap image send in a 15s timeout.
+          const sendPromise = sock.sendMessage(chatId, msg);
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Image send timed out after 15s (media upload hung)')), 15000)
+          );
+          const result = await Promise.race([sendPromise, timeoutPromise]);
+          console.log(`[sendMenuWithBanner] IMAGE SENT OK:`, JSON.stringify(result?.key || result?.status || 'no key'));
+          return result;
+        } catch (imgErr) {
+          console.error("[sendMenuWithBanner] IMAGE SEND FAILED:", imgErr.message);
+          console.error("[sendMenuWithBanner] falling back to TEXT");
+        }
       } else {
-        const botName = botConfig.getBotName();
-        const botMarker = `🃏 *${botName}*\n\n`;
-        return await sock.sendMessage(chatId, {
-          text: botMarker + text,
-          mentions,
-          contextInfo,
-        });
+        console.log(`[sendMenuWithBanner] banner file does NOT exist - skipping to text`);
       }
+      // Fall back to text
+      console.log(`[sendMenuWithBanner] falling back to TEXT`);
+      const botName = botConfig.getBotName();
+      const botMarker = `🃏 *${botName}*\n\n`;
+      const textMsg = {
+        text: botMarker + text,
+        mentions,
+      };
+      if (contextInfo) textMsg.contextInfo = contextInfo;
+      return await sock.sendMessage(chatId, textMsg);
     }
 
     // New dynamic menu function
@@ -3928,13 +5816,13 @@ ${targetCategory}`;
         const emoji = CATEGORY_EMOJIS[targetCategory] || "📂";
         let catMsg = GET_BANNER(`${emoji} ${targetCategory.toUpperCase()}`) + `\n\n`;
         visibleCmds.forEach((c) => {
-          catMsg += `➤ \`${prefix} ${c.cmd}\` – ${c.desc.split(".")[0]}\n`;
+          catMsg += `➤ \`${prefix} ${c.cmd}\` - ${c.desc.split(".")[0]}\n`;
         });
         catMsg += `\n➤ Type \`${prefix} menu\` to go back.`;
         return await sendMenuWithBanner(sock, chatId, catMsg);
       }
 
-      // 3. MAIN MENU – all categories at once (.j menu OR .j menu all)
+      // 3. MAIN MENU - all categories at once (.j menu OR .j menu all)
       const categories = Object.keys(COMMAND_REGISTRY);
       const visibleCategories = categories.filter(
         (cat) => cat !== "MODERATOR" || showHidden,
@@ -3945,7 +5833,7 @@ ${targetCategory}`;
         `\n *Version ${botConfig.getVersion() || "1.0.0"}* \n *By mellow* \n\n`;
 
       mainMsg += `*Prefix:* ${prefix}\n\n`;
-      mainMsg += `📂 *Categories* – type \`${prefix} menu <name>\` to open:\n\n`;
+      mainMsg += `📂 *Categories* - type \`${prefix} menu <name>\` to open:\n\n`;
 
       for (let i = 0; i < visibleCategories.length; i += 2) {
         const cat1Name = visibleCategories[i];
@@ -3962,9 +5850,212 @@ ${targetCategory}`;
       }
 
       mainMsg += `\n➤ Type \`${prefix} menu <CATEGORY>\` to see its commands.`;
-      mainMsg += `\n\n💡 *Tip:* Use \`${prefix} blacksmith\` to check and repair your gear! Broken items lose all stats.`;
 
-      return await sendMenuWithBanner(sock, chatId, mainMsg);
+      // 💡 ROTATING TIPS: 30 tips, one randomly chosen each time the menu opens.
+      // Covers blacksmith, crafting, combat, cards, guilds, economy, PvP, Abyss,
+      // and general gameplay. Keeps the menu feeling fresh + teaches mechanics.
+      const TIPS = [
+        `Use \`${prefix} blacksmith\` to check and repair your gear! Broken items lose all stats.`,
+        `Enhancement stones stack additively, not multiplicatively. A Legendary Stone (+35%) is always better than 3 Minor Stones (+15%).`,
+        `Mythic items can be enhanced up to Level 30 - that's 11.5× base stats. Don't waste Legendary Stones on Common gear!`,
+        `Socket a COOLDOWN Rune (Abyss drop) into your ultimate to cast it every turn. ABYSSAL tier = no cooldown at all.`,
+        `Status effects stack! WET + SHOCK = automatic stun. Use SHOCK_INFUSION rune on a water skill for free CC.`,
+        `BARRAGE rune splits one hit into 5 weaker hits that bypass shields - perfect against tanky bosses with active shields.`,
+        `SOUL_RIP rune executes enemies below 20% HP for up to 4× bonus true damage. Pair with LIFESTEAL for maximum sustain.`,
+        `Chain Lightning (Elementalist) arcs to 3 enemies. Socket MULTI_SHOT rune to hit even more targets.`,
+        `Defend gives you a shield equal to 1.5× your DEF. Use it when enemies are charging up a big attack.`,
+        `Your MAG stat affects magical skills. If your class uses magic (Mage, Warlock, Elementalist), invest in MAG not ATK.`,
+        `Crit chance is capped at 100%. Beyond that, invest in CRIT damage via equipment and runes.`,
+        `Evasion caps at 75%. Beyond that, stack DEF and damage reduction instead.`,
+        `Runes only drop in the Abyss (Floor 21+). The deeper you go, the better the tier.`,
+        `Abyss Floor 50+ can drop ABYSSAL-tier runes - the strongest in the game.`,
+        `Use \`${prefix} rune inv\` to see your rune inventory and \`${prefix} rune socket <runeId> <skillId>\` to socket them.`,
+        `Ultimate skills have 3 rune slots. Regular skills have 1-2. Plan your socketing accordingly.`,
+        `Guild bank balance is used for building upgrades, not guild XP. Donate Zeni to fund your guild's growth.`,
+        `Rank missions unlock every 2 rank promotions. Complete them via \`${prefix} rank mission\` to advance past D, B, S, and SSS rank.`,
+        `PvP duels use your actual maxEnergy, not a capped 100. Ultimates like Singularity (162 energy) are fully castable.`,
+        `Weapons with elemental damage (e.g. Hellfire Greatmaul) can proc bonus status effects on basic attacks.`,
+        `Durability decreases with each hit. A broken weapon does ZERO damage - always carry a repair kit!`,
+        `Crafting recipes often require materials from specific dungeon ranks. Check \`${prefix} craft\` for the full recipe list.`,
+        `The Dragon Seal Ring is required to damage dragons. Keep it in your bag OR equipped - both work.`,
+        `Boss HP scales with dungeon rank AND party size. A solo F-rank boss has ~2500 HP; a 5-player S-rank boss has millions.`,
+        `Overkill damage (2× the killing blow) grants bonus Zeni. Save your ultimates for the killing blow!`,
+        `Skills don't reset between floors in the Abyss. If you used your ultimate on Floor 1, it's on cooldown for Floor 2.`,
+        `Cards spawn every 20 minutes in enabled chats. Use \`${prefix} spawninfo\` to check the timer.`,
+        `Event cards (E-tier) never spawn naturally - they're only available via \`${prefix} eshop\` or admin \`${prefix} espawn\`.`,
+        `Investment system offers 5-80% interest rates. Higher risk = higher reward, but you can lose your principal.`,
+        `Wealth tax runs every 72 hours. Keep your wallet balanced or the taxman cometh.`,
+        // 💡 2026-09-10: non-RPG tips - groups, games, utility, economy ops.
+        `5 warnings = automatic kick. Mods can wipe your slate with \`${prefix} resetwarn\`.`,
+        `Reply to any message and use \`${prefix} pin\` to pin it for the whole group.`,
+        `\`${prefix} glock rank <level>\` locks the chat behind a rank gate - \`${prefix} glock open\` frees it.`,
+        `\`${prefix} cards on\` / \`${prefix} cards off\` toggles card spawns for this group only.`,
+        `Deck creators: submit to the eShop, then a mod approves it via the deck queue.`,
+        `Type \`${prefix} menu <command>\` on ANY command to see its full usage guide.`,
+        `\`${prefix} menu -h\` reveals the hidden moderator category (mods see it anyway).`,
+        `Type \`${prefix} bots\` to see which bot instances are online right now.`,
+        `The GAMES category has Wordle and more - type \`${prefix} menu games\` to browse.`,
+        `Search the web straight from chat: \`${prefix} search <query>\`.`,
+        `Turn images into stickers with the STICKERS tools - \`${prefix} menu stickers\`.`,
+        `Interactions (\`${prefix} hug\`, \`${prefix} slap\`...) - \`${prefix} reactions\` lists them all.`,
+      ];
+      // 💡 LORE TIP SLOT (lore_drop_system.md §3 "general"): one menu in six
+      // appends a general-world lore drop as its OWN message after the menu
+      // (owner 2026-09-20: a drop is a distinct lore event, never baked into
+      // another message box).
+      let __menuLoreDrop = null;
+      if (Math.random() < 1 / 6) {
+        try {
+          const loreDrops = require('./rpg/loreDrops');
+          __menuLoreDrop = loreDrops.maybeDrop('general_world', { userId: senderJid || 'menu', chatId, force: true });
+        } catch (e) { __menuLoreDrop = null; }
+      }
+      const tip = TIPS[Math.floor(Math.random() * TIPS.length)];
+      mainMsg += `\n\n💡 *Tip:* ${tip}`;
+
+      await sendMenuWithBanner(sock, chatId, mainMsg);
+      if (__menuLoreDrop) {
+        try {
+          const loreDrops = require('./rpg/loreDrops');
+          await loreDrops.sendOwn(sock, chatId, __menuLoreDrop);
+        } catch (e) {}
+      }
+      return;
+    }
+
+    // ============================================
+    // 🛡️ MOD TERMINAL - 2026-09-10
+    // Regular-menu UX, mods only. One command: <prefix> mod
+    //   mod                 -> main grid (two-column categories)
+    //   mod <category>      -> ➤ command list
+    //   mod <command>       -> explain mode (desc/usage/category)
+    //   anything else       -> falls through to the GM admin console
+    // Data lives in ./utils/modMenuData.js (single source of truth).
+    // Returns true if it rendered a view, false to fall through.
+    // ============================================
+    async function sendModMenu(sock, chatId, senderJid, args = [], senderIsOwner = false) {
+      const prefix = botConfig.getPrefix() || ".j";
+      const { MOD_MENU, MOD_TIPS } = require("./utils/modMenuData");
+
+      // Resolve the viewer's tiers (same gate as the old MOD COMMAND CENTER)
+      const tier = {
+        owner: senderIsOwner,
+        gmod: senderIsOwner || isGlobalMod(senderJid),
+        rpg: senderIsOwner || isGlobalMod(senderJid) || isRpgMod(senderJid),
+        card:
+          senderIsOwner ||
+          isGlobalMod(senderJid) ||
+          isCardsMod(senderJid) ||
+          (cardSystem && cardSystem.getInst && cardSystem.getInst().modJids && cardSystem.getInst().modJids.has(senderJid)),
+        // 💡 QUIZ MODS (2026-09-27): Quiz Mods see the Quiz Tools category
+        quiz: senderIsOwner || isGlobalMod(senderJid) || isQuizMod(senderJid),
+      };
+      tier.any = tier.owner || tier.gmod || tier.rpg || tier.card;
+
+      const visible = Object.entries(MOD_MENU).filter(([key, cat]) => tier[cat.tier]);
+
+      // Flat index: "setlevel" / "eshop deck approve" -> command entry
+      const flat = {};
+      for (const [key, cat] of Object.entries(MOD_MENU)) {
+        for (const c of cat.commands) flat[c.cmd.toLowerCase()] = { catKey: key, ...c };
+      }
+
+      const cleanArgs = (args || []).filter((a) => !a.startsWith("-"));
+      const input = cleanArgs.join(" ").toLowerCase().trim();
+
+      const tip = MOD_TIPS[Math.floor(Math.random() * MOD_TIPS.length)].replaceAll("{p}", prefix);
+
+      // ── CATEGORY DETAIL (mod <category>) ──
+      if (input) {
+        const catMatch = visible.find(
+          ([key, cat]) =>
+            key.toLowerCase() === input || cat.name.toLowerCase() === input,
+        );
+        if (catMatch) {
+          const [key, cat] = catMatch;
+          let catMsg =
+            GET_BANNER(`${cat.emoji} ${cat.name.toUpperCase()} - MOD`) + `\n\n`;
+          // Each entry shows its SHORT action label (ticket #b4f818):
+          // `sandbox`, `createclass`, `givezeni` - not the full invocation
+          // path. The real invocation form lives in the explain view
+          // (`.j mod <command>`) and in the footer hint below.
+          cat.commands.forEach((c) => {
+            catMsg += `➤ \`${c.cmd}\`\n`;
+          });
+          catMsg += `\n➤ Type \`${prefix} mod <command>\` for details.`;
+          catMsg += `\n➤ Type \`${prefix} mod\` to go back.`;
+          await sendMenuWithBanner(sock, chatId, catMsg);
+          return true;
+        }
+
+        // ── COMMAND EXPLAIN (mod <command>) ──
+        // Explains when input EXACTLY equals a registered command (no extra
+        // args) - multiword commands like "eshop deck approve" included.
+        // Real runs ("mod setlevel @user 50") still fall to the console.
+        const exact = flat[input];
+        if (exact) {
+          const cmdWordCount = exact.cmd.split(" ").length;
+          const isBareLookup = cleanArgs.length === cmdWordCount;
+          // modclass with no args shows the interactive class list - keep that.
+          // 💡 TICKET #b4f855: createclass must ALSO fall through to the admin
+          // console - `.j mod createclass` must open the real CLASS CREATOR
+          // template (detailed creation fields), not the generic one-line menu
+          // description. It was being intercepted by this explain view.
+          const isFallThroughCmd =
+            exact.cmd === "modclass" || exact.cmd === "createclass";
+          if (isBareLookup && !isFallThroughCmd && visible.some(([k]) => k === exact.catKey)) {
+            const cat = MOD_MENU[exact.catKey];
+            let explainMsg = GET_BANNER(`${cat.emoji} ${botConfig.getBotName().toUpperCase()}`) + `\n\n`;
+            explainMsg += `*Command:* \`${prefix} ${exact.usage}\`\n\n`;
+            explainMsg += `*Description:*\n${exact.desc}\n\n`;
+            if (exact.eg) explainMsg += `*Example:*\n\`${prefix} ${exact.eg}\`\n\n`;
+            explainMsg += `*Category:*\n${cat.name}`;
+            explainMsg += `\n\n💡 *Tip:* ${tip}`;
+            await sendMenuWithBanner(sock, chatId, explainMsg);
+            return true;
+          }
+        }
+        // Unknown or run-with-args -> fall through to the admin console
+        return false;
+      }
+
+      // ── MAIN VIEW - mirrors the regular menu layout ──
+      const botName = botConfig.getBotName() || "Mellow's Bot";
+      const permLabel = tier.owner
+        ? "👑 Owner"
+        : tier.gmod
+          ? "🛡️ Global Mod"
+          : tier.rpg
+            ? "⚔️ RPG Mod"
+            : tier.card
+              ? "🎴 Card Mod"
+              : "👤 Member";
+
+      let mainMsg =
+        GET_BANNER(`🛡️ *MOD TERMINAL*`) +
+        `\n *Version ${botConfig.getVersion() || "1.0.0"}* \n *By mellow* \n\n`;
+
+      mainMsg += `_Your permissions: ${permLabel}_\n\n`;
+      mainMsg += `*Prefix:* ${prefix}\n\n`;
+      mainMsg += `📂 *Mod Categories* - type \`${prefix} mod <name>\` to open:\n\n`;
+
+      for (let i = 0; i < visible.length; i += 2) {
+        const cat1 = visible[i];
+        const c1 = `\`${cat1[1].emoji} ${cat1[1].name}\``.padEnd(18);
+        let c2 = "";
+        if (i + 1 < visible.length) {
+          const cat2 = visible[i + 1];
+          c2 = `\`${cat2[1].emoji} ${cat2[1].name}\``;
+        }
+        mainMsg += `${c1} ${c2}\n`;
+      }
+
+      mainMsg += `\n➤ Type \`${prefix} mod <CATEGORY>\` to see its commands.`;
+      mainMsg += `\n➤ Type \`${prefix} mod <command>\` for details.`;
+      mainMsg += `\n\n💡 *Tip:* ${tip}`;
+
+      await sendMenuWithBanner(sock, chatId, mainMsg);
+      return true;
     }
 
     // ============================================
@@ -4130,7 +6221,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           await new Promise((r) => setTimeout(r, 2000));
         } catch (err) {
           console.error(
-            `❌❌ Failed to send article to ${chatId}:`,
+            `❌ Failed to send article to ${chatId}:`,
             err.message,
           );
         }
@@ -4153,7 +6244,8 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         let sentCount = 0;
 
         for (const [chatId, config] of groupSettings.entries()) {
-          if (config.animeNews) {
+          // 🚫 MASTER GC GATE: never proactively message a blacklisted group
+          if (config.animeNews && enabledGcs.has(chatId)) {
             const success = await sendNewsToGroup(sock, chatId, articles);
             if (success) sentCount++;
             await new Promise((r) => setTimeout(r, 2000));
@@ -4166,7 +6258,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
       }
     }
 
-    async function broadcastUpdate(sock, customMessage = null) {
+    async function broadcastUpdate(sock, customMessage = null, selectedGroups = null) {
       const v = botConfig.getVersion();
 
       let allGroups = [];
@@ -4176,7 +6268,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         allGroups = Object.keys(groupsData);
       } catch (err) {
         console.error(
-          "❌❌ Failed to fetch groups from WhatsApp:",
+          "❌ Failed to fetch groups from WhatsApp:",
           err.message,
         );
         // Fallback to groupSettings if WhatsApp fetch fails
@@ -4190,18 +6282,25 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         return 0;
       }
 
+      let targetGroups = allGroups;
+      let skippedCount = 0;
+      if (selectedGroups && Array.isArray(selectedGroups) && selectedGroups.length > 0) {
+        targetGroups = allGroups.filter(g => selectedGroups.includes(g));
+        skippedCount = allGroups.length - targetGroups.length;
+      }
+
       const m =
         customMessage ||
         "╭───────────────────╮\n  📢 *BOT UPDATE v" +
           v +
-          "* \n╰───────────────────╯\n\n*System improvements have been applied!* 🛡️\n\nUse `.g menu` to see all commands.";
+          "* \n╰───────────────────╯\n\n*System improvements have been applied!* 🛡️\n\nUse `" + botConfig.getPrefix() + " menu` to see all commands.";
 
       let sentCount = 0;
       console.log(
         `📡 Starting live broadcast to ${allGroups.length} groups...`,
       );
 
-      for (const g of allGroups) {
+      for (const g of targetGroups) {
         try {
           await sock.sendMessage(g, { text: BOT_MARKER + m });
           sentCount++;
@@ -4211,7 +6310,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           console.error(`❌❌ Failed broadcast to ${g}:`, e.message);
         }
       }
-      return sentCount;
+      return { count: sentCount, skipped: skippedCount };
     }
 
     async function initSocket() {
@@ -4227,32 +6326,90 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         // QR code appears immediately. Data is loaded once the connection opens.
         const isFreshLogin = !state.creds?.me;
         if (!isFreshLogin) {
-          // Existing session — load everything before connecting (normal path)
-          await loadGlobalMods();
-          await loadBlockedUsers();
+          // Existing session - load everything before connecting (normal path)
+          // 💡 FIX: system.loadSystemData MUST run BEFORE loadGlobalMods etc.
+          // because mod loading reads from the systemCache (in-memory Map)
+          // that loadSystemData populates. If mods load first, the cache is
+          // empty → system.get returns null → no mods loaded → they appear
+          // "reset" on every bot restart.
+          await system.loadSystemData();
+          try { murderMystery.init(); } catch (e) { console.error('murder init failed:', e.message); } // 🔪 rehydrate running mysteries after boot
+          await economy.loadEconomy();
+          await guilds.loadGuilds();
+          await loans.loadLoans();
+          await lidResolver.loadLidMappings();
 
-          await Promise.all([
-            system.loadSystemData(),
-            economy.loadEconomy(),
-            guilds.loadGuilds(),
-            guilds.loadChallenges(),
-            loans.loadLoans(),
-            lidResolver.loadLidMappings(),
-          ]);
+          // NOW load mods (system cache is populated)
+          await loadGlobalMods();
+          await loadRpgMods();
+    try { await loadGameTesters(); } catch(e) { console.error('Game Tester load failed:', e.message); }
+          await loadCardsMods();
+          try { await loadQuizMods(); } catch(e) { console.error('Quiz Mods load failed:', e.message); }
+          try { await loadGcOwners(); } catch(e) { console.error("GC owner load failed:", e.message); }
+          await loadBlockedUsers();
+          await loadBannedUsers();
+          await loadHardBannedUsers();
+          await loadHardMutedUsers();
+
+          // 💡 FIX 2026-09-11: keep shared mod lists in sync across instances.
+          // The Sets above are a boot snapshot; without this timer a mod added
+          // on any other bot was invisible here until restart. Capture the
+          // botId NOW (we're inside this instance's AsyncLocalStorage context;
+          // a raw setInterval callback would lose it and resolve to "global").
+          if (!modRefreshTimersByBot.has(botConfig.getBotId())) {
+            const modRefreshBotId = botConfig.getBotId();
+            const modRefreshTimer = setInterval(() => {
+              refreshSharedModSets(modRefreshBotId).catch(() => {});
+            }, 45 * 1000);
+            if (typeof modRefreshTimer.unref === 'function') modRefreshTimer.unref();
+            modRefreshTimersByBot.set(modRefreshBotId, modRefreshTimer);
+            console.log(`🔄 [${modRefreshBotId}] shared mod-list auto-refresh every 45s`);
+          }
 
           // Chess must be loaded after system data is ready
           chess.loadActiveGames();
 
           loadEnabledChats();
+          loadEnabledGcs();
           loadGroupSettings();
           loadSupportUsage();
           loadMutedUsers();
           loadUserWarnings();
+          // 💡 NOT-NUDE SAFELIST (2026-09-28): persist mod-marked images in the
+          // system KV so "antinude ok" verdicts survive restarts. Idempotent.
+          try {
+            require('./utils/antinude').initSafelistStore({
+              load: () => system.get(BOT_ID + "_antinude_safelist", {}),
+              save: (obj) => system.set(BOT_ID + "_antinude_safelist", obj),
+            });
+          } catch (e) { console.log(`[Antinude] safelist store init failed: ${e.message}`); }
         } else {
-          console.log(`🔑 [${BOT_ID}] No existing session — showing QR immediately. Data will load after login.`);
+          console.log(`🔑 [${BOT_ID}] No existing session - showing QR immediately. Data will load after login.`);
+          // 🛡️ AUTH PRESERVATION GUARD (2026-09-28): if a creds.json exists on
+          // disk but has no `me`, the fresh-pair flow below is about to overwrite
+          // it. That exact overwrite is how a live Subaru session was lost during
+          // a deploy (creds loaded me-less -> re-pair -> old file unrecoverable).
+          // Preserve the old file so any session loss is a rename away from a fix.
+          try {
+            const __fs = require("fs");
+            const __legacyCreds = `${authPath}/creds.json`.replace(/\/+/g, "/");
+            if (__fs.existsSync(__legacyCreds)) {
+              const __stamp = new Date().toISOString().replace(/[:.]/g, "-");
+              __fs.renameSync(__legacyCreds, `${__legacyCreds}.preserve-${__stamp}`);
+              console.log(`🛡️ [${BOT_ID}] existing creds.json (no 'me') preserved as creds.json.preserve-${__stamp}`);
+            }
+          } catch (e) {
+            console.log(`[${BOT_ID}] creds preservation check failed (non-fatal): ${e?.message?.slice(0, 60)}`);
+          }
         }
 
-        const { version } = await fetchLatestBaileysVersion();
+        // 💡 FIX: skip the fetchLatestBaileysVersion() network round-trip on
+        // every boot. That call hits WhatsApp's servers and takes 15-30s on
+        // slow or congested connections - causing the notorious "why is it
+        // taking so long to give the pairing code?" delay.
+        // The version tuple is pinned to the last known-good value; update it
+        // manually if Baileys starts rejecting the session.
+        const version = [2, 3000, 1043857760];
         sock = makeWASocket({
           version,
           auth: {
@@ -4263,33 +6420,276 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
             ),
           },
           logger: P({ level: "silent" }),
-          experimentalStore: true,
           syncFullHistory: false,       // skip loading old message history on boot
           shouldSyncHistoryMessage: () => false, // ⚡ SKIP downloading/decrypting history sync messages
-          markOnlineOnConnect: true,    // broadcast online status to keep connection active and warm
+          // 💡 POLISH 2026-07-17: markOnlineOnConnect=false - Baileys 7.x was
+          // broadcasting the bot's online presence every few seconds AND
+          // auto-subscribing to other users' presence updates. This caused
+          // excessive traffic, made the bot appear "noisy" to WhatsApp's
+          // servers, and may have contributed to soft-fail / shadow-ban
+          // patterns where the bot connects but doesn't receive messages.
+          // Disabling means the bot won't appear "online" in chat lists,
+          // but it also won't trigger the presence-subscription storm.
+          markOnlineOnConnect: false,
+          // 💡 POLISH 2026-07-17: explicit defaultQueryTimeout to avoid
+          // hanging on stalled queries (presence fetches, group metadata
+          // fetches, etc). 10s is generous but bounded.
+          defaultQueryTimeout: 10000,
+
+          // 💡 CRITICAL FIX (media upload hang): Baileys rc13's
+          // uploadWithNodeHttp passes `timeout: timeoutMs` to Node's
+          // https.request. If mediaUploadTimeoutMs is not set, timeoutMs
+          // is undefined → Node treats it as NO timeout → the upload
+          // hangs FOREVER if WhatsApp's media server doesn't respond.
+          // This is exactly what was happening: text sends work (they go
+          // over the WebSocket), but image sends hang (they require an
+          // HTTP POST to mmg.whatsapp.net which never completes).
+          // Setting this to 20s ensures the upload fails fast instead
+          // of hanging indefinitely, so the queue can move on and the
+          // text fallback can be sent.
+          mediaUploadTimeoutMs: 20000,
+
+          // 💡 CRITICAL FIX (IPv6 hang): Oracle Cloud instances have IPv6
+          // configured, but the IPv6 route to WhatsApp's media servers
+          // may not work. Node's default behavior is to try IPv6 first
+          // (happy eyeballs), which can cause the HTTPS connection to
+          // mmg.whatsapp.net to hang for 20+ seconds before falling back
+          // to IPv4. By passing a custom agent with family:4, we force
+          // IPv4 only - eliminating the IPv6 hang entirely.
+          // This agent is used by Baileys' uploadWithNodeHttp (line 555:
+          // `agent: fetchAgent`) for all media uploads.
+          fetchAgent: new (require('https').Agent)({
+            family: 4,           // force IPv4 - avoid IPv6 hang on Oracle
+            keepAlive: true,     // reuse connections for multiple uploads
+            timeout: 20000,      // socket timeout as a safety net
+          }),
+
+          // 💡 customUploadHosts is required by Baileys (used in
+          // getWAUploadToServer: `[...customUploadHosts, ...uploadInfo.hosts]`).
+          // If undefined, the spread throws "undefined is not iterable".
+          // Default to empty array - Baileys will use WhatsApp's hosts.
+          customUploadHosts: [],
+
+          // 💡 FIX 2026-09-25 (gstatus media root cause): relayMessage() derives
+          // the stanza `mediatype` attribute from the TOP-LEVEL message BEFORE
+          // this hook runs, but group statuses must travel wrapped in
+          // groupStatusMessageV2. gsPost therefore relays media TOP-LEVEL (so
+          // mediatype lands on the <enc> node and the server can process it)
+          // and marks it; this hook re-wraps ONLY marked messages into the
+          // official status envelope right before encoding. Every unmarked
+          // message passes through untouched - zero regression surface for
+          // normal messages, reactions, polls, etc.
+          patchMessageBeforeSending: async (message) => {
+            try {
+              const mark = globalThis.__gsWrapMark;
+              if (mark && mark.has(message)) {
+                mark.delete(message);
+                const secret = require("crypto").randomBytes(32);
+                return {
+                  messageContextInfo: { messageSecret: secret },
+                  groupStatusMessageV2: {
+                    message: { ...message, messageContextInfo: { messageSecret: secret } },
+                  },
+                };
+              }
+            } catch (gsWrapErr) {
+              console.log("[GStatus] wrap hook failed (sending unwrapped):", gsWrapErr?.message);
+            }
+            return message;
+          },
         });
+        _moduleSock = sock; // 💡 FIX: module-level ref so getSock() works from outside startBot()
 
         sendQueue.bind(sock);
-        sock.sendMessage = (j, m, o = {}) => sendQueue.send(j, m, o);
+        const originalQueueSend = sendQueue.send.bind(sendQueue);
+        sock.sendMessage = (j, m, o = {}) => {
+          if (m && typeof m === 'object') {
+            const mediaKeys = ['image', 'video', 'audio', 'document', 'sticker'];
+            for (const key of mediaKeys) {
+              if (m[key]) {
+                const media = m[key];
+                const hasUrl = media.url && typeof media.url === 'string';
+                const hasBuffer = media.buffer && Buffer.isBuffer(media.buffer);
+                const isStream = media.stream || media instanceof require('stream');
+                
+                if (!hasUrl && !hasBuffer && !isStream && !Buffer.isBuffer(media)) {
+                  console.warn(`[Validation] Dropping invalid ${key} payload for ${j} (missing url/buffer)`);
+                  return Promise.resolve({ status: 'dropped', reason: 'invalid_media' });
+                }
+              }
+            }
+          }
+          return originalQueueSend(j, m, o);
+        };
 
         // Wrap event registrations in the storage context to ensure isolation
         await botConfig.storage.run(configInstance, async () => {
           sock.ev.on("creds.update", saveCreds);
-          botStartTime = Date.now();
+          // 💡 FIX 2026-08-14: Only set botStartTime on FIRST connect, not on
+          // every reconnect. This prevents uptime from resetting when the bot
+          // temporarily disconnects and reconnects (which happens frequently
+          // with WhatsApp's connection management).
+          //
+          // We also check MongoDB for a persisted startedAt from a previous
+          // run of this bot instance. If found and the PID is different (process
+          // restarted), we use the CURRENT time (fresh start). If the PID is
+          // the same (reconnect within same process), we keep the original
+          // startedAt so uptime doesn't reset.
+          if (!botStartTime) {
+            try {
+              const System = require('./models/System');
+              const existingHb = await System.findOne({ key: 'heartbeat_' + BOT_ID }).lean();
+              if (existingHb && existingHb.value) {
+                const prev = existingHb.value;
+                if (prev.pid === process.pid && prev.startedAt) {
+                  // Same process - this is a reconnect, not a restart.
+                  // Keep the original startedAt so uptime doesn't reset.
+                  botStartTime = prev.startedAt;
+                  console.log(`⏱️ [${BOT_ID}] Uptime preserved: ${formatUptime(Date.now() - botStartTime)} (reconnect, same PID ${process.pid})`);
+                } else {
+                  // Different PID - process restarted. Fresh start.
+                  botStartTime = Date.now();
+                  console.log(`⏱️ [${BOT_ID}] Fresh start time set (PID ${process.pid})`);
+                }
+              } else {
+                botStartTime = Date.now();
+                console.log(`⏱️ [${BOT_ID}] First start time set (PID ${process.pid})`);
+              }
+            } catch (e) {
+              botStartTime = Date.now();
+              console.log(`⏱️ [${BOT_ID}] Start time set (fallback, PID ${process.pid})`);
+            }
+          }
+
+          let pairingCodeRequested = false;
+          const pairingPhoneConfig = configInstance.pairingPhone || null;
+
+          const requestAndDisplayPairingCode = async (phone) => {
+            if (pairingCodeRequested) return;
+            pairingCodeRequested = true;
+            try {
+              console.log(`\n📱 [${BOT_ID}] Requesting pairing code for ${phone}...`);
+              const code = await sock.requestPairingCode(phone);
+              console.log(`\n╔══════════════════════════════════════╗`);
+              console.log(`║  🔑 PAIRING CODE: ${code}              ║`);
+              console.log(`╚══════════════════════════════════════╝`);
+              console.log(`\n📱 On your phone:`);
+              console.log(`   WhatsApp → Settings → Linked Devices`);
+              console.log(`   → Link a Device`);
+              console.log(`   → "Link with phone number instead"`);
+              console.log(`   → Enter: ${code}\n`);
+
+              botInstancesHealth.set(BOT_ID, {
+                name: BOT_NAME,
+                status: "needs_pairing",
+                lastUpdated: Date.now(),
+                error: `Pairing code: ${code}`,
+              });
+            } catch (pairErr) {
+              pairingCodeRequested = false;
+              console.error(`❌ [${BOT_ID}] Fast pairing code failed:`, pairErr.message);
+            }
+          };
+
+          // ⚡ FAST PAIRING: If pairingPhone is configured and device not registered,
+          // request pairing code directly after socket opens without waiting 60-90s for QR cycle!
+          if (pairingPhoneConfig && !state.creds?.registered) {
+            setTimeout(() => {
+              if (!pairingCodeRequested && !state.creds?.registered) {
+                requestAndDisplayPairingCode(pairingPhoneConfig).catch(() => {});
+              }
+            }, 3500);
+          }
 
           sock.ev.on("connection.update", async (update) => {
             const { connection, lastDisconnect, qr } = update;
 
-            if (qr && !qrShown) {
+            if (qr && !qrShown && !pairingCodeRequested) {
               qrShown = true;
-              botInstancesHealth.set(BOT_ID, {
-                name: BOT_NAME,
-                status: "needs_qr",
-                lastUpdated: Date.now(),
-                error: "Authentication QR code generated. Scan to login.",
-              });
-              console.log("📱 Scan this QR code to login:");
-              qrcode.generate(qr, { small: true });
+
+              // 💡 FIX 2026-07-26: Pairing code is now the DEFAULT login
+              // method. QR code is the BACKUP. Previous code auto-skipped
+              // to QR after a 5-second timeout (too fast to type), and
+              // defaulted to QR (option 1). Now:
+              //   - Pairing code is option 1 (default)
+              //   - QR code is option 2 (backup)
+              //   - NO timeout on the menu (waits forever for input)
+              //   - NO timeout on phone number entry (waits forever)
+              //   - If pairingPhone is set in botConfig.json, use it directly
+              //   - If stdin not available (PM2), use pairingPhone if set,
+              //     otherwise fall back to QR
+              const pairingPhoneConfig = configInstance.pairingPhone || null;
+
+              let usePairing = false;
+              let phoneForPairing = null;
+
+              if (pairingPhoneConfig) {
+                // Pre-configured in botConfig.json - use it directly (works in PM2 too)
+                usePairing = true;
+                phoneForPairing = pairingPhoneConfig;
+              } else if (isFreshLogin) {
+                const isPM2 = Boolean(process.env.PM2_HOME || process.env.PM2_USAGE || !process.stdin.isTTY);
+                if (isPM2) {
+                  // Non-interactive: can't prompt for phone number.
+                  // QR code is the only option that works without stdin.
+                  console.log(`📱 [${BOT_ID}] Non-interactive background mode (PM2). Rendering QR code...`);
+                  console.log(`   💡 To use pairing code instead, set "pairingPhone": "<your_number>" in instances/${BOT_ID}/botConfig.json`);
+                } else {
+                  // Interactive terminal - let the user choose, NO timeout
+                  console.log(`\n╔══════════════════════════════════════════════════╗`);
+                  console.log(`║  🔐 LOGIN METHOD - ${BOT_ID.padEnd(37)}║`);
+                  console.log(`╠══════════════════════════════════════════════════╣`);
+                  console.log(`║  1️⃣  Pairing Code (enter code on phone) [DEFAULT]║`);
+                  console.log(`║  2️⃣  QR Code (scan with phone camera) [BACKUP]   ║`);
+                  console.log(`╚══════════════════════════════════════════════════╝`);
+
+                  try {
+                    const readline = require('readline');
+                    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+                    const choice = await new Promise(resolve => {
+                      // 💡 NO timeout - wait forever for the user to choose.
+                      // Previous code had a 5s timeout that auto-defaulted to
+                      // QR code, which was way too fast.
+                      rl.question('Choose (1 or 2, default=1 for pairing code): ', answer => { rl.close(); resolve(answer.trim() || '1'); });
+                    });
+
+                    // Default to pairing code (option 1) instead of QR
+                    if (choice === '2') {
+                      // QR code - just fall through (qr is already rendered by Baileys)
+                      console.log('📱 Using QR code. Scan it with your phone.\n');
+                    } else {
+                      // Pairing code (default) - ask for phone number, NO timeout
+                      const rl2 = readline.createInterface({ input: process.stdin, output: process.stdout });
+                      const phone = await new Promise(resolve => {
+                        // 💡 NO timeout - wait forever for the phone number.
+                        // Previous code had a 10s timeout.
+                        rl2.question('📱 Enter phone number (country code, no +, e.g. 2348086616347): ', answer => { rl2.close(); resolve(answer.trim()); });
+                      });
+                      if (phone && /^\d{8,15}$/.test(phone)) {
+                        usePairing = true;
+                        phoneForPairing = phone;
+                      } else {
+                        console.log('❌ Invalid phone number. Falling back to QR code.\n');
+                      }
+                    }
+                  } catch (e) {
+                    console.log('(stdin not available, using QR code)');
+                  }
+                }
+              }
+
+              if (usePairing && phoneForPairing) {
+                await requestAndDisplayPairingCode(phoneForPairing);
+              } else {
+                botInstancesHealth.set(BOT_ID, {
+                  name: BOT_NAME,
+                  status: "needs_qr",
+                  lastUpdated: Date.now(),
+                  error: "Authentication QR code generated. Scan to login.",
+                });
+                console.log(`\n📱 [${BOT_ID}] Scan this QR code to login:\n`);
+                qrcode.generate(qr, { small: true });
+              }
             }
 
             if (connection === "open") {
@@ -4309,10 +6709,52 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               isRekeying = false; // BOT IS STABLE
               ignoreBroadcasts = false; // Allow broadcasts after successful connection
 
+              // 💡 PERF PATCH 2026-07-27: bind cardSystem.sock_ref SYNCHRONOUSLY
+              // before any await in this handler. Without this, the first wave of
+              // post-connect messages hits handleCommand() while sock_ref is still
+              // null (init() hadn't been called yet - it was 80+ lines below,
+              // behind ~6 awaits that take 1-30s to resolve on a cold start).
+              // Symptom: "🃏 [cardSystem] returning false: inst.sock_ref is null"
+              // for EVERY card command in the first ~30s after a reconnect.
+              // bindSocket() is sync and only sets the sock_ref - the heavy
+              // DB loads still happen later via cardSystem.init() below.
+              try { cardSystem.bindSocket(sock); } catch (e) { /* best-effort */ }
+
+              // 💡 REBUILT 2026-09-14 (owner: "the thumbnail is always black
+              // instead of the blurry version - fix it"):
+              // The old patch injected a 1×1 JPEG whose base64 decoded to a
+              // BLACK pixel - every image previewed as a black box. sharp
+              // must STILL never be called (native segfault on Oracle kills
+              // the whole process), so the patch now injects a REAL preview
+              // generated with jimp (pure JS) via buildThumbnailSmart:
+              //   • content.image Buffer   → thumbnail from the bytes
+              //   • content.image {url}    → local file read or bounded
+              //     http(s) download (6s, 8MB, LRU-cached)
+              //   • failure at any step    → light-gray placeholder
+              //   • video                  → gray placeholder (no ffmpeg
+              //     dependency - same as before, just no longer black)
+              if (!sock._sendMessagePatched) {
+                const _origSendMessage = sock.sendMessage.bind(sock);
+                sock.sendMessage = async (chatId, content, options = {}) => {
+                  try {
+                    if (content && !content.jpegThumbnail && content.image) {
+                      content.jpegThumbnail = await buildThumbnailSmart(content.image);
+                    } else if (content && !content.jpegThumbnail && content.video) {
+                      content.jpegThumbnail = FALLBACK_THUMB;
+                    }
+                  } catch (_) {
+                    // NEVER block or crash a send over a thumbnail problem.
+                  }
+                  return _origSendMessage(chatId, content, options);
+                };
+                sock._sendMessagePatched = true;
+                console.log(`🛡️ [${BOT_ID}] sock.sendMessage patched: injecting REAL image previews (jimp) - sharp stays banned`);
+              }
+
               // Give the WS a moment to settle, then flush any queued outbound messages.
               setTimeout(() => sendQueue.kick(), 1500);
 
-              // 💡 CROSS-INSTANCE HEARTBEAT — write this instance's status to
+              // 💡 CROSS-INSTANCE HEARTBEAT - write this instance's status to
               // the shared System collection every 30s so other instances can
               // check if we're alive via `.g instances`. Key format:
               // "heartbeat_<BOT_ID>" → { botId, name, status, lastSeen, uptime,
@@ -4320,13 +6762,17 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               if (heartbeatInterval) clearInterval(heartbeatInterval);
               const writeHeartbeat = async () => {
                 try {
-                  // 💡 FIX: botConfig.get() returns the active config STORE (for
-                  // AsyncLocalStorage), not a key-value getter. Use getSiblings().
+                  // 💡 FIX 2026-08-08: Read actual status from botInstancesHealth
+                  // instead of hard-coding 'connected'. This fixes the health
+                  // command showing all bots as Online even when disconnected.
+                  const selfHealth = botInstancesHealth.get(BOT_ID);
+                  const selfStatus = selfHealth?.status || 'connected';
                   const siblings = botConfig.getSiblings();
                   await system.set('heartbeat_' + BOT_ID, {
                     botId: BOT_ID,
                     name: BOT_NAME,
-                    status: 'connected',
+                    status: selfStatus,
+                    error: selfHealth?.error || null,
                     lastSeen: Date.now(),
                     startedAt: botStartTime || Date.now(),
                     uptimeMs: botStartTime ? (Date.now() - botStartTime) : 0,
@@ -4337,7 +6783,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     ramUsage: Math.round(process.memoryUsage().rss / 1024 / 1024),
                   });
                 } catch (e) {
-                  // Silent fail — heartbeat is best-effort
+                  // Silent fail - heartbeat is best-effort
                 }
               };
               await writeHeartbeat(); // write immediately on connect
@@ -4347,18 +6793,28 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               // load all data now that the session is established.
               if (isFreshLogin) {
                 console.log(`📦 [${BOT_ID}] Loading data post-QR login...`);
+                // 💡 FIX: system.loadSystemData MUST run BEFORE mod loading.
+                await system.loadSystemData();
+                try { murderMystery.init(); } catch (e) { console.error('murder init failed:', e.message); } // 🔪 rehydrate running mysteries after boot
+                await economy.loadEconomy();
+                await guilds.loadGuilds();
+                await loans.loadLoans();
+                await lidResolver.loadLidMappings();
+
+                // NOW load mods (system cache is populated)
                 await loadGlobalMods();
+                await loadRpgMods();
+                await loadCardsMods();
+                try { await loadQuizMods(); } catch(e) { console.error("Quiz Mods load failed:", e.message); }
+                try { await loadGcOwners(); } catch(e) { console.error("GC owner load failed:", e.message); }
                 await loadBlockedUsers();
-                await Promise.all([
-                  system.loadSystemData(),
-                  economy.loadEconomy(),
-                  guilds.loadGuilds(),
-                  guilds.loadChallenges(),
-                  loans.loadLoans(),
-                  lidResolver.loadLidMappings(),
-                ]);
+                await loadBannedUsers();
+                await loadHardBannedUsers();
+                await loadHardMutedUsers();
+
                 chess.loadActiveGames();
                 loadEnabledChats();
+                loadEnabledGcs();
                 loadGroupSettings();
                 loadSupportUsage();
                 loadMutedUsers();
@@ -4396,7 +6852,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               }
               qrShown = false;
 
-              // Initialize Card System (now async — awaits DB loads)
+              // Initialize Card System (now async - awaits DB loads)
               cardSystem.init(
                 sock,
                 [], // Admins (init empty, will load from DB)
@@ -4441,7 +6897,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
 
               if (!hasAuth(configInstance.getAuthPath())) {
-                console.log(`🔑 [${BOT_ID}] Auth folder missing or empty — creating it and restarting for fresh QR login...`);
+                console.log(`🔑 [${BOT_ID}] Auth folder missing or empty - creating it and restarting for fresh QR login...`);
                 try {
                   fs.mkdirSync(configInstance.getAuthPath(), { recursive: true });
                 } catch (e) {
@@ -4534,7 +6990,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           if (entry && Date.now() < entry.expires) {
             return entry.admins.has(participantJid);
           }
-          return null; // cache miss — caller falls back to metadata
+          return null; // cache miss - caller falls back to metadata
         }
 
         function buildAdminCache(groupJid, participants) {
@@ -4581,7 +7037,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
             return metadata;
           } catch (e) {
             console.error(
-              `❌❌ Failed to fetch metadata for ${id}:`,
+              `❌ Failed to fetch metadata for ${id}:`,
               e.message,
             );
             return cached || null;
@@ -4590,7 +7046,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
         // ============================================
         // 🐘 LARGE GROUP GUARD
-        // Groups above this size skip eager metadata fetch —
+        // Groups above this size skip eager metadata fetch -
         // metadata is only loaded on-demand when a command or
         // security check actually needs it. Keeps the bot from
         // lagging just because it's sitting in a big GC.
@@ -4767,25 +7223,11 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   const isOwner = _isBotOwner(authorNormalized);
                   const isGlobal = isGlobalMod && isGlobalMod(update.author);
                   if (!isOwner && !isGlobal) {
-                    const allowed = hasActionPermission(update.id, update.author, "glock");
-                    if (!allowed) {
-                      console.log(`🛡️ Undo manual group setting change by unauthorized user: ${update.author} in group ${update.id}`);
-                      await sock.sendMessage(update.id, {
-                        text: BOT_MARKER + `⚠️ @${update.author.split('@')[0]} is not authorized to edit group settings. Reverting changes...`,
-                        mentions: [update.author]
-                      });
-
-                      if (update.announce !== undefined) {
-                        const settings = getGroupSettings(update.id);
-                        const expectedAnnounce = settings.lockMode === 'locked';
-                        await sock.groupSettingUpdate(update.id, expectedAnnounce ? 'announcement' : 'not_announcement');
-                      }
-                      
-                      if (update.restrict !== undefined) {
-                        const originalRestrict = cached ? !update.restrict : true;
-                        await sock.groupSettingUpdate(update.id, originalRestrict ? 'locked' : 'unlocked');
-                      }
-                    }
+                    // 💡 DISABLED 2026-07-31: "not authorized to edit group settings"
+                    // was spamming every group chat whenever any admin did anything.
+                    // Let all group setting changes through without reverting.
+                    // const allowed = hasActionPermission(update.id, update.author, "glock");
+                    // if (!allowed) { ... }
                   }
                 }
               }
@@ -4800,6 +7242,35 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
             // Get cached metadata or fetch it (non-forced)
             let groupMetadata = await getGroupMetadata(id, false);
             if (!groupMetadata) return;
+
+            // 📊 DAILY GC ACTIVITY (2026-09-22): log membership events so
+            // `.j activity [day]` can report who joined / left / was kicked
+            // (and promotions/demotions). A self-removal is a 'left', an
+            // admin action is a 'kicked'. Best-effort - never blocks the
+            // participant handling below.
+            try {
+              const _actLogModel = require('./models/ActivityLog');
+              const _actVoluntary = action === "remove" && participants.some(p => {
+                const pNorm = jidNormalizedUser(normalizeParticipantJid(p) || '');
+                return author && pNorm === jidNormalizedUser(author);
+              });
+              const _actType =
+                action === "add" ? "join"
+                  : action === "leave" ? "left"
+                    : action === "remove" ? (_actVoluntary ? "left" : "kicked")
+                      : action === "promote" ? "promote"
+                        : action === "demote" ? "demote" : null;
+              if (_actType) {
+                const _actChatId = jidNormalizedUser(id);
+                const _actDocs = participants
+                  .map((p) => jidNormalizedUser(normalizeParticipantJid(p) || "") || String(p))
+                  .filter(Boolean)
+                  .map((pj) => ({ chatId: _actChatId, userId: pj, type: _actType, timestamp: new Date() }));
+                if (_actDocs.length) {
+                  _actLogModel.create(_actDocs).catch(() => {});
+                }
+              }
+            } catch (_actLogErr) { /* logging must never break participant handling */ }
 
             // AUTO-UNDO MANUAL ACTIONS
             if (author && typeof author === 'string' && (action === "promote" || action === "demote" || action === "remove")) {
@@ -4819,6 +7290,10 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   const isGlobal = isGlobalMod && isGlobalMod(author);
                   if (!isOwner && !isGlobal) {
                     const cmdKey = action === "remove" ? "kick" : action;
+                    // 💡 DISABLED 2026-07-31: "not authorized to promote/demote/kick"
+                    // was spamming every group chat whenever any admin did anything.
+                    // Let all participant changes through without reverting.
+                    /*
                     let allowed = hasActionPermission(id, author, cmdKey);
                     if (allowed) {
                       for (const target of participants) {
@@ -4835,27 +7310,28 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                       if (action === "promote") {
                         console.log(`🛡️ Undo manual promotion by unauthorized user: ${author} in group ${id}`);
                         await sock.sendMessage(id, {
-                          text: BOT_MARKER + `⚠️ @${author.split('@')[0]} is not authorized to promote members. Reverting promotion...`,
+                          text: BOT_MARKER + `⚠️ @${economy.getDisplayName(author)} is not authorized to promote members. Reverting promotion...`,
                           mentions: [author]
                         });
                         await sock.groupParticipantsUpdate(id, participants, "demote");
                       } else if (action === "demote") {
                         console.log(`🛡️ Undo manual demotion by unauthorized user: ${author} in group ${id}`);
                         await sock.sendMessage(id, {
-                          text: BOT_MARKER + `⚠️ @${author.split('@')[0]} is not authorized to demote members. Reverting demotion...`,
+                          text: BOT_MARKER + `⚠️ @${economy.getDisplayName(author)} is not authorized to demote members. Reverting demotion...`,
                           mentions: [author]
                         });
                         await sock.groupParticipantsUpdate(id, participants, "promote");
                       } else if (action === "remove") {
                         console.log(`🛡️ Undo manual kick by unauthorized user: ${author} in group ${id}`);
                         await sock.sendMessage(id, {
-                          text: BOT_MARKER + `⚠️ @${author.split('@')[0]} is not authorized to kick members. Attempting to add them back...`,
+                          text: BOT_MARKER + `⚠️ @${economy.getDisplayName(author)} is not authorized to kick members. Attempting to add them back...`,
                           mentions: [author]
                         });
                         await sock.groupParticipantsUpdate(id, participants, "add");
                       }
                       return;
                     }
+                    */
                   }
                 }
               }
@@ -4887,7 +7363,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 // ⚠️ FIX (audit Task ID 5 BUG A): clean up stale rank entries
                 // for demoted admins HERE (the actual demotion event) instead
                 // of inside getMemberRankLevel (which is a READ function that
-                // was destroying the data it read — see comment at L1216-1234).
+                // was destroying the data it read - see comment at L1216-1234).
                 // Demoted admins lose their explicit rank assignment; if they
                 // are re-promoted later, the owner can re-assign via `set rank`.
                 try {
@@ -4896,7 +7372,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     const { canonicalRankKey } = require('./utils/lidResolver');
                     let mutated = false;
                     for (const p of pSet) {
-                      // Delete all known forms of the JID — phone, LID, canonical
+                      // Delete all known forms of the JID - phone, LID, canonical
                       const forms = new Set([p, canonicalRankKey(p)]);
                       // Also try resolveToPhone form if available
                       try {
@@ -4925,6 +7401,35 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
             const groupName = groupMetadata.subject;
 
+            // 📣 ADMIN PROMOTE/DEMOTE ANNOUNCEMENTS (opt-in via `.announce on`)
+            try {
+              if ((action === "promote" || action === "demote")) {
+                const _s = getGroupSettings(id);
+                if (_s.announceAdmins === true) {
+                  const targets = (Array.isArray(participants) ? participants : [participants])
+                    .map((p) => normalizeParticipantJid(p))
+                    .filter(Boolean);
+                  if (targets.length) {
+                    const authorJid =
+                      author && typeof author === "string" ? jidNormalizedUser(author) : null;
+                    const authorTag = authorJid ? `@${authorJid.split("@")[0]}` : null;
+                    const targetTags = targets.map((t) => `@${t.split("@")[0]}`);
+                    const heading = action === "promote" ? "👑 *Admin Promotion*" : "📉 *Admin Demotion*";
+                    const line =
+                      (authorTag ? `${authorTag} ${action === "promote" ? "promoted" : "demoted"}` : action === "promote" ? "Promoted" : "Demoted") +
+                      `:\n${targetTags.join("\n")}`;
+                    const mentions = [...targets, ...(authorJid ? [authorJid] : [])];
+                    await sock.sendMessage(id, {
+                      text: BOT_MARKER + `${heading}\n\n${line}`,
+                      mentions,
+                    });
+                  }
+                }
+              }
+            } catch (_annErr) {
+              console.log("[announce] failed:", _annErr?.message || _annErr);
+            }
+
             // Loop through participants (usually just one)
             for (let participant of participants) {
               // ✅ IMPROVED FIX: Handle both string and object formats from Baileys
@@ -4934,13 +7439,14 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
               // 🟢 WELCOME MESSAGE
               if (action === "add") {
+                try { require('./utils/antibot').noteJoin(id, participantJid); } catch (e) {}
                 queueWelcome(id, groupName, participantJid);
               }
 
               // 🔴 GOODBYE MESSAGE (Optional)
               else if (action === "remove") {
                 const settings = getGroupSettings(id);
-                if (settings.byeEnabled === false) return; // Silent if disabled
+                if (settings.byeEnabled === false) continue; // Silent if disabled (was: return - skipped the rest of the batch)
 
                 const phoneNumber = participantJid.split("@")[0];
 
@@ -4966,6 +7472,21 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 });
               }
             }
+
+            // FIX 2026-09-16: Ludo forfeit on departure - leaving OR being
+            // removed from the group mid-game counts as a forfeit. Runs for
+            // remove/leave actions only, and never on promote/demote.
+            if (action === "remove" || action === "leave") {
+              try {
+                for (const dep of participants || []) {
+                  const depJid = normalizeParticipantJid(dep) || String(dep);
+                  if (!depJid) continue;
+                  await ludo.handleParticipantLeave(sock, id, depJid);
+                }
+              } catch (ludoErr) {
+                console.log("Ludo forfeit-on-leave error:", ludoErr.message);
+              }
+            }
           } catch (err) {
             console.log("Error in group-participants.update:", err);
           }
@@ -4981,7 +7502,8 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               const chatId = key.remoteJid;
 
               // Only care about reactions during a debate
-              if (!chatId.endsWith("@g.us") || !debate.isDebateActive(chatId))
+              // 🚫 MASTER GC GATE: reactions are ignored in blacklisted GCs
+              if (!chatId.endsWith("@g.us") || !enabledGcs.has(chatId) || !debate.isDebateActive(chatId))
                 continue;
 
               // Reacting user
@@ -5050,7 +7572,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
             // 💡 DIAGNOSTIC: log when messages are dropped due to rekeying.
             // If this fires constantly, the bot is churning (rapid
             // connect/disconnect) and needs auth refresh.
-            console.log(`⏭️ [${BOT_ID}] Dropping ${messages.length} message(s) — isRekeying=true (connection churning)`);
+            console.log(`⏭️ [${BOT_ID}] Dropping ${messages.length} message(s) - isRekeying=true (connection churning)`);
             return;
           }
 
@@ -5068,10 +7590,93 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 return;
               }
 
-              // ✅ Real message — reset zombie silence timer
+              // ✅ Real message - reset zombie silence timer
               recordUpsert(BOT_ID);
 
-              await botConfig.storage.run(configInstance, async () => {
+              // 💡 FIX 2026-07-26 (INVESTIGATION.md):
+              // GLOBAL COMMAND TIMEOUT - 90 seconds.
+              //
+              // The message handler has many await points that can hang
+              // indefinitely with no timeout:
+              //   - sock.profilePictureUrl() - hangs on LID JIDs (fixed
+              //     separately in rpgCommands.js with an 8s timeout, but
+              //     other callsites may still hang)
+              //   - goService.generateCardGrid() - 60s axios timeout, but
+              //     the _enqueue queue can stack up blocked calls
+              //   - goService.generateCombatImage() - 10s timeout, but
+              //     same queue issue
+              //   - any DB query that hangs
+              //   - any external HTTP call without a timeout
+              //
+              // When a command hangs, the outer catch (line ~25195) never
+              // fires because no error is thrown - the Promise just never
+              // resolves. The user sees "nothing" as the response. This is
+              // exactly what caused .jk char / .jk bal / .jk coll / .jk diag
+              // to silently fail for 30+ hours while 12 "ROOT CAUSE" commits
+              // chased symptoms.
+              //
+              // Fix: race the entire storage.run against a 90s timeout.
+              // If the timeout wins, log loudly and tell the user. The
+              // underlying hung promise is orphaned (we can't cancel it),
+              // but at least the user gets a visible error instead of
+              // silence, and the bot can continue processing other messages.
+              const _cmdStartTime = Date.now();
+              const _cmdTimeoutMs = 45000; // 45s - was 90s (way too long).
+                // Legitimate commands: card grid = 15s, combat = 5s, anime = 10s.
+                // Card grid hybrid MP4 can take 30s - 45s gives headroom.
+                // Anything over 45s is hung and should be killed.
+              // 💡 AUDIT FIX 2026-09-26 (quiz P5): per-command timeout overrides.
+              // The old 45s ceiling applied to EVERY command except audio's
+              // special-cased 180s, so legitimately slow commands (trends
+              // browser fallback ~60-90s, quiz generation, stock charts on a
+              // cold Yahoo roundtrip, media uploads) tripped the generic
+              // "⏱️ Command timed out after 45.0s" error. One shared map at
+              // THIS layer covers every current and future slow command -
+              // quiz no longer patches this in isolation and trends is fixed
+              // by the same mechanism. Commands NOT in the map keep 45s.
+              const CMD_TIMEOUT_OVERRIDES = {
+                audio: 180000,   // download + convert + send (unchanged behavior)
+                clip: 150000,    // ffmpeg trim of a replied audio (FFMPEG_TIMEOUT_MS = 120s)
+                trends: 150000,  // got-scraping + browser fallback + chart render
+                quiz: 90000,     // generation is async, but section prep + media validation can stall a tick
+                quizmod: 20000,  // DB persistence roundtrip
+                stock: 90000,    // Yahoo quote + chart render (cold cache)
+                gstatus: 150000, // media upload to status (internal 120s guard)
+                img: 90000,      // pinterest search + up to 5 image downloads
+                video: 120000,   // video search + download + upload
+                sticker: 90000,  // media download + webp convert + send
+                ai: 120000,      // LLM reply (long completions)
+                imagine: 150000, // image generation services
+              };
+              // 💡 FIX 2026-07-29: Capture context for the timeout catch handler.
+              const _cmdContext = { primaryCmd: null, senderJid: null, chatId: null, txt: null, timeoutMs: null };
+              // A running command may extend its own window mid-flight by
+              // setting _cmdContext.timeoutMs (checked every tick below).
+              // 💡 FIX 2026-07-31: Audio command needs more time (download + send = 60-90s).
+              // We can't know the command yet (it's parsed inside storage.run), so we
+              // use a dynamic timeout that checks _cmdContext.primaryCmd.
+              let _cmdEffectiveTimeout = _cmdTimeoutMs;
+              const _cmdTimeoutPromise = new Promise((_, reject) => {
+                // Check every 5s if we should extend the timeout for slow commands
+                const checkInterval = setInterval(() => {
+                  const elapsed = Date.now() - _cmdStartTime;
+                  const cmdLimit = _cmdContext.primaryCmd
+                    ? (CMD_TIMEOUT_OVERRIDES[_cmdContext.primaryCmd] || _cmdTimeoutMs)
+                    : _cmdTimeoutMs;
+                  // a command that set _cmdContext.timeoutMs wins over the map
+                  const limit = _cmdContext.timeoutMs || cmdLimit;
+                  if (elapsed < limit) {
+                    return; // keep waiting
+                  }
+                  clearInterval(checkInterval);
+                  const elapsedSec = (elapsed / 1000).toFixed(1);
+                  reject(new Error(`Command timed out after ${elapsedSec}s (possible Go service hang or network stall)`));
+                }, 5000);
+              });
+
+              try {
+                await Promise.race([
+                  botConfig.storage.run(configInstance, async () => {
                 try {
                   const rawChatId = m.key.remoteJid;
                   const chatId = jidNormalizedUser(rawChatId);
@@ -5084,6 +7689,17 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     senderJid.startsWith("233201487480") ||
                     senderJid.includes("251453323092189") ||
                     senderJid.includes("105712667648066");
+
+                  // 💡 SANDBOX MODE: if the admin has sandbox mode active,
+                  // swap their JID to the sandbox JID so all commands
+                  // (.char, .bank, .solo, .skill, etc.) use the sandbox
+                  // account. The real JID is preserved in `realSenderJid`
+                  // for permission checks (isOwner, isGlobalMod, etc.).
+                  const realSenderJid = senderJid;
+                  const sandboxJid = getSandboxJid(realSenderJid);
+                  if (sandboxJid) {
+                    senderJid = sandboxJid;
+                  }
 
                   // --- 0. REPLY HELPER ---
                   const reply = async (content, options = {}) => {
@@ -5100,6 +7716,22 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   const botLid = sock.authState.creds?.me?.lid
                     ? jidNormalizedUser(sock.authState.creds.me.lid)
                     : null;
+                  // ⚡ SIBLING-BOT REGISTRY (ticket #b4fa57): let every instance
+                  // on this process know who we are, so messages SENT BY a
+                  // sibling bot can be recognized and never reacted to.
+                  registerBotIdentity(botJid, botLid);
+
+                  // ⚡ INTERACTION TRACKER (2026-09-17): record @tags /
+                  // reply-targets per pair for the ship Match Meter.
+                  // Registered users only, in-memory + 5-min batched flush.
+                  try {
+                    require('./rpg/interactionTracker').recordMessage(m, senderJid, chatId, {
+                      isGroup: isGroupChat,
+                      botJid,
+                      botLid,
+                      normalize: jidNormalizedUser,
+                    });
+                  } catch (e) {}
 
                   // Sync user registration status from DB if missing in memory cache
                   await economy.syncUserFromDB(senderJid);
@@ -5112,8 +7744,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   const senderName =
                     user?.nickname ||
                     userProfile?.nickname ||
-                    m.pushName ||
-                    senderJid.split("@")[0];
+                    m.pushName || economy.getDisplayName(senderJid);
 
                   // 3. Relaxed Stub Filter: ONLY skip if there is NO actual message content
                   const hasRealContent =
@@ -5130,6 +7761,176 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   // 4. Diagnostic Log
                   console.log(`📩 [${botConfig.getBotId()}] Message received from ${senderJid} in ${chatId}`);
 
+                  // 💡 HARDMUTE AUTO-DELETE (2026-08-14):
+                  // Check VERY EARLY - before MongoDB persist, before any command processing.
+                  // If the sender is hard-muted AND this is a group chat, attempt to delete
+                  // their message immediately. This runs for EVERY message (not just commands)
+                  // so the hard-muted user is silenced across every GC where the bot sees them.
+                  //
+                  // We attempt the delete unconditionally (no botIsAdmin pre-check) because
+                  // the LID/phone JID admin check is unreliable - group metadata can return
+                  // the bot's JID in LID format, and resolveToPhone may not always map it
+                  // correctly. WhatsApp will return an error if the bot isn't admin, which
+                  // we catch silently. Better to try and fail than to skip the delete entirely.
+                  if (isGroupChat && isHardMuted(senderJid)) {
+                    // Don't delete the bot's own messages or protocol messages
+                    if (!m.key.fromMe && !m.message?.protocolMessage) {
+                      // 💡 Enhanced logging (2026-08-14): log the message key structure
+                      // and the delete result so we can see exactly what's happening.
+                      const _hmKey = {
+                        remoteJid: m.key.remoteJid,
+                        id: m.key.id,
+                        fromMe: m.key.fromMe,
+                        participant: m.key.participant || null
+                      };
+                      
+                      // Fetch group metadata to check admin status for logging
+                      let _hmBotAdmin = 'unknown';
+                      let _hmAdminList = [];
+                      try {
+                        const _hmMeta = await getGroupMetadata(chatId);
+                        if (_hmMeta && _hmMeta.participants) {
+                          const _hmBotId = jidNormalizedUser(sock.user.id);
+                          const _hmBotLid = sock.authState?.creds?.me?.lid ? jidNormalizedUser(sock.authState.creds.me.lid) : null;
+                          const _hmBotEntry = _hmMeta.participants.find(p =>
+                            p.id === _hmBotId || p.id === _hmBotLid ||
+                            p.id.split(':')[0] === _hmBotId.split(':')[0] ||
+                            (_hmBotLid && p.id.split(':')[0] === _hmBotLid.split(':')[0])
+                          );
+                          _hmBotAdmin = _hmBotEntry ? (_hmBotEntry.admin || 'member') : 'not_in_group';
+                          _hmAdminList = _hmMeta.participants
+                            .filter(p => p.admin === 'admin' || p.admin === 'superadmin')
+                            .map(p => p.id);
+                        }
+                      } catch (e) {
+                        _hmBotAdmin = 'fetch_error: ' + e.message;
+                      }
+
+                      try {
+                        const _result = await sock.sendMessage(chatId, { delete: m.key });
+                        console.log(`🔇 [Hardmute] Delete result for ${senderJid} in ${chatId} | botAdmin=${_hmBotAdmin} | botId=${jidNormalizedUser(sock.user.id)} | botLid=${sock.authState?.creds?.me?.lid || 'none'} | admins=[${_hmAdminList.join(',')}] | result=${_result ? 'received' : 'null'}`);
+                      } catch (e) {
+                        console.log(`🔇 [Hardmute] Delete FAILED for ${senderJid} in ${chatId} | botAdmin=${_hmBotAdmin} | error=${e.message}`);
+                      }
+                    }
+                    return; // Stop all further processing for hard-muted users
+                  }
+
+                  // 🔪 MURDER MYSTERY DEAD-GATE (independent, loophole-free):
+                  // Runs for EVERY message type (text, media, view-once, stickers,
+                  // documents, commands) BEFORE MongoDB persist, before cardSystem,
+                  // before any normal-mute logic - so `.j claim` and every other
+                  // normal-mute workaround is useless to the dead. The gate is bound
+                  // to the game lifecycle inside murderMystery.isSilenced and is
+                  // released the moment the case closes.
+                  if (isGroupChat && !m.key.fromMe && !m.message?.protocolMessage && murderMystery.isSilenced(senderJid, chatId)) {
+                    try { await sock.sendMessage(chatId, { delete: m.key }); } catch (e) {}
+                    try { console.log(`🔪 [MurderMystery] deleted message from the dead: ${senderJid} in ${chatId}`); } catch (e) {}
+                    return; // the dead do not speak in the manor
+                  }
+
+                  // ============================================
+                  // 🚫 MASTER GC GATE (2026-09-28) - DEFAULT BLACKLIST EVERY GROUP
+                  // ============================================
+                  // Every group chat is blacklisted by default. The bot does
+                  // ABSOLUTELY NOTHING in a group until the bot owner (or a
+                  // global mod) runs `.j bot on` INSIDE that group:
+                  //   - no commands, no AI, no games, no quiz, no leveling
+                  //   - nothing is persisted to MongoDB
+                  //   - no group metadata fetches (perf win on big groups)
+                  //   - no reactions processing (separate guard below)
+                  //   - no proactive news feeds (guard in broadcastNews)
+                  // DMs are intentionally NOT affected.
+                  //
+                  // The ONLY messages that pass through a disabled GC are the
+                  // master toggle commands from an authorized sender - they
+                  // are handled inline right here and never reach the main
+                  // dispatcher, so the gate has zero coupling to command
+                  // parsing and cannot be bypassed by aliases, prefixed
+                  // variants or media captions.
+                  //
+                  // ⚠️ Placement: BEFORE MongoDB persist, BEFORE group
+                  // metadata fetch, BEFORE spam detection, BEFORE command
+                  // parsing, BEFORE the AI layer. If you add an early-return
+                  // feature above this gate, make sure it cannot be abused to
+                  // wake the bot in a blacklisted GC.
+                  // ============================================
+                  if (isGroupChat) {
+                    const _gateText = (
+                      m.message?.conversation ||
+                      m.message?.extendedTextMessage?.text ||
+                      m.message?.imageMessage?.caption ||
+                      m.message?.videoMessage?.caption || ""
+                    ).trim();
+                    const _pfx = (botConfig.getPrefix() || ".j").toLowerCase();
+                    const _gateLower = _gateText.toLowerCase();
+                    const _isToggleCmd =
+                      _gateLower === `${_pfx} bot on` ||
+                      _gateLower === `${_pfx} bot enable` ||
+                      _gateLower === `${_pfx} bot off` ||
+                      _gateLower === `${_pfx} bot disable` ||
+                      _gateLower === `${_pfx} bot status`;
+
+                    if (_isToggleCmd) {
+                      // Toggle commands are handled HERE in both enabled and
+                      // disabled GCs (single source of truth - the off switch
+                      // must work in an enabled group too). Unauthorized
+                      // senders get silence in a blacklisted GC (never bait a
+                      // reply) and a short denial in an enabled one.
+                      const _canToggle = isBotOwner(realSenderJid) ||
+                        (typeof isGlobalMod === "function" && isGlobalMod(realSenderJid));
+                      if (!_canToggle) {
+                        if (enabledGcs.has(chatId)) {
+                          try {
+                            await sock.sendMessage(chatId, {
+                              text: BOT_MARKER + "⛔ Only the bot owner can toggle the bot in this group.",
+                            }, { quoted: m });
+                          } catch (e) {}
+                        }
+                        console.log(`🚫 [${BOT_ID}] Master GC gate: unauthorized toggle attempt by ${senderJid} in ${chatId}`);
+                        return;
+                      }
+                      try {
+                        if (_gateLower === `${_pfx} bot status`) {
+                          const _on = enabledGcs.has(chatId);
+                          await sock.sendMessage(chatId, {
+                            text: BOT_MARKER +
+                              `🤖 Bot status in this group: *${_on ? "✅ ENABLED" : "❌ DISABLED (blacklisted)"}*\n\n` +
+                              `All groups are blacklisted by default.\n` +
+                              `Use \`${_pfx} bot on\` to enable me here, \`${_pfx} bot off\` to disable me again.\n` +
+                              `(Bot owner / global mods only)`,
+                          }, { quoted: m });
+                        } else if (_gateLower === `${_pfx} bot on` || _gateLower === `${_pfx} bot enable`) {
+                          enabledGcs.add(chatId);
+                          saveEnabledGcs();
+                          console.log(`🟢 [${BOT_ID}] Master GC gate ENABLED for ${chatId} by ${realSenderJid}`);
+                          await sock.sendMessage(chatId, {
+                            text: BOT_MARKER +
+                              `🤖 Bot is now *ENABLED* in this group. All systems online.\n` +
+                              `_Note: AI chatbot still needs its own \`${_pfx} on\` if you want it. Use \`${_pfx} bot off\` to silence everything again._`,
+                          }, { quoted: m });
+                        } else {
+                          enabledGcs.delete(chatId);
+                          saveEnabledGcs();
+                          console.log(`🔴 [${BOT_ID}] Master GC gate DISABLED for ${chatId} by ${realSenderJid}`);
+                          await sock.sendMessage(chatId, {
+                            text: BOT_MARKER +
+                              `🤖 Bot is now *DISABLED* in this group. I won't respond here until re-enabled with \`${_pfx} bot on\`.`,
+                          }, { quoted: m });
+                        }
+                      } catch (_gateErr) {
+                        console.error(`Master GC gate toggle error in ${chatId}:`, _gateErr.message);
+                      }
+                      return; // toggle handled - never enter the main pipeline
+                    }
+
+                    if (!enabledGcs.has(chatId)) {
+                      // Silent blacklist: drop without logging per-message (a
+                      // busy blacklisted GC must not spam the logs or the DB).
+                      return;
+                    }
+                  }
+
                   // Persist message to MongoDB (1-hour TTL)
                   const messageBody =
                     m.message.conversation ||
@@ -5137,7 +7938,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     m.message.imageMessage?.caption ||
                     m.message.videoMessage?.caption ||
                     null;
-                  // Persist message to MongoDB — batched write (non-blocking)
+                  // Persist message to MongoDB - batched write (non-blocking)
                   queueMsgWrite({
                     sender: senderJid,
                     body: messageBody,
@@ -5152,6 +7953,42 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     chatId: chatId,
                     botId: BOT_ID,
                   });
+
+                  // ============================================
+                  // 🎯 DIRECT QUIZ ANSWERS (2026-09-28 owner spec §1)
+                  // ============================================
+                  // While a quiz question is OPEN in this chat, plain chat
+                  // text (no prefix) IS an answer attempt - the answer text
+                  // itself, or a letter when options are shown. Matching
+                  // attempts are consumed HERE (✅/❌ react + score); chatter
+                  // that matches nothing passes through untouched (no react,
+                  // no attempt lock, every downstream feature still sees it).
+                  // Prefixed forms (.j b / .j <answer>) still work via their
+                  // own routes further down. This must sit before the AI
+                  // layer so an answer like "Subaru Natsuki" can never also
+                  // wake the chatbot, and it ignores the bot's own messages.
+                  // ============================================
+                  if (quizGame.isQuestionOpen(chatId) && messageBody && !m.key.fromMe) {
+                    const _bareAns = String(messageBody).trim();
+                    const _pfxLower = String(botConfig.getPrefix() || ".").toLowerCase();
+                    if (_bareAns && !_bareAns.toLowerCase().startsWith(_pfxLower)) {
+                      try {
+                        const _qRes = await quizGame.handleAnswer(
+                          sock,
+                          chatId,
+                          senderJid,
+                          _bareAns,
+                          BOT_MARKER,
+                          m,
+                          senderName,
+                          { bareText: true },
+                        );
+                        if (_qRes && _qRes.handled) return; // consumed as a quiz answer
+                      } catch (_qaErr) {
+                        console.log("[Quiz] bare-answer intercept error:", _qaErr?.message);
+                      }
+                    }
+                  }
 
                   // 1. Get Group Metadata & Admin Status EARLY (Needed for Security & Commands)
                   let groupMetadata = null;
@@ -5186,7 +8023,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                         groupMetadata = await getGroupMetadata(chatId);
                         if (groupMetadata) {
                           updateGroupSizeCache(chatId, groupMetadata);
-                          // O(1) admin Set cache lookup — avoids rebuilding the Set on every message
+                          // O(1) admin Set cache lookup - avoids rebuilding the Set on every message
                           const cachedEntry = adminSetCache.get(chatId);
                           if (cachedEntry && Date.now() < cachedEntry.expires) {
                             cachedAdminSet = cachedEntry.admins;
@@ -5194,17 +8031,17 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                             cachedAdminSet = buildAdminCache(chatId, groupMetadata.participants);
                           }
 
-                          // Resolve bot + sender JID once — NOT inside a loop over 1k participants
+                          // Resolve bot + sender JID once - NOT inside a loop over 1k participants
                           const botPhoneJid = lidResolver.resolveToPhone(botJid, configInstance.getAuthPath());
                           const senderPhoneJid = lidResolver.resolveToPhone(senderJid, configInstance.getAuthPath());
 
-                          // O(1) Set lookup — replaces .some() scanning all participants
+                          // O(1) Set lookup - replaces .some() scanning all participants
                           botIsAdmin = cachedAdminSet.has(botPhoneJid) || cachedAdminSet.has(botJid);
                           senderIsAdmin = cachedAdminSet.has(senderPhoneJid) || cachedAdminSet.has(senderJid);
                         }
                       } catch (e) {}
                     } else {
-                      // Large group idle message — warm the size cache in the background
+                      // Large group idle message - warm the size cache in the background
                       // so future command messages know the group is large.
                       getGroupMetadata(chatId).then((meta) => {
                         if (meta) updateGroupSizeCache(chatId, meta);
@@ -5255,11 +8092,14 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                       }
 
                       if (!isOwner && !isGlobal && !isWAAdmin) {
+                        // 💡 DISABLED 2026-07-31: "not authorized to pin/unpin"
+                        // was spamming group chats. Let all pin/unpin through.
+                        /*
                         const allowed = hasActionPermission(chatId, senderJid, "pin");
                         if (!allowed) {
                           console.log(`🛡️ Undo manual pin/unpin by unauthorized user: ${senderJid} in group ${chatId}`);
                           await sock.sendMessage(chatId, {
-                            text: BOT_MARKER + `⚠️ @${senderJid.split('@')[0]} is not authorized to pin/unpin messages. Reverting...`,
+                            text: BOT_MARKER + `⚠️ @${economy.getDisplayName(senderJid)} is not authorized to pin/unpin messages. Reverting...`,
                             mentions: [senderJid]
                           });
 
@@ -5282,6 +8122,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                           }
                           return;
                         }
+                        */
                       }
                     }
 
@@ -5294,12 +8135,32 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                       addWarning,
                       getWarningCount,
                       groupMetadata,
-                      cachedAdminSet, // pre-built Set — skips O(n) scan inside security
+                      cachedAdminSet, // pre-built Set - skips O(n) scan inside security
                     );
+
+                    // 💡 1b. ANTINUDE (2026-09-27): NSFW image/sticker
+                    // moderation - runs ASYNC in its own bounded queue on the
+                    // Box 2 vision-worker, never blocks the command path.
+                    // Fire-and-forget: deletes/warns/kicks when the verdict
+                    // clears the group's threshold.
+                    try {
+                      const _antinude = require('./utils/antinude');
+                      const _anSettings = getGroupSettings(chatId);
+                      if (_anSettings.antinude) {
+                        _antinude.handleAntinude(sock, m, _anSettings, addWarning, getWarningCount, {
+                          chatId,
+                          senderJid,
+                          senderIsAdmin,
+                          isOwner,
+                          isGlobalMod,
+                          isGcOwner: (jid, cid) => isGcOwner(jid, cid),
+                        }).catch(() => {});
+                      }
+                    } catch (_ane) { /* fail-open - moderation never breaks the bot */ }
 
                     // 2. Antispam Detection
                     const settings = getGroupSettings(chatId);
-                    if (settings.antispam && !isOwner && !isGlobalMod(senderJid)) {
+                    if (settings.antispam && !isOwner && !isGlobalMod(senderJid) && !isGcOwner(senderJid, chatId)) {
                       // Exempt admin sticker messages (useful when bots/admins send bulk stickers)
                       const isSticker = m.message?.stickerMessage;
                       const isSpamming = !(isSticker && senderIsAdmin) && checkSpam(senderJid, chatId);
@@ -5320,6 +8181,538 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     }
                   }
 
+                  // 3. 🤖 ANTI-BOT - detect other bots posting in this group.
+                  // Scored heuristics (message-id fingerprints, linked-device
+                  // relays, interactive payloads, instant-on-join, bot marks).
+                  // Admins/owner/global mods are always exempt.
+                  if (isGroupChat && getGroupSettings(chatId).antibot === true && !m.key.fromMe) {
+                    try {
+                      const antiBot = require('./utils/antibot');
+                      const abSettings = getGroupSettings(chatId);
+                      const verdict = antiBot.inspect(m, {
+                        joinedAt: antiBot.getJoinedAt(chatId, senderJid),
+                        mode: abSettings.antibotMode,
+                      });
+                      const abExempt =
+                        senderIsAdmin ||
+                        isOwner ||
+                        isGlobalMod(senderJid) ||
+                        isGcOwner(senderJid, chatId) ||
+                        senderJid === jidNormalizedUser(sock?.user?.id);
+                      if (verdict.isBot && !abExempt) {
+                        console.log(
+                          `🤖 AntiBot: score=${verdict.score} [${verdict.signals.join(", ")}] sender=${senderJid} in ${chatId}`,
+                        );
+                        await antiBot.act(sock, chatId, m, senderJid, verdict, {
+                          settings: abSettings,
+                          addWarning,
+                          getWarningCount,
+                          resetWarnings,
+                        });
+                        return; // handled - do not process as a command
+                      }
+                    } catch (abErr) {
+                      console.log("[AntiBot] failed:", abErr?.message || abErr);
+                    }
+                  }
+
+                  // 3.5 🔒 GROUP STATUS LOCK (opt-in via `.gstatus lock on`).
+                  // When enabled, only "us" may post group statuses: the bot itself,
+                  // group admins, the bot owner and global mods. Anyone else's status
+                  // is auto-deleted, warned, and the member is removed at 3 strikes
+                  // (shares the standard addWarning pool, same as antilink).
+                  let gsLockViolated = false;
+                  // 💡 FIX 2026-09-22 (owner: "gstatus STILL can't do images and
+                  // videos"): GS_UNSUPPORTED used to be declared INSIDE
+                  // __gsEnsureHelpers but referenced in the pending-post catch AND
+                  // the command-media catch - both OUTSIDE its scope. Every
+                  // unsupported-media rejection then crashed the catch itself with
+                  // "ReferenceError: GS_UNSUPPORTED is not defined" instead of
+                  // telling the user what was wrong. Hoisted to per-message scope.
+                  const GS_UNSUPPORTED = '__gs_unsupported_media__';
+                  if (isGroupChat && !m.key.fromMe && getGroupSettings(chatId).gstatusLock === true) {
+                    try {
+                      const gslWrap =
+                        m.message.groupStatusMentionMessage ||
+                        m.message.groupStatusMessage ||
+                        m.message.groupStatusMessageV2;
+                      const gslCtx =
+                        m.message.extendedTextMessage?.contextInfo ||
+                        m.message.imageMessage?.contextInfo ||
+                        m.message.videoMessage?.contextInfo;
+                      const gslIs =
+                        !!gslWrap ||
+                        gslCtx?.isGroupStatus === true ||
+                        gslCtx?.isGroupStatus === 1;
+                      if (gslIs) {
+                        // 2026-09-15: ground-truth logger - every incoming group
+                        // status dumps its shape so we can compare the OFFICIAL
+                        // client's structure against what we relay ourselves.
+                        try {
+                          const __wK = m.message.groupStatusMessageV2 ? "V2" : m.message.groupStatusMessage ? "V1" : m.message.groupStatusMentionMessage ? "MENTION" : "CTX";
+                          const __inr = (m.message.groupStatusMessageV2 || m.message.groupStatusMessage || m.message.groupStatusMentionMessage || {}).message || m.message;
+                          const __iK = Object.keys(__inr).filter((k) => !/ContextInfo$/.test(k)).slice(0, 6).join("+");
+                          const __mM = __inr.imageMessage || __inr.videoMessage || __inr.audioMessage || null;
+                          const __cT = __inr.imageMessage?.contextInfo || __inr.videoMessage?.contextInfo || __inr.extendedTextMessage?.contextInfo || null;
+                          console.log(`[GStatusIn] wrap=${__wK} inner=[${__iK}] media=${__mM ? "y" : "n"} isGS=${__cT?.isGroupStatus ?? "-"} secret=${__inr.messageContextInfo?.messageSecret ? "y" : "n"} from=${String(m.key.participant || "").slice(0, 16)}`);
+                        } catch { }
+                        const gslAuthorRaw =
+                          gslCtx?.participant || m.key.participant || m.key.remoteJid;
+                        const gslAuthor = jidNormalizedUser(gslAuthorRaw || senderJid);
+                        const gslPhone = lidResolver.resolveToPhone(gslAuthor, configInstance.getAuthPath());
+                        // Admin check - prefer the O(1) Set cache, fall back to metadata scan
+                        let gslIsAdmin = false;
+                        const gslMeta = groupMetadata || await getGroupMetadata(chatId).catch(() => null);
+                        if (gslMeta) {
+                          const admSet = cachedAdminSet || buildAdminCache(chatId, gslMeta.participants);
+                          gslIsAdmin = admSet.has(gslPhone) || admSet.has(gslAuthor);
+                        }
+                        const gslExempt =
+                          gslIsAdmin ||
+                          _isBotOwner(gslAuthor) ||
+                          (typeof isGlobalMod === "function" && isGlobalMod(gslAuthor)) ||
+                          gslAuthor === jidNormalizedUser(sock?.user?.id || "");
+                        if (!gslExempt) {
+                          gsLockViolated = true;
+                          // best-effort delete - WhatsApp may refuse revoking status
+                          // protocol messages; never let a failed revoke skip the warn
+                          let gslDeleted = false;
+                          try { await sock.sendMessage(chatId, { delete: m.key }); gslDeleted = true; } catch {}
+                          // 2026-09-15 (owner: "doesn't actually remove them"):
+                          // 1) key strikes by the RESOLVED PHONE so one person
+                          // can't split counts across LIDs/devices;
+                          // 2) await the removal and REPORT failure (bot not
+                          // admin) instead of swallowing it in setTimeout.
+                          const gslStableId = (gslPhone && String(gslPhone).includes("@")) ? gslPhone : gslAuthor;
+                          const gslCount = addWarning(gslStableId, chatId, "Group-status lock violation");
+                          const gslName = `@${String(gslAuthor).split("@")[0].split(":")[0]}`;
+                          if (gslCount >= 3) {
+                            let gslRemoved = false;
+                            let gslRemoveErr = "";
+                            try {
+                              await sock.groupParticipantsUpdate(chatId, [gslAuthor], "remove");
+                              gslRemoved = true;
+                            } catch (gslRE) {
+                              gslRemoveErr = (gslRE && gslRE.message) || String(gslRE || "unknown");
+                            }
+                            await sock.sendMessage(chatId, {
+                              text: BOT_MARKER + `🔒 *GROUP STATUS VIOLATION*
+
+*User:* ${gslName}
+*Action:* ${gslRemoved ? "REMOVED ✅" : "REMOVAL FAILED ❌ - _I need to be an admin to remove members_"}
+*Strikes:* ${gslCount}/3
+
+_Only admins can post group statuses here._`,
+                              mentions: [gslAuthor],
+                            });
+                            console.log(`[GStatusLock] ${gslStableId} strike ${gslCount}/3 in ${chatId} removed=${gslRemoved}${gslRemoved ? "" : " err=" + gslRemoveErr}`);
+                          } else {
+                            await sock.sendMessage(chatId, {
+                              text: BOT_MARKER + `🔒 *GROUP STATUS NOT ALLOWED*
+
+*User:* ${gslName}
+${gslDeleted ? "*Status:* revoke sent (WhatsApp may keep it visible)" : "*Status:* removal not permitted by WhatsApp"}
+*Strikes:* ${gslCount}/3
+
+_Only admins can post group statuses here. 3 strikes = removal._`,
+                              mentions: [gslAuthor],
+                            });
+                          }
+                          console.log(`[GStatusLock] ${gslAuthor} strike ${gslCount}/3 in ${chatId} (deleted=${gslDeleted})`);
+                        }
+                      }
+                    } catch (gslErr) {
+                      console.log("[GStatusLock] failed:", gslErr?.message || gslErr);
+                    }
+                  }
+
+                  // ── Group-status media helpers (defined once per process) ──
+                  const __gsEnsureHelpers = () => {
+                    if (globalThis.__gsHelpers) return globalThis.__gsHelpers;
+                    const crypto = require("crypto");
+                    const gfs = require("fs");
+                    const gos = require("os");
+                    const gpath = require("path");
+                    const { execFile } = require("child_process");
+
+                    const gsDownloadBuf = async (msg, kind) => {
+                      const stream = await downloadContentFromMessage(msg, kind);
+                      const chunks = [];
+                      for await (const ch of stream) chunks.push(ch);
+                      return Buffer.concat(chunks);
+                    };
+
+                    // placeholder jpeg - guarantees jpegThumbnail is never
+                    // undefined so Baileys can NEVER fall into its sharp path
+                    const gsPlaceholderB64 = async () => {
+                      try {
+                        const { Jimp } = require("jimp");
+                        const img = new Jimp({ width: 96, height: 54, color: 0x14101fff });
+                        const jpg = await img.getBuffer("image/jpeg", { quality: 55 });
+                        return jpg.toString("base64");
+                      } catch (e) {
+                        // 1x1 gray JPEG, base64 - last-resort constant
+                        return "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwcJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPDs0NDT/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q==";
+                      }
+                    };
+
+                    const gsImageThumbB64 = async (buf) => {
+                      try {
+                        const { Jimp } = require("jimp");
+                        const img = await Jimp.read(buf);
+                        img.scaleToFit({ w: 96, h: 96 });
+                        const jpg = await img.getBuffer("image/jpeg", { quality: 70 });
+                        return jpg.toString("base64");
+                      } catch (e) {
+                        console.log("[GStatus] image thumb failed, placeholder:", e?.message);
+                        return await gsPlaceholderB64();
+                      }
+                    };
+
+                    const gsVideoThumbB64 = async (buf) => {
+                      const dir = await gfs.promises.mkdtemp(gpath.join(gos.tmpdir(), "gstat-"));
+                      try {
+                        const inP = gpath.join(dir, "in.mp4");
+                        const outP = gpath.join(dir, "frame.jpg");
+                        await gfs.promises.writeFile(inP, buf);
+                        await new Promise((resolve, reject) => {
+                          const t = setTimeout(() => reject(new Error("ffmpeg frame timeout (10s)")), 10000);
+                          execFile("ffmpeg", ["-ss", "00:00:00", "-i", inP, "-y", "-vframes", "1", "-vf", "scale=96:-2", outP], (err) => { clearTimeout(t); err ? reject(err) : resolve(); });
+                        });
+                        const jpg = await gfs.promises.readFile(outP);
+                        return jpg.toString("base64");
+                      } catch (e) {
+                        console.log("[GStatus] video frame failed, placeholder:", e?.message);
+                        return await gsPlaceholderB64();
+                      } finally {
+                        gfs.promises.rm(dir, { recursive: true, force: true }).catch(() => {});
+                      }
+                    };
+
+                    const gsAudioSeconds = async (buf) => {
+                      const dir = await gfs.promises.mkdtemp(gpath.join(gos.tmpdir(), "gstat-"));
+                      try {
+                        const inP = gpath.join(dir, "in.bin");
+                        await gfs.promises.writeFile(inP, buf);
+                        return await new Promise((resolve) => {
+                          const t = setTimeout(() => resolve(undefined), 10000);
+                          execFile("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", inP], (err, stdout) => {
+                            clearTimeout(t);
+                            const d = parseFloat(String(stdout || "").trim());
+                            resolve(Number.isFinite(d) && d > 0 ? Math.round(d) : undefined);
+                          });
+                        });
+                      } catch (e) {
+                        return undefined;
+                      } finally {
+                        gfs.promises.rm(dir, { recursive: true, force: true }).catch(() => {});
+                      }
+                    };
+
+                    // synthetic 64-bar voice-note waveform (audio-decode is not
+                    // installed; a visual-only wave beats blocking on it)
+                    const gsWaveform = () => {
+                      const out = new Uint8Array(64);
+                      let v = 42;
+                      for (let i = 0; i < 64; i++) {
+                        v = Math.max(10, Math.min(100, v + (Math.random() * 38 - 19)));
+                        out[i] = Math.round(v);
+                      }
+                      return out;
+                    };
+
+                    // 💡 TICKET #b4fa05 (2026-09-21): media-type validation.
+                    // Group statuses only render for a known set of media types;
+                    // anything else (documents, HEIC images, unsupported codecs)
+                    // silently produced a status that WhatsApp never displayed,
+                    // which testers reported as "gstatus cannot upload media".
+                    // Now: normalize/verify the mimetype, set it explicitly on
+                    // the payload (so Baileys doesn't guess), and throw a clear
+                    // typed error for unsupported types. (GS_UNSUPPORTED now
+                    // lives at per-message scope - see the 2026-09-22 hoist note.)
+                    const gsCheckMediaType = (kind, msg) => {
+                      const mt = String((msg && msg.mimetype) || '').toLowerCase();
+                      if (kind === 'image') {
+                        if (mt && !/^image\/(jpeg|jpg|png|webp)$/.test(mt)) {
+                          throw Object.assign(new Error(`Unsupported image type (${mt || 'unknown'}). Use JPG, PNG or WEBP.`), { code: GS_UNSUPPORTED });
+                        }
+                        return mt || 'image/jpeg';
+                      }
+                      if (kind === 'video') {
+                        if (mt && !/^video\/(mp4|webm|quicktime|3gpp)$/.test(mt)) {
+                          throw Object.assign(new Error(`Unsupported video type (${mt || 'unknown'}). Use MP4 (H.264).`), { code: GS_UNSUPPORTED });
+                        }
+                        return mt === 'video/quicktime' ? 'video/mp4' : (mt || 'video/mp4');
+                      }
+                      return null;
+                    };
+
+                    const gsBuildPayload = async (kind, msg, buf, caption) => {
+                      const mediaBuf = buf || (await gsDownloadBuf(msg, kind));
+                      if (kind === "image") {
+                        const payload = { image: mediaBuf };
+                        const __mt = gsCheckMediaType('image', msg);
+                        if (__mt) payload.mimetype = __mt;
+                        payload.jpegThumbnail = await gsImageThumbB64(mediaBuf);
+                        if (caption) payload.caption = caption;
+                        return payload;
+                      }
+                      if (kind === "video") {
+                        const payload = { video: mediaBuf };
+                        const __mt = gsCheckMediaType('video', msg);
+                        if (__mt) payload.mimetype = __mt;
+                        payload.jpegThumbnail = await gsVideoThumbB64(mediaBuf);
+                        if (caption) payload.caption = caption;
+                        return payload;
+                      }
+                      if (kind === "audio") {
+                        const payload = { audio: mediaBuf, ptt: !!(msg && msg.ptt), mimetype: (msg && msg.mimetype) || undefined };
+                        const sec = await gsAudioSeconds(mediaBuf);
+                        if (sec) payload.seconds = sec;
+                        if (payload.ptt) payload.waveform = gsWaveform();
+                        return payload;
+                      }
+                      return { sticker: mediaBuf };
+                    };
+
+                    const gsPost = async (sock2, chatId2, key2, payload) => {
+                      if (key2) await sock2.sendMessage(chatId2, { react: { text: "⏳", key: key2 } }).catch(() => {});
+                      const isMedia = !!(payload.image || payload.video || payload.audio || payload.sticker);
+                      const t0 = Date.now();
+                      if (isMedia) {
+                        const b = payload.image || payload.video || payload.audio || payload.sticker;
+                        console.log(`[GStatus] uploading ${payload.image ? "image" : payload.video ? "video" : payload.audio ? "audio" : "sticker"} (${Math.round((b.length || 0) / 1024)}KB)…`);
+                      }
+                      const genPromise = generateWAMessageContent(payload, {
+                        upload: sock2.waUploadToServer,
+                        // 💡 TICKET #b4fa05 (2026-09-21): the standalone
+                        // generateWAMessageContent call does NOT inherit the
+                        // socket's mediaUploadTimeoutMs (20s) - timeoutMs was
+                        // undefined, meaning NO upload timeout. Videos then
+                        // hung until this function's 90s race killed the post,
+                        // which surfaced to testers as "gstatus can't upload
+                        // media". Give status posts an explicit 60s upload
+                        // budget (statuses carry big videos) and raise the
+                        // race backstop to 120s so the upload can finish.
+                        mediaUploadTimeoutMs: 60000,
+                      });
+                      const inner = isMedia
+                        ? await Promise.race([
+                            genPromise,
+                            new Promise((_, reject) => setTimeout(() => reject(new Error("media upload timed out after 120s - try a smaller file")), 120000)),
+                          ])
+                        : await genPromise;
+                      // 2026-09-15 v3: mirror gifted-baileys GiftedStatus.sendGroupStatus
+                      // EXACTLY - the content wrapped once in groupStatusMessageV2 and
+                      // relayed with a bare messageId. Our old double messageSecret +
+                      // generateWAMessageFromContent layers made WhatsApp ACCEPT the
+                      // relay (no error) while never RENDERING media statuses; text
+                      // survived only because clients are lenient for plain text.
+                      // 💡 FIX 2026-09-25 (owner: image group statuses STILL not
+                      // rendering after 10 attempts) - ROOT CAUSE FOUND: Baileys'
+                      // relayMessage() computes the stanza's `mediatype` attribute
+                      // from the TOP-LEVEL message (getMediaType) BEFORE the patch
+                      // hook runs. Our old relay wrapped the media inside
+                      // { groupStatusMessageV2 } first, so getMediaType() saw only
+                      // the wrapper, `mediatype` never landed on the <enc> node,
+                      // and WhatsApp's server silently dropped the media status
+                      // while accepting text ones (text needs no mediatype - hence
+                      // "text works, images never do"). Fix (mirrors the zaileys
+                      // library's proven design): relay MEDIA TOP-LEVEL so
+                      // mediatype is set, and wrap into the official
+                      // groupStatusMessageV2 envelope inside the socket's
+                      // patchMessageBeforeSending hook (see makeWASocket config)
+                      // right before encoding - the wire format keeps the official
+                      // shape (outer + inner messageContextInfo.messageSecret).
+                      const __gsInner = inner.message || inner;
+                      const __gsId = gsMsgId();
+                      if (isMedia) {
+                        const __gsMark = (globalThis.__gsWrapMark = globalThis.__gsWrapMark || new WeakSet());
+                        __gsMark.add(__gsInner);
+                        await sock2.relayMessage(chatId2, __gsInner, { messageId: __gsId });
+                      } else {
+                        // text statuses render fine with the direct wrap (proven in
+                        // production) - this path is intentionally untouched.
+                        await sock2.relayMessage(
+                          chatId2,
+                          { groupStatusMessageV2: { message: __gsInner } },
+                          { messageId: __gsId },
+                        );
+                      }
+                      // remember our last posts per (instance, chat) for `.gstatus delete`
+                      globalThis.__gsMine = globalThis.__gsMine || new Map();
+                      const __gsMineK = `${jidNormalizedUser(sock2?.user?.id || "")}:${chatId2}`;
+                      const __gsMineArr = globalThis.__gsMine.get(__gsMineK) || [];
+                      __gsMineArr.push({ id: __gsId, ts: Date.now() });
+                      while (__gsMineArr.length > 5) __gsMineArr.shift();
+                      globalThis.__gsMine.set(__gsMineK, __gsMineArr);
+                      if (isMedia) console.log(`[GStatus] posted media ok (id=…${__gsId.slice(-8)}) in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+                      if (key2) await sock2.sendMessage(chatId2, { react: { text: "✅", key: key2 } }).catch(() => {});
+                    };
+
+                    // message ids for status relays (Baileys helper, safe fallback)
+                    const gsMsgId = () => {
+                      try {
+                        return require("@whiskeysockets/baileys").generateMessageID();
+                      } catch {
+                        return "GSTATUS" + Date.now().toString(36).toUpperCase() + crypto.randomBytes(8).toString("hex").toUpperCase();
+                      }
+                    };
+                    globalThis.__gsHelpers = { gsBuildPayload, gsPost, gsMsgId };
+                    return globalThis.__gsHelpers;
+                  };
+                  const { gsBuildPayload: __gsBuildPayload, gsPost: __gsPost } = __gsEnsureHelpers();
+                  const __gsPendingTake = (botId, chatId2, sender2) => {
+                    const map = (globalThis.__gsPending = globalThis.__gsPending || new Map());
+                    const key = `${botId}:${chatId2}:${sender2}`;
+                    const entry = map.get(key);
+                    if (!entry) return null;
+                    map.delete(key);
+                    if (Date.now() - entry.ts > 60000) return null; // expired
+                    return entry;
+                  };
+
+                  // 💡 FIX 2026-09-22 (owner: "gstatus STILL can't do images and
+                  // videos, IT EVEN LAGS THE BOT NOW"): media posts used to be
+                  // fully AWAITED inside the message run - media download +
+                  // thumbnail + a 60s upload budget inside a pipeline that is
+                  // raced by the 45s command timeout. Big media therefore
+                  // (a) reported "Command timed out after 45s" while the upload
+                  // was still running - every video, every time - and (b) kept
+                  // large buffers and upload/encryption work churning through
+                  // the event loop, which the whole chat felt as lag. Media
+                  // posts now run DETACHED: the message run returns at once,
+                  // the ⏳ react shows instantly, and the ✅/❌ react plus a
+                  // final text report the outcome when the upload settles.
+                  const __gsDetachPost = (sock2, chatId2, key2, buildFn, okText) => {
+                    sock2.sendMessage(chatId2, { react: { text: "⏳", key: key2 } }).catch(() => {});
+                    const done = (async () => {
+                      const payload = await buildFn();
+                      await __gsPost(sock2, chatId2, key2, payload);
+                      await sock2.sendMessage(chatId2, { text: BOT_MARKER + okText }).catch(() => {});
+                    })();
+                    done.catch(async (gsErr) => {
+                      console.log("[GStatus] detached post failed:", gsErr?.message || gsErr);
+                      const __gsReason = gsErr?.code === GS_UNSUPPORTED
+                        ? gsErr.message
+                        : String(gsErr?.message || gsErr).slice(0, 120);
+                      try { await sock2.sendMessage(chatId2, { react: { text: "❌", key: key2 } }); } catch {}
+                      await sock2.sendMessage(chatId2, {
+                        text: BOT_MARKER + `❌ Could not post the group status: ${__gsReason}`,
+                      }).catch(() => {});
+                    });
+                    return done;
+                  };
+
+                  // 3.75 📌 GROUP STATUS MEDIA PIPELINE (2026-09-15 fix).
+                  // Baileys computes image/video thumbnails with SHARP when it is
+                  // installed - sharp is BANNED on this box (native libvips crash
+                  // killed the process mid-post). prepareWAMessageMedia SKIPS that
+                  // path when the payload already carries jpegThumbnail /
+                  // waveform / seconds, so the helpers below always provide them
+                  // (jimp + ffmpeg - both proven safe here). Also: a bare
+                  // `.gstatus` arms a 60s media window; the sender's next
+                  // photo/video/audio/sticker becomes the group status (the only
+                  // way to post audio, since WhatsApp never captions voice notes).
+                  if (isGroupChat && !m.key.fromMe) {
+                    const _gsKind =
+                      m.message.imageMessage ? "image"
+                        : m.message.videoMessage ? "video"
+                          : m.message.audioMessage ? "audio"
+                            : m.message.stickerMessage ? "sticker" : null;
+                    let _gsExempt = false;
+                    if (_gsKind) {
+                      try {
+                        const gsPm = groupMetadata || await getGroupMetadata(chatId).catch(() => null);
+                        const gsPadm = gsPm ? (cachedAdminSet || buildAdminCache(chatId, gsPm.participants)) : null;
+                        const gsPphone = lidResolver.resolveToPhone(senderJid, configInstance.getAuthPath());
+                        _gsExempt = !gsPadm || gsPadm.has(gsPphone) || gsPadm.has(senderJid) ||
+                          _isBotOwner(senderJid) ||
+                          (typeof isGlobalMod === "function" && isGlobalMod(senderJid));
+                      } catch (gsPExErr) {
+                        console.log("[GStatus] pending exemption check failed:", gsPExErr?.message);
+                      }
+                    }
+                    if (_gsKind && _gsExempt) {
+                      const _gsCap = (
+                        m.message.imageMessage?.caption ||
+                        m.message.videoMessage?.caption ||
+                        m.message.conversation ||
+                        m.message.extendedTextMessage?.text || ""
+                      ).trim();
+                      if (!_gsCap.startsWith(PREFIX) && __gsPendingTake(BOT_ID, chatId, senderJid)) {
+                        // DETACHED (2026-09-22): build + upload run in the
+                        // background - the message run returns immediately.
+                        __gsDetachPost(
+                          sock,
+                          chatId,
+                          m.key,
+                          () => __gsBuildPayload(
+                            _gsKind,
+                            _gsKind === "sticker" ? m.message.stickerMessage
+                              : _gsKind === "audio" ? m.message.audioMessage
+                                : m.message[_gsKind + "Message"],
+                            null,
+                            _gsCap || undefined,
+                          ),
+                          `📌 Posted to this group's status! (visible for 24h in the Status tab)`,
+                        );
+                        return; // handled - do not run the rest of the pipeline
+                      }
+                    }
+                  }
+
+                  // 4. 📌 GROUP STATUS ANNOUNCEMENTS (opt-in via `.gstatus on`).
+                  // WhatsApp group statuses arrive wrapped in
+                  // groupStatusMentionMessage/groupStatusMessage(V2) - or with
+                  // contextInfo.isGroupStatus after Baileys unwrapping.
+                  if (isGroupChat && !gsLockViolated && getGroupSettings(chatId).gstatusAnnounce === true && !m.key.fromMe) {
+                    try {
+                      const gsWrap =
+                        m.message.groupStatusMentionMessage ||
+                        m.message.groupStatusMessage ||
+                        m.message.groupStatusMessageV2;
+                      const gsCtx =
+                        m.message.extendedTextMessage?.contextInfo ||
+                        m.message.imageMessage?.contextInfo ||
+                        m.message.videoMessage?.contextInfo;
+                      const isGs =
+                        !!gsWrap ||
+                        gsCtx?.isGroupStatus === true ||
+                        gsCtx?.isGroupStatus === 1;
+                      if (isGs) {
+                        const inner = gsWrap?.message || m.message;
+                        const gsText =
+                          inner.conversation ||
+                          inner.extendedTextMessage?.text ||
+                          inner.imageMessage?.caption ||
+                          inner.videoMessage?.caption ||
+                          "";
+                        const kind = inner.imageMessage
+                          ? "📷 photo"
+                          : inner.videoMessage
+                            ? "🎥 video"
+                            : inner.audioMessage
+                              ? "🎵 audio"
+                              : "📝 text";
+                        const gsAuthor =
+                          (gsCtx && gsCtx.participant) ||
+                          m.key.participant ||
+                          m.key.remoteJid;
+                        const gsWho = `@${String(gsAuthor).split("@")[0].split(":")[0]}`;
+                        await sock.sendMessage(chatId, {
+                          text:
+                            BOT_MARKER +
+                            `📌 ${kind} group status from ${gsWho}` +
+                            (gsText ? `\n\n"${String(gsText).slice(0, 300)}"` : ""),
+                          mentions: [jidNormalizedUser(gsAuthor)],
+                        }, { quoted: m });
+                      }
+                    } catch (gsErr) {
+                      console.log("[GStatus] announce failed:", gsErr?.message || gsErr);
+                    }
+                  }
+
                   const text =
                     m.message.conversation ||
                     m.message.extendedTextMessage?.text ||
@@ -5329,10 +8722,120 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
                   const txt = text ? text.trim() : "";
 
+                  // 💡 SIBLING PREFIX COLLISION GUARD (2026-08-14):
+                  // If the message starts with a sibling bot's prefix, skip it entirely.
+                  // This prevents Jake's ".jk char" from being misread by Joker as
+                  // ".j" + "k char" → error.
+                  //
+                  // CRITICAL: Own prefix is checked FIRST. If the message starts with our
+                  // own prefix, we process it - even if a sibling prefix is a substring.
+                  // Example: Jake's prefix is ".jk", Joker's is ".j". When Jake sees
+                  // ".jk char", it starts with ".jk" (own prefix) → process it (do NOT
+                  // check siblings). When Joker sees ".jk char", it does NOT start with
+                  // ".j" as an exact prefix match... wait, ".jk" DOES start with ".j".
+                  //
+                  // So the real logic is: check own prefix first (exact startswith). If
+                  // it matches, process. If it does NOT match own prefix, THEN check
+                  // siblings. But ".jk char" starts with ".j" (Joker's prefix) AND ".jk"
+                  // (Jake's prefix). Joker needs to realize ".jk" is a sibling prefix
+                  // and is LONGER than ".j", so the message is for Jake, not Joker.
+                  //
+                  // Solution: check ALL prefixes (own + siblings), pick the LONGEST match.
+                  // If the longest match is a sibling prefix, skip. If it's our own, process.
+                  if (txt.length > 1 && siblingPrefixes.length > 0) {
+                    const lowerTxtForPrefix = txt.toLowerCase();
+                    const ownPrefixLower = PREFIX.toLowerCase();
+
+                    // Find the longest matching prefix (own or sibling)
+                    let longestMatch = null;
+                    let longestMatchIsOwn = false;
+
+                    // Check own prefix
+                    if (lowerTxtForPrefix.startsWith(ownPrefixLower)) {
+                      longestMatch = ownPrefixLower;
+                      longestMatchIsOwn = true;
+                    }
+
+                    // Check sibling prefixes (sorted longest-first)
+                    for (const sibPrefix of siblingPrefixes) {
+                      if (lowerTxtForPrefix.startsWith(sibPrefix)) {
+                        if (!longestMatch || sibPrefix.length > longestMatch.length) {
+                          longestMatch = sibPrefix;
+                          longestMatchIsOwn = false;
+                        }
+                      }
+                    }
+
+                    // If the longest match is a sibling prefix (not our own), skip
+                    if (longestMatch && !longestMatchIsOwn) {
+                      return; // Skip silently - message is for a sibling bot
+                    }
+                  }
+
                   // ── PIPELINE STAGE 2: TEXT PARSED ──────────
                   const _looksLikeCmd = txt.startsWith('.') || txt.toLowerCase().startsWith(botConfig.getPrefix().toLowerCase());
                   if (_looksLikeCmd) {
                     console.log(`🔍 [Pipeline:2] Text parsed | from=${senderJid.split('@')[0]} | text=${JSON.stringify(txt.slice(0, 80))} | muted=${isMuted(senderJid, chatId)} | isRekeying=${isRekeying}`);
+                  }
+
+                  // 🌍 DM encounter routing (owner brief #fec956): while a
+                  // player has an active DM encounter session, their DMs go
+                  // to the encounter framework - EXCEPT prefix commands, so
+                  // players can still use normal bot commands mid-encounter.
+                  if (
+                    typeof chatId === "string" &&
+                    !chatId.endsWith("@g.us") &&
+                    txt &&
+                    !txt.toLowerCase().startsWith(botConfig.getPrefix().toLowerCase())
+                  ) {
+                    try {
+                      // ⚔️ GUILD WAR first: active-event DM actions (movement,
+                      // relics, challenges). Returns null when not a Ruins action.
+                      // NOTE: `prefix` const is declared further down this scope
+                      // (TDZ) - NEVER reference it here. Use botConfig directly.
+                      const gwResult = await require("./rpg/guildWar/dmRouter").handleDM(
+                        sock, senderJid, chatId, txt, BOT_MARKER, { prefix: botConfig.getPrefix() },
+                      );
+                      if (gwResult) {
+                        if (gwResult.image) {
+                          await sock.sendMessage(chatId, { image: gwResult.image, caption: BOT_MARKER + (gwResult.text || "") });
+                        } else if (gwResult.text) {
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + gwResult.text });
+                        }
+                        return;
+                      }
+                    } catch (e) {
+                      console.error("[GuildWar] DM router error:", e.message);
+                    }
+                    try {
+                      const consumed = await require("./rpg/encounterFramework").handleDM(
+                        sock,
+                        senderJid,
+                        chatId,
+                        txt,
+                        BOT_MARKER,
+                      );
+                      if (consumed) return;
+                    } catch (e) {
+                      console.error("[Encounter] DM routing error:", e.message);
+                    }
+                    // 💡 NEW PLAYER TUTORIAL (2026-10-03): DM verbs for the
+                    // interactive tutorial (start/skip/next/finish/retry).
+                    try {
+                      const tutResult = await require("./rpg/tutorial").handleDM(
+                        sock, senderJid, chatId, txt, BOT_MARKER, { prefix: botConfig.getPrefix() },
+                      );
+                      if (tutResult) {
+                        if (tutResult.image) {
+                          await sock.sendMessage(chatId, { image: tutResult.image, caption: BOT_MARKER + (tutResult.text || "") });
+                        } else if (tutResult.text) {
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + tutResult.text });
+                        }
+                        return;
+                      }
+                    } catch (e) {
+                      console.error("[Tutorial] DM router error:", e.message);
+                    }
                   }
 
                   const handlePendingNameReply = async () => {
@@ -5376,6 +8879,16 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                       .trim();
 
                     if (chosenName.length < 2 || chosenName.length > 20) {
+                      // 💡 FIX §1.1: Rate-limit the nickname prompt to prevent
+                      // cross-bot infinite loops. If we've sent this prompt to
+                      // this chat in the last 60 seconds, don't send it again -
+                      // just silently consume the message. This breaks the
+                      // feedback loop where two bots keep prompting each other.
+                      const lastPrompt = pendingNameRequests.get(senderJid + '_rateLimit_' + chatId);
+                      if (lastPrompt && Date.now() - lastPrompt < 60000) {
+                        return true; // consume silently, don't send another prompt
+                      }
+                      pendingNameRequests.set(senderJid + '_rateLimit_' + chatId, Date.now());
                       await reply(
                         `Yo! That name's a bit weird or too long/short. Give me a chill nickname (2-20 characters)! What should I call you?`,
                       );
@@ -5438,13 +8951,46 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   // so we can see when commands are being eaten as name replies.
                   const _pendingResult = await handlePendingNameReply();
                   if (_pendingResult) {
-                    console.log(`⏭️ [${BOT_ID}] Message "${txt.slice(0, 40)}" consumed by handlePendingNameReply (treated as name reply) — command NOT processed`);
+                    console.log(`⏭️ [${BOT_ID}] Message "${txt.slice(0, 40)}" consumed by handlePendingNameReply (treated as name reply) - command NOT processed`);
                     return;
+                  }
+
+                  // 💡 SKILL/CLASS CREATION REPLY HANDLER - when a mod replies to
+                  // the template message from .g admin createskill/createclass
+                  // 💡 FIX (ticket #b4fa57, 2026-09-21): this no-prefix mutation
+                  // path used to run on EVERY bot instance that shared the group
+                  // (they all share the same mods) - so one mod reply created the
+                  // skill/class three times and produced three responses. Two
+                  // guards now:
+                  //   1. Sibling suppression: a message authored by another bot
+                  //      never triggers the creator reply flow.
+                  //   2. electOnce: a shared claim keyed on the WhatsApp message
+                  //      id means exactly ONE instance processes a given reply.
+                  const _quotedCtx = m.message?.extendedTextMessage?.contextInfo;
+                  const _quotedText = _quotedCtx?.quotedMessage?.conversation ||
+                    _quotedCtx?.quotedMessage?.extendedTextMessage?.text || '';
+                  if (_quotedText && (isOwner || isGlobalMod(senderJid) || isRpgMod(senderJid))) {
+                    if (isSiblingBot(senderJid)) {
+                      console.log(`⏭️ [${BOT_ID}] CREATOR reply from sibling bot ${senderJid} ignored (anti-duplicate).`);
+                    } else if (_quotedText.includes('SKILL CREATOR') || _quotedText.includes('CLASS CREATOR')) {
+                      if (electOnce('creator_reply', (m && m.key && m.key.id) || `${chatId}:${Date.now()}`)) {
+                        const adminConsole = require('./commands/adminConsole');
+                        if (_quotedText.includes('SKILL CREATOR')) {
+                          await adminConsole.handleSkillCreationReply(sock, chatId, senderJid, txt, BOT_MARKER, botConfig.getPrefix());
+                        } else {
+                          await adminConsole.handleClassCreationReply(sock, chatId, senderJid, txt, BOT_MARKER, botConfig.getPrefix());
+                        }
+                      } else {
+                        console.log(`🗳️ [${BOT_ID}] CREATOR reply ${m.key?.id} already claimed by a sibling - skipping.`);
+                      }
+                      return;
+                    }
                   }
 
                   // 🚨 HARD-PING TEST (Bypasses everything)
                   const _isPing = txt.toLowerCase() === "ping" ||
-                    txt.toLowerCase() === `${botConfig.getPrefix().toLowerCase()} ping`;
+                    txt.toLowerCase() === `${botConfig.getPrefix().toLowerCase()} ping` ||
+                    txt.toLowerCase() === `${botConfig.getPrefix().toLowerCase()}ping`;
                   if (_isPing) {
                     console.log(`🏓 [${BOT_ID}] Ping test matched: "${txt}"`);
                   }
@@ -5463,6 +9009,32 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   // 🧼 CLEAN TEXT: Strip WhatsApp formatting characters (*, ~, outer _) for command parsing
                   const cleanTxt = txt.replace(/[*~]/g, "").replace(/(?<!\w)_|_(?!\w)/g, "");
                   let lowerTxt = cleanTxt.toLowerCase().replace(/\s+/g, " ");
+
+                  // ⚡ PREFIX-LESS ALIASES (2026-09-17): '.lore' and '.updates …'
+                  // work without any instance prefix; one sibling replies.
+                  if (lowerTxt === '.lore') {
+                    if (electOnce('lore', (m && m.key && m.key.id) || String(Date.now()))) {
+                      const { sendLore } = require('./rpg/loreContent');
+                      await sendLore(sock, chatId, botConfig.getPrefix());
+                    }
+                    return;
+                  }
+                  if (lowerTxt === '.updates' || lowerTxt.startsWith('.updates ')) {
+                    if (lowerTxt === '.updates' || lowerTxt.split(' ')[1] === 'all') {
+                      if (electOnce('updates', (m && m.key && m.key.id) || String(Date.now()))) {
+                        if (!isOwner && !isGlobalMod(senderJid)) {
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Only the bot owner or a global mod can broadcast updates to all groups.' });
+                        } else {
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + '🔄 *UPDATES ALL*\nEnabling the updates feed in every group and broadcasting now...' });
+                          const count = await handleModeUpdates(['updates', 'all']);
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + count });
+                        }
+                      }
+                      return;
+                    }
+                    await sock.sendMessage(chatId, { text: BOT_MARKER + `📰 Use: \`.updates all\` (owner broadcast) or \`.updates status\`.` });
+                    return;
+                  }
 
                   const senderRankLevel = isGroupChat ? getMemberRankLevel(chatId, senderJid) : 0;
                   let canUseAdminCommands =
@@ -5498,12 +9070,59 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     );
                   }
 
+                  // ── EXPANDED RPG TEST-MODE LOCK (PHASE 7 FIX 2026-08-29) ──────────
+                  // PHASE 7 FIX 2026-08-29: expanded RPG lock - hardcoded command list
+                  // The lock at line ~7298 (after isCommandDisabled) only catches commands
+                  // registered in commandRegistry. But many RPG commands are inline if-blocks
+                  // in engine.js (rank, profile, me, evolve, trial, combat, etc.) that aren't
+                  // registered, AND cards commands are intercepted by cardSystem.handleCommand
+                  // BEFORE the lock fires. This hardcoded list check sits BEFORE the card
+                  // intercept so all RPG commands are caught regardless of dispatch path.
+                  if (_looksLikeCmd && await testerSystem.getTestMode()) {
+                    try {
+                      const words = lowerTxt.split(' ');
+                      const prefixPart = botConfig.getPrefix().toLowerCase();
+                      const firstWord = words[0].startsWith(prefixPart) ? words[0].slice(prefixPart.length) : (words[0].startsWith('.') ? words[0].slice(1) : words[0]);
+                      const RPG_CMDS = new Set(['char', 'character', 'stats', 'kills', 'killcount', 'profile', 'me', 'whois', 'cardstyle', 'setdefaultcard', 'status', 'inventory', 'bag', 'inv', 'dismantle', 'equip', 'unequip', 'use', 'enhance', 'blacksmith', 'repair', 'inspect', 'shop', 'buy', 'recipes', 'craft', 'brew', 'forge', 'cook', 'source', 'mine', 'skill', 'skills', 'skilltree', 'st', 'abilities', 'allocate', 'classes', 'evolve', 'trial', 'quest', 'solo', 'adventure', 'join', 'stop', 'vote', 'raid', 'abyss', 'world', 'bounty', 'duel', 'challenge', 'pvp', 'combat', 'summon', 'summons', 'dragonlord', 'dglord', 'dragongod', 'rune', 'clinic', 'heal', 'health', 'hospital', 'rank', 'adventurer', 'monster', 'handbook', 'guide', 'lore', 'leaderboard', 'lb', 'upgrade', 'claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 't2edeck', 't2ecoll', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'cdeck', 'tokens', 'event', 'setprice', 'esummon', 'fc', 'spawn', 'listitem', 'unlistitem', 'buyitem', 'itemmarket', 'balance', 'bal', 'daily', 'register', 'deposit', 'withdraw', 'transfer', 'rob', 'rich', 'lottery', 'invest', 'investment', 'gamble', 'slots', 'dice', 'coinflip', 'blackjack', 'roulette', 'plinko', 'wheel', 'crash', 'cups', 'scratch', 'rps', 'horse', 'hl', 'mines', 'penalty', 'guess', 'guild', 'reset', 'handbook', 'tutorial']);
+                      const isRpg = RPG_CMDS.has(firstWord.toLowerCase());
+                      if (isRpg) {
+                        const bypass = await testerSystem.canBypassRpgLock(senderJid, chatId);
+                        if (!bypass) {
+                          // Try image card via Go service
+                          let cardSent = false;
+                          try {
+                            const goService = require('./utils/goImageService');
+                            if (await goService.isHealthy()) {
+                              const cardBuf = await goService.generateBossSplash({
+                                sprite: 'enemies/boss_0_N.png',
+                                name: 'RPG UNDER MAINTENANCE',
+                                flavorText: 'The RPG is currently under maintenance indefinitely. Only Game Testers and Mods can access RPG features during this testing phase.',
+                                rank: '???',
+                                floor: 404
+                              });
+                              if (cardBuf) {
+                                await sock.sendMessage(chatId, { image: cardBuf, caption: BOT_MARKER + '🚧 *RPG UNDER MAINTENANCE*\n\nThe RPG is currently under maintenance indefinitely.\n\nGame Testers and Mods can still access RPG features.\nIf you believe this is in error, contact a moderator.' }, { quoted: m });
+                                cardSent = true;
+                              }
+                            }
+                          } catch (e) { console.error('[TestMode-ExpandLock] card gen failed:', e.message); }
+                          if (!cardSent) {
+                            await sock.sendMessage(chatId, {
+                              text: BOT_MARKER + '🚧 *RPG UNDER MAINTENANCE*\n\nThe RPG is currently under maintenance indefinitely.\n\nGame Testers and Mods can still access RPG features.\nIf you believe this is in error, contact a moderator.'
+                            }, { quoted: m });
+                          }
+                          return;
+                        }
+                      }
+                    } catch (expandLockErr) { console.error('[TestMode-ExpandLock] error:', expandLockErr.message); }
+                  }
+
                   // ── CARD SYSTEM INTERCEPT ──────────────────
                   if (_looksLikeCmd) {
                     const disabledCats = system.get(botConfig.getBotId() + "_disabled_categories", []);
                     const normalizedDisabled = disabledCats.map(c => c.toLowerCase());
                     if (normalizedDisabled.includes('cards')) {
-                      const cardCmds = ['claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 't2edeck', 't2ecoll', 'swap card', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'list decks', 'create deck', 'cdeck', 'rename deck', 'delete deck', 'tokens', 'event', 'setprice', 'esummon'];
+                      const cardCmds = ['claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 't2edeck', 't2ecoll', 'swap card', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'list decks', 'create deck', 'cdeck', 'rename deck', 'delete deck', 'tokens', 'event', 'setprice', 'esummon', 'listitem', 'unlistitem', 'buyitem', 'itemmarket'];
                       const words = lowerTxt.split(' ');
                       const prefixPart = botConfig.getPrefix().toLowerCase();
                       const firstWord = words[0].startsWith(prefixPart) ? words[0].slice(prefixPart.length) : (words[0].startsWith('.') ? words[0].slice(1) : words[0]);
@@ -5512,6 +9131,27 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                       }
                     }
                   }
+
+                  // 💡 FIX 2026-08-08: Move mute/ban/hardmute checks BEFORE card system.
+                  // Previously, card commands were processed at line 6861 BEFORE the
+                  // mute check at line 9341 - so muted/banned/hard-muted users could
+                  // still use ALL card commands (.jk cards on, .jk spawn, etc.).
+                  // Now we check permissions first and block card access for
+                  // muted/banned/hard-muted users.
+                  if (isMuted(senderJid, chatId)) {
+                    try { await sock.sendMessage(chatId, { delete: m.key }); } catch (e) {}
+                    return;
+                  }
+                  // 🔪 Murder Mystery: the dead do not speak in the manor (spec §12)
+                  if (murderMystery.isSilenced(senderJid, chatId)) {
+                    try { await sock.sendMessage(chatId, { delete: m.key }); } catch (e) {}
+                    return;
+                  }
+                  if (isBlocked(senderJid)) return;
+                  if (isBanned(senderJid)) return;
+                  // 💡 Hardmute check now happens EARLY (line ~6458) before MongoDB persist.
+                  // If we reach here, the user is NOT hard-muted (or it's a DM).
+                  // No need to re-check here.
 
                   if (_looksLikeCmd) console.log(`🃏 [Pipeline:3] Entering cardSystem.handleCommand | lowerTxt=${JSON.stringify(lowerTxt.slice(0,60))}`);
                   const cardHandled = await cardSystem.handleCommand({
@@ -5697,14 +9337,98 @@ _💡 Reply with another number from your search list!_`.trim();
                   // This block handles high-priority commands with robust parsing
                   const currentPrefix = botConfig.getPrefix().toLowerCase();
 
+                  // 💡 DIAG: log what we're about to check
+                  if (_looksLikeCmd) {
+                    console.log(`🔧 [Pipeline:CMD] lowerTxt=${JSON.stringify(lowerTxt.slice(0,60))} | currentPrefix=${JSON.stringify(currentPrefix)} | startsWith=${lowerTxt.startsWith(currentPrefix)}`);
+                  }
+
                   if (lowerTxt.startsWith(currentPrefix)) {
-                    const cmdBody = lowerTxt
+                    let cmdBody = lowerTxt
                       .substring(currentPrefix.length)
                       .trim();
+
+                    // 💡 FIX §9: normalize common no-space command patterns.
+                    // ".e bag6" → ".e bag 6", ".e solo1" → ".e solo 1", etc.
+                    // Only applies to known multi-word commands followed by a number.
+                    cmdBody = cmdBody.replace(/^(bag|inv|inventory|coll|deck|solo|combat|skill|buy|equip|use|craft|info|coll)\s*(\d+)$/i, '$1 $2');
+
                     const cmdArgs = cmdBody.split(" ");
                     const primaryCmd = cmdArgs[0];
 
+                    // 💡 FIX 2026-07-29: Populate the timeout context so the
+                    // catch handler at line ~25337 can log which command hung.
+                    // This prevents the "primaryCmd is not defined" ReferenceError
+                    // that was masking all real timeout errors.
+                    _cmdContext.primaryCmd = primaryCmd;
+                    _cmdContext.senderJid = senderJid;
+                    _cmdContext.chatId = chatId;
+                    _cmdContext.txt = txt;
+
                     const disabledCat = isCommandDisabled(primaryCmd, botConfig.getBotId());
+                  // 💡 PHASE 7 FIX 2026-08-29: RPG TEST MODE LOCK - fixed category lookup
+                  // PHASE 7 FIX 2026-08-29: RPG test-mode lock - fixed category lookup
+                  if (await testerSystem.getTestMode()) {
+                    try {
+                      // Iterate the COMMAND_REGISTRY to find primaryCmd's category.
+                      // (The old code did `CMD_REGISTRY.commandRegistry[primaryCmd].category` which is wrong -
+                      // the registry is exported directly, not nested, and entries have no .category field.
+                      // That bug meant the lock NEVER fired for ANY command.)
+                      const CMD_REGISTRY = require('./utils/commandRegistry');
+                      let isRpgCommand = false;
+                      for (const [catName, cmdList] of Object.entries(CMD_REGISTRY)) {
+                        if (cmdList && cmdList.some(c => c.cmd && c.cmd.toLowerCase() === primaryCmd.toLowerCase())) {
+                          // Lock if the command is in any of these user-facing categories:
+                          // rpg (RPG + GUILDS + PROGRESSION), cards (CARDS), gambling (GAMBLING).
+                          // ECONOMY category is also locked since it's part of the RPG economy.
+                          if (catName === 'RPG' || catName === 'GUILDS' || catName === 'PROGRESSION'
+                              || catName === 'CARDS' || catName === 'GAMBLING' || catName === 'ECONOMY') {
+                            isRpgCommand = true;
+                          }
+                          break;
+                        }
+                      }
+                      if (isRpgCommand) {
+                        const bypass = await testerSystem.canBypassRpgLock(senderJid, chatId);
+                        if (!bypass) {
+                          // 💡 FIX 2026-08-29: Use a direct construction/repair image URL
+                          // (was: Go service boss splash with sprite - wrong visual for a maintenance page)
+                          let cardSent = false;
+                          try {
+                            // Free online asset (Unsplash, hotlink-safe): construction workers
+                            const imgUrl = 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&q=80';
+                            const axios = require('axios');
+                            const imgRes = await axios.get(imgUrl, { responseType: 'arraybuffer', timeout: 8000 });
+                            if (imgRes.data && imgRes.data.length > 1000) {
+                              const imgBuf = Buffer.from(imgRes.data);
+                              await sock.sendMessage(chatId, {
+                                image: imgBuf,
+                                caption: BOT_MARKER + '🚧 *RPG UNDER MAINTENANCE*\n\nThe RPG is currently under maintenance indefinitely.\n\n🔧 Game Testers and Mods can still access RPG features.\nIf you believe this is in error, contact a moderator.'
+                              }, { quoted: m });
+                              cardSent = true;
+                            }
+                          } catch (e) { console.error('[TestMode] image fetch failed:', e.message); }
+                          // Fallback: try direct URL send (no buffer)
+                          if (!cardSent) {
+                            try {
+                              const imgUrl = 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&q=80';
+                              await sock.sendMessage(chatId, {
+                                image: { url: imgUrl },
+                                caption: BOT_MARKER + '🚧 *RPG UNDER MAINTENANCE*\n\nThe RPG is currently under maintenance indefinitely.\n\n🔧 Game Testers and Mods can still access RPG features.\nIf you believe this is in error, contact a moderator.'
+                              }, { quoted: m });
+                              cardSent = true;
+                            } catch (e) { console.error('[TestMode] URL send failed:', e.message); }
+                          }
+                          if (!cardSent) {
+                            return await sock.sendMessage(chatId, {
+                              text: BOT_MARKER + '🚧 *RPG UNDER MAINTENANCE*\n\nThe RPG is currently under maintenance indefinitely.\n\nGame Testers and Mods can still access RPG features.\nIf you believe this is in error, contact a moderator.'
+                            }, { quoted: m });
+                          }
+                          return;
+                        }
+                      }
+                    } catch (lockErr) { console.error('[TestMode] lock check error:', lockErr.message); }
+                  }
+
                     if (disabledCat) {
                       return await sock.sendMessage(chatId, {
                         text: BOT_MARKER + `❌ The *${disabledCat}* category is currently disabled for this bot instance.`,
@@ -5713,6 +9437,34 @@ _💡 Reply with another number from your search list!_`.trim();
 
                     // ── PIPELINE STAGE 4: CMD ROUTER ───────────
                     console.log(`⚡ [Pipeline:4] CMD DETECTED | cmd=${JSON.stringify(primaryCmd)} | sender=${senderJid.split('@')[0]} | chat=${chatId.split('@')[0]} | isSelf=${isSelf}`);
+
+                    // 💡 SANDBOX AUTO-SAVE: after every command, save the sandbox
+                    // data to AdminSandbox so nothing is lost. This runs
+                    // asynchronously (fire-and-forget) so it doesn't slow
+                    // down command processing.
+                    if (isSandboxJid(senderJid)) {
+                      const _realJid = stripSandboxPrefix(senderJid);
+                      const _sbUser = economy.economyData.get(senderJid);
+                      if (_sbUser) {
+                        const AdminSandbox = require('./models/AdminSandbox');
+                        AdminSandbox.patch(_realJid, {
+                          wallet: _sbUser.wallet, bank: _sbUser.bank,
+                          class: _sbUser.class, adventurerRank: _sbUser.adventurerRank,
+                          stats: _sbUser.stats, statBonuses: _sbUser.statBonuses,
+                          skillPoints: _sbUser.skillPoints, skills: _sbUser.skills,
+                          completedTrials: _sbUser.completedTrials,
+                          evolutionHistory: _sbUser.evolutionHistory,
+                          evolvedAt: _sbUser.evolvedAt,
+                          inventory: _sbUser.inventory, equipment: _sbUser.equipment,
+                          progression: _sbUser.progression,
+                          questsCompleted: _sbUser.questsCompleted,
+                          questsWon: _sbUser.questsWon, questsFailed: _sbUser.questsFailed,
+                          bossesDefeated: _sbUser.bossesDefeated,
+                          dragonsKilled: _sbUser.dragonsKilled,
+                          pvpWins: _sbUser.pvpWins, pvpLosses: _sbUser.pvpLosses,
+                        }).catch(e => console.error('[Sandbox] Auto-save failed:', e.message));
+                      }
+                    }
 
                     // --- REACTION COMMANDS ---
                     const reaction = REACTIONS.find((r) => r.type === primaryCmd);
@@ -5727,6 +9479,22 @@ _💡 Reply with another number from your search list!_`.trim();
                         senderJid,
                         senderName
                       );
+                      return;
+                    }
+
+                    // .j opscheck - deploy-pipeline verification (2026-09 rebuild test)
+                    // 💡 2026-09-10: now mod-gated (listed in the Mod Terminal,
+                    // so access must match). Read-only, harmless by design.
+                    if (primaryCmd === "opscheck") {
+                      const isModUserOps = isOwner || isGlobalMod(senderJid) || isRpgMod(senderJid) || isCardsMod(senderJid) || overrideUsers.has(senderJid);
+                      if (!isModUserOps) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ This command is for moderators and above only.' });
+                        return;
+                      }
+                      // 💡 AUDIT FIX 2026-09-26 (quiz P18): pass args so
+                      // `.j opscheck -info` can render command documentation
+                      // (incl. the group's live quizmod values).
+                      await opsCheckCommands.handleOpsCheck(sock, chatId, cmdArgs.slice(1).join(" "));
                       return;
                     }
 
@@ -5775,6 +9543,146 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
+                    // ═══════════════════════════════════════════════════════════
+                    // 💡 MINIMAL TEST - .j test
+                    // Simplest possible command. Just sends "test ok".
+                    // If THIS doesn't work, the issue is in command dispatch.
+                    // ═══════════════════════════════════════════════════════════
+                    if (primaryCmd === "test") {
+                      console.log(`🧪 [TEST] handler reached for primaryCmd="test"`);
+                      try {
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + "✅ test ok - command dispatch works" });
+                      } catch (e) {
+                        console.error(`🧪 [TEST] send failed:`, e.message);
+                        return;
+                      }
+                    }
+
+                    // ═══════════════════════════════════════════════════════════
+                    // 💡 DIAGNOSTIC COMMAND - .j diag
+                    // Tests every layer of image sending and reports back.
+                    // Use this to debug image/media issues in real-time.
+                    // ═══════════════════════════════════════════════════════════
+                    if (primaryCmd === "diag") {
+                      console.log(`🔍 [DIAG] handler reached for primaryCmd="diag"`);
+                      try {
+                      const results = [];
+                      results.push("🔍 *IMAGE PIPELINE DIAGNOSTIC*");
+                      results.push("━━━━━━━━━━━━━━━━━━━");
+
+                      // Test 1: Banner file
+                      const bannerPath = botConfig.getAssetPath("banner.png");
+                      results.push(`*1. Banner file:*`);
+                      results.push(`   Path: \`${bannerPath}\``);
+                      results.push(`   Exists: ${fs.existsSync(bannerPath) ? "✅ YES" : "❌ NO"}`);
+                      if (fs.existsSync(bannerPath)) {
+                        try {
+                          const stat = fs.statSync(bannerPath);
+                          results.push(`   Size: ${stat.size} bytes`);
+                          const buf = fs.readFileSync(bannerPath);
+                          results.push(`   Readable: ✅ YES (${buf.length} bytes)`);
+                          results.push(`   Magic bytes: ${buf.slice(0, 4).toString('hex')}`);
+                          results.push(`   Is JPEG: ${buf.slice(0, 2).toString('hex') === 'ffd8' ? "✅ YES (despite .png extension)" : "NO"}`);
+                        } catch (e) {
+                          results.push(`   Readable: ❌ ${e.message}`);
+                        }
+                      }
+
+                      // Test 2: Thumbnail generation
+                      results.push(`*2. Thumbnail generation:*`);
+                      try {
+                        const bannerBuf = fs.readFileSync(bannerPath);
+                        const thumb = await buildThumbnail(bannerBuf);
+                        results.push(`   buildThumbnail: ✅ ${thumb.length} bytes`);
+                      } catch (e) {
+                        results.push(`   buildThumbnail: ❌ ${e.message}`);
+                      }
+                      results.push(`   FALLBACK_THUMB (gray placeholder): ${FALLBACK_THUMB.length} bytes`);
+
+                      // Test 3: Sharp
+                      results.push(`*3. Sharp:*`);
+                      results.push(`   ⚠️ Sharp is DISABLED - it crashes with GLib-GObject-CRITICAL on Oracle, killing the process. Thumbnails are generated with jimp (pure JS).`);
+                      results.push(`   buildThumbnail() renders a REAL preview (≤120px JPEG) via jimp; gray placeholder only as last resort (${FALLBACK_THUMB.length} bytes).`);
+
+                      // Test 4: Jimp
+                      results.push(`*4. Jimp:*`);
+                      try {
+                        const Jimp = require('jimp');
+                        results.push(`   Load: ✅ (Jimp type: ${typeof Jimp.Jimp})`);
+                      } catch (e) {
+                        results.push(`   Load: ❌ ${e.message}`);
+                      }
+
+                      // Test 5: Text send (baseline - should always work)
+                      results.push(`*5. Text send:*`);
+                      try {
+                        await sock.sendMessage(chatId, { text: "📱 Test text message from .jk diag" });
+                        results.push(`   ✅ SUCCESS`);
+                      } catch (e) {
+                        results.push(`   ❌ ${e.message}`);
+                      }
+
+                      // Send the text diagnostic first
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + results.join("\n") });
+
+                      // Test 6: Banner image send (the actual .jk menu path)
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + "6. Now testing banner image send..." });
+                      try {
+                        const bannerBuf = fs.readFileSync(bannerPath);
+                        const thumb = await buildThumbnail(bannerBuf);
+                        await sock.sendMessage(chatId, {
+                          image: { url: bannerPath },
+                          caption: "🖼️ Banner image test (with jpegThumbnail)",
+                          jpegThumbnail: thumb,
+                        });
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + "6. Banner image: ✅ SENT (check if you see it above)" });
+                      } catch (e) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + `6. Banner image: ❌ ${e.message}` });
+                      }
+
+                      // Test 7: Banner image WITHOUT thumbnail (raw Baileys path)
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + "7. Testing banner WITHOUT jpegThumbnail..." });
+                      try {
+                        await sock.sendMessage(chatId, {
+                          image: { url: bannerPath },
+                          caption: "🖼️ Banner image test (NO thumbnail - raw Baileys path)",
+                        });
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + "7. Banner (no thumb): ✅ SENT" });
+                      } catch (e) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + `7. Banner (no thumb): ❌ ${e.message}` });
+                      }
+
+                      // Test 8: URL image send (the anime/img path)
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + "8. Testing URL image send..." });
+                      try {
+                        await sendImageSafe(sock, chatId, "https://cdn.myanimelist.net/images/anime/13/17465.jpg", "🖼️ URL image test (Jikan/MAL CDN)", m);
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + "8. URL image: ✅ SENT (check if you see it above)" });
+                      } catch (e) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + `8. URL image: ❌ ${e.message}` });
+                      }
+
+                      // Test 9: GoService health
+                      results.push(`*9. GoService:*`);
+                      try {
+                        const health = await goService.healthCheck();
+                        results.push(`   Health: ${health ? "✅ " + JSON.stringify(health) : "❌ null (service down)"}`);
+                      } catch (e) {
+                        results.push(`   Health: ❌ ${e.message}`);
+                      }
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + `9. GoService health: ${goService.baseUrl}` });
+
+                      // Final summary
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + "━━━━━━━━━━━━━━━━━━━\n📋 Diagnostic complete. Check which tests passed/failed above and report back." });
+                      } catch (diagErr) {
+                        console.error(`🔍 [DIAG] FATAL ERROR in diag handler:`, diagErr.message);
+                        console.error(`🔍 [DIAG] stack:`, diagErr.stack?.split('\n').slice(0, 8).join('\n'));
+                        try {
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + `🔍 DIAG FATAL ERROR: ${diagErr.message}` });
+                        } catch (_) {}
+                      }
+                      return;
+                    }
+
                     // .j menu or .j help
                     if (primaryCmd === "menu" || primaryCmd === "help") {
                       const menuArgs = cmdArgs.slice(1);
@@ -5782,134 +9690,191 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
-                    // 💡 .g modcom — show moderator commands by permission level
-                    if (primaryCmd === "modcom") {
-                      // 💡 FIX: `isMod` was never declared in this scope (it's only a
-                      // property key passed to cardSystem.handleCommand). Replaced with
-                      // the actual permission checks.
-                      const isSenderOwner = isOwner;
-                      const isSenderGMod = isGlobalMod(senderJid);
-                      const isSenderOverride = overrideUsers.has(senderJid);
-                      const isSenderMod = isSenderOverride || isSenderGMod || isSenderOwner;
-                      const isSenderCardMod = isSenderMod || (cardSystem && cardSystem.getInst && cardSystem.getInst().modJids && cardSystem.getInst().modJids.has(senderJid));
+                    // ═══════════════════════════════════════════════════════════
+                    // 💡 REBUILD 2026-09-10 - MOD TERMINAL (one command: <pfx> mod)
+                    // Replaces the old MOD COMMAND CENTER + modcom/admin aliases.
+                    // Same UX as the regular menu: category grid -> drill-down ->
+                    // explain mode, rotating tips. Real runs (e.g. "mod setlevel
+                    // @user 50") still fall through to the GM admin console.
+                    // ═══════════════════════════════════════════════════════════
+                    const isModUser = isOwner || isGlobalMod(senderJid) || isRpgMod(senderJid) || isCardsMod(senderJid) || overrideUsers.has(senderJid) ||
+                      (cardSystem && cardSystem.getInst && cardSystem.getInst().modJids && cardSystem.getInst().modJids.has(senderJid));
 
-                      // Non-mods get nothing
-                      if (!isSenderMod && !isSenderCardMod) {
+                    if (primaryCmd === "mod") {
+                      if (!isModUser) {
                         return reply(BOT_MARKER + '❌ This command is for moderators and above only.\n\n_If you believe this is an error, contact a bot owner._');
                       }
 
-                      let msg = `🔧 *MODERATOR COMMAND REFERENCE* 🔧\n`;
-                      msg += `_Showing commands available to your permission level._\n\n`;
-                      msg += `**Your permissions:** ${isSenderOwner ? '👑 Owner' : isSenderGMod ? '🛡️ Global Mod' : isSenderCardMod ? '🎴 Card Mod' : '👤 Member'}\n\n`;
+                      const modArgs = cmdArgs.slice(1);
 
-                      // ── GLOBAL MOD COMMANDS (owner + global mod) ──
-                      if (isSenderOwner || isSenderGMod) {
-                        msg += `┌─ *🛡️ GLOBAL MOD COMMANDS* ─┐\n`;
-                        msg += `• \`${botConfig.getPrefix()} addmod @user\` — promote to global mod\n`;
-                        msg += `• \`${botConfig.getPrefix()} delmod @user\` — demote global mod\n`;
-                        msg += `• \`${botConfig.getPrefix()} mods\` — list all global mods\n`;
-                        msg += `• \`${botConfig.getPrefix()} updateall [message]\` — broadcast to all groups\n`;
-                        msg += `• \`${botConfig.getPrefix()} setpack <name>\` — set sticker pack name\n`;
-                        msg += `• \`${botConfig.getPrefix()} setauthor <name>\` — set sticker author\n`;
-                        msg += `• \`${botConfig.getPrefix()} spawnset <minutes>\` — set card spawn interval\n`;
-                        msg += `• \`${botConfig.getPrefix()} spawninfo\` — view spawn config\n`;
-                        msg += `• \`${botConfig.getPrefix()} instances\` — check all bot instances' status\n\n`;
-                        msg += `*RPG Admin Commands:*\n`;
-                        msg += `• \`${botConfig.getPrefix()} abyss admin\` — Abyss management\n`;
-                        msg += `• \`${botConfig.getPrefix()} raid admin\` — Raid management\n`;
-                        msg += `• \`${botConfig.getPrefix()} bounty admin\` — Bounty management\n`;
-                        msg += `• \`${botConfig.getPrefix()} war admin\` — Guild war management\n`;
-                        msg += `• \`${botConfig.getPrefix()} rank toggleperm <level>\` — grant toggle perm\n`;
-                        msg += `• \`${botConfig.getPrefix()} rank togglelock on|off\` — lock rank toggle\n\n`;
+                      // Menu views (main grid / category / explain) - renders and
+                      // returns true; anything else falls through to the console.
+                      const rendered = await sendModMenu(sock, chatId, senderJid, modArgs, isOwner);
+                      if (rendered) {
+                        return;
                       }
 
-                      // ── CARD MOD COMMANDS (owner + global mod + card mod) ──
-                      if (isSenderOwner || isSenderGMod || isSenderCardMod) {
-                        msg += `┌─ *🎴 CARD MOD COMMANDS* ─┐\n`;
-                        msg += `• \`${botConfig.getPrefix()} cardmod add @user\` — add card mod\n`;
-                        msg += `• \`${botConfig.getPrefix()} cardmod del @user\` — remove card mod\n`;
-                        msg += `• \`${botConfig.getPrefix()} cardmod list\` — list card mods\n`;
-                        msg += `• \`${botConfig.getPrefix()} spawn <name>\` — force-spawn a card\n`;
-                        msg += `• \`${botConfig.getPrefix()} event start\` — start token event\n`;
-                        msg += `• \`${botConfig.getPrefix()} event stop\` — stop token event\n`;
-                        msg += `• \`${botConfig.getPrefix()} event status\` — event status\n`;
-                        msg += `• \`${botConfig.getPrefix()} t2edeck\` — manage eShop deck\n`;
-                        msg += `• \`${botConfig.getPrefix()} setprice edeck <slot> <price>\` — set price\n`;
-                        msg += `• \`${botConfig.getPrefix()} espawn [name]\` — spawn event card (no args = list)\n`;
-                        msg += `• \`${botConfig.getPrefix()} einfo [name]\` — look up event card (no args = list)\n`;
-                        msg += `• \`${botConfig.getPrefix()} t2ecoll\` — view event card database\n`;
-                        msg += `• \`${botConfig.getPrefix()} info <name> event\` — search event cards\n\n`;
+                      // Standalone commands (spawn, updateall, warn, ...) don't
+                      // live under "mod". If the first args name one, redirect
+                      // to its real form instead of the console's generic
+                      // unknown-command help. Runs before the console tier
+                      // check so card mods get card-tool redirects too.
+                      const { findStandalone } = require("./utils/modMenuData");
+                      const standalone = findStandalone(modArgs);
+                      if (standalone) {
+                        return reply(BOT_MARKER +
+                          `❌ \`${botConfig.getPrefix()} ${standalone.cmd}\` runs on its own, not under \`mod\`.\n\n` +
+                          `Real form: \`${botConfig.getPrefix()} ${standalone.usage}\``);
                       }
 
-                      // ── GROUP ADMIN COMMANDS (WA admin + owner + global mod) ──
-                      msg += `┌─ *⚔️ GROUP ADMIN COMMANDS* ─┐\n`;
-                      msg += `• \`${botConfig.getPrefix()} warn @user\` — warn a user\n`;
-                      msg += `• \`${botConfig.getPrefix()} resetwarn @user\` — reset warnings\n`;
-                      msg += `• \`${botConfig.getPrefix()} mute @user <time>\` — mute a user\n`;
-                      msg += `• \`${botConfig.getPrefix()} unmute @user\` — unmute\n`;
-                      msg += `• \`${botConfig.getPrefix()} kick @user\` — kick from group\n`;
-                      msg += `• \`${botConfig.getPrefix()} block @user\` — block from using bot\n`;
-                      msg += `• \`${botConfig.getPrefix()} unblock @user\` — unblock\n`;
-                      msg += `• \`${botConfig.getPrefix()} glock\` — lock group (admin only)\n`;
-                      msg += `• \`${botConfig.getPrefix()} gunlock\` — unlock group\n`;
-                      msg += `• \`${botConfig.getPrefix()} glock rank <N>\` — rank-locked group\n`;
-                      msg += `• \`${botConfig.getPrefix()} pin <duration>\` — pin message\n`;
-                      msg += `• \`${botConfig.getPrefix()} unpin\` — unpin\n\n`;
-
-                      // ── RANK MANAGEMENT (canManageRanks) ──
-                      msg += `┌─ *🏷️ RANK MANAGEMENT* ─┐\n`;
-                      msg += `• \`${botConfig.getPrefix()} rank on\` — enable rank system\n`;
-                      msg += `• \`${botConfig.getPrefix()} rank off\` — disable rank system\n`;
-                      msg += `• \`${botConfig.getPrefix()} rank setup\` — initialize rank ladder\n`;
-                      msg += `• \`${botConfig.getPrefix()} rank add <level> <icon> <name>\` — add rank tier\n`;
-                      msg += `• \`${botConfig.getPrefix()} set rank @user <level>\` — set user rank\n`;
-                      msg += `• \`${botConfig.getPrefix()} unrank @user\` — remove user rank\n`;
-                      msg += `• \`${botConfig.getPrefix()} title set @user <title>\` — set custom title\n`;
-                      msg += `• \`${botConfig.getPrefix()} rank allow @user\` — allow rank commands\n`;
-                      msg += `• \`${botConfig.getPrefix()} rank deny @user\` — deny rank commands\n`;
-                      msg += `• \`${botConfig.getPrefix()} rank perms\` — view rank permissions\n\n`;
-
-                      // ── RPG SYSTEM COMMANDS (everyone, listed for discovery) ──
-                      msg += `┌─ *🎮 RPG SYSTEMS* ─┐\n`;
-                      msg += `• \`${botConfig.getPrefix()} abyss\` — endless dungeon\n`;
-                      msg += `• \`${botConfig.getPrefix()} raid\` — weekly avatar raid\n`;
-                      msg += `• \`${botConfig.getPrefix()} bounty\` — PvP bounty system\n`;
-                      msg += `• \`${botConfig.getPrefix()} war\` — guild wars (status, my, bracket, champion, guardian, schedule, history)\n`;
-                      msg += `• \`${botConfig.getPrefix()} rune\` — rune socketing system\n`;
-                      msg += `• \`${botConfig.getPrefix()} guild perks\` — view guild perks\n`;
-                      msg += `• \`${botConfig.getPrefix()} guild info\` — guild status\n`;
-                      msg += `• \`${botConfig.getPrefix()} guild donate <amount>\` — donate to guild\n`;
-                      msg += `• \`${botConfig.getPrefix()} guild loan <amount>\` — borrow from guild\n`;
-
-                      await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-                      return;
+                      // Subcommand run - route to admin console (unchanged behavior)
+                      if (isOwner || isGlobalMod(senderJid) || isRpgMod(senderJid)) {
+                        const adminConsole = require('./commands/adminConsole');
+                        await adminConsole.handleAdmin(sock, chatId, senderJid, modArgs, m, BOT_MARKER, botConfig.getPrefix(), getMentionOrReply);
+                        return;
+                      } else {
+                        return reply(BOT_MARKER + '❌ GM admin subcommands require RPG Mod or higher.');
+                      }
                     }
 
-                    // 💡 .g instances — cross-instance health check
+                    // 💡 .g instances - cross-instance health check
                     // Shows the status of ALL bot instances (self + siblings)
                     // by reading their heartbeats from the shared System collection.
-                    // Mods/owner only — exposes operational info.
-                    if (primaryCmd === "instances" || primaryCmd === "instance" || primaryCmd === "health") {
-                      // 💡 FIX: `isMod` was never declared in this scope (it's only a
-                      // property key passed to cardSystem.handleCommand at L5423).
-                      // Referencing it threw ReferenceError, silently crashing the
-                      // command. Use overrideUsers / isGlobalMod directly instead.
+                    // Mods/owner only - exposes operational info.
+                    if (primaryCmd === "instances" || primaryCmd === "instance" || primaryCmd === "health" || primaryCmd === "bots") {
+                      // 💡 .g bots - simplified version for regular players
+                      if (primaryCmd === "bots") {
+                        try {
+                          // 💡 FIX: status-based online check (was timestamp-only - a
+                          // disconnected bot in a reconnect loop kept refreshing
+                          // lastUpdated, so it always showed as 🟢 Online even though
+                          // it was actually offline. Inverted the truth.)
+                          //
+                          // Now we read the actual connection status from the
+                          // health map. Only `connected` counts as online.
+                          // `connecting`/`needs_qr`/`needs_pairing` show their
+                          // real state. `disconnected`/`logged_out` show as offline.
+                          // We also include disabled siblings (instances that exist
+                          // in config but were not spawned) so the user can see
+                          // they exist but are turned off.
+                          const allHealth = botInstancesHealth;
+                          const seenIds = new Set();
+                          let msg = `🤖 *BOT STATUS*\n\n`;
+                          for (const [id, h] of allHealth.entries()) {
+                            seenIds.add(id);
+                            const ageMs = Date.now() - (h.lastUpdated || 0);
+                            const fresh = ageMs < 120000;
+                            let icon, label;
+                            if (!fresh) {
+                              icon = '⚫'; label = 'Stale';
+                            } else if (h.status === 'connected') {
+                              icon = '🟢'; label = 'Online';
+                            } else if (h.status === 'connecting') {
+                              icon = '🟡'; label = 'Connecting';
+                            } else if (h.status === 'needs_qr') {
+                              icon = '🟣'; label = 'Needs QR';
+                            } else if (h.status === 'needs_pairing') {
+                              icon = '🟣'; label = 'Needs Pairing';
+                            } else if (h.status === 'logged_out') {
+                              icon = '⚫'; label = 'Logged Out';
+                            } else if (h.status === 'disconnected') {
+                              icon = '🔴'; label = 'Offline';
+                            } else {
+                              icon = '⚪'; label = h.status ? String(h.status).replace(/_/g, ' ') : 'Unknown';
+                            }
+                            msg += `${icon} ${h.name || id} - ${label}\n`;
+                            if (h.status === 'connected' && h.uptime) {
+                              msg += `   ⏱️ Uptime: ${formatUptime(h.uptime)}\n`;
+                            }
+                          }
+                          // Show disabled siblings (configured but not spawned)
+                          // so the user can see they exist but are turned off.
+                          try {
+                            const siblings = (typeof botConfig.getSiblings === 'function') ? (botConfig.getSiblings() || []) : [];
+                            const allConfigIds = Array.from(new Set([BOT_ID, ...siblings]));
+                            const disabledIds = allConfigIds.filter(id => !seenIds.has(id) && id !== BOT_ID);
+                            // Also include self if THIS bot is somehow not in the health map
+                            if (!seenIds.has(BOT_ID)) disabledIds.unshift(BOT_ID);
+                            if (disabledIds.length > 0) {
+                              msg += `\n🔇 *Disabled / Not Running*\n`;
+                              for (const id of disabledIds) {
+                                msg += `⚫ ${id} - Disabled\n`;
+                              }
+                            }
+                          } catch (_) {}
+                          msg += `\n_Updated every 30s. Use \`${botConfig.getPrefix()} instances\` (mods only) for full details._`;
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        } catch (e) {
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed to fetch bot status.' });
+                        }
+                        return;
+                      }
+
+                      // 💡 .g instances / .g health - full version for mods
                       const isSenderOwner = isOwner;
                       const isSenderGMod = isGlobalMod(senderJid);
                       const isSenderOverride = overrideUsers.has(senderJid);
                       const isSenderMod = isSenderOverride || isSenderGMod || isSenderOwner;
 
                       if (!isSenderMod) {
-                        return reply(BOT_MARKER + '❌ This command is for moderators and above only.');
+                        // 💡 FIX: regular players get the simplified view instead of a hard denial.
+                        // Same status-based logic as the `.g bots` handler above -
+                        // do NOT use timestamp-only check (that's the inversion bug
+                        // where disconnected bots in a reconnect loop show as Online).
+                        try {
+                          const allHealth = botInstancesHealth;
+                          const seenIds = new Set();
+                          let msg = `🤖 *BOT STATUS*\n\n`;
+                          for (const [id, h] of allHealth.entries()) {
+                            seenIds.add(id);
+                            const ageMs = Date.now() - (h.lastUpdated || 0);
+                            const fresh = ageMs < 120000;
+                            let icon, label;
+                            if (!fresh) { icon = '⚫'; label = 'Stale'; }
+                            else if (h.status === 'connected') { icon = '🟢'; label = 'Online'; }
+                            else if (h.status === 'connecting') { icon = '🟡'; label = 'Connecting'; }
+                            else if (h.status === 'needs_qr') { icon = '🟣'; label = 'Needs QR'; }
+                            else if (h.status === 'needs_pairing') { icon = '🟣'; label = 'Needs Pairing'; }
+                            else if (h.status === 'logged_out') { icon = '⚫'; label = 'Logged Out'; }
+                            else if (h.status === 'disconnected') { icon = '🔴'; label = 'Offline'; }
+                            else { icon = '⚪'; label = h.status ? String(h.status).replace(/_/g, ' ') : 'Unknown'; }
+                            msg += `${icon} ${h.name || id} - ${label}\n`;
+                          }
+                          // Include disabled siblings so players can see they exist but are off
+                          try {
+                            const siblings = (typeof botConfig.getSiblings === 'function') ? (botConfig.getSiblings() || []) : [];
+                            const allConfigIds = Array.from(new Set([BOT_ID, ...siblings]));
+                            const disabledIds = allConfigIds.filter(id => !seenIds.has(id) && id !== BOT_ID);
+                            if (!seenIds.has(BOT_ID)) disabledIds.unshift(BOT_ID);
+                            if (disabledIds.length > 0) {
+                              msg += `\n🔇 *Disabled / Not Running*\n`;
+                              for (const id of disabledIds) {
+                                msg += `⚫ ${id} - Disabled\n`;
+                              }
+                            }
+                          } catch (_) {}
+                          msg += `\n_Full details: \`${botConfig.getPrefix()} instances\` (mods only)_`;
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        } catch (e) {
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed to fetch bot status.' });
+                        }
+                        return;
                       }
 
-                      // Write our own fresh heartbeat immediately before querying
+                      // Write our own fresh heartbeat immediately before querying.
+                      // 💡 FIX: was hard-coded `status: 'connected'` regardless of
+                      // actual state. Now reads from botInstancesHealth so the
+                      // mod view reflects the truth (e.g. if self is in a 408
+                      // reconnect loop, the heartbeat says `disconnected`).
                       try {
                         const siblings = botConfig.getSiblings();
+                        const selfHealth = botInstancesHealth.get(BOT_ID);
+                        const selfStatus = selfHealth?.status || 'unknown';
                         await system.set('heartbeat_' + BOT_ID, {
                           botId: BOT_ID,
                           name: BOT_NAME,
-                          status: 'connected',
+                          status: selfStatus,
+                          error: selfHealth?.error || null,
                           lastSeen: Date.now(),
                           startedAt: botStartTime || Date.now(),
                           uptimeMs: botStartTime ? (Date.now() - botStartTime) : 0,
@@ -5927,7 +9892,7 @@ _💡 Reply with another number from your search list!_`.trim();
                         // (which requires manual updates when adding a new instance),
                         // we query MongoDB for ALL keys starting with "heartbeat_".
                         // This means any instance that has ever written a heartbeat
-                        // will show up automatically — no config changes needed
+                        // will show up automatically - no config changes needed
                         // when adding a new bot.
                         //
                         // We still merge in self + siblings as a fallback in case
@@ -5958,6 +9923,24 @@ _💡 Reply with another number from your search list!_`.trim();
                           }).lean();
                         }
 
+                        // 💡 FIX 2026-09-11: prune long-dead heartbeats (retired or
+                        // disabled instances whose last beat is >30 days old) so they
+                        // stop rendering as permanent ⚫ rows with stale errors in the
+                        // mod view ("health shows the older broken version"). Disabled
+                        // but configured instances still appear via the config merge
+                        // below as ⚫ offline - just without month-old error details.
+                        const PRUNE_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+                        const nowPrune = Date.now();
+                        const freshHeartbeatDocs = [];
+                        for (const doc of heartbeatDocs) {
+                          if ((doc.value?.lastSeen || 0) < nowPrune - PRUNE_AGE_MS) {
+                            System.deleteOne({ key: doc.key }).catch(() => {});
+                            continue;
+                          }
+                          freshHeartbeatDocs.push(doc);
+                        }
+                        heartbeatDocs = freshHeartbeatDocs;
+
                         const heartbeatMap = {};
                         const discoveredIds = [];
                         for (const doc of heartbeatDocs) {
@@ -5974,12 +9957,9 @@ _💡 Reply with another number from your search list!_`.trim();
                         const now = Date.now();
                         const STALE_THRESHOLD = 2 * 60 * 1000;   // 2 min → STALE
                         const DEAD_THRESHOLD  = 5 * 60 * 1000;   // 5 min → DEAD
-                        const SELF_TAG = ' (you)';
+                        const SELF_TAG = ' ◄';
 
-                        let out = `🖥️ *BOT INSTANCE STATUS*\n`;
-                        out += `_Checked at ${new Date().toLocaleTimeString()} — ${allIds.length} instances_\n\n`;
-
-                        let aliveCount = 0, staleCount = 0, deadCount = 0, unknownCount = 0;
+                        let aliveCount = 0, staleCount = 0, deadCount = 0;
 
                         // Sort: self first, then others alphabetically
                         allIds.sort((a, b) => {
@@ -5988,86 +9968,68 @@ _💡 Reply with another number from your search list!_`.trim();
                           return a.localeCompare(b);
                         });
 
+                        // 💡 Compact stylish format: one line per bot
+                        // Format: 🔵 Jake  🟢 2m  312MB  .jk
+                        let out = `╭─ 🖥️ INSTANCE STATUS ─╮\n`;
+                        out += `│  _${new Date().toLocaleTimeString()}_  \n`;
+                        out += `│\n`;
+
                         for (const id of allIds) {
                           const hb = heartbeatMap[id];
-                          let statusIcon, statusLabel, lastSeenStr, uptimeStr, detailStr;
+                          let icon, status, uptimeShort, ram, prefix;
 
                           if (!hb) {
-                            // No heartbeat record at all — instance never started
-                            // since the heartbeat feature was deployed, OR its
-                            // heartbeat was cleared. Treat as DEAD.
-                            statusIcon = '⚫';
-                            statusLabel = 'NEVER_SEEN';
-                            lastSeenStr = '—';
-                            uptimeStr = '—';
-                            detailStr = 'No heartbeat record. Instance may be offline or running a pre-heartbeat version.';
+                            icon = '⚫'; status = 'offline';
+                            uptimeShort = '-'; ram = ''; prefix = '';
                             deadCount++;
                           } else {
                             const ageMs = now - (hb.lastSeen || 0);
                             const isSelf = (id === selfId);
 
-                            // Self reports its own connection state directly;
-                            // siblings are judged by heartbeat freshness.
                             if (isSelf) {
                               const selfHealth = botInstancesHealth.get(BOT_ID);
                               const selfStatus = selfHealth?.status || 'unknown';
                               if (selfStatus === 'connected') {
-                                statusIcon = '🟢'; statusLabel = 'ONLINE';
-                                aliveCount++;
+                                icon = '🟢'; status = 'online'; aliveCount++;
                               } else if (selfStatus === 'connecting') {
-                                statusIcon = '🟡'; statusLabel = 'CONNECTING';
-                                staleCount++;
+                                icon = '🟡'; status = 'connecting'; staleCount++;
                               } else {
-                                statusIcon = '🔴'; statusLabel = String(selfStatus).toUpperCase();
-                                deadCount++;
+                                icon = '🔴'; status = String(selfStatus); deadCount++;
                               }
+                            } else if (hb.status === 'needs_pairing') {
+                              // 🔑 Pairing instance: surface the LIVE pairing code so
+                              // mods can link the phone straight from WhatsApp
+                              // (codes rotate ~60s - this always shows the current one).
+                              icon = '🔑'; status = 'needs pairing'; staleCount++;
                             } else if (hb.status === 'disconnected' || hb.status === 'logged_out') {
-                              statusIcon = '🔴'; statusLabel = String(hb.status).toUpperCase();
-                              detailStr = hb.error ? `Error: ${hb.error}` : 'Connection closed';
-                              deadCount++;
+                              icon = '🔴'; status = 'offline'; deadCount++;
                             } else if (ageMs < STALE_THRESHOLD) {
-                              statusIcon = '🟢'; statusLabel = 'ONLINE';
-                              aliveCount++;
+                              icon = '🟢'; status = 'online'; aliveCount++;
                             } else if (ageMs < DEAD_THRESHOLD) {
-                              statusIcon = '🟡'; statusLabel = 'STALE';
-                              detailStr = `Last heartbeat ${Math.floor(ageMs / 1000)}s ago — may be lagging or restarting.`;
-                              staleCount++;
+                              icon = '🟡'; status = 'stale'; staleCount++;
                             } else {
-                              statusIcon = '⚫'; statusLabel = 'DEAD';
-                              detailStr = `Last heartbeat ${Math.floor(ageMs / 1000 / 60)}m ago — instance is likely down.`;
-                              deadCount++;
+                              icon = '⚫'; status = 'dead'; deadCount++;
                             }
 
-                          lastSeenStr = hb.lastSeen
-                              ? `${Math.floor((now - hb.lastSeen) / 1000)}s ago`
-                              : '—';
-                            uptimeStr = hb.startedAt
-                              ? formatUptime(now - hb.startedAt)
-                              : '—';
+                            uptimeShort = hb.startedAt ? formatUptime(now - hb.startedAt) : '-';
+                            ram = hb.ramUsage ? `${hb.ramUsage}MB` : '';
+                            prefix = hb.prefix || '';
                           }
 
-                          out += `${statusIcon} *${id}*${id === selfId ? SELF_TAG : ''}\n`;
-                          out += `   Status: ${statusLabel}\n`;
-                          out += `   Last seen: ${lastSeenStr}\n`;
-                          if (uptimeStr && uptimeStr !== '—') out += `   Uptime: ${uptimeStr}\n`;
-                          if (hb?.ramUsage) out += `   RAM Usage: ${hb.ramUsage} MB\n`;
-                          if (hb?.version) out += `   Version: ${hb.version}\n`;
-                          if (hb?.prefix) out += `   Prefix: ${hb.prefix}\n`;
-                          if (detailStr) out += `   ⚠️ ${detailStr}\n`;
-                          out += `\n`;
+                          out += `│  ${icon} *${id}*${id === selfId ? SELF_TAG : ''}\n`;
+                          let detailLine = `│     ${status}`;
+                          if (uptimeShort && uptimeShort !== '-') detailLine += `  ⏱ ${uptimeShort}`;
+                          if (ram) detailLine += `  💾 ${ram}`;
+                          if (prefix) detailLine += `  ▸ ${prefix}`;
+                          out += `${detailLine}\n`;
+                          if (hb && hb.status === 'needs_pairing' && hb.error) {
+                            const m = String(hb.error).match(/code:?\s*([A-Z0-9]{4,8})/i);
+                            if (m) out += `│     🔑 *PAIRING CODE: ${m[1]}*  (Settings › Linked Devices › Link with phone number)\n`;
+                          }
                         }
 
-                        // Summary line
-                        out += `━━━━━━━━━━━━━━━━━━━━\n`;
-                        out += `Summary: 🟢 ${aliveCount} online · 🟡 ${staleCount} stale · 🔴 ${deadCount} down · ${allIds.length} total\n`;
-
-                        // Action recommendations
-                        if (deadCount > 0) {
-                          out += `\n⚠️ *Action needed:* ${deadCount} instance(s) are down. Check their deployment/logs.`;
-                        }
-                        if (staleCount > 0) {
-                          out += `\n🟡 *Watch:* ${staleCount} instance(s) are stale — may be restarting or lagging.`;
-                        }
+                        out += `│\n`;
+                        out += `╰─ 🟢${aliveCount} 🟡${staleCount} 🔴${deadCount} / ${allIds.length} total ─╯`;
 
                         await sock.sendMessage(chatId, { text: BOT_MARKER + out });
                         return;
@@ -6077,7 +10039,7 @@ _💡 Reply with another number from your search list!_`.trim();
                       }
                     }
 
-                    // 💡 .g debug — show internal connection state for this bot instance.
+                    // 💡 .g debug - show internal connection state for this bot instance.
                     // Mod-only. Helps diagnose why a bot isn't responding.
                     if (primaryCmd === "debug") {
                       const isSenderOwnerDbg = isOwner;
@@ -6089,7 +10051,7 @@ _💡 Reply with another number from your search list!_`.trim();
                       const selfHealth = botInstancesHealth.get(BOT_ID);
                       const wsOpen = sock?.ws ? (typeof sock.ws.isOpen === 'boolean' ? sock.ws.isOpen : (sock.ws.readyState ?? sock.ws.socket?.readyState) === 1) : false;
                       const queueSize = sendQueue.size();
-                      let dbg = `🔧 *DEBUG — ${BOT_ID}*\n\n`;
+                      let dbg = `🔧 *DEBUG - ${BOT_ID}*\n\n`;
                       dbg += `📡 isRekeying: ${isRekeying ? '⚠️ TRUE (messages being dropped!)' : '✅ false'}\n`;
                       dbg += `🔌 WebSocket open: ${wsOpen ? '✅ yes' : '❌ no'}\n`;
                       dbg += `🤖 Connection status: ${selfHealth?.status || 'unknown'}\n`;
@@ -6098,14 +10060,14 @@ _💡 Reply with another number from your search list!_`.trim();
                       dbg += `⏱️ Bot uptime: ${botStartTime ? Math.floor((Date.now() - botStartTime) / 1000) + 's' : 'not started'}\n`;
                       dbg += `🔗 Total WA connections from this server: ${global.waConnectionCount || 0}\n`;
                       if ((global.waConnectionCount || 0) >= 3) {
-                        dbg += `⚠️ 3+ connections from same IP — WhatsApp may be throttling. Try reducing active instances.\n`;
+                        dbg += `⚠️ 3+ connections from same IP - WhatsApp may be throttling. Try reducing active instances.\n`;
                       }
                       dbg += `🆔 BOT_ID: ${BOT_ID}\n`;
                       dbg += `📱 Bot JID: ${sock?.user?.id || 'unknown'}\n`;
                       dbg += `🏷️ Prefix: ${botConfig.getPrefix()}\n`;
                       if (selfHealth?.error) dbg += `❌ Last error: ${selfHealth.error}\n`;
                       if (isRekeying) {
-                        dbg += `\n⚠️ *DIAGNOSIS:* This bot is in rekeying state — ALL incoming messages are being silently dropped. The connection is likely churning (rapid connect/disconnect). Try:\n`;
+                        dbg += `\n⚠️ *DIAGNOSIS:* This bot is in rekeying state - ALL incoming messages are being silently dropped. The connection is likely churning (rapid connect/disconnect). Try:\n`;
                         dbg += `1. Delete the auth folder and re-scan QR\n`;
                         dbg += `2. Check for conflicting instances running the same auth\n`;
                         dbg += `3. Check server logs for "Connection closed" spam\n`;
@@ -6120,7 +10082,7 @@ _💡 Reply with another number from your search list!_`.trim();
                     ) {
                       const target = getMentionOrReply(m);
                       if (target) {
-                        const targetName = target.split("@")[0];
+                        const targetName = economy.getDisplayName(target); // 💡 FIX 2026-08-18: was target.split("@")[0] which showed raw LID for @lid targets
                         await shopCommands.displayCharacter(
                           sock,
                           chatId,
@@ -6140,11 +10102,57 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
+                    // .j cardstyle - choose your character card design
+                    if (primaryCmd === "cardstyle") {
+                      await rpgCommands.handleCardStyle(
+                        sock,
+                        chatId,
+                        senderJid,
+                        cmdArgs.slice(1),
+                        senderName,
+                      );
+                      return;
+                    }
+
+                    // .j equipment / .j gear - 2026-09-14 owner: image card
+                    // of everything currently worn, with each item's tier
+                    // (rarity) and remaining durability. Own armory layout.
+                    if (primaryCmd === "equipment" || primaryCmd === "gear") {
+                      await rpgCommands.displayEquipmentCard(
+                        sock,
+                        chatId,
+                        senderJid,
+                        senderName,
+                      );
+                      return;
+                    }
+
+                    // .j setdefaultcard - RPG MOD: pick the server-wide default card
+                    // (what players who never picked a style see)
+                    if (primaryCmd === "setdefaultcard") {
+                      if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + "❌ That's an RPG mod command.",
+                        });
+                        return;
+                      }
+                      await rpgCommands.handleSetDefaultCard(
+                        sock,
+                        chatId,
+                        senderJid,
+                        cmdArgs.slice(1),
+                      );
+                      return;
+                    }
+
                     // --- RPG COMMANDS ---
 
                     // .j shop
+                    // 💡 2026-09-14: multi-word args joined so `.j shop health potion`
+                    // searches "health potion". displayShop treats any non-category
+                    // arg as a search query (known categories unchanged).
                     if (primaryCmd === "shop") {
-                      const category = cmdArgs[1] || "all";
+                      const category = cmdArgs.slice(1).join(" ") || "all";
                       await shopCommands.displayShop(sock, chatId, category);
                       return;
                     }
@@ -6219,6 +10227,15 @@ _💡 Reply with another number from your search list!_`.trim();
                         lowerTxt.includes("permadeath") ||
                         lowerTxt.includes("-f") ||
                         lowerTxt.includes("--f");
+                      // 💡 2026-09-14 owner: ".solo f -s" - skip flag for the
+                      // 90-second pre-raid shop timer (solo quests only).
+                      const skipShop = isSolo && cmdArgs.slice(1).includes("-s");
+                      // 💡 DEAD WORLD (2026-09-21 owner ticket): ".j solo f -d"
+                      // forces the Dead World encounter on the first regular
+                      // combat encounter of a SOLO run, for testing the full
+                      // sequence without waiting on the 5% roll. The normal
+                      // ".j solo f" behavior is untouched.
+                      const forceDeadWorld = isSolo && cmdArgs.slice(1).includes("-d");
                       const ranks = [
                         "f",
                         "e",
@@ -6230,6 +10247,7 @@ _💡 Reply with another number from your search list!_`.trim();
                         "ss",
                         "sss",
                         "dragon",
+                        "god",
                       ];
                       const rank =
                         cmdArgs.find((a) => ranks.includes(a.toLowerCase())) ||
@@ -6244,17 +10262,97 @@ _💡 Reply with another number from your search list!_`.trim();
                         rank ? rank.toUpperCase() : null,
                         senderJid,
                         smartGroqCall,
+                        null,
+                        { skipShop, forceDeadWorld },
                       );
                       if (result.success && !result.isMenu) {
-                        const state = guildAdventure.getGameState(chatId);
+                        const state = guildAdventure.getGameState(
+                          chatId,
+                          isSolo ? senderJid : undefined,
+                        );
                         if (state) state.onHardcoreDeath = addToGraveyard;
 
-                        if (isSolo) {
+                        // 💡 2026-09-14 owner: "add a starting image card to
+                        // quest starting" - solo casts QUESTSTART, group casts
+                        // RAID (different banners + arrangements). Falls back
+                        // to the plain text announcement on any failure.
+                        const cardData = result.card || {};
+                        let cardBuf = null;
+                        try {
+                          const goService = require("./utils/goImageService");
+                          const ecoUser = economy.getUser(senderJid);
+                          const userClass = economy.getUserClass(senderJid);
+                          const dungeonLabel = String(
+                            cardData.dungeonName || `${rank || "F"}-Rank`,
+                          ).toUpperCase();
+                          const rows = isSolo
+                            ? [
+                                { label: "DUNGEON", value: dungeonLabel },
+                                { label: "MODE", value: isHardcore ? "HARDCORE" : "NORMAL" },
+                                { label: "ENCOUNTERS", value: String(cardData.encounters || "?") },
+                                { label: "ENVIRONMENT", value: String(cardData.environment || "UNKNOWN").toUpperCase() },
+                                { label: "THE SHOP", value: skipShop ? "SKIPPED" : "OPEN 90S" },
+                              ]
+                            : [
+                                { label: "DUNGEON", value: dungeonLabel },
+                                { label: "MODE", value: isHardcore ? "HARDCORE" : "NORMAL" },
+                                { label: "JOIN WINDOW", value: `${Math.round((cardData.joinMs || 120000) / 1000)}S` },
+                                { label: "COMMAND", value: `${botConfig.getPrefix()} join`.toUpperCase() },
+                                { label: "PARTY", value: `MIN ${cardData.minPlayers || 2} HEROES` },
+                              ];
+                          cardBuf = await goService.generatePortraitCard({
+                            kind: isSolo ? "QUESTSTART" : "RAID",
+                            nickname: senderName,
+                            caption: isHardcore
+                              ? "permadeath - one life, no return"
+                              : isSolo
+                                ? "the gate groans open"
+                                : "the horns sound - assemble",
+                            sealText: (rank || "f").toUpperCase(),
+                            playerClass: userClass?.id || "",
+                            playerIndex: ecoUser?.spriteIndex || 0,
+                            background: cardData.envAsset || "",
+                            partyText: isSolo ? "" : "AWAITING PARTY",
+                            rows,
+                          });
+                        } catch (e) {
+                          console.error("[quest] start card failed:", e?.message || e);
+                        }
+
+                        if (cardBuf && cardBuf.length > 100) {
+                          const cap = isSolo
+                            ? BOT_MARKER +
+                              `🗡️ *QUEST STARTING*\n` +
+                              `👤 Hero: *${senderName}* | ⭐ Rank: *${(rank || "F").toUpperCase()}* | 🔥 Mode: *${isHardcore ? "HARDCORE" : "NORMAL"}*` +
+                              (skipShop ? `\n⏩ Pre-raid shop skipped` : ``)
+                            : BOT_MARKER +
+                              `🏰 *GROUP RAID INITIATED*\n` +
+                              `⏱️ You have ${Math.round((cardData.joinMs || 120000) / 1000)} seconds to join!\n` +
+                              `👉 Type \`${botConfig.getPrefix()} join\` to enter.`;
+                          // 💡 FIX 2026-09-14 (ROOT CAUSE of "txt is not
+                          // defined" on .j solo): the payload below
+                          // referenced `caption`, but the variable built
+                          // above is named `cap`. The ReferenceError aborted
+                          // BOTH solo paths (normal + -s) right after the
+                          // shop/skip message, and the engine's outer catch
+                          // then crashed on its own out-of-scope `txt` log
+                          // line, masking the real error. Use `cap`.
+                          await sock.sendMessage(
+                            chatId,
+                            { image: cardBuf, caption: cap, mimetype: "image/jpeg" },
+                            { quoted: m },
+                          );
+                        } else if (isSolo) {
                           let startMsg = `╔════════════════════╗\n   🗡️  *QUEST STARTING* \n╚════════════════════╝\n\n👤 Hero: *${senderName}*\n⭐ Rank: *${rank || "F"}*\n🔥 Mode: *${isHardcore ? "HARDCORE" : "NORMAL"}*\n\n⚔️ Preparing the battlefield...`;
                           await reply(startMsg);
                         } else {
-                          await reply(`🏰 *GROUP RAID INITIATED* 🏰\n\n⏱️ You have 60 seconds to join!\n👉 Type \`.g join\` to enter.`);
+                          await reply(`🏰 *GROUP RAID INITIATED* 🏰\n\n⏱️ You have 60 seconds to join!\n👉 Type \`${botConfig.getPrefix()} join\` to enter.`);
                         }
+                        // 💡 2026-09-14 (ordering fix): signal guildAdventure that the
+                        // start card (or its text fallback) has been sent
+                        // so the solo pre-raid shop menu no longer races
+                        // ahead of the QUESTSTART image.
+                        if (state) state.startCardSent = true;
                       } else {
                         await reply(result.msg);
                       }
@@ -6357,22 +10455,22 @@ _💡 Reply with another number from your search list!_`.trim();
                     }
 
                     // ============================================
-                    // 💡 .g trial — Class Trial manager
+                    // 💡 .g trial - Class Trial manager
                     // ============================================
                     // Shows pending trials for the player's class line and
                     // lets them start one. Replaces the old ".g trial" hint
                     // that pointed at a non-existent command.
                     //
                     // Usage:
-                    //   .g trial            — list pending trials for your class
-                    //   .g trial <number>   — start trial #N (same as .g evolve N)
-                    //   .g trial status     — show your completedTrials history
-                    //   .g trial info <bossId> — info about a specific trial boss
+                    //   .g trial            - list pending trials for your class
+                    //   .g trial <number>   - start trial #N (same as .g evolve N)
+                    //   .g trial status     - show your completedTrials history
+                    //   .g trial info <bossId> - info about a specific trial boss
                     if (primaryCmd === "trial") {
                       const trialArgs = cmdArgs.slice(1);
                       const trialSub = trialArgs[0]?.toLowerCase();
 
-                      // .g trial status — show completed trials
+                      // .g trial status - show completed trials
                       if (trialSub === 'status' || trialSub === 'history') {
                         try {
                           const user = economy.getUser(senderJid);
@@ -6380,7 +10478,7 @@ _💡 Reply with another number from your search list!_`.trim();
                           if (completed.length === 0) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + `📜 *Trial History*\n\nYou have not completed any class trials yet.\n\nUse \`${botConfig.getPrefix()} trial\` to see available trials.` });
                           }
-                          let msg = `📜 *TRIAL HISTORY — ${senderName}*\n\n`;
+                          let msg = `📜 *TRIAL HISTORY - ${senderName}*\n\n`;
                           msg += `*Completed Trials (${completed.length}):*\n`;
                           for (const bossId of completed) {
                             msg += `• ✅ ${bossId.replace(/_/g, ' ')}\n`;
@@ -6393,7 +10491,7 @@ _💡 Reply with another number from your search list!_`.trim();
                         return;
                       }
 
-                      // .g trial info <bossId> — info about a specific trial boss
+                      // .g trial info <bossId> - info about a specific trial boss
                       if (trialSub === 'info' || trialSub === 'boss') {
                         const bossId = (trialArgs[1] || '').toUpperCase().replace(/\s+/g, '_');
                         if (!bossId) {
@@ -6431,7 +10529,7 @@ _💡 Reply with another number from your search list!_`.trim();
                               const DragonGod = require('./models/DragonGod');
                               const existing = await DragonGod.getCurrent();
                               if (existing) {
-                                const godName = existing.dragonGodName || existing.dragonGodJid.split('@')[0];
+                                const godName = existing.dragonGodName || economy.getDisplayName(existing.dragonGodJid);
                                 msg += `\n🌊 *The Leviathan has already been slain.*\n`;
                                 msg += `Dragon God: *${godName}* (crowned ${new Date(existing.ascendedAt).toLocaleDateString()})\n`;
                                 msg += `_The path to Dragon God is closed. Seek the Dragon Lord path instead._\n`;
@@ -6450,18 +10548,18 @@ _💡 Reply with another number from your search list!_`.trim();
                         return;
                       }
 
-                      // .g trial <number> — start trial #N (delegates to evolve)
+                      // .g trial <number> - start trial #N (delegates to evolve)
                       if (trialSub && /^\d+$/.test(trialSub)) {
                         // Delegate to handleEvolve with the number arg
                         await skillCommands.handleEvolve(sock, chatId, senderJid, senderName, [trialSub]);
                         return;
                       }
 
-                      // .g trial (no args) — list pending trials
+                      // .g trial (no args) - list pending trials
                       try {
                         const user = economy.getUser(senderJid);
                         if (!user) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Use `.g register` first.' });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Use `${botConfig.getPrefix()} register` first.' });
                         }
                         const userClass = user.class;
                         if (!userClass) {
@@ -6515,11 +10613,11 @@ _💡 Reply with another number from your search list!_`.trim();
                               const DragonGod = require('./models/DragonGod');
                               const existing = await DragonGod.getCurrent();
                               if (existing) {
-                                const godName = existing.dragonGodName || existing.dragonGodJid.split('@')[0];
-                                msg += `   🌊 *CLOSED* — Dragon God: ${godName}\n`;
+                                const godName = existing.dragonGodName || economy.getDisplayName(existing.dragonGodJid);
+                                msg += `   🌊 *CLOSED* - Dragon God: ${godName}\n`;
                                 msg += `   _Use the Dragon Lord path instead._\n`;
                               } else {
-                                msg += `   🌊 *OPEN* — No Dragon God yet. First to slay Leviathan wins.\n`;
+                                msg += `   🌊 *OPEN* - No Dragon God yet. First to slay Leviathan wins.\n`;
                               }
                             } catch (e) {}
                           }
@@ -6528,10 +10626,10 @@ _💡 Reply with another number from your search list!_`.trim();
                         }
 
                         msg += `*Commands:*\n`;
-                        msg += `• \`${botConfig.getPrefix()} trial <number>\` — start trial #N\n`;
-                        msg += `• \`${botConfig.getPrefix()} trial status\` — view completed trials\n`;
-                        msg += `• \`${botConfig.getPrefix()} trial info <bossId>\` — boss info\n`;
-                        msg += `• \`${botConfig.getPrefix()} evolve\` — full evolution menu`;
+                        msg += `• \`${botConfig.getPrefix()} trial <number>\` - start trial #N\n`;
+                        msg += `• \`${botConfig.getPrefix()} trial status\` - view completed trials\n`;
+                        msg += `• \`${botConfig.getPrefix()} trial info <bossId>\` - boss info\n`;
+                        msg += `• \`${botConfig.getPrefix()} evolve\` - full evolution menu`;
                         await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                       } catch (e) {
                         return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
@@ -6540,7 +10638,7 @@ _💡 Reply with another number from your search list!_`.trim();
                     }
 
                     // ============================================
-                    // 💡 .g dragongod — view the one true Dragon God
+                    // 💡 .g dragongod - view the one true Dragon God
                     // ============================================
                     if (primaryCmd === "dragongod" || primaryCmd === "dglord") {
                       try {
@@ -6555,7 +10653,7 @@ _💡 Reply with another number from your search list!_`.trim();
                           await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                           return;
                         }
-                        const godName = existing.dragonGodName || existing.dragonGodJid.split('@')[0];
+                        const godName = existing.dragonGodName || economy.getDisplayName(existing.dragonGodJid);
                         const ascendedAt = new Date(existing.ascendedAt);
                         let msg = `┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
                         msg    += `┃  🐲👑 *THE ONE TRUE DRAGON GOD* 👑🐲  ┃\n`;
@@ -6608,11 +10706,27 @@ _💡 Reply with another number from your search list!_`.trim();
 
                     // .j abilities / .j skills
                     if (primaryCmd === "abilities" || primaryCmd === "skills") {
+                      // FIX 2026-09-16: page arg - `.j abilities 2` shows page 2.
                       await skillCommands.viewAbilities(
                         sock,
                         chatId,
                         senderJid,
                         senderName,
+                        cmdArgs.slice(1)[0],
+                      );
+                      return;
+                    }
+
+                    // 💡 Summoner System (Phase 4) - .j summon <subcommand> [args]
+                    if (primaryCmd === "summon" || primaryCmd === "summons") {
+                      const summonArgs = cmdArgs.slice(1);
+                      await summonCommands.handleCommand(
+                        sock,
+                        chatId,
+                        senderJid,
+                        senderName,
+                        summonArgs,
+                        m,
                       );
                       return;
                     }
@@ -6654,6 +10768,7 @@ _💡 Reply with another number from your search list!_`.trim();
                               image: result.image.buffer,
                               caption: BOT_MARKER + result.message,
                               mentions: result.mentions || [],
+                              mimetype: 'image/jpeg',
                             });
                           } else {
                             await sock.sendMessage(chatId, {
@@ -6684,6 +10799,17 @@ _💡 Reply with another number from your search list!_`.trim();
                     }
 
                     // .j equip / .j unequip
+                    if (primaryCmd === "equip" && !cmdArgs[1]) {
+                      // 2026-09-16: bare ".equip" shows the themed equipment
+                      // card instead of the legacy raw text list.
+                      await rpgCommands.displayEquipmentCard(
+                        sock,
+                        chatId,
+                        senderJid,
+                        senderName,
+                      );
+                      return;
+                    }
                     if (primaryCmd === "equip") {
                       const itemId = cmdArgs[1];
                       const slot = cmdArgs[2];
@@ -6744,9 +10870,81 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
+                    // 💡 HOSPITAL COMMAND (2026-07-31): Free full heal.
+                    // Restores HP to max. Works with the persistent HP system.
+                    if (primaryCmd === "hospital" || primaryCmd === "heal" || primaryCmd === "clinic") {
+                      try {
+                        if (!economy.isRegistered(senderJid))
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Register first!" });
+                        const user = economy.getUser(senderJid);
+                        const userClass = user.class || { id: 'FIGHTER', name: 'Fighter' };
+                        const classId = userClass?.id || userClass?.name?.toUpperCase() || 'FIGHTER';
+                        const baseStats = progression.getBaseStats(senderJid, classId);
+                        const maxHP = baseStats.hp;
+
+                        const currentHP = economy.getPersistentHP(senderJid, maxHP);
+                        if (currentHP >= maxHP) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + "🏥 You're already at full health!" });
+                        }
+
+                        // 💡 AUDIT FIX 2026-08-01: healToFull now returns {healed, onCooldown, cooldownRemainingMs}
+                        // (12h cooldown added to prevent free-heal spam). Handle both old + new return shapes
+                        // defensively in case of stale deployment.
+                        const healResult = economy.healToFull(senderJid, maxHP);
+                        const healed = typeof healResult === 'object' ? (healResult.healed || 0) : healResult;
+                        const onCooldown = typeof healResult === 'object' ? healResult.onCooldown : false;
+                        const cdRemainingMs = typeof healResult === 'object' ? healResult.cooldownRemainingMs : 0;
+
+                        if (onCooldown) {
+                          // Format remaining cooldown as "Xh Ym"
+                          const totalMin = Math.ceil(cdRemainingMs / 60000);
+                          const h = Math.floor(totalMin / 60);
+                          const m = totalMin % 60;
+                          const cdStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
+                          return sock.sendMessage(chatId, {
+                            text: BOT_MARKER + `🏥 *HOSPITAL COOLDOWN*\n\nThe hospital can only fully heal you once every 12 hours.\n\n⏳ Time remaining: *${cdStr}*\n\n💡 Your passive regen still works out of combat - your HP will slowly recover over time. Use \`${botConfig.getPrefix()} char\` to check your HP.`,
+                          });
+                        }
+
+                        // 💡 LORE DROP: healing pool (10%) - hospital surface,
+                        // own message box after the main reply
+                        let __healDrop = null;
+                        try {
+                          const loreDrops = require('./rpg/loreDrops');
+                          __healDrop = loreDrops.maybeDrop('healing', { userId: senderJid, chatId, chance: 0.10 });
+                        } catch (e) {}
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `🏥 *HOSPITAL*\n\n❤️ HP restored: +${healed}\n📊 HP: ${maxHP}/${maxHP}\n\n_You are now at full health._\n\n⏳ _Next hospital visit available in 12 hours. Out-of-combat passive regen will keep you topped up between visits._`,
+                        });
+                        // 💡 TUTORIAL: hospital step done (no-op unless active)
+                        try { require('./rpg/tutorial').notify(senderJid, 'hospital', { sock, chatId, prefix: botConfig.getPrefix() }).catch(() => {}); } catch (e) {}
+                        if (__healDrop) {
+                          try {
+                            const loreDrops = require('./rpg/loreDrops');
+                            await loreDrops.sendOwn(sock, chatId, __healDrop);
+                          } catch (e) {}
+                        }
+                      } catch (e) {
+                        console.error('Hospital command error:', e.message);
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Hospital error: " + e.message });
+                      }
+                      return;
+                    }
+
                     // .j recipes
                     if (primaryCmd === "recipes") {
                       await rpgCommands.displayRecipes(sock, chatId);
+                      return;
+                    }
+
+                    // .j kills - the Fortune Teller's reading (owner
+                    // 2026-09-20: the stat existed for years but had no
+                    // player-facing view; the designed Fortune Teller system
+                    // — locked sight / reader's fee / ledger card — replaces
+                    // the interim plain text ledger. Aliases kept.)
+                    if (primaryCmd === "kills" || primaryCmd === "killcount" || primaryCmd === "slain") {
+                      const soulReader = require('./rpg/soulReader');
+                      await soulReader.viewKills(sock, chatId, senderJid, cmdArgs.slice(1));
                       return;
                     }
 
@@ -6881,6 +11079,30 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
+                    // .j world [beyond|afterlife|abyss] - live cosmology charts
+                    // (owner pass-3 geometry; gates per world_map.md §1)
+                    if (primaryCmd === "world" || primaryCmd === "maps" || primaryCmd === "map") {
+                      try {
+                        const worldMap = require('./rpg/worldMap');
+                        const progressionForWorld = require('./rpg/progression');
+                        const __wUser = economy.getUser(senderJid) || {};
+                        await worldMap.showWorld(sock, chatId, senderJid, cmdArgs.slice(1).join(" "), {
+                          getLevel: (uid) => {
+                            try { return progressionForWorld.getLevel(uid) || 1; } catch (e) { return 1; }
+                          },
+                          getRank: (uid) => __wUser.adventurerRank || 'F',
+                          // 💡 2026-09-20: `.j world all` - mods bypass the
+                          // unlock gate (owner ruling); the same tier checks
+                          // the rest of the mod surface uses.
+                          isMod: (uid) => isOwner || isGlobalMod(uid) || isRpgMod(uid) || isCardsMod(uid) || overrideUsers.has(uid),
+                        });
+                      } catch (e) {
+                        console.error('[world] command error:', e.message);
+                        await sock.sendMessage(chatId, { text: '❌ The charts refuse to unroll just now. Try again shortly.' });
+                      }
+                      return;
+                    }
+
                     // .j search <query> -> alias for .j anime search
                     if (primaryCmd === "search") {
                       const q = cmdArgs.slice(1).join(" ");
@@ -6963,16 +11185,25 @@ _💡 Reply with another number from your search list!_`.trim();
                     // .j audio <query>
                     if (primaryCmd === "audio") {
                       const query = cmdArgs.slice(1).join(" ");
-                      if (!query)
-                        return await sendUsage(
-                          sock,
-                          chatId,
-                          BOT_MARKER,
-                          "🎵 AUDIO",
-                          "audio <query>",
-                          "audio starboy",
-                          "Search and download any song from YouTube.",
-                        );
+                      if (!query) {
+                        // ⚡ REALM'S THEME (2026-09-17): bare '.j audio' plays a
+                        // song drawn from the bot's lore - epic dungeon/divine
+                        // themes fit for the Chronicles. Fixed 2026-09-17 audio
+                        // pipeline: local Go chain + WARP (tv_embedded client).
+                        const REALM_THEMES = [
+                          'epic fantasy orchestral battle theme',
+                          'dungeon boss battle epic music',
+                          'divine choir angelic epic orchestral',
+                          'dark fantasy ambient dungeon music',
+                          'heroic adventure orchestral theme',
+                        ];
+                        const themeQuery = REALM_THEMES[Math.floor(Math.random() * REALM_THEMES.length)];
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `🎵 *THE REALM'S THEME* 🎵\n_Summoning a song worthy of the Divine Architect's chronicles..._\n\n💡 Tip: search any song with \`${botConfig.getPrefix()} audio <song>\``,
+                        });
+                        await handleAudioCommand(sock, chatId, themeQuery, m);
+                        return;
+                      }
                       await handleAudioCommand(sock, chatId, query, m);
                       return;
                     }
@@ -7087,15 +11318,70 @@ _💡 Reply with another number from your search list!_`.trim();
 
                     // .j tutorial
                     if (primaryCmd === "tutorial") {
+                      // 💡 NEW PLAYER TUTORIAL (2026-10-03): `.j tutorial start`
+                      // launches the interactive hands-on version (messages land
+                      // in this chat; best experienced in DMs).
+                      if ((cmdArgs[1] || "").toLowerCase() === "start") {
+                        try {
+                          const tut = require("./rpg/tutorial");
+                          const res = await tut.handleDM(sock, senderJid, chatId, "tutorial start", BOT_MARKER, { prefix: botConfig.getPrefix() });
+                          if (res && res.text) await sock.sendMessage(chatId, { text: BOT_MARKER + res.text });
+                          if (cmdArgs[2] !== "silent") {
+                            await sock.sendMessage(chatId, { text: BOT_MARKER + `💡 Tip: run the tutorial in my DMs for the cleanest experience.` });
+                          }
+                        } catch (e) {
+                          console.error("[Tutorial] start error:", e.message);
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Tutorial could not start - try again in a moment." });
+                        }
+                        return;
+                      }
                       let msg = `🎓 *RPG ADVENTURE GUIDE* 🎓\n\n`;
                       msg += `Welcome to the legend! Here is how to navigate your new life:\n\n`;
+                      msg += `━━━━━━━━━━━━━━━\n`;
+                      msg += `📋 *THE BASICS*\n`;
+                      msg += `━━━━━━━━━━━━━━━\n`;
                       msg += `1️⃣ *REGISTER:* \`${currentPrefix} register <nickname>\` to start.\n\n`;
-                      msg += `2️⃣ *LEVEL UP:* Do \`${currentPrefix} quest\` or \`${currentPrefix} solo\`. As you level, you gain points!\n\n`;
-                      msg += `3️⃣ *STATS:* Use \`${currentPrefix} allocate <stat> <n>\` (e.g. \`allocate atk 5\`). Points in MAG increase magic damage!\n\n`;
-                      msg += `4️⃣ *SKILLS:* ⚠️ *IMPORTANT:* You must **UNLOCK** skills before you can use them! Check \`${currentPrefix} skill tree\` and use \`${currentPrefix} skill up <name>\` to learn them.\n\n`;
-                      msg += `5️⃣ *COMBAT:* In battle, type \`${currentPrefix} combat ability 1\` to use your first skill. Use \`rest\` to recover Energy.\n\n`;
-                      msg += `6️⃣ *EVOLVE:* Reach Lv.20 and 30 Quests, then use \`${currentPrefix} evolve\` to unlock advanced classes and Trials!\n\n`;
-                      msg += `💡 *Pro Tip:* Use \`${currentPrefix} menu rpg\` to see every command available!`;
+                      msg += `2️⃣ *LEVEL UP:* \`${currentPrefix} quest\` or \`${currentPrefix} solo\` - fight enemies for XP & gold.\n\n`;
+                      msg += `3️⃣ *STATS:* \`${currentPrefix} allocate <stat> <n>\` (e.g. \`allocate atk 5\`). MAG increases magic damage!\n\n`;
+                      msg += `4️⃣ *SKILLS:* ⚠️ You must **UNLOCK** skills first! \`${currentPrefix} skill tree\` → \`${currentPrefix} skill up <name>\`\n\n`;
+                      msg += `5️⃣ *COMBAT:* \`${currentPrefix} combat ability 1\` to use skills. \`rest\` to recover energy.\n\n`;
+                      msg += `6️⃣ *EVOLVE:* Reach Lv.20 + 30 Quests → \`${currentPrefix} evolve\` for advanced classes!\n\n`;
+                      msg += `━━━━━━━━━━━━━━━\n`;
+                      msg += `🐉 *SUMMON SYSTEM*\n`;
+                      msg += `━━━━━━━━━━━━━━━\n`;
+                      msg += `7️⃣ *BUY EGG:* \`${currentPrefix} shop\` → buy Basic Summon Egg (5K Zeni)\n\n`;
+                      msg += `8️⃣ *HATCH:* \`${currentPrefix} summon hatch <egg_id>\` - get a monster companion!\n\n`;
+                      msg += `9️⃣ *DEPLOY:* \`${currentPrefix} summon deploy <#>\` - equip your summon for combat\n\n`;
+                      msg += `🔟 *SUMMON DUEL:* \`${currentPrefix} summon duel @user\` - monster vs monster PvP!\n\n`;
+                      msg += `━━━━━━━━━━━━━━━\n`;
+                      msg += `🕳️ *ABYSS & ENDGAME*\n`;
+                      msg += `━━━━━━━━━━━━━━━\n`;
+                      msg += `🕳️ \`${currentPrefix} abyss\` - Endless dungeon. HP carries between floors!\n`;
+                      msg += `   • Earn fragments → craft higher-tier eggs\n`;
+                      msg += `   • Boss floors every 5 levels (5x rewards)\n`;
+                      msg += `   • Runes drop on Floor 21+ bosses\n\n`;
+                      msg += `━━━━━━━━━━━━━━━\n`;
+                      msg += `⚔️ *PVP & ECONOMY*\n`;
+                      msg += `━━━━━━━━━━━━━━━\n`;
+                      msg += `⚔️ \`${currentPrefix} duel @user [wager]\` - PvP with optional Zeni stakes\n`;
+                      msg += `🎰 \`${currentPrefix} slots\` / \`${currentPrefix} coinflip\` / \`${currentPrefix} dice\` - Casino\n`;
+                      msg += `💰 \`${currentPrefix} daily\` - Free Zeni every 24h\n`;
+                      msg += `🏦 \`${currentPrefix} deposit <amount>\` - Bank your Zeni (safe from robbers)\n`;
+                      msg += `🥷 \`${currentPrefix} rob @user\` - Steal Zeni (40% success, jail if caught!)\n\n`;
+                      msg += `━━━━━━━━━━━━━━━\n`;
+                      msg += `🃏 *CARD GAME*\n`;
+                      msg += `━━━━━━━━━━━━━━━\n`;
+                      msg += `🃏 \`${currentPrefix} cards on\` - Enable card spawns in this group\n`;
+                      msg += `📋 \`${currentPrefix} coll\` - View your collection\n`;
+                      msg += `📦 \`${currentPrefix} deck\` - Build a deck\n\n`;
+                      msg += `━━━━━━━━━━━━━━━\n`;
+                      msg += `⚒️ *PROFESSIONS*\n`;
+                      msg += `━━━━━━━━━━━━━━━\n`;
+                      msg += `⛏️ \`${currentPrefix} mine\` - Mine for ores & materials\n`;
+                      msg += `⚒️ \`${currentPrefix} craft\` - Craft equipment & items\n`;
+                      msg += `🔨 \`${currentPrefix} forge\` - Upgrade gear at the blacksmith\n\n`;
+                      msg += `💡 *Pro Tip:* Type \`${currentPrefix} menu\` to see ALL commands!\n`;
+                      msg += `💡 *Need help?* Type \`${currentPrefix} guide\` for the RPG Handbook!`;
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + msg,
                       });
@@ -7109,6 +11395,9 @@ _💡 Reply with another number from your search list!_`.trim();
                     chatId.endsWith("@g.us") &&
                     debate.isDebateActive(chatId)
                   ) {
+                    // BSON fix follow-up: re-arm the 2h expiry timers that
+                    // died with a previous process (no-op after first call).
+                    debate.rearmTimers(sock, BOT_MARKER).catch(() => {});
                     // 1. Check if sender is a regular debater
                     debate.recordArgument(chatId, senderJid, txt);
 
@@ -7320,11 +11609,39 @@ _💡 Reply with another number from your search list!_`.trim();
                           msg += `▫️ Sell Value: ${ZENI}${sellValue.toLocaleString()}\n\n`;
                           msg += `💡 Sell it at the Resistance HQ or keep it for crafting!`;
 
-                          await sock.sendMessage(
-                            chatId,
-                            { text: msg },
-                            { quoted: m },
-                          );
+                          // 💡 2026-09-12: FISH parchment card (same lamoot/decree family as brew/craft cards).
+                          // Falls back to the text banner if the Go render fails.
+                          let fishCardSent = false;
+                          try {
+                            const fishCard = await goService.generateTransactionCard({
+                              nickname: freshUser.nickname || economy.getDisplayName(senderJid),
+                              type: "FISH",
+                              style: (freshUser && freshUser.cardStyle) || 0,
+                              amount: 1,
+                              newWallet: freshUser.wallet || 0,
+                              newBank: freshUser.bank || 0,
+                              zeniSymbol: economy.getZENI(),
+                              itemName: item.name || "Fish",
+                              details: "fresh catch - sell at HQ or craft with it"
+                            });
+                            if (fishCard) {
+                              await sock.sendMessage(
+                                chatId,
+                                { image: fishCard, caption: BOT_MARKER + msg },
+                                { quoted: m },
+                              );
+                              fishCardSent = true;
+                            }
+                          } catch (fishCardErr) {
+                            console.error('[FishCard] Render failed (non-fatal):', fishCardErr.message);
+                          }
+                          if (!fishCardSent) {
+                            await sock.sendMessage(
+                              chatId,
+                              { text: BOT_MARKER + msg },
+                              { quoted: m },
+                            );
+                          }
                           await awardProgression(senderJid, chatId);
                         } finally {
                           busyUsers.delete(senderJid);
@@ -7340,10 +11657,46 @@ _💡 Reply with another number from your search list!_`.trim();
                   if (
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} hunt`
                   ) {
+                    // 💡 FIX 2026-10-03 (owner hunting exploit report): hunts had
+                    // NO daily limit and NO spam guard at all - the counter was
+                    // never stored on the player document, the block ran fully
+                    // concurrent (engine processes messages via Promise.all) and
+                    // it returned BEFORE the global 5s cooldown map was set, so
+                    // rapid ".j hunt" spam dropped unlimited loot. The limit is
+                    // now enforced against the player/day state itself:
+                    // huntCount/lastHuntDay live on the user document (survive
+                    // restarts and re-registrations), and the check+increment
+                    // happens synchronously before any await so N simultaneous
+                    // messages still count against the same shared object.
+                    const HUNT_DAILY_LIMIT = 10; // owner spec: 7-15 per day
+                    if (busyUsers.has(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "⏳ Still processing your last action...",
+                      }, { quoted: m });
+                    }
                     if (!economy.isRegistered(senderJid))
                       return await sock.sendMessage(chatId, {
                         text: BOT_MARKER + "❌ Register first!",
                       });
+                    const hunter = economy.getUser(senderJid);
+                    const huntDayUtc = new Date().toISOString().slice(0, 10);
+                    if ((hunter.lastHuntDay || "") !== huntDayUtc) {
+                      hunter.lastHuntDay = huntDayUtc;
+                      hunter.huntCount = 0;
+                    }
+                    if ((hunter.huntCount || 0) >= HUNT_DAILY_LIMIT) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          `🏹 *HUNTING FATIGUE*\n\nThe wilderness is picked clean for today - you've already taken ${HUNT_DAILY_LIMIT} hunts. The animals know your scent now.\n\n▫️ Hunts today: ${hunter.huntCount}/${HUNT_DAILY_LIMIT}\n▫️ Resets at midnight UTC`,
+                      }, { quoted: m });
+                    }
+                    // Synchronous increment: every concurrent hunt message sees
+                    // the updated count (single event loop, shared cached user).
+                    hunter.huntCount = (hunter.huntCount || 0) + 1;
+                    economy.saveUser(senderJid);
+                    busyUsers.add(senderJid);
+                    try {
                     await sock.sendMessage(chatId, {
                       react: { text: "🏹", key: m.key },
                     });
@@ -7357,7 +11710,7 @@ _💡 Reply with another number from your search list!_`.trim();
                     const luck = (freshUser.stats?.luck || 5) + (eqStats.luck || 0);
                     // ⚠️ FIX (audit Task 4): previously '(Math.random() * 100) + (luck / 5)'
                     // which gave +94 bonus at luck=471 (auto-bear every hunt).
-                    // Now capped at +15 and scaled at 1 per 20 luck — same fix
+                    // Now capped at +15 and scaled at 1 per 20 luck - same fix
                     // as the fishing roll at L6511.
                     const luckBonus = Math.min(15, Math.floor(luck / 20));
                     let roll = (Math.random() * 100) + luckBonus;
@@ -7382,18 +11735,98 @@ _💡 Reply with another number from your search list!_`.trim();
                     const sellMultiplier = rarityInfo.sellMultiplier || 0.6;
                     const sellValue = Math.floor((item.value || 0) * sellMultiplier);
 
-                    let msg =
-                      GET_BANNER(`🏹 HUNTING`) +
-                      `\n\nCaptured: ${emoji} *${item.name}*\n▫️ Rarity: ${item.rarity}\n▫️ Sell Value: ${ZENI}${sellValue.toLocaleString()}`;
-                    return await sock.sendMessage(
-                      chatId,
-                      { text: msg },
-                      { quoted: m },
-                    );
+                    // 💡 FIX 2026-10-03: the XP shown here was FAKE - the caption
+                    // promised "+N XP" but nothing ever called addXP. Grant it for
+                    // real so the card tells the truth. (xpReward is computed here
+                    // so both the grant and the card caption share one value.)
+                    const xpReward = Math.max(5, Math.floor(sellValue / 5));
+                    try {
+                      require('./rpg/progression').addXP(senderJid, xpReward, 'Hunt');
+                    } catch (xpErr) {
+                      console.error('[Hunt] XP grant failed (non-fatal):', xpErr.message);
+                    }
+
+                    // 💡 NEW 2026-07-29: Render an image card for the hunt result
+                    // (replaces the text-only banner). Falls back to text on failure.
+                    let huntCardSent = false;
+                    try {
+                      const combatImageGen = require('./rpg/combatImageGenerator');
+                      // Determine animal name + biome from context
+                      const animalName = (selected.id === 'rabbit_hide') ? 'Rabbit'
+                        : (selected.id === 'deer_antler') ? 'Deer'
+                        : (selected.id === 'bear_claw') ? 'Bear' : 'Creature';
+                      // XP reward scales with rarity (computed above, shared with
+                      // the real XP grant)
+                      const huntCard = await combatImageGen.generateHuntCard({
+                        playerName: freshUser.nickname || economy.getDisplayName(senderJid),
+                        playerClass: String(freshUser.class?.id || freshUser.class || 'FIGHTER').toUpperCase(),
+                        biome: 'forest',
+                        animal: animalName.toUpperCase(),
+                        item: item.name || 'Unknown Item',
+                        itemRarity: item.rarity || 'COMMON',
+                        xp: xpReward,
+                        zeni: sellValue,
+                        rank: freshUser.adventurerRank || 'F'
+                      });
+                      if (huntCard.success && huntCard.buffer) {
+                        const huntCaption =
+                          `🏹 *HUNT SUCCESSFUL!*\n` +
+                          `-----------\n` +
+                          `Captured: ${emoji} *${item.name}*\n` +
+                          `▫️ Rarity: ${item.rarity}\n` +
+                          `▫️ Sell Value: ${ZENI}${sellValue.toLocaleString()}\n` +
+                          `▫️ XP Gained: +${xpReward}`;
+                        await sock.sendMessage(chatId, {
+                          image: huntCard.buffer,
+                          caption: huntCaption,
+                          mimetype: 'image/jpeg'
+                        }, { quoted: m });
+                        huntCardSent = true;
+                      }
+                    } catch (huntCardErr) {
+                      console.error('[HuntCard] Render failed (non-fatal):', huntCardErr.message);
+                    }
+
+                    if (!huntCardSent) {
+                      // Fallback to text-only banner
+                      let msg =
+                        GET_BANNER(`🏹 HUNTING`) +
+                        `\n\nCaptured: ${emoji} *${item.name}*\n▫️ Rarity: ${item.rarity}\n▫️ Sell Value: ${ZENI}${sellValue.toLocaleString()}`;
+                      return await sock.sendMessage(
+                        chatId,
+                        { text: msg },
+                        { quoted: m },
+                      );
+                    }
+                    return;
+                    } finally {
+                      busyUsers.delete(senderJid);
+                    }
                   }
 
                   // SPAM PREVENTION: Intelligent Cooldowns
-                  if (isBotCommand && !isOwner && !isGlobalMod(senderJid)) {
+                  // 💡 AUDIT FIX 2026-09-26 (quiz P4): quiz ANSWERS are gameplay
+                  // input, not commands. With a quiz running, answer messages
+                  // (an option letter like ".j b", or plain typed text) must
+                  // neither CHECK nor SET the global
+                  // 5s cooldown - otherwise players got "⚠️ SLOW DOWN!" mid-game
+                  // and answering locked the group's other commands for 5s.
+                  // Quiz-internal pacing is handled inside quiz.js separately.
+                  // 💡 2026-09-28 OWNER AUDIT §2/§7: while a quiz question is
+                  // OPEN, the whole 5s cooldown (check AND set) is bypassed for
+                  // this chat. Word answers (".j <answer text>" - the format the
+                  // question cards advertise) are indistinguishable from
+                  // commands at this point, so the letter-only exemption still
+                  // let "⚠️ SLOW DOWN!" DROP answers mid-question (return below
+                  // = the message never reached the quiz receiver). The quiz
+                  // one-attempt-locks players itself; the hard gambling spam
+                  // lock and the 20s same-game cooldown still guard abuse in
+                  // normal (closed-question) traffic.
+                  const _isQuizAnswerMsg =
+                    quizGame.hasActive(chatId) && quizGame.isQuizAnswerText(lowerTxt);
+                  const _quizQuestionOpen =
+                    quizGame.hasActive(chatId) && quizGame.isQuestionOpen(chatId);
+                  if (isBotCommand && !_isQuizAnswerMsg && !_quizQuestionOpen && !isOwner && !isGlobalMod(senderJid)) {
                     const now = Date.now();
                     const gamblingCommands = [
                       "cf",
@@ -7432,7 +11865,7 @@ _💡 Reply with another number from your search list!_`.trim();
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            `🚫 *SYSTEM LOCKOUT* 🚫\n\n@${senderJid.split("@")[0]} has been **BLOCKED** for excessive spamming of high-frequency commands.\n\nContact an admin to appeal.`,
+                            `🚫 *SYSTEM LOCKOUT* 🚫\n\n@${economy.getDisplayName(senderJid)} has been *BLOCKED* for excessive spamming of high-frequency commands.\n\nContact an admin to appeal.`,
                           mentions: [senderJid],
                         });
                         return;
@@ -7525,9 +11958,9 @@ _💡 Reply with another number from your search list!_`.trim();
                   const quoted =
                     m.message?.extendedTextMessage?.contextInfo?.quotedMessage;
 
-                  // track activity in groups
+                  // track activity in groups (type-tagged for the daily breakdown)
                   if (isGroupChat) {
-                    trackActivity(chatId, senderJid);
+                    trackActivity(chatId, senderJid, detectActivityType(m));
                   }
 
                   // Track message for group summaries (after isGroupChat is defined)
@@ -7555,9 +11988,11 @@ _💡 Reply with another number from your search list!_`.trim();
                         whatsappName: m.pushName,
                       });
 
-                      // Also set as nickname if user doesn't have one yet (ONLY if they are registered)
+                      // ⚡ 2026-09-17: also heal placeholder nicknames ('Adventurer')
+                      // to the WhatsApp display name - the username IS their
+                      // default name until they register a custom one.
                       const currentProfile = getUserProfile(senderJid);
-                      if (currentProfile && !currentProfile.nickname && economy.isRegistered(senderJid)) {
+                      if (currentProfile && (!currentProfile.nickname || currentProfile.nickname === 'Adventurer')) {
                         updateUserProfile(senderJid, { nickname: m.pushName });
                       }
                     }
@@ -7565,6 +12000,11 @@ _💡 Reply with another number from your search list!_`.trim();
 
                   // FIXED: Auto-delete muted user messages FIRST before anything else
                   if (isMuted(senderJid, chatId)) {
+                    // 🔪 Murder Mystery: the dead do not speak in the manor (spec §12)
+                    if (murderMystery.isSilenced(senderJid, chatId)) {
+                      try { await sock.sendMessage(chatId, { delete: m.key }); } catch (e) {}
+                      return;
+                    }
                     try {
                       await sock.sendMessage(chatId, { delete: m.key });
                       console.log(
@@ -7573,7 +12013,7 @@ _💡 Reply with another number from your search list!_`.trim();
                       return; // stop processing this message
                     } catch (err) {
                       console.log(
-                        "❌❌ Failed to delete muted user message:",
+                        "❌ Failed to delete muted user message:",
                         err.message,
                       );
                     }
@@ -7588,11 +12028,33 @@ _💡 Reply with another number from your search list!_`.trim();
                     return;
                   }
 
+                  // 💡 CHECK IF USER IS PERMA-BANNED - mod-issued, global, permanent
+                  // Banned users get NO response, same as blocked. But unlike block,
+                  // WA group admins CANNOT unban - only mods can.
+                  if (isBanned(senderJid)) {
+                    console.log(
+                      `🚫 Perma-banned user tried to use bot: ${senderJid}`,
+                    );
+                    return;
+                  }
+
+                  // 💡 Hardmute check now happens EARLY (line ~6458) before MongoDB persist.
+                  // If we reach here, the user is NOT hard-muted. No re-check needed.
+
                   // Override command - allows user to bypass admin checks
+                  // 💡 SECURITY FIX 2026-08-31: this was UNGATED - any user who
+                  // typed the phrase got full admin (kick/ban/card-mod/market).
+                  // Now restricted to the bot owner only.
                   if (
                     lowerTxt ===
                     `${botConfig.getPrefix().toLowerCase()} mellowisking`
                   ) {
+                    if (!isBotOwner(senderJid)) {
+                      await reply(
+                        "❌ This command is restricted to the bot owner.",
+                      );
+                      return;
+                    }
                     if (overrideUsers.has(senderJid)) {
                       overrideUsers.delete(senderJid);
                       await reply(`failed`);
@@ -7752,8 +12214,8 @@ Usage: ${newUsage}/5${warningText}`;
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `@${targetUser.split("@")[0]} has been blocked from using the bot.`,
-                      mentions: [targetUser],
+                        `@${economy.getDisplayName(targetUser)} has been blocked from using the bot.`,
+                      mentions: buildMentions(m, [], targetUser),
                     });
 
                     console.log(`🚫 Blocked user: ${targetUser}`);
@@ -7791,6 +12253,25 @@ Usage: ${newUsage}/5${warningText}`;
                       );
                     }
 
+                    // 💡 FIX 2026-07-17: prevent self-unblock exploit.
+                    // Blocking is GLOBAL (not per-chat) - a blocked user who is
+                    // a WA group admin in another group could run .g unblock
+                    // @themselves there to remove the global block. This is
+                    // a privilege escalation exploit. Hard block: you cannot
+                    // unblock yourself. Only the bot owner or a global mod
+                    // can unblock someone who was blocked by another admin.
+                    if (targetUser === senderJid ||
+                        jidNormalizedUser(targetUser) === jidNormalizedUser(senderJid)) {
+                      if (!isOwner && !isGlobalMod(senderJid)) {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + "❌ You cannot unblock yourself. Only the bot owner or a global moderator can unblock a user.",
+                        });
+                        return;
+                      }
+                      // Owner/global mod self-unblock: allow but log it
+                      console.log(`⚠️ [Security] ${senderJid} (owner/mod) self-unblocked themselves in ${chatId}`);
+                    }
+
                     if (!isBlocked(targetUser)) {
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + "that user isn't blocked.",
@@ -7798,15 +12279,22 @@ Usage: ${newUsage}/5${warningText}`;
                       return;
                     }
 
+                    // 💡 FIX: only owner or global mod can unblock a user who
+                    // was blocked by a different admin. Regular WA admins can
+                    // only unblock users they themselves blocked (or if no
+                    // blocker info exists - legacy blocks).
+                    // For now, allow WA admins to unblock (backwards compat)
+                    // but log it so the owner can audit.
+                    console.log(`✅ Unblocked user: ${targetUser} (unblocked by ${senderJid} in ${chatId})`);
+
                     unblockUser(targetUser);
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `@${targetUser.split("@")[0]} can now use the bot again.`,
-                      mentions: [targetUser],
+                        `@${economy.getDisplayName(targetUser)} can now use the bot again.`,
+                      mentions: buildMentions(m, [], targetUser),
                     });
 
-                    console.log(`✅ Unblocked user: ${targetUser}`);
                     return;
                   }
 
@@ -7837,7 +12325,7 @@ Usage: ${newUsage}/5${warningText}`;
                       `*Blocked Users (${blockedArray.length})*\n\n`;
 
                     blockedArray.slice(0, 20).forEach((userId, i) => {
-                      text += `${i + 1}. @${userId.split("@")[0]}\n`;
+                      text += `${i + 1}. @${economy.getDisplayName(userId)}\n`;
                     });
 
                     if (blockedArray.length > 20) {
@@ -7849,6 +12337,234 @@ Usage: ${newUsage}/5${warningText}`;
                       mentions: blockedArray.slice(0, 20),
                     });
                     return;
+                  }
+
+                  // ═══════════════════════════════════════════════════════════
+                  // 💡 PERMA-BAN SYSTEM - mod-only
+                  // .g ban @user    - permanently ban (mod+ only)
+                  // .g unban @user  - lift perma-ban (mod+ only)
+                  // .g banlist      - list all banned users (mod+ only)
+                  // ═══════════════════════════════════════════════════════════
+
+                  // .g ban @user
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} ban` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} ban `)
+                  ) {
+                    // Only mods (General/RPG/Cards) or owner can ban
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid) && !isCardsMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only moderators can use the perma-ban command. WA group admins should use `${botConfig.getPrefix()} block` instead.",
+                      });
+                    }
+                    const targetUser = getMentionOrReply(m);
+                    if (!targetUser) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} ban @user\`\n\n_Permanently bans the user from using the bot in ALL groups. Only mods can reverse this with_ \`${botConfig.getPrefix()} unban\``,
+                      });
+                    }
+                    // Can't ban yourself
+                    if (targetUser === senderJid || jidNormalizedUser(targetUser) === jidNormalizedUser(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ You can't ban yourself." });
+                    }
+                    // Can't ban other mods or owner
+                    // 💡 CRITICAL FIX: was `isOwner ||` which checked the SENDER's
+                    // owner status. When the owner tried to ban ANYONE, isOwner
+                    // (sender) was true → condition always true → "can't ban a
+                    // mod" for every target. The owner literally could not ban
+                    // anyone. Now correctly checks if the TARGET is the owner.
+                    if (isBotOwner(targetUser) || isGlobalMod(targetUser) || isRpgMod(targetUser) || isCardsMod(targetUser)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ You can't ban a moderator or the owner." });
+                    }
+                    if (isBanned(targetUser)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "That user is already perma-banned." });
+                    }
+                    banUser(targetUser);
+                    console.log(`🚫 [PermaBan] ${senderJid} banned ${targetUser}`);
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `🚫 @${economy.getDisplayName(targetUser)} has been *permanently banned*.\n\nThey can no longer use the bot in ANY group. Only a moderator can reverse this with \`${botConfig.getPrefix()} unban\`.`,
+                      mentions: buildMentions(m, [], targetUser),
+                    });
+                  }
+
+                  // .g unban @user
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} unban` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} unban `)
+                  ) {
+                    // Only mods or owner can unban
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid) && !isCardsMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only moderators can reverse a perma-ban.",
+                      });
+                    }
+                    const targetUser = getMentionOrReply(m);
+                    if (!targetUser) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} unban @user\``,
+                      });
+                    }
+                    if (!isBanned(targetUser)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "That user isn't perma-banned." });
+                    }
+                    // 💡 FIX 2026-08-03: mods can't unban hard-banned users
+                    if (isHardBanned(targetUser) && !isOwner) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ This user is HARD-BANNED by the owner. Only the owner can reverse this with `" + botConfig.getPrefix() + " unhardban`.",
+                      });
+                    }
+                    unbanUser(targetUser);
+                    console.log(`✅ [PermaBan] ${senderJid} unbanned ${targetUser}`);
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `✅ @${economy.getDisplayName(targetUser)} has been unbanned. They can use the bot again.`,
+                      mentions: buildMentions(m, [], targetUser),
+                    });
+                  }
+
+                  // ═══════════════════════════════════════════════════════════
+                  // 💡 OWNER-ONLY HARD MUTE/BAN (2026-08-03, bug report #10)
+                  // Commands: hardban, unhardban, hardmute, unhardmute
+                  // ONLY the bot owner can use these. Mods CANNOT reverse them.
+                  // ═══════════════════════════════════════════════════════════
+
+                  // .g hardban @user - owner-only permanent ban that mods can't undo
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} hardban` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} hardban `)
+                  ) {
+                    if (!isOwner) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only the bot owner can use hard-ban. This action cannot be reversed by moderators.",
+                      });
+                    }
+                    const targetUser = getMentionOrReply(m);
+                    if (!targetUser) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} hardban @user\`\n\n_Owner-only permanent ban. Mods CANNOT reverse this with_ \`${botConfig.getPrefix()} unban\`_. Only_ \`${botConfig.getPrefix()} unhardban\` _can reverse it._`,
+                      });
+                    }
+                    if (targetUser === senderJid || jidNormalizedUser(targetUser) === jidNormalizedUser(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ You can't hard-ban yourself." });
+                    }
+                    if (isBotOwner(targetUser)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ You can't hard-ban the owner." });
+                    }
+                    hardBanUser(targetUser);
+                    console.log(`🚫 [Owner] ${senderJid} hard-banned ${targetUser}`);
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `🚫 @${economy.getDisplayName(targetUser)} has been *HARD-BANNED* by the owner.\n\nThis action is permanent. Mods cannot undo this.`,
+                      mentions: buildMentions(m, [], targetUser),
+                    });
+                  }
+
+                  // .g unhardban @user - owner-only reversal of hard-ban
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} unhardban` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} unhardban `)
+                  ) {
+                    if (!isOwner) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only the bot owner can reverse a hard-ban.",
+                      });
+                    }
+                    const targetUser = getMentionOrReply(m);
+                    if (!targetUser) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} unhardban @user\``,
+                      });
+                    }
+                    if (!isHardBanned(targetUser)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "That user isn't hard-banned." });
+                    }
+                    unhardBanUser(targetUser);
+                    console.log(`✅ [Owner] ${senderJid} unhard-banned ${targetUser}`);
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `✅ @${economy.getDisplayName(targetUser)} has been unhard-banned. They can use the bot again.`,
+                      mentions: buildMentions(m, [], targetUser),
+                    });
+                  }
+
+                  // .g hardmute @user - owner-only global mute (no expiry, all chats)
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} hardmute` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} hardmute `)
+                  ) {
+                    if (!isOwner) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only the bot owner can use hard-mute.",
+                      });
+                    }
+                    const targetUser = getMentionOrReply(m);
+                    if (!targetUser) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} hardmute @user\`\n\n_Owner-only global mute. The user can see the bot but can't use ANY commands. Mods CANNOT reverse this._`,
+                      });
+                    }
+                    if (targetUser === senderJid || jidNormalizedUser(targetUser) === jidNormalizedUser(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ You can't hard-mute yourself." });
+                    }
+                    if (isBotOwner(targetUser)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ You can't hard-mute the owner." });
+                    }
+                    // 👑 GC OWNER IMMUNITY: the marked owner of this group
+                    // cannot be hard-muted either.
+                    if (isGcOwner(targetUser, chatId)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + `👑 @${economy.getDisplayName(targetUser)} is the marked owner of this group and cannot be hard-muted.`, mentions: buildMentions(m, [], targetUser) });
+                    }
+                    hardMuteUser(targetUser);
+                    console.log(`🔇 [Owner] ${senderJid} hard-muted ${targetUser}`);
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `🔇 @${economy.getDisplayName(targetUser)} has been *HARD-MUTED* by the owner.\n\nThey can see the bot but can't use any commands.`,
+                      mentions: buildMentions(m, [], targetUser),
+                    });
+                  }
+
+                  // .g unhardmute @user - owner-only reversal of hard-mute
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} unhardmute` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} unhardmute `)
+                  ) {
+                    if (!isOwner) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only the bot owner can reverse a hard-mute.",
+                      });
+                    }
+                    const targetUser = getMentionOrReply(m);
+                    if (!targetUser) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} unhardmute @user\``,
+                      });
+                    }
+                    if (!isHardMuted(targetUser)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "That user isn't hard-muted." });
+                    }
+                    unhardMuteUser(targetUser);
+                    console.log(`✅ [Owner] ${senderJid} unhard-muted ${targetUser}`);
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `✅ @${economy.getDisplayName(targetUser)} has been unhard-muted. They can use commands again.`,
+                      mentions: buildMentions(m, [], targetUser),
+                    });
+                  }
+
+                  // .g banlist
+                  if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} banlist`) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid) && !isCardsMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only moderators can view the ban list.",
+                      });
+                    }
+                    const bannedArray = Array.from(bannedUsers);
+                    if (bannedArray.length === 0) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "📋 *Banned Users (0)*\n\n_No users are currently perma-banned._" });
+                    }
+                    let text = BOT_MARKER + `🚫 *Perma-Banned Users (${bannedArray.length})*\n\n`;
+                    bannedArray.slice(0, 20).forEach((userId, i) => {
+                      text += `${i + 1}. ${userId.split("@")[0]}\n`;
+                    });
+                    if (bannedArray.length > 20) {
+                      text += `\n... and ${bannedArray.length - 20} more`;
+                    }
+                    return await sock.sendMessage(chatId, { text });
                   }
 
                   // ============================================
@@ -8097,7 +12813,7 @@ Usage: ${newUsage}/5${warningText}`;
 
                       // ── Build FFmpeg command ──────────────────────────────────────────────
                       //
-                      // BASE: letterbox — fits whole image inside 512×512, black bars on the
+                      // BASE: letterbox - fits whole image inside 512×512, black bars on the
                       // short sides. Used by effects/rotation that need a fixed-size canvas.
                       // color=black is safe for all pixel formats (color=none requires alpha).
                       //
@@ -8127,7 +12843,7 @@ Usage: ${newUsage}/5${warningText}`;
                           ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" -filter_complex "${cf}" -map "[out]" -vframes 1 -c:v libwebp -lossless 0 -compression_level 6 -q:v 75 -y "${outputPath}"`;
                         }
 
-                        // ── -spin: animated sticker — image spins slowly forever ─────────────
+                        // ── -spin: animated sticker - image spins slowly forever ─────────────
                       } else if (isSpin) {
                         // Scale to inscribed-circle size (362px) so content stays in frame at
                         // all rotation angles, centre on 512×512 black canvas, then rotate.
@@ -8191,7 +12907,7 @@ Usage: ${newUsage}/5${warningText}`;
                         } else {
                           const vf = filter ? `-vf "${filter}"` : "";
                           // pix_fmt yuva420p carries the alpha plane for -r (circle).
-                          // For all opaque modes it's harmless — WebP supports it fine.
+                          // For all opaque modes it's harmless - WebP supports it fine.
                           ffmpegCmd = `"${FFMPEG_PATH}" -i "${inputPath}" ${vf} -vframes 1 -c:v libwebp -pix_fmt yuva420p -lossless 0 -compression_level 6 -q:v 75 -y "${outputPath}"`;
                         }
                       }
@@ -8656,11 +13372,31 @@ Usage: ${newUsage}/5${warningText}`;
                       if (args.length > 0) {
                         let targetClassId = args[0];
                         if (targetClassId.toLowerCase() === "info") {
+                          // 💡 FIX: .g class info - was silently failing when
+                          // getCharacterSheet returned null (unregistered user)
+                          // or sheet.class was null (no class assigned). Now
+                          // we explicitly check and send an error message
+                          // instead of falling through to displayCharacterSheet
+                          // (which made it look like the command was ignored).
                           const sheet = progression.getCharacterSheet(senderJid);
-                          targetClassId = sheet ? sheet.class : null;
+                          if (!sheet || !sheet.class) {
+                            return await sock.sendMessage(chatId, {
+                              text: BOT_MARKER + `❌ You don't have a class yet! Use \`${botConfig.getPrefix()} register\` to get started, then \`${botConfig.getPrefix()} class\` to pick a class.`
+                            });
+                          }
+                          targetClassId = sheet.class;
                         }
                         if (targetClassId) {
                           await classCommands.displayEvolutionTree(sock, chatId, targetClassId);
+                          return;
+                        }
+                      } else {
+                        // 💡 FIX: .g class with no args - show the player's
+                        // current class evolution tree if they have a class,
+                        // otherwise show the character sheet (class picker).
+                        const sheet = progression.getCharacterSheet(senderJid);
+                        if (sheet && sheet.class) {
+                          await classCommands.displayEvolutionTree(sock, chatId, sheet.class);
                           return;
                         }
                       }
@@ -8693,37 +13429,44 @@ Usage: ${newUsage}/5${warningText}`;
                       return;
                     }
 
-                    const level = progression.getLevel(senderJid);
-                    const gp = progression.getGP(senderJid);
+                    // 💡 FIX 2026-09-14 (owner: ".j rank didn't give an image
+                    // card"): this block rendered the OLD inline text layout -
+                    // the RANK portrait card shipped in progressionCommands.
+                    // handleRankCommand but was never dispatched. The card is
+                    // now the primary response (with the rank-gate rows folded
+                    // in), and the gate info also survives in its text
+                    // fallback. Mission objective detail remains at `.rank
+                    // mission`.
                     const rank = user.adventurerRank || "F";
-                    const rankData = classSystem.ADVENTURER_RANKS[rank];
 
-                    let msg = `🏆 *ADVENTURER RANK* 🏆\n\n`;
-                    msg += `${rankData.icon} *Current Rank:* ${rankData.name}\n`;
-                    msg += `Tier: ${rank}\n\n`;
-                    msg += `📊 *Your Stats:*\n`;
-                    msg += `📊 Level: ${level}\n`;
-                    msg += `⭐ GP: ${(gp || 0).toLocaleString()}\n`;
-                    msg += `🗡️ Quests Completed: ${user.questsCompleted || 0}\n`;
-                    msg += `✅ Quests Won: ${user.questsWon || 0}\n`;
-                    msg += `❌ Quests Failed: ${user.questsFailed || 0}\n\n`;
-                    msg += `💰 *Benefits:*\n`;
-                    msg += `+${rankData.benefits.questRewardBonus}% Quest Rewards\n\n`;
-
+                    const gateRows = [];
                     const nextRank = classSystem.getNextRankRequirements(rank);
                     if (nextRank) {
-                      msg += `━━━━━━━━━━━━━━━\n`;
-                      msg += `🎯 *Next Rank:* ${nextRank.rank}\n`;
                       const req = nextRank.requirements;
-                      msg += `Requirements:\n`;
-                      msg += `  • Level: ${req.level} (You: ${level})\n`;
-                      msg += `  • Quests: ${req.questsCompleted} (You: ${user.questsCompleted || 0})\n`;
+                      gateRows.push({ label: 'NEXT RANK', value: String(nextRank.rank).toUpperCase() });
+                      gateRows.push({ label: 'REQUIRES', value: `LV ${req.level} · ${req.questsCompleted} QUESTS` });
+                      const gateMission = classSystem.getGateMissionForRank(rank);
+                      if (gateMission) {
+                        const completedMissions = user.completedRankMissions || [];
+                        if (completedMissions.includes(gateMission.id)) {
+                          gateRows.push({ label: 'MISSION', value: 'COMPLETE' });
+                        } else {
+                          const progressResult = classSystem.checkMissionProgress(gateMission.id, user.stats || {});
+                          const done = progressResult.progress.filter(p => p.done).length;
+                          gateRows.push({ label: 'MISSION', value: `${gateMission.name} (${done}/${progressResult.progress.length})` });
+                        }
+                      }
                     } else {
-                      msg += `━━━━━━━━━━━━━━━\n`;
-                      msg += `✨ *MAX RANK ACHIEVED!* ✨\n`;
+                      gateRows.push({ label: 'PROMOTION', value: 'MAX RANK ACHIEVED' });
                     }
 
-                    await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                    await progressionCommands.handleRankCommand(
+                      sock,
+                      chatId,
+                      senderJid,
+                      m,
+                      gateRows,
+                    );
                     return;
                   }
 
@@ -8822,6 +13565,25 @@ Usage: ${newUsage}/5${warningText}`;
                     return;
                   }
 
+                  // 💡 ECONOMY SINK (Item #4): .g/.e/.j respec - reset allocated
+                  // stat points for a Zeni fee (1K × level). Previously stat
+                  // allocation was permanent; this gives players a way to undo
+                  // mistakes while draining Zeni from the economy.
+                  if (
+                    lowerTxt ===
+                      `${botConfig.getPrefix().toLowerCase()} respec` ||
+                    lowerTxt ===
+                      `${botConfig.getPrefix().toLowerCase()} respecialize`
+                  ) {
+                    await progressionCommands.handleRespecCommand(
+                      sock,
+                      chatId,
+                      senderJid,
+                      m,
+                    );
+                    return;
+                  }
+
                   // .j leaderboard - View leaderboard
                   if (
                     lowerTxt.startsWith(
@@ -8850,6 +13612,124 @@ Usage: ${newUsage}/5${warningText}`;
                     return;
                   }
 
+                  // 💡 P4 (2026-08-16): .j networth [@user] - mod net-worth command
+                  // Shows total assets: wallet + bank + card value + equipment value + debt owed
+                  if (
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} networth`,
+                    ) ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} nw`,
+                    )
+                  ) {
+                    // Determine target user (self or @mentioned)
+                    let targetJid = senderJid;
+                    const mentioned = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+                    if (mentioned) targetJid = mentioned;
+
+                    // Permission: can view own networth always; viewing others requires mod+
+                    if (targetJid !== senderJid && !isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + '❌ You can only view your own net worth. Mention a player as a moderator to view theirs.',
+                      });
+                    }
+
+                    const targetUser = economy.getUser(targetJid);
+                    if (!targetUser) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + '❌ User not found.',
+                      });
+                    }
+
+                    const wallet = targetUser.wallet || 0;
+                    const bank = targetUser.bank || 0;
+                    const debt = targetUser.debt?.amount || 0;
+
+                    // Card value: count UserCard docs × estimated avg value per tier
+                    // Using the rank-based reward table: T1=1K, T2=3K, T3=6K, T4=9K, T5=13K, T6=18K, S=25K, E=35K
+                    let cardValue = 0;
+                    try {
+                      const UserCard = require('./models/UserCard');
+                      const cardCount = await UserCard.countDocuments({ userId: targetJid });
+                      // Conservative estimate: avg 5K per card (mix of tiers)
+                      cardValue = cardCount * 5000;
+                    } catch (e) {}
+
+                    // Equipment value: sum of equipped item values
+                    let equipValue = 0;
+                    if (targetUser.equipment) {
+                      for (const slot of ['main_hand', 'off_hand', 'helmet', 'armor', 'gloves', 'boots', 'ring', 'cloak']) {
+                        const item = targetUser.equipment[slot];
+                        if (item && item.id) {
+                          // Conservative: 10K per equipped item
+                          equipValue += 10000;
+                        }
+                      }
+                    }
+
+                    const totalAssets = wallet + bank + cardValue + equipValue;
+                    const netWorth = totalAssets - debt;
+                    const displayName = economy.getDisplayName(targetJid) || targetJid.split('@')[0];
+
+                    let msg = `📊 *NET WORTH - ${displayName}*\n\n`;
+                    msg += `━━━━━━━━━━━━━━━\n`;
+                    msg += `💰 Wallet: ${economy.getZENI()}${wallet.toLocaleString()}\n`;
+                    msg += `🏦 Bank: ${economy.getZENI()}${bank.toLocaleString()}\n`;
+                    msg += `🎴 Cards (est.): ${economy.getZENI()}${cardValue.toLocaleString()}\n`;
+                    msg += `⚔️ Equipment (est.): ${economy.getZENI()}${equipValue.toLocaleString()}\n`;
+                    msg += `━━━━━━━━━━━━━━━\n`;
+                    msg += `📈 Total Assets: ${economy.getZENI()}${totalAssets.toLocaleString()}\n`;
+                    if (debt > 0) {
+                      msg += `📉 Debt Owed: ${economy.getZENI()}${debt.toLocaleString()}\n`;
+                      msg += `━━━━━━━━━━━━━━━\n`;
+                      msg += `💎 Net Worth: ${economy.getZENI()}${netWorth.toLocaleString()}\n`;
+                    } else {
+                      msg += `💎 Net Worth: ${economy.getZENI()}${netWorth.toLocaleString()}\n`;
+                    }
+
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                  }
+
+                  // 💡 P4 (2026-08-16): .j setmarketprice <tier> <amount> - admin command
+                  if (
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} setmarketprice`,
+                    )
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + '❌ Only moderators and above can set market prices.',
+                      });
+                    }
+                    const parts = lowerTxt.split(/\s+/);
+                    const tier = parts[2]?.toUpperCase();
+                    const price = parseInt(parts[3]);
+                    if (!tier || isNaN(price) || price < 0) {
+                      // Show current prices
+                      const System = require('./models/System');
+                      const doc = await System.findOne({ key: 'market_prices' }).lean();
+                      const prices = doc?.value || {};
+                      let priceMsg = `📊 *MARKET PRICES*\n\n`;
+                      for (const [t, p] of Object.entries(prices)) {
+                        priceMsg += `Tier ${t}: ${economy.getZENI()}${p.toLocaleString()}\n`;
+                      }
+                      priceMsg += `\n💡 Usage: \`${botConfig.getPrefix()} setmarketprice <tier> <amount>\`\nExample: \`${botConfig.getPrefix()} setmarketprice 5 25000\``;
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + priceMsg });
+                    }
+                    const System = require('./models/System');
+                    const doc = await System.findOne({ key: 'market_prices' }).lean();
+                    const prices = doc?.value || {};
+                    prices[tier] = price;
+                    await System.findOneAndUpdate(
+                      { key: 'market_prices' },
+                      { value: prices },
+                      { upsert: true }
+                    );
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `✅ Market price for Tier ${tier} set to ${economy.getZENI()}${price.toLocaleString()}`,
+                    });
+                  }
+
                   // .j sell <n> [qty] - Sell item from inventory
                   if (
                     lowerTxt.startsWith(
@@ -8858,7 +13738,12 @@ Usage: ${newUsage}/5${warningText}`;
                   ) {
                     const parts = txt.split(" ");
                     const itemNum = parts[2];
-                    const qty = parseInt(parts[3]) || 1;
+                    // 💡 SECURITY FIX 2026-08-31: validate qty BEFORE passing down.
+                    // parseInt("-5") is truthy so `|| 1` let negatives through,
+                    // enabling the negative-sell item duplication exploit.
+                    const parsedQty = parseInt(parts[3]);
+                    const qty =
+                      !isNaN(parsedQty) && parsedQty > 0 ? parsedQty : 1;
 
                     if (!itemNum) {
                       return await sendUsage(
@@ -8870,6 +13755,12 @@ Usage: ${newUsage}/5${warningText}`;
                         "sell 1 5",
                         "Use your inventory index number to sell items.",
                       );
+                    }
+                    if (!isNaN(parsedQty) && parsedQty <= 0) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER +
+                          "❌ Quantity must be a positive number.",
+                      });
                     }
 
                     await rpgCommands.sellItem(
@@ -8961,6 +13852,14 @@ Usage: ${newUsage}/5${warningText}`;
 
                     const target = getMentionOrReply(m);
                     if (target) {
+                      // 👑 GC OWNER IMMUNITY: the marked owner of this group
+                      // cannot be kicked.
+                      if (isGcOwner(target, chatId)) {
+                        return reply(
+                          `👑 @${target.split('@')[0]} is the marked owner of this group and cannot be removed.`,
+                          { mentions: buildMentions(m, [], target) }
+                        );
+                      }
                       // 🛡️ Rank protection: can't kick someone of equal or higher rank
                       const settings = getGroupSettings(chatId);
                       if (settings.rankLadder?.length > 0) {
@@ -8969,8 +13868,8 @@ Usage: ${newUsage}/5${warningText}`;
                           const targetPhone = target.split('@')[0];
                           return reply(
                             `🚫 *Rank protection triggered.*\n\n` +
-                            `@${targetPhone} holds ${targetRank ? formatRankBadge(targetRank) : 'an equal or higher rank'} — you cannot remove them.`,
-                            { mentions: [target] }
+                            `@${targetPhone} holds ${targetRank ? formatRankBadge(targetRank) : 'an equal or higher rank'} - you cannot remove them.`,
+                            { mentions: buildMentions(m, [], target) }
                           );
                         }
                       }
@@ -9005,6 +13904,104 @@ Usage: ${newUsage}/5${warningText}`;
                     return;
                   }
 
+                  // 💡 NUKE - remove everyone in the GC that the bot can remove
+                  if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} nuke`) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only the bot owner or global mods can nuke a group.",
+                      });
+                    }
+                    if (!chatId.endsWith("@g.us")) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ This command only works in group chats.",
+                      });
+                    }
+
+                    try {
+                      const groupInfo = await sock.groupMetadata(chatId);
+                      const participants = groupInfo.participants || [];
+
+                      // Don't remove: the bot itself, other bots, group admins, owner, mods
+                      const protectedJids = new Set();
+                      // Add bot's own JIDs
+                      protectedJids.add(botJid);
+                      if (botLid) protectedJids.add(botLid);
+                      // Add owner phones
+                      for (const phone of BOT_OWNER_PHONES) {
+                        protectedJids.add(`${phone}@s.whatsapp.net`);
+                        protectedJids.add(`${phone}@lid`);
+                      }
+                      // Add all global mods
+                      for (const mod of globalMods) protectedJids.add(mod);
+                      // Add all RPG mods
+                      for (const mod of rpgMods) protectedJids.add(mod);
+                      // Add all card mods
+                      for (const mod of cardsMods) protectedJids.add(mod);
+                      // Add override users
+                      for (const ou of overrideUsers) protectedJids.add(ou);
+                      // 👑 GC OWNER IMMUNITY: the marked owner of this group
+                      // survives a nuke.
+                      const _gcOwnerJid = getGcOwner(chatId);
+                      if (_gcOwnerJid) protectedJids.add(_gcOwnerJid);
+
+                      // Build list of targets - exclude admins and protected users
+                      const targets = [];
+                      for (const p of participants) {
+                        const pid = p.id;
+                        const isAdmin = p.admin === "admin" || p.admin === "superadmin";
+                        if (isAdmin) continue;
+                        if (protectedJids.has(pid)) continue;
+                        // 👑 GC OWNER IMMUNITY: identity-safe check (handles
+                        // @lid vs phone spellings of the marked owner).
+                        if (isGcOwner(pid, chatId)) continue;
+                        // Also check phone-based owner match
+                        const phone = pid.split("@")[0];
+                        if (BOT_OWNER_PHONES.includes(phone)) continue;
+                        targets.push(pid);
+                      }
+
+                      if (targets.length === 0) {
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + "⚠️ No removable participants found (all are admins or protected).",
+                        });
+                      }
+
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `☢️ *NUKE INCOMING*\n\nRemoving ${targets.length} participants...\n_This cannot be undone._`,
+                      });
+
+                      // WhatsApp allows max ~50 per groupParticipantsUpdate call
+                      // Process in batches of 50
+                      let removed = 0;
+                      let failed = 0;
+                      for (let i = 0; i < targets.length; i += 50) {
+                        const batch = targets.slice(i, i + 50);
+                        try {
+                          const result = await sock.groupParticipantsUpdate(chatId, batch, "remove");
+                          for (const r of result) {
+                            if (r.status === "200") removed++;
+                            else failed++;
+                          }
+                        } catch (e) {
+                          failed += batch.length;
+                        }
+                        // Small delay between batches to avoid rate limiting
+                        if (i + 50 < targets.length) {
+                          await new Promise(resolve => setTimeout(resolve, 1000));
+                        }
+                      }
+
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `☢️ *NUKE COMPLETE*\n\n✅ Removed: ${removed}\n❌ Failed (admins/bots): ${failed}\n📊 Total targeted: ${targets.length}`,
+                      });
+                    } catch (err) {
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ Nuke failed: ${err.message}`,
+                      });
+                    }
+                    return;
+                  }
+
                   // .j mods - List global moderators
                   if (
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} mods`
@@ -9024,7 +14021,7 @@ Usage: ${newUsage}/5${warningText}`;
                     let modMsg = `🛡️ *GLOBAL MODERATORS* 🛡️\n\n`;
                     const modArray = Array.from(globalMods);
                     modArray.forEach((mod, i) => {
-                      modMsg += `${i + 1}. @${mod.split("@")[0]}\n`;
+                      modMsg += `${i + 1}. @${economy.getDisplayName(mod)}\n`;
                     });
                     modMsg += `\n━━━━━━━━━━━━━━━\n👑 Owners always have full access.`;
                     return await sock.sendMessage(chatId, {
@@ -9033,17 +14030,25 @@ Usage: ${newUsage}/5${warningText}`;
                     });
                   }
 
-                  // .j addmod - Add a global moderator (Owner Only)
+                  // .j addmod - Add a global moderator
+                  // 💡 OWNER RULING 2026-09-22: the "immutable mod roles"
+                  // policy (2026-09-20) is OVERRULED. The owner MUST be able
+                  // to manage the roster from chat ("i cant add or remove
+                  // mods anymore???? tf fix that"). Restored the original
+                  // behaviour: addmod is OWNER-ONLY (the privilege-escalation
+                  // fix stands - mods still cannot add mods), tier commands
+                  // are owner/General-Mod only. All writes go through the
+                  // same DB-backed helpers + .j reloadmods reads them.
                   if (
                     lowerTxt.startsWith(
                       `${botConfig.getPrefix().toLowerCase()} addmod`,
                     )
                   ) {
-                    if (!isOwner && !isGlobalMod(senderJid)) {
+                    if (!isOwner) {
                       return await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          "❌ Only the owner or a global mod can add global moderators.",
+                          "❌ Only the bot owner can add global moderators. (Mods can no longer add other mods - this was changed to prevent privilege escalation.)",
                       });
                     }
                     const target =
@@ -9057,17 +14062,26 @@ Usage: ${newUsage}/5${warningText}`;
                           BOT_MARKER + "❌ Tag someone to add as a moderator.",
                       });
 
-                    addGlobalMod(target);
+                    // Prevent adding the owner as a mod - redundant (owner
+                    // already has all permissions) and makes the mod list
+                    // confusing (owner shows up as a mod).
+                    if (isBotOwner(target)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `⚠️ The owner doesn't need to be added as a moderator - owners already have full access to everything.\n\n_Add someone else, or use \`${botConfig.getPrefix()} listmods\` to see current mods._`,
+                      });
+                    }
+
+                    await addGlobalMod(target);
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `✅ @${target.split("@")[0]} is now a Global Moderator.\n\nThey now have access to admin commands and RPG privileges (.j spawn, etc).`,
-                      mentions: [target],
+                        `✅ @${economy.getDisplayName(target)} is now a Global Moderator.\n\nThey now have access to admin commands and RPG privileges (.j spawn, etc).`,
+                      mentions: buildMentions(m, [], target),
                     });
                     return;
                   }
 
-                  // .j delmod - Remove a global moderator (Owner Only)
+                  // .j delmod - Remove a global moderator (Owner or General Mod)
                   if (
                     lowerTxt.startsWith(
                       `${botConfig.getPrefix().toLowerCase()} delmod`,
@@ -9092,15 +14106,875 @@ Usage: ${newUsage}/5${warningText}`;
                           "❌ Tag someone to remove from moderators.",
                       });
 
-                    delGlobalMod(target);
+                    await delGlobalMod(target);
+                    // Also clean up ALL other mod Sets. Previously delmod
+                    // only removed from globalMods - if the person was also
+                    // in rpgMods, cardsMods, or cardSystem's modJids, they'd
+                    // still have mod privileges and the ban protection would
+                    // still see them as a mod ("can't ban a mod or owner"
+                    // even after removal).
+                    await delRpgMod(target);
+                    await delCardsMod(target);
+                    try {
+                      const cardSystem = require('./rpg/cardSystem');
+                      const inst = cardSystem.getInst();
+                      if (inst && inst.modJids) {
+                        inst.modJids.delete(target);
+                        if (typeof cardSystem.saveRoles === 'function') await cardSystem.saveRoles();
+                      }
+                    } catch (e) {}
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `✅ @${target.split("@")[0]} has been removed from Global Moderators.`,
-                      mentions: [target],
+                        `✅ @${economy.getDisplayName(target)} has been removed from Global Moderators.\n\n_Cleaned from all mod roles (Global, RPG, Cards)._`,
+                      mentions: buildMentions(m, [], target),
                     });
                     return;
                   }
+
+                  // ═══════════════════════════════════════════════════════════════════
+                  // 3-TIER MODERATOR ROLE COMMANDS (restored 2026-09-22)
+                  // ═══════════════════════════════════════════════════════════════════
+                  // .g addrpgmod @user  - promote to RPG Moderator (RPG cmds only)
+                  // .g delrpgmod @user  - demote RPG Moderator
+                  // .g addcardsmod @user - promote to Cards Moderator (Cards cmds only)
+                  // .g delcardsmod @user - demote Cards Moderator
+                  //
+                  // Only the owner or a General (global) Mod can promote/demote
+                  // any mod role. RPG Mods cannot promote other RPG Mods. Cards
+                  // Mods cannot promote other Cards Mods.
+                  // ═══════════════════════════════════════════════════════════════════
+
+                  // .g addrpgmod - Add an RPG Moderator (Owner or General Mod only)
+                  if (
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} addrpgmod`,
+                    )
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Only the owner or a General Mod can add RPG moderators. RPG Mods cannot promote other mods.",
+                      });
+                    }
+                    const target =
+                      getMentionOrReply(m) ||
+                      (txt.split(" ")[2]?.includes("@")
+                        ? txt.split(" ")[2]
+                        : null);
+                    if (!target)
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER + "❌ Tag someone to add as an RPG Moderator.",
+                      });
+
+                    await addRpgMod(target);
+                    await sock.sendMessage(chatId, {
+                      text:
+                        BOT_MARKER +
+                        `✅ @${economy.getDisplayName(target)} is now an RPG Moderator.\n\nThey have access to RPG moderation commands only (combat, classes, items, dungeons, abyss, runes, economy).`,
+                      mentions: buildMentions(m, [], target),
+                    });
+                    return;
+                  }
+
+                  // .g delrpgmod - Remove an RPG Moderator
+                  if (
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} delrpgmod`,
+                    )
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Only the owner or a General Mod can remove RPG moderators.",
+                      });
+                    }
+                    const target =
+                      getMentionOrReply(m) ||
+                      (txt.split(" ")[2]?.includes("@")
+                        ? txt.split(" ")[2]
+                        : null);
+                    if (!target)
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Tag someone to remove from RPG Moderators.",
+                      });
+
+                    await delRpgMod(target);
+                    // Also clean cardSystem modJids for full cleanup
+                    try {
+                      const cardSystem = require('./rpg/cardSystem');
+                      const inst = cardSystem.getInst();
+                      if (inst && inst.modJids) {
+                        inst.modJids.delete(target);
+                        if (typeof cardSystem.saveRoles === 'function') await cardSystem.saveRoles();
+                      }
+                    } catch (e) {}
+                    await sock.sendMessage(chatId, {
+                      text:
+                        BOT_MARKER +
+                        `✅ @${economy.getDisplayName(target)} has been removed from RPG Moderators.`,
+                      mentions: buildMentions(m, [], target),
+                    });
+                    return;
+                  }
+
+                  // .g addcardsmod - Add a Cards Moderator
+                  if (
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} addcardsmod`,
+                    )
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Only the owner or a General Mod can add Cards moderators. Cards Mods cannot promote other mods.",
+                      });
+                    }
+                    const target =
+                      getMentionOrReply(m) ||
+                      (txt.split(" ")[2]?.includes("@")
+                        ? txt.split(" ")[2]
+                        : null);
+                    if (!target)
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER + "❌ Tag someone to add as a Cards Moderator.",
+                      });
+
+                    await addCardsMod(target);
+                    // ALSO add to cardSystem's modJids so the two systems
+                    // stay in sync.
+                    try {
+                      const cardSystem = require('./rpg/cardSystem');
+                      const inst = cardSystem.getInst();
+                      if (inst && inst.modJids) {
+                        inst.modJids.add(target);
+                        if (typeof cardSystem.saveRoles === 'function') await cardSystem.saveRoles();
+                      }
+                    } catch (e) {}
+                    await sock.sendMessage(chatId, {
+                      text:
+                        BOT_MARKER +
+                        `✅ @${economy.getDisplayName(target)} is now a Cards Moderator.\n\nThey have access to card-related moderation commands only (spawn, market, deck, eshop, espawn, einfo).`,
+                      mentions: buildMentions(m, [], target),
+                    });
+                    return;
+                  }
+
+                  // .g delcardsmod - Remove a Cards Moderator
+                  if (
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} delcardsmod`,
+                    )
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Only the owner or a General Mod can remove Cards moderators.",
+                      });
+                    }
+                    const target =
+                      getMentionOrReply(m) ||
+                      (txt.split(" ")[2]?.includes("@")
+                        ? txt.split(" ")[2]
+                        : null);
+                    if (!target)
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER + "❌ Tag someone to remove from Cards Moderators.",
+                      });
+
+                    await delCardsMod(target);
+                    // ALSO remove from cardSystem's modJids. Without this,
+                    // the card commands still see them as a card mod
+                    // (inst.modJids.has() check) even after delcardsmod
+                    // removed them from the engine's cardsMods.
+                    try {
+                      const cardSystem = require('./rpg/cardSystem');
+                      const inst = cardSystem.getInst();
+                      if (inst && inst.modJids) {
+                        inst.modJids.delete(target);
+                        if (typeof cardSystem.saveRoles === 'function') await cardSystem.saveRoles();
+                      }
+                    } catch (e) {}
+                    await sock.sendMessage(chatId, {
+                      text:
+                        BOT_MARKER +
+                        `✅ @${economy.getDisplayName(target)} has been removed from Cards Moderators.`,
+                      mentions: buildMentions(m, [], target),
+                    });
+                    return;
+                  }
+
+                  // .j addquizmod @user - promote to QUIZ Moderator (2026-09-27)
+                  // Owner or General Mod only. Quiz Mods can start/manage/configure
+                  // quizzes - nothing else.
+                  if (
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} addquizmod`,
+                    )
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Only the owner or a General Mod can add Quiz moderators.",
+                      });
+                    }
+                    const target =
+                      getMentionOrReply(m) ||
+                      (txt.split(" ")[2]?.includes("@")
+                        ? txt.split(" ")[2]
+                        : null);
+                    if (!target)
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER + "❌ Tag someone to add as a Quiz Moderator.",
+                      });
+
+                    await addQuizMod(target);
+                    await sock.sendMessage(chatId, {
+                      text:
+                        BOT_MARKER +
+                        `✅ @${economy.getDisplayName(target)} is now a Quiz Moderator.\n\nThey can start and manage quizzes (start, go, end, pick, quizmod config) - without unrelated global mod powers.`,
+                      mentions: buildMentions(m, [], target),
+                    });
+                    return;
+                  }
+
+                  // .j delquizmod @user - demote QUIZ Moderator
+                  if (
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} delquizmod`,
+                    )
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Only the owner or a General Mod can remove Quiz moderators.",
+                      });
+                    }
+                    const target =
+                      getMentionOrReply(m) ||
+                      (txt.split(" ")[2]?.includes("@")
+                        ? txt.split(" ")[2]
+                        : null);
+                    if (!target)
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER + "❌ Tag someone to remove from Quiz Moderators.",
+                      });
+
+                    await delQuizMod(target);
+                    await sock.sendMessage(chatId, {
+                      text:
+                        BOT_MARKER +
+                        `✅ @${economy.getDisplayName(target)} has been removed from Quiz Moderators.`,
+                      mentions: buildMentions(m, [], target),
+                    });
+                    return;
+                  }
+
+                  // .g listmods - List all moderators across all 3 categories
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} listmods` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} listmods `)
+                  ) {
+                    // 💡 FIX: collect all mod JIDs so we can @mention them
+                    // (WhatsApp renders @phone as the person's name). Owner
+                    // also sees raw JIDs for debugging.
+                    const allModJids = new Set([
+                      ...globalMods,
+                      ...rpgMods,
+                      ...cardsMods,
+                      ...gameTesters,
+                      ...quizMods,
+                    ]);
+
+                    let listMsg = `🛡️ *MODERATOR ROSTER*\n\n`;
+                    listMsg += `*General Mods* (${globalMods.size}):\n`;
+                    if (globalMods.size === 0) listMsg += `  _none_\n`;
+                    for (const jid of globalMods) {
+                      listMsg += `  • @${economy.getDisplayName(jid)}\n`;
+                    }
+
+                    listMsg += `\n*RPG Mods* (${rpgMods.size}):\n`;
+                    if (rpgMods.size === 0) listMsg += `  _none_\n`;
+                    for (const jid of rpgMods) {
+                      listMsg += `  • @${economy.getDisplayName(jid)}\n`;
+                    }
+
+                    listMsg += `\n*Cards Mods* (${cardsMods.size}):\n`;
+                    if (cardsMods.size === 0) listMsg += `  _none_\n`;
+                    for (const jid of cardsMods) {
+                      listMsg += `  • @${economy.getDisplayName(jid)}\n`;
+                    }
+
+                    listMsg += `\n*Game Testers* (${gameTesters.size}):\n`;
+                    if (gameTesters.size === 0) listMsg += `  _none_\n`;
+                    for (const jid of gameTesters) {
+                      listMsg += `  • @${economy.getDisplayName(jid)}\n`;
+                    }
+
+                    listMsg += `\n*Quiz Mods* (${quizMods.size}):\n`;
+                    if (quizMods.size === 0) listMsg += `  _none_\n`;
+                    for (const jid of quizMods) {
+                      listMsg += `  • @${economy.getDisplayName(jid)}\n`;
+                    }
+
+                    listMsg += `\n_Commands:_ \`${botConfig.getPrefix()} addmod/delmod\` (General), \`${botConfig.getPrefix()} addrpgmod/delrpgmod\` (RPG), \`${botConfig.getPrefix()} addcardsmod/delcardsmod\` (Cards), \`${botConfig.getPrefix()} addquizmod/delquizmod\` (Quiz), \`${botConfig.getPrefix()} addgtester/delgtester\` (Game Testers)\n\n\`${botConfig.getPrefix()} reloadmods\` - refresh mod lists from DB (after external DB changes)\n\`${botConfig.getPrefix()} reloadservers\` - manually reload bot caches + BOTH Go image servers`;
+                    await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + listMsg,
+                      mentions: Array.from(allModJids).filter(j => j && j.includes('@')),
+                    });
+                    return;
+                  }
+
+                  // ════════════════════════════════════════════════════════════════
+                  // 💡 PHASE 7 2026-08-29: Game Tester + tester GC + test mode + bug/issues
+                  // ════════════════════════════════════════════════════════════════
+
+                  // .j addgtester @user - Promote to Game Tester (Owner/GlobalMod/RpgMod)
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} addgtester`)) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner, Global Mod, or RPG Mod can add Game Testers." });
+                    }
+                    const target = getMentionOrReply(m) || (txt.split(" ")[2] && txt.split(" ")[2].includes("@") ? txt.split(" ")[2] : null);
+                    if (!target) return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Tag someone to add as a Game Tester." });
+                    await addGameTester(target);
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `✅ @${economy.getDisplayName(target)} is now a *Game Tester*.\n\nThey have limited RPG access for testing. They can use the RPG in tester GCs and submit bug reports via \`${botConfig.getPrefix()} bug <text>\`.`,
+                      mentions: buildMentions(m, [], target)
+                    });
+                  }
+
+                  // .j delgtester @user - Demote Game Tester
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} delgtester`)) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner, Global Mod, or RPG Mod can remove Game Testers." });
+                    }
+                    const target = getMentionOrReply(m) || (txt.split(" ")[2] && txt.split(" ")[2].includes("@") ? txt.split(" ")[2] : null);
+                    if (!target) return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Tag someone to remove from Game Testers." });
+                    await delGameTester(target);
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `✅ @${economy.getDisplayName(target)} has been removed from Game Testers.`,
+                      mentions: buildMentions(m, [], target)
+                    });
+                  }
+
+                  // .j listtesters - List current Game Testers
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} listtesters`)) {
+                    const testerArr = Array.from(gameTesters);
+                    if (testerArr.length === 0) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "🎮 *No Game Testers appointed.*\n\nUse `" + botConfig.getPrefix() + " addgtester @user` to add one (Owner/GlobalMod/RpgMod only)." });
+                    }
+                    let msg = `🎮 *GAME TESTERS* (${testerArr.length})\n\n`;
+                    for (let i = 0; i < testerArr.length; i++) {
+                      msg += `${i + 1}. @${economy.getDisplayName(testerArr[i])}\n`;
+                    }
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + msg, mentions: testerArr });
+                  }
+
+                  // .j testmode on|off|status - Toggle RPG test mode
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} testmode`)) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner, Global Mod, or RPG Mod can toggle test mode." });
+                    }
+                    const _tmParts = txt.split(/\s+/);
+                    const sub = _tmParts[2] && _tmParts[2].toLowerCase();
+                    if (sub === 'on') {
+                      await testerSystem.setTestMode(true);
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "🚧 *RPG TEST MODE ACTIVATED*\n\nAll regular players will now see a maintenance card when trying to use RPG commands. Game Testers, RPG Mods, and Global Mods bypass the lock. Tester GCs also bypass." });
+                    }
+                    if (sub === 'off') {
+                      await testerSystem.setTestMode(false);
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "✅ *RPG TEST MODE DEACTIVATED*\n\nRegular players can use RPG commands normally again." });
+                    }
+                    const on = await testerSystem.getTestMode();
+                    const gcs = await testerSystem.loadTesterGcs();
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `📊 *RPG TEST MODE STATUS*\n\nState: ${on ? '🚧 ON (maintenance lock active)' : '✅ OFF (regular play)'}\nGame Testers: ${gameTesters.size}\nTester GCs: ${gcs.length}\n\nUse \`${botConfig.getPrefix()} testmode on|off\` to toggle.`
+                    });
+                  }
+
+                  // .j testgc add|remove|list [@gid] - Manage tester GC list
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} testgc`)) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner, Global Mod, or RPG Mod can manage tester GCs." });
+                    }
+                    const partsArr = txt.split(/\s+/);
+                    const sub = partsArr[2] && partsArr[2].toLowerCase();
+                    if (sub === 'add') {
+                      const target = getMentionOrReply(m) || (partsArr[2] && partsArr[2].includes("@") ? partsArr[2] : null) || chatId;
+                      if (!target || !target.endsWith('@g.us')) {
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Tag a group chat (or run this command inside the tester GC) to add it." });
+                      }
+                      await testerSystem.addTesterGc(target);
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Added GC to tester list: ${target}\n\nAll players in this GC will bypass the RPG maintenance lock.` });
+                    }
+                    if (sub === 'remove') {
+                      const target = getMentionOrReply(m) || (partsArr[2] && partsArr[2].includes("@") ? partsArr[2] : null) || chatId;
+                      if (!target || !target.endsWith('@g.us')) {
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Tag a group chat to remove." });
+                      }
+                      await testerSystem.removeTesterGc(target);
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Removed GC from tester list: ${target}` });
+                    }
+                    // list / default
+                    const gcs = await testerSystem.loadTesterGcs();
+                    if (gcs.length === 0) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "📋 *No tester GCs registered.*\n\nUse `" + botConfig.getPrefix() + " testgc add` (inside the GC) to add one." });
+                    }
+                    // PHASE 7 FIX 2026-08-29: resolve tester GC names
+                    let msg = `📋 *TESTER GCs* (${gcs.length})\n\n`;
+                    for (let i = 0; i < gcs.length; i++) {
+                      let gName = gcs[i];
+                      try {
+                        const meta = await getGroupMetadata(gcs[i]);
+                        if (meta && meta.subject) gName = meta.subject;
+                      } catch (e) { /* fall back to JID */ }
+                      msg += `${i + 1}. ${gName}\n   _${gcs[i]}_\n`;
+                    }
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                  }
+
+                  // .j bug <text> - Submit a tester issue
+                  // Handle .j bug with no args - show usage instead of "Unknown command"
+                  if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} bug` || lowerTxt === `${botConfig.getPrefix().toLowerCase()} bug `) {
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `📝 *BUG REPORT*\n\nUsage: \`${botConfig.getPrefix()} bug <description>\`\n\nOptional [category:severity] prefix:\n  \`${botConfig.getPrefix()} bug [bug:high] PvP initiative is wrong\`\n  \`${botConfig.getPrefix()} bug [balance:normal] SLOW doesn't affect turn order\`\n\nCategories: bug, balance, missing-feature, feedback, general\nSeverities: low, normal, high, critical`
+                    });
+                  }
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} bug `)) {
+                    const body = txt.slice((botConfig.getPrefix() + ' bug ').length).trim();
+                    if (!body || body.length < 5) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Bug report body is empty. Usage: `" + botConfig.getPrefix() + " bug <description of the issue>`" });
+                    }
+                    const isTester = isGameTester(senderJid) || isOwner || isGlobalMod(senderJid) || isRpgMod(senderJid);
+                    const inTesterGc = await testerSystem.isTesterGc(chatId);
+                    if (!isTester && !inTesterGc) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Game Testers and Mods can submit bug reports, or run this command inside a registered tester GC." });
+                    }
+                    // PHASE 7 FIX 2026-08-29: bug regex allows hyphens + validation
+                    let category = 'general';
+                    let severity = 'normal';
+                    let actualBody = body;
+                    const VALID_CATEGORIES = ['bug', 'balance', 'missing-feature', 'feedback', 'general'];
+                    const VALID_SEVERITIES = ['low', 'normal', 'high', 'critical'];
+                    const tagMatch = body.match(/^\[([\w-]+):(\w+)\]\s*(.+)$/);
+                    if (tagMatch) {
+                      const parsedCat = tagMatch[1].toLowerCase();
+                      const parsedSev = tagMatch[2].toLowerCase();
+                      // Validate - only accept known values, fall back to defaults otherwise
+                      if (VALID_CATEGORIES.includes(parsedCat)) category = parsedCat;
+                      if (VALID_SEVERITIES.includes(parsedSev)) severity = parsedSev;
+                      actualBody = tagMatch[3];
+                    }
+                    try {
+                      const issue = await testerSystem.submitIssue({
+                        reporterId: senderJid,
+                        reporterName: economy.getDisplayName(senderJid),
+                        chatId,
+                        chatName: chatId,
+                        body: actualBody,
+                        category, severity, attachments: []
+                      });
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `✅ *BUG REPORTED*\n\n🆔 \`${issue._id.toString().slice(-6)}\`\n🏷️ Category: ${category}\n⚠️ Severity: ${severity}\n📝 ${actualBody.slice(0, 200)}${actualBody.length > 200 ? '...' : ''}\n\nReported by @${economy.getDisplayName(senderJid)}. Use \`${botConfig.getPrefix()} issues\` to view collected reports.`,
+                        mentions: [senderJid]
+                      });
+                    } catch (e) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Failed to submit bug: " + e.message });
+                    }
+                  }
+
+                  // .j issues [n] [status] - View collected tester issues
+                  // ".j issue" accepted as alias (2026-09-19).
+                  if (
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} issues`) ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} issue` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} issue `)
+                  ) {
+                    const isTester = isGameTester(senderJid) || isOwner || isGlobalMod(senderJid) || isRpgMod(senderJid);
+                    const inTesterGc = await testerSystem.isTesterGc(chatId);
+                    if (!isTester && !inTesterGc) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Game Testers and Mods can view bug reports." });
+                    }
+                    // 💡 FIX 2026-08-31: partsArr = [prefix, 'issues', count?, status?] -
+                    // limit was parsed from the literal word "issues" (always
+                    // NaN→10) and statusFilter read the user's COUNT (".j
+                    // issues 5" filtered by status "5" → always empty).
+                    // Correct indices: count = partsArr[2], status = partsArr[3].
+                    const partsArr = txt.split(/\s+/);
+                    const limit = Math.min(parseInt(partsArr[2]) || 10, 30);
+                    const statusFilter = partsArr[3] || 'open';
+                    const issues = await testerSystem.listIssues(limit, statusFilter);
+                    const openCount = await testerSystem.countOpenIssues();
+                    if (issues.length === 0) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + `📭 No issues found (filter: ${statusFilter}). ${openCount} open issues total.` });
+                    }
+                    let msg = `📋 *TESTER ISSUES* (${issues.length} of ${openCount} open)\n\n`;
+                    issues.forEach((iss, i) => {
+                      msg += `*${i + 1}.* 🆔 \`${iss._id.toString().slice(-6)}\` [${iss.category}/${iss.severity}]\n`;
+                      msg += `   👤 @${iss.reporterName} · 📅 ${new Date(iss.submittedAt).toLocaleDateString()}\n`;
+                      msg += `   📝 ${iss.body.slice(0, 120)}${iss.body.length > 120 ? '...' : ''}\n`;
+                      if (iss.status !== 'open') msg += `   📌 Status: ${iss.status}\n`;
+                      msg += '\n';
+                    });
+                    msg += `💡 Use \`${botConfig.getPrefix()} organizeissues\` to send all open issues to Groq for cleanup.`;
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + msg, mentions: issues.map(i => i.reporterId) });
+                  }
+
+                  // .j organizeissues - Send all open issues to Groq for organization
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} organizeissues`)) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner, Global Mod, or RPG Mod can organize issues." });
+                    }
+                    const openCount = await testerSystem.countOpenIssues();
+                    if (openCount === 0) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "📭 No open issues to organize." });
+                    }
+                    await sock.sendMessage(chatId, { text: BOT_MARKER + `🔄 Organizing ${openCount} open issues with Groq... (this may take 30-60s)` });
+                    try {
+                      const result = await testerSystem.organizeIssuesWithGroq(senderJid);
+                      if (!result.success) {
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ " + result.message });
+                      }
+                      const organized = result.organized;
+                      if (organized.length <= 4000) {
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ *ORGANIZED ISSUES* (${result.issuesProcessed} processed)\n\n` + organized });
+                      }
+                      const chunks = organized.match(/[\s\S]{1,3800}/g) || [];
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ *ORGANIZED ISSUES* (${result.issuesProcessed} processed, ${chunks.length} parts)\n\n*PART 1:*\n\n` + chunks[0] });
+                      for (let i = 1; i < chunks.length; i++) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + `*PART ${i + 1}:*\n\n` + chunks[i] });
+                      }
+                      return;
+                    } catch (e) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Organize failed: " + e.message });
+                    }
+                  }
+
+
+                  // .g reloadmods - reload ALL mod lists from DB (owner/mod only)
+                  // 💡 Used when an external script (like clear_all_mods.js)
+                  // modifies the DB directly and the in-memory Sets are stale.
+                  // Without this, the bot must be restarted to pick up DB changes.
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} reloadmods` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} reloadmods `)
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only moderators can reload mod lists.",
+                      });
+                    }
+                    try {
+                      // 💡 FIX 2026-09-11: was clear() + loaders - but the loaders
+                      // read system.js's BOOT-TIME cache, so this never picked up
+                      // mods added after this instance booted (the very bug it was
+                      // meant to fix). refreshSharedModSets() hits MongoDB directly
+                      // and atomically swaps the Sets.
+                      await refreshSharedModSets();
+
+                      // Also reload card system roles
+                      let cardModCount = 0;
+                      try {
+                        const cardSystem = require('./rpg/cardSystem');
+                        const inst = cardSystem.getInst();
+                        if (inst && inst.modJids) {
+                          inst.modJids.clear();
+                          if (typeof cardSystem.loadRoles === 'function') {
+                            await cardSystem.loadRoles();
+                          }
+                          cardModCount = inst.modJids.size;
+                        }
+                      } catch (e) {}
+
+                      let msg = `🔄 *MOD LISTS RELOADED FROM DB*\n\n`;
+                      msg += `🛡️ General Mods: ${globalMods.size}\n`;
+                      msg += `⚔️ RPG Mods: ${rpgMods.size}\n`;
+                      msg += `🃏 Cards Mods: ${cardsMods.size}\n`;
+                      msg += `🃏 Card System Mods: ${cardModCount}\n\n`;
+                      msg += `_In-memory mod Sets are now synced with the database._`;
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                    } catch (e) {
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Reload failed: ${e.message}` });
+                    }
+                    return;
+                  }
+                  // <prefix> reloadservers - manually reload BOTH servers (owner/mod only):
+                  //   1) this bot instance: shared mod Sets re-synced from DB +
+                  //      profile-card asset caches dropped (layouts/bg re-read from disk)
+                  //   2) BOTH Go image services: POST /admin/reload → each one self-execs
+                  //      a fresh process (same PID, pm2 keeps tracking; assets re-read).
+                  //      Targets = GO_IMAGE_SERVICE_URL (the remote instance the bot renders
+                  //      with) + the co-located 127.0.0.1:7860 instance - deduped when equal.
+                  // Added 2026-09-12: manual counterpart to the 45s mod auto-refresh, and
+                  // the way to push new card assets live without a full bot restart.
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} reloadservers` ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} reload servers` ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} reload`
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only moderators can reload the servers.",
+                      });
+                    }
+                    try {
+                      // 1) bot-side: shared mod Sets, fresh from MongoDB
+                      await refreshSharedModSets();
+                      let cardModCount = 0;
+                      try {
+                        const cardSystem = require('./rpg/cardSystem');
+                        const inst = cardSystem.getInst();
+                        if (inst && inst.modJids) {
+                          inst.modJids.clear();
+                          if (typeof cardSystem.loadRoles === 'function') {
+                            await cardSystem.loadRoles();
+                          }
+                          cardModCount = inst.modJids.size;
+                        }
+                      } catch (e) {}
+                      // 2) bot-side: drop profile-card asset + health caches
+                      let assetCacheCleared = false;
+                      try {
+                        const pcr = require('./rpg/profileCardRenderer');
+                        if (typeof pcr.clearCaches === 'function') { pcr.clearCaches(); assetCacheCleared = true; }
+                      } catch (e) {}
+                      try { require('./utils/goImageService').resetHealthCache?.(); } catch (e) {}
+
+                      // 3) Go image services (both instances)
+                      const goUrls = [];
+                      const pushUrl = (u) => { if (u && !goUrls.includes(String(u).replace(/\/+$/, ''))) goUrls.push(String(u).replace(/\/+$/, '')); };
+                      pushUrl(process.env.GO_IMAGE_SERVICE_URL || 'http://127.0.0.1:7860');
+                      pushUrl('http://127.0.0.1:7860');
+                      const goLines = [];
+                      for (const u of goUrls) {
+                        try {
+                          const resp = await axios.post(`${u}/admin/reload`, {}, { timeout: 8000 });
+                          goLines.push(`✅ ${u} → reloading (fresh process, assets re-read)`);
+                        } catch (e) {
+                          goLines.push(`❌ ${u} → ${e.message}`);
+                        }
+                      }
+
+                      let msg = `🔄 *MANUAL SERVER RELOAD*\n\n`;
+                      msg += `🤖 *Bot instance:*\n`;
+                      msg += `• Mod lists re-synced from DB - General: ${globalMods.size} | RPG: ${rpgMods.size} | Cards: ${cardsMods.size} | CardSys: ${cardModCount}\n`;
+                      msg += `• Profile-card asset cache: ${assetCacheCleared ? 'cleared (layouts/bg re-read on next render)' : 'clear unavailable'}\n\n`;
+                      msg += `🖼️ *Go image services:*\n`;
+                      msg += goLines.join('\n') + `\n\n`;
+                      msg += `_Both image servers are re-exec'ing fresh processes - new sprites/cards are picked up without a full restart._`;
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                    } catch (e) {
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Server reload failed: ${e.message}` });
+                    }
+                    return;
+                  }
+                  // .j editissue <id> [cat:sev] - Edit an existing issue's category/severity
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} editissue`)) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid) && !isGameTester(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner, Global Mod, RPG Mod, or Game Tester can edit issues." });
+                    }
+                    const partsArr = txt.split(/\s+/);
+                    const issueIdShort = partsArr[2];
+                    // 💡 PHASE 7 FIX 2026-08-29: editissue ID is at partsArr[2], tag at partsArr[3]
+                    if (!issueIdShort || issueIdShort.length < 6) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Usage: `" + botConfig.getPrefix() + " editissue <issueId> [category:severity]`\\nExample: `" + botConfig.getPrefix() + " editissue 922135 bug:high`" });
+                    }
+                    const tag = partsArr[3] || '';
+                    let newCat = null, newSev = null;
+                    const tagMatch = tag.match(/^([\w-]+):(\w+)$/);
+                    if (tagMatch) {
+                      newCat = tagMatch[1].toLowerCase();
+                      newSev = tagMatch[2].toLowerCase();
+                    }
+                    try {
+                      const Issue = require('./models/Issue');
+                      // Find by short ID (last 6 chars of _id)
+                      const all = await Issue.find({}).lean();
+                      const target = all.find(i => i._id.toString().slice(-6) === issueIdShort);
+                      if (!target) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Issue with ID \`${issueIdShort}\` not found.` });
+                      const update = {};
+                      if (newCat) update.category = newCat;
+                      if (newSev) update.severity = newSev;
+                      if (Object.keys(update).length === 0) {
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ No category:severity specified. Usage: `" + botConfig.getPrefix() + " editissue <id> [cat:sev]`" });
+                      }
+                      await Issue.findByIdAndUpdate(target._id, { $set: update });
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Issue \`${issueIdShort}\` updated.\\nCategory: ${newCat || target.category}\\nSeverity: ${newSev || target.severity}` });
+                    } catch (e) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Edit failed: " + e.message });
+                    }
+                  }
+
+                  // .j deleteissue <id> - Permanently delete a single issue
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} deleteissue`)) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner, Global Mod, or RPG Mod can delete issues." });
+                    }
+                    const partsArr = txt.split(/\s+/);
+                    // 💡 PHASE 7 FIX 2026-08-29: ID is at partsArr[2], not partsArr[1]
+                    // (partsArr[0]=prefix, partsArr[1]=deleteissue, partsArr[2]=issueId)
+                    const issueIdShort = partsArr[2];
+                    if (!issueIdShort) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Usage: `" + botConfig.getPrefix() + " deleteissue <issueId>`" });
+                    }
+                    try {
+                      const Issue = require('./models/Issue');
+                      const all = await Issue.find({}).lean();
+                      const target = all.find(i => i._id.toString().slice(-6) === issueIdShort);
+                      if (!target) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Issue \`${issueIdShort}\` not found.` });
+                      await Issue.findByIdAndDelete(target._id);
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Issue \`${issueIdShort}\` deleted.\\nOriginal body: ${target.body.slice(0, 120)}` });
+                    } catch (e) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Delete failed: " + e.message });
+                    }
+                  }
+
+                  // .j clearissues - Delete ALL collected issues (Owner/RpgMod only)
+                  if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} clearissues`) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner, Global Mod, or RPG Mod can clear all issues." });
+                    }
+                    try {
+                      const Issue = require('./models/Issue');
+                      const r = await Issue.deleteMany({});
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Cleared all tester issues. ${r.deletedCount} documents deleted.` });
+                    } catch (e) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Clear failed: " + e.message });
+                    }
+                  }
+
+                  // .j lookupban @user - Diagnostic: which ban/block list is the user on?
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} lookupban`)) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner, Global Mod, or RPG Mod can look up bans." });
+                    }
+                    const target = getMentionOrReply(m) || (txt.split(" ")[2] && txt.split(" ")[2].includes("@") ? txt.split(" ")[2] : null);
+                    if (!target) return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Tag someone to look up." });
+                    const system = require('./utils/system');
+                    const lists = ['_shared_banned_users', '_shared_hard_banned_users', '_shared_blocked_users'];
+                    let msg = `🔍 *BAN LOOKUP for @${economy.getDisplayName(target)}*\\n\\nJID: ${target}\\n\\n`;
+                    for (const listKey of lists) {
+                      const arr = system.get(listKey, []);
+                      const onList = arr.some(j => j === target || jidNormalizedUser(j) === jidNormalizedUser(target));
+                      msg += `${listKey}: ${onList ? '⚠️ ON LIST' : '✅ not on list'}\\n`;
+                    }
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + msg, mentions: [target] });
+                  }
+
+                  // .j pardon @user - Unified unblock+unban+unhardban (Owner/GlobalMod only)
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} pardon`)) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner or Global Mod can pardon users." });
+                    }
+                    const target = getMentionOrReply(m) || (txt.split(" ")[2] && txt.split(" ")[2].includes("@") ? txt.split(" ")[2] : null);
+                    if (!target) return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Tag someone to pardon." });
+                    const system = require('./utils/system');
+                    let cleared = [];
+                    // Clear from banned list
+                    const bans = system.get('_shared_banned_users', []);
+                    if (bans.includes(target) || bans.some(j => jidNormalizedUser(j) === jidNormalizedUser(target))) {
+                      const filtered = bans.filter(j => j !== target && jidNormalizedUser(j) !== jidNormalizedUser(target));
+                      await system.set('_shared_banned_users', filtered);
+                      cleared.push('banned');
+                    }
+                    // Clear from hard-banned list
+                    const hardBans = system.get('_shared_hard_banned_users', []);
+                    if (hardBans.includes(target) || hardBans.some(j => jidNormalizedUser(j) === jidNormalizedUser(target))) {
+                      const filtered = hardBans.filter(j => j !== target && jidNormalizedUser(j) !== jidNormalizedUser(target));
+                      await system.set('_shared_hard_banned_users', filtered);
+                      cleared.push('hard-banned');
+                    }
+                    // Clear from blocked list
+                    const blocks = system.get('_shared_blocked_users', []);
+                    if (blocks.includes(target) || blocks.some(j => jidNormalizedUser(j) === jidNormalizedUser(target))) {
+                      const filtered = blocks.filter(j => j !== target && jidNormalizedUser(j) !== jidNormalizedUser(target));
+                      await system.set('_shared_blocked_users', filtered);
+                      cleared.push('blocked');
+                    }
+                    // Also clear in-memory Sets
+                    try { bannedUsers.delete(target); bannedUsers.delete(jidNormalizedUser(target)); } catch (e) {}
+                    try { hardBannedUsers.delete(target); hardBannedUsers.delete(jidNormalizedUser(target)); } catch (e) {}
+                    try { blockedUsers.delete(target); blockedUsers.delete(jidNormalizedUser(target)); } catch (e) {}
+                    if (cleared.length === 0) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + `ℹ️ @${economy.getDisplayName(target)} is not on any ban/block list.`, mentions: [target] });
+                    }
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ *PARDONED* @${economy.getDisplayName(target)}\\n\\nCleared from: ${cleared.join(', ')}\\n\\nThe user can now use the bot again.`, mentions: [target] });
+                  }
+
+
+                  // .g reloaduser @user - force-reload user from DB (mod+ only)
+                  // 💡 Used when an external script modifies the DB directly
+                  // (stat point grants, enhancement recovery) and the bot's
+                  // in-memory cache is stale.
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} reloaduser` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} reloaduser `)
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only moderators can reload users.",
+                      });
+                    }
+                    const targetUser = getMentionOrReply(m);
+                    if (!targetUser) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} reloaduser @user\``,
+                      });
+                    }
+                    try {
+                      const result = await economy.reloadUserFromDB(targetUser);
+                      if (result) {
+                        const user = economy.getUser(targetUser);
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `✅ Reloaded @${economy.getDisplayName(targetUser)} from DB.\nStat points: ${user?.progression?.statPoints ?? 'unknown'}\nWallet: ${(user?.wallet || 0).toLocaleString()}`,
+                          mentions: buildMentions(m, [], targetUser),
+                        });
+                      } else {
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `❌ User not found in DB.`,
+                        });
+                      }
+                    } catch (e) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + '❌ Reload failed: ' + e.message,
+                      });
+                    }
+                  }
+
+                  // ═══════════════════════════════════════════════════════════
+                  // 💡 GM ADMIN CONSOLE - .g admin <subcommand> + .g modclass
+                  // ═══════════════════════════════════════════════════════════
+                  const adminConsole = require('./commands/adminConsole');
+
+                  // .g modclass <name> - main-account class switch (mod+ only)
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} modclass` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} modclass `)
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Only RPG Mods, Global Mods, or the owner can use this command."
+                      });
+                    }
+                    const modArgs = txt.trim().split(/\s+/).slice(2);
+                    await adminConsole.handleModClass(sock, chatId, senderJid, modArgs, BOT_MARKER, botConfig.getPrefix());
+                    return;
+                  }
+
+                  // 💡 .g admin subcommands now handled by unified .g mod block above.
+                  // .g modclass is still separate (it's a standalone command, not part of the console).
+                  // .g admin / .g modcom are aliases that route to .g mod.
 
                   // .j category enable/disable/list & .j rank on/off commands
                   if (
@@ -9244,7 +15118,7 @@ Usage: ${newUsage}/5${warningText}`;
                       await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          `@${messageAuthor.split("@")[0]} Don't say that shi again dude`,
+                          `@${economy.getDisplayName(messageAuthor)} Don't say that shi again dude`,
                         mentions: [messageAuthor],
                       });
                     } catch (err) {
@@ -9254,7 +15128,7 @@ Usage: ${newUsage}/5${warningText}`;
                       await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          `couldn't delete @${messageAuthor.split("@")[0]}'s message. might need different permissions.`,
+                          `couldn't delete @${economy.getDisplayName(messageAuthor)}'s message. might need different permissions.`,
                         mentions: [messageAuthor],
                       });
                     }
@@ -9264,7 +15138,7 @@ Usage: ${newUsage}/5${warningText}`;
 
                   // `.g glock` (with rank and open modes)
                   // ⚠️ FIX (audit Task ID 5 BUG C): also accept `.g glock <N>`
-                  // shorthand (e.g. `.j glock 2`) — previously only `.g glock rank <N>`
+                  // shorthand (e.g. `.j glock 2`) - previously only `.g glock rank <N>`
                   // was accepted, so users typing `.j glock 2` silently got nothing.
                   if (
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} glock` ||
@@ -9299,7 +15173,7 @@ Usage: ${newUsage}/5${warningText}`;
                         });
                       } catch (err) {
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to lock group: " + err.message,
+                          text: BOT_MARKER + "❌ Failed to lock group: " + err.message,
                         });
                       }
                       return;
@@ -9315,7 +15189,7 @@ Usage: ${newUsage}/5${warningText}`;
                       settings.lockMode = 'open';
                       saveGroupSettings();
                       await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + "🔓 *GROUP OPEN* — All members can send messages.",
+                        text: BOT_MARKER + "🔓 *GROUP OPEN* - All members can send messages.",
                       });
                       return;
                     }
@@ -9339,7 +15213,7 @@ Usage: ${newUsage}/5${warningText}`;
                       if (!rankObj) {
                         return reply(`❌ Rank ${minLevel} doesn't exist. Use \`${P} ranks\` to see valid levels.`);
                       }
-                      // Keep WA open so everyone CAN send — bot will delete non-qualifying messages
+                      // Keep WA open so everyone CAN send - bot will delete non-qualifying messages
                       if (botIsAdmin) {
                         try {
                           await sock.groupSettingUpdate(chatId, 'not_announcement');
@@ -9354,7 +15228,7 @@ Usage: ${newUsage}/5${warningText}`;
                         `_Lift with: \`${P} glock open\` or \`${P} gunlock\`_`
                       );
                     }
-                    // .g glock rank (no number) — give usage hint instead of silently doing nothing
+                    // .g glock rank (no number) - give usage hint instead of silently doing nothing
                     if (lowerTxt.startsWith(`${P} glock rank`)) {
                       return reply(`❌ Usage: \`${P} glock rank <level>\`\nExample: \`${P} glock rank 3\`\n\nUse \`${P} ranks\` to see valid levels.`);
                     }
@@ -9594,7 +15468,7 @@ Usage: ${newUsage}/5${warningText}`;
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            "❌❌ Failed to pin message. Make sure I have admin permissions and the message exists.",
+                            "❌ Failed to pin message. Make sure I have admin permissions and the message exists.",
                         });
                       }
                     }
@@ -9846,6 +15720,262 @@ Usage: ${newUsage}/5${warningText}`;
                     });
                   }
 
+                  // 💡 ANTINUDE (2026-09-27) - NSFW image/sticker moderation
+                  // .s antinude [on|off|status|action <delete|warn|kick>|threshold <0.5-0.95>]
+                  if (
+                    lowerTxt ===
+                      `${botConfig.getPrefix().toLowerCase()} antinude` ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} antinude `,
+                    )
+                  ) {
+                    if (!canUseAdminCommands) {
+                      await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          `you need to be an admin to use this command.`,
+                      });
+                      return;
+                    }
+
+                    const args = lowerTxt.split(" ");
+                    const settings = getGroupSettings(chatId);
+
+                    if (args[2] === "on") {
+                      settings.antinude = true;
+                      saveGroupSettings();
+                      await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          `🔞 *Antinude Protection Enabled*
+
+Scans every image, sticker (incl. animated) and video posted in this group for NSFW / sexual content.
+Videos and animated stickers are checked on 5 frames sampled from start to finish.
+Prohibited media is removed automatically.
+
+Current action: *${settings.antinudeAction || "delete"}*
+Current threshold: *${Math.round((settings.antinudeThreshold || 0.45) * 100)}%*
+Warn limit: *${settings.antinudeWarnLimit || 10}* nude warnings before removal
+
+Tune it:
+• \`${botConfig.getPrefix()} antinude action <delete/warn/kick>\`
+• \`${botConfig.getPrefix()} antinude threshold <30-95>\` (or 0.30-0.95) - lower = catches more
+• \`${botConfig.getPrefix()} antinude limit <1-50>\` - warnings before removal (default 10)
+• \`${botConfig.getPrefix()} antinude reset @user\` - clear someone's nude warnings
+• \`${botConfig.getPrefix()} antinude ok\` (reply to media) - mark an image as NOT nude (false-positive fix)
+• \`${botConfig.getPrefix()} nsfwcheck\` (reply to media) - see exactly what it scores
+\`${botConfig.getPrefix()} antinude off\` to disable.
+
+⚡ General Mods, the GC owner and the bot owner are exempt - group admins are NOT. Analysis runs on a separate worker - it never slows the bot.`,
+                      });
+                    } else if (args[2] === "off") {
+                      settings.antinude = false;
+                      saveGroupSettings();
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `🔞 Antinude protection disabled.`,
+                      });
+                    } else if (args[2] === "action" && args[3]) {
+                      if (["delete", "warn", "kick"].includes(args[3])) {
+                        settings.antinudeAction = args[3];
+                        saveGroupSettings();
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `✅ Antinude action set to *${args[3]}*.`,
+                        });
+                      } else {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `❌ Unknown action. Use: delete / warn / kick`,
+                        });
+                      }
+                    } else if (args[2] === "reset") {
+                      // 💡 OWNER REQUEST (2026-09-28): reset NUDE warnings only.
+                      // The warning pool is shared (manual warns, antilink,
+                      // antinude all write userWarnings) - this wipes ONLY the
+                      // "Antinude violation" entries so unrelated strikes and
+                      // the manual-warn 5-strike counter stay untouched.
+                      const targetUser = getMentionOrReply(m);
+                      if (!targetUser) {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `Usage: \`${botConfig.getPrefix()} antinude reset @user\` (or reply to one of their messages).`,
+                        }, { quoted: m });
+                      } else {
+                        const key = `${targetUser}@${chatId}`;
+                        const { kept, removed } = require('./utils/antinude').filterAntinudeWarnings(userWarnings.get(key) || []);
+                        if (removed > 0) {
+                          if (kept.length) userWarnings.set(key, kept);
+                          else userWarnings.delete(key);
+                          saveUserWarnings();
+                        }
+                        const tName = targetUser.split("@")[0];
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `🧼 Nude warnings cleared for @${tName}: *${removed} removed*, ${kept.length} other warning(s) untouched.\n_Nude-warning count is now 0/${settings.antinudeWarnLimit || 10}._`,
+                          contextInfo: { mentionedJid: [targetUser] },
+                        }, { quoted: m });
+                      }
+                    } else if (args[2] === "limit" && args[3]) {
+                      // 💡 OWNER DIRECTIVE (2026-09-28): removal limit default 10.
+                      const n = parseInt(args[3], 10);
+                      if (!Number.isFinite(n) || n < 1 || n > 50) {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `❌ Limit must be a number 1-50. Example: \`${botConfig.getPrefix()} antinude limit 10\``,
+                        }, { quoted: m });
+                      } else {
+                        settings.antinudeWarnLimit = n;
+                        saveGroupSettings();
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `✅ Nude-removal limit set to *${n}*.\n_A user reaching ${n} antinude warnings in this group is removed automatically (action = warn)._`,
+                        }, { quoted: m });
+                      }
+                    } else if (args[2] === "ok") {
+                      // 💡 OWNER REQUEST (2026-09-28): manually mark an image as
+                      // NOT nude. Marks by sha256 of the media bytes -> future
+                      // re-uploads of the same image are never flagged. Sources,
+                      // in order: explicit hash arg (from the violation notice),
+                      // replied-to media, else the last flagged image in this
+                      // chat (original is usually already deleted).
+                      const _anOk = require('./utils/antinude');
+                      const sub = (args[3] || "").toLowerCase();
+                      if (sub === "list") {
+                        const info = _anOk.safelistInfo();
+                        const lines = info.recent.map((r) => `• ${r.hash}… by ${String(r.by || "?").split("@")[0]}${r.at ? ` (${new Date(r.at).toLocaleDateString()})` : ""}`).join("\n") || "• (none yet)";
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `🖼 *Not-nude safelist* - ${info.size} image(s)\n${lines}`, 
+                        }, { quoted: m });
+                      } else if (sub === "clear") {
+                        const before = _anOk.safelistInfo().size;
+                        _anOk.safelistClear();
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `🧹 Not-nude safelist cleared (${before} entr${before === 1 ? "y" : "ies"} removed).`,
+                        }, { quoted: m });
+                      } else {
+                        let resolved = sub ? _anOk.resolveFlaggedHash(chatId, sub) : null;
+                        if (!resolved) {
+                          const qInfoOk = Object.values(m.message || {}).find(
+                            (v) => v && typeof v === "object" && v.contextInfo
+                          )?.contextInfo;
+                          const quotedMsgOk = qInfoOk?.quotedMessage;
+                          const qMediaOk = quotedMsgOk ? _anOk.extractImageMedia({ message: quotedMsgOk }) : null;
+                          if (qMediaOk) {
+                            try {
+                              const bufOk = await _anOk.downloadMedia(qMediaOk.node, qMediaOk.type, qMediaOk.dlType);
+                              if (bufOk && bufOk.length >= 800) {
+                                resolved = { hash: _anOk.mediaHash(bufOk), source: "replied media" };
+                              }
+                            } catch { /* fall through to flag ring */ }
+                          }
+                        }
+                        if (!resolved) resolved = _anOk.resolveFlaggedHash(chatId, "");
+                        if (!resolved) {
+                          await sock.sendMessage(chatId, {
+                            text: BOT_MARKER + `❌ Nothing to mark. Reply to an image/sticker/video with \`${botConfig.getPrefix()} antinude ok\`, pass the hash from the violation notice (\`${botConfig.getPrefix()} antinude ok <hash>\`), or use it right after a flag to mark the last flagged image.`,
+                          }, { quoted: m });
+                        } else {
+                          _anOk.safelistAdd(resolved.hash, { by: senderJid, chat: chatId, kind: "manual" });
+                          const infoOk = _anOk.safelistInfo();
+                          await sock.sendMessage(chatId, {
+                            text: BOT_MARKER + `✅ Marked as *NOT nude* (${resolved.hash.slice(0, 12)}…, via ${resolved.source}).\n_This exact image will never be flagged or deleted again - globally (${infoOk.size} safelisted)._`,
+                          }, { quoted: m });
+                        }
+                      }
+                    } else if (args[2] === "threshold" && args[3]) {
+                      // v2 FIX: the old parser used parseInt and rejected its own
+                      // documented "0.5-0.95" format (parseInt("0.5") === 0 → error).
+                      // Now accepts BOTH "0.6" and "60" forms.
+                      const rawT = parseFloat(args[3]);
+                      const tFrac = Number.isFinite(rawT) && rawT > 0 && rawT <= 1 ? rawT : rawT / 100;
+                      if (!Number.isFinite(tFrac) || tFrac < 0.3 || tFrac > 0.95) {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `❌ Threshold must be 30-95 (percent) or 0.30-0.95.`,
+                        });
+                      } else {
+                        settings.antinudeThreshold = Math.round(tFrac * 100) / 100;
+                        saveGroupSettings();
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `✅ Antinude threshold set to *${Math.round(settings.antinudeThreshold * 100)}%*. Lower = catches more (more false positives).`,
+                        });
+                      }
+                    } else {
+                      // status (also the no-arg default)
+                      const st = require('./utils/antinude').stats();
+                      const slInfo = require('./utils/antinude').safelistInfo();
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `🔞 *ANTINUDE STATUS*
+
+Protection: *${settings.antinude ? "ENABLED" : "disabled"}*
+Action: *${settings.antinudeAction || "delete"}*
+Threshold: *${Math.round((settings.antinudeThreshold || 0.45) * 100)}%*
+Warn limit: *${settings.antinudeWarnLimit || 10}* (nude warnings before removal)
+Not-nude safelist: *${slInfo.size}* image(s)
+Media scanned: ${st.checked} (videos: ${st.videos || 0}, anim. stickers: ${st.astickers || 0}, cache hits: ${st.cacheHits})
+Flagged: ${st.flagged} • Errors: ${st.errors}
+
+Toggle: \`${botConfig.getPrefix()} antinude on|off\` • Action: \`${botConfig.getPrefix()} antinude action <delete/warn/kick>\`
+Limit: \`${botConfig.getPrefix()} antinude limit <1-50>\` • Reset: \`${botConfig.getPrefix()} antinude reset @user\`
+Mark not-nude: \`${botConfig.getPrefix()} antinude ok\` (reply to media / right after a flag) • Test media: \`${botConfig.getPrefix()} nsfwcheck\``,
+                      });
+                    }
+                    return;
+                  }
+
+                  // 💡 NSFWCHECK (2026-09-27 v2) - test the antinude pipeline on any
+                  // media: reply to an image/sticker/animated-sticker/video with
+                  // `.s nsfwcheck` and get the exact scores the moderation would see.
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} nsfwcheck` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} nsfwcheck `)
+                  ) {
+                    if (!canUseAdminCommands) {
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `you need to be an admin to use this command.`,
+                      });
+                      return;
+                    }
+                    const _an = require('./utils/antinude');
+                    // find the quoted message (contextInfo can sit on any message node)
+                    const qInfo = Object.values(m.message || {}).find(
+                      (v) => v && typeof v === "object" && v.contextInfo
+                    )?.contextInfo;
+                    const quotedMsg = qInfo?.quotedMessage;
+                    const qMedia = quotedMsg ? _an.extractImageMedia({ message: quotedMsg }) : null;
+                    if (!qMedia) {
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `🔞 *NSFW Check*\n\nReply to an image, sticker or video with \`${botConfig.getPrefix()} nsfwcheck\` to see exactly how the moderation scores it.`,
+                      }, { quoted: m });
+                      return;
+                    }
+                    await sock.sendMessage(chatId, { react: { text: "🔍", key: m.key } }).catch(() => {});
+                    try {
+                      const buf = await _an.downloadMedia(qMedia.node, qMedia.type, qMedia.dlType);
+                      if (!buf || buf.length < 800) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Could not download the quoted media (too large or expired).` }, { quoted: m });
+                        return;
+                      }
+                      const r = await _an.analyzeMediaBuffer(qMedia.type, buf, `nsfwcheck ${buf.length}B `);
+                      if (!r) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Analysis failed (download, decode or worker error). See bot logs.` }, { quoted: m });
+                        return;
+                      }
+                      const settings = getGroupSettings(chatId);
+                      const threshold = Number.isFinite(settings.antinudeThreshold) ? settings.antinudeThreshold : 0.45;
+                      const verdict = r.nsfw >= threshold ? "🚨 WOULD BE DELETED" : "✅ allowed";
+                      const frameStr = r.frames.map((f) => `#${f.pos}${r.frames.length > 1 ? "s" : ""} ${(f.nsfw * 100).toFixed(0)}%`).join(" • ");
+                      const partsStr = (r.parts && r.parts.length)
+                        ? r.parts.map((p) => `• ${p.label} - ${(p.score * 100).toFixed(0)}%`).join("\n")
+                        : "• none detected";
+                      const what = { image: "Image", sticker: "Sticker", asticker: "Animated sticker", video: "Video" }[r.kind] || r.kind;
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `🔞 *NSFW CHECK - ${what}* (${(buf.length / 1024).toFixed(0)} KB)\n\n` +
+                          `Final score: *${(r.nsfw * 100).toFixed(1)}%* (threshold ${(threshold * 100).toFixed(0)}%)\n` +
+                          `Verdict: *${verdict}*\n\n` +
+                          `Frames (${r.frames.length}${r.kind === "video" ? " sampled start→finish" : ""}):\n${frameStr}\n\n` +
+                          `Detected parts:\n${partsStr}\n\n` +
+                          `⏱ ${r.ms}ms${r.cached ? " (cached)" : ""}`,
+                      }, { quoted: m });
+                    } catch (e) {
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ nsfwcheck failed: ${String(e.message).slice(0, 80)}` }, { quoted: m });
+                    }
+                    return;
+                  }
+
                   // antilink - toggle link detection
                   if (
                     lowerTxt ===
@@ -9945,6 +16075,330 @@ Commands:
                     return;
                   }
 
+                  // 🤖 antibot - toggle bot detection
+                  if (
+                    lowerTxt ===
+                      `${botConfig.getPrefix().toLowerCase()} antibot` ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} antibot `,
+                    )
+                  ) {
+                    if (!canUseAdminCommands) {
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `you need to be an admin to use this command.`,
+                      });
+                      return;
+                    }
+                    const argsAB = lowerTxt.split(" ");
+                    const settingsAB = getGroupSettings(chatId);
+
+                    if (argsAB[2] === "on") {
+                      settingsAB.antibot = true;
+                      saveGroupSettings();
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `🤖 *Anti-Bot Enabled*
+
+Suspicious automated accounts get warnings - 3 strikes = removal.
+• Mode: *${settingsAB.antibotMode}* (scored, false-positive safe)
+• Action: *${settingsAB.antibotAction}*
+
+Configure:
+• ${botConfig.getPrefix().toLowerCase()} antibot action <warn/kick/delete>
+• ${botConfig.getPrefix().toLowerCase()} antibot mode <smart/strict>
+
+⚡ Admins and mods are always exempt.`,
+                      });
+                    } else if (argsAB[2] === "off") {
+                      settingsAB.antibot = false;
+                      saveGroupSettings();
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `🤖 Anti-bot disabled.`,
+                      });
+                    } else if (argsAB[2] === "action" && ["warn", "kick", "delete"].includes(argsAB[3])) {
+                      settingsAB.antibotAction = argsAB[3];
+                      saveGroupSettings();
+                      const descAB =
+                        argsAB[3] === "warn"
+                          ? "⚠️ Warn mode - 3 strikes = removal"
+                          : argsAB[3] === "kick"
+                            ? "🔴 Kick mode - instant removal"
+                            : "🔇 Delete mode - messages deleted, no kick";
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `⚙️ Anti-bot action: *${argsAB[3].toUpperCase()}*\n\n${descAB}`,
+                      });
+                    } else if (argsAB[2] === "mode" && ["smart", "strict"].includes(argsAB[3])) {
+                      settingsAB.antibotMode = argsAB[3];
+                      saveGroupSettings();
+                      const descM =
+                        argsAB[3] === "smart"
+                          ? "🧠 Smart - a verdict needs corroborating signals (recommended)"
+                          : "🎯 Strict - any bot-like message fingerprint acts immediately";
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `⚙️ Anti-bot mode: *${argsAB[3].toUpperCase()}*\n\n${descM}`,
+                      });
+                    } else {
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `🤖 *Anti-Bot Status*
+
+Enabled: ${settingsAB.antibot ? "✅ Yes" : "❌ No"}
+Action: ${settingsAB.antibotAction || "warn"}
+Mode: ${settingsAB.antibotMode || "smart"}
+
+Commands:
+• ${botConfig.getPrefix().toLowerCase()} antibot on/off
+• ${botConfig.getPrefix().toLowerCase()} antibot action <warn/kick/delete>
+• ${botConfig.getPrefix().toLowerCase()} antibot mode <smart/strict>`,
+                      });
+                    }
+                    return;
+                  }
+
+                  // 📌 gstatus - post to the group's status / toggle announcements
+                  if (
+                    lowerTxt ===
+                      `${botConfig.getPrefix().toLowerCase()} gstatus` ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} gstatus `,
+                    )
+                  ) {
+                    if (!isGroupChat) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "Groups only." });
+                    }
+                    const argsGS = lowerTxt.split(" ");
+                    const settingsGS = getGroupSettings(chatId);
+
+                    // .gstatus lock on/off - only admins/owner may post group statuses;
+                    // violators: auto-delete + warn, removed at the 3rd strike.
+                    if (argsGS[2] === "lock") {
+                      if (!canUseAdminCommands) {
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + "Admins only." });
+                      }
+                      if (argsGS[3] !== "on" && argsGS[3] !== "off") {
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `Usage: \`${botConfig.getPrefix().toLowerCase()} gstatus lock on/off\` - currently ${settingsGS.gstatusLock ? "ON" : "OFF"}.`,
+                        });
+                      }
+                      settingsGS.gstatusLock = argsGS[3] === "on";
+                      saveGroupSettings();
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + (settingsGS.gstatusLock
+                          ? `🔒 Group-status lock *ON*. Only admins can post group statuses - others are auto-deleted, warned, and removed at 3/3 strikes.`
+                          : `🔓 Group-status lock *OFF*. Everyone can post group statuses again.`),
+                      });
+                    }
+
+                    // .gstatus delete - revoke a group status. Bare = my last
+                    // post here; replying to a group-status message = that one.
+                    // Admins only. Revokes are best-effort (WhatsApp may refuse
+                    // protocol deletes for statuses; we report honestly).
+                    if (argsGS[2] === "delete") {
+                      if (!canUseAdminCommands) {
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + "Admins only." });
+                      }
+                      const rqCtx = m.message?.extendedTextMessage?.contextInfo || null;
+                      const rqQuoted = rqCtx?.quotedMessage || null;
+                      const rqIsStatus = !!(
+                        rqQuoted &&
+                        (rqQuoted.groupStatusMessageV2 ||
+                          rqQuoted.groupStatusMessage ||
+                          rqQuoted.groupStatusMentionMessage ||
+                          rqQuoted.imageMessage?.contextInfo?.isGroupStatus ||
+                          rqQuoted.videoMessage?.contextInfo?.isGroupStatus ||
+                          rqQuoted.extendedTextMessage?.contextInfo?.isGroupStatus)
+                      );
+                      if (rqIsStatus && (rqCtx.stanzaId || rqCtx.participant)) {
+                        const rqKey = { remoteJid: chatId, fromMe: false, id: rqCtx.stanzaId || undefined, participant: rqCtx.participant };
+                        let rqOk = false;
+                        try { await sock.sendMessage(chatId, { delete: rqKey }); rqOk = true; } catch (eD) {
+                          console.log("[GStatus] delete(replied) failed:", eD?.message);
+                        }
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + (rqOk
+                            ? `🗑️ Revoke sent for the replied group status - check the Status tab (WhatsApp may take a moment or refuse status revokes).`
+                            : `❌ WhatsApp refused that revoke - status revokes are best-effort.`),
+                        });
+                      }
+                      globalThis.__gsMine = globalThis.__gsMine || new Map();
+                      const dMineK = `${jidNormalizedUser(sock?.user?.id || "")}:${chatId}`;
+                      const dArr = globalThis.__gsMine.get(dMineK) || [];
+                      const dLast = dArr[dArr.length - 1];
+                      if (!dLast) {
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `I haven't posted a group status in this group since my last restart - nothing to delete.`,
+                        });
+                      }
+                      let dOk = false;
+                      try { await sock.sendMessage(chatId, { delete: { remoteJid: chatId, fromMe: true, id: dLast.id } }); dOk = true; } catch (eD2) {
+                        console.log("[GStatus] delete(mine) failed:", eD2?.message);
+                      }
+                      dArr.pop();
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + (dOk
+                          ? `🗑️ Revoke sent for my last group status here (id …${dLast.id.slice(-8)}) - check the Status tab.`
+                          : `❌ WhatsApp refused the revoke - status revokes are best-effort.`),
+                      });
+                    }
+
+                    // .gstatus on/off - announce incoming group statuses
+                    if (argsGS[2] === "on" || argsGS[2] === "off") {
+                      if (!canUseAdminCommands) {
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + "Admins only." });
+                      }
+                      settingsGS.gstatusAnnounce = argsGS[2] === "on";
+                      saveGroupSettings();
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `📌 Group-status announcements ${settingsGS.gstatusAnnounce ? "ON" : "OFF"}.`,
+                      });
+                    }
+
+                    if (!canUseAdminCommands) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "Admins only." });
+                    }
+
+                    // Build the status payload from args or a quoted message.
+                    // (2026-09-15: all media now flows through __gsBuildPayload so
+                    // thumbnails/waveform/seconds are pre-computed with safe libs
+                    // and Baileys' sharp-based thumbnail path can never run.)
+                    const qm =
+                      m.message?.extendedTextMessage?.contextInfo?.quotedMessage || null;
+                    const idxGS = txt.toLowerCase().indexOf("gstatus");
+                    const typedText = idxGS >= 0 ? txt.slice(idxGS + 7).trim() : "";
+                    // 💡 DIRECT MEDIA (2026-09-15): the caption/media can arrive ATTACHED to
+                    // the command message itself - `.gstatus <caption>` sent with a
+                    // photo/video/audio/sticker - not only as a reply to another message.
+                    const dmKind =
+                      m.message.imageMessage ? "image"
+                        : m.message.videoMessage ? "video"
+                          : m.message.audioMessage ? "audio"
+                            : m.message.stickerMessage ? "sticker" : null;
+                    let payload = null;
+                    let __gsMediaError = null;
+                    // 💡 FIX 2026-09-22: media builds no longer run inline (the
+                    // build downloads the file and computes thumbnails - exactly
+                    // the work that used to stall the 45s-raced message run).
+                    // Media stores a buildFn instead; the post runs detached
+                    // below, and the user gets ⏳ -> ✅/❌ feedback.
+                    let __gsMediaBuild = null;
+                    try {
+                      const qKind =
+                        qm?.imageMessage ? "image"
+                          : qm?.videoMessage ? "video"
+                            : qm?.audioMessage ? "audio"
+                              : qm?.stickerMessage ? "sticker" : null;
+                      if (qm && qKind) {
+                        const qMsg = qm.imageMessage || qm.videoMessage || qm.audioMessage || qm.stickerMessage;
+                        const __capK = (qKind === "image" || qKind === "video") && typedText ? typedText : undefined;
+                        __gsMediaBuild = () => __gsBuildPayload(qKind, qMsg, null, __capK);
+                      } else if (dmKind) {
+                        const __capK = (dmKind === "image" || dmKind === "video") && typedText ? typedText : undefined;
+                        __gsMediaBuild = () => __gsBuildPayload(dmKind, m.message[dmKind + "Message"], null, __capK);
+                      } else if (qm && (qm.conversation || qm.extendedTextMessage?.text)) {
+                        payload = { text: qm.conversation || qm.extendedTextMessage.text };
+                      } else if (typedText) {
+                        payload = { text: typedText };
+                      }
+                    } catch (dlErr) {
+                      console.log("[GStatus] media download failed:", dlErr?.message);
+                      // 💡 TICKET #b4fa05: unsupported media must get an explicit
+                      // rejection - not silently arm a 60s "waiting for media" window.
+                      if (dlErr?.code === GS_UNSUPPORTED) __gsMediaError = dlErr;
+                    }
+
+                    if (__gsMediaError) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ ${__gsMediaError.message}\n_Text and JPG/PNG/WEBP images, MP4 videos, audio and stickers all post fine._`,
+                      });
+                    }
+
+                    if (__gsMediaBuild) {
+                      // DETACHED (2026-09-22): never block the command run on a
+                      // status upload - ⏳ shows now, ✅/❌ lands with the result.
+                      __gsDetachPost(
+                        sock,
+                        chatId,
+                        m.key,
+                        __gsMediaBuild,
+                        `📌 Posted to this group's status! (visible for 24h in the Status tab)`,
+                      );
+                      return;
+                    }
+
+                    if (!payload) {
+                      // 📎 Arm a 60s media window: the next photo/video/audio/
+                      // sticker this user sends in this chat becomes the status.
+                      globalThis.__gsPending = globalThis.__gsPending || new Map();
+                      globalThis.__gsPending.set(`${BOT_ID}:${chatId}:${senderJid}`, { ts: Date.now() });
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `📎 *Waiting for your media…* (60s)
+
+Send or attach a photo / video / audio / sticker in this chat now and I'll post it to this group's status.
+You can also reply \`gstatus\` to any media - or attach one to \`${botConfig.getPrefix().toLowerCase()} gstatus <caption>\` to caption it.
+${canUseAdminCommands ? `
+Moderation:
+• \`${botConfig.getPrefix().toLowerCase()} gstatus on/off\` - announce incoming statuses
+• \`${botConfig.getPrefix().toLowerCase()} gstatus delete\` - remove my last group status\n• \`${botConfig.getPrefix().toLowerCase()} gstatus lock on/off\` - admins-only statuses (auto-delete + warn, removed at 3/3)` : ""}`,
+                      });
+                    }
+
+                    try {
+                      await __gsPost(sock, chatId, m.key, payload);
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `📌 Posted to this group's status! (visible for 24h in the Status tab)`,
+                      });
+                    } catch (gsErr) {
+                      console.log("[GStatus] post failed:", gsErr?.message);
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ Could not post the group status: ${String(gsErr?.message || gsErr).slice(0, 120)}`,
+                      });
+                    }
+                    return;
+                  }
+
+                  // 📣 announce - toggle promote/demote announcements
+                  if (
+                    lowerTxt ===
+                      `${botConfig.getPrefix().toLowerCase()} announce on` ||
+                    lowerTxt ===
+                      `${botConfig.getPrefix().toLowerCase()} announce off`
+                  ) {
+                    if (!isGroupChat) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "Groups only." });
+                    }
+                    if (!canUseAdminCommands) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "Admins only." });
+                    }
+                    const settingsAN = getGroupSettings(chatId);
+                    const enableAN = lowerTxt.endsWith("on");
+                    settingsAN.announceAdmins = enableAN;
+                    saveGroupSettings();
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `📣 Admin promote/demote announcements ${enableAN ? "ON" : "OFF"}.`,
+                    });
+                  }
+
+                  // ⚡ MODE COMMAND (2026-09-17): '.jmode updates all' and
+                  // '.j mode updates all' both land here (prefix-attached
+                  // 'mode' is just this instance's prefix + mode). Controls
+                  // the automated updates feed + owner broadcast.
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()}mode` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()}mode `) ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} mode` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} mode `)
+                  ) {
+                    const p = botConfig.getPrefix().toLowerCase();
+                    const modeArgs = lowerTxt
+                      .substring(
+                        lowerTxt.startsWith(`${p} mode `) ? p.length + 1 : p.length,
+                      )
+                      .trim()
+                      .split(/\s+/)
+                      .filter(Boolean);
+                    const replyMsg = await handleModeUpdates(modeArgs);
+                    await sock.sendMessage(chatId, { text: BOT_MARKER + replyMsg }, { quoted: m });
+                    return;
+                  }
+
                   // news on/off - Toggle automated anime news
                   if (
                     lowerTxt ===
@@ -9991,7 +16445,7 @@ Commands:
                         }
                       } catch (err) {
                         console.error(
-                          "❌❌ Failed to send initial news:",
+                          "❌ Failed to send initial news:",
                           err.message,
                         );
                       }
@@ -10072,6 +16526,14 @@ Commands:
 
                     const targetUser = getMentionOrReply(m);
                     if (targetUser) {
+                      // 👑 GC OWNER IMMUNITY: the marked owner of this group
+                      // cannot be warned (and thus never auto-kicked at 5).
+                      if (isGcOwner(targetUser, chatId)) {
+                        return reply(
+                          `👑 @${targetUser.split('@')[0]} is the marked owner of this group and cannot be warned.`,
+                          { mentions: buildMentions(m, [], targetUser) }
+                        );
+                      }
                       // 🛡️ Rank protection: can't warn someone of equal or higher rank
                       const settings = getGroupSettings(chatId);
                       if (settings.rankLadder?.length > 0) {
@@ -10080,8 +16542,8 @@ Commands:
                           const targetPhone = targetUser.split('@')[0];
                           return reply(
                             `🚫 *Rank protection triggered.*\n\n` +
-                            `@${targetPhone} holds ${targetRank ? formatRankBadge(targetRank) : 'an equal or higher rank'} — you cannot warn them.`,
-                            { mentions: [targetUser] }
+                            `@${targetPhone} holds ${targetRank ? formatRankBadge(targetRank) : 'an equal or higher rank'} - you cannot warn them.`,
+                            { mentions: buildMentions(m, [], targetUser) }
                           );
                         }
                       }
@@ -10262,8 +16724,8 @@ Commands:
                         const targetPhone = target.split('@')[0];
                         return reply(
                           `🚫 *Rank protection triggered.*\n\n` +
-                          `@${targetPhone} holds ${targetRank ? formatRankBadge(targetRank) : 'an equal or higher rank'} — you cannot promote them.`,
-                          { mentions: [target] }
+                          `@${targetPhone} holds ${targetRank ? formatRankBadge(targetRank) : 'an equal or higher rank'} - you cannot promote them.`,
+                          { mentions: buildMentions(m, [], target) }
                         );
                       }
                     }
@@ -10333,6 +16795,15 @@ Commands:
                     const targets = [target];
                     console.log("⬇️ Attempting to demote:", targets);
 
+                    // 👑 GC OWNER IMMUNITY: the marked owner of this group
+                    // cannot be demoted.
+                    if (isGcOwner(target, chatId)) {
+                      return reply(
+                        `👑 @${target.split('@')[0]} is the marked owner of this group and cannot be demoted.`,
+                        { mentions: buildMentions(m, [], target) }
+                      );
+                    }
+
                     // 🛡️ Rank protection: can't demote someone of equal or higher rank
                     const settings = getGroupSettings(chatId);
                     if (settings.rankLadder?.length > 0) {
@@ -10341,8 +16812,8 @@ Commands:
                         const targetPhone = target.split('@')[0];
                         return reply(
                           `🚫 *Rank protection triggered.*\n\n` +
-                          `@${targetPhone} holds ${targetRank ? formatRankBadge(targetRank) : 'an equal or higher rank'} — you cannot demote them.`,
-                          { mentions: [target] }
+                          `@${targetPhone} holds ${targetRank ? formatRankBadge(targetRank) : 'an equal or higher rank'} - you cannot demote them.`,
+                          { mentions: buildMentions(m, [], target) }
                         );
                       }
                     }
@@ -10400,7 +16871,7 @@ Commands:
                       canToggle = allowedLevels.includes(memberLevel);
                     }
 
-                    // Hard lock override — even Overlords can't toggle if locked
+                    // Hard lock override - even Overlords can't toggle if locked
                     if (settings.rankToggleLocked === true) {
                       canToggle = false;
                     }
@@ -10426,9 +16897,9 @@ Commands:
                     return reply(BOT_MARKER + replyMsg);
                   }
 
-                  // 💡 NEW: .g rank toggleperm <level> — grant toggle permission to a tier
-                  // .g rank toggleperm clear — reset to default (Overlord only)
-                  // .g rank togglelock on/off — hard-lock toggle (no one can change)
+                  // 💡 NEW: .g rank toggleperm <level> - grant toggle permission to a tier
+                  // .g rank toggleperm clear - reset to default (Overlord only)
+                  // .g rank togglelock on/off - hard-lock toggle (no one can change)
                   if (lowerTxt.startsWith(`${P} rank toggleperm`) || lowerTxt.startsWith(`${P} rank togglelock`)) {
                     if (!isGroupChat) return reply('❌ Groups only.');
                     let meta = groupMetadata;
@@ -10456,7 +16927,7 @@ Commands:
                       }
                       const lvl = parseInt(arg, 10);
                       if (isNaN(lvl) || lvl < 1 || lvl > 5) {
-                        return reply('❌ Usage: `.g rank toggleperm <1-5>` or `.g rank toggleperm clear`\nLevels: 1=Wanderer 2=Initiate 3=Guardian 4=Commander 5=Overlord');
+                        return reply('❌ Usage: `${botConfig.getPrefix()} rank toggleperm <1-5>` or `${botConfig.getPrefix()} rank toggleperm clear`\nLevels: 1=Wanderer 2=Initiate 3=Guardian 4=Commander 5=Overlord');
                       }
                       settings.rankToggleAllowedLevels = settings.rankToggleAllowedLevels || [5];
                       if (!settings.rankToggleAllowedLevels.includes(lvl)) {
@@ -10471,13 +16942,13 @@ Commands:
                       if (arg === 'on') {
                         settings.rankToggleLocked = true;
                         saveGroupSettings();
-                        return reply(BOT_MARKER + '🔒 Rank toggle is now LOCKED. No one can change the rank system state until `.g rank togglelock off` is run.');
+                        return reply(BOT_MARKER + '🔒 Rank toggle is now LOCKED. No one can change the rank system state until `${botConfig.getPrefix()} rank togglelock off` is run.');
                       } else if (arg === 'off') {
                         settings.rankToggleLocked = false;
                         saveGroupSettings();
                         return reply(BOT_MARKER + '🔓 Rank toggle is now UNLOCKED.');
                       }
-                      return reply('❌ Usage: `.g rank togglelock on|off`');
+                      return reply('❌ Usage: `${botConfig.getPrefix()} rank togglelock on|off`');
                     }
                   }
 
@@ -10491,7 +16962,7 @@ Commands:
                     const status = economy.getRankMissionStatus(senderJid);
 
                     if (missionSub === 'claim') {
-                      // 💡 FIX: claimRankMission is async — was missing `await`,
+                      // 💡 FIX: claimRankMission is async - was missing `await`,
                       // so `result` was a Promise and `.message` was undefined.
                       // The claim silently did nothing (no confirmation, no
                       // rank-up), even when all objectives were complete.
@@ -10532,7 +17003,7 @@ Commands:
                   }
 
                   // Intercept rank system commands if disabled
-                  // 💡 NOTE: 'rank mission' is NOT included here — it's handled above
+                  // 💡 NOTE: 'rank mission' is NOT included here - it's handled above
                   // and is an RPG feature, not a group admin feature.
                   const isRankCommand =
                     lowerTxt === `${P} rank setup` ||
@@ -10583,11 +17054,11 @@ Commands:
                     saveGroupSettings();
                     return reply(
                       `✅ *Rank Ladder Initialized!*\n\n` +
-                      `👑 *Overlord*   — Level 5\n` +
-                      `⚔️ *Commander*  — Level 4\n` +
-                      `🛡️ *Guardian*   — Level 3\n` +
-                      `🌿 *Initiate*   — Level 2\n` +
-                      `💤 *Wanderer*   — Level 1\n\n` +
+                      `👑 *Overlord*   - Level 5\n` +
+                      `⚔️ *Commander*  - Level 4\n` +
+                      `🛡️ *Guardian*   - Level 3\n` +
+                      `🌿 *Initiate*   - Level 2\n` +
+                      `💤 *Wanderer*   - Level 1\n\n` +
                       `_Add custom ranks: \`${P} rank add <level> <icon> <name>\`_\n` +
                       `_Remove a rank:   \`${P} rank remove <level>\`_\n` +
                       `_Assign a member: \`${P} set rank @user <level>\`_`
@@ -10666,7 +17137,7 @@ Commands:
                     return reply(`✅ Removed rank level ${level}.`);
                   }
 
-                  // .g ranks  — list all ranks with member counts
+                  // .g ranks  - list all ranks with member counts
                   if (lowerTxt === `${P} ranks`) {
                     if (!isGroupChat) return reply('❌ Groups only.');
                     const settings = getGroupSettings(chatId);
@@ -10792,7 +17263,7 @@ Commands:
                     // 💡 FIX: When the sender is a WA admin/superadmin with no
                     // explicit rank (senderLevel === 0), the old guard
                     // `levelNum >= senderLevel` evaluated to `levelNum >= 0`
-                    // which is ALWAYS true — blocking the admin from assigning
+                    // which is ALWAYS true - blocking the admin from assigning
                     // ANY rank, including level 1. The error message then said
                     // "it is equal to or above your own rank (0)" which the
                     // user reasonably misread as "the bot thinks I'm max rank".
@@ -10829,13 +17300,13 @@ Commands:
                     }
                     if (levelNum >= senderLevel && !isOwner && !isGlobalMod(senderJid)) {
                       const senderRankName = senderLevel === 0
-                        ? 'unranked — ask a higher admin to assign you a rank first'
+                        ? 'unranked - ask a higher admin to assign you a rank first'
                         : senderLevel;
-                      return reply(`❌ You cannot assign rank level ${levelNum} — it is equal to or above your own rank (${senderRankName}).`);
+                      return reply(`❌ You cannot assign rank level ${levelNum} - it is equal to or above your own rank (${senderRankName}).`);
                     }
 
                     if (!settings.memberRanks) settings.memberRanks = {};
-                    // 💡 FIX: Store rank using canonicalRankKey — the SAME
+                    // 💡 FIX: Store rank using canonicalRankKey - the SAME
                     // normalization that getMemberRankLevel uses for reads.
                     // This guarantees write/read consistency regardless of
                     // whether the input came from a mention (@s.whatsapp.net
@@ -10863,7 +17334,7 @@ Commands:
                     const phone = target.split('@')[0];
                     return reply({
                       text: BOT_MARKER + `✅ @${phone} assigned to ${rankObj.icon} *${rankObj.name}* (Level ${levelNum})`,
-                      mentions: [target]
+                      mentions: buildMentions(m, [], target)
                     });
                   }
 
@@ -10893,7 +17364,7 @@ Commands:
 
                     let removed = false;
                     if (settings.memberRanks) {
-                      // 💡 FIX: Also check bare phone number as a key — some rank entries
+                      // 💡 FIX: Also check bare phone number as a key - some rank entries
                       // may have been stored with a different JID format.
                       if (settings.memberRanks[target] !== undefined) { delete settings.memberRanks[target]; removed = true; }
                       if (phoneJid && settings.memberRanks[phoneJid] !== undefined) { delete settings.memberRanks[phoneJid]; removed = true; }
@@ -10917,7 +17388,7 @@ Commands:
                     const phone = target.split('@')[0];
                     return reply({
                       text: BOT_MARKER + `✅ Removed rank from @${phone}.`,
-                      mentions: [target]
+                      mentions: buildMentions(m, [], target)
                     });
                   }
 
@@ -10964,7 +17435,7 @@ Commands:
 
                     return reply({
                       text: BOT_MARKER + resp.trim(),
-                      mentions: [target]
+                      mentions: buildMentions(m, [], target)
                     });
                   }
 
@@ -10997,7 +17468,7 @@ Commands:
                     saveGroupSettings();
                     return reply({
                       text: BOT_MARKER + `✅ Title set for @${phone}: 🏷️ _${title}_`,
-                      mentions: [target]
+                      mentions: buildMentions(m, [], target)
                     });
                   }
 
@@ -11036,7 +17507,7 @@ Commands:
                     const phone = target.split('@')[0];
                     return reply({
                       text: BOT_MARKER + `✅ Removed title from @${phone}.`,
-                      mentions: [target]
+                      mentions: buildMentions(m, [], target)
                     });
                   }
 
@@ -11267,6 +17738,97 @@ Members are assigned to Rank Tiers (1 to 5).
                     });
                   }
 
+                  // 👑 .j gcowner - mark/view the PROTECTED OWNER of THIS group.
+                  // 💡 OWNER ORDER 2026-09-22: "add a command where i can use it
+                  // to mark someone as the owner of a gc in the database and they
+                  // are immune to muting and everything other admins can do to
+                  // them". Bot-owner-only. Stored in the shared DB
+                  // (_shared_gc_owners) so both bots enforce the immunity.
+                  // Immunity surfaces: mute, hardmute, kick, warn, demote, nuke,
+                  // antispam auto-mute, antibot actions, antilink security.
+                  if (
+                    lowerTxt ===
+                      `${botConfig.getPrefix().toLowerCase()} gcowner` ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} gcowner `,
+                    )
+                  ) {
+                    if (!isOwner) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Only the bot owner can manage the marked GC owner.",
+                      });
+                    }
+                    if (!isGroupChat || !chatId.endsWith("@g.us")) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ This command only works inside a group chat.",
+                      });
+                    }
+
+                    const target = getMentionOrReply(m);
+                    if (!target) {
+                      // No mention - show the currently marked owner (if any)
+                      const current = getGcOwner(chatId);
+                      if (!current) {
+                        return await sock.sendMessage(chatId, {
+                          text:
+                            BOT_MARKER +
+                            `👑 *GC OWNER*\n\nNo one is marked as the owner of this group.\n\n▫️ *Usage:* \`${botConfig.getPrefix()} gcowner @user\` to mark someone.\n▫️ \`${botConfig.getPrefix()} ungcowner\` to remove the mark.`,
+                        });
+                      }
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          `👑 *GC OWNER*\n\n@${economy.getDisplayName(current)} is the marked owner of this group.\n\nThey are immune to muting, kicking, warnings, demotion and every other admin action the bots can take on a member of this group.\n\n▫️ \`${botConfig.getPrefix()} ungcowner\` to remove the mark.`,
+                        mentions: buildMentions(m, [], current),
+                      });
+                    }
+
+                    await setGcOwner(chatId, target);
+                    // Clearing any live mute in THIS group - a protected
+                    // owner must not stay muted from before the mark.
+                    unmuteUser(target, chatId);
+                    return await sock.sendMessage(chatId, {
+                      text:
+                        BOT_MARKER +
+                        `👑 @${economy.getDisplayName(target)} is now the marked OWNER of this group (saved to the database).\n\nThey are immune to muting, kicking, warnings, demotion and every other admin action the bots can take on a member of this group.`,
+                      mentions: buildMentions(m, [], target),
+                    });
+                  }
+
+                  // 👑 .j ungcowner - remove the marked GC owner of THIS group
+                  if (
+                    lowerTxt ===
+                      `${botConfig.getPrefix().toLowerCase()} ungcowner` ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} ungcowner `,
+                    )
+                  ) {
+                    if (!isOwner) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Only the bot owner can manage the marked GC owner.",
+                      });
+                    }
+                    if (!isGroupChat || !chatId.endsWith("@g.us")) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ This command only works inside a group chat.",
+                      });
+                    }
+                    const had = await clearGcOwner(chatId);
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + (had
+                        ? "✅ The GC owner mark has been removed from this group. Standard moderation rules apply again."
+                        : "No GC owner is marked in this group."),
+                    });
+                  }
+
                   // ✅ FIXED: `${botConfig.getPrefix().toLowerCase()}` mute - temporarily mute user (with proper time parsing)
 
                   if (
@@ -11323,6 +17885,17 @@ Members are assigned to Rank Tiers (1 to 5).
                       });
                     }
 
+                    // 👑 GC OWNER IMMUNITY (2026-09-22): the marked owner of
+                    // this group cannot be muted - by admins or mods alike.
+                    if (isGcOwner(targetUser, chatId)) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          `👑 @${economy.getDisplayName(targetUser)} is the marked owner of this group and cannot be muted.`,
+                        mentions: buildMentions(m, [], targetUser),
+                      });
+                    }
+
                     // Find duration in args
                     let durationStr = null;
                     for (const arg of args) {
@@ -11351,9 +17924,9 @@ Members are assigned to Rank Tiers (1 to 5).
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `@${targetUser.split("@")[0]} has been muted for ${formatDuration(duration)}. their messages will be auto-deleted.`,
+                        `@${economy.getDisplayName(targetUser)} has been muted for ${formatDuration(duration)}. their messages will be auto-deleted.`,
 
-                      mentions: [targetUser],
+                      mentions: buildMentions(m, [], targetUser),
                     });
 
                     return;
@@ -11387,7 +17960,48 @@ Members are assigned to Rank Tiers (1 to 5).
                       return;
                     }
 
+                    // 💡 FIX 2026-07-17: prevent self-unmute exploit.
+                    // A user muted in Group A could go to Group B (where they're
+                    // WA admin) and unmute themselves. Even though the mute is
+                    // per-chat, this prevents the edge case where:
+                    // 1. The mute was stored with a different JID format (LID vs phone)
+                    // 2. The mute was a DM-based global mute (key = userId only)
+                    // 3. Any future global-mute feature
+                    // Rule: you cannot unmute yourself, period. Ask another admin.
+                    if (targetUser === senderJid ||
+                        jidNormalizedUser(targetUser) === jidNormalizedUser(senderJid)) {
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ You cannot unmute yourself. Ask another admin to unmute you.",
+                      });
+                      return;
+                    }
+
+                    // 💡 FIX: also check if the target is muted in ANY group (not
+                    // just this one). If they're muted elsewhere, warn the admin
+                    // but still allow the unmute in THIS chat (since the admin
+                    // has authority here). This prevents cross-group mute bypass
+                    // where a user muted in Group A gets unmuted in Group B
+                    // through a JID-format mismatch.
                     if (!isMuted(targetUser, chatId)) {
+                      // Check if muted in ANY group by scanning mutedUsers
+                      let mutedElsewhere = false;
+                      let mutedGroups = [];
+                      for (const [key, data] of mutedUsers.entries()) {
+                        if (data.userId === targetUser || data.userId === jidNormalizedUser(targetUser)) {
+                          if (Date.now() < data.until) {
+                            mutedElsewhere = true;
+                            if (data.chatId && data.chatId !== chatId) {
+                              mutedGroups.push(data.chatId);
+                            }
+                          }
+                        }
+                      }
+                      if (mutedElsewhere && mutedGroups.length > 0) {
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `⚠️ That user isn't muted in *this* group, but they ARE muted in ${mutedGroups.length} other group(s). The mute there remains active - this unmute only applies here.`,
+                        });
+                        return;
+                      }
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + "that user isn't muted.",
                       });
@@ -11398,8 +18012,8 @@ Members are assigned to Rank Tiers (1 to 5).
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `@${targetUser.split("@")[0]} has been unmuted.`,
-                      mentions: [targetUser],
+                        `@${economy.getDisplayName(targetUser)} has been unmuted.`,
+                      mentions: buildMentions(m, [], targetUser),
                     });
 
                     return;
@@ -11529,10 +18143,10 @@ Members are assigned to Rank Tiers (1 to 5).
 
                     // Build the announcement text
                     let announcementText = "";
-                    const senderHeader = `\n👤 *Message by:* @${senderJid.split("@")[0]}\n`;
+                    const senderHeader = `\n👤 *Message by:* @${economy.getDisplayName(senderJid)}\n`;
                     let replyTag = "";
                     if (quotedParticipant) {
-                      replyTag = `📢 *Attention:* @${quotedParticipant.split("@")[0]}\n\n`;
+                      replyTag = `📢 *Attention:* @${economy.getDisplayName(quotedParticipant)}\n\n`;
                     }
 
                     if (customText) {
@@ -11637,7 +18251,7 @@ ${memberList}`;
                     } catch (err) {
                       console.error("❌ Tagall send error:", err);
                       await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + "❌❌ Failed to send announcement.",
+                        text: BOT_MARKER + "❌ Failed to send announcement.",
                       });
                     }
 
@@ -11783,10 +18397,10 @@ ${memberList}`;
                     // Build message with member count info
                     let messageText = customText || contentToSend || "";
 
-                    const senderHeader = `👤 *Message by:* @${senderJid.split("@")[0]}\n`;
+                    const senderHeader = `👤 *Message by:* @${economy.getDisplayName(senderJid)}\n`;
                     let replyTag = "";
                     if (quotedParticipant) {
-                      replyTag = `📢 *Attention:* @${quotedParticipant.split("@")[0]}\n\n`;
+                      replyTag = `📢 *Attention:* @${economy.getDisplayName(quotedParticipant)}\n\n`;
                     }
 
                     // Mentions list should include all participants + quoted user
@@ -11872,7 +18486,7 @@ ${memberList}`;
                       await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          "❌❌ Failed to send hidden tag message.",
+                          "❌ Failed to send hidden tag message.",
                       });
                     }
 
@@ -12015,7 +18629,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                       if (topic === "combat") {
                         msg = `⚔️ *COMBAT MECHANICS*\n\n`;
                         msg += `• *Initiative (SPD):* Determines turn frequency. Faster players act more often.\n`;
-                        msg += `• *Energy:* Required for skills. Restore +15 per turn by using \`rest\`.\n`;
+                        msg += `• *Energy:* Required for skills. Regenerates +15 per turn automatically.\n`;
                         msg += `• *Damage Types:* \n`;
                         msg += `  - Physical: Blocked by DEF.\n`;
                         msg += `  - Magical: Partially ignores DEF, scales with MAG.\n`;
@@ -12161,7 +18775,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                         msg += `  - *Reward:* *Dragon Heart* (Required for Dragonslayer class).\n\n`;
                         msg += `💡 Keep an eye on the shop for rare keys to other secret realms!`;
                       } else if (topic === "pvp") {
-                        msg = ` Arena 🏟️ *PVP & DUELS*\n\n`;
+                        msg = `🏟️ *PVP & DUELS*\n\n`;
                         msg += `• *Duels:* Challenge anyone with \`${botConfig.getPrefix()} pvp <@user>\` for bragging rights.\n`;
                         msg += `• *Wager:* Bet Zeni on your combat skills.\n`;
                         msg += `• *Arena:* Climb the seasonal leaderboard for unique titles and Mythic gear rewards.`;
@@ -12190,9 +18804,9 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                         msg = `📜 *COMMAND LIST*\n\n`;
                         msg += `• *Basic:* \`register\`, \`profile\`, \`stats\`, \`bal\`\n`;
                         msg += `• *Action:* \`quest\`, \`solo\`, \`raid\`, \`mine\`, \`craft\`\n`;
-                        msg += `• *Social:* \`guild\`, \`gift\`, \`marry\`, \`pvp\`\n`;
+                        msg += `• *Social:* \`guild\`, \`pvp\`, \`duel\`\n`;
                         msg += `• *Growth:* \`evolve\`, \`skills\`, \`skill up\`, \`equip\`\n`;
-                        msg += `• *Misc:* \`shop\`, \`recipes\`, \`inv\`, \`use\`\n`;
+                        msg += `• *Misc:* \`shop\`, \`recipes\`, \`inv\`, \`use\`, \`kills\`, \`world\`\n`;
                       } else {
                         msg = `❌ Topic not found. Use \`${botConfig.getPrefix()} guide\` for the main menu.`;
                       }
@@ -12266,7 +18880,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                       } catch (err) {
                         console.error("Guild create error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to create guild!",
+                          text: BOT_MARKER + "❌ Failed to create guild!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -12283,7 +18897,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
 
                         if (result.success && result.members) {
                           const memberList = result.members
-                            .map((jid) => `@${jid.split(`@`)[0]}`)
+                            .map((jid) => `@${economy.getDisplayName(jid)}`)
                             .join(", ");
                           const message = `${result.message}\n\n💥 Former members: ${memberList}`;
 
@@ -12299,7 +18913,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                       } catch (err) {
                         console.error("Guild delete error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to delete guild!",
+                          text: BOT_MARKER + "❌ Failed to delete guild!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -12339,7 +18953,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                       } catch (err) {
                         console.error("Guild join error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to join guild!",
+                          text: BOT_MARKER + "❌ Failed to join guild!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -12352,14 +18966,22 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                       `${botConfig.getPrefix().toLowerCase()} guild leave`
                     ) {
                       try {
+                        // 🏦 GW overhaul: resolve guild BEFORE leaving, then settle
+                        // any active guild loan (wallet deduct, else User.debt — config policy)
+                        const _preLeaveGuild = guilds.getUserGuild(senderJid);
                         const result = guilds.leaveGuild(senderJid);
+                        if (_preLeaveGuild) {
+                          try {
+                            const _loanSettle = await require('./rpg/guildWar/bankLoans').handleGuildLeave(senderJid, _preLeaveGuild);
+                          } catch (e) { /* loan settle best-effort */ }
+                        }
                         await sock.sendMessage(chatId, {
                           text: BOT_MARKER + result.message,
                         });
                       } catch (err) {
                         console.error("Guild leave error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to leave guild!",
+                          text: BOT_MARKER + "❌ Failed to leave guild!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -12379,7 +19001,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                         console.error("Guild board error:", err);
                         await sock.sendMessage(chatId, {
                           text:
-                            BOT_MARKER + "❌❌ Failed to fetch guild board!",
+                            BOT_MARKER + "❌ Failed to fetch guild board!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -12398,7 +19020,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            `❌ Usage: \`${botConfig.getPrefix().toLowerCase()}\` guild invite @user\n\nMention someone or reply to them to invite them!`,
+                            `❌ Usage: \`${botConfig.getPrefix()} guild invite @user\`\n\nMention someone or reply to them to invite them!`,
                         });
                         return;
                       }
@@ -12415,10 +19037,10 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
 
                           const inviteText = `🏰 *GUILD INVITATION* 🏰
 
-@${targetUser.split(`@`)[0]} has been invited to join *${myGuildName}*!
+@${economy.getDisplayName(targetUser)} has been invited to join *${myGuildName}*!
 
 ━━━━━━━━━━━━━━━
-📨 @${targetUser.split("@")[0]} - Type:
+📨 @${economy.getDisplayName(targetUser)} - Type:
   • ${botConfig.getPrefix().toLowerCase()} accept - to join
   • ${botConfig.getPrefix().toLowerCase()} decline - to decline
 
@@ -12436,7 +19058,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                       } catch (err) {
                         console.error("Guild invite error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to send invite!",
+                          text: BOT_MARKER + "❌ Failed to send invite!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -12468,13 +19090,13 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                         const inviteText = `📨 *PENDING GUILD INVITE*
 
 🏰 Guild: *${invite.guildName}*
-👤 From: @${invite.inviter.split(`@`)[0]}
+👤 From: @${economy.getDisplayName(invite.inviter)}
 ⏰ Expires in: ${minutesLeft} minutes
 
 ━━━━━━━━━━━━━━
 Type:
-  • ${botConfig.getPrefix().toLowerCase()} guild accept
-  • ${botConfig.getPrefix().toLowerCase()} guild decline`;
+  • ${botConfig.getPrefix().toLowerCase()} accept
+  • ${botConfig.getPrefix().toLowerCase()} decline`;
 
                         await sock.sendMessage(chatId, {
                           text: BOT_MARKER + inviteText,
@@ -12483,7 +19105,7 @@ Type:
                       } catch (err) {
                         console.error("Guild invites error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to check invites!",
+                          text: BOT_MARKER + "❌ Failed to check invites!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -12502,7 +19124,7 @@ Type:
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            `❌ Usage: \`${botConfig.getPrefix().toLowerCase()}\` guild promote @user\n\nMention someone or reply to them to promote!`,
+                            `❌ Usage: \`${botConfig.getPrefix()} guild promote @user\`\n\nMention someone or reply to them to promote!`,
                         });
                         return;
                       }
@@ -12516,7 +19138,7 @@ Type:
                         if (result.success) {
                           const message = `⭐ *GUILD PROMOTION* ⭐
 
-@${result.targetJid.split(`@`)[0]} is now an admin of *${result.guildName}*!
+@${economy.getDisplayName(result.targetJid)} is now an admin of *${result.guildName}*!
 
 Admins can:
   • Invite members
@@ -12525,7 +19147,7 @@ Admins can:
 
                           await sock.sendMessage(chatId, {
                             text: BOT_MARKER + message,
-                            mentions: [result.targetJid],
+                            mentions: buildMentions(m, [], result.targetJid),
                           });
                         } else {
                           await sock.sendMessage(chatId, {
@@ -12535,7 +19157,7 @@ Admins can:
                       } catch (err) {
                         console.error("Guild promote error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to promote member!",
+                          text: BOT_MARKER + "❌ Failed to promote member!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -12554,7 +19176,7 @@ Admins can:
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            `❌ Usage: \`${botConfig.getPrefix().toLowerCase()}\` guild demote @user or reply to them.`,
+                            `❌ Usage: \`${botConfig.getPrefix()} guild demote @user\` or reply to them.`,
                         });
                         return;
                       }
@@ -12566,10 +19188,10 @@ Admins can:
                         );
 
                         if (result.success) {
-                          const message = `${result.message}\n\n@${result.targetJid.split(`@`)[0]} is now a regular member.`;
+                          const message = `${result.message}\n\n@${economy.getDisplayName(result.targetJid)} is now a regular member.`;
                           await sock.sendMessage(chatId, {
                             text: BOT_MARKER + message,
-                            mentions: [result.targetJid],
+                            mentions: buildMentions(m, [], result.targetJid),
                           });
                         } else {
                           await sock.sendMessage(chatId, {
@@ -12579,7 +19201,7 @@ Admins can:
                       } catch (err) {
                         console.error("Guild demote error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to demote admin!",
+                          text: BOT_MARKER + "❌ Failed to demote admin!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -12598,7 +19220,7 @@ Admins can:
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            `❌ Usage: \`${botConfig.getPrefix().toLowerCase()}\` guild kick @user or reply to them.`,
+                            `❌ Usage: \`${botConfig.getPrefix()} guild kick @user\` or reply to them.`,
                         });
                         return;
                       }
@@ -12612,11 +19234,11 @@ Admins can:
                         if (result.success) {
                           const message = `💢 *GUILD KICK* 💢
 
-@${result.targetJid.split(`@`)[0]} has been kicked from *${result.guildName}*.`;
+@${economy.getDisplayName(result.targetJid)} has been kicked from *${result.guildName}*.`;
 
                           await sock.sendMessage(chatId, {
                             text: BOT_MARKER + message,
-                            mentions: [result.targetJid],
+                            mentions: buildMentions(m, [], result.targetJid),
                           });
                         } else {
                           await sock.sendMessage(chatId, {
@@ -12626,7 +19248,7 @@ Admins can:
                       } catch (err) {
                         console.error("Guild kick error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to kick member!",
+                          text: BOT_MARKER + "❌ Failed to kick member!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -12639,8 +19261,9 @@ Admins can:
 
                     if (
                       lowerTxt.startsWith(
-                        `${botConfig.getPrefix().toLowerCase()} guild title `,
-                      )
+                        `${botConfig.getPrefix().toLowerCase()} guild title`,
+                      ) &&
+                      !lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild titles`)
                     ) {
                       const targetUser = getMentionOrReply(m);
 
@@ -12648,7 +19271,7 @@ Admins can:
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            `❌ Usage: \`${botConfig.getPrefix().toLowerCase()}\` guild title @user <title>\n\nExample: \`${botConfig.getPrefix().toLowerCase()}\` guild title @john Elite Warrior`,
+                            `❌ Usage: \`${botConfig.getPrefix()} guild title @user <title>\`\n\nExample: \`${botConfig.getPrefix()} guild title @john Elite Warrior\``,
                         });
                         return;
                       }
@@ -12678,12 +19301,12 @@ Admins can:
                         );
                         await sock.sendMessage(chatId, {
                           text: BOT_MARKER + result.message,
-                          mentions: [targetUser],
+                          mentions: buildMentions(m, [], targetUser),
                         });
                       } catch (err) {
                         console.error("Guild title error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to set guild title!",
+                          text: BOT_MARKER + "❌ Failed to set guild title!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -12716,7 +19339,7 @@ Admins can:
 
                       // Owner
                       msg += `👑 *Guild Leader:*\n`;
-                      msg += `  @${guild.owner.split("@")[0]}\n\n`;
+                      msg += `  @${economy.getDisplayName(guild.owner)}\n\n`;
 
                       // Members with titles
                       if (
@@ -12727,7 +19350,7 @@ Admins can:
                         for (const [jid, title] of Object.entries(
                           guild.titles,
                         )) {
-                          msg += `  • ${title}: @${jid.split("@")[0]}\n`;
+                          msg += `  • ${title}: @${economy.getDisplayName(jid)}\n`;
                         }
                         msg += `\n`;
                       }
@@ -12736,7 +19359,7 @@ Admins can:
                       msg += `👥 *All Members (${guild.members.length}):*\n`;
                       guild.members.forEach((jid) => {
                         const title = guild.titles?.[jid] || "Member";
-                        msg += `  • @${jid.split("@")[0]} - ${title}\n`;
+                        msg += `  • @${economy.getDisplayName(jid)} - ${title}\n`;
                       });
 
                       const mentions = guild.members;
@@ -12843,11 +19466,7 @@ Admins can:
                           return;
                         }
 
-                        let listText = `╔════════════╗
-║ 🏰 *GUILD LIST* 🏰
-╚════════════╝
-
-`;
+                        let listText = `┏━━━━━━━━━━━━━━━━━┓\n┃ 🏰 *GUILD LIST*\n┗━━━━━━━━━━━━━━━━━┛\n\n`;
 
                         const allOwners = [];
 
@@ -12878,7 +19497,7 @@ Admins can:
                       } catch (err) {
                         console.error("Guild list error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to load guild list!",
+                          text: BOT_MARKER + "❌ Failed to load guild list!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -12950,7 +19569,7 @@ Admins can:
                           const classIcon = classData?.icon || "❓";
                           const className = classData?.name || "No Class";
 
-                          text += `${i + 1}. @${jid.split("@")[0]}\n`;
+                          text += `${i + 1}. @${economy.getDisplayName(jid)}\n`;
                           text += `   ├─ Title: ${titleDisplay}\n`;
                           text += `   ├─ Rank: ${rankData.icon} ${rank}\n`;
                           text += `   └─ Class: ${classIcon} ${className} (Lv.${level})\n\n`;
@@ -12963,7 +19582,7 @@ Admins can:
                       } catch (err) {
                         console.error("Guild members error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to load members!",
+                          text: BOT_MARKER + "❌ Failed to load members!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -12972,15 +19591,23 @@ Admins can:
                     // `${botConfig.getPrefix().toLowerCase()}` guild tag <message>
                     if (
                       lowerTxt.startsWith(
-                        `${botConfig.getPrefix().toLowerCase()} guild tag `,
+                        `${botConfig.getPrefix().toLowerCase()} guild tag`,
                       )
                     ) {
                       const message = txt
                         .substring(
-                          `${botConfig.getPrefix().toLowerCase()} guild tag `
-                            .length,
+                          `${botConfig.getPrefix().toLowerCase()} guild tag `.length,
                         )
                         .trim();
+
+                      if (!message) {
+                        await sock.sendMessage(chatId, {
+                          text:
+                            BOT_MARKER +
+                            `❌ Usage: \`${botConfig.getPrefix()} guild tag <message>\`\n_Mentions every guild member with your message._`,
+                        });
+                        return;
+                      }
 
                       try {
                         const result = await guilds.tagGuildMembers(
@@ -13000,7 +19627,7 @@ Admins can:
                         console.error(`Guild tag error:`, err);
                         await sock.sendMessage(chatId, {
                           text:
-                            BOT_MARKER + "❌❌ Failed to tag guild members!",
+                            BOT_MARKER + "❌ Failed to tag guild members!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -13010,20 +19637,19 @@ Admins can:
                     // `${botConfig.getPrefix().toLowerCase()}` guild motto <text>
                     if (
                       lowerTxt.startsWith(
-                        `${botConfig.getPrefix().toLowerCase()} guild motto `,
+                        `${botConfig.getPrefix().toLowerCase()} guild motto`,
                       )
                     ) {
                       const motto = txt
                         .substring(
-                          `${botConfig.getPrefix().toLowerCase()} guild motto `
-                            .length,
+                          `${botConfig.getPrefix().toLowerCase()} guild motto `.length,
                         )
                         .trim();
 
                       if (!motto) {
                         await sock.sendMessage(chatId, {
                           text:
-                            BOT_MARKER + "❌ Usage: `.j guild motto <text>`",
+                            BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} guild motto <text>\`\n_Leaders only - sets the guild's slogan._`,
                         });
                         return;
                       }
@@ -13063,12 +19689,7 @@ Admins can:
                           return;
                         }
 
-                        let leaderboardText = `╔══════════════╗
-   🏆 *GUILD LEADERBOARD* 🏆
-╚═════════════╝
-_Sorted by guild level + XP_
-
-`;
+                        let leaderboardText = `┏━━━━━━━━━━━━━━━━━┓\n┃ 🏆 *GUILD LEADERBOARD*\n┗━━━━━━━━━━━━━━━━━┛\n_Sorted by guild level + XP_\n\n`;
 
                         // Use points leaderboard as primary (fallback to mini-game if empty)
                         const primaryList = pointsLeaderboard.length > 0 ? pointsLeaderboard : miniGameLeaderboard;
@@ -13097,9 +19718,7 @@ _Sorted by guild level + XP_
                           if (mg) {
                             leaderboardText += `   🎮 Mini-games: ${mg.wordleWins}W/${mg.tttWins}T/${mg.gamblingWins}G\n`;
                           }
-                          if (guild.warPoints > 0) {
-                            leaderboardText += `   ⚔️ War Points: ${guild.warPoints}\n`;
-                          }
+
                           leaderboardText += `━━━━━━━━━━━━━━━━\n`;
                         });
 
@@ -13109,7 +19728,7 @@ _Sorted by guild level + XP_
                       } catch (err) {
                         console.error("Guild leaderboard error:", err);
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to load leaderboard!",
+                          text: BOT_MARKER + "❌ Failed to load leaderboard!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -13117,10 +19736,17 @@ _Sorted by guild level + XP_
                     }
 
                     // `${botConfig.getPrefix().toLowerCase()}` guild points - Show current guild points
+                    // 💡 AUDIT FIX: the previous handler used a regex literal
+                    // `/^\`...\`` with stray backtick escapes that never matched
+                    // real input (WhatsApp commands start with `.g`, not a backtick).
+                    // The command was effectively unreachable. Replaced with the
+                    // same string-comparison pattern used by every other guild
+                    // subcommand so `.g guild points` / `.g guild pts` now works.
                     if (
-                      /^\`${botConfig.getPrefix().toLowerCase()}`\s+guild\s+(points?|pts)$/.test(
-                        lowerTxt,
-                      )
+                      lowerTxt ===
+                        `${botConfig.getPrefix().toLowerCase()} guild points` ||
+                      lowerTxt ===
+                        `${botConfig.getPrefix().toLowerCase()} guild pts`
                     ) {
                       try {
                         const info = guilds.getGuildInfo();
@@ -13144,18 +19770,7 @@ _Sorted by guild level + XP_
                           return;
                         }
 
-                        let text = `╔═══════════════════╗
-   🏆 GUILD INFO 🏆
-╚═══════════════════╝
-
-🏰 *${userGuild}*
-📊 Level: ${info.guilds[userGuild]?.level || 1}
-⭐ XP: ${pointsData.points.toLocaleString()}/${((info.guilds[userGuild]?.level || 1) * 1000).toLocaleString()}
-💰 Guild Funds: ${(info.guilds[userGuild]?.balance || 0).toLocaleString()} Zeni
-
-━━━━━━━━━━━━━━━━
-📈 Recent Activity:
-`;
+                        let text = `┏━━━━━━━━━━━━━━━━━┓\n┃ 🏆 *GUILD POINTS*\n┗━━━━━━━━━━━━━━━━━┛\n\n🏰 *${userGuild}*\n📊 Level: ${info.guilds[userGuild]?.level || 1}\n⭐ XP: ${pointsData.points.toLocaleString()}/${((info.guilds[userGuild]?.level || 1) * 1000).toLocaleString()}\n💰 Guild Funds: ${(info.guilds[userGuild]?.balance || 0).toLocaleString()} Zeni\n\n📈 *Recent Activity:*\n`;
 
                         const recentHistory = pointsData.history
                           .slice(-5)
@@ -13188,7 +19803,7 @@ _Sorted by guild level + XP_
                         console.error("Guild points error:", err);
                         await sock.sendMessage(chatId, {
                           text:
-                            BOT_MARKER + "❌❌ Failed to load guild points!",
+                            BOT_MARKER + "❌ Failed to load guild points!",
                           mentions: [senderJid],
                         });
                       }
@@ -13233,9 +19848,7 @@ _Sorted by guild level + XP_
                           text += `${medal} *${guild.name}* [${guild.type || 'ADVENTURER'}]\n`;
                           text += `   📊 Lv ${guild.level || 1} | XP ${guild.points.toLocaleString()}\n`;
                           text += `   💰 Bank: ${(guild.balance || 0).toLocaleString()} | 👥 ${guild.members} members\n`;
-                          if (guild.warPoints > 0) {
-                            text += `   ⚔️ War Points: ${guild.warPoints}\n`;
-                          }
+
                           text += `━━━━━━━━━━━━━━━━\n`;
                         });
 
@@ -13247,7 +19860,7 @@ _Sorted by guild level + XP_
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            "❌❌ Failed to load points leaderboard!",
+                            "❌ Failed to load points leaderboard!",
                         });
                       }
                       await awardProgression(senderJid, chatId);
@@ -13299,7 +19912,7 @@ _Sorted by guild level + XP_
                     // .g guild perks / donate / loan / repay / emblem / info
                     // ============================================
 
-                    // `.g guild perks` — show active perks for your guild
+                    // `.g guild perks` - show active perks for your guild
                     if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild perks`) {
                       try {
                         const guildPerks = require('./rpg/guildPerks');
@@ -13319,7 +19932,7 @@ _Sorted by guild level + XP_
                         const memberCap = guildPerks.getMemberCap(guild);
                         const interestRate = guildPerks.getBankInterestRate(guild);
 
-                        let msg = `🏰 *${userGuild}* — Active Perks\n\n`;
+                        let msg = `🏰 *${userGuild}* - Active Perks\n\n`;
                         msg += `📊 *Guild Level:* ${guild.level || 1} (${guild.points || 0} XP)\n`;
                         msg += `🏷️ *Archetype:* ${guild.type || 'ADVENTURER'}\n`;
                         msg += `👥 *Members:* ${(guild.members || []).length}/${memberCap}\n`;
@@ -13346,156 +19959,143 @@ _Sorted by guild level + XP_
                       return;
                     }
 
-                    // `.g guild donate <amount>` — donate Zeni from wallet to guild bank
-                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild donate `)) {
+                    // `.g guild donate` / `.g guild donate <amount>` - donate
+                    // Zeni from wallet to guild bank
+                    // 💡 UI-STYLE FIX 2026-09-20 (owner: donate is still old
+                    // style): 1) the gate required a TRAILING SPACE, so a bare
+                    // `${prefix} guild donate` fell through to the unknown-
+                    // command card instead of answering with usage; 2) the
+                    // amount was parseInt'd raw, so "100,000" donated 100
+                    // (commas silently dropped); 3) the response was a plain
+                    // 3-liner from the old template era. Rebuilt on the guild-
+                    // loan pattern: bare form = usage card, comma-tolerant
+                    // amount, checked money flow, modern response.
+                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild donate`) &&
+                        !lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild donated`)) {
                       try {
-                        const amountStr = lowerTxt.split(' ')[3];
-                        const amount = parseInt(amountStr, 10);
-                        if (!amount || amount <= 0) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} guild donate <amount>\`` });
-                        }
-                        const userGuild = guilds.getUserGuild(senderJid);
-                        if (!userGuild) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
-                        }
-                        const economy = require('./rpg/economy');
-                        const userWallet = economy.getGold(senderJid);
-                        if (userWallet < amount) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You only have ${userWallet.toLocaleString()} Zeni in your wallet.` });
-                        }
-                        economy.removeMoney(senderJid, amount, `Donation to ${userGuild}`);
-                        guilds.addGuildBalance(userGuild, amount);
-                        // 💡 QA FIX: cap donation XP to prevent inflation.
-                        // Was 1 XP per 1000 Zeni — depositing 500M = 500K XP,
-                        // which broke the level curve. Now: 1 XP per 100K Zeni,
-                        // capped at 100 XP per donation.
-                        const xpAward = Math.min(100, Math.max(1, Math.floor(amount / 100000)));
-                        guilds.addGuildPoints(userGuild, xpAward, `donation by ${senderJid}`);
-                        // Sync to DB
-                        await guilds.syncGuild(userGuild);
-                        await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Donated ${amount.toLocaleString()} Zeni to *${userGuild}*.\n🏛️ Bank: ${((guilds.getGuild(userGuild).balance) || 0).toLocaleString()} Zeni\n🎁 Guild XP: +${xpAward}` });
-                      } catch (e) {
-                        await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
-                      }
-                      return;
-                    }
+                        const P = botConfig.getPrefix();
+                        const tokens = lowerTxt.split(/\s+/);
+                        const amountRaw = String(tokens[3] || '').replace(/,/g, '');
 
-                    // `.g guild loan <amount>` — borrow from guild bank (must repay in 7 days)
-                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild loan `)) {
-                      try {
-                        const sub = lowerTxt.split(' ')[3]?.toLowerCase();
+                        // Bare form / bad amount -> usage card
+                        if (!amountRaw || !/^\d+$/.test(amountRaw) || parseInt(amountRaw, 10) <= 0) {
+                          let usage = `┏━━━━━━━━━━━━━━━━━┓\n┃ 🏛️ *GUILD DONATE*\n┗━━━━━━━━━━━━━━━━━┛\n\n`;
+                          usage += `Donate Zeni from your wallet to your guild's bank.\n\n`;
+                          usage += `▫️ Usage: \`${P} guild donate <amount>\`\n`;
+                          usage += `▫️ Example: \`${P} guild donate 50,000\`\n\n`;
+                          usage += `_Donations earn guild XP (capped per donation) and feed the guild bank for loans, perks and wars._`;
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + usage });
+                        }
+                        const amount = parseInt(amountRaw, 10);
+
                         const userGuild = guilds.getUserGuild(senderJid);
                         if (!userGuild) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You are not in a guild. Use \`${P} guild create\` or \`${P} guild join\` first.` });
                         }
                         const guild = guilds.getGuild(userGuild);
                         if (!guild) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Guild not found.' });
                         }
-
-                        // .g guild loan — show your active loans
-                        if (!sub || sub === 'list' || sub === 'status') {
-                          const myLoans = (guild.loans || []).filter(l => l.borrowerJid === senderJid && !l.repaid);
-                          if (myLoans.length === 0) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `💵 *Your Guild Loans*\n\n_No active loans._\n\n_Borrow with \`${botConfig.getPrefix()} guild loan <amount>\` (max 10% of guild bank, repay within 7 days or auto-deducted from earnings)._` });
-                          }
-                          let msg = `💵 *Your Guild Loans* (${myLoans.length} active)\n\n`;
-                          let totalOwed = 0;
-                          for (const loan of myLoans) {
-                            const daysLeft = Math.ceil((new Date(loan.dueAt).getTime() - Date.now()) / 86400000);
-                            msg += `💰 ${loan.amount.toLocaleString()} Zeni\n`;
-                            msg += `  Due: ${daysLeft > 0 ? `${daysLeft}d left` : '⚠️ OVERDUE'}\n`;
-                            msg += `  Taken: ${new Date(loan.takenAt).toLocaleDateString()}\n\n`;
-                            totalOwed += loan.amount;
-                          }
-                          msg += `*Total owed: ${totalOwed.toLocaleString()} Zeni*\n\n_Repay with \`${botConfig.getPrefix()} guild loan repay <amount>\`_`;
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-                          return;
-                        }
-
-                        // .g guild loan repay <amount>
-                        if (sub === 'repay') {
-                          const repayAmount = parseInt(lowerTxt.split(' ')[4], 10);
-                          if (!repayAmount || repayAmount <= 0) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} guild loan repay <amount>\`` });
-                          }
-                          const myLoans = (guild.loans || []).filter(l => l.borrowerJid === senderJid && !l.repaid);
-                          if (myLoans.length === 0) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You have no active loans to repay.' });
-                          }
-                          const economy = require('./rpg/economy');
-                          const userWallet = economy.getGold(senderJid);
-                          if (userWallet < repayAmount) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You only have ${userWallet.toLocaleString()} Zeni in your wallet.` });
-                          }
-                          // Apply repayment to loans oldest-first
-                          let remaining = repayAmount;
-                          let totalRepaid = 0;
-                          for (const loan of myLoans) {
-                            if (remaining <= 0) break;
-                            const apply = Math.min(remaining, loan.amount);
-                            loan.amount -= apply;
-                            remaining -= apply;
-                            totalRepaid += apply;
-                            if (loan.amount <= 0) {
-                              loan.repaid = true;
-                              loan.repaidAt = new Date();
-                            }
-                          }
-                          economy.removeMoney(senderJid, totalRepaid, `Guild loan repayment`);
-                          guilds.addGuildBalance(userGuild, totalRepaid);
-                          await guilds.syncGuild(userGuild);
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Repaid ${totalRepaid.toLocaleString()} Zeni to *${userGuild}* bank.` });
-                          return;
-                        }
-
-                        // .g guild loan <amount> — take a new loan
-                        const amount = parseInt(sub, 10);
-                        if (!amount || amount <= 0) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} guild loan <amount>\` (or \`list\` / \`repay <amount>\`)` });
-                        }
-                        const bankBalance = guild.balance || 0;
-                        const maxLoan = Math.floor(bankBalance * 0.10); // max 10% of bank
-                        if (amount > maxLoan) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Max loan is 10% of guild bank = ${maxLoan.toLocaleString()} Zeni.\n_Requested: ${amount.toLocaleString()}_` });
-                        }
-                        // Check existing loans from this user
-                        const existingLoans = (guild.loans || []).filter(l => l.borrowerJid === senderJid && !l.repaid);
-                        const totalExisting = existingLoans.reduce((s, l) => s + l.amount, 0);
-                        if (totalExisting + amount > maxLoan) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You already owe ${totalExisting.toLocaleString()} Zeni. Max additional loan: ${(maxLoan - totalExisting).toLocaleString()} Zeni.` });
-                        }
-                        // Permission: only members+ can borrow (not recruits — added in this commit)
-                        const memberInfo = guilds.getGuildMember(userGuild, senderJid);
-                        if (!memberInfo) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not a member of this guild.' });
-                        }
-                        if (memberInfo.role === 'recruit') {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Recruits cannot borrow from the guild bank. Ask an officer to promote you.' });
-                        }
-                        // Create loan
-                        if (!guild.loans) guild.loans = [];
-                        const dueAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-                        guild.loans.push({
-                          borrowerJid: senderJid,
-                          amount,
-                          takenAt: new Date(),
-                          dueAt,
-                          repaid: false,
-                          repaidAt: null,
-                        });
-                        guild.balance = bankBalance - amount;
-                        await guilds.syncGuild(userGuild);
                         const economy = require('./rpg/economy');
-                        economy.addMoney(senderJid, amount, `Guild loan from ${userGuild}`);
-                        await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Borrowed ${amount.toLocaleString()} Zeni from *${userGuild}* bank.\n📅 Due: ${dueAt.toLocaleDateString()} (7 days)\n⚠️ _Unpaid loans auto-deduct 10% from your earnings each day past due._\n\n_Repay early with \`${botConfig.getPrefix()} guild loan repay <amount>\`_` });
+
+                        // Money-critical: pull fresh state from the shared DB
+                        // before moving anything (same discipline as the loan
+                        // rework - the other instance keeps its own caches).
+                        await guilds.refreshGuildMoney(userGuild);
+                        let donor = economy.getUser(senderJid);
+                        if (!donor) {
+                          await economy.syncUserFromDB(senderJid);
+                          donor = economy.getUser(senderJid);
+                        }
+                        if (!donor) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Could not locate your economy account (JID: \`${senderJid}\`). Nothing was charged. Try the bot you registered with, or ask a mod.` });
+                        }
+
+                        const userWallet = economy.getGold(senderJid);
+                        if (userWallet < amount) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You only have *${userWallet.toLocaleString()}* Zeni in your wallet.\n_Requested donation: ${amount.toLocaleString()}._` });
+                        }
+                        // Checked debit: a racing balance change can no longer
+                        // credit the guild from an empty wallet.
+                        const donated = economy.removeMoney(senderJid, amount, `Donation to ${userGuild}`);
+                        if (!donated) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You only have *${economy.getGold(senderJid).toLocaleString()}* Zeni in your wallet.` });
+                        }
+                        guild.balance = (guild.balance || 0) + amount;
+                        // 💡 GW-OVERHAUL 2026-10-03: donation→XP conversion REMOVED
+                        // (owner ban: Guild Points are earned, not bought). Donations
+                        // still fund the guild bank (support system).
+                        // Sync to DB - if the bank persist fails, refund the
+                        // wallet (never take money without recording it).
+                        const persisted = await guilds.syncGuild(userGuild);
+                        if (!persisted) {
+                          economy.addMoney(senderJid, amount, 'Guild donation refund (bank persist failed)');
+                          await guilds.refreshGuildMoney(userGuild);
+                          console.error(`[GuildDonate] persist FAILED for ${userGuild}: ${amount} refunded to ${senderJid}`);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Donation failed: the guild bank could not be saved. Your wallet was refunded - nothing was lost. Try again shortly.' });
+                        }
+                        let msg = `┏━━━━━━━━━━━━━━━━━┓\n┃ 🏛️ *DONATION RECEIVED*\n┗━━━━━━━━━━━━━━━━━┛\n\n`;
+                        msg += `💰 Donated: *${amount.toLocaleString()} Zeni* → *${userGuild}*\n`;
+                        msg += `🏦 Guild bank: *${((guild.balance) || 0).toLocaleString()} Zeni*\n`;
+                        msg += `🎁 Guild XP: *+${xpAward}*\n\n`;
+                        msg += `_The guild thanks you, benefactor._`;
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                       } catch (e) {
                         await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                       }
                       return;
                     }
 
-                    // `.g guild info` — comprehensive guild info (level, members, perks, buildings)
+                    // `.j guild loan` — GM-approved no-interest loans (GW overhaul 2026-10-03)
+                    // request <amt> → GuildLoan collection (requested) → leader/officer
+                    // approve|reject @player → funds move bank→wallet → repay <amt>.
+                    if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild loan` ||
+                        lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild loan `)) {
+                      const bankLoans = require('./rpg/guildWar/bankLoans');
+                      const loanArgs = txt.trim().split(/\s+/).slice(2); // [guild, loan, ...args]
+                      const loanSub = (loanArgs[1] || 'list').toLowerCase();
+                      const ug = guilds.getUserGuild(senderJid);
+                      if (!ug) return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
+
+                      try {
+                        if (loanSub === 'list') {
+                          const lists = await bankLoans.listLoans(senderJid, ug);
+                          const mine = lists.mine.join('\n') || 'No active loans.';
+                          const pendingLine = lists.pending.length
+                            ? `\n📜 Pending requests: ${lists.pending.length} (GM: \`loan approve @player\`)`
+                            : '';
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `🏦 *Guild Loans*\n${mine}${pendingLine}\n_No interest. One active loan per player._` });
+                        }
+                        if (loanSub === 'request' || (/^\d/.test(loanSub))) {
+                          const amt = loanSub === 'request' ? Number(loanArgs[2]) : Number(loanArgs[1]);
+                          const res = await bankLoans.requestLoan(senderJid, senderName, ug, amt, { prefix: botConfig.getPrefix() });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + res.text });
+                        }
+                        if (loanSub === 'approve' || loanSub === 'reject') {
+                          const targetName = (loanArgs[2] || '').replace(/^@/, '');
+                          const member = guilds.getGuildMember(ug, targetName);
+                          const targetJid = member?.jid || loanArgs[2];
+                          const res = loanSub === 'approve'
+                            ? await bankLoans.approveLoan(senderJid, ug, targetJid, { prefix: botConfig.getPrefix() })
+                            : await bankLoans.rejectLoan(senderJid, ug, targetJid);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + res.text });
+                        }
+                        if (loanSub === 'repay') {
+                          const res = await bankLoans.repayLoan(senderJid, ug, Number(loanArgs[2]) || 0, { prefix: botConfig.getPrefix() });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + res.text });
+                        }
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + `Usage: \`guild loan [request <amt>|list|approve @player|reject @player|repay <amt>]\`` });
+                      } catch (e) {
+                        console.error('[GuildLoan] error:', e?.message);
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Loan error: ' + e.message });
+                      }
+                    }
+
+                    // `.g guild info` - comprehensive guild info (level, members, perks, buildings)
+                    // 💡 2026-09-14 owner: "add an image card to the guild info
+                    // command" - GUILDINFO charter card (800x800) is now the
+                    // primary response; the text layout below stays as the
+                    // fallback when the Go render fails.
                     if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild info` ||
                         lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild status`) {
                       try {
@@ -13511,9 +20111,58 @@ _Sorted by guild level + XP_
                         const memberCap = guildPerks.getMemberCap(guild);
                         const interestRate = guildPerks.getBankInterestRate(guild);
 
-                        let msg = `🏰 *${userGuild}* — Guild Info\n\n`;
+                        // ── charter card (primary) ──
+                        const guildLevel = guild.level || 1;
+                        const guildPoints = guild.points || 0;
+                        const guildXpNeed = guildLevel * 1000;
+                        let cardBuf = null;
+                        try {
+                          const goService = require('./utils/goImageService');
+                          cardBuf = await goService.generatePortraitCard({
+                            kind: 'GUILDINFO',
+                            style: (() => { try { return (economy.getUser(senderJid) || {}).cardStyle || 0; } catch (e) { return 0; } })(),
+                            nickname: userGuild,
+                            sealText: `L${guildLevel}`,
+                            level: guildLevel,
+                            xpPercent: Math.max(0, Math.min(100, Math.floor((guildPoints / guildXpNeed) * 100))),
+                            hexColor: guild.emblem?.color || '',
+                            emblem: guild.emblem?.img || '',
+                            motto: guild.motto || '',
+                            caption: '',
+                            rows: [
+                              { label: 'ARCHETYPE', value: String(guild.type || 'ADVENTURER').toUpperCase() },
+                              { label: 'LEADER', value: guild.owner ? '@' + guild.owner.split('@')[0] : 'UNKNOWN' },
+                              { label: 'MEMBERS', value: `${(guild.members || []).length}/${memberCap}` },
+                              { label: 'BANK', value: `${(guild.balance || 0).toLocaleString()} ZENI` },
+                            ],
+                            buildings: [
+                              { name: 'HALL', level: (guild.buildings?.hall?.level) || 0 },
+                              { name: 'TRAINING', level: (guild.buildings?.training?.level) || 0 },
+                              { name: 'TREASURY', level: (guild.buildings?.treasury?.level) || 0 },
+                            ],
+                          });
+                        } catch (e) {
+                          console.error('[guild] info card failed:', e?.message || e);
+                        }
+
+                        if (cardBuf && cardBuf.length > 100) {
+                          const infoMentions0 = [];
+                          if (guild.owner && guild.owner.includes('@')) infoMentions0.push(guild.owner);
+                          await sock.sendMessage(chatId, {
+                            image: cardBuf,
+                            caption: BOT_MARKER +
+                              `🏰 *${userGuild}* - Lv ${guildLevel} · XP ${guildPoints.toLocaleString()}/${guildXpNeed.toLocaleString()}\n` +
+                              `💡 Use \`${botConfig.getPrefix()} guild perks\` for full perk breakdown.`,
+                            mimetype: 'image/jpeg',
+                            mentions: infoMentions0,
+                          }, { quoted: m });
+                          return;
+                        }
+
+                        // ── fallback: legacy text layout ──
+                        let msg = `🏰 *${userGuild}* - Guild Info\n\n`;
                         msg += `🏷️ Archetype: ${guild.type || 'ADVENTURER'}\n`;
-                        msg += `📊 Level: ${guild.level || 1} | XP: ${(guild.points || 0).toLocaleString()}/${((guild.level || 1) * 1000).toLocaleString()}\n`;
+                        msg += `📊 Level: ${guildLevel} | XP: ${guildPoints.toLocaleString()}/${guildXpNeed.toLocaleString()}\n`;
                         // 💡 QA FIX: show leader phone number (readable) instead of raw JID
                         const leaderDisplay = guild.owner ? '@' + guild.owner.split('@')[0] : 'unknown';
                         msg += `👤 Leader: ${leaderDisplay}\n`;
@@ -13543,44 +20192,209 @@ _Sorted by guild level + XP_
                       return;
                     }
 
-                    // `.g guild emblem <icon> <color>` — set guild emblem (leader only)
-                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild emblem `)) {
+                    // `.g guild emblem` - set guild emblem (leader only)
+                    // 2026-09-17: upload path - send an IMAGE with caption
+                    // `.guild emblem` (or reply to an image with it) to set a
+                    // picture emblem shown on the guild charter card. Emoji +
+                    // color path unchanged. `.guild emblem clear` removes.
+                    if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild emblem` ||
+                        lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild emblem `)) {
                       try {
                         const userGuild = guilds.getUserGuild(senderJid);
                         if (!userGuild) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c You are not in a guild.' });
                         }
                         if (!guilds.isGuildOwner(senderJid)) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Only the guild leader can set the emblem.' });
-                        }
-                        const parts = txt.trim().split(/\s+/);
-                        const icon = parts[3]; // .g guild emblem <icon>
-                        const color = parts[4] || '#FFD700'; // optional hex color
-                        if (!icon) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} guild emblem <emoji> [hexColor]\`\nExample: \`${botConfig.getPrefix()} guild emblem 🐉 #FF5500\`` });
-                        }
-                        if (icon.length > 4) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Emblem icon must be a single emoji (max 4 chars).' });
-                        }
-                        // Validate hex color
-                        const hexColorRegex = /^#[0-9A-Fa-f]{6}$/;
-                        if (!hexColorRegex.test(color)) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Color must be a hex code like #FFD700.\n_Got: ${color}_` });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Only the guild leader can set the emblem.' });
                         }
                         const guild = guilds.getGuild(userGuild);
+                        if (!guild) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Guild not found.' });
+                        }
+                        const parts = txt.trim().split(/\s+/);
+                        const sub = (parts[3] || '').toLowerCase();
+                        // 💡 2026-09-17 FIX: deep-unwrap ephemeral/viewOnce
+                        // wrappers before looking for the image - with
+                        // disappearing-messages ON every message is wrapped and
+                        // the raw reads never saw the picture.
+                        const emblemUnwrap = (node) => {
+                          let cur = node;
+                          for (let i = 0; cur && i < 6; i++) {
+                            const inner = cur.ephemeralMessage?.message || cur.viewOnceMessage?.message ||
+                              cur.viewOnceMessageV2?.message || cur.viewOnceMessageV2Extension?.message ||
+                              cur.documentWithCaptionMessage?.message;
+                            if (!inner) break;
+                            cur = inner;
+                          }
+                          return cur;
+                        };
+                        const emblemFindImg = (msgNode) => {
+                          let cur = msgNode;
+                          for (let i = 0; cur && i < 6; i++) {
+                            if (cur.imageMessage) return cur.imageMessage;
+                            const inner = cur.ephemeralMessage?.message || cur.viewOnceMessage?.message ||
+                              cur.viewOnceMessageV2?.message || cur.viewOnceMessageV2Extension?.message ||
+                              cur.documentWithCaptionMessage?.message;
+                            if (!inner) break;
+                            cur = inner;
+                          }
+                          if (cur && typeof cur === 'object') {
+                            for (const type of Object.keys(cur)) {
+                              const node = cur[type];
+                              if (node && typeof node === 'object' && node.imageMessage) return node.imageMessage;
+                            }
+                          }
+                          return null;
+                        };
+                        const emblemCore = emblemUnwrap(m?.message);
+                        const quotedCore = m?.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+                        const ownImg = emblemFindImg(emblemCore);
+                        const quotedImg = quotedCore ? emblemFindImg(emblemUnwrap(quotedCore)) : null;
+                        const srcImg = ownImg || quotedImg || null;
+                        const wantsUpload = !sub || sub === 'set' || sub === 'upload';
+                        const wantsClear = sub === 'clear' || sub === 'remove';
+
+                        // UPLOAD: image attached (or quoted), no emoji arg
+                        if (srcImg && wantsUpload) {
+                          await sock.sendMessage(chatId, { react: { text: '\u23f3', key: m.key } });
+                          // ⚡ 2026-09-17: memory guard - large photo spikes were
+                          // pushing the process over the pm2 450MB restart line
+                          // (hourglass react then silent restart = the "hang").
+                          const _memNow = process.memoryUsage();
+                          if (_memNow.rss > 400 * 1024 * 1024) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '\u26a0\ufe0f The bot is under heavy load right now - try uploading the emblem again in a minute.' });
+                          }
+                          let raw;
+                          try {
+                            // ⚡ 2026-09-17: hard 45s cap - media re-uploads can
+                            // hang forever on a stale session, which looked like
+                            // the emblem command "hanging".
+                            raw = await Promise.race([
+                              downloadMediaMessage(
+                                { message: ownImg ? m.message : { imageMessage: quotedImg } },
+                                'buffer',
+                                {},
+                                { logger: console, reuploadRequest: sock.updateMediaMessage }
+                              ),
+                              new Promise((_, rej) => setTimeout(() => rej(new Error('media download timed out (45s)')), 45000)),
+                            ]);
+                          } catch (dlErr) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Could not download that image (' + (dlErr.message || 'error') + ') - send it again with caption `.guild emblem`.' });
+                          }
+                          if (!raw || raw.length < 512) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c That image looks empty - try another one.' });
+                          }
+                          if (raw.length > 8 * 1024 * 1024) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Image too large (max 8MB).' });
+                          }
+                          // ⚡ 2026-09-17: SECOND memory gate AFTER the download -
+                          // a big-photo spike here was the remaining path over the
+                          // pm2 450MB line (hourglass react then silence).
+                          if (process.memoryUsage().rss > 430 * 1024 * 1024) {
+                            raw = null;
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '\u26a0\ufe0f Bot is near its memory limit right now - try again in a minute.' });
+                          }
+                          // 💡 2026-09-17 FIX: gate exotic formats up-front
+                          // (iPhone HEIC/HEIF photos were crashing libvips with
+                          // GLib-GObject-CRITICAL) and run sharp in an ISOLATED
+                          // child process - a native crash now kills only the
+                          // worker, never the whole bot.
+                          const _h = raw.subarray(0, 12);
+                          const _a3 = _h.subarray(0, 3).toString('latin1');
+                          if (_h.subarray(4, 8).toString('latin1') === 'ftyp') {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '📷 That looks like an iPhone HEIC/HEIF photo - send it as JPG or PNG (repost the compressed photo), then caption it `.guild emblem` again.' });
+                          }
+                          const _okFmt = (_h[0] === 0xFF && _h[1] === 0xD8) || _a3 === 'GIF' ||
+                            (_h[0] === 0x89 && _h[1] === 0x50) ||
+                            (_h.subarray(0, 4).toString('latin1') === 'RIFF' && _h.subarray(8, 12).toString('latin1') === 'WEBP');
+                          if (!_okFmt) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Unsupported image format - send a JPG or PNG photo.' });
+                          }
+                          const png = await new Promise((resolve, reject) => {
+                            const cp = require('child_process');
+                            const pth = require('path');
+                            const child = cp.fork(pth.join(__dirname, 'utils', 'emblemWorker.js'), [], { silent: true, execArgv: [] });
+                            const chunks = [];
+                            let settled = false, outBuf = null, outDone = false, exitCode = null, exitSig = null;
+                            const timer = setTimeout(() => finish(reject, new Error('image processing timed out')), 30000);
+                            function finish(fn, arg) {
+                              if (settled) return;
+                              settled = true;
+                              clearTimeout(timer);
+                              try { child.kill(); } catch (e) {}
+                              fn(arg);
+                            }
+                            function trySettle() {
+                              if (settled || !outDone || exitCode === null) return;
+                              if (exitCode === 0 && outBuf && outBuf.length > 0) finish(resolve, outBuf);
+                              else finish(reject, new Error(exitCode === 0 ? 'image processor returned nothing' : 'image processor crashed' + (exitSig ? ' (' + exitSig + ')' : ' (' + exitCode + ')')));
+                            }
+                            child.stdout.on('data', (c) => chunks.push(c));
+                            child.stdout.on('end', () => { outDone = true; outBuf = Buffer.concat(chunks); trySettle(); });
+                            child.on('exit', (code, sig) => { exitCode = code; exitSig = sig; trySettle(); });
+                            child.on('error', (e) => finish(reject, e));
+                            child.stdin.on('error', () => {});
+                            child.stdin.write(raw);
+                            child.stdin.end();
+                          });
+                          if (!png || png.length > 700 * 1024) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Emblem is still too big after resize - use a smaller image.' });
+                          }
+                          if (!guild.emblem) guild.emblem = {};
+                          guild.emblem.img = `data:image/png;base64,${png.toString('base64')}`;
+                          await guilds.syncGuild(userGuild);
+                          await sock.sendMessage(chatId, {
+                            image: png,
+                            caption: BOT_MARKER + '\u2705 Guild emblem uploaded! It now shows on the guild crest card (`.guild info`).',
+                          });
+                          return;
+                        }
+
+                        if (wantsClear) {
+                          if (guild.emblem?.img) {
+                            guild.emblem.img = null;
+                            await guilds.syncGuild(userGuild);
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '\u2705 Uploaded emblem cleared - the emoji emblem shows again.' });
+                          }
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '\u2139\ufe0f No uploaded emblem to clear.' });
+                        }
+
+                        if (!sub) {
+                          return sock.sendMessage(chatId, {
+                            text: BOT_MARKER + '\ud83c\udfa8 *GUILD EMBLEM*\n\n'
+                              + `\u2022 Send an image with caption \`${botConfig.getPrefix()} guild emblem\` - it becomes the crest on the guild card\n`
+                              + `\u2022 \`${botConfig.getPrefix()} guild emblem <emoji> [h<hexColor>\` - emoji emblem (e.g. \ud83d\udc09 #FF5500)\n`
+                              + `\u2022 \`${botConfig.getPrefix()} guild emblem clear\` - remove the uploaded image`,
+                          });
+                        }
+
+                        const icon = parts[3];
+                        const color = parts[4] || '#FFD700';
+                        // 💡 2026-10-02: count CODE POINTS, not UTF-16 units -
+                        // ZWJ emoji (👨‍👩‍👧‍👦 = 7 code points, 11 UTF-16 units)
+                        // are valid single-grapheme emblems but the old
+                        // length check rejected them ("frequently breaks").
+                        if ([...icon].length > 7) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Emblem icon must be a single emoji.' });
+                        }
+                        const hexColorRegex = /^#[0-9A-Fa-f]{6}$/;
+                        if (!hexColorRegex.test(color)) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `\u274c Color must be a hex code like #FFD700.\n_Got: ${color}_` });
+                        }
                         if (!guild.emblem) guild.emblem = {};
                         guild.emblem.icon = icon;
                         guild.emblem.color = color;
                         await guilds.syncGuild(userGuild);
-                        await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Guild emblem updated: ${icon} (color ${color})` });
+                        const hasImg = guild.emblem && guild.emblem.img;
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + `\u2705 Guild emblem updated: ${icon} (color ${color})${hasImg ? ' - the uploaded image takes priority on cards (`.guild emblem clear` to remove it)' : ''}` });
                       } catch (e) {
-                        await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Failed: ' + e.message });
                       }
                       return;
                     }
 
-                    // `.g guild role` or `.g guild role @user <role>` — Phase 2 4-tier role system
-                    // 💡 QA FIX: was startsWith('guild role ') (trailing space) —
+                    // `.g guild role` or `.g guild role @user <role>` - Phase 2 4-tier role system
+                    // 💡 QA FIX: was startsWith('guild role ') (trailing space) -
                     // '.g guild role' (no args) didn't match and fell through to
                     // another handler (building upgrade). Now matches both forms.
                     if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild role` ||
@@ -13591,7 +20405,7 @@ _Sorted by guild level + XP_
                         const targetJid = getMentionOrReply(m) || (parts[3]?.includes('@') ? parts[3] : null);
                         const newRole = parts[4]?.toLowerCase();
 
-                        // No args — show current roles for all members
+                        // No args - show current roles for all members
                         if (!targetJid && !newRole) {
                           const userGuild = guilds.getUserGuild(senderJid);
                           if (!userGuild) {
@@ -13601,11 +20415,11 @@ _Sorted by guild level + XP_
                           if (!guild) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Guild not found.' });
                           }
-                          let msg = `🏷️ *${userGuild}* — Guild Roles\n\n`;
+                          let msg = `🏷️ *${userGuild}* - Guild Roles\n\n`;
                           for (const memberJid of (guild.members || [])) {
                             const memberInfo = guilds.getGuildMember(userGuild, memberJid);
                             const roleIcon = memberInfo?.role === 'leader' ? '👑' : memberInfo?.role === 'officer' ? '⚔️' : memberInfo?.role === 'recruit' ? '💤' : '🌿';
-                            msg += `${roleIcon} @${memberJid.split('@')[0]} — ${memberInfo?.role || 'member'}\n`;
+                            msg += `${roleIcon} @${economy.getDisplayName(memberJid)} - ${memberInfo?.role || 'member'}\n`;
                           }
                           msg += `\n_Set roles: \`${botConfig.getPrefix()} guild role @user <recruit|member|officer>\`_`;
                           const mentions = (guild.members || []).filter(j => j && j.includes('@'));
@@ -13619,13 +20433,13 @@ _Sorted by guild level + XP_
                           return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Invalid role. Use: recruit, member, or officer.` });
                         }
                         const result = await guilds.setMemberRole(senderJid, targetJid, newRole);
-                        return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: buildMentions(m, [], targetJid) });
                       } catch (e) {
                         return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                       }
                     }
 
-                    // 💡 .g dragonkills — show dragon kill progress
+                    // 💡 .g dragonkills - show dragon kill progress
                     if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} dragonkills` ||
                         lowerTxt === `${botConfig.getPrefix().toLowerCase()} dragonkills`) {
                       try {
@@ -13661,7 +20475,7 @@ _Sorted by guild level + XP_
 `;
                         }
                         msg += `
-_Kill dragons in the Dragon Dungeon (.g solo dragon) or S+ dungeons._`;
+_Kill dragons in the Dragon Dungeon (\`${botConfig.getPrefix()} solo dragon\`) or S+ dungeons._`;
                         await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                       } catch (e) {
                         await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
@@ -13669,8 +20483,11 @@ _Kill dragons in the Dragon Dungeon (.g solo dragon) or S+ dungeons._`;
                       return;
                     }
 
-                    // 💡 .g guild archetype <type> — change guild archetype (leader only, costs 1M Zeni)
-                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild archetype `)) {
+                    // 💡 .g guild archetype <type> - change guild archetype (leader only, costs 1M Zeni)
+                    // 💡 BARE-FORM FIX: the gate required a trailing space, so
+                    // a bare `${prefix} guild archetype` fell through to the
+                    // unknown-command card instead of listing the valid types.
+                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild archetype`)) {
                       try {
                         const userGuild = guilds.getUserGuild(senderJid);
                         if (!userGuild) {
@@ -13682,7 +20499,7 @@ _Kill dragons in the Dragon Dungeon (.g solo dragon) or S+ dungeons._`;
                         const parts = txt.trim().split(/\s+/);
                         const newType = parts[3]?.toUpperCase();
                         if (!['ADVENTURER', 'MERCHANT', 'RESEARCH'].includes(newType)) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Invalid archetype. Use: ADVENTURER, MERCHANT, or RESEARCH.' });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} guild archetype <type>\`\n\nValid archetypes:\n• *ADVENTURER* - +15% XP from dungeons\n• *MERCHANT* - +10% gold + 10% sell value\n• *RESEARCH* - −10% crafting material cost\n\n_Cost: 1,000,000 Zeni from the guild bank._` });
                         }
                         const guild = guilds.getGuild(userGuild);
                         if (guild.type === newType) {
@@ -13711,7 +20528,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       }
                     }
 
-                    // 💡 .g guild guide — comprehensive guild system guide
+                    // 💡 .g guild guide - comprehensive guild system guide
                     if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild guide` ||
                         lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild help`) {
                       const guide = guilds.getGuildGuide(botConfig.getPrefix());
@@ -13719,7 +20536,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       return;
                     }
 
-                    // 💡 .g guild purge — owner-only, wipes ALL guild data (fixes legacy conflicts)
+                    // 💡 .g guild purge - owner-only, wipes ALL guild data (fixes legacy conflicts)
                     if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild purge`) {
                       if (!isOwner && !isGlobalMod(senderJid)) {
                         return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Only the bot owner or a global mod can purge all guild data.' });
@@ -13728,92 +20545,13 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                     }
 
-                    // `${botConfig.getPrefix().toLowerCase()}` guild challenges - List available challenge types
-                    if (
-                      lowerTxt ===
-                      `${botConfig.getPrefix().toLowerCase()} guild challenges`
-                    ) {
-                      try {
-                        const types = guilds.getChallengeTypes();
-                        let text = `⚔️ *AVAILABLE CHALLENGE TYPES* ⚔️\n\n`;
-
-                        Object.entries(types).forEach(([id, data]) => {
-                          text += `🔹 *${data.name}* (\`${id}\`)\n`;
-                          text += `   💰 Entry: ${economy.getZENI()}${data.entryFee.toLocaleString()}\n`;
-                          text += `   🏆 Prize: ${economy.getZENI()}${data.prize.toLocaleString()}\n\n`;
-                        });
-
-                        text += `💡 Issue a challenge: \`${botConfig.getPrefix().toLowerCase()} guild challenge <guild_name> <type_id>\``;
-
-                        await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + text,
-                        });
-                      } catch (err) {
-                        console.error("Guild challenges error:", err);
-                        await sock.sendMessage(chatId, {
-                          text:
-                            BOT_MARKER + "❌❌ Failed to load challenge types!",
-                        });
-                      }
-                      await awardProgression(senderJid, chatId);
-                      return;
-                    }
-
-                    // `${botConfig.getPrefix().toLowerCase()}` guild challenge <guild> <type> - Issue a challenge
-                    if (
-                      lowerTxt.startsWith(
-                        `${botConfig.getPrefix().toLowerCase()} guild challenge `,
-                      )
-                    ) {
-                      const args = txt
-                        .substring(
-                          `${botConfig.getPrefix().toLowerCase()} guild challenge `
-                            .length,
-                        )
-                        .trim()
-                        .split(/\s+/);
-
-                      if (args.length < 2) {
-                        await sock.sendMessage(chatId, {
-                          text:
-                            BOT_MARKER +
-                            `❌ Usage: \`${botConfig.getPrefix().toLowerCase()} guild challenge <guild_name> <type>\`\n\nExample: \`${botConfig.getPrefix().toLowerCase()} guild challenge "Dragon Warriors" ttt\``,
-                        });
-                        return;
-                      }
-
-                      // Handle guild names with spaces if they are in quotes, or just take the first part if not
-                      let targetGuildName, type;
-                      if (txt.includes('"')) {
-                        const match = txt.match(/"([^"]+)"\s+(\S+)/);
-                        if (match) {
-                          targetGuildName = match[1];
-                          type = match[2];
-                        }
-                      }
-
-                      if (!targetGuildName) {
-                        type = args[args.length - 1];
-                        targetGuildName = args.slice(0, -1).join(" ");
-                      }
-
-                      try {
-                        const result = guilds.createChallenge(
-                          senderJid,
-                          targetGuildName,
-                          type,
-                        );
-                        await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + result.message,
-                        });
-                      } catch (err) {
-                        console.error("Guild challenge issue error:", err);
-                        await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to issue challenge!",
-                        });
-                      }
-                      return;
-                    }
+                    // 💡 REMOVED 2026-09-12 (audit): `guild challenge` / `guild challenges`.
+                    // The feature was a half-built stub - CHALLENGE_TYPES was an empty
+                    // placeholder, so EVERY challenge attempt failed with "Invalid
+                    // challenge type!", and no accept/resolve mechanic ever existed
+                    // (challenges could never complete). Guild-vs-guild competition is
+                    // fully served by the real `.guild war` system (guildWars.js).
+                    // Internal guilds.js stub functions left in place (zero callers).
 
                     // ============================================
                     // 💡 PHASE 3: RUNE COMMANDS (`.g rune ...`)
@@ -13823,25 +20561,26 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       const runeSub = runeArgs[0]?.toLowerCase();
                       const runeSystem = require('./rpg/runeSystem');
 
-                      // .g rune — show inventory + help
+                      // .g rune - show inventory + help
                       if (!runeSub || runeSub === 'help') {
                         let helpMsg = `💎 *RUNE SYSTEM* 💎\n\n`;
-                        helpMsg += `Socket runes into skills to modify their behavior. Runes drop from S+ bosses, weekly raids, and the Abyss.\n\n`;
+                        helpMsg += `Socket runes into skills to modify their behavior. Runes drop exclusively from the Abyss (Floor 21+).\n\n`;
                         helpMsg += `*Commands:*\n`;
-                        helpMsg += `• \`${botConfig.getPrefix()} rune inv\` — view your rune inventory\n`;
-                        helpMsg += `• \`${botConfig.getPrefix()} rune list\` — list all rune types\n`;
-                        helpMsg += `• \`${botConfig.getPrefix()} rune socket <runeId> <skillId>\` — socket a rune\n`;
-                        helpMsg += `• \`${botConfig.getPrefix()} rune remove <runeId>\` — remove a rune (needs scroll)\n`;
-                        helpMsg += `• \`${botConfig.getPrefix()} rune destroy <runeId>\` — destroy a socketed rune\n`;
-                        helpMsg += `• \`${botConfig.getPrefix()} rune slots <skillId>\` — check slot capacity for a skill\n`;
-                        helpMsg += `• \`${botConfig.getPrefix()} rune sell <runeId> <price>\` — list a rune for sale\n`;
-                        helpMsg += `• \`${botConfig.getPrefix()} rune buy <listingId>\` — buy a listed rune\n`;
-                        helpMsg += `• \`${botConfig.getPrefix()} rune market\` — browse runes for sale\n`;
+                        helpMsg += `• \`${botConfig.getPrefix()} rune inv\` - view your rune inventory\n`;
+                        helpMsg += `• \`${botConfig.getPrefix()} rune list\` - list all rune types\n`;
+                        helpMsg += `• \`${botConfig.getPrefix()} rune socket <runeName> <skillId or #>\` - socket a rune\n`;
+                        helpMsg += `• \`${botConfig.getPrefix()} rune remove <runeName>\` - remove a rune (needs scroll)\n`;
+                        helpMsg += `• \`${botConfig.getPrefix()} rune destroy <runeName>\` - destroy a socketed rune\n`;
+                        helpMsg += `• \`${botConfig.getPrefix()} rune slots <skillId>\` - check slot capacity for a skill\n`;
+                        helpMsg += `• \`${botConfig.getPrefix()} rune fuse <type> [count|all]\` - fuse same-type same-tier runes\n`;
+                        helpMsg += `• \`${botConfig.getPrefix()} rune sell <runeId> <price>\` - list a rune for sale\n`;
+                        helpMsg += `• \`${botConfig.getPrefix()} rune buy <listingId>\` - buy a listed rune\n`;
+                        helpMsg += `• \`${botConfig.getPrefix()} rune market\` - browse runes for sale\n`;
                         await sock.sendMessage(chatId, { text: BOT_MARKER + helpMsg });
                         return;
                       }
 
-                      // .g rune sell <runeId> <price> — list a rune for sale on the market
+                      // .g rune sell <runeId> <price> - list a rune for sale on the market
                       if (runeSub === 'sell') {
                         const runeId = runeArgs[1];
                         const price = parseInt(runeArgs[2], 10);
@@ -13883,7 +20622,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         }
                       }
 
-                      // .g rune market — browse runes for sale
+                      // .g rune market - browse runes for sale
                       if (runeSub === 'market') {
                         try {
                           const CardMarket = require('./models/CardMarket');
@@ -13898,7 +20637,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                             if (!rune) continue;
                             const rt = runeSystem.RUNE_TYPES[rune.type];
                             const tt = runeSystem.RUNE_TIERS[rune.tier];
-                            msg += `${rt.icon} ${rt.name} (${tt.name}) — ${l.price.toLocaleString()} Zeni\n`;
+                            msg += `${rt.icon} ${rt.name} (${tt.name}) - ${l.price.toLocaleString()} Zeni\n`;
                             msg += `  Buy: \`${botConfig.getPrefix()} rune buy ${l._id}\`\n`;
                             msg += `  Seller: ${l.sellerId.split('@')[0]}\n\n`;
                           }
@@ -13909,7 +20648,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         return;
                       }
 
-                      // .g rune buy <listingId> — buy a listed rune
+                      // .g rune buy <listingId> - buy a listed rune
                       if (runeSub === 'buy') {
                         const listingId = runeArgs[1];
                         if (!listingId) {
@@ -13953,7 +20692,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         }
                       }
 
-                      // .g rune unsell <runeId> — cancel a market listing
+                      // .g rune unsell <runeId> - cancel a market listing
                       if (runeSub === 'unsell') {
                         const runeId = runeArgs[1];
                         if (!runeId) {
@@ -13981,22 +20720,42 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         }
                       }
 
-                      // .g rune inv — inventory
+                      // .g rune inv - inventory (stacked by type + tier)
                       if (runeSub === 'inv' || runeSub === 'inventory') {
                         try {
                           const runes = await runeSystem.getRuneInventory(senderJid);
                           if (runes.length === 0) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '💎 *Your Rune Inventory*\n\n_No runes yet. Defeat S+ bosses, join weekly raids, or descend into the Abyss to find some._' });
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '💎 *Your Rune Inventory*\n\n_No runes yet. Descend into the Abyss (Floor 21+) to find some._' });
                           }
-                          let msg = `💎 *Your Rune Inventory* (${runes.length} runes)\n\n`;
+                          // 💡 Group runes by type+tier for stacking display
+                          const stacks = {};
                           for (const r of runes) {
-                            const rt = runeSystem.RUNE_TYPES[r.type];
-                            const tt = runeSystem.RUNE_TIERS[r.tier];
-                            msg += `${rt.icon} *${rt.name}* (${tt.name})\n`;
-                            msg += `  ID: \`${r.runeId}\`\n`;
+                            const key = `${r.type}_${r.tier}`;
+                            if (!stacks[key]) {
+                              stacks[key] = { type: r.type, tier: r.tier, count: 0, runeIds: [] };
+                            }
+                            stacks[key].count++;
+                            stacks[key].runeIds.push(r.runeId);
+                          }
+                          const stackList = Object.values(stacks).sort((a, b) => {
+                            // Sort by type name then tier (LESSER < NORMAL < GREATER < ABYSSAL)
+                            const tierOrder = ['LESSER', 'NORMAL', 'GREATER', 'ABYSSAL'];
+                            const tDiff = tierOrder.indexOf(a.tier) - tierOrder.indexOf(b.tier);
+                            if (tDiff !== 0) return tDiff;
+                            return a.type.localeCompare(b.type);
+                          });
+                          let msg = `💎 *Your Rune Inventory* (${runes.length} runes, ${stackList.length} types)\n\n`;
+                          for (const s of stackList) {
+                            const rt = runeSystem.RUNE_TYPES[s.type];
+                            const tt = runeSystem.RUNE_TIERS[s.tier];
+                            msg += `${rt.icon} *${rt.name}* (${tt.name}) ×${s.count}\n`;
+                            // 💡 Show name-based reference for socketing
+                            msg += `  Ref: \`${s.type}-${s.tier}\` or \`${s.type}\`\n`;
                             msg += `  ${rt.desc}\n\n`;
                           }
-                          msg += `_Use \`${botConfig.getPrefix()} rune socket <runeId> <skillId>\` to socket a rune._`;
+                          msg += `_Use \`${botConfig.getPrefix()} rune socket <type> <skillId or #>\` to socket._`;
+                          msg += `\n_Example: \`${botConfig.getPrefix()} rune socket power total_war\`_`;
+                          msg += `\n_Use \`${botConfig.getPrefix()} rune fuse <type> [count|all]\` to fuse._`;
                           await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                         } catch (e) {
                           await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed to load rune inventory: ' + e.message });
@@ -14004,30 +20763,70 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         return;
                       }
 
-                      // .g rune list — all rune types
+                      // .g rune list - all rune types
                       if (runeSub === 'list') {
                         let msg = `💎 *Rune Types*\n\n`;
                         for (const [id, rt] of Object.entries(runeSystem.RUNE_TYPES)) {
                           msg += `${rt.icon} *${rt.name}*\n  ${rt.desc}\n\n`;
                         }
-                        msg += `*Tiers:* Lesser < Normal < Greater\n`;
-                        msg += `_Socket slots: Starter=0, Evolved=1, Ascended=2, Ultimate=3_`;
+                        msg += `*Tiers:* Lesser < Normal < Greater < Abyssal\n`;
+                        msg += `_Socket slots: T1=1, T2=2, T3=3, Ultimate=3_`;
                         await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                         return;
                       }
 
                       // .g rune socket <runeId> <skillId>
                       if (runeSub === 'socket') {
-                        const runeId = runeArgs[1];
-                        const skillId = runeArgs[2]?.toLowerCase();
-                        if (!runeId || !skillId) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} rune socket <runeId> <skillId>\`` });
+                        const runeQuery = runeArgs[1];
+                        let skillId = runeArgs[2]?.toLowerCase();
+                        if (!runeQuery || !skillId) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} rune socket <runeName> <skillId or #>\`\nExample: \`${botConfig.getPrefix()} rune socket power total_war\`\nExample: \`${botConfig.getPrefix()} rune socket POWER-LESSER 3\`` });
+                        }
+                        // 💡 FIX: accept skill index number (from .g abilities list)
+                        if (!isNaN(parseInt(skillId))) {
+                          try {
+                            const guildAdventure = require('./rpg/guildAdventure');
+                            const resolved = guildAdventure.getAbilityByIndex(senderJid, parseInt(skillId) - 1);
+                            if (resolved) {
+                              skillId = resolved.id;
+                            } else {
+                              return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Skill #${skillId} not found. Use \`${botConfig.getPrefix()} abilities\` to see your skill list with numbers.` });
+                            }
+                          } catch (e) {}
                         }
                         try {
-                          const result = await runeSystem.socketRune(senderJid, runeId, skillId);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          // 💡 Use resolveRune to accept name-based queries
+                          const rune = await runeSystem.resolveRune(senderJid, runeQuery);
+                          if (!rune) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Rune "${runeQuery}" not found. Use \`${botConfig.getPrefix()} rune inv\` to see available runes.` });
+                          }
+                          const result = await runeSystem.socketRune(senderJid, rune.runeId, skillId);
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          // 💡 2026-09-20: drop arrives as its own message box
+                          try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
+                          return;
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                      }
+
+                      // 💡 RUNE FUSION by name + count
+                      // .g rune fuse <type> [count|all]
+                      // Examples: .g rune fuse power 2, .g rune fuse POWER all, .g rune fuse cooldown
+                      if (runeSub === 'fuse' || runeSub === 'fusion') {
+                        const typeQuery = runeArgs[1];
+                        const countQuery = runeArgs[2] || 'all';
+                        if (!typeQuery) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} rune fuse <type> [count|all]\`\n\nExample: \`${botConfig.getPrefix()} rune fuse power 2\`\nExample: \`${botConfig.getPrefix()} rune fuse POWER all\`\n\n_Fuses pairs of same-type same-tier runes into the next tier up._\n_Lesser+Lesser → Normal, Normal+Normal → Greater, Greater+Greater → Abyssal_` });
+                        }
+                        try {
+                          const result = await runeSystem.fuseRunesByName(senderJid, typeQuery, countQuery);
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          // 💡 2026-09-20: drop arrives as its own message box
+                          try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
+                          return;
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Fusion failed: ' + e.message });
                         }
                       }
 
@@ -14045,7 +20844,10 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           if (result.success && hasScroll) {
                             inventorySystem.removeItem(senderJid, 'rune_removal_scroll', 1);
                           }
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          // 💡 2026-09-20: drop arrives as its own message box
+                          try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
+                          return;
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
@@ -14059,7 +20861,10 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         }
                         try {
                           const result = await runeSystem.destroyRune(senderJid, runeId);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          // 💡 2026-09-20: drop arrives as its own message box
+                          try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
+                          return;
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
@@ -14076,7 +20881,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           const economy = require('./rpg/economy');
                           const user = economy.getUser(senderJid);
                           if (!user || !user.class) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need a class first. Use `.g class`.' });
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need a class first. Use `${botConfig.getPrefix()} class`.' });
                           }
                           const skillTree = require('./rpg/skillTree');
                           const allClasses = skillTree.SKILL_TREES || {};
@@ -14104,11 +20909,41 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                             for (const r of socketed) {
                               const rt = runeSystem.RUNE_TYPES[r.type];
                               const tt = runeSystem.RUNE_TIERS[r.tier];
-                              msg += `${rt.icon} ${rt.name} (${tt.name}) — \`${r.runeId}\`\n`;
+                              msg += `${rt.icon} ${rt.name} (${tt.name}) - \`${r.runeId}\`\n`;
                             }
                           } else {
                             msg += `_No runes socketed._`;
                           }
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                        return;
+                      }
+
+                      // 💡 NEW 2026-08-06: .s rune sockets - list ALL socketed runes across all skills
+                      if (runeSub === 'sockets') {
+                        try {
+                          const socketed = await runeSystem.getAllSocketedRunes(senderJid);
+                          if (socketed.length === 0) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '💎 *Socketed Runes*\n\n_No runes socketed. Use `' + botConfig.getPrefix() + ' rune socket <runeName> <skillId>` to socket one._' });
+                          }
+                          const bySkill = {};
+                          for (const r of socketed) {
+                            if (!bySkill[r.socketedSkillId]) bySkill[r.socketedSkillId] = [];
+                            bySkill[r.socketedSkillId].push(r);
+                          }
+                          let msg = `💎 *Socketed Runes* (${socketed.length} total, ${Object.keys(bySkill).length} skills)\n\n`;
+                          for (const [skillId, runes] of Object.entries(bySkill)) {
+                            msg += `*${skillId}* (${runes.length} rune${runes.length > 1 ? 's' : ''}):\n`;
+                            for (const r of runes) {
+                              const rt = runeSystem.RUNE_TYPES[r.type];
+                              const tt = runeSystem.RUNE_TIERS[r.tier];
+                              msg += `  ${rt?.icon || '💎'} ${rt?.name || r.type} (${tt?.name || r.tier}) - \`${r.runeId}\`\n`;
+                            }
+                            msg += `\n`;
+                          }
+                          msg += `_Use \`${botConfig.getPrefix()} rune remove <runeId>\` to remove (needs scroll) or \`${botConfig.getPrefix()} rune destroy <runeId>\` to destroy._`;
                           await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
@@ -14128,26 +20963,27 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       const bountySub = bountyArgs[0]?.toLowerCase();
                       const bountySystem = require('./rpg/bountySystem');
 
-                      // .g bounty — help
+                      // .g bounty - help
                       if (!bountySub || bountySub === 'help') {
                         let msg = `💰 *BOUNTY SYSTEM* 💰\n\n`;
                         msg += `Place Zeni bounties on other players. Bounty hunters track via PvP. Adds risk to hoarding wealth.\n\n`;
                         msg += `*Rules:*\n`;
-                        msg += `• Min bounty: 100K Zeni | Max: 50M Zeni\n`;
+                        msg += `• Min bounty: 5K Zeni | Max: 5M Zeni\n`;
                         msg += `• Target must be level 20+\n`;
                         msg += `• Max 3 active bounties per target\n`;
                         msg += `• 24h cooldown between placements by same user\n`;
                         msg += `• 7-day expiry with Zeni refund\n`;
                         msg += `• Hunter fee: 5% to hunter's guild treasury\n`;
                         msg += `• Failed hunt: hunter pays 10% penalty to target\n`;
-                        msg += `• Targets with bounties CANNOT use the bank\n\n`;
+                        msg += `• Targets with bounties CANNOT use the bank (deposit OR withdraw)\n`;
+                        msg += `• 💡 Defender wins: if the target defeats 3 challengers, the bounty auto-clears (no refund to placer)\n\n`;
                         msg += `*Commands:*\n`;
-                        msg += `• \`${botConfig.getPrefix()} bounty place @target <amount>\` — place a bounty\n`;
-                        msg += `• \`${botConfig.getPrefix()} bounty list\` — top 10 active bounties\n`;
-                        msg += `• \`${botConfig.getPrefix()} bounty target\` — bounties on you\n`;
-                        msg += `• \`${botConfig.getPrefix()} bounty mine\` — bounties you placed\n`;
-                        msg += `• \`${botConfig.getPrefix()} bounty cancel <bountyId>\` — cancel (10% fee)\n`;
-                        msg += `• \`${botConfig.getPrefix()} bounty admin\` — admin commands`;
+                        msg += `• \`${botConfig.getPrefix()} bounty place @target <amount>\` - place a bounty\n`;
+                        msg += `• \`${botConfig.getPrefix()} bounty list\` - top 10 active bounties\n`;
+                        msg += `• \`${botConfig.getPrefix()} bounty target\` - bounties on you\n`;
+                        msg += `• \`${botConfig.getPrefix()} bounty mine\` - bounties you placed\n`;
+                        msg += `• \`${botConfig.getPrefix()} bounty cancel <bountyId>\` - cancel (10% fee)\n`;
+                        msg += `• \`${botConfig.getPrefix()} bounty admin\` - admin commands`;
                         msg += `\n\n_Claim bounties by winning PvP duels against the target. The bounty auto-claims on win._`;
                         await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                         return;
@@ -14157,7 +20993,8 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       if (bountySub === 'place') {
                         const targetJid = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0]
                           || (bountyArgs[1]?.includes('@') ? bountyArgs[1] : null);
-                        const amount = parseInt(bountyArgs[2], 10);
+                        // 💡 COMMA FIX: thousands separators no longer silently shrink the bounty
+                        const amount = parseInt(String(bountyArgs[2] || '').replace(/,/g, ''), 10);
                         if (!targetJid || !amount) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} bounty place @target <amount>\`` });
                         }
@@ -14171,13 +21008,13 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           const placerLevel = progression.getLevel(senderJid);
                           const targetLevel = progression.getLevel(targetJid);
                           const result = await bountySystem.placeBounty(senderJid, targetJid, amount, placerLevel, targetLevel);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: buildMentions(m, [], targetJid) });
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
                       }
 
-                      // .g bounty list — top 10 active bounties
+                      // .g bounty list - top 10 active bounties
                       if (bountySub === 'list' || bountySub === 'top') {
                         try {
                           const top = await bountySystem.getTopBounties(10);
@@ -14188,7 +21025,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           for (let i = 0; i < top.length; i++) {
                             const entry = top[i];
                             const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
-                            msg += `${medal} @${entry._id.split('@')[0]}\n   💰 ${entry.totalBounty.toLocaleString()} Zeni (${entry.count} bounties)\n`;
+                            msg += `${medal} @${economy.getDisplayName(entry._id)}\n   💰 ${entry.totalBounty.toLocaleString()} Zeni (${entry.count} bounties)\n`;
                           }
                           msg += `\n_Win a PvP duel against a target to claim their bounties._`;
                           await sock.sendMessage(chatId, { text: BOT_MARKER + msg, mentions: top.map(e => e._id) });
@@ -14198,7 +21035,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         return;
                       }
 
-                      // .g bounty target — bounties on you
+                      // .g bounty target - bounties on you
                       if (bountySub === 'target' || bountySub === 'onme') {
                         try {
                           const bounties = await bountySystem.getBountiesOnTarget(senderJid);
@@ -14209,7 +21046,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           let msg = `⚠️ *BOUNTIES ON YOU* ⚠️\n\n`;
                           for (const b of bounties) {
                             msg += `💰 ${b.amount.toLocaleString()} Zeni\n`;
-                            msg += `  Placed by: @${b.placerJid.split('@')[0]}\n`;
+                            msg += `  Placed by: @${economy.getDisplayName(b.placerJid)}\n`;
                             msg += `  Expires: ${new Date(b.expiresAt).toLocaleDateString()}\n\n`;
                             total += b.amount;
                           }
@@ -14223,7 +21060,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         return;
                       }
 
-                      // .g bounty mine — bounties you placed
+                      // .g bounty mine - bounties you placed
                       if (bountySub === 'mine' || bountySub === 'placed') {
                         try {
                           const bounties = await bountySystem.getPlacedBounties(senderJid);
@@ -14232,7 +21069,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           }
                           let msg = `💰 *Your Placed Bounties* (${bounties.length} active)\n\n`;
                           for (const b of bounties) {
-                            msg += `💰 ${b.amount.toLocaleString()} Zeni on @${b.targetJid.split('@')[0]}\n`;
+                            msg += `💰 ${b.amount.toLocaleString()} Zeni on @${economy.getDisplayName(b.targetJid)}\n`;
                             msg += `  ID: \`${b.bountyId}\`\n`;
                             msg += `  Expires: ${new Date(b.expiresAt).toLocaleDateString()}\n`;
                             msg += `  Cancel: \`${botConfig.getPrefix()} bounty cancel ${b.bountyId}\`\n\n`;
@@ -14258,17 +21095,17 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         }
                       }
 
-                      // .g bounty admin — admin commands
+                      // .g bounty admin - admin commands
                       if (bountySub === 'admin' || bountySub === 'mod') {
-                        if (!isOwner && !isGlobalMod(senderJid)) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Admin only.' });
+                        if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Admin only. You must be the bot owner, a global mod, or an RPG mod.' });
                         }
                         const adminSub = bountyArgs[1]?.toLowerCase();
                         if (!adminSub) {
                           let msg = `🔧 *BOUNTY ADMIN COMMANDS*\n\n`;
-                          msg += `• \`${botConfig.getPrefix()} bounty admin cancel <bountyId>\` — cancel (full refund, no fee)\n`;
-                          msg += `• \`${botConfig.getPrefix()} bounty admin purge\` — delete ALL bounties (no refunds)\n`;
-                          msg += `• \`${botConfig.getPrefix()} bounty admin expire\` — force-expire all old bounties now`;
+                          msg += `• \`${botConfig.getPrefix()} bounty admin cancel <bountyId>\` - cancel (full refund, no fee)\n`;
+                          msg += `• \`${botConfig.getPrefix()} bounty admin purge\` - delete ALL bounties (no refunds)\n`;
+                          msg += `• \`${botConfig.getPrefix()} bounty admin expire\` - force-expire all old bounties now`;
                           await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                           return;
                         }
@@ -14301,47 +21138,178 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       const abyssArgs = txt.trim().split(/\s+/).slice(2);
                       const abyssSub = abyssArgs[0]?.toLowerCase();
                       const abyssSystem = require('./rpg/abyssSystem');
+const broadcastHelpers = require('./rpg/broadcastHelpers');
 
-                      // .g abyss — show status or help
+                      // 💡 FIX 2026-07-31 Bug #3: Block Abyss sub-commands during
+                      // active combat to prevent state corruption. Players in combat
+                      // must finish the combat round before using abyss commands.
+                      // 'status', 'leaderboard', 'best', 'help', and 'admin' are
+                      // allowed (read-only or admin operations).
+                      const _abyssCombatState = guildAdventure.getGameState(`${chatId}_${senderJid}`);
+                      const _abyssInCombat = _abyssCombatState?.inCombat === true;
+                      const _abyssReadOnly = ['status', 'info', 'leaderboard', 'lb', 'best', 'help', 'admin', 'mod'];
+                      // 2026-09-15 (owner: "abyss retreat/leave doesnt work ... wait for encounter to end"):
+                      // retreat/extract/leave/exit/flee ARE the extraction path - they must work
+                      // mid-battle too (combat flee is blocked in the Abyss, so gating them here
+                      // left the player with NO way out of a fight). Only state-mutating subs
+                      // (enter/resume/collect/choose/skip) stay gated during active combat.
+                      const _abyssExtractors = ['retreat', 'extract', 'leave', 'exit', 'flee'];
+                      if (_abyssInCombat && !_abyssReadOnly.includes(abyssSub) && !_abyssExtractors.includes(abyssSub)) {
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + `⚔️ You are in active combat! Finish the round with \`${botConfig.getPrefix()} combat attack\`, or extract now with \`${botConfig.getPrefix()} abyss retreat\` (keeps 100% loot).` });
+                      }
+                      // Mid-combat extraction: defuse the live encounter BEFORE the retreat runs,
+                      // so loot is paid out with no zombie fight left behind (pending turn
+                      // timers cleared; processors guard on inCombat and will no-op).
+                      if (_abyssInCombat && _abyssExtractors.includes(abyssSub)) {
+                        try {
+                          const __xs = _abyssCombatState;
+                          __xs.inCombat = false;
+                          __xs.active = false;
+                          __xs.combatProcessing = false;
+                          if (__xs.timers) {
+                            for (const __tk of Object.keys(__xs.timers)) {
+                              if (__xs.timers[__tk]) { try { clearTimeout(__xs.timers[__tk]); } catch (e) {} __xs.timers[__tk] = null; }
+                            }
+                          }
+                          console.log(`[Abyss] mid-combat extraction: encounter defused for ${senderJid}`);
+                        } catch (__defuseErr) {
+                          console.error('[Abyss] mid-combat defuse error:', __defuseErr.message);
+                        }
+                      }
+
+                      // .g abyss - show status or help
                       if (!abyssSub || abyssSub === 'help') {
-                        let msg = `🕳️ *ABYSS — ENDLESS DUNGEON* 🕳️\n\n`;
-                        msg += `Procedural floors that get harder the deeper you go. Death = lose 90% of run loot. Retreat = keep 100%.\n\n`;
+                        let msg = `🕳️ *ABYSS - ENDLESS DUNGEON* 🕳️\n\n`;
+                        msg += `Procedural floors with increasing difficulty. Death = lose 90% of loot. Retreat = keep 100%.\n\n`;
                         msg += `*Floor Structure:*\n`;
-                        msg += `• Floors 1-10: F→A rank enemies\n`;
-                        msg += `• Floors 11-20: S rank, mini-boss every 3rd floor\n`;
-                        msg += `• Floors 21-49: SS+ rank, every floor is a boss\n`;
+                        msg += `• Floors 1-2: F-rank mobs (rats, bats, slimes)\n`;
+                        msg += `• Floors 3-6: C-rank, boss every 5th floor\n`;
+                        msg += `• Floors 7-10: A-rank, tougher mobs\n`;
+                        msg += `• Floors 11-20: S-rank, mini-boss every 3rd floor\n`;
+                        msg += `• Floors 21-49: SS+ rank, boss every 5th floor\n`;
                         msg += `• Floors 50+: SSS rank, brutal\n`;
-                        msg += `• Floor 100: The Abyssal God (final boss)\n\n`;
-                        msg += `*Commands:*\n`;
-                        msg += `• \`${botConfig.getPrefix()} abyss enter\` — start a run (12h cooldown)\n`;
-                        msg += `• \`${botConfig.getPrefix()} abyss attack\` — attack current floor enemy\n`;
-                        msg += `• \`${botConfig.getPrefix()} abyss collect\` — collect treasure on current floor\n`;
-                        msg += `• \`${botConfig.getPrefix()} abyss choose <1/2>\` — respond to event encounter\n`;
-                        msg += `• \`${botConfig.getPrefix()} abyss skip\` — skip treasure/event floor\n`;
-                        msg += `• \`${botConfig.getPrefix()} abyss status\` — view your active run\n`;
-                        msg += `• \`${botConfig.getPrefix()} abyss retreat\` — extract with 100% loot\n`;
-                        msg += `• \`${botConfig.getPrefix()} abyss leaderboard\` — top runs this week\n`;
-                        msg += `• \`${botConfig.getPrefix()} abyss best\` — your best run ever\n\n`;
+                        msg += `• Floor 100: The Abyssal God\n\n`;
+                        msg += `*Combat Commands (standard):*\n`;
+                        msg += `• \`${botConfig.getPrefix()} combat attack\` - attack\n`;
+                        msg += `• \`${botConfig.getPrefix()} combat skill <#>\` - use skill\n`;
+                        msg += `• \`${botConfig.getPrefix()} combat item\` - use item\n`;
+                        msg += `• \`${botConfig.getPrefix()} combat flee\` - flee (penalty)\n\n`;
+                        msg += `*Abyss Commands:*\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss enter\` - start a run (12h cooldown; entry obeys the universal 6h gate: 5h locked + 1h open)\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss resume\` - restart combat after disconnect\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss collect\` - collect treasure\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss choose <1/2>\` - event choice\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss skip\` - skip treasure/event floor\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss status\` - view your run\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss retreat\` - extract with 100% loot\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss leaderboard\` - top runs\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss best\` - your best run\n\n`;
                         msg += `*Rewards:* XP + Zeni per floor, rune drops on floor 21+ bosses, leaderboard glory.\n`;
                         msg += `*Score:* deepestFloor × 100 + monstersKilled × 5`;
                         await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                         return;
                       }
 
-                      // .g abyss enter — start a run
+                      // .g abyss enter - start a run
                       if (abyssSub === 'enter' || abyssSub === 'start') {
                         try {
                           const economy = require('./rpg/economy');
                           const progression = require('./rpg/progression');
                           const user = economy.getUser(senderJid);
                           if (!user) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to register first. Use `.g register`.' });
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You need to register first. Use \`${botConfig.getPrefix()} register\`.` });
                           }
-                          const level = progression.getLevel(senderJid);
-                          if (level < 20) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to be at least level 20 to enter the Abyss.\n_Current level: ' + level + '_' });
+                          const levelRawEntry = progression.getLevel(senderJid);
+                          // 💡 2026-09-21 OWNER FIX (Abyss alignment logic):
+                          // this comparison used the raw return value - an
+                          // undefined/NaN level evaluated `NaN < 20` == false
+                          // and PASSED the tier check (fail-open, runtime
+                          // probed). Anything that is not a finite number is
+                          // now treated as below the tier (fail closed).
+                          const levelNum = Number(levelRawEntry);
+                          if (!Number.isFinite(levelNum) || levelNum < 20) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to be at least level 20 to enter the Abyss.\n_Current level: ' + (Number.isFinite(levelNum) ? levelNum : 0) + '_' });
                           }
-                          const baseStats = progression.getBaseStats(senderJid, user.class);
+                          // 💡 ABYSS UNIVERSAL ENTRY WINDOW + WORLD ALIGNMENT
+                          // (cosmology pass, owner consolidated review §6;
+                          // tickets #b4c0ec + #b4f5b0): one universal 6-hour
+                          // cycle across ALL players - 5 h locked + 1 h entry
+                          // window. The window gates ENTRY ONLY: players already
+                          // inside are never extracted by it closing.
+                          //
+                          // 💡 FIX (#b4c0ec + #b4f5b0, 2026-09-21): this gate
+                          // used to reference an undefined `engine` identifier
+                          // (ReferenceError swallowed by the catch) so it FAILED
+                          // OPEN - the Abyss never closed and the staff bypass
+                          // never worked. Two rules now:
+                          //   1. FAIL CLOSED (#b4c0ec): if the world-alignment
+                          //      system is unavailable/disconnected or returns
+                          //      garbage, the gate stays SEALED. No alignment
+                          //      state = no access.
+                          //   2. ALIGNMENT GATE (#b4f5b0): the 6h window IS the
+                          //      world-alignment state for the descent - window
+                          //      closed = the worlds are not aligned, the gate is
+                          //      SEALED for everyone. Normal player checks (level/
+                          //      registration) do not bypass it. Staff (owner /
+                          //      RPG mod) bypass mirrors the cooldown bypass in
+                          //      abyssSystem. (the FW-bottom routine link and the
+                          //      weekly triune stay separate clocks - never merged
+                          //      into the entry schedule)
+                          {
+                            let __w = null;
+                            let __gateAlive = true;
+                            try {
+                              const cosmology = require('./rpg/cosmology');
+                              __w = cosmology.abyssWindow();
+                              if (!__w || typeof __w.open !== 'boolean' || typeof __w.label !== 'string') {
+                                __gateAlive = false;
+                              }
+                            } catch (__gateErr) {
+                              console.error('[Abyss] world-alignment system unavailable - gate fails CLOSED:', __gateErr.message);
+                              __gateAlive = false;
+                            }
+                            const __gateBypass = isBotOwner(senderJid) || isRpgMod(senderJid);
+                            if (!__gateAlive) {
+                              // 💡 2026-09-21 owner: alignment failures get an
+                              // IMAGE CARD that carries the refusal visually
+                              // (text stays as the caption / fallback).
+                              const __sealedTxt = BOT_MARKER + `🕳️ *THE GATE IS SEALED*
+
+The alignment of the worlds cannot be read right now - and the abyss does not open on a maybe.
+_Try again soon; those already below are not pulled out._`;
+                              try {
+                                const __gateBuf = await (require('./rpg/worldMapRenderer')).renderAbyssMisalignedCard({ mode: 'unreadable' });
+                                if (__gateBuf && __gateBuf.length > 100) {
+                                  return sock.sendMessage(chatId, { image: __gateBuf, caption: __sealedTxt });
+                                }
+                              } catch (__gateCardErr) {
+                                console.error('[Abyss] sealed gate card failed:', __gateCardErr.message);
+                              }
+                              return sock.sendMessage(chatId, { text: __sealedTxt });
+                            }
+                            if (!__w.open && !__gateBypass) {
+                              // 💡 2026-09-21 owner: worlds-not-aligned refusal
+                              // renders the misalignment card (link not met,
+                              // live window countdown in the plate).
+                              const __closedTxt = BOT_MARKER + `🕳️ *THE GATE IS SEALED*
+
+The worlds are not aligned for the descent right now - the abyss admits new descenters only during its one-hour window, five hours locked, one hour open, one cycle for everyone.
+⏳ The gate opens in *${__w.label.replace('locked ', '')}*.
+_Those already below are not pulled out by the closing - only entry is gated._`;
+                              try {
+                                const __gateBuf = await (require('./rpg/worldMapRenderer')).renderAbyssMisalignedCard({ mode: 'closed', opensInLabel: String(__w.label || '') });
+                                if (__gateBuf && __gateBuf.length > 100) {
+                                  return sock.sendMessage(chatId, { image: __gateBuf, caption: __closedTxt });
+                                }
+                              } catch (__gateCardErr) {
+                                console.error('[Abyss] closed gate card failed:', __gateCardErr.message);
+                              }
+                              return sock.sendMessage(chatId, { text: __closedTxt });
+                            }
+                          }
+                          const userClassObj = economy.getUserClass(senderJid);
+                          const classIdForAbyss = userClassObj?.id || user.class || 'FIGHTER';
+                          const baseStats = progression.getBaseStats(senderJid, classIdForAbyss);
                           const playerStats = {
                             hp: baseStats.hp,
                             maxHp: baseStats.hp,
@@ -14349,40 +21317,120 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                             maxEnergy: baseStats.maxEnergy || 100,
                             atk: baseStats.atk || 10,
                             def: baseStats.def || 5,
+                            // 💡 FIX 2026-08-31: pass spd too - TRAP events
+                            // roll against it (was never snapshotted).
+                            spd: baseStats.spd || 5,
                           };
-                          const result = await abyssSystem.startRun(senderJid, playerStats);
+                          const result = await abyssSystem.startRun(senderJid, playerStats, { playerClassId: classIdForAbyss });
                           if (!result.success) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           }
-                          // If first floor is combat, start real combat engine
                           const run = result.run;
-                          if (run.currentEncounterType === 'combat' && run.currentEnemy) {
-                            try {
+                          // 2026-09-15: ABYSS_ENTRY card - descent brief with the
+                          // run announcement as caption (text fallback on failure)
+                          try {
+                            const abyssTier = abyssSystem.getFloorTier(run.currentFloor || 1);
+                            const abyssMult = Number(abyssSystem.getFloorMultiplier(run.currentFloor || 1).toFixed(1));
+                            const __entryBuf = await (require('./utils/goImageService')).generatePortraitCard({
+                              kind: 'ABYSS_ENTRY',
+                              // 🧩 SPRITE CONSISTENCY 2026-09-17: hero sprite fields.
+                              playerClass: String((economy.getUser(senderJid) || {}).class || '').toUpperCase(),
+                              playerIndex: Math.max(0, Math.floor(Number((economy.getUser(senderJid) || {}).spriteIndex) || 0)),
+                              nickname: economy.getDisplayName(senderJid),
+                              cur: run.currentFloor || 1,
+                              pointsBig: `FLOOR ${run.currentFloor || 1}`,
+                              pill: `TIER ${abyssTier} · DANGER x${abyssMult}`,
+                              spentNow: 'BOSS EVERY 5TH FLOOR',
+                              spentLeft: '12H COOLDOWN',
+                              sealText: String(run.currentFloor || 1),
+                              caption: 'the abyss hungers',
+                              rows: [
+                                { label: 'BOSS FLOORS', value: 'EVERY 5TH' },
+                                { label: 'FIGHT', value: '.combat attack' },
+                                { label: 'TREASURE', value: '.abyss collect' },
+                                { label: 'EVENTS', value: '.abyss choose 1|2' },
+                                { label: 'EXTRACT', value: '.abyss retreat' },
+                              ],
+                            });
+                            if (__entryBuf && __entryBuf.length > 100) {
+                              await sock.sendMessage(chatId, { image: __entryBuf, caption: BOT_MARKER + result.message });
+                            } else {
                               await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                            }
+                          } catch (__cardErr) {
+                            console.error('[Abyss] entry card failed:', __cardErr.message);
+                            await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          }
+                          // 💡 2026-09-20: lore drop arrives as its own message box
+                          try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
+                          // 💡 FIX 2026-08-31: wild_summon floors (10% of floors)
+                          // were never combat-started from `enter` - the run
+                          // soft-locked with "Not in combat!" on attack.
+                          if ((run.currentEncounterType === 'combat' || run.currentEncounterType === 'wild_summon') && run.currentEnemy) {
+                            try {
                               await guildAdventure.startAbyssCombat(sock, chatId, senderJid, run.currentEnemy, run, 1);
                             } catch (combatErr) {
                               console.error('[Abyss] Failed to start combat:', combatErr.message);
-                              return sock.sendMessage(chatId, { text: BOT_MARKER + '⚠️ Abyss started but combat failed to initialize.' });
+                              return sock.sendMessage(chatId, { text: BOT_MARKER + '⚠️ Abyss started but combat failed to initialize. Use `' + botConfig.getPrefix() + ' abyss resume` to retry.' });
                             }
-                          } else {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           }
+                          // 💡 FIX 2026-08-15: MUST return here. Without this return,
+                          // the code fell through to "Unknown Abyss command: enter" even
+                          // though the run started successfully. (The announcement is
+                          // delivered via the ABYSS_ENTRY card above.)
+                          return;
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
                       }
 
-                      // .g abyss attack — redirect to combat (Abyss uses real combat now)
+                      // .g abyss attack/atk/fight - redirect to standard combat
                       if (abyssSub === 'attack' || abyssSub === 'atk' || abyssSub === 'fight') {
-                        return sock.sendMessage(chatId, { text: BOT_MARKER + '⚠️ Abyss combat now uses the real combat system! Use `.g combat attack` to fight.' });
+                        const abyssSessionKey = `${chatId}_${senderJid}`;
+                        const combatState = guildAdventure.getGameState(abyssSessionKey);
+                        if (combatState && combatState.inCombat) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `⚔️ Use \`${botConfig.getPrefix()} combat attack\` to fight.` });
+                        }
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + `⚔️ Abyss uses standard combat.\n_Start: \`${botConfig.getPrefix()} abyss enter\`\n_Attack: \`${botConfig.getPrefix()} combat attack\`_` });
                       }
 
-                      // .g abyss status — view active run
+                      // 💡 AUDIT FIX 2026-08-01 (Round 1): .g abyss resume -
+                      // restart combat after bot restart wiped the in-memory
+                      // gameStates Map. Without this, players mid-Abyss-combat
+                      // when the bot restarts had no way to finish the fight.
+                      if (abyssSub === 'resume' || abyssSub === 'restart' || abyssSub === 'continue') {
+                        try {
+                          const run = await abyssSystem.getRunStatus(senderJid);
+                          if (!run) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No active Abyss run to resume.' });
+                          }
+                          // 💡 FIX 2026-08-31: accept wild_summon floors too -
+                          // previously resume rejected them ("not a combat
+                          // floor") even though they REQUIRE combat.
+                          const runEncType = run.currentEncounterType;
+                          if ((runEncType !== 'combat' && runEncType !== 'wild_summon') || !run.currentEnemy) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Current floor is not a combat floor. Use `${botConfig.getPrefix()} abyss status` to see what to do.' });
+                          }
+                          const abyssSessionKey = `${chatId}_${senderJid}`;
+                          const existingState = guildAdventure.getGameState(abyssSessionKey);
+                          if (existingState && existingState.inCombat) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '⚠️ You are already in combat! Use `${botConfig.getPrefix()} combat attack` to fight.' });
+                          }
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + `⚔️ *Resuming Abyss combat on floor ${run.currentFloor}...*` });
+                          await guildAdventure.startAbyssCombat(sock, chatId, senderJid, run.currentEnemy, run, run.currentFloor);
+                          return;
+                        } catch (e) {
+                          console.error('[Abyss resume] failed:', e.message);
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Resume failed: ' + e.message + '\n\n_You can still retreat with `${botConfig.getPrefix()} abyss retreat`._' });
+                        }
+                      }
+
+                      // .g abyss status - view active run
                       if (abyssSub === 'status' || abyssSub === 'info') {
                         try {
                           const run = await abyssSystem.getRunStatus(senderJid);
                           if (!run) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No active Abyss run.\n_Start one with `.g abyss enter`._' });
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No active Abyss run.\n_Start one with `${botConfig.getPrefix()} abyss enter`._' });
                           }
                           let msg = `🕳️ *ABYSS RUN STATUS*\n\n`;
                           msg += `📊 Floor: ${run.currentFloor}\n`;
@@ -14396,70 +21444,163 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           if (run.lootAccumulator.runes.length > 0) {
                             msg += `• Runes: ${run.lootAccumulator.runes.length}\n`;
                           }
-                          msg += `\n👹 *Current Enemy:* ${run.currentEnemy.name}\n`;
-                          msg += `HP: ${run.currentEnemy.hp}/${run.currentEnemy.maxHp}\n`;
-                          msg += `ATK: ${run.currentEnemy.atk} | DEF: ${run.currentEnemy.def}\n`;
-                          if (run.currentEnemy.isBoss) msg += `⚠️ *BOSS FLOOR*\n`;
-                          msg += `\n_Attack with \`.g abyss attack\`_\n_Retreat with \`.g abyss retreat\`_`;
+                          // 💡 FIX 2026-07-31 Bug #5: Null-safe enemy display
+                          // (currentEnemy is null on treasure/event floors)
+                          const encounterType = run.currentEncounterType || 'combat';
+                          if (encounterType === 'combat' && run.currentEnemy && run.currentEnemy.name) {
+                            msg += `\n👹 *Current Enemy:* ${run.currentEnemy.name}\n`;
+                            msg += `HP: ${run.currentEnemy.hp}/${run.currentEnemy.maxHp}\n`;
+                            msg += `ATK: ${run.currentEnemy.atk} | DEF: ${run.currentEnemy.def}\n`;
+                            if (run.currentEnemy.isBoss) msg += `⚠️ *BOSS FLOOR*\n`;
+                            if (Array.isArray(run.packQueue) && run.packQueue.length) msg += `👥 *PACK FIGHT* - ${run.packQueue.length} more pack member(s) queued on this floor\n`;
+                            // 💡 AUDIT FIX 2026-08-01 (Round 1): if the bot restarted
+                            // while the player was in Abyss combat, the in-memory
+                            // gameStates Map was wiped - the player had no way to
+                            // resume the fight. Now we check if the combat state
+                            // exists; if not, offer to resume it.
+                            const abyssSessionKey = `${chatId}_${senderJid}`;
+                            const abyssCombatState = guildAdventure.getGameState(abyssSessionKey);
+                            if (!abyssCombatState || !abyssCombatState.inCombat) {
+                              msg += `\n⚠️ _Combat state lost (bot may have restarted)._\n`;
+                              msg += `_Type \`${botConfig.getPrefix()} abyss resume\` to restart the fight._\n`;
+                              msg += `_Or \`${botConfig.getPrefix()} abyss retreat\` to extract._`;
+                            } else {
+                              msg += `\n_Attack with \`${botConfig.getPrefix()} combat attack\`_\n_Retreat with \`${botConfig.getPrefix()} abyss retreat\`_`;
+                            }
+                          } else if (encounterType === 'treasure') {
+                            msg += `\n💰 *Treasure Floor!*\n_Use \`${botConfig.getPrefix()} abyss collect\` or \`${botConfig.getPrefix()} abyss skip\`_`;
+                          } else if (encounterType === 'event') {
+                            msg += `\n❓ *Event Floor!*\n_Use \`${botConfig.getPrefix()} abyss choose <1|2>\` or \`${botConfig.getPrefix()} abyss skip\`_`;
+                          } else {
+                            msg += `\n_Use \`${botConfig.getPrefix()} abyss retreat\` to extract._`;
+                          }
                           return sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
                       }
 
-                      // .g abyss retreat — extract with loot
-                      if (abyssSub === 'retreat' || abyssSub === 'extract' || abyssSub === 'flee') {
+                      // .g abyss retreat - extract with loot
+                      if (abyssSub === 'retreat' || abyssSub === 'extract' || abyssSub === 'flee' || abyssSub === 'leave' || abyssSub === 'exit') {
                         try {
                           const result = await abyssSystem.retreat(senderJid);
+                          // 2026-09-15: ABYSS_RESULT (EXTRACTED) card, text fallback
+                          try {
+                            if (result.card) {
+                              const __c = result.card;
+                              const __eco = require('./rpg/economy');
+                              const __exBuf = await (require('./utils/goImageService')).generatePortraitCard({
+                                kind: 'ABYSS_RESULT',
+                                // 🧩 SPRITE CONSISTENCY 2026-09-17: hero sprite fields.
+                                playerClass: String((__eco.getUser(senderJid) || {}).class || '').toUpperCase(),
+                                playerIndex: Math.max(0, Math.floor(Number((__eco.getUser(senderJid) || {}).spriteIndex) || 0)),
+                                nickname: __eco.getDisplayName(senderJid),
+                                partyText: 'EXTRACTED',
+                                cur: __c.floor,
+                                pointsBig: `FLOOR ${__c.floor}`,
+                                pill: `EXTRACTED · SCORE ${Number(__c.score || 0).toLocaleString()}`,
+                                spentNow: __c.runes > 0 ? `${__c.runes} RUNES RECOVERED` : 'FULL LOOT RECOVERED',
+                                spentLeft: '100% KEPT',
+                                sealText: String(Math.min(__c.score || 0, 999)),
+                                caption: 'a wise extraction',
+                                rows: [
+                                  { label: 'XP', value: `+${Number(__c.keptXp || 0).toLocaleString()}` },
+                                  { label: 'ZENI', value: `+${Number(__c.keptGold || 0).toLocaleString()}` },
+                                  { label: 'RUNES', value: String(__c.runes || 0) },
+                                  { label: 'MONSTERS', value: String(__c.monstersKilled || 0) },
+                                  { label: 'BOSSES', value: String(__c.bossesKilled || 0) },
+                                  { label: 'DEPTH', value: `FLOOR ${__c.floor} / 200` },
+                                ],
+                              });
+                              if (__exBuf && __exBuf.length > 100) {
+                                return sock.sendMessage(chatId, { image: __exBuf, caption: BOT_MARKER + result.message });
+                              }
+                            }
+                          } catch (__cardErr) {
+                            console.error('[Abyss] retreat card failed:', __cardErr.message);
+                          }
                           return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
                       }
 
-                      // 💡 .g abyss collect — collect treasure on current floor
+                      // 💡 .g abyss collect - collect treasure on current floor
                       if (abyssSub === 'collect' || abyssSub === 'take' || abyssSub === 'loot') {
                         try {
                           const result = await abyssSystem.processTreasure(senderJid);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          // 💡 2026-09-20: lore drop arrives as its own message box
+                          try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
+                          // 💡 FIX 2026-08-15: Start combat if next floor is combat.
+                          // 💡 FIX 2026-08-31: wild_summon floors too, and RETURN -
+                          // previously fell through to "Unknown Abyss command: collect"
+                          // after every successful collection.
+                          if (result.run && (result.run.currentEncounterType === 'combat' || result.run.currentEncounterType === 'wild_summon') && result.run.currentEnemy) {
+                            await guildAdventure.startAbyssCombat(sock, chatId, senderJid, result.run.currentEnemy, result.run, result.run.currentFloor);
+                          }
+                          return;
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
                       }
 
-                      // 💡 .g abyss choose <1/2> — make a choice in event encounters
+                      // 💡 .g abyss choose <1/2> - make a choice in event encounters
                       if (abyssSub === 'choose' || abyssSub === 'pick' || abyssSub === 'select') {
                         try {
                           const choiceId = abyssArgs[1] || '1';
                           const result = await abyssSystem.processEventChoice(senderJid, choiceId);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          // 💡 2026-09-20: lore drop arrives as its own message box
+                          try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
+                          // 💡 FIX 2026-08-15: If the next floor is combat, start it!
+                          // Previously processEventChoice advanced the floor and said "Attack with .s combat atk"
+                          // but never actually started combat - so the player got "Not in combat!" when they tried.
+                          // 💡 FIX 2026-08-31: wild_summon floors too, and RETURN -
+                          // previously fell through to "Unknown Abyss command: choose".
+                          if (result.run && (result.run.currentEncounterType === 'combat' || result.run.currentEncounterType === 'wild_summon') && result.run.currentEnemy) {
+                            await guildAdventure.startAbyssCombat(sock, chatId, senderJid, result.run.currentEnemy, result.run, result.run.currentFloor);
+                          }
+                          return;
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
                       }
 
-                      // 💡 .g abyss skip — skip treasure/event floor
+                      // 💡 .g abyss skip - skip treasure/event floor
                       if (abyssSub === 'skip' || abyssSub === 'next') {
                         try {
                           const result = await abyssSystem.processSkip(senderJid);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          // 💡 2026-09-20: lore drop arrives as its own message box
+                          try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
+                          // 💡 FIX 2026-08-15: Same fix as choose - start combat if next floor is combat.
+                          // 💡 FIX 2026-08-31: wild_summon floors too, and RETURN -
+                          // previously fell through to "Unknown Abyss command: skip".
+                          if (result.run && (result.run.currentEncounterType === 'combat' || result.run.currentEncounterType === 'wild_summon') && result.run.currentEnemy) {
+                            await guildAdventure.startAbyssCombat(sock, chatId, senderJid, result.run.currentEnemy, result.run, result.run.currentFloor);
+                          }
+                          return;
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }
                       }
 
-                      // .g abyss leaderboard — top runs this week
+                      // .g abyss leaderboard - top runs this week
                       if (abyssSub === 'leaderboard' || abyssSub === 'lb') {
                         try {
                           const leaderboard = await abyssSystem.getWeeklyLeaderboard(15);
                           if (leaderboard.length === 0) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '🕳️ *Abyss Leaderboard (This Week)*\n\n_No runs completed yet this week._' });
                           }
-                          let msg = `🕳️ *ABYSS LEADERBOARD — THIS WEEK* 🕳️\n\n`;
+                          let msg = `🕳️ *ABYSS LEADERBOARD - THIS WEEK* 🕳️\n\n`;
                           for (let i = 0; i < leaderboard.length; i++) {
                             const entry = leaderboard[i];
                             const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
-                            msg += `${medal} ${entry.userId.split('@')[0]}\n`;
+                            // 💡 FIX: show nickname instead of raw user ID
+                            const lbUser = economy.getUser(entry.userId);
+                            const displayName = (lbUser && lbUser.nickname) ? lbUser.nickname : entry.userId.split('@')[0];
+                            msg += `${medal} ${displayName}\n`;
                             msg += `   🕳️ Floor ${entry.deepestFloor} | ☠️ ${entry.monstersKilled} kills | 📊 ${entry.score} pts\n`;
                             msg += `   ${entry.result === 'retreat' ? '🏃 Retreated' : '💀 Died'}\n`;
                           }
@@ -14469,7 +21610,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         }
                       }
 
-                      // .g abyss best — your best run ever
+                      // .g abyss best - your best run ever
                       if (abyssSub === 'best') {
                         try {
                           const best = await abyssSystem.getPlayerBest(senderJid);
@@ -14490,18 +21631,18 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
 
                       // ── ABYSS ADMIN COMMANDS (owner / global mod only) ──
                       if (abyssSub === 'admin' || abyssSub === 'mod') {
-                        // Permission check
-                        if (!isOwner && !isGlobalMod(senderJid)) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Admin only. You must be the bot owner or a global mod.' });
+                        // Permission check - RPG Mods can also use abyss admin
+                        if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Admin only. You must be the bot owner, a global mod, or an RPG mod.' });
                         }
                         const adminSub = abyssArgs[1]?.toLowerCase();
                         if (!adminSub) {
                           let msg = `🔧 *ABYSS ADMIN COMMANDS*\n\n`;
-                          msg += `• \`${botConfig.getPrefix()} abyss admin reset @user\` — reset user's cooldown\n`;
-                          msg += `• \`${botConfig.getPrefix()} abyss admin clear @user\` — clear user's active run (no loot)\n`;
-                          msg += `• \`${botConfig.getPrefix()} abyss admin setfloor @user <floor>\` — set user's floor (testing)\n`;
-                          msg += `• \`${botConfig.getPrefix()} abyss admin purge\` — purge ALL active runs (emergency)\n`;
-                          msg += `• \`${botConfig.getPrefix()} abyss admin inspect @user\` — view a user's active run`;
+                          msg += `• \`${botConfig.getPrefix()} abyss admin reset @user\` - reset user's cooldown\n`;
+                          msg += `• \`${botConfig.getPrefix()} abyss admin clear @user\` - clear user's active run (no loot)\n`;
+                          msg += `• \`${botConfig.getPrefix()} abyss admin setfloor @user <floor>\` - set user's floor (testing)\n`;
+                          msg += `• \`${botConfig.getPrefix()} abyss admin purge\` - purge ALL active runs (emergency)\n`;
+                          msg += `• \`${botConfig.getPrefix()} abyss admin inspect @user\` - view a user's active run`;
                           await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                           return;
                         }
@@ -14514,7 +21655,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                             return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} abyss admin reset @user\`` });
                           }
                           const result = await abyssSystem.adminResetCooldown(targetJid);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: buildMentions(m, [], targetJid) });
                         }
 
                         // .g abyss admin clear @user
@@ -14525,7 +21666,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                             return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} abyss admin clear @user\`` });
                           }
                           const result = await abyssSystem.adminClearRun(targetJid);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: buildMentions(m, [], targetJid) });
                         }
 
                         // .g abyss admin setfloor @user <floor>
@@ -14537,10 +21678,10 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                             return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} abyss admin setfloor @user <floor>\`` });
                           }
                           const result = await abyssSystem.adminSetFloor(targetJid, floor);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: buildMentions(m, [], targetJid) });
                         }
 
-                        // .g abyss admin purge — purge ALL active runs
+                        // .g abyss admin purge - purge ALL active runs
                         if (adminSub === 'purge') {
                           const result = await abyssSystem.adminPurgeAllRuns();
                           return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
@@ -14555,23 +21696,24 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           }
                           const run = await abyssSystem.adminGetRunById(targetJid);
                           if (!run) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ No active Abyss run for ${targetJid.split('@')[0]}.`, mentions: [targetJid] });
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ No active Abyss run for ${targetJid.split('@')[0]}.`, mentions: buildMentions(m, [], targetJid) });
                           }
-                          let msg = `🔍 *Abyss Run Inspection — ${targetJid.split('@')[0]}*\n\n`;
+                          let msg = `🔍 *Abyss Run Inspection - ${targetJid.split('@')[0]}*\n\n`;
                           msg += `Floor: ${run.currentFloor} | Status: ${run.status}\n`;
                           msg += `HP: ${run.currentHp}/${run.playerSnapshot.maxHp}\n`;
                           msg += `Monsters: ${run.monstersKilled} | Bosses: ${run.bossesKilled}\n`;
                           msg += `Loot: ${run.lootAccumulator.xp.toLocaleString()} XP, ${run.lootAccumulator.gold.toLocaleString()} Zeni\n`;
                           msg += `Started: ${new Date(run.startedAt).toLocaleString()}\n`;
                           msg += `Current Enemy: ${run.currentEnemy?.name || 'none'} (HP ${run.currentEnemy?.hp?.toLocaleString() || 0})\n`;
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg, mentions: [targetJid] });
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg, mentions: buildMentions(m, [], targetJid) });
                           return;
                         }
 
                         return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown admin subcommand. Use \`${botConfig.getPrefix()} abyss admin\` for help.` });
                       }
 
-                      return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown abyss subcommand. Use \`${botConfig.getPrefix()} abyss help\` for usage.` });
+                      // 💡 FIX 2026-08-15: Cleaner unknown command message.
+                      return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown Abyss command: \`${abyssSub}\`\n\n_Type \`${botConfig.getPrefix()} abyss help\` for the command list._` });
                     }
 
                     // ============================================
@@ -14582,13 +21724,13 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       const raidSub = raidArgs[0]?.toLowerCase();
                       const raidSystem = require('./rpg/raidSystem');
 
-                      // .g raid — show status or help
+                      // .g raid - show status or help
                       if (!raidSub || raidSub === 'help') {
-                        let msg = `⚔️ *WEEKLY RAID — AVATAR MODE* ⚔️\n\n`;
-                        msg += `Every Sunday 00:00 UTC, a server-wide raid boss spawns. All joined players merge into "The Avatar" — a single entity whose class, stats, and skills are determined by the participants.\n\n`;
+                        let msg = `⚔️ *WEEKLY RAID - AVATAR MODE* ⚔️\n\n`;
+                        msg += `Every Sunday 00:00 UTC, a server-wide raid boss spawns. All joined players merge into "The Avatar" - a single entity whose class, stats, and skills are determined by the participants.\n\n`;
                         msg += `*How it works:*\n`;
-                        msg += `• Join the raid with \`.g raid join\`\n`;
-                        msg += `• Each round, vote for which skill the Avatar uses (\`.g raid vote 1-5\`)\n`;
+                        msg += `• Join the raid with \`${botConfig.getPrefix()} raid join\`\n`;
+                        msg += `• Each round, vote for which skill the Avatar uses (\`${botConfig.getPrefix()} raid vote 1-5\`)\n`;
                         msg += `• 60-second voting window per round\n`;
                         msg += `• Most-voted skill is executed, then boss attacks back\n`;
                         msg += `• Continues until boss dies (win) or all attackers dead (loss)\n\n`;
@@ -14603,10 +21745,10 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         msg += `• Top 50: 100K XP + 50K Zeni\n`;
                         msg += `• All participants: 10K XP + 5K Zeni\n\n`;
                         msg += `*Commands:*\n`;
-                        msg += `• \`${botConfig.getPrefix()} raid status\` — view current raid\n`;
-                        msg += `• \`${botConfig.getPrefix()} raid join\` — join the raid\n`;
-                        msg += `• \`${botConfig.getPrefix()} raid vote <1-5>\` — vote for a skill\n`;
-                        msg += `• \`${botConfig.getPrefix()} raid leaderboard\` — all-time top contributors`;
+                        msg += `• \`${botConfig.getPrefix()} raid status\` - view current raid\n`;
+                        msg += `• \`${botConfig.getPrefix()} raid join\` - join the raid\n`;
+                        msg += `• \`${botConfig.getPrefix()} raid vote <1-5>\` - vote for a skill\n`;
+                        msg += `• \`${botConfig.getPrefix()} raid leaderboard\` - all-time top contributors`;
                         await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                         return;
                       }
@@ -14632,7 +21774,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                             const secsLeft = Math.ceil((new Date(raid.votingClosesAt) - new Date()) / 1000);
                             msg += `🗳️ Voting open: ${secsLeft}s left (${raid.currentVotes.length} votes cast)\n`;
                           } else {
-                            msg += `🗳️ Voting closed — next round starting\n`;
+                            msg += `🗳️ Voting closed - next round starting\n`;
                           }
                           const endsAt = new Date(raid.endsAt);
                           const hoursLeft = Math.ceil((endsAt - new Date()) / 3600000);
@@ -14642,7 +21784,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           for (let i = 0; i < raid.avatar.skills.length; i++) {
                             const skill = raid.avatar.skills[i];
                             const votes = raid.currentVotes.filter(v => v.skillIndex === i).length;
-                            msg += `${i + 1}. ${skill.name} (${skill.class}) — ${votes} votes\n`;
+                            msg += `${i + 1}. ${skill.name} (${skill.class}) - ${votes} votes\n`;
                           }
                           msg += `\n_Vote with \`${botConfig.getPrefix()} raid vote 1-5\`_`;
                           // Show last 3 combat log entries
@@ -14660,7 +21802,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         return;
                       }
 
-                      // .g raid join
+                      // .s raid join
                       if (raidSub === 'join') {
                         try {
                           const economy = require('./rpg/economy');
@@ -14701,7 +21843,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           if (leaderboard.length === 0) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '⚔️ *Raid Leaderboard (All-Time)*\n\n_No raid data yet._' });
                           }
-                          let msg = `⚔️ *RAID LEADERBOARD — ALL-TIME* ⚔️\n\n`;
+                          let msg = `⚔️ *RAID LEADERBOARD - ALL-TIME* ⚔️\n\n`;
                           for (let i = 0; i < leaderboard.length; i++) {
                             const entry = leaderboard[i];
                             const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
@@ -14718,20 +21860,20 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
 
                       // ── RAID ADMIN COMMANDS (owner / global mod only) ──
                       if (raidSub === 'admin' || raidSub === 'mod') {
-                        // Permission check
-                        if (!isOwner && !isGlobalMod(senderJid)) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Admin only. You must be the bot owner or a global mod.' });
+                        // Permission check - RPG Mods can also use raid admin
+                        if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Admin only. You must be the bot owner, a global mod, or an RPG mod.' });
                         }
                         const adminSub = raidArgs[1]?.toLowerCase();
                         if (!adminSub) {
                           let msg = `🔧 *RAID ADMIN COMMANDS*\n\n`;
-                          msg += `• \`${botConfig.getPrefix()} raid admin spawn\` — force-spawn the weekly raid\n`;
-                          msg += `• \`${botConfig.getPrefix()} raid admin end <won|lost|fled>\` — force-end the raid\n`;
-                          msg += `• \`${botConfig.getPrefix()} raid admin sethp <hp>\` — set boss HP (testing)\n`;
-                          msg += `• \`${botConfig.getPrefix()} raid admin revive @user\` — revive a dead attacker\n`;
-                          msg += `• \`${botConfig.getPrefix()} raid admin kick @user\` — remove an attacker\n`;
-                          msg += `• \`${botConfig.getPrefix()} raid admin skip\` — skip current voting round\n`;
-                          msg += `• \`${botConfig.getPrefix()} raid admin purge\` — delete ALL raid data (emergency)`;
+                          msg += `• \`${botConfig.getPrefix()} raid admin spawn\` - force-spawn the weekly raid\n`;
+                          msg += `• \`${botConfig.getPrefix()} raid admin end <won|lost|fled>\` - force-end the raid\n`;
+                          msg += `• \`${botConfig.getPrefix()} raid admin sethp <hp>\` - set boss HP (testing)\n`;
+                          msg += `• \`${botConfig.getPrefix()} raid admin revive @user\` - revive a dead attacker\n`;
+                          msg += `• \`${botConfig.getPrefix()} raid admin kick @user\` - remove an attacker\n`;
+                          msg += `• \`${botConfig.getPrefix()} raid admin skip\` - skip current voting round\n`;
+                          msg += `• \`${botConfig.getPrefix()} raid admin purge\` - delete ALL raid data (emergency)`;
                           await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                           return;
                         }
@@ -14769,7 +21911,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                             return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} raid admin revive @user\`` });
                           }
                           const result = await raidSystem.adminReviveAttacker(targetJid);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: buildMentions(m, [], targetJid) });
                         }
 
                         // .g raid admin kick @user
@@ -14780,7 +21922,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                             return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} raid admin kick @user\`` });
                           }
                           const result = await raidSystem.adminKickAttacker(targetJid);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: buildMentions(m, [], targetJid) });
                         }
 
                         // .g raid admin skip
@@ -14802,448 +21944,6 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                     }
 
                     // ============================================
-                    // 💡 PHASE 7: GUILD WAR COMMANDS (`.g war ...`)
-                    // ============================================
-                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} war`)) {
-                      const warArgs = txt.trim().split(/\s+/).slice(2);
-                      const warSub = warArgs[0]?.toLowerCase();
-                      const guildWars = require('./rpg/guildWars');
-                      const isSenderAdmin = isOwner || isGlobalMod(senderJid);
-
-                      // Helper: check if sender is leader/officer of their guild
-                      const getSenderGuildRole = () => {
-                        const gName = guilds.getUserGuild(senderJid);
-                        if (!gName) return null;
-                        const member = guilds.getGuildMember(gName, senderJid);
-                        if (!member) return null;
-                        return { guildName: gName, role: member.role, member };
-                      };
-
-                      // .g war — help
-                      if (!warSub || warSub === 'help') {
-                        const event = guildWars.getCurrentEvent();
-                        let msg = `${event.icon} *GUILD WARS* ${event.icon}\n\n`;
-                        msg += `Weekly guild competition. 4 event types rotate weekly (Monday → Sunday):\n\n`;
-                        msg += `*Event Rotation:*\n`;
-                        msg += `• Week 1: ⚔️ Champion Tournament — 1v1 PvP bracket between guild champions\n`;
-                        msg += `• Week 2: 🛡️ Guardian Clash — 3v3 team PvP between top guilds\n`;
-                        msg += `• Week 3: 🐉 Monster Hunt — PvE race (boss kills + Abyss)\n`;
-                        msg += `• Week 4: 🏰 Stronghold Siege — defend virtual strongholds\n\n`;
-                        msg += `*This Week:* ${event.icon} ${event.name}\n${event.desc}\n\n`;
-                        msg += `*How to earn points:*\n`;
-                        msg += `• Dungeon clear: 10 × rank tier\n`;
-                        msg += `• Boss kill: 50\n`;
-                        msg += `• PvP win: 5\n`;
-                        msg += `• Raid participation: 20\n`;
-                        msg += `• Abyss completion: floor × 2\n\n`;
-                        msg += `*Rewards:*\n`;
-                        msg += `• 1st: 5M Zeni + 10% XP/gold buff for members\n`;
-                        msg += `• 2nd-3rd: 2M Zeni + 5% buff\n`;
-                        msg += `• 4th-8th: 500K Zeni\n\n`;
-                        msg += `*Member Commands:*\n`;
-                        msg += `• \`${botConfig.getPrefix()} war status\` — view current war\n`;
-                        msg += `• \`${botConfig.getPrefix()} war my\` — your guild's war setup, rank, points\n`;
-                        msg += `• \`${botConfig.getPrefix()} war leaderboard\` — this week's rankings\n`;
-                        msg += `• \`${botConfig.getPrefix()} war bracket\` — tournament bracket / clash matchups\n`;
-                        msg += `• \`${botConfig.getPrefix()} war schedule\` — upcoming event rotation\n`;
-                        msg += `• \`${botConfig.getPrefix()} war history\` — all-time top guilds\n`;
-                        msg += `• \`${botConfig.getPrefix()} war champion @user\` — set your guild's champion (leader/officer, tournament weeks)\n`;
-                        msg += `• \`${botConfig.getPrefix()} war guardian @u1 @u2 @u3\` — set 3 guardians (leader/officer, clash weeks)\n`;
-                        msg += `• \`${botConfig.getPrefix()} war admin\` — admin commands`;
-                        await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-                        return;
-                      }
-
-                      // .g war status
-                      if (warSub === 'status' || warSub === 'info') {
-                        try {
-                          const war = await guildWars.getWarStatus();
-                          if (!war) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No active war this week.' });
-                          }
-                          const event = guildWars.WAR_EVENTS.find(e => e.id === war.eventType);
-                          let msg = `${event?.icon || '⚔️'} *${war.eventName}* — Active\n\n`;
-                          msg += `📅 Ends: ${new Date(war.endsAt).toLocaleString()}\n`;
-                          msg += `👥 Guilds: ${war.participants.length}\n`;
-                          const hoursLeft = Math.ceil((new Date(war.endsAt) - new Date()) / 3600000);
-                          msg += `⏰ Time left: ${hoursLeft}h\n\n`;
-                          // Show top 5
-                          const sorted = [...war.participants].sort((a, b) => b.points - a.points).slice(0, 5);
-                          msg += `*Top 5:*\n`;
-                          for (let i = 0; i < sorted.length; i++) {
-                            msg += `${i + 1}. ${sorted[i].guildName} — ${sorted[i].points.toLocaleString()} pts\n`;
-                          }
-                          // Show user's guild rank
-                          const userGuild = guilds.getUserGuild(senderJid);
-                          if (userGuild) {
-                            const myRank = war.participants.find(p => p.guildName === userGuild);
-                            if (myRank) {
-                              const rankIdx = war.participants
-                                .slice()
-                                .sort((a, b) => b.points - a.points)
-                                .findIndex(p => p.guildName === userGuild) + 1;
-                              msg += `\n🏠 Your guild *${userGuild}*: rank ${rankIdx} (${myRank.points.toLocaleString()} pts)\n`;
-                            }
-                          }
-                          msg += `\n_Earn points by doing dungeons, bosses, PvP, raids, and Abyss runs._`;
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-                        } catch (e) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
-                        }
-                        return;
-                      }
-
-                      // .g war my — full info about YOUR guild's war setup
-                      if (warSub === 'my' || warSub === 'me' || warSub === 'mywar') {
-                        try {
-                          const userGuild = guilds.getUserGuild(senderJid);
-                          if (!userGuild) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild. Use `.g guild create <name>` or ask an officer to invite you.' });
-                          }
-                          const info = await guildWars.getMyWarInfo(userGuild);
-                          if (!info) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No active war this week.' });
-                          }
-                          const { war, participant, rank, total } = info;
-                          const event = guildWars.WAR_EVENTS.find(e => e.id === war.eventType);
-                          let msg = `${event?.icon || '⚔️'} *${userGuild} — WAR DASHBOARD*\n\n`;
-                          msg += `*Event:* ${war.eventName}\n`;
-                          msg += `*Rank:* ${rank} / ${total}\n`;
-                          msg += `*Points:* ${participant.points.toLocaleString()}\n`;
-                          if (event?.id === 'champion_tournament') {
-                            msg += `*Champion:* ${participant.championJid ? '✅ ' + participant.championJid.split('@')[0] : '⚠️ Not set — use `.g war champion @user`'}\n`;
-                            msg += `*Champion wins:* ${participant.championWins || 0}\n`;
-                          } else if (event?.id === 'guardian_clash') {
-                            msg += `*Guardians:* `;
-                            if (participant.guardians && participant.guardians.length > 0) {
-                              msg += participant.guardians.map(g => g.split('@')[0]).join(', ') + '\n';
-                            } else {
-                              msg += `⚠️ Not set — use \`.g war guardian @u1 @u2 @u3\`\n`;
-                            }
-                            msg += `*Guardian wins:* ${participant.guardianWins || 0}\n`;
-                          } else if (event?.id === 'stronghold_siege') {
-                            msg += `*Stronghold:* Level ${participant.strongholdLevel || 1}\n`;
-                            msg += `*Defended:* ${participant.strongholdDefended ? '🛡️ Yes' : '⚔️ Overrun'}\n`;
-                          }
-                          const hoursLeft = Math.ceil((new Date(war.endsAt) - new Date()) / 3600000);
-                          msg += `*Time left:* ${hoursLeft}h\n\n`;
-                          // Show neighbors in leaderboard (rank-1, rank, rank+1)
-                          const sorted = [...war.participants].sort((a, b) => b.points - a.points);
-                          msg += `*Nearby Guilds:*\n`;
-                          for (let i = Math.max(0, rank - 2); i < Math.min(sorted.length, rank + 1); i++) {
-                            const arrow = sorted[i].guildName === userGuild ? '👉' : '  ';
-                            msg += `${arrow} ${i + 1}. ${sorted[i].guildName} — ${sorted[i].points.toLocaleString()} pts\n`;
-                          }
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-                        } catch (e) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
-                        }
-                        return;
-                      }
-
-                      // .g war leaderboard
-                      if (warSub === 'leaderboard' || warSub === 'lb') {
-                        try {
-                          const leaderboard = await guildWars.getWarLeaderboard();
-                          if (leaderboard.length === 0) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No active war this week.' });
-                          }
-                          let msg = `🏆 *WEEKLY WAR LEADERBOARD* 🏆\n\n`;
-                          for (let i = 0; i < Math.min(15, leaderboard.length); i++) {
-                            const entry = leaderboard[i];
-                            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
-                            msg += `${medal} ${entry.guildName} — ${entry.points.toLocaleString()} pts\n`;
-                          }
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-                        } catch (e) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
-                        }
-                        return;
-                      }
-
-                      // .g war bracket — tournament bracket or clash matchups
-                      if (warSub === 'bracket' || warSub === 'matches' || warSub === 'matchups') {
-                        try {
-                          const war = await guildWars.getWarStatus();
-                          if (!war) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No active war this week.' });
-                          }
-                          const bracket = await guildWars.getBracket();
-                          if (!bracket) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No bracket data.' });
-                          }
-                          if (bracket.type === 'none' || bracket.data.length === 0) {
-                            let msg = `📋 *${war.eventName}*\n\n`;
-                            msg += `_This event type has no bracket/matchups. Points are earned from regular activities (dungeons, bosses, PvP, raids, Abyss)._\n`;
-                            msg += `\nFinal rankings will be determined when the war resolves (${Math.ceil((new Date(war.endsAt) - new Date()) / 3600000)}h left).`;
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-                          }
-                          let msg = '';
-                          if (bracket.type === 'bracket') {
-                            msg = `⚔️ *CHAMPION TOURNAMENT BRACKET* ⚔️\n\n`;
-                            if (war.status === 'active' && bracket.data.length === 0) {
-                              msg += `_Bracket will be simulated when the war resolves (${Math.ceil((new Date(war.endsAt) - new Date()) / 3600000)}h left)._`;
-                              msg += `\n_Set your champion with_ \`${botConfig.getPrefix()} war champion @user\``;
-                            } else {
-                              // Group by round
-                              const byRound = {};
-                              for (const m of bracket.data) {
-                                if (!byRound[m.round]) byRound[m.round] = [];
-                                byRound[m.round].push(m);
-                              }
-                              for (const r of Object.keys(byRound).sort((a, b) => a - b)) {
-                                msg += `*Round ${r}:*\n`;
-                                for (const m of byRound[r]) {
-                                  const winA = m.winner === m.guildA;
-                                  msg += `  ${winA ? '✅' : '❌'} ${m.guildA} (${m.scoreA}) vs ${!winA ? '✅' : '❌'} ${m.guildB} (${m.scoreB})\n`;
-                                }
-                                msg += `\n`;
-                              }
-                            }
-                          } else if (bracket.type === 'clash') {
-                            msg = `🛡️ *GUARDIAN CLASH MATCHUPS* 🛡️\n\n`;
-                            if (war.status === 'active' && bracket.data.length === 0) {
-                              msg += `_Matchups will be simulated when the war resolves (${Math.ceil((new Date(war.endsAt) - new Date()) / 3600000)}h left)._`;
-                              msg += `\n_Set your 3 guardians with_ \`${botConfig.getPrefix()} war guardian @u1 @u2 @u3\``;
-                            } else {
-                              for (const m of bracket.data) {
-                                const winA = m.winner === m.guildA;
-                                msg += `${winA ? '✅' : '❌'} ${m.guildA} (${m.scoreA}) vs ${!winA ? '✅' : '❌'} ${m.guildB} (${m.scoreB})\n`;
-                              }
-                            }
-                          }
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-                        } catch (e) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
-                        }
-                        return;
-                      }
-
-                      // .g war schedule — upcoming event rotation
-                      if (warSub === 'schedule' || warSub === 'calendar') {
-                        try {
-                          const schedule = guildWars.getWarSchedule(8);
-                          let msg = `📅 *WAR EVENT SCHEDULE* 📅\n\n`;
-                          for (const s of schedule) {
-                            const marker = s.label === 'This week' ? '👉 ' : '   ';
-                            msg += `${marker}${s.label}: ${s.event.icon} ${s.event.name}\n`;
-                            if (s.label === 'This week') {
-                              msg += `      _${s.event.desc}_\n`;
-                            }
-                          }
-                          msg += `\n_Events rotate every Monday 00:00 UTC._`;
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-                        } catch (e) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
-                        }
-                        return;
-                      }
-
-                      // .g war history — all-time
-                      if (warSub === 'history' || warSub === 'alltime') {
-                        try {
-                          const history = await guildWars.getAllTimeWarLeaderboard(15);
-                          if (history.length === 0) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ No war history yet.' });
-                          }
-                          let msg = `📜 *ALL-TIME WAR LEADERBOARD* 📜\n\n`;
-                          for (let i = 0; i < history.length; i++) {
-                            const entry = history[i];
-                            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
-                            msg += `${medal} ${entry._id}\n   📊 ${entry.totalPoints.toLocaleString()} pts | 🏆 ${entry.warsParticipated} wars\n`;
-                          }
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-                        } catch (e) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
-                        }
-                        return;
-                      }
-
-                      // .g war champion @user — set YOUR guild's champion (leader/officer only)
-                      if (warSub === 'champion') {
-                        try {
-                          const targetJid = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
-                          if (!targetJid) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war champion @user\`\n\n_Mentions your guild member to designate them as champion for the tournament._` });
-                          }
-                          const senderRole = getSenderGuildRole();
-                          if (!senderRole) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
-                          }
-                          if (!isSenderAdmin && senderRole.role !== 'leader' && senderRole.role !== 'officer') {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Only guild leaders and officers can set the champion.' });
-                          }
-                          const result = await guildWars.setChampion(senderRole.guildName, targetJid);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
-                        } catch (e) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
-                        }
-                      }
-
-                      // .g war guardian @u1 @u2 @u3 — set YOUR guild's guardians (leader/officer)
-                      if (warSub === 'guardian' || warSub === 'guardians') {
-                        try {
-                          const mentions = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-                          if (mentions.length === 0) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war guardian @u1 @u2 @u3\`\n\n_Set 1-3 guardians for the 3v3 Guardian Clash._` });
-                          }
-                          const senderRole = getSenderGuildRole();
-                          if (!senderRole) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
-                          }
-                          if (!isSenderAdmin && senderRole.role !== 'leader' && senderRole.role !== 'officer') {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Only guild leaders and officers can set guardians.' });
-                          }
-                          const result = await guildWars.setGuardians(senderRole.guildName, mentions);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions });
-                        } catch (e) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
-                        }
-                      }
-
-                      // .g war clear — clear champion or guardians from your guild
-                      if (warSub === 'clear') {
-                        try {
-                          const clearWhat = warArgs[1]?.toLowerCase();
-                          if (!clearWhat || !['champion', 'guardian', 'guardians'].includes(clearWhat)) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war clear <champion|guardians>\`` });
-                          }
-                          const senderRole = getSenderGuildRole();
-                          if (!senderRole) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
-                          }
-                          if (!isSenderAdmin && senderRole.role !== 'leader' && senderRole.role !== 'officer') {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Only guild leaders and officers can clear.' });
-                          }
-                          let result;
-                          if (clearWhat === 'champion') {
-                            result = await guildWars.clearChampion(senderRole.guildName);
-                          } else {
-                            result = await guildWars.clearGuardians(senderRole.guildName);
-                          }
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
-                        } catch (e) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
-                        }
-                      }
-
-                      // .g war admin
-                      if (warSub === 'admin' || warSub === 'mod') {
-                        if (!isSenderAdmin) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Admin only.' });
-                        }
-                        const adminSub = warArgs[1]?.toLowerCase();
-                        if (!adminSub) {
-                          let msg = `🔧 *GUILD WAR ADMIN COMMANDS* 🔧\n\n`;
-                          msg += `*War Management:*\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin spawn\` — force-spawn the weekly war\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin resolve\` — force-resolve the war (distribute rewards)\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin sync\` — force-sync war points from guild data\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin purge\` — delete ALL war data\n\n`;
-                          msg += `*Event Control:*\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin event <champion_tournament|guardian_clash|monster_hunt|stronghold_siege>\` — override this week's event\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin schedule\` — preview upcoming events\n\n`;
-                          msg += `*Guild Management:*\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin addguild <name>\` — add a guild to the current war\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin removeguild <name>\` — remove a guild from the war\n\n`;
-                          msg += `*Champion/Guardian Override (any guild):*\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin champion <guildName> @user\` — set champion for any guild\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin guardian <guildName> @u1 @u2 @u3\` — set guardians for any guild\n`;
-                          msg += `• \`${botConfig.getPrefix()} war admin clear <guildName> <champion|guardians>\` — clear for any guild`;
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-                          return;
-                        }
-                        if (adminSub === 'spawn') {
-                          const result = await guildWars.adminForceSpawn();
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
-                        }
-                        if (adminSub === 'resolve') {
-                          const result = await guildWars.adminForceResolve();
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
-                        }
-                        if (adminSub === 'purge') {
-                          const result = await guildWars.adminPurgeAllWars();
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
-                        }
-                        if (adminSub === 'sync') {
-                          await guildWars.syncWarPointsToActiveWar();
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '✅ Synced war points from guild data.' });
-                        }
-                        if (adminSub === 'event') {
-                          const eventId = warArgs[2]?.toLowerCase();
-                          if (!eventId) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war admin event <champion_tournament|guardian_clash|monster_hunt|stronghold_siege>\`` });
-                          }
-                          const result = await guildWars.adminSetEventType(eventId);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
-                        }
-                        if (adminSub === 'addguild') {
-                          const gName = warArgs[2];
-                          if (!gName) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war admin addguild <guildName>\`` });
-                          }
-                          const result = await guildWars.adminAddGuild(gName);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
-                        }
-                        if (adminSub === 'removeguild') {
-                          const gName = warArgs[2];
-                          if (!gName) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war admin removeguild <guildName>\`` });
-                          }
-                          const result = await guildWars.adminRemoveGuild(gName);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
-                        }
-                        if (adminSub === 'schedule') {
-                          const schedule = guildWars.getWarSchedule(8);
-                          let msg = `📅 *WAR EVENT SCHEDULE (ADMIN)* 📅\n\n`;
-                          for (const s of schedule) {
-                            const marker = s.label === 'This week' ? '👉 ' : '   ';
-                            msg += `${marker}${s.label} [${s.weekKey}]: ${s.event.icon} ${s.event.name} (${s.event.id})\n`;
-                          }
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-                        }
-                        if (adminSub === 'champion') {
-                          // .g war admin champion <guildName> @user
-                          const gName = warArgs[2];
-                          const targetJid = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
-                          if (!gName || !targetJid) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war admin champion <guildName> @user\`` });
-                          }
-                          const result = await guildWars.setChampion(gName, targetJid);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions: [targetJid] });
-                        }
-                        if (adminSub === 'guardian' || adminSub === 'guardians') {
-                          // .g war admin guardian <guildName> @u1 @u2 @u3
-                          const gName = warArgs[2];
-                          const mentions = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-                          if (!gName || mentions.length === 0) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war admin guardian <guildName> @u1 @u2 @u3\`` });
-                          }
-                          const result = await guildWars.setGuardians(gName, mentions);
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message, mentions });
-                        }
-                        if (adminSub === 'clear') {
-                          // .g war admin clear <guildName> <champion|guardians>
-                          const gName = warArgs[2];
-                          const clearWhat = warArgs[3]?.toLowerCase();
-                          if (!gName || !clearWhat || !['champion', 'guardian', 'guardians'].includes(clearWhat)) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} war admin clear <guildName> <champion|guardians>\`` });
-                          }
-                          let result;
-                          if (clearWhat === 'champion') {
-                            result = await guildWars.clearChampion(gName);
-                          } else {
-                            result = await guildWars.clearGuardians(gName);
-                          }
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
-                        }
-                        return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown admin subcommand. Use \`${botConfig.getPrefix()} war admin\` for the menu.` });
-                      }
-
-                      return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown war subcommand. Use \`${botConfig.getPrefix()} war help\` for usage.` });
-                    }
-
-                    // ============================================
                     // ACTIVITY COMMANDS
                     // ============================================
 
@@ -15259,7 +21959,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                     }
 
                     function formatPeriodLabel(arg) {
-                      if (!arg) return "today";
+                      if (!arg) return "today (since midnight)";
                       const match = arg.trim().match(/^(\d+)([mhdw])$/);
                       if (!match) return arg;
                       const n = match[1];
@@ -15268,19 +21968,76 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       return `last ${n} ${label}${n > 1 ? "s" : ""}`;
                     }
 
-                    // `${botConfig.getPrefix().toLowerCase()}` activity - show total messages today
+                    // 📊 DAILY GC ACTIVITY (2026-09-22, owner order): "today"
+                    // means SINCE MIDNIGHT (Africa/Accra), never "last 24h".
+                    const gcActivity = require('./utils/gcActivity');
+                    const gcActivityWindow = (periodArg) => {
+                      if (periodArg !== null && parseTimePeriod(periodArg) !== null) {
+                        const ms = parseTimePeriod(periodArg);
+                        return { start: new Date(Date.now() - ms), end: new Date(), label: formatPeriodLabel(periodArg) };
+                      }
+                      const range = gcActivity.dayRangeFromArg(periodArg || "today");
+                      if (range && !range.error) {
+                        return { start: range.start, end: periodArg ? range.end : new Date(), label: range.label };
+                      }
+                      // Unparseable arg - fall back to today
+                      const today = gcActivity.dayRangeFromArg("today");
+                      return { start: today.start, end: new Date(), label: today.label };
+                    };
+
+                    // `.j activity [day]` - the REAL daily GC breakdown:
+                    // messages / images / videos / stickers / audio / documents /
+                    // contacts / locations / polls / links deleted / joined /
+                    // left / kicked + top posters, for THIS group on THAT day.
+                    // Bare = today since midnight (never "last 24 hours").
                     if (
-                      lowerTxt ===
-                      `${botConfig.getPrefix().toLowerCase()} activity`
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} activity` ||
+                      lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} activity `)
                     ) {
-                      const activity = await getChatActivity(chatId);
-                      const total = activity.reduce(
-                        (sum, user) => sum + user.count,
-                        0,
-                      );
-                      await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + `📊 Total messages this session: *${total}*`,
-                      });
+                      if (!isGroupChat) {
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + "This command only works in groups." });
+                      }
+                      const argAct = lowerTxt.replace(`${botConfig.getPrefix().toLowerCase()} activity`, "").trim();
+                      const rangeAct = gcActivity.dayRangeFromArg(argAct || "today");
+                      if (rangeAct.error) {
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER +
+                            `📊 *Daily GC Activity* - usage:\n\n` +
+                            `\`${botConfig.getPrefix().toLowerCase()} activity\` - today (since midnight)\n` +
+                            `\`${botConfig.getPrefix().toLowerCase()} activity yesterday\`\n` +
+                            `\`${botConfig.getPrefix().toLowerCase()} activity 2026-09-21\` (or 21/09, 21-09, 21)\n\n` +
+                            `_Shows messages, images, videos, stickers, audio, documents, links deleted, joins/leaves/kicks and the day's top posters for this group._`,
+                        });
+                      }
+                      if (rangeAct.end < Date.now() - 31 * 86400000) {
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `📭 ${rangeAct.label} is beyond the 30-day activity window - detailed daily activity is auto-purged after 30 days.`,
+                        });
+                      }
+                      if (rangeAct.start > Date.now()) {
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `📭 ${rangeAct.label} hasn't happened yet - I can't count the future.`,
+                        });
+                      }
+                      try {
+                        const ActivityLogModel = require('./models/ActivityLog');
+                        const bd = await gcActivity.getDailyBreakdown(ActivityLogModel, chatId, rangeAct.start, rangeAct.end);
+                        if (!bd.totalEvents) {
+                          return await sock.sendMessage(chatId, {
+                            text: BOT_MARKER + `📭 No activity recorded here on ${rangeAct.label}.`,
+                          });
+                        }
+                        const card = gcActivity.formatCard(bd, rangeAct.label, (jid) => economy.getDisplayName(jid));
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + card,
+                          mentions: gcActivity.collectMentions(bd),
+                        });
+                      } catch (actErr) {
+                        console.error("[Activity] daily breakdown failed:", actErr?.message);
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `❌ Couldn't build the daily activity card: ${String(actErr?.message || actErr).slice(0, 120)}`,
+                        });
+                      }
                       return;
                     }
 
@@ -15302,8 +22059,9 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       const periodMs = parseTimePeriod(periodArg);
                       const periodLabel = formatPeriodLabel(periodArg);
 
-                      // Use windowed activity tracking (defaults to last 24 hours if no period is specified)
-                      const activity = await getChatActivityForPeriod(chatId, periodMs !== null ? periodMs : 24 * 60 * 60 * 1000);
+                      // 📊 Windowed activity (default = today since midnight, per owner order)
+                      const _winAct = gcActivityWindow(periodArg);
+                      const activity = await getChatActivityBetween(chatId, _winAct.start, _winAct.end);
                       const sorted = activity.sort((a, b) => b.count - a.count).slice(0, 15);
 
                       if (sorted.length === 0) {
@@ -15316,7 +22074,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       let text = BOT_MARKER + `🏆 *Most Active Members* (${periodLabel})\n\n`;
                       sorted.forEach((user, i) => {
                         const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`;
-                        text += `${medal} @${user.userId.split("@")[0]} — *${user.count}* msg${user.count !== 1 ? "s" : ""}\n`;
+                        text += `${medal} @${economy.getDisplayName(user.userId)} - *${user.count}* msg${user.count !== 1 ? "s" : ""}\n`;
                       });
                       const mentions = sorted.map((u) => u.userId);
                       await sock.sendMessage(chatId, { text, mentions });
@@ -15342,7 +22100,8 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       const periodMs = parseTimePeriod(periodArg);
                       const periodLabel = formatPeriodLabel(periodArg);
 
-                      const activity = await getChatActivityForPeriod(chatId, periodMs !== null ? periodMs : 24 * 60 * 60 * 1000);
+                      const _winAct = gcActivityWindow(periodArg);
+                      const activity = await getChatActivityBetween(chatId, _winAct.start, _winAct.end);
                       const activeUserSet = new Set(activity.map((u) => u.userId));
 
                       const botJidNorm = jidNormalizedUser(sock.user.id);
@@ -15365,9 +22124,9 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         return;
                       }
 
-                      let text = BOT_MARKER + `💤 *Inactive Members* (${periodLabel}) — ${inactive.length} found\n\n`;
+                      let text = BOT_MARKER + `💤 *Inactive Members* (${periodLabel}) - ${inactive.length} found\n\n`;
                       inactive.slice(0, 20).forEach((p, i) => {
-                        text += `${i + 1}. @${p.id.split("@")[0]}\n`;
+                        text += `${i + 1}. @${economy.getDisplayName(p.id)}\n`;
                       });
                       if (inactive.length > 20) text += `\n...and ${inactive.length - 20} more.`;
                       const mentions = inactive.map((p) => p.id);
@@ -15398,7 +22157,8 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       const periodMs = parseTimePeriod(periodArg);
                       const periodLabel = formatPeriodLabel(periodArg);
 
-                      const activity = await getChatActivityForPeriod(chatId, periodMs !== null ? periodMs : 24 * 60 * 60 * 1000);
+                      const _winAct = gcActivityWindow(periodArg);
+                      const activity = await getChatActivityBetween(chatId, _winAct.start, _winAct.end);
 
                       if (activity.length === 0) {
                         await sock.sendMessage(chatId, {
@@ -15408,7 +22168,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       }
 
                       const mentions = activity.map((u) => u.userId);
-                      const tagList = mentions.map((id) => `@${id.split("@")[0]}`).join(" ");
+                      const tagList = mentions.map((id) => `@${economy.getDisplayName(id)}`).join(" ");
                       const msgText = customMsg || `Hey everyone active in the ${periodLabel}! 👋`;
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + `📢 *Tagging active members* (${periodLabel})\n\n${tagList}\n\n${msgText}`,
@@ -15439,7 +22199,8 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       const periodMs = parseTimePeriod(periodArg);
                       const periodLabel = formatPeriodLabel(periodArg);
 
-                      const activity = await getChatActivityForPeriod(chatId, periodMs !== null ? periodMs : 24 * 60 * 60 * 1000);
+                      const _winAct = gcActivityWindow(periodArg);
+                      const activity = await getChatActivityBetween(chatId, _winAct.start, _winAct.end);
                       const activeUserSet = new Set(activity.map((u) => u.userId));
 
                       const botJidNorm2 = jidNormalizedUser(sock.user.id);
@@ -15461,7 +22222,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       }
 
                       const mentions = inactiveMembers.map((p) => p.id);
-                      const tagList = mentions.map((id) => `@${id.split("@")[0]}`).join(" ");
+                      const tagList = mentions.map((id) => `@${economy.getDisplayName(id)}`).join(" ");
                       const msgText = customMsg || `Hey, we haven't seen you in a while! Come chat 👀`;
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + `📢 *Tagging inactive members* (${periodLabel})\n\n${tagList}\n\n${msgText}`,
@@ -15494,7 +22255,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       const blocked = isBlocked(targetUser);
 
                       let info = BOT_MARKER + `*User Info*\n\n`;
-                      info += `Phone: @${targetUser.split("@")[0]}\n`;
+                      info += `Phone: @${economy.getDisplayName(targetUser)}\n`;
                       if (profile?.nickname)
                         info += `Nickname: ${profile.nickname}\n`;
                       info += `Admin: ${isAdmin ? "Yes" : "No"}\n`;
@@ -15565,7 +22326,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
 
                       await sock.sendMessage(chatId, {
                         text: jidInfo,
-                        mentions: [targetUser],
+                        mentions: buildMentions(m, [], targetUser),
                       });
                       return;
                     }
@@ -15640,7 +22401,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           react: { text: "❌", key: m.key },
                         });
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "❌❌ Failed to fetch images.",
+                          text: BOT_MARKER + "❌ Failed to fetch images.",
                         });
                       }
 
@@ -15764,7 +22525,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                             );
                           } catch (imgErr) {
                             console.error(
-                              `❌❌ Failed to send image ${i + 1}:`,
+                              `❌ Failed to send image ${i + 1}:`,
                               imgErr.message,
                             );
                             continue;
@@ -16263,78 +23024,11 @@ ${anime.synopsis?.slice(0, 350) || "No synopsis available."}...
                       }
                     }
 
-                    // Minimal valid 1×1 white JPEG — used as thumbnail fallback
-                    // when sharp/jimp aren't available. WhatsApp just needs *any*
-                    // non-empty jpegThumbnail to show the blurred preview.
-                    const FALLBACK_THUMB = Buffer.from(
-                      '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AJQAB/9k=',
-                      'base64'
-                    );
-
-                    async function buildThumbnail(imgBuffer) {
-                      try {
-                        // Attempt sharp first (fastest)
-                        const sharp = require('sharp');
-                        return await sharp(imgBuffer).resize(32).jpeg({ quality: 40 }).toBuffer();
-                      } catch (_) {}
-                      try {
-                        // Attempt jimp fallback
-                        const Jimp = require('jimp');
-                        const img = await Jimp.read(imgBuffer);
-                        img.resize(32, Jimp.AUTO);
-                        return await img.getBufferAsync(Jimp.MIME_JPEG);
-                      } catch (_) {}
-                      return FALLBACK_THUMB;
-                    }
-
-                    async function sendImageSafe(
-                      sock,
-                      chatId,
-                      imageUrl,
-                      caption,
-                      quotedMsg,
-                    ) {
-                      if (!imageUrl) throw new Error("No imageUrl provided");
-
-                      // Always download the buffer so we can generate a thumbnail
-                      // (WhatsApp requires jpegThumbnail for the blurred preview)
-                      let imgBuffer = null;
-                      try {
-                        const resp = await axios.get(imageUrl, {
-                          responseType: "arraybuffer",
-                          headers: { "User-Agent": "Mozilla/5.0" },
-                          timeout: 15000,
-                          maxContentLength: 10 * 1024 * 1024,
-                        });
-                        imgBuffer = Buffer.from(resp.data);
-                      } catch (_) {}
-
-                      const thumb = imgBuffer ? await buildThumbnail(imgBuffer) : FALLBACK_THUMB;
-
-                      try {
-                        if (imgBuffer) {
-                          await sock.sendMessage(
-                            chatId,
-                            { image: imgBuffer, caption, jpegThumbnail: thumb },
-                            { quoted: quotedMsg },
-                          );
-                        } else {
-                          // Couldn't download — send by URL with fallback thumb
-                          await sock.sendMessage(
-                            chatId,
-                            { image: { url: imageUrl }, caption, jpegThumbnail: thumb },
-                            { quoted: quotedMsg },
-                          );
-                        }
-                      } catch (err) {
-                        // Last resort: URL-only with no thumbnail
-                        await sock.sendMessage(
-                          chatId,
-                          { image: { url: imageUrl }, caption },
-                          { quoted: quotedMsg },
-                        );
-                      }
-                    }
+                    // NOTE: sendImageSafe / buildThumbnail / FALLBACK_THUMB are now
+                    // defined at module scope (above startBot) so they can be
+                    // called from ANY handler - including handleAnimeTrending and
+                    // the other top-level handlers that previously couldn't see
+                    // them and silently threw ReferenceError.
 
                     // --------------------------
                     // Search caches (by chat and by specific message id)
@@ -16531,14 +23225,14 @@ _💡 Reply with another number from your search list!_`.trim();
                             { role: "system", content: systemPrompt },
                             { role: "user", content: userPrompt },
                           ],
-                          model: "llama-3.1-8b-instant",
+                          model: "openai/gpt-oss-20b",
                         });
 
                         const roastText = res.choices[0].message.content;
 
                         await sock.sendMessage(chatId, {
                           text: BOT_MARKER + `@${targetName} ${roastText}`,
-                          contextInfo: { mentionedJid: [targetJid] },
+                          contextInfo: { mentionedJid: buildMentions(m, [], targetJid) },
                         });
                         await awardProgression(senderJid, chatId);
                         return;
@@ -16586,7 +23280,7 @@ _💡 Reply with another number from your search list!_`.trim();
                       });
 
                       try {
-                        const result = await getPowerScale(character);
+                        const result = await getPowerScale(character, chatId);
 
                         if (!result.success) {
                           await sock.sendMessage(chatId, {
@@ -16719,7 +23413,9 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
-                    // Ship Meter
+                    // Ship Meter -> Match Meter image card (v2 2026-09-17)
+                    // Deterministic multi-factor engine + rendered card.
+                    // No RPG lore - ship is standalone from the RPG.
                     if (
                       lowerTxt ===
                         `${botConfig.getPrefix().toLowerCase()} ship` ||
@@ -16731,173 +23427,211 @@ _💡 Reply with another number from your search list!_`.trim();
                       let mentions =
                         m.message.extendedTextMessage?.contextInfo
                           ?.mentionedJid || [];
-
-                      // Support reply if no mentions
                       if (mentions.length === 0 && target) {
                         mentions = [target];
                       }
+                      const shipText = txt
+                        .substring(
+                          `${botConfig.getPrefix().toLowerCase()} ship `
+                            .length,
+                        )
+                        .trim();
 
-                      // Check for usage
-                      if (mentions.length === 0) {
-                        const textInput = txt
-                          .substring(
-                            `${botConfig.getPrefix().toLowerCase()} ship `
-                              .length,
-                          )
-                          .trim();
-                        if (!textInput) {
-                          return await sendUsage(
-                            sock,
-                            chatId,
-                            BOT_MARKER,
-                            "❤️ SHIP",
-                            "ship @u1 @u2",
-                            "ship @friend1 @friend2",
-                            "Check the compatibility between two people!",
-                          );
-                        }
+                      if (mentions.length === 0 && !shipText) {
+                        return await sendUsage(
+                          sock,
+                          chatId,
+                          BOT_MARKER,
+                          "💞 SHIP",
+                          "ship @u1 @u2",
+                          "ship alice + bob",
+                          "Render a compatibility card for a pair!",
+                        );
                       }
 
-                      let score = 0;
-                      let comment = ``;
-                      let namesDisplay = "";
+                      await sock.sendMessage(chatId, {
+                        react: { text: "💘", key: m.key },
+                      });
 
-                      // ---------------------------------------------------------
-                      // SCENARIO 1: AI ANALYSIS (If users are tagged)
-                      // ---------------------------------------------------------
-                      if (mentions.length > 0) {
-                        await sock.sendMessage(chatId, {
-                          react: { text: "💘", key: m.key },
+                      try {
+                        const shipCards = require('./rpg/shipCardRenderer');
+
+                        let jid1 = null, jid2 = null, p1 = null, p2 = null;
+                        let name1, name2;
+
+                        if (mentions.length > 0) {
+                          jid1 =
+                            mentions.length === 2 ? mentions[0] : senderJid;
+                          jid2 =
+                            mentions.length === 2 ? mentions[1] : mentions[0];
+                          // v2.1 FIX: pass FULL user objects. getUserProfile()
+                          // returns the bare profile subdoc, so p.profile.*
+                          // accessors never resolved and the bond factor was
+                          // silently null in the live path.
+                          p1 = economy.getUser(jid1) || {};
+                          p2 = economy.getUser(jid2) || {};
+                          // v2 FIX: getDisplayName already treats the
+                          // 'Adventurer' placeholder as missing and falls
+                          // back to the real WhatsApp name - never prefer a
+                          // raw nickname that may be the placeholder.
+                          name1 = economy.getDisplayName(jid1);
+                          name2 = economy.getDisplayName(jid2);
+                        } else {
+                          const parts = shipText
+                            .split(/\s*(?:\band\b|\bx\b|&|\+|,|×)\s*/i)
+                            .map((s) => s.trim())
+                            .filter(Boolean);
+                          name1 = parts[0] || "Someone";
+                          name2 = parts[1] || "Someone Else";
+                        }
+
+                        // ── Multi-factor engine (deterministic per pair) ──
+                        const result = shipCards.computeShip({
+                          name1,
+                          name2,
+                          jid1,
+                          jid2,
+                          p1,
+                          p2,
                         });
 
-                        // Determine who is being shipped
-                        const u1Jid =
-                          mentions.length === 2 ? mentions[0] : senderJid;
-                        const u2Jid =
-                          mentions.length === 2 ? mentions[1] : mentions[0];
-
-                        // Load profiles
-                        const p1 = getUserProfile(u1Jid) || {};
-                        const p2 = getUserProfile(u2Jid) || {};
-
-                        const name1 = p1.nickname || u1Jid.split("@")[0];
-                        const name2 = p2.nickname || u2Jid.split("@")[0];
-                        namesDisplay = `${name1} & ${name2}`;
-
-                        // Format data for AI
-                        const formatData = (p) => {
-                          const likes =
-                            p.memories?.likes?.join(", ") || "Unknown";
-                          const dislikes =
-                            p.memories?.dislikes?.join(", ") || "Unknown";
-                          const hobbies =
-                            p.memories?.hobbies?.join(", ") || "Unknown";
-                          const personality =
-                            p.notes?.map((n) => n.content).join(". ") ||
-                            "Mystery";
-                          return `Likes: ${likes} | Dislikes: ${dislikes} | Hobbies: ${hobbies} | Notes: ${personality}`;
+                        // Optional AI verdict (comment ONLY - the score always
+                        // comes from the deterministic engine). Guarded:
+                        // 12s timeout, needs real profile data on both sides.
+                        const memOf = (p) =>
+                          (p && (p.memories || (p.profile && p.profile.memories))) || {};
+                        const hasData = (p) => {
+                          if (!p) return false;
+                          const prof = p.profile || p;
+                          const mem = memOf(p);
+                          return (((prof.notes || []).length > 0) ||
+                            (((mem.likes || []).length) +
+                              ((mem.hobbies || []).length) +
+                              ((mem.personal || []).length)) > 0);
                         };
+                        if (jid1 && jid2 && hasData(p1) && hasData(p2)) {
+                          try {
+                            const res = await Promise.race([
+                              groq.chat.completions.create({
+                                messages: [
+                                  {
+                                    role: "user",
+                                    content: `Two people: ${name1} and ${name2}.
+${name1}: likes=${(memOf(p1).likes || []).join(", ") || "?"}; hobbies=${(memOf(p1).hobbies || []).join(", ") || "?"}
+${name2}: likes=${(memOf(p2).likes || []).join(", ") || "?"}; hobbies=${(memOf(p2).hobbies || []).join(", ") || "?"}
+Compatibility score (from the engine): ${result.score}/100.
+Write ONE witty verdict line (max 90 chars) about their compatibility. Roast them lightly if the score is low. Plain text only - no percentages, no emoji.`,
+                                  },
+                                ],
+                                model: "openai/gpt-oss-20b",
+                                max_tokens: 70,
+                              }),
+                              new Promise((_, rej) =>
+                                setTimeout(
+                                  () => rej(new Error("ai timeout")),
+                                  12000,
+                                ),
+                              ),
+                            ]);
+                            const t = (
+                              res.choices?.[0]?.message?.content || ""
+                            )
+                              .trim()
+                              .replace(/^["']+|["']+$/g, "");
+                            if (t && t.length <= 150) result.comment = t;
+                          } catch (err) {
+                            console.error(
+                              "Ship AI verdict failed (canned fallback):",
+                              err.message,
+                            );
+                          }
+                        }
 
-                        const prompt = `
-        Analyze romantic compatibility between two people based on this data:
+                        const buf = await shipCards.renderShipCard({
+                          name1,
+                          name2,
+                          score: result.score,
+                          factors: result.factors,
+                          tier: result.tier,
+                          comment: result.comment,
+                          mash: result.mash,
+                          hearts: result.hearts,
+                        });
 
-        Person A (${name1}): ${formatData(p1)}
-        Person B (${name2}): ${formatData(p2)}
+                        const caption = [
+                          `💞 *${name1} × ${name2}*`,
+                          `${result.tier.emoji} *${result.tier.label}* - *${result.score}%* match`,
+                          `_${result.comment}_`,
+                        ].join("\n");
 
-        Task:
-        1. Calculate a compatibility percentage (0-100).
-        2. Write a short, funny, 1-sentence verdict (roast them if incompatible).
+                        const sendOpts = { image: buf, caption };
+                        if (jid1 && jid2) {
+                          sendOpts.mentions = [jid1, jid2];
+                        }
+                        return await sock.sendMessage(chatId, sendOpts);
+                      } catch (err) {
+                        console.error("Ship card error:", err);
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER +
+                            `❌ Ship card failed: ${err.message}`,
+                        });
+                      }
+                    }
 
-        Output JSON ONLY:
-        {"score": number, "comment": "string"}
-        `;
+                    // Interaction History (.j history [@a] [@b]) 2026-09-17
+                    // Shows the tracked tags/mentions/replies between two
+                    // people - the same data that feeds the ship Match Meter.
+                    if (
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} bond` ||
+                      lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} bond `)
+                    ) {
+                      const historyMentions =
+                        m.message.extendedTextMessage?.contextInfo
+                          ?.mentionedJid || [];
 
-                        try {
-                          const res = await groq.chat.completions.create({
-                            messages: [{ role: "user", content: prompt }],
-                            model: "llama-3.1-8b-instant",
-                            response_format: { type: "json_object" },
-                          });
-
-                          const result = JSON.parse(
-                            res.choices[0].message.content,
-                          );
-                          score = result.score;
-                          comment = result.comment;
-                        } catch (err) {
-                          console.error("AI Ship Error:", err);
-                          // Fallback to random if AI fails
-                          score = Math.floor(Math.random() * 101);
-                          comment = "The stars remain silent... (AI Error)";
+                      let hj1 = null, hj2 = null;
+                      if (historyMentions.length >= 2) {
+                        hj1 = jidNormalizedUser(historyMentions[0]);
+                        hj2 = jidNormalizedUser(historyMentions[1]);
+                      } else {
+                        // single mention or reply-to -> you x them
+                        const single = getMentionOrReply(m);
+                        if (single) {
+                          hj1 = senderJid;
+                          hj2 = single;
                         }
                       }
 
-                      // ---------------------------------------------------------
-                      // SCENARIO 2: MATH HASH (If just text provided)
-                      // ---------------------------------------------------------
-                      else {
-                        const textInput = txt
-                          .substring(
-                            `${botConfig.getPrefix().toLowerCase()} ship `
-                              .length,
-                          )
-                          .trim();
-                        if (!textInput)
-                          return await sock.sendMessage(chatId, {
-                            text:
-                              BOT_MARKER +
-                              `Who are we shipping? Tag them or type names!`,
-                          });
-
-                        namesDisplay = textInput;
-
-                        // Deterministic Hash Logic (So "A+B" always gives same score)
-                        const pairString = textInput
-                          .toLowerCase()
-                          .split(/\s+(?:and|x|&|\+)\s+/i)
-                          .sort()
-                          .join("");
-                        let hash = 0;
-                        for (let i = 0; i < pairString.length; i++) {
-                          hash =
-                            pairString.charCodeAt(i) + ((hash << 5) - hash);
-                        }
-                        score = Math.abs(hash % 101);
-
-                        // Generic comments based on score
-                        if (score > 90)
-                          comment = "It's destiny! Put a ring on it! 💍";
-                        else if (score > 75)
-                          comment = "Getting spicy in here. 🔥";
-                        else if (score > 50)
-                          comment = "There's potential... maybe. ⚖️";
-                        else if (score > 25) comment = "It's a bit chilly. 🧊";
-                        else comment = "Run. Just run. ☠️";
+                      if (!hj1 || !hj2) {
+                        return await sendUsage(
+                          sock,
+                          chatId,
+                          BOT_MARKER,
+                          "🤝 INTERACTION HISTORY",
+                          "bond @u1 @u2",
+                          "bond @alice (you × alice)",
+                          "See who tags, mentions & replies to whom - the data behind the ship score!",
+                        );
                       }
-                      let emoji =
-                        score > 90
-                          ? "💍"
-                          : score > 75
-                            ? "💖"
-                            : score > 50
-                              ? "⚖️"
-                              : "💔";
 
-                      // Create Progress Bar
-                      const filledLength = Math.floor(score / 10);
-                      const emptyLength = 10 - filledLength;
-                      const bar =
-                        "█".repeat(filledLength) + "░".repeat(emptyLength);
+                      await sock.sendMessage(chatId, {
+                        react: { text: "🤝", key: m.key },
+                      });
 
-                      const response = [
-                        `${BOT_MARKER} ${emoji} *LOVE CALCULATOR* ${emoji}`,
-                        `*Pair:* ${namesDisplay}`,
-                        `*Score:* ${score}%`,
-                        `*Meter:* [${bar}]`,
-                        `*Verdict:* ${comment}`,
-                      ].join("\n");
-
-                      return await sock.sendMessage(chatId, { text: response });
+                      try {
+                        const interactionTracker = require('./rpg/interactionTracker');
+                        const histOut = interactionTracker.renderPairHistory(hj1, hj2);
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + histOut.text,
+                        });
+                      } catch (err) {
+                        console.error("Interaction history error:", err);
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER +
+                            `❌ Interaction history failed: ${err.message}`,
+                        });
+                      }
+                      return;
                     }
 
                     // Random Joke
@@ -16930,7 +23664,7 @@ _💡 Reply with another number from your search list!_`.trim();
                                 content: "Tell me a short funny, actually culturally funny joke. Be creative.",
                               },
                             ],
-                            model: "llama-3.1-8b-instant",
+                            model: "openai/gpt-oss-20b",
                             timeout: 5000
                           });
                           jokeText = res.choices[0].message.content;
@@ -16976,7 +23710,7 @@ _💡 Reply with another number from your search list!_`.trim();
                                 content: "Ask one spicy/embarrassing truth question.",
                               },
                             ],
-                            model: "llama-3.1-8b-instant",
+                            model: "openai/gpt-oss-20b",
                             timeout: 5000
                           });
                           truthText = res.choices[0].message.content;
@@ -17028,7 +23762,7 @@ _💡 Reply with another number from your search list!_`.trim();
                                 content: "Give one funny dare that can be done in a WhatsApp group.",
                               },
                             ],
-                            model: "llama-3.1-8b-instant",
+                            model: "openai/gpt-oss-20b",
                             timeout: 5000
                           });
                           dareText = res.choices[0].message.content;
@@ -17080,7 +23814,7 @@ _💡 Reply with another number from your search list!_`.trim();
                                 content: "Give me an aggressive 1-sentence motivation.",
                               },
                             ],
-                            model: "llama-3.1-8b-instant",
+                            model: "openai/gpt-oss-20b",
                             timeout: 5000
                           });
                           mot = res.choices[0].message.content;
@@ -17310,7 +24044,7 @@ _💡 Reply with another number from your search list!_`.trim();
                               },
                               { role: "user", content: ratingContext },
                             ],
-                            model: "llama-3.1-8b-instant",
+                            model: "openai/gpt-oss-20b",
                           });
 
                           const rating = completion.choices[0].message.content;
@@ -17318,7 +24052,7 @@ _💡 Reply with another number from your search list!_`.trim();
                             text:
                               BOT_MARKER +
                               `⭐ *Rating @${targetName}*\n\n${rating}`,
-                            contextInfo: { mentionedJid: [targetJid] },
+                            contextInfo: { mentionedJid: buildMentions(m, [], targetJid) },
                           });
                           await awardProgression(senderJid, chatId);
                           return;
@@ -17404,7 +24138,7 @@ _💡 Reply with another number from your search list!_`.trim();
                                 content: "Generate a funny internet-style text meme (e.g. Me: ... / Also Me: ... or similar formats). Keep it short and funny."
                               }
                             ],
-                            model: "llama-3.1-8b-instant",
+                            model: "openai/gpt-oss-20b",
                             timeout: 5000
                           });
                           fallbackMeme = res.choices[0].message.content;
@@ -17460,7 +24194,7 @@ _💡 Reply with another number from your search list!_`.trim();
                                 content: "Generate one creative, funny, and engaging 'Would you rather' question. Format it as: 'Would you rather [Option A] OR [Option B]?'"
                               }
                             ],
-                            model: "llama-3.1-8b-instant",
+                            model: "openai/gpt-oss-20b",
                             timeout: 5000
                           });
                           if (res.choices[0].message.content) {
@@ -17517,7 +24251,7 @@ _💡 Reply with another number from your search list!_`.trim();
                                 content: "Provide one inspiring, philosophical, or funny quote. Output in JSON format only: {\"quote\": \"...\", \"author\": \"...\"}"
                               }
                             ],
-                            model: "llama-3.1-8b-instant",
+                            model: "openai/gpt-oss-20b",
                             response_format: { type: "json_object" },
                             timeout: 5000
                           });
@@ -17530,7 +24264,7 @@ _💡 Reply with another number from your search list!_`.trim();
                           `${BOT_MARKER}📜 *QUOTE OF THE DAY*`,
                           "",
                           `> "${quoteText}"`,
-                          `— _*${author || "Unknown"}*_`
+                          `- _*${author || "Unknown"}*_`
                         ].join("\n");
 
                         await sock.sendMessage(chatId, { text: responseMsg }, { quoted: m });
@@ -17539,7 +24273,7 @@ _💡 Reply with another number from your search list!_`.trim();
                         console.error("Quote Command Error:", err.message);
                         await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + "📜 *Quote:*\n\"I have not failed. I've just found 10,000 ways that won't work.\"\n— _*Thomas A. Edison*_"
+                          text: BOT_MARKER + "📜 *Quote:*\n\"I have not failed. I've just found 10,000 ways that won't work.\"\n- _*Thomas A. Edison*_"
                         }, { quoted: m });
                       }
                       await awardProgression(senderJid, chatId);
@@ -17692,7 +24426,7 @@ _💡 Reply with another number from your search list!_`.trim();
                             },
                             { role: "user", content: textToTranslate }
                           ],
-                          model: "llama-3.1-8b-instant",
+                          model: "openai/gpt-oss-20b",
                           timeout: 8000
                         });
 
@@ -17835,6 +24569,26 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
+                    // FIX 2026-09-16: `.clip` - refined audio clipping/citing.
+                    // Reply to an audio/voice note: `.clip <start> <end>`.
+                    if (
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} clip` ||
+                      lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} clip `)
+                    ) {
+                      const clipArgs = txt
+                        .substring(`${botConfig.getPrefix().toLowerCase()} clip`.length)
+                        .trim()
+                        .split(/\s+/)
+                        .filter(Boolean);
+                      const audioClip = require('./utils/audioclip');
+                      await audioClip.handleClipCommand(
+                        sock, chatId, senderJid, clipArgs, m, BOT_MARKER,
+                        botConfig.getPrefix(),
+                      );
+                      await awardProgression(senderJid, chatId);
+                      return;
+                    }
+
                     // Trivia Command (NEW)
                     if (
                       lowerTxt === `${botConfig.getPrefix().toLowerCase()} trivia`
@@ -17858,16 +24612,35 @@ _💡 Reply with another number from your search list!_`.trim();
                             [options[i], options[j]] = [options[j], options[i]];
                           }
 
+                          // FIX 2026-09-16: overwrite-safe timer - announce
+                          // time's-up + reveal answer instead of silent expiry.
+                          const __prevTrivia = activeTrivias.get(chatId);
+                          if (__prevTrivia && __prevTrivia.timerId) {
+                            try { clearTimeout(__prevTrivia.timerId); } catch (e) {}
+                          }
+                          const __triviaCategory = decodeHtmlEntities(result.category || "");
                           activeTrivias.set(chatId, {
                             question,
                             correctAnswer,
                             options,
-                            expiresAt: Date.now() + 60000
+                            category: __triviaCategory,
+                            difficulty: result.difficulty || "",
+                            expiresAt: Date.now() + 60000,
+                            timerId: setTimeout(async () => {
+                              const __td = activeTrivias.get(chatId);
+                              if (!__td || __td.correctAnswer !== correctAnswer) return; // answered/replaced
+                              activeTrivias.delete(chatId);
+                              try {
+                                await sock.sendMessage(chatId, {
+                                  text: BOT_MARKER + `⏰ *TIME'S UP!* ⏰\n\nThe answer was: *${correctAnswer}*\n\n_Play again with \`${botConfig.getPrefix()} trivia\`!_`
+                                });
+                              } catch (e) {}
+                            }, 61000)
                           });
 
                           const triviaMsg = [
                             `${BOT_MARKER}🧠 *TRIVIA QUESTION* 🧠`,
-                            `*Category:* ${result.category} | *Difficulty:* ${result.difficulty}`,
+                            `*Category:* ${__triviaCategory} | *Difficulty:* ${result.difficulty}`,
                             `━━━━━━━━━━━━━━━━━`,
                             question,
                             ``,
@@ -18097,7 +24870,7 @@ _💡 Reply with another number from your search list!_`.trim();
                                   content: "Provide one famous, iconic anime quote. Return in JSON format only: {\"quote\": \"...\", \"character\": \"...\", \"anime\": \"...\"}"
                                 }
                               ],
-                              model: "llama-3.1-8b-instant",
+                              model: "openai/gpt-oss-20b",
                               response_format: { type: "json_object" },
                               timeout: 5000
                             });
@@ -18127,7 +24900,7 @@ _💡 Reply with another number from your search list!_`.trim();
                           `${BOT_MARKER}💬 *ANIME QUOTE* 💬`,
                           "",
                           `> "${quote}"`,
-                          `— _*${character}*_ (${anime})`
+                          `- _*${character}*_ (${anime})`
                         ].join("\n");
 
                         await sock.sendMessage(chatId, { text: responseMsg }, { quoted: m });
@@ -18376,14 +25149,16 @@ ${senderName} said y'all should know:
                         const isCorrectNumber = !isNaN(choice) && choice >= 1 && choice <= 4 && triviaData.options[choice - 1] === triviaData.correctAnswer;
                         const isCorrectText = lowerTxt.trim() === triviaData.correctAnswer.toLowerCase();
                         
+                        // FIX 2026-09-16: clear the pending timer on a win.
                         if (isCorrectNumber || isCorrectText) {
+                          if (triviaData.timerId) { try { clearTimeout(triviaData.timerId); } catch (e) {} }
                           activeTrivias.delete(chatId);
                           const rewardZeni = 500;
                           const rewardXp = 50;
                           
                           try {
                             economy.addMoney(senderJid, rewardZeni, "Trivia Reward");
-                            const xpResult = progression.addXP(senderJid, 45, "Trivia Answer");
+                            const xpResult = progression.addXP(senderJid, rewardXp, "Trivia Answer");
                             if (xpResult && xpResult.leveledUp) {
                               const levelDisplay = progression.getLevelDisplay(xpResult.newLevel);
                               let msg = `🎊 *LEVEL UP!* 🎊\n\n`;
@@ -18402,10 +25177,19 @@ ${senderName} said y'all should know:
                             react: { text: "🎉", key: m.key }
                           });
                           await sock.sendMessage(chatId, {
-                            text: BOT_MARKER + `🎉 *CORRECT!* 🎉\n\n@${senderJid.split("@")[0]} got it right!\n*Answer:* ${triviaData.correctAnswer}\n\n*Rewards:* +${rewardZeni} Zeni | +${rewardXp} XP`,
+                            text: BOT_MARKER + `🎉 *CORRECT!* 🎉\n\n@${economy.getDisplayName(senderJid)} got it right!\n*Answer:* ${triviaData.correctAnswer}\n\n*Rewards:* +${rewardZeni} Zeni | +${rewardXp} XP`,
                             contextInfo: { mentionedJid: [senderJid] }
                           }, { quoted: m });
                           return;
+                        } else {
+                          // FIX 2026-09-16: quiet feedback for REAL attempts only -
+                          // a numeric 1-4 pick or an exact wrong-option text. Random
+                          // chat never triggers a react, so the group stays clean.
+                          const __attempt = (choice >= 1 && choice <= 4) ||
+                            triviaData.options.some(o => String(o).toLowerCase() === lowerTxt.trim());
+                          if (__attempt) {
+                            await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                          }
                         }
                       }
                     }
@@ -18431,6 +25215,7 @@ ${senderName} said y'all should know:
                             await sock.sendMessage(chatId, {
                               image: result.image.buffer,
                               caption: BOT_MARKER + result.message,
+                              mimetype: 'image/jpeg',
                             });
                           } else {
                             await sock.sendMessage(chatId, {
@@ -18453,7 +25238,7 @@ ${senderName} said y'all should know:
                           await sock.sendMessage(chatId, {
                             text:
                               BOT_MARKER +
-                              `⭐ *WELCOME!* ⭐\n\n@${senderJid.split("@")[0]} has accepted the invitation and joined *${result.guild}*!`,
+                              `⭐ *WELCOME!* ⭐\n\n@${economy.getDisplayName(senderJid)} has accepted the invitation and joined *${result.guild}*!`,
                             mentions: [senderJid],
                           });
                         } else {
@@ -18467,18 +25252,27 @@ ${senderName} said y'all should know:
                       // 3. Check Loan Invites
                       const loanRequest = loans.getPendingRequest(senderJid);
                       if (loanRequest) {
-                        const result = loans.acceptLoan(loanRequest.lenderJid);
-                        if (result.success) {
+                        // 💡 SECURITY FIX 2026-08-31: getPendingRequest matches
+                        // by lender OR borrower - previously the BORROWER could
+                        // type `.g accept` to force-accept their own request,
+                        // draining the lender's wallet without consent.
+                        // Only the lender may accept a loan request.
+                        if (loanRequest.lenderJid !== senderJid) {
                           await sock.sendMessage(chatId, {
                             text:
                               BOT_MARKER +
-                              `✅ Loan of ${ZENI}${result.amount.toLocaleString()} accepted! funds transferred to your wallet.`,
+                              "⏳ You have a pending loan request - wait for the *lender* to accept it.",
                           });
-                        } else {
-                          await sock.sendMessage(chatId, {
-                            text: BOT_MARKER + result.msg,
-                          });
+                          return;
                         }
+                        const result = loans.acceptLoan(loanRequest.lenderJid);
+                        // 💡 FIX 2026-08-06: acceptLoan returns { success, msg } -
+                        // it does NOT return `amount`. Previous code tried to read
+                        // result.amount.toLocaleString() → TypeError → 0.1s timeout.
+                        // Now we just use result.msg for both success and failure.
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + result.msg,
+                        });
                         return;
                       }
 
@@ -18531,6 +25325,48 @@ ${senderName} said y'all should know:
                       });
                     }
 
+                    // 💡 FIX 2026-08-03: `.s duel cancel` / `.s duel end` / `.s pvp cancel`
+                    // Manually clears a stuck duel state. Use this if a duel
+                    // got stuck (e.g. image generation failed mid-accept and
+                    // the chat is locked with "A duel is already active").
+                    // 💡 FIX 2026-08-31: PARTICIPANT/MOD PERMISSION CHECK -
+                    // previously ANYONE could cancel any duel: a player about
+                    // to lose a staked duel could refund their own stake by
+                    // typing `duel cancel`, and trolls could kill any ongoing
+                    // duel. Now only the duel participants or a mod+ can cancel.
+                    if (
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} duel cancel` ||
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} duel end` ||
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} pvp cancel` ||
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} pvp end` ||
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} cancel duel` ||
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} end duel`
+                    ) {
+                      const liveDuel = pvpSystem.getDuel(chatId);
+                      if (liveDuel && liveDuel.players) {
+                        const isParticipant = liveDuel.players.some(
+                          (p) => p.jid === senderJid || p.jid === jidNormalizedUser(senderJid),
+                        );
+                        const isModCancel =
+                          isBotOwner(senderJid) ||
+                          isGlobalMod(senderJid) ||
+                          isRpgMod(senderJid);
+                        if (!isParticipant && !isModCancel) {
+                          await sock.sendMessage(chatId, {
+                            text:
+                              BOT_MARKER +
+                              "❌ Only the duel participants (or a mod) can cancel this duel.",
+                          });
+                          return;
+                        }
+                      }
+                      const result = pvpSystem.cancelDuel(chatId);
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + result.message,
+                      });
+                      return;
+                    }
+
                     // Check if it's pvp command being used as a challenge (e.g. .pvp @user)
                     const isPvpChallenge = (
                       (lowerTxt === `${botConfig.getPrefix().toLowerCase()} pvp` ||
@@ -18538,6 +25374,21 @@ ${senderName} said y'all should know:
                       getMentionOrReply(m) &&
                       !["attack", "ability", "item", "stats", "flee"].includes(lowerTxt.split(/\s+/)[2])
                     );
+
+                    // 💡 FIX §2.2: .g pvp with no @mention - was falling through
+                    // to the general unknown-command handler. Now shows the
+                    // correct usage for the current duel-challenge system.
+                    if (
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} pvp` ||
+                      (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} pvp `) &&
+                       !getMentionOrReply(m) &&
+                       !["attack", "ability", "item", "stats", "flee"].includes(lowerTxt.split(/\s+/)[2]))
+                    ) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER +
+                          `⚔️ *PVP DUEL*\n\nTo challenge someone:\n\`${botConfig.getPrefix()} pvp @user [wager]\`\n\`${botConfig.getPrefix()} duel @user [wager]\`\n\nExample: \`${botConfig.getPrefix()} pvp @friend 500\``,
+                      });
+                    }
 
                     // duel @user [stake] / challenge @user [stake] - Challenge someone to a duel
                     if (
@@ -18588,26 +25439,41 @@ ${senderName} said y'all should know:
                           ? parseInt(lastWord)
                           : 0;
 
+                      // 💡 P4 (2026-08-16): Parse --equalise flag for equalised PvP
+                      const equalise = txt.includes('--equalise') || txt.includes('--equalized') || txt.includes('--equal');
+
                       const result = pvpSystem.challengePlayer(
                         chatId,
                         senderJid,
                         target,
                         stake,
+                        { equalise },
                       );
 
                       if (result.success) {
-                        const targetName = target.split("@")[0];
+                        const targetName = economy.getDisplayName(target); // 💡 FIX 2026-08-18: was target.split("@")[0] which showed raw LID like @176429438373975 for @lid targets
                         const stakeText =
                           stake > 0
                             ? ` with a *${economy.getZENI() || "💰"}${stake.toLocaleString()}* stake`
                             : "";
                         // Note: CHALLENGE_TIMEOUT in pvpSystem.js is 120000ms (2 minutes).
                         // The previous message said "5 minutes" which was incorrect.
+                        //
+                        // 💡 PING RULE: only @-ping the target if the challenger
+                        // explicitly tagged them. If the challenger replied to
+                        // (quoted) the target's message to issue the challenge,
+                        // show their name in the text but do NOT ping them -
+                        // the target didn't ask to be notified.
+                        const challengeMentions = buildMentions(
+                          m,
+                          [senderJid],
+                          target,
+                        );
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
                             `⚔️ *DUEL CHALLENGE!* ⚔️\n\n@${senderName} has challenged @${targetName} to a duel${stakeText}!\n\n✅ Type \`${botConfig.getPrefix()} accept\` to accept\n❌ Type \`${botConfig.getPrefix()} decline\` to decline\n\n⏳ Challenge expires in 2 minutes.`,
-                          mentions: [senderJid, target],
+                          mentions: challengeMentions,
                         });
                       } else {
                         await sock.sendMessage(chatId, {
@@ -18692,7 +25558,11 @@ ${senderName} said y'all should know:
                           `❌ Usage: \`${botConfig.getPrefix()} item <num> [target]\``,
                       });
                     }
-                    // const target = parts[3]; // Handled above
+                    // 💡 FIX 2026-08-31: `target` was commented out but still
+                    // referenced below - ReferenceError on EVERY use, swallowed
+                    // by the catch with no reply (the documented .j item
+                    // shortcut was 100% dead). Restore the declaration.
+                    const target = parts[3];
 
                     try {
                       const result = await guildAdventure.handleCombatAction(
@@ -18710,6 +25580,11 @@ ${senderName} said y'all should know:
                         "Combat item shortcut failed:",
                         err.message,
                       );
+                      await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Item use failed: " + (err.message || "unknown error"),
+                      }).catch(() => {});
                     }
                     return;
                   }
@@ -19460,6 +26335,17 @@ ${senderName} said y'all should know:
                       text: BOT_MARKER + result.message,
                     });
                     await awardProgression(senderJid, chatId);
+                    // 💡 NEW PLAYER TUTORIAL (2026-10-03): invite every fresh
+                    // registration to the hands-on walkthrough.
+                    if (result.success) {
+                      try {
+                        const isDM = typeof chatId === 'string' && !chatId.endsWith('@g.us');
+                        const tutLine = require('./rpg/tutorial').offerLine(botConfig.getPrefix());
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + (isDM ? tutLine : tutLine.replace(/\n\n/g, ' ')),
+                        });
+                      } catch (e) { /* non-fatal */ }
+                    }
                     return;
                   }
 
@@ -19551,7 +26437,7 @@ ${senderName} said y'all should know:
                       await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          `❌ You need to register first!\n\nType: \`\`${botConfig.getPrefix().toLowerCase()}\` register <nickname>\``,
+                          `❌ You need to register first!\n\nType: \`${botConfig.getPrefix()} register <nickname>\``,
                       });
                       return;
                     }
@@ -19576,11 +26462,15 @@ ${senderName} said y'all should know:
                     try {
                       let pfpUrl = "";
                       try {
-                        pfpUrl = await sock.profilePictureUrl(senderJid, "image");
+                        // 💡 PERF PATCH 2026-07-27: was sock.profilePictureUrl(senderJid, "image")
+                        // with NO timeout - could hang for 90s on LID jids. Now uses the
+                        // shared pfpCache helper: 8s timeout + 5min positive / 60s negative cache.
+                        pfpUrl = await fetchPfpCached(sock, senderJid);
                       } catch (e) {}
 
                       const cardBuffer = await goService.generateEconomyCard({
-                        nickname: user.nickname || senderJid.split("@")[0],
+                        nickname: user.nickname || economy.getDisplayName(senderJid),
+                        style: (user && user.cardStyle) || 0,
                         wallet: balance.wallet || 0,
                         bank: balance.bank || 0,
                         total: balance.total || 0,
@@ -19636,7 +26526,7 @@ ${senderName} said y'all should know:
                       await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          `❌ You need to register first!\n\nType: \`\`${botConfig.getPrefix().toLowerCase()}\` register <nickname>\``,
+                          `❌ You need to register first!\n\nType: \`${botConfig.getPrefix()} register <nickname>\``,
                       });
                       return;
                     }
@@ -19714,7 +26604,7 @@ ${senderName} said y'all should know:
                     // Award guild points for daily claim
                     if (result.success) {
                       try {
-                        const guilds = require('./rpg/guilds'); // 💡 QA FIX: was `./guilds` (wrong path — MODULE_NOT_FOUND silently swallowed)
+                        const guilds = require('./rpg/guilds'); // 💡 QA FIX: was `./guilds` (wrong path - MODULE_NOT_FOUND silently swallowed)
                         guilds.awardPointsForActivity(
                           senderJid,
                           "daily_claimed",
@@ -19756,7 +26646,7 @@ ${senderName} said y'all should know:
                       await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          `❌ You need to register first!\n\nType: \`\`${botConfig.getPrefix().toLowerCase()}\` register <nickname>\``,
+                          `❌ You need to register first!\n\nType: \`${botConfig.getPrefix()} register <nickname>\``,
                       });
                       return;
                     }
@@ -19779,13 +26669,27 @@ ${senderName} said y'all should know:
                       return;
                     }
 
-                    // Check if target is the bot
+                    // Check if target is the bot (ANY bot instance, not just this one)
                     const botJid =
                       sock.user.id.split(":")[0] + "@s.whatsapp.net";
                     const botLid = sock.authState.creds?.me?.lid;
-                    if (victim === botJid || victim === botLid) {
+                    // 💡 FIX: also check all known bot instance JIDs. Previously
+                    // only checked THIS bot's JID - players could rob other bot
+                    // instances (Goten, Joker, Subaru) from a different bot's group.
+                    const allBotJids = [
+                      botJid, botLid,
+                      // Known bot phone numbers from BOT_OWNER_PHONES + instance configs
+                      ...Object.values(botInstancesHealth).map(h => h?.jid).filter(Boolean),
+                    ].filter(Boolean);
+                    const isBotTarget = allBotJids.some(jid => {
+                      if (!jid) return false;
+                      const norm = jidNormalizedUser(jid);
+                      const victimNorm = jidNormalizedUser(victim);
+                      return norm === victimNorm || economy.getDisplayName(jid) === victim.split('@')[0];
+                    });
+                    if (isBotTarget) {
                       await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + `❌ you cant rob the bot`,
+                        text: BOT_MARKER + `❌ You can't rob a bot! Nice try though 😏`,
                       });
                       return;
                     }
@@ -19812,7 +26716,7 @@ ${senderName} said y'all should know:
                       await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          `❌ You need to register first!\n\nType: \`\`${botConfig.getPrefix().toLowerCase()}\` register <nickname>\``,
+                          `❌ You need to register first!\n\nType: \`${botConfig.getPrefix()} register <nickname>\``,
                       });
                       return;
                     }
@@ -19835,7 +26739,8 @@ Examples:
                     }
 
                     const args = txt.split(` `);
-                    const amount = parseInt(args[args.length - 1]); // Last arg is amount
+                    // 💡 COMMA FIX: thousands separators no longer shrink transfers
+                    const amount = parseInt(String(args[args.length - 1] || '').replace(/,/g, ''), 10); // Last arg is amount
 
                     if (isNaN(amount) || amount <= 0) {
                       await sock.sendMessage(chatId, {
@@ -19854,10 +26759,12 @@ Examples:
 
                     if (result.success) {
                       try {
-                        const pfpUrl = await sock.profilePictureUrl(senderJid, 'image').catch(() => null);
+                        // 💡 PERF PATCH 2026-07-27: cached + 8s timeout (was no timeout, could hit 90s global)
+                        const pfpUrl = await fetchPfpCached(sock, senderJid);
                         const imgBuf = await goService.generateTransactionCard({
                           nickname: result.nickname,
                           type: "TRANSFER",
+                          style: (() => { try { return (economy.getUser(senderJid) || {}).cardStyle || 0; } catch (e) { return 0; } })(),
                           amount: result.amount,
                           newWallet: result.wallet,
                           newBank: result.bank,
@@ -19868,7 +26775,8 @@ Examples:
                           await sock.sendMessage(chatId, {
                             image: imgBuf,
                             caption: BOT_MARKER + result.message,
-                            contextInfo: { mentionedJid: [result.receiver] },
+                            // 💡 PING RULE: only ping receiver if explicitly @-mentioned.
+                            contextInfo: { mentionedJid: buildMentions(m, [], result.receiver) },
                           });
                         } else {
                           throw new Error("No image buffer");
@@ -19876,9 +26784,12 @@ Examples:
                       } catch (e) {
                         await sock.sendMessage(chatId, {
                           text: BOT_MARKER + result.message,
-                          contextInfo: { mentionedJid: [result.receiver] },
+                          // 💡 PING RULE: only ping receiver if explicitly @-mentioned.
+                          contextInfo: { mentionedJid: buildMentions(m, [], result.receiver) },
                         });
                       }
+                      // 💡 2026-09-20: trading lore drop arrives as its own message box
+                      try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
                     } else {
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + result.message,
@@ -19931,9 +26842,9 @@ Examples:
                                 ? "🥉"
                                 : `${i + 1}.`;
                         const nickname =
-                          user.nickname || user.userId.split("@")[0];
+                          user.nickname || economy.getDisplayName(user.userId);
 
-                        text += `${medal} @${user.userId.split("@")[0]}\n`;
+                        text += `${medal} @${economy.getDisplayName(user.userId)}\n`;
                         text += `   💎 ${economy.getZENI()}${user.total.toLocaleString()}\n`;
                         text += `   💵 Wallet: ${economy.getZENI()}${user.total - (user.bank || 0) >= 0 ? (user.total - (user.bank || 0)).toLocaleString() : "0"}\n`;
                         text += `━━━━━━━━━━━━━━━━━━\n`;
@@ -19948,7 +26859,7 @@ Examples:
                     } catch (err) {
                       console.error("Rich leaderboard error:", err);
                       await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + "❌❌ Failed to load leaderboard!",
+                        text: BOT_MARKER + "❌ Failed to load leaderboard!",
                       });
                     }
                     return;
@@ -19967,7 +26878,8 @@ Examples:
                     )
                   ) {
                     const args = txt.split(` `);
-                    let amount = args[2];
+                    // 💡 COMMA FIX: "deposit 100,000" deposited 100
+                    let amount = String(args[2] || '').replace(/,/g, '');
 
                     if (!amount) {
                       await sock.sendMessage(chatId, {
@@ -19983,7 +26895,7 @@ Examples:
                       const balance = economy.getBalance(senderJid);
                       amount = balance;
                     } else {
-                      amount = parseInt(amount);
+                      amount = parseInt(amount, 10);
                     }
 
                     if (isNaN(amount) || amount <= 0) {
@@ -19995,14 +26907,14 @@ Examples:
 
                     // 💡 QA FIX: moved bounty check BEFORE economy.deposit().
                     // Previously the deposit executed first, then the bounty
-                    // check returned an error — but the Zeni had already
+                    // check returned an error - but the Zeni had already
                     // moved from wallet to bank. Bounty targets could bypass
                     // the bank block entirely.
                     try {
                       const bountySystem = require('./rpg/bountySystem');
                       const hasBounty = await bountySystem.hasActiveBounty(senderJid);
                       if (hasBounty) {
-                        return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You have an active bounty on your head — you cannot deposit Zeni to the bank while hunted.\n\n_Get yourself killed in PvP to clear the bounty, or wait for it to expire (7 days)._' });
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You have an active bounty on your head - you cannot deposit Zeni to the bank while hunted.\n\n_Get yourself killed in PvP to clear the bounty, or wait for it to expire (7 days)._' });
                       }
                     } catch (e) {
                       // If bounty check fails, allow the deposit (don't block on error)
@@ -20011,10 +26923,12 @@ Examples:
                     const result = economy.deposit(senderJid, amount);
                     if (result.success) {
                       try {
-                        const pfpUrl = await sock.profilePictureUrl(senderJid, 'image').catch(() => null);
+                        // 💡 PERF PATCH 2026-07-27: cached + 8s timeout (was no timeout, could hit 90s global)
+                        const pfpUrl = await fetchPfpCached(sock, senderJid);
                         const imgBuf = await goService.generateTransactionCard({
                           nickname: result.nickname,
                           type: "DEPOSIT",
+                          style: (() => { try { return (economy.getUser(senderJid) || {}).cardStyle || 0; } catch (e) { return 0; } })(),
                           amount: result.amount,
                           newWallet: result.wallet,
                           newBank: result.bank,
@@ -20034,6 +26948,8 @@ Examples:
                           text: BOT_MARKER + result.message,
                         });
                       }
+                      // 💡 2026-09-20: trading lore drop arrives as its own message box
+                      try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
                     } else {
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + result.message,
@@ -20056,7 +26972,8 @@ Examples:
                     )
                   ) {
                     const args = txt.split(` `);
-                    let amount = args[2];
+                    // 💡 COMMA FIX: "withdraw 100,000" withdrew 100
+                    let amount = String(args[2] || '').replace(/,/g, '');
 
                     if (!amount) {
                       await sock.sendMessage(chatId, {
@@ -20072,7 +26989,7 @@ Examples:
                       const bankData = economy.getBankBalance(senderJid);
                       amount = bankData.bank;
                     } else {
-                      amount = parseInt(amount);
+                      amount = parseInt(amount, 10);
                     }
 
                     if (isNaN(amount) || amount <= 0) {
@@ -20082,13 +26999,36 @@ Examples:
                       return;
                     }
 
+                    // 💡 AUDIT FIX 2026-08-01: bounty block on withdraw.
+                    // The bounty rules at the top of bountySystem.js say:
+                    //   "Targets with bounties cannot use the bank (forces
+                    //    wallet carry = risk)"
+                    // The deposit command was already blocked (line 22271),
+                    // but withdraw was NOT - a player with a bounty could
+                    // still withdraw existing bank funds, which defeats the
+                    // "forces wallet carry" design. Now both directions are
+                    // blocked while a bounty is active. Player must clear
+                    // the bounty (win PvP, wait 7 days, or placer cancels)
+                    // before accessing the bank again.
+                    try {
+                      const bountySystem = require('./rpg/bountySystem');
+                      const hasBounty = await bountySystem.hasActiveBounty(senderJid);
+                      if (hasBounty) {
+                        return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You have an active bounty on your head - you cannot access the bank while hunted.\n\n_Get yourself killed in PvP to clear the bounty, or wait for it to expire (7 days)._' });
+                      }
+                    } catch (e) {
+                      // If bounty check fails, allow the withdraw (don't block on error)
+                    }
+
                     const result = economy.withdraw(senderJid, amount);
                     if (result.success) {
                       try {
-                        const pfpUrl = await sock.profilePictureUrl(senderJid, 'image').catch(() => null);
+                        // 💡 PERF PATCH 2026-07-27: cached + 8s timeout (was no timeout, could hit 90s global)
+                        const pfpUrl = await fetchPfpCached(sock, senderJid);
                         const imgBuf = await goService.generateTransactionCard({
                           nickname: result.nickname,
                           type: "WITHDRAW",
+                          style: (() => { try { return (economy.getUser(senderJid) || {}).cardStyle || 0; } catch (e) { return 0; } })(),
                           amount: result.amount,
                           newWallet: result.wallet,
                           newBank: result.bank,
@@ -20108,6 +27048,8 @@ Examples:
                           text: BOT_MARKER + result.message,
                         });
                       }
+                      // 💡 2026-09-20: trading lore drop arrives as its own message box
+                      try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
                     } else {
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + result.message,
@@ -20153,8 +27095,11 @@ Examples:
                       return cmdNames.some(name => lower.endsWith(name));
                     });
                     if (cmdIdx === -1) return { amount: NaN, extra: null, extra2: null, cmdWord: null };
-                    
-                    const amount = parseInt(args[cmdIdx + 1]);
+
+                    // 💡 COMMA FIX 2026-09-20: "cf 100,000" donated 100 -
+                    // strip thousands separators before parsing (same fix as
+                    // guild donate / loan repay).
+                    const amount = parseInt(String(args[cmdIdx + 1] || '').replace(/,/g, ''), 10);
                     const extra = args[cmdIdx + 2];
                     const extra2 = args[cmdIdx + 3];
                     return { amount, extra, extra2, cmdWord: args[cmdIdx], rawArgs: args.slice(cmdIdx) };
@@ -20961,10 +27906,8 @@ Example: \`${botConfig.getPrefix().toLowerCase()} crash 300 2.5\``,
                       console.log(`📸 Fetching PFP for ${normalizedJid}...`);
 
                       try {
-                        const pfpUrl = await sock.profilePictureUrl(
-                          jid,
-                          "image",
-                        );
+                        // 💡 PERF PATCH 2026-07-27: cached + 8s timeout (was no timeout, could hit 90s global)
+                        const pfpUrl = await fetchPfpCached(sock, jid);
 
                         if (pfpUrl) {
                           const response = await axios.get(pfpUrl, {
@@ -21023,11 +27966,13 @@ Example: \`${botConfig.getPrefix().toLowerCase()} crash 300 2.5\``,
                             economy.saveUser(targetJid);
                           }
                         } else {
+                          // 💡 PING RULE: only ping if explicitly @-mentioned,
+                          // not if resolved via a reply/quote.
                           return await sock.sendMessage(chatId, {
                             text:
                               BOT_MARKER +
                               `I don't have any data on @${targetName} yet.`,
-                            contextInfo: { mentionedJid: [targetJid] },
+                            contextInfo: { mentionedJid: buildMentions(m, [], targetJid) },
                           });
                         }
                       }
@@ -21250,7 +28195,9 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                           await sock.sendMessage(chatId, {
                             image: profileCardBuffer,
                             caption: response,
-                            contextInfo: { mentionedJid: [targetJid] },
+                            mimetype: 'image/jpeg',
+                            // 💡 PING RULE: only ping if explicitly @-mentioned.
+                            contextInfo: { mentionedJid: buildMentions(m, [], targetJid) },
                           });
                           profileCardSent = true;
                         }
@@ -21267,12 +28214,14 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                           await sock.sendMessage(chatId, {
                             image: fs.readFileSync(pfpPath),
                             caption: response,
-                            contextInfo: { mentionedJid: [targetJid] },
+                            // 💡 PING RULE: only ping if explicitly @-mentioned.
+                            contextInfo: { mentionedJid: buildMentions(m, [], targetJid) },
                           });
                         } else {
                           await sock.sendMessage(chatId, {
                             text: response,
-                            contextInfo: { mentionedJid: [targetJid] },
+                            // 💡 PING RULE: only ping if explicitly @-mentioned.
+                            contextInfo: { mentionedJid: buildMentions(m, [], targetJid) },
                           });
                         }
                       }
@@ -21287,7 +28236,7 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            `❌ You need to register first!\n\nType: \`\`${botConfig.getPrefix().toLowerCase()}\` register <nickname>\``,
+                            `❌ You need to register first!\n\nType: \`${botConfig.getPrefix()} register <nickname>\``,
                         });
                       } else {
                         await sock.sendMessage(chatId, {
@@ -21350,7 +28299,7 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                       await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          `❌❌ Failed to refresh metadata. Make sure I am in this group!`,
+                          `❌ Failed to refresh metadata. Make sure I am in this group!`,
                       });
                     }
                     return;
@@ -21422,7 +28371,7 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                     } catch (err) {
                       console.error("Summary Error:", err.message);
                       await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + "❌❌ Failed to create summary.",
+                        text: BOT_MARKER + "❌ Failed to create summary.",
                       });
                     }
                     return;
@@ -21571,6 +28520,34 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                   // DEBATE TRACKER COMMANDS
                   // ============================================
 
+                  // bare `${prefix} debate` / `${prefix} debate on` (no topic/users) -> usage
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} debate` ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} debate on` ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} debate help`
+                  ) {
+                    await sock.sendMessage(chatId, {
+                      text:
+                        BOT_MARKER +
+                        `┏━━━━━━━━━━━━━━━━━┓
+┃ ⚖️ *DEBATE* - AI-judged duel
+┗━━━━━━━━━━━━━━━━━┛
+
+⚔️ Start: \`${botConfig.getPrefix()} debate on <topic> @user\`
+   (or tag two users to pit them against each other)
+
+💬 While active: only the two debaters can talk.
+🙋 Spectators: react 🙋 to a message for a 1-message pass.
+
+⚖️ End: \`${botConfig.getPrefix()} judge\` - the AI scores both sides and names a winner.
+🚫 Cancel: \`${botConfig.getPrefix()} debate off\`
+🏆 Rankings: \`${botConfig.getPrefix()} debate leaderboard\`
+
+_Needs the bot to be a group admin (it locks the group and promotes the debaters)._`,
+                    });
+                    return;
+                  }
+
                   // `${botConfig.getPrefix().toLowerCase()}` debate on <topic> @user1 @user2
                   if (
                     lowerTxt.startsWith(
@@ -21619,23 +28596,23 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                       await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          `━━━━━━━━━━━━━━━━━
-⚖️ *DEBATE USAGE* ⚖️
-━━━━━━━━━━━━━━━━━
+                          `┏━━━━━━━━━━━━━━━━━┓
+┃ ⚖️ *DEBATE* - how to start
+┗━━━━━━━━━━━━━━━━━┛
 
-❌ *Error:* You must specify who is debating!
+❌ You must name the two debaters.
 
-💡 *Option 1 (Admin vs User):*
-\`${botConfig.getPrefix().toLowerCase()} debate on <topic> @user\`
-_(Or reply to their message)_
+1️⃣ *You vs someone:*
+\`${botConfig.getPrefix()} debate on <topic> @user\`
+_(or reply to their message)_
 
-💡 *Option 2 (User vs User):*
-\`${botConfig.getPrefix().toLowerCase()} debate on <topic> @user1 @user2\`
+2️⃣ *Two others:*
+\`${botConfig.getPrefix()} debate on <topic> @user1 @user2\`
 
 📌 *Example:*
-\`${botConfig.getPrefix().toLowerCase()} debate on Messi is better than Ronaldo @user1 @user2\`
+\`${botConfig.getPrefix()} debate on Messi is better than Ronaldo @user1 @user2\`
 
-━━━━━━━━━━━━━━━━━`,
+⚖️ \`${botConfig.getPrefix()} judge\` ends the debate with the AI verdict.`,
                       });
                       return;
                     }
@@ -21853,12 +28830,30 @@ _(Or reply to their message)_
                     return;
                   }
 
-                  // `${botConfig.getPrefix().toLowerCase()}` ludo end - End game
+                  // `${botConfig.getPrefix().toLowerCase()}` ludo end - End game (FORFEIT)
                   if (
                     lowerTxt ===
                     `${botConfig.getPrefix().toLowerCase()} ludo end`
                   ) {
                     const result = await ludo.endGame(
+                      sock,
+                      chatId,
+                      senderJid,
+                      BOT_MARKER,
+                      m,
+                    );
+                    if (!result.success) {
+                      await sock.sendMessage(chatId, { text: result.message });
+                    }
+                    return;
+                  }
+
+                  // FIX 2026-09-16: `.ludo leave` - voluntary forfeit.
+                  if (
+                    lowerTxt ===
+                    `${botConfig.getPrefix().toLowerCase()} ludo leave`
+                  ) {
+                    const result = await ludo.leaveGame(
                       sock,
                       chatId,
                       senderJid,
@@ -22291,6 +29286,241 @@ _(Or reply to their message)_
                   }
 
                   // ============================================
+                  // ANIME QUIZ (.j quiz / .j a / .j quizboard)
+                  // ============================================
+
+                  // quizboard - persistent per-chat leaderboard
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} quizboard` ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} quiz top` ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} quiz leaderboard`
+                  ) {
+                    const resultQ = await quizGame.showLeaderboard(
+                      sock,
+                      chatId,
+                      senderJid,
+                      BOT_MARKER,
+                      m,
+                    );
+                    if (resultQ.message) {
+                      await sock.sendMessage(chatId, { text: resultQ.message }, { quoted: m });
+                    }
+                    return;
+                  }
+
+                  // quiz pick <n> - resolve an ambiguous title selection
+                  if (
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} quiz pick `,
+                    )
+                  ) {
+                    const pickNum = txt
+                      .substring(
+                        `${botConfig.getPrefix().toLowerCase()} quiz pick `.length,
+                      )
+                      .trim();
+                    const resultQ = await quizGame.pickCandidate(
+                      sock,
+                      chatId,
+                      senderJid,
+                      BOT_MARKER,
+                      m,
+                      pickNum,
+                      senderName,
+                      smartGroqCall,
+                      MODELS,
+                    );
+                    if (resultQ.message) {
+                      await sock.sendMessage(chatId, { text: resultQ.message }, { quoted: m });
+                    }
+                    return;
+                  }
+
+                  // quiz end - cancel the running quiz (starter or admins)
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} quiz end` ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} quiz stop`
+                  ) {
+                    const resultQ = await quizGame.endQuiz(
+                      sock,
+                      chatId,
+                      senderJid,
+                      BOT_MARKER,
+                      canUseAdminCommands,
+                    );
+                    if (resultQ.message) {
+                      await sock.sendMessage(chatId, { text: resultQ.message }, { quoted: m });
+                    }
+                    return;
+                  }
+
+                  // 💡 AUDIT FIX 2026-09-26 (quiz P17): mod-only quiz config.
+                  // ".j quizmod" alone shows settings; "<setting> <value>" tunes.
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} quizmod` ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} quizmod `,
+                    )
+                  ) {
+                    const resultM = await quizGame.handleQuizMod(
+                      sock,
+                      chatId,
+                      senderJid,
+                      BOT_MARKER,
+                      cleanTxt
+                        .substring(`${botConfig.getPrefix().toLowerCase()} quizmod`.length)
+                        .trim(),
+                      canUseAdminCommands,
+                    );
+                    if (resultM.message) {
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + resultM.message }, { quoted: m });
+                    }
+                    return;
+                  }
+
+                  // 💡 PLANNING MODE 2026-09-27: "quiz go" / "quiz start" /
+                  // "quiz begin" fires the starting gun for a PREPARED
+                  // (ready-gate) quiz. Routed BEFORE the generic "quiz ..."
+                  // handler - otherwise the generic parser would treat "go"
+                  // as a franchise title.
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} quiz go` ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} quiz start` ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} quiz begin`
+                  ) {
+                    const resultGo = await quizGame.confirmStart(
+                      sock,
+                      chatId,
+                      senderJid,
+                      BOT_MARKER,
+                      canUseAdminCommands,
+                    );
+                    if (resultGo.message) {
+                      await sock.sendMessage(chatId, {
+                        text: resultGo.message,
+                        ...(resultGo.mentions ? { mentions: resultGo.mentions } : {}),
+                      }, { quoted: m });
+                    }
+                    return;
+                  }
+
+                  // quiz ["title"] [count] [difficulty] - start an anime quiz
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} quiz` ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} quiz `,
+                    )
+                  ) {
+                    const quizArgs = cleanTxt
+                      .substring(
+                        `${botConfig.getPrefix().toLowerCase()} quiz`.length,
+                      )
+                      .trim();
+                    const resultQ = await quizGame.startQuiz(
+                      sock,
+                      chatId,
+                      senderJid,
+                      BOT_MARKER,
+                      m,
+                      quizArgs,
+                      senderName,
+                      smartGroqCall,
+                      MODELS,
+                    );
+                    if (resultQ.message) {
+                      // 2026-09-27: parked-quiz bounce tags the initiator
+                      await sock.sendMessage(chatId, {
+                        text: resultQ.message,
+                        ...(resultQ.mentions ? { mentions: resultQ.mentions } : {}),
+                      }, { quoted: m });
+                    }
+                    return;
+                  }
+
+                  // 💡 AUDIT FIX 2026-09-26 (quiz P1): a/b/c/d/answer all route
+                  // to the quiz answer handler when a quiz is active - before
+                  // this fix only ".j a"/".j answer" were routed and ".j b B"
+                  // fell through to unknown-command. Falls through when no
+                  // quiz is active so unknown-command can still fire.
+                  const _pfx = `${botConfig.getPrefix().toLowerCase()}`;
+                  const _firstTok = lowerTxt.slice(_pfx.length).trim().split(/\s+/)[0] || "";
+                  const _isLetterAns = /^[abcd]$/.test(_firstTok) &&
+                    (lowerTxt === `${_pfx} ${_firstTok}` || lowerTxt.startsWith(`${_pfx} ${_firstTok} `));
+                  const _isWordAns = lowerTxt === `${_pfx} answer` || lowerTxt.startsWith(`${_pfx} answer `);
+                  if ((_isLetterAns || _isWordAns) && quizGame.hasActive(chatId)) {
+                    const ansRaw = _isWordAns
+                      ? cleanTxt.substring(_pfx.length + 7).trim()   // strip "<prefix> answer"
+                      : cleanTxt.substring(_pfx.length + 2).trim();  // strip "<prefix> a"
+                    const resultQ = await quizGame.handleAnswer(
+                      sock,
+                      chatId,
+                      senderJid,
+                      ansRaw,
+                      BOT_MARKER,
+                      m,
+                      senderName,
+                    );
+                    if (resultQ.handled) return;
+                  }
+                  // no active quiz -> fall through
+
+                  // ============================================
+                  // REAL-WORLD MARKET + GOOGLE TRENDS
+                  // ============================================
+
+                  // stock <ticker> [1d|5d|1m|6m|1y|5y] - real market chart
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} stock` ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} stock `,
+                    )
+                  ) {
+                    const stockArgs = txt
+                      .substring(
+                        `${botConfig.getPrefix().toLowerCase()} stock`.length,
+                      )
+                      .trim();
+                    const resultS = await stockChart.handleStock(
+                      sock,
+                      chatId,
+                      senderJid,
+                      BOT_MARKER,
+                      m,
+                      stockArgs,
+                    );
+                    if (resultS.message) {
+                      await sock.sendMessage(chatId, { text: resultS.message }, { quoted: m });
+                    }
+                    return;
+                  }
+
+                  // trends <"kw"...> [range] - Google Trends comparison graph
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} trends` ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} trends `,
+                    )
+                  ) {
+                    const trendsArgs = cleanTxt
+                      .substring(
+                        `${botConfig.getPrefix().toLowerCase()} trends`.length,
+                      )
+                      .trim();
+                    const resultT = await trendsChart.handleTrends(
+                      sock,
+                      chatId,
+                      senderJid,
+                      BOT_MARKER,
+                      m,
+                      trendsArgs,
+                    );
+                    if (resultT.message) {
+                      await sock.sendMessage(chatId, { text: resultT.message }, { quoted: m });
+                    }
+                    return;
+                  }
+
+                  // ============================================
                   // PROGRESSION COMMANDS
                   // ============================================
 
@@ -22366,12 +29596,107 @@ _(Or reply to their message)_
                   }
 
                   // ============================================
+                  // 🔪 MURDER MYSTERY - Blackvale Manor (`${prefix} murder` / `${prefix} mm`)
+                  // Lobby: create/join/leave/players/start · Play: vote/status/end
+                  // Night (DM only): kill/investigate - see core/games/murdermystery/
+                  // ============================================
+                  if (
+                    lowerTxt.startsWith(`${prefix} murder`) ||
+                    lowerTxt.startsWith(`${prefix} mm`)
+                  ) {
+                    const mmBody = lowerTxt.startsWith(`${prefix} murder`)
+                      ? lowerTxt.substring(`${prefix} murder`.length).trim()
+                      : lowerTxt.substring(`${prefix} mm`.length).trim();
+                    const mmParts = mmBody.split(/\s+/);
+                    const mmSub = mmParts[0] || '';
+                    const mmTarget = mmParts.slice(1).join(' ');
+                    let mmSenderName = 'Guest';
+                    try { mmSenderName = economy.getDisplayName(senderJid) || mmSenderName; } catch (e) {}
+                    try {
+                      await murderMystery.handleCommand({
+                        sock,
+                        chatId,
+                        senderJid,
+                        senderName: mmSenderName,
+                        sub: mmSub,
+                        rest: mmTarget,
+                        m,
+                        botMarker: BOT_MARKER,
+                        isGroup: !!(chatId && chatId.endsWith('@g.us')),
+                        botId: botConfig.getBotId(),
+                        prefix: botConfig.getPrefix(),
+                      });
+                    } catch (mmErr) {
+                      console.error('🔪 [MurderMystery] command error:', mmErr.message);
+                    }
+                    return;
+                  }
+
+                  // ============================================
+                  // ⚔️ GUILD WAR — THE RUINS (`${prefix} gw` / `${prefix} wr` / `${prefix} war`)
+                  // Mods: start / forcestart / end / abort · Players: join / status.
+                  // After deployment players act in bot DMs (move/look/map/relics/
+                  // handin/challenge) — see core/rpg/guildWar/. `wr` and `war` are
+                  // first-class aliases of `gw` (owner ask: keep the old switch alive).
+                  // ============================================
+                  if (
+                    lowerTxt.startsWith(`${prefix} gw`) ||
+                    lowerTxt.startsWith(`${prefix} wr`) ||
+                    lowerTxt.startsWith(`${prefix} war`)
+                  ) {
+                    const gwRest = lowerTxt.startsWith(`${prefix} gw`)
+                      ? lowerTxt.substring(`${prefix} gw`.length)
+                      : lowerTxt.startsWith(`${prefix} wr`)
+                        ? lowerTxt.substring(`${prefix} wr`.length)
+                        : lowerTxt.substring(`${prefix} war`.length);
+                    const gwArgs = gwRest.trim() ? gwRest.trim().split(/\s+/) : [];
+                    let gwSenderName = 'Champion';
+                    try { gwSenderName = economy.getDisplayName(senderJid) || gwSenderName; } catch (e) {}
+                    try {
+                      await require('./rpg/guildWar').handleGroupCommand(
+                        sock, chatId, senderJid, gwSenderName, gwArgs, { m, prefix },
+                      );
+                    } catch (gwErr) {
+                      console.error('⚔️ [GuildWar] command error:', gwErr.message);
+                    }
+                    return;
+                  }
+
+                  // ============================================
                   // Don't forget to update the allCommands array for the unknown command handler:
                   // Add these to the allCommands array (around line 6023):
                   //
                   // ============================================
 
-                  // ❓ unknown joker command — MUST be LAST
+                  // 💡 SIMPLIFIED ANSWER FORMAT (2026-09-27): when a quiz is
+                  // active and a question is OPEN, ANY ".j <text>" that reached
+                  // this point (i.e. matched no other command) is treated as a
+                  // quiz answer attempt. ".j b" picks option B; ".j Subaru
+                  // Natsuki" matches option text; unknown junk gets the 🤔
+                  // react and is ignored. Normal commands still work - this
+                  // sits AFTER every real command handler and BEFORE the
+                  // unknown-command fallback, so only genuinely unmatched
+                  // input during a live question is intercepted.
+                  if (quizGame.hasActive(chatId)) {
+                    const _ans = cleanTxt
+                      .substring(botConfig.getPrefix().length)
+                      .trim();
+                    if (_ans) {
+                      const resultQ = await quizGame.handleAnswer(
+                        sock,
+                        chatId,
+                        senderJid,
+                        _ans,
+                        BOT_MARKER,
+                        m,
+                        senderName,
+                      );
+                      if (resultQ.handled) return;
+                    }
+                  }
+                  // no active quiz -> fall through to unknown-command
+
+                  // ❓ unknown joker command - MUST be LAST
                   // We add checks here to ensure valid sub-commands like 'ttt' and 'move' don't trigger this
                   if (
                     lowerTxt.startsWith(
@@ -22403,6 +29728,10 @@ _(Or reply to their message)_
                       "about",
                       "support",
                       "refresh",
+                      "cardstyle",
+                      "equipment",
+                      "gear",
+                      "setdefaultcard",
                       "register",
                       "balance",
                       "bal",
@@ -22494,6 +29823,8 @@ _(Or reply to their message)_
                       "lore",
                       "allocate",
                       "alloc",
+                      "respec",
+                      "respecialize",
                       "leaderboard",
                       "top",
                       "rank",
@@ -22577,6 +29908,17 @@ _(Or reply to their message)_
                       "mods",
                       "addmod",
                       "delmod",
+                      "addrpgmod",
+                      "delrpgmod",
+                      "addcardsmod",
+                      "delcardsmod",
+                      "addquizmod",
+                      "delquizmod",
+                      "gcowner",
+                      "ungcowner",
+                      "listmods",
+                      "reloadmods",
+                      "reloadservers",
                       "spawn",
                       "cardmod",
                       "eshop",
@@ -22592,6 +29934,10 @@ _(Or reply to their message)_
                       "chess",
                       "resign",
                       "ludo",
+                      "quiz",
+                      "quizboard",
+                      "stock",
+                      "trends",
                     ];
                     if (
                       validPrefixes.some((p) =>
@@ -22628,6 +29974,7 @@ _(Or reply to their message)_
                       "about",
                       "support",
                       "refresh",
+                      "cardstyle",
                       "handbook",
                       "reset sprite",
                       "accept",
@@ -22670,8 +30017,9 @@ _(Or reply to their message)_
                       "guild join",
                       "guild leave",
                       "guild invite",
-                      "guild accept",
-                      "guild decline",
+                      // 💡 STALE SUGGESTION FIX 2026-09-20: removed
+                      // "guild accept"/"guild decline" - the dispatch was
+                      // deleted; invites are accepted via `.j invites`.
                       "guild list",
                       "guild members",
                       "guild tag",
@@ -22686,8 +30034,6 @@ _(Or reply to their message)_
                       "guild points",
                       "guild pointsboard",
                       "guild upgrade",
-                      "guild challenge",
-                      "guild challenges",
                       "news",
                       "anime news",
                       "register",
@@ -22827,6 +30173,32 @@ _(Or reply to their message)_
                       "wordle end",
                       "wordle stats",
                       "wordle top",
+                      "quiz",
+                      "quiz pick",
+                      "quiz end",
+                      "quizboard",
+                      "answer",
+                      "stock",
+                      "trends",
+                      "murder",
+                      "mm",
+                      "murder create",
+                      "murder join",
+                      "murder leave",
+                      "murder players",
+                      "murder start",
+                      "murder status",
+                      "murder vote",
+                      "murder kill",
+                      "murder investigate",
+                      "murder end",
+                      "murder help",
+                      "gw",
+                      "gw start",
+                      "gw join",
+                      "gw status",
+                      "wr",
+                      "war",
                       "shop",
                       "buy",
                       "evolve",
@@ -22917,6 +30289,12 @@ _(Or reply to their message)_
                     );
                   if (isCommand && txt.split(` `).length > 1) return;
 
+                  // ⚡ SIBLING-BOT SUPPRESSION (ticket #b4fa57): never let the AI
+                  // respond to another bot's message. Two bots chatting (or a
+                  // bot's output mentioning a sibling's name) used to make BOTH
+                  // bots answer - duplicate outputs and infinite echo risk.
+                  if (isSiblingBot(senderJid)) return;
+
                   // check if bot should respond (mentioned, replied to, or keyword)
                   const waContextInfo =
                     m.message.extendedTextMessage?.contextInfo ||
@@ -22969,7 +30347,7 @@ _(Or reply to their message)_
                   if (botConfig.getBotName().toLowerCase() === "subaru") {
                     // 💡 FIX: Tightened RBD keywords. The old list included
                     // common words like "talk", "tell me", "secret", "power",
-                    // "ability", "spill" — these fire on completely normal
+                    // "ability", "spill" - these fire on completely normal
                     // conversation, inflating the RBD counter and causing the
                     // panic response + video to trigger after just 6 casual
                     // messages. Now only phrases specifically about Subaru's
@@ -23019,7 +30397,7 @@ _(Or reply to their message)_
                         // (below) will only re-add it if it was enabled before.
                         // This prevents the RBD from persisting chats that were
                         // never explicitly enabled (the root cause of the DM
-                        // spam bug — DMs that triggered RBD during the isDM||
+                        // spam bug - DMs that triggered RBD during the isDM||
                         // bug period got permanently added to enabledChats).
                         const wasEnabledBeforeRBD = enabledChats.has(chatId);
                         enabledChats.delete(chatId);
@@ -23047,44 +30425,32 @@ _(Or reply to their message)_
                   }
                   // -----------------------------------------
 
-                  // Conversational nickname placeholder acquisition for unregistered users
+                  // ⚡ AUTO-NAME (2026-09-17, owner directive): the AI never asks
+                  // for names anymore. Unregistered users automatically get
+                  // their WhatsApp display name as their default name until
+                  // they register and choose a different one.
                   if (!economy.isRegistered(senderJid)) {
                     if (senderJid === botJid || (botLid && senderJid === botLid)) return;
-                    if (pendingNameRequests.has(senderJid)) return; // Already waiting for name response!
-                    const user = economy.getOrCreateUser(senderJid);
-                    const isNameUnknown = !user.nickname || user.nickname === "Adventurer";
-                    if (isNameUnknown) {
-                      // --- Sibling Bot Detection: skip name-ask for known peer bots ---
-                      const siblings = botConfig.getSiblings().map(s => s.toLowerCase());
-                      const senderPushName = (m.pushName || "").trim();
-                      const isSiblingBot = senderPushName && siblings.includes(senderPushName.toLowerCase());
-                      if (isSiblingBot) {
-                        // Auto-register this sibling with their known name + friend relationship
-                        user.nickname = senderPushName;
-                        if (!user.profile) user.profile = {};
-                        user.profile.nickname = senderPushName;
-                        user.profile.whatsappName = senderPushName;
-                        if (!user.profile.relationships) user.profile.relationships = {};
-                        // 💡 FIX: Mongoose Maps do not support keys that contain "."
-                        // JIDs like "2348086616347@s.whatsapp.net" have "." in the
-                        // domain part. Sanitize by replacing "." with "_" (same
-                        // pattern used by socialSystem.js).
-                        const relKey = (botJid || '').replace(/\./g, '_');
-                        if (typeof user.profile.relationships.set === 'function') {
-                          user.profile.relationships.set(relKey, 50);
-                        } else {
-                          user.profile.relationships[relKey] = 50;
-                        }
-                        economy.scheduleSave(senderJid);
-                        // Don't return — let the conversation continue naturally
-                      } else {
-                        await reply(`Yo! I don't know your name yet. What should I call you?`);
-                        pendingNameRequests.set(senderJid, { chatId, timestamp: Date.now() });
-                        return;
+                    const userAuto = economy.getOrCreateUser(senderJid);
+                    const pnAuto = (m.pushName || "").trim();
+                    const isNameUnknown =
+                      !userAuto.nickname || userAuto.nickname === "Adventurer";
+                    if (
+                      isNameUnknown &&
+                      pnAuto &&
+                      pnAuto.toLowerCase() !== "undefined" &&
+                      pnAuto.length >= 2 &&
+                      pnAuto.length <= 20
+                    ) {
+                      userAuto.nickname = pnAuto;
+                      if (!userAuto.profile) userAuto.profile = {};
+                      userAuto.profile.nickname = pnAuto;
+                      if (!userAuto.profile.whatsappName) {
+                        userAuto.profile.whatsappName = pnAuto;
                       }
+                      economy.scheduleSave(senderJid);
                     }
                   }
-
 
                   const prompt = txt
                     .replace(new RegExp(`${botConfig.getPrefix()}`, "gi"), "")
@@ -23111,7 +30477,7 @@ _(Or reply to their message)_
                           quotedName = botConfig.getBotName();
                         } else {
                           const quotedUser = economy.getOrCreateUser(normalizedQuotedJid);
-                          quotedName = quotedUser?.nickname || normalizedQuotedJid.split("@")[0];
+                          quotedName = quotedUser?.nickname || economy.getDisplayName(normalizedQuotedJid);
                         }
                       }
                       promptWithReply = `[Replying to ${quotedName}'s message: "${quotedText.trim()}"] ${prompt}`;
@@ -23119,7 +30485,7 @@ _(Or reply to their message)_
                   }
 
                   try {
-                    // check if user wants to tag everyone (regex — no API call)
+                    // check if user wants to tag everyone (regex - no API call)
                     if (isGroupChat) {
                       const intent = detectTagIntent(prompt);
 
@@ -23222,7 +30588,7 @@ _(Or reply to their message)_
                     }
                   } catch (err) {
                     console.error("❌ AI error:", err.message);
-                    await reply(`🤖 AI didn't respond — try again!`);
+                    await reply(`🤖 AI didn't respond - try again!`);
                   }
                 } catch (err) {
                   if (
@@ -23230,9 +30596,79 @@ _(Or reply to their message)_
                     err.message?.includes("MAC")
                   )
                     return;
-                  console.log("⚠️️ Skipping message:", err.message);
+                  console.error("🔴🔴🔴 SKIPPING MESSAGE (FATAL):", err.message);
+                  console.error("🔴🔴🔴 FULL STACK:", err.stack);
+                  // 💡 FIX 2026-09-14: this catch block lives in a scope where
+                  // `txt` (declared ~line 7306 in a nested block) is NOT
+                  // visible. Logging `txt?` here threw its own
+                  // "ReferenceError: txt is not defined", which REPLACED the
+                  // real error - users saw "Command failed: txt is not
+                  // defined" for completely unrelated bugs (e.g. the solo
+                  // `caption` crash). Read everything through _cmdContext
+                  // (declared ~line 6943 OUTSIDE storage.run, populated at
+                  // ~line 7848 INSIDE it), which is the only identifier set
+                  // guaranteed in scope across both worlds.
+                  const _fatalCtx = (typeof _cmdContext !== "undefined" && _cmdContext) ? _cmdContext : {};
+                  const _fatalChat = (_fatalCtx.chatId && typeof _fatalCtx.chatId === "string") ? _fatalCtx.chatId : null;
+                  console.error("🔴🔴🔴 Message that caused this:", JSON.stringify(
+                    _fatalCtx.txt ? String(_fatalCtx.txt).slice(0, 100) : "(unavailable)",
+                  ));
+                  console.error("🔴🔴🔴 Sender:", _fatalCtx.senderJid || "(unknown)", "Chat:", _fatalChat || "(unknown)");
+                  // 💡 Also send the error to the user so they can see it
+                  if (_fatalChat) {
+                    try {
+                      await sock.sendMessage(_fatalChat, { text: BOT_MARKER + `🔴 Command failed: ${err.message?.slice(0, 200)}\n\nType .jk ping to check if bot is alive.` });
+                    } catch (_) {}
+                  }
                 }
-              }); // END storage.run
+                  }), // END storage.run callback
+                  _cmdTimeoutPromise,
+                ]); // END Promise.race
+              } catch (_cmdTimeoutErr) {
+                // 💡 This catch fires when the 90s timeout wins the race.
+                // The original storage.run promise is orphaned (we can't
+                // cancel it) but at least the user gets a visible error
+                // instead of silence. This is the ONLY way to surface
+                // hung commands - the inner catch at line ~25235 only
+                // fires when something THROWS, and a hung await never
+                // throws.
+                //
+                // 💡 FIX 2026-07-29: Use _cmdContext (populated inside
+                // storage.run) instead of primaryCmd/senderJid/etc which
+                // are out of scope here. Previously this catch crashed with
+                // "ReferenceError: primaryCmd is not defined" - masking the
+                // real timeout error and producing an unhandled rejection.
+                const elapsed = ((Date.now() - _cmdStartTime) / 1000).toFixed(1);
+                const _ctx = _cmdContext || {};
+
+                // 💡 FIX 2026-08-06: Distinguish real timeouts (≥5s) from sync errors
+                // that escaped the inner catch (elapsed < 1s). Sync errors were being
+                // misreported as "0.0s timeout" which is misleading - they're actually
+                // TypeErrors or missing-function calls, not backend service issues.
+                const isRealTimeout = parseFloat(elapsed) >= 4.5;
+                if (isRealTimeout) {
+                  console.error(`⏱️⏱️⏱️ COMMAND TIMEOUT after ${elapsed}s | cmd=${JSON.stringify(_ctx.primaryCmd || _ctx.txt?.slice(0, 50) || 'unknown')} | sender=${_ctx.senderJid?.split('@')[0] || 'unknown'} | chat=${_ctx.chatId?.split('@')[0] || 'unknown'}`);
+                  console.error(`    This usually means the Go image service is unreachable or a network call hung.`);
+                  console.error(`    Check: curl -s -m 5 http://127.0.0.1:7860/health (should return JSON, not null)`);
+                } else {
+                  // Sync error escaped the inner catch - log with full stack for debugging
+                  console.error(`🔴🔴🔴 SYNC ERROR (misreported as timeout) after ${elapsed}s | cmd=${JSON.stringify(_ctx.primaryCmd || _ctx.txt?.slice(0, 50) || 'unknown')} | sender=${_ctx.senderJid?.split('@')[0] || 'unknown'}`);
+                  console.error(`    Error: ${_cmdTimeoutErr?.message || _cmdTimeoutErr}`);
+                  console.error(`    Stack: ${_cmdTimeoutErr?.stack?.split('\n').slice(0, 5).join('\n    ') || 'no stack'}`);
+                }
+
+                if (_ctx.chatId && typeof _ctx.chatId === 'string' && _ctx.chatId.includes('@')) {
+                  try {
+                    if (isRealTimeout) {
+                      await sock.sendMessage(_ctx.chatId, { text: BOT_MARKER + `⏱️ Command timed out after ${elapsed}s.\n\nThe bot is having trouble reaching a backend service (image renderer, database, or network). The owner has been notified.\n\nTry again in a minute, or use \`${botConfig.getPrefix()}ping\` to check if the bot is alive.\n\nCmd: \`${_ctx.primaryCmd || 'unknown'}\`` });
+                    } else {
+                      // 💡 FIX 2026-08-06: Sync error - show actual error message, not "timeout"
+                      const errMsg = _cmdTimeoutErr?.message?.slice(0, 200) || 'Unknown error';
+                      await sock.sendMessage(_ctx.chatId, { text: BOT_MARKER + `🔴 Command failed: ${errMsg}\n\nCmd: \`${_ctx.primaryCmd || 'unknown'}\`\n\nThe owner has been notified. Use \`${botConfig.getPrefix()}ping\` to check if the bot is alive.` });
+                    }
+                  } catch (_) {}
+                }
+              }
             }),
           ); // END Promise.all map
         }); // END messages.upsert
@@ -23275,7 +30711,7 @@ _(Or reply to their message)_
 }
 
 function getSock() {
-  return sock;
+  return _moduleSock;
 }
 
 module.exports = {
@@ -23285,5 +30721,50 @@ module.exports = {
   delGlobalMod,
   isGlobalMod,
   loadGlobalMods,
+  // 💡 3-tier mod system exports
+  addRpgMod,
+  delRpgMod,
+  isRpgMod,
+  loadRpgMods,
+isGameTester, loadGameTesters,
+  addCardsMod,
+  delCardsMod,
+  isCardsMod,
+  loadCardsMods,
+  // 💡 Quiz Mods (2026-09-27)
+  addQuizMod,
+  delQuizMod,
+  isQuizMod,
+  loadQuizMods,
+  // 💡 Sandbox mode exports
+  getSandboxJid,
+  enableSandbox,
+  disableSandbox,
+  saveAllSandboxes,
+  isSandboxJid,
+  stripSandboxPrefix,
+  sandboxMode,
+  hasModPermission,
+  isBotOwner,
+  // 👑 GC owner registry (2026-09-22) - .j gcowner immunity system
+  setGcOwner,
+  clearGcOwner,
+  getGcOwner,
+  isGcOwner,
+  loadGcOwners,
+  // Perma-ban system
+  banUser,
+  unbanUser,
+  isBanned,
+  // 💡 Owner-only hard mute/ban
+  hardBanUser,
+  unhardBanUser,
+  isHardBanned,
+  hardMuteUser,
+  unhardMuteUser,
+  isHardMuted,
+  loadHardBannedUsers,
+  loadHardMutedUsers,
+  loadBannedUsers,
   getBotInstancesHealth: () => botInstancesHealth,
 };

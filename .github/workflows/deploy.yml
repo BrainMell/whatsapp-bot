@@ -1,0 +1,26 @@
+name: Deploy to Oracle Cloud
+
+on:
+  push:
+    branches:
+      - audit/fix-pass-1
+
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH and Deploy (smart auth precedence)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.ORACLE_HOST }}
+          username: ubuntu
+          key: ${{ secrets.ORACLE_SSH_KEY }}
+          command_timeout: 10m
+          script: |
+            cd ~/whatsapp-bot
+            git fetch origin || exit 1
+            # self-bootstrap: always run the newest deploy script from git,
+            # regardless of what state the working tree is in
+            git show "origin/${{ github.ref_name }}:scripts/deploy_on_box.sh" > /tmp/deploy_on_box.sh \
+              && bash /tmp/deploy_on_box.sh "${{ github.ref_name }}"

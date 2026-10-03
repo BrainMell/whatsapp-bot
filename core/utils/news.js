@@ -1,5 +1,4 @@
-const GoImageService = require('./goImageService');
-const goService = new GoImageService();
+const goService = require('./goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
 const system = require('./system'); // NEW: Database System Module
 
 let sentUrls = new Set();
