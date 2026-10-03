@@ -60,3 +60,7 @@ core/data/quiz_pools/
 core/data/quiz_recent_used.json
 .gemini/
 scripts/_memmongo.pid
+
+# Baileys runtime auth (2026-10-03): never tracked in git again.
+# Deploys resolve auth via deploy_on_box.sh precedence (disk wins over git).
+instances/*/auth/

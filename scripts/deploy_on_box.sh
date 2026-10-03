@@ -29,7 +29,8 @@ TARGET="$BRANCH"
 TARGET_HEAD=$(git rev-parse "origin/$TARGET" 2>/dev/null || echo "")
 CURRENT_HEAD=$(git rev-parse HEAD 2>/dev/null || echo "")
 if [ -n "$TARGET_HEAD" ] && [ "$TARGET_HEAD" = "$CURRENT_HEAD" ]; then
-  PSTATE=$(pm2 jlist 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const p=JSON.parse(s);const w=(p||[]).find(x=>x&&x.name==='whatsapp-bot');console.log(w&&w.pm2_env&&w.pm2_env.status==='online'?'online':'no')}catch(e){console.log('no')}})" 2>/dev/null || echo no)
+  # 3-tenant split (2026-10-03): gate = ALL wa-* apps online.
+  PSTATE=$(pm2 jlist 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const p=JSON.parse(s);const want=['wa-jake','wa-joker','wa-subaru'];const ok=want.every(n=>(p||[]).some(x=>x&&x.name===n&&x.pm2_env&&x.pm2_env.status==='online'));console.log(ok?'online':'no')}catch(e){console.log('no')}})" 2>/dev/null || echo no)
   if [ "$PSTATE" = "online" ]; then
     echo "=== deploy done: skip $(git rev-parse --short HEAD) already deployed, pm2 online $(date -u +%FT%TZ) ==="
     exit 0
@@ -102,11 +103,30 @@ echo "relay key authorized: $(grep -c ubuntu@probe-amd-e2-micro-2 ~/.ssh/authori
 
 # ── 7. deps + restart ──────────────────────────────────────────────────
 npm install --no-audit --no-fund --loglevel=error 2>&1 | tail -3
-pm2 restart whatsapp-bot 2>/dev/null || pm2 start ecosystem.config.js 2>/dev/null || pm2 start index.js --name whatsapp-bot
+
+# 3-tenant split (2026-10-03): retire the shared fleet process if it
+# still exists (one-time migration; delete FIRST so tenants never run
+# in two processes at once - that would double-login the same session).
+if pm2 describe whatsapp-bot >/dev/null 2>&1; then
+  echo "migrating: deleting shared process 'whatsapp-bot' (3-tenant split)"
+  pm2 delete whatsapp-bot 2>/dev/null || true
+fi
+
+# Staggered restart: keep WhatsApp same-IP reconnection gentle.
+for APP in wa-jake wa-joker wa-subaru; do
+  if pm2 describe "$APP" >/dev/null 2>&1; then
+    pm2 restart "$APP" --update-env >/dev/null 2>&1 || true
+  fi
+  sleep 15
+done
+pm2 start ecosystem.config.js 2>/dev/null || pm2 start index.js --name whatsapp-bot
 pm2 save 2>/dev/null | tail -1
 sleep 6
 echo "=== pm2 ==="
 pm2 list
-echo "=== boot log tail ==="
-tail -40 ~/.pm2/logs/whatsapp-bot-out.log 2>/dev/null | grep -E "Spawning|PAIRING|Connected|401|logged|error" | tail -15
+echo "=== boot log tails ==="
+for APP in wa-jake wa-joker wa-subaru; do
+  echo "--- $APP ---"
+  tail -25 ~/.pm2/logs/$APP-out.log 2>/dev/null | grep -aE "Spawning|PAIRING|Connected|401|logged|Split|error" | tail -6
+done
 echo "=== deploy done: $HEADS $(date -u +%FT%TZ) ==="

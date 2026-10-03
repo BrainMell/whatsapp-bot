@@ -509,7 +509,25 @@ async function boot() {
     process.on('SIGINT', gracefulShutdown);
 
     console.log(" Multi-Tenant Manager Booting...");
-    
+
+    // ── 3-tenant pm2 split support (2026-10-03) ─────────────────────────
+    // In split-process mode each pm2 app runs ONE tenant (BOT_INSTANCE).
+    //   START_DELAY_MS    - staggers boots across processes so tenants never
+    //                       reconnect to WhatsApp simultaneously (same-IP
+    //                       multi-device rate limit → slow/failed relogin).
+    //   GLOBAL_SCHEDULERS - the schedulers below are GLOBAL-DB (they iterate
+    //                       every user in the economy, not one tenant): wealth
+    //                       tax, raid spawn/voting, bounty expiry, passive
+    //                       regen. Exactly ONE process per fleet must run them
+    //                       or their effects stack 3x. Default '1' keeps the
+    //                       single-process behaviour intact.
+    const RUN_GLOBAL_SCHEDULERS = (process.env.GLOBAL_SCHEDULERS || '1') !== '0';
+    const START_DELAY_MS = parseInt(process.env.START_DELAY_MS || '0', 10) || 0;
+    if (START_DELAY_MS > 0) {
+        console.log(`⏳ [Split] START_DELAY_MS=${START_DELAY_MS} - delaying boot to stagger WhatsApp reconnects...`);
+        await new Promise(resolve => setTimeout(resolve, START_DELAY_MS));
+    }
+
     // 1. Connect to Shared Database once
     await connectDB();
 
@@ -542,7 +560,8 @@ async function boot() {
     }
 
     // 3. Schedule weekly wealth tax (Phase 1 - Economy Rebalance)
-    try {
+    // (GLOBAL_SCHEDULERS gate: global-DB scheduler → runs on ONE process only)
+    if (RUN_GLOBAL_SCHEDULERS) try {
       const economy = require('./core/rpg/economy');
       if (typeof economy.scheduleWealthTax === 'function') {
         economy.scheduleWealthTax();
@@ -556,7 +575,8 @@ async function boot() {
     // penalties are gone — loans are no-interest, GM-approved support.)
 
     // 3c. Schedule weekly raid spawn + voting round resolver (Phase 5 - Avatar Raid)
-    try {
+    // (GLOBAL_SCHEDULERS gate: global-DB scheduler → runs on ONE process only)
+    if (RUN_GLOBAL_SCHEDULERS) try {
       const raidSystem = require('./core/rpg/raidSystem');
       // Spawn raid boss if it doesn't exist for this week (runs on boot + every hour)
       const checkAndSpawnRaid = async () => {
@@ -596,7 +616,8 @@ async function boot() {
     }
 
     // 3d. Schedule daily bounty expiry (Phase 6 - Bounty System)
-    try {
+    // (GLOBAL_SCHEDULERS gate: global-DB scheduler → runs on ONE process only)
+    if (RUN_GLOBAL_SCHEDULERS) try {
       const bountySystem = require('./core/rpg/bountySystem');
       const ONE_DAY = 24 * 60 * 60 * 1000;
       // First run in 30 min, then daily
@@ -804,10 +825,17 @@ async function boot() {
         }
       };
 
-      // First run in 5 min (let DB settle), then every 60s
-      setTimeout(applyOutOfCombatPassiveRegen, 5 * 60 * 1000);
-      setInterval(applyOutOfCombatPassiveRegen, OUT_OF_COMBAT_TICK_MS);
-      console.log("🌊 Out-of-combat passive regen scheduler initialized (runs every 60s).");
+      // First run in 5 min (let DB settle), then every 60s.
+      // (GLOBAL_SCHEDULERS gate: the boot block above also wires the per-process
+      //  Guild War combat hooks + recoverOnBoot - those MUST stay on every
+      //  process; only the global regen timers are single-owner.)
+      if (RUN_GLOBAL_SCHEDULERS) {
+        setTimeout(applyOutOfCombatPassiveRegen, 5 * 60 * 1000);
+        setInterval(applyOutOfCombatPassiveRegen, OUT_OF_COMBAT_TICK_MS);
+        console.log("🌊 Out-of-combat passive regen scheduler initialized (runs every 60s).");
+      } else {
+        console.log("🌊 Out-of-combat passive regen: skipped here (GLOBAL_SCHEDULERS=0 - fleet owner runs it).");
+      }
     } catch (e) {
       console.error("Failed to init passive regen scheduler:", e.message);
     }
@@ -845,7 +873,9 @@ if (require.main === module) {
     // 💡 SPRITE WARM-UP: fetch all missing Digimon sprites in the background
     // 30s after boot. This ensures the codex/roster/profile card renderers
     // have sprites cached before any user views them. Non-blocking, non-fatal.
-    setTimeout(() => {
+    // (GLOBAL_SCHEDULERS gate: one warm-up per fleet is enough - 3 processes
+    //  fetching the same sprite set simultaneously just burns bandwidth.)
+    if ((process.env.GLOBAL_SCHEDULERS || '1') !== '0') setTimeout(() => {
         try {
             const summonSprites = require('./core/rpg/summonSprites');
             const registry = require('./core/rpg/summonRegistry');
