@@ -23,23 +23,28 @@ function installCombatHooks() {
     const guildAdventure = require('../guildAdventure');
     guildAdventure.setRuinsHooks({
         // flee → back to previous room, room forfeited (stays ACTIVE)
-        onFlee(state) {
-            const meta = state.ruinsMeta;
+        // ⚔️ §15 #1 FIX: the hook param was named `state`, SHADOWING the
+        // module's own `const state = require('./state')` — every hook call
+        // threw `state.getEvent is not a function` and was swallowed
+        // upstream, so rooms never cleared, GP never paid, lives never
+        // dropped. Param renamed to `session` (the combat session object).
+        onFlee(session) {
+            const meta = session.ruinsMeta;
             if (!meta) return;
-            const player = (state.players || [])[0];
+            const player = (session.players || [])[0];
             if (!player) return;
             // teleport the session's player back to their previous room
-            state.playerRetreated = true; // hint for any group combat flows
+            session.playerRetreated = true; // hint for any group combat flows
             require('./index')._noteRetreat(meta.eventId, player.jid).catch((e) =>
                 console.error('[GW] onFlee note failed:', e?.message));
         },
         // combat end → victory clears the room + awards; defeat respawns.
         // 💡 NAVIGATION OVERHAUL: on victory the player is DM'd the VISUAL
         // navigation card (arrows for every open path) instead of text exits.
-        async onEnd(state, victory, sessionKey, sock) {
-            const meta = state.ruinsMeta;
+        async onEnd(session, victory, sessionKey, sock) {
+            const meta = session.ruinsMeta;
             if (!meta) return;
-            const player = (state.players || [])[0];
+            const player = (session.players || [])[0];
             if (!player) return;
             const GuildWarEvent = require('../../models/GuildWarEvent');
             const jid = player.jid;
@@ -103,6 +108,7 @@ function installCombatHooks() {
                 }
             } else {
                 // defeat: lives--, respawn at spawn corner with protection, room stays ACTIVE
+                // (§15 #1 fix: this path was unreachable before the shadowing fix)
                 const freshLives = Math.max(0, (player.lives ?? CFG.COMBAT.LIVES) - 1);
                 if (freshLives > 0) {
                     await state.updatePlayer(meta.eventId, jid, {}, {
@@ -254,7 +260,9 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
                 return sock.sendMessage(chatId, { text: `ℹ️ That war is already *${ev.state}*. Nothing to end.` });
             }
 
-            const ended = await state.endEvent(targetId, 'Called to an end by the Association.');
+            // quietFeed: the richer end card below already announces the end
+            // to the host GC — skip the generic feed major to avoid doubles.
+            const ended = await state.endEvent(targetId, 'Called to an end by the Association.', { quietFeed: true });
             if (!ended) return sock.sendMessage(chatId, { text: '❌ No active war found.' });
             feed.queue(targetId, 'major', `🏳️ THE WAR HAS ENDED. The Association tallies the spoils: ${ended.rewards.guilds.length} guilds took the field.`);
 
@@ -365,10 +373,14 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
 
 // ⚔️ DM the "war has begun + how you play" start card to every champion.
 // Fired on deploy - both manual forcestart and auto registration-expiry start.
-// Card is rendered ONCE per war (per-bot prefix), then sent to each player DM.
+// 💡 PHASE 3 (presentation overhaul): the start card is no longer the end of
+// the deployment DM - the champion's spawn room AUTO-PRESENTS itself right
+// after (map with YOU marker + scene + situation caption). The war opens on
+// their screen without anybody having to type `look` first.
 async function dmWarStartCards(sock, BOT_MARKER = '\u200B', event, prefix = '.') {
     if (!sock || !event) return 0;
     const notice = require('./noticeCard');
+    const dmRouter = require('./dmRouter');
     const buf = await notice.renderWarStartCard({ prefix });
     const players = (event.players || []).filter((p) => p && p.jid && p.status !== 'quit');
     let sent = 0;
@@ -376,12 +388,24 @@ async function dmWarStartCards(sock, BOT_MARKER = '\u200B', event, prefix = '.')
         try {
             await sock.sendMessage(p.jid, {
                 image: buf,
-                caption: `${BOT_MARKER}⚔️ *THE WAR HAS BEGUN, ${p.name}.*\nYou are deployed into the Ruins of a dead world. My DMs are now your game screen - your first move is \`look\`.`,
+                caption: `${BOT_MARKER}⚔️ *THE WAR HAS BEGUN, ${p.name}.*\nYou are deployed into the Ruins of a dead world. My DMs are now your game screen - your surroundings await below.`,
             });
             sent += 1;
         } catch (e) {
             console.error('[GW] start card DM failed:', p.jid, e?.message);
         }
+        // auto-present the spawn room (§3: the character stands in the scene
+        // first, the map rides underneath — the war opens on their screen)
+        try {
+            const ctx = await state.getMoveContext(event.eventId, p.roomId);
+            if (ctx && ctx.room) {
+                const me = ctx.players?.find?.((x) => x.jid === p.jid) || p;
+                await dmRouter.presentRoom(sock, p.jid, BOT_MARKER, ctx, me, ctx.room, { prefix, withMap: true, deployOrder: true });
+            }
+        } catch (e) {
+            console.error('[GW] spawn auto-present failed:', p.jid, e?.message);
+        }
+        await new Promise((r) => setTimeout(r, 700)); // pace the deployment wave
     }
     return sent;
 }

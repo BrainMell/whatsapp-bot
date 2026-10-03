@@ -6877,6 +6877,47 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               await writeHeartbeat(); // write immediately on connect
               heartbeatInterval = setInterval(writeHeartbeat, 30000);
 
+              // 🛡️ WHATSAPP LIVENESS WATCHDOG (2026-10-03): Baileys sockets
+              // sometimes die WITHOUT emitting 'close' (observed in prod:
+              // TCP CLOSE_WAIT zombies — process alive, zero WhatsApp
+              // traffic, reconnect never fires; bots look "up" but never
+              // receive another message until a manual restart). Every 60s
+              // we check per-bot silence; after 3 silent minutes we probe
+              // with a real API round-trip, and a failed probe ends the
+              // socket explicitly so the existing close handler reconnects.
+              global.waWatchSocks = global.waWatchSocks || new Map();
+              global.waWatchSocks.set(BOT_ID, sock);
+              global.waLastInbound = global.waLastInbound || {};
+              if (!global.waLastInbound[BOT_ID]) global.waLastInbound[BOT_ID] = Date.now();
+              if (!global.waWatchdogTimer) {
+                global.waWatchdogTimer = setInterval(async () => {
+                  try {
+                    if (!global.waWatchSocks || !global.waWatchSocks.size) return;
+                    const now = Date.now();
+                    for (const [bid, s] of global.waWatchSocks) {
+                      try {
+                        if (!s) continue;
+                        const silentFor = now - (global.waLastInbound[bid] || now);
+                        if (silentFor < 180000) continue; // traffic flowing
+                        const probe = await Promise.race([
+                          s.groupFetchAllParticipating().then(() => true).catch(() => false),
+                          new Promise((res) => setTimeout(() => res(false), 20000)),
+                        ]);
+                        if (!probe) {
+                          console.log(`🛡️ [${bid}] WATCHDOG: socket silent ${Math.round(silentFor / 1000)}s + API probe failed — forcing reconnect (dead socket, no close event)`);
+                          global.waLastInbound[bid] = now; // no probe storm while closing
+                          try { s.end(new Error('watchdog: dead socket (no close event)')); } catch (e) {}
+                        } else {
+                          global.waLastInbound[bid] = now; // socket alive, just quiet
+                        }
+                      } catch (e) { /* per-bot isolation */ }
+                    }
+                  } catch (e) { /* the watchdog must never throw */ }
+                }, 60000);
+                if (global.waWatchdogTimer.unref) global.waWatchdogTimer.unref();
+                console.log('🛡️ WhatsApp liveness watchdog armed (3-min silence + failed probe → forced reconnect)');
+              }
+
               // ⚡ DEFERRED DATA LOAD: if we skipped loading on startup (fresh QR login),
               // load all data now that the session is established.
               if (isFreshLogin) {
@@ -7591,6 +7632,8 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         // ============================================
         sock.ev.on("messages.upsert", async ({ messages, type }) => {
           if (type !== "notify" && type !== "append") return;
+          global.waLastInbound = global.waLastInbound || {};
+          global.waLastInbound[BOT_ID] = Date.now(); // 🛡️ watchdog liveness clock
           if (isRekeying) {
             // 💡 DIAGNOSTIC: log when messages are dropped due to rekeying.
             // If this fires constantly, the bot is churning (rapid

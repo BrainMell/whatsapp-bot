@@ -302,12 +302,28 @@ function _renderInProcess(eventDoc, player, extras = {}) {
     }
     const me = roomsMap.get(player.roomId);
     if (me && discovered.has(player.roomId)) {
+        const mx = cx(me), myy = cy(me);
+        // 💡 PHASE 3 (YOU-marker upgrade): the marker used to be a faint
+        // 5px triangle riding the dot — easy to lose on a 60×60 alignment
+        // sheet. Now: a double pulse-ring around the room dot, a solid wax
+        // triangle ABOVE it and a labeled "YOU" tag that survives zoom-out.
+        ctx.strokeStyle = PAL.you;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(mx, myy, dotR + 7, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 0.45;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.arc(mx, myy, dotR + 12, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 1;
+        const ty = myy - dotR - 12;
         ctx.fillStyle = PAL.you;
         ctx.beginPath();
-        const mx = cx(me), myy = cy(me) - dotR - 9;
-        ctx.moveTo(mx, myy - 7); ctx.lineTo(mx - 5.5, myy + 3); ctx.lineTo(mx + 5.5, myy + 3);
+        ctx.moveTo(mx, ty - 9); ctx.lineTo(mx - 7, ty + 4); ctx.lineTo(mx + 7, ty + 4);
         ctx.closePath(); ctx.fill();
         ctx.strokeStyle = '#F3ECD9'; ctx.lineWidth = 1; ctx.stroke();
+        ctx.font = 'bold 12px "Cinzel"';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = PAL.you;
+        ctx.fillText('YOU', mx, ty - 14);
     }
 
     // ── legend plate ──

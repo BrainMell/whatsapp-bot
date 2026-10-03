@@ -13,6 +13,7 @@ const RoomSchema = new mongoose.Schema({
     region: { type: Number, default: 0 },
     type: String,           // empty|combat|puzzle|discovery|reward|hazard|lore|coop|secret|anomaly|landmark|core
     state: { type: String, default: 'UNEXPLORED' }, // UNEXPLORED|ACTIVE|CLEARED
+    ring: { type: Number, default: 0 },      // BFS ring from spawn band (§15 #3: was stripped by strict mode before)
     payload: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} }, // encounter setup (server-side answers, enemies, loot)
     clearedBy: String,      // player jid
     clearedByGuild: String,
@@ -47,6 +48,7 @@ const PlayerSchema = new mongoose.Schema({
     lives: { type: Number, default: 3 },
     protectedUntil: { type: Number, default: 0 },
     lastActionAt: { type: Number, default: 0 },
+    lastMoveAt: { type: Number, default: 0 },   // §15 #4: move cooldown clock (was stripped by strict mode)
     pvpMeta: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} }, // victim decay ledger
     joinedAt: Date,
 }, { _id: false });
@@ -73,6 +75,11 @@ const GuildWarEventSchema = new mongoose.Schema({
     endsAt: Number,                             // hard end
     archivedAt: Number,
     logTail: [{ t: Number, type: String, actor: String, payload: String }], // ring, newest last
+    // Phase 2 (feed resurrection): the live feed queue lives in the DOC so
+    // every instance can flush it and a restart loses nothing.
+    feedQueue: [{ id: String, tier: String, text: String, t: Number, tries: { type: Number, default: 0 } }],
+    // Phase 1 #8: PvP challenge windows are shared state (was per-process Map)
+    pvpChallenges: [{ key: String, challengerJid: String, challengedJid: String, roomKey: String, expiresAt: Number }],
     createdAt: { type: Date, default: Date.now },
 }, { collection: 'guildwarevents', minimize: false });
 

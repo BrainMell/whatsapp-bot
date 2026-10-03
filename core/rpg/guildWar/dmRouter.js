@@ -76,12 +76,15 @@ async function navCardFor(eventDoc, player, room, prefix) {
 }
 
 // ── ROOM ENTRY PRESENTATION (owner: "reactive and visual") ──
-// Order on EVERY room entry (move, look, first room):
-//   1. the MAP, clearly marking where the player is,
-//   2. the room-TYPE card (what kind of place am I entering),
-//   3. the encounter SCENE image (player standing in the room),
-//   with short captions instead of text walls. Puzzle rooms append the
-//   actual game board. Returns {} - everything was already sent.
+// 💡 PHASE 3 (presentation overhaul): image discipline — the old flow sent
+// map + room-type parchment + scene on EVERY entry (2-3 images for an empty
+// hall). Now:
+//   • empty rooms → ONE message: the map, with the situation as its caption
+//     (the QUIET HALL parchment is gone — silence is one image, not three)
+//   • typed rooms → map + scene (+ the type card ONLY when it carries a
+//     payload-specific body/hint, and never on a revisit of a cleared room)
+//   • puzzle rooms still append the live game board
+// Returns {} - everything was already sent.
 async function presentRoom(sock, chatId, BOT_MARKER, ctxDoc, me, newRoom, opts = {}) {
     const prefix = opts.prefix || '.';
     const withMap = opts.withMap !== false;
@@ -91,23 +94,6 @@ async function presentRoom(sock, chatId, BOT_MARKER, ctxDoc, me, newRoom, opts =
 
     const theme = encounters.worldTheme((newRoom.payload && newRoom.payload.theme) || eventDocWorldOf(ctxDoc));
     const meta = navCard.typeMeta(newRoom.type);
-
-    // 1) map first - "clearly indicate where the player currently is"
-    if (withMap) {
-        try {
-            const fresh = await state.getEvent(ctxDoc.eventId, { fresh: true });
-            const freshMe = fresh.players.find((p) => p.jid === me.jid) || me;
-            const renderer = require('./mapRenderer');
-            const extras = visibility.extrasFor(fresh, freshMe, guildLevelOf(fresh, freshMe));
-            const buf = await renderer.renderRuinsMap(fresh, freshMe, { mates: extras.mates, enemyPings: extras.enemyPings });
-            if (buf) {
-                await send({ image: buf, caption: BOT_MARKER + `📍 *YOU ARE HERE* - ${meta.label} (chamber ${newRoom.key})` });
-            }
-        } catch (e) {
-            console.error('[RuinsNav] map render failed (non-fatal):', e?.message);
-        }
-    }
-
     const intro = await encounters.roomIntro(ctxDoc, me, newRoom);
 
     // meeting lines (kept short - they are gameplay-critical)
@@ -119,34 +105,84 @@ async function presentRoom(sock, chatId, BOT_MARKER, ctxDoc, me, newRoom, opts =
     if (mates.length) social += `\n\n🤝 ${mates.map((m) => m.name).join(', ')} of your guild ${mates.length > 1 ? 'are' : 'is'} here - fight together for a shared reward.`;
     if (foes.length) social += `\n\n⚠️ ${foes.map((f) => f.name).join(', ')} (${foes[0].guildName}) ${foes.length > 1 ? 'are' : 'is'} here - rival guild. \`challenge @name\` or move carefully.`;
 
-    // 2) room-type card - what am I entering? (payload-specific flavour body,
-    // action hint as caption)
-    let typeBuf = null;
-    try {
-        typeBuf = await navCard.renderRoomTypeCard({
-            roomType: newRoom.type,
-            world: theme.name,
-            ring: newRoom.ring,
-            landmarkName: (newRoom.payload && newRoom.payload.landmarkName) || null,
-            cleared: newRoom.state === 'CLEARED',
-            body: intro.cardBody || null,
-            prefix,
-        });
-    } catch (e) { /* best-effort */ }
-    if (typeBuf) {
-        const typeCaption = intro.cardAction || (intro.text || '').split('\n')[0];
-        await send({ image: typeBuf, caption: BOT_MARKER + typeCaption });
+    const isEmpty = newRoom.type === 'empty' && newRoom.state !== 'CLEARED';
+    // 💡 OVERHAUL MD §3: on DEPLOY the character stands in the scene FIRST
+    // and the map rides UNDERNEATH it — "I am here" before "here is the
+    // world". Ordinary movement keeps the lightweight map-first flow (§6).
+    const deployOrder = !!opts.deployOrder;
+
+    // deploy flow: scene (the character, in place) → map (the world below)
+    if (deployOrder) {
+        const sitCaption = BOT_MARKER + ((intro.text || '') + social).trim();
+        if (intro.image) {
+            await send({ image: intro.image, caption: sitCaption });
+        } else if (intro.text || social) {
+            await send({ text: sitCaption });
+        }
+        if (withMap) {
+            try {
+                const fresh = await state.getEvent(ctxDoc.eventId, { fresh: true });
+                const freshMe = fresh.players.find((p) => p.jid === me.jid) || me;
+                const renderer = require('./mapRenderer');
+                const extras = visibility.extrasFor(fresh, freshMe, guildLevelOf(fresh, freshMe));
+                const buf = await renderer.renderRuinsMap(fresh, freshMe, { mates: extras.mates, enemyPings: extras.enemyPings });
+                if (buf) {
+                    await send({ image: buf, caption: BOT_MARKER + `📍 *YOU ARE HERE* - ${meta.label} (chamber ${newRoom.key}). Walk with w/a/s/d.` });
+                }
+            } catch (e) {
+                console.error('[RuinsNav] deploy map render failed (non-fatal):', e?.message);
+            }
+        }
+        return {};
+    }
+
+    // 1) map first - "clearly indicate where the player currently is".
+    //    Empty rooms: the map CAPTION carries the situation (1 message total).
+    if (withMap) {
+        try {
+            const fresh = await state.getEvent(ctxDoc.eventId, { fresh: true });
+            const freshMe = fresh.players.find((p) => p.jid === me.jid) || me;
+            const renderer = require('./mapRenderer');
+            const extras = visibility.extrasFor(fresh, freshMe, guildLevelOf(fresh, freshMe));
+            const buf = await renderer.renderRuinsMap(fresh, freshMe, { mates: extras.mates, enemyPings: extras.enemyPings });
+            if (buf) {
+                const caption = isEmpty
+                    ? BOT_MARKER + ((intro.text || '') + social).trim()
+                    : BOT_MARKER + `📍 *YOU ARE HERE* - ${meta.label} (chamber ${newRoom.key})`;
+                await send({ image: buf, caption });
+            }
+        } catch (e) {
+            console.error('[RuinsNav] map render failed (non-fatal):', e?.message);
+        }
+    }
+    if (isEmpty) return {}; // one image, one caption — the hall says all
+
+    // 2) room-type card - ONLY when it has something non-generic to say
+    const hasTypeBody = !!(intro.cardBody || intro.cardAction);
+    if (newRoom.state !== 'CLEARED' && hasTypeBody) {
+        let typeBuf = null;
+        try {
+            typeBuf = await navCard.renderRoomTypeCard({
+                roomType: newRoom.type,
+                world: theme.name,
+                ring: newRoom.ring,
+                landmarkName: (newRoom.payload && newRoom.payload.landmarkName) || null,
+                cleared: newRoom.state === 'CLEARED',
+                body: intro.cardBody || null,
+                prefix,
+            });
+        } catch (e) { /* best-effort */ }
+        if (typeBuf) {
+            const typeCaption = intro.cardAction || (intro.text || '').split('\n')[0];
+            await send({ image: typeBuf, caption: BOT_MARKER + typeCaption });
+        }
     }
 
     // 3) the encounter scene (player standing in the room)
     if (intro.image) {
         await send({ image: intro.image, caption: BOT_MARKER + ((intro.text || '') + social).trim() });
-    } else if (typeBuf) {
-        // combat rooms: battle image comes later from startRoomCombat - the
-        // type card + one short line is the entry visual.
-        if (social) await send({ text: BOT_MARKER + social.trim() });
-    } else if (intro.text || social) {
-        await send({ text: BOT_MARKER + ((intro.text || '') + social).trim() });
+    } else if (social) {
+        await send({ text: BOT_MARKER + social.trim() });
     }
 
     // 4) puzzle rooms: the actual game board rides last, up close.
@@ -358,7 +394,8 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
     }
     if (/^flee$/.test(norm)) {
         const room = roomOf(eventDoc, player);
-        const pending = [...ruinsPvp._openChallenges.values()].find((c) => c.challengedJid === senderJid && Date.now() < c.expiresAt);
+        const pending = await ruinsPvp.openChallengeFor(eventDoc, senderJid)
+            || [...ruinsPvp._openChallenges.values()].find((c) => c.challengedJid === senderJid && Date.now() < c.expiresAt) || null;
         if (pending || room?.type === 'combat' || room?.type === 'coop' || room?.type === 'core') {
             await state.updatePlayer(eventDoc.eventId, senderJid, {}, {
                 roomId: player.prevRoomId,
@@ -490,13 +527,18 @@ async function useRelic(eventDoc, player, arg, { sock, chatId, BOT_MARKER }) {
         const buff = relics.wardBuff(match);
         if (!buff) return { text: 'This ward is inert.' };
         const GuildWarEventModel = require('../../models/GuildWarEvent');
+        // ⚔️ §15 #6 FIX: the old activation OVERWROTE meta with { buff },
+        // losing the ward's `fights` counter — and nothing downstream read
+        // `ward_active` anyway. meta now carries kind+fights+buff, and
+        // encounters.startRoomCombat applies + consumes the ward per fight.
+        const oldMeta = typeof match.meta?.get === 'function' ? Object.fromEntries(match.meta.entries()) : (match.meta || {});
         await GuildWarEventModel.updateOne(
             { eventId: eventDoc.eventId, 'players.jid': player.jid },
             { $pull: { 'players.$.relics': { id: match.id } } }
         );
         await GuildWarEventModel.updateOne(
             { eventId: eventDoc.eventId, 'players.jid': player.jid },
-            { $push: { 'players.$.relics': { ...match, category: 'ward_active', charges: 0, meta: { buff } } } }
+            { $push: { 'players.$.relics': { ...match, category: 'ward_active', charges: 0, meta: { ...oldMeta, buff } } } }
         );
         return { text: `🛡️ The ${match.name} flares - its ward wraps your next fight (${buff.type}).` };
     }
@@ -534,4 +576,4 @@ function displayName(jid) {
     } catch (e) { return String(jid).split('@')[0]; }
 }
 
-module.exports = { handleDM, getEventForPlayer, displayName, navCardFor, computeExits };
+module.exports = { handleDM, getEventForPlayer, displayName, navCardFor, computeExits, presentRoom };

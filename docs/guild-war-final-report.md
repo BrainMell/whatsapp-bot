@@ -97,3 +97,66 @@ Rendered via `scripts/gw_visual.js` (copies in `/tmp/gwtest/scripts/render_out/`
 2. **Config pass**: all numbers live in `core/rpg/guildWar/config.js` — durations, GP values, caps, relic weights. Tell me anything to retune.
 3. **Alignment cadence**: currently the 96h cosmology window auto-launches a registration phase. Want it quieter (manual-only) or keep auto?
 4. **"Thud"**: if it really is a Go-side element you want removed from OTHER encounter types, point me at which card — the Go repo isn't in this workspace.
+
+
+## 5. 2026-10-03 Experience Overhaul (phases 1-3 applied)
+
+Owner directive: make the war feel ALIVE — "I am physically inside the
+Ruins", not "the bot tells me a story about the Ruins" (see
+`guild-war-presentation-overhaul.md`). All three phases shipped in
+commit `guild-war overhaul: all 3 phases`.
+
+**Phase 1 — mechanics come alive (verified §15 defects, all fixed):**
+- Combat settlement hook un-shadowed (`state` → `session` in
+  `guildWar/index.js`): room clears, GP, relics, lives, defeat respawn and
+  the victory nav card actually execute now — every victory/defeat used to
+  throw `state.getEvent is not a function` and vanish into a catch.
+- GP awards are atomic (`$inc` + `$min` cap clamp) — back-to-back awards
+  (core breach fires three) no longer lose GP to last-write-wins.
+- `ring` (RoomSchema) + `lastMoveAt` (PlayerSchema) persist: enemy/ring
+  scaling, relic luck, puzzle size, RING UI and the 6s move cooldown work.
+- Ward relics: activation preserves `fights`; `startRoomCombat` passes the
+  buff into `startRuinsCombat` via `spec.ward` (atk/def % or shield status)
+  and consumes one fight per battle. Ward kinds restricted to what the
+  engine reads (atk/def/shield).
+- Ruins damage is REAL: puzzle-fail shock, hazard hits and anomaly
+  hp_drain write the player's persistent HP (floor 1 — only combat takes
+  lives). Captions now say so.
+- PvP protection is two-way: a protected player cannot be challenged.
+- PvP challenge windows persist in the event doc (`pvpChallenges[]`):
+  cross-instance accept via atomic claim, tick-pruned timeouts. The
+  per-process Map is a legacy mirror only.
+
+**Phase 2 — the GC live feed actually works:**
+- The feed queue lives in the event doc (`feedQueue[]`): atomic
+  claim-and-clear flush — any of the 3 instances can dispatch any queue,
+  restarts lose nothing, duplicates are impossible per claim.
+- Hostless (organic alignment) wars route to each bot's RPG-friendly GCs
+  (`gw rpg on`) — previously `hostGroupId: null` wiped the queue every
+  flush and the entire organic-war feed was dead by construction.
+- Auto-start (registration expiry) now announces "the war has begun" and
+  DMs the start cards; time-expiry end announces the result. Both were
+  silent before.
+- Failed sends requeue (tries+1, drop after 3) instead of voiding; majors
+  degrade to text, never disappear; only SUCCESSFUL sends burn the rate
+  window; `scoreboardAt` no longer pre-bumps.
+- 20s fast flush cadence (in addition to the 60s sweeper) + dispose of
+  feed state once a war ends.
+
+**Phase 3 — presentation (image discipline + auto-entry):**
+- Deployment DM = start card, then the champion's character standing in
+  the spawn scene, then the map UNDERNEATH with YOU ARE HERE (§3 of the
+  MD). No forced `look` — the world opens by itself.
+- Ordinary empty rooms = ONE message (the map, situation as its caption).
+  The QUIET HALL parchment is retired; type cards render only when they
+  carry payload-specific body/hints; puzzle boards still ride last.
+- Even empty halls render the character scene on deploy and `look`.
+- Map YOU-marker upgraded: double pulse-ring + labeled triangle that
+  survives zoom-out on 60×60 alignment sheets.
+- Riddle bank: replaced the "map"-answer riddle (the answer collided with
+  the `map` command — its solve path was unreachable).
+
+**QA:** `scripts/gw_sim.js` 558/558 green (three full runs; two earlier
+failures were a real find — the riddle/command collision — plus a test
+race from a duplicated sim process). `scripts/gw_visual.js` renders all
+maps incl. the new YOU-marker. Docs: this section + decisions log.

@@ -22,3 +22,14 @@ Format: [phase] DECISION — rationale. Newest at bottom.
 - [perf] .lean() on all event reads + immutable adjacency/room-index caches + projected move context (one ~1KB read per move instead of a full 841-1849-room document) — L2 move p95 improved 44s → 18-23s under all-simultaneous flood.
 - [visual] Map glyphs restricted to the CARD-SYSTEM §6 DejaVu-verified whitelist (emoji have zero coverage; ⌛⛓ known tofu). Glyph map: ⚔ ✥ ⚑ ◈ ☠ ✺ ✚ ✦ ✷ ▲ ⨀.
 - [known-limitation] At alignment-extreme scale (150 players ALL moving in the same second, 1849 rooms) p95 reaches ~60-75s with GC stalls up to ~10-20s on the 2-core box; correctness holds (0 failures, memory bounded). Structural next step if the owner wants faster extreme-scale: chunked room storage (one doc per region). Documented for the morning, deliberately not rushed overnight.
+
+- [2026-10-03 experience overhaul] Feed queue moved into the event doc
+  (`feedQueue[]`, atomic claim flush — multi-instance safe, restart-safe);
+  hostless alignment wars broadcast to per-bot RPG-friendly GCs; combat
+  hook param renamed (`state`→`session`) so settlement actually runs; GP
+  `$inc`+`$min` atomic; `ring`/`lastMoveAt` persisted; wards apply+consume
+  via `spec.ward` (atk/def/shield only); Ruins damage writes persistent HP
+  (floor 1); two-way PvP protection; PvP challenges persisted in-doc with
+  tick-pruned timeouts; deploy auto-presents spawn (scene→map, §3); empty
+  rooms = 1 map message; map YOU-marker upgraded; riddle bank de-collided
+  from DM verbs.

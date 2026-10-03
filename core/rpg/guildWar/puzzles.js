@@ -28,8 +28,11 @@ function genSequence(rng, room) {
 }
 
 // 2. guardian riddle (offline bank; LLM variant optional later)
+// ⚔️ collision guard: answers must never match DM command verbs — the old
+// first riddle answered "map", which the router intercepts as the map
+// command (its solve path was unreachable, forever).
 const RIDDLES = [
-    { q: 'I have cities but no houses, forests but no trees, water but no fish. What am I?', a: ['map'] },
+    { q: 'I have keys but no locks. I have space but no room. You can enter, but you can\u2019t go outside. What am I?', a: ['keyboard'] },
     { q: 'I am always coming but never arrive. What am I?', a: ['tomorrow'] },
     { q: 'The more you take, the more you leave behind. What am I?', a: ['footsteps', 'footprints', 'steps'] },
     { q: 'I speak without a mouth and hear without ears. I have no body, but I come alive with wind. What am I?', a: ['echo'] },

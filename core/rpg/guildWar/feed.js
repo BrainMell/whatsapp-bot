@@ -1,34 +1,72 @@
 // ============================================
-// 📢 EVENT FEED — Guild War Overhaul 2026-10-03
+// 📢 EVENT FEED — Guild War Overhaul 2026-10-03 · Phase 2 RESURRECTION
 // Batched, tiered group announcer. Minors merge into a digest; normals are
-// rate-capped; majors (image cards) always go. Hard cap protects the group
-// from spam and WhatsApp rate limits. Never blocks the event loop.
+// rate-capped; majors (image cards) always go with a text fallback.
+//
+// PHASE 2 (why the war felt invisible — all fixed here):
+//  1. Queue used to be PER-PROCESS MEMORY: a restart lost it and only the
+//     instance that queued could flush it. Now the queue lives in the event
+//     DOC (feedQueue[]) — atomic $push to enqueue, atomic claim-and-clear to
+//     flush, so ANY instance can flush ANY queue and restarts lose nothing.
+//  2. hostless (organic alignment) wars wiped the queue every flush because
+//     hostGroupId was null. They now route to this bot's RPG-friendly GCs.
+//  3. Send failures used to burn the item AND the rate window. Failed sends
+//     now requeue (tries+1, drop after 3) and only SUCCESS marks the window.
+//  4. Majors had no text fallback — now they degrade to text, never void.
+//  5. feedStates leaked forever after a war ended — flush now disposes its
+//     state once the event is over and the queue is drained.
+//  6. A fast internal cadence (CFG.FEED.FLUSH_MS) makes the feed feel live
+//     instead of waiting for the 60s sweeper piggyback.
 // ============================================
 
 const CFG = require('./config');
 const state = require('./state');
 
-// per-event feed state (memory; a crash loses at most one flush window)
-const feedStates = new Map(); // eventId → { queue: [], lastNormalAt, windowStart, windowCount, hostGroupId, scoreboardAt }
+// per-event feed state (memory): pacing windows + sock registration only —
+// the ITEMS themselves live in the event doc (multi-instance + restart safe)
+const feedStates = new Map(); // eventId → { windowStart, windowCount, lastNormalAt, scoreboardAt, hostOk }
+
+let _sock = null, _marker = '\u200B', _fastTimer = null;
 
 function st(eventId) {
     let s = feedStates.get(eventId);
     if (!s) {
-        s = { queue: [], lastNormalAt: 0, windowStart: 0, windowCount: 0, scoreboardAt: 0 };
+        // `queue` = this instance's local mirror (QA/sim seam + zero-latency
+        // flush source); the DOC's feedQueue[] remains the shared truth.
+        s = { queue: [], windowStart: 0, windowCount: 0, lastNormalAt: 0, scoreboardAt: 0, hostOk: null };
         feedStates.set(eventId, s);
     }
+    if (!s.queue) s.queue = [];
     return s;
 }
 
+// the sweeper calls this every 60s; the fast flush cadence reuses the sock
+function registerSock(sock, BOT_MARKER) {
+    if (sock) _sock = sock;
+    if (BOT_MARKER) _marker = BOT_MARKER;
+    if (!_fastTimer && CFG.FEED.FLUSH_MS > 0) {
+        _fastTimer = setInterval(() => {
+            tickAll(_sock, _marker).catch((e) => console.error('[GWFeed] fast tick:', e.message));
+        }, CFG.FEED.FLUSH_MS);
+        if (_fastTimer.unref) _fastTimer.unref();
+    }
+}
+
+let _seq = 0;
 function tierRank(t) { return t === 'major' ? 2 : t === 'normal' ? 1 : 0; }
 
-// queue a feed item; flushes happen on the event sweeper tick (60s) AND on a
-// shorter internal cadence via tickAll called from the same sweeper
+// queue a feed item. Sync-local push (callers/sim read st().queue) + async
+// mirror into the event doc so any instance / post-restart flush can send it.
 function queue(eventId, tier, text) {
     if (!text) return;
-    const s = st(eventId);
-    s.queue.push({ tier, text: String(text).slice(0, 300), t: Date.now() });
-    if (s.queue.length > 200) s.queue.splice(0, s.queue.length - 200); // bound
+    const item = { id: `fq_${Date.now().toString(36)}_${(_seq++).toString(36)}`, tier, text: String(text).slice(0, 300), t: Date.now(), tries: 0 };
+    st(eventId).queue.push(item);
+    // DB mirror (source of truth; bounded, atomic, multi-instance safe)
+    const GuildWarEvent = require('../../models/GuildWarEvent');
+    GuildWarEvent.updateOne(
+        { eventId },
+        { $push: { feedQueue: { $each: [item], $slice: -250 } } }
+    ).catch((e) => console.error('[GWFeed] queue mirror failed:', e.message));
 }
 
 // rate-window accounting: max MAX_MSGS_PER_5MIN group messages
@@ -38,6 +76,7 @@ function windowAllows(s) {
     return s.windowCount < CFG.FEED.MAX_MSGS_PER_5MIN;
 }
 
+// only a SUCCESSFUL send may burn the rate window (Phase 2 #3)
 function markSent(s) { s.windowCount++; s.lastNormalAt = Date.now(); }
 
 // build digest text from queued minors (+normals if over cap)
@@ -47,25 +86,93 @@ function buildDigest(items) {
     return lines.join('\n').slice(0, 900);
 }
 
-// flush one event's queue; returns list of {text, isCard} to send
+// where does this event's feed go?
+// explicit host GC for hosted wars; this bot's RPG-friendly GCs for hostless
+// (organic alignment) wars — the "dead by construction" case, now alive.
+function destinationsFor(ev) {
+    if (ev.hostGroupId) return [ev.hostGroupId];
+    try {
+        const botId = require('../../../botConfig').getBotId() || 'global';
+        const list = require('../../../core/utils/system').get(`gw_rpg_gcs_${botId}`, []) || [];
+        return list.slice(0, 4); // pace: at most 4 groups per flush wave
+    } catch (e) { return []; }
+}
+
+// atomic claim: whoever's findOneAndUpdate matches FIRST gets the items and
+// clears the queue in the same server-side op — no double-flush across the
+// 3 instances. Returns the claimed array (possibly empty).
+async function claimFromDoc(eventId) {
+    try {
+        const GuildWarEvent = require('../../models/GuildWarEvent');
+        const prev = await GuildWarEvent.findOneAndUpdate(
+            { eventId, 'feedQueue.0': { $exists: true } },
+            { $set: { feedQueue: [] } },
+            { new: false, projection: { feedQueue: 1 } }
+        ).lean();
+        return prev?.feedQueue || [];
+    } catch (e) { return []; }
+}
+
+async function requeueToDoc(eventId, items) {
+    if (!items.length) return;
+    try {
+        const GuildWarEvent = require('../../models/GuildWarEvent');
+        await GuildWarEvent.updateOne(
+            { eventId },
+            { $push: { feedQueue: { $each: items, $slice: -250 } } }
+        );
+    } catch (e) { /* items age out via the stale filter */ }
+}
+
+// flush one event's queue; returns list of {text, isCard} sent
 async function flush(eventId, sock, BOT_MARKER) {
     const s = st(eventId);
-    if (!s.queue.length) return;
-    const ev = await state.getEvent(eventId, { fresh: false });
-    if (!ev) return;
-    const host = ev.hostGroupId;
-    if (!host) { s.queue = []; return; }
+    const useSock = sock || _sock;
+    const useMarker = BOT_MARKER || _marker;
+    if (!useSock) return;
 
-    const minors = s.queue.filter((i) => tierRank(i.tier) === 0);
-    const normals = s.queue.filter((i) => tierRank(i.tier) === 1);
-    const majors = s.queue.filter((i) => tierRank(i.tier) === 2);
-    s.queue = [];
+    // claim the DB queue + merge any items queued locally this instant
+    const claimed = await claimFromDoc(eventId);
+    const local = (s.queue || []).splice(0, (s.queue || []).length);
+    const seen = new Set();
+    const now = Date.now();
+    const items = [];
+    for (const it of [...claimed, ...local]) {
+        if (!it || seen.has(it.id)) continue;
+        if (now - (it.t || 0) > 10 * 60 * 1000) continue;      // stale: dropped silently
+        if ((it.tries || 0) >= 3) continue;                     // failed 3×: give up (logged below)
+        seen.add(it.id);
+        items.push(it);
+    }
+    if (!items.length) { await maybeDispose(eventId); return; }
+
+    // projected read: flush only needs routing info (hostGroupId + state) —
+    // a full 1800-room lean read here stalled the loop at alignment scale.
+    const GuildWarEvent = require('../../models/GuildWarEvent');
+    const evLite = await GuildWarEvent.findOne({ eventId }, { hostGroupId: 1, state: 1 }).lean();
+    if (!evLite) { await maybeDispose(eventId); return; }
+    const dests = destinationsFor(evLite);
+    if (!dests.length) {
+        // no destination on THIS bot: keep items for a bot that has one
+        const back = items.map((i) => ({ ...i, tries: (i.tries || 0) + 1 }));
+        await requeueToDoc(eventId, back);
+        return;
+    }
+    // NOTE (Phase 2): no membership pre-gate here — a bot that cannot post
+    // to a destination simply fails the send below, and failed sends REQUEUE
+    // (tries+1) instead of burning items. A member instance will usually
+    // claim the queue first; a lone non-member drops after 3 tries, logged.
+
+    const minors = items.filter((i) => tierRank(i.tier) === 0);
+    const normals = items.filter((i) => tierRank(i.tier) === 1);
+    const majors = items.filter((i) => tierRank(i.tier) === 2);
+    const failed = [];
 
     // majors: always sent (they are the designed image-card moments)
     for (const m of majors) {
         if (windowAllows(s)) {
-            await sendToGroup(sock, host, BOT_MARKER + `🚨 *${m.text}*`, true);
-            markSent(s);
+            const ok = await sendToGroup(useSock, dests, useMarker + `🚨 *${m.text}*`, true);
+            if (ok) markSent(s); else failed.push({ ...m, tries: (m.tries || 0) + 1 });
         } else {
             minors.push(m); // degrade to digest under pressure
         }
@@ -74,8 +181,8 @@ async function flush(eventId, sock, BOT_MARKER) {
     // normals: rate-limited
     for (const n of normals) {
         if (windowAllows(s) && Date.now() - s.lastNormalAt >= CFG.FEED.NORMAL_GAP_MS) {
-            await sendToGroup(sock, host, BOT_MARKER + `⚔️ ${n.text}`, false);
-            markSent(s);
+            const ok = await sendToGroup(useSock, dests, useMarker + `⚔️ ${n.text}`, false);
+            if (ok) markSent(s); else failed.push({ ...n, tries: (n.tries || 0) + 1 });
         } else {
             minors.push(n);
         }
@@ -83,38 +190,74 @@ async function flush(eventId, sock, BOT_MARKER) {
 
     // minors: one digest per flush
     if (minors.length && windowAllows(s)) {
-        await sendToGroup(sock, host, BOT_MARKER + `📜 *Ruins digest*\n${buildDigest(minors)}`, false);
-        markSent(s);
+        const ok = await sendToGroup(useSock, dests, useMarker + `📜 *Ruins digest*\n${buildDigest(minors)}`, false);
+        if (!ok) failed.push(...minors.map((m) => ({ ...m, tries: (m.tries || 0) + 1 })));
+    } else if (minors.length) {
+        failed.push(...minors.map((m) => ({ ...m, tries: (m.tries || 0) + 1 })));
     }
+
+    if (failed.length) {
+        console.error(`[GWFeed] ${eventId}: ${failed.length} item(s) requeued (send failed / window pressure)`);
+        await requeueToDoc(eventId, failed);
+    }
+    await maybeDispose(eventId);
 }
 
-async function sendToGroup(sock, host, text, isCard) {
+// over-war cleanup (Phase 2 #7): once the event is neither registering nor
+// active AND its queue is drained, drop this instance's feed memory.
+async function maybeDispose(eventId) {
     try {
-        if (isCard) {
-            // major cards: reuse official-notice renderer when available
-            const notice = require('./noticeCard');
-            const buf = await notice.renderNotice(text.replace(/^\S+\s*/, '').slice(0, 180));
-            await sock.sendMessage(host, { image: buf, caption: text.slice(0, CFG.FEED.MAX_CAPTION) });
-        } else {
-            await sock.sendMessage(host, { text });
+        const ev = await state.getEvent(eventId, { fresh: true });
+        if (!ev || !['ACTIVE', 'REGISTRATION'].includes(ev.state)) {
+            const GuildWarEvent = require('../../models/GuildWarEvent');
+            const doc = await GuildWarEvent.findOne({ eventId }, { feedQueue: 1 }).lean();
+            if (!doc || !(doc.feedQueue || []).length) dispose(eventId);
         }
-    } catch (e) {
-        console.error('[GWFeed] send failed:', e.message);
+    } catch (e) { /* keep state on error — harmless */ }
+}
+
+// one send to every destination; returns true when at least one landed.
+// majors (isCard) degrade to plain text when the card render fails (Phase 2 #5).
+async function sendToGroup(sock, dests, text, isCard) {
+    let any = false;
+    for (const dest of dests) {
+        try {
+            if (isCard) {
+                let buf = null;
+                try {
+                    const notice = require('./noticeCard');
+                    buf = await notice.renderNotice(text.replace(/^\S+\s*/, '').slice(0, 180));
+                } catch (e) { buf = null; }
+                if (buf) await sock.sendMessage(dest, { image: buf, caption: text.slice(0, CFG.FEED.MAX_CAPTION) });
+                else await sock.sendMessage(dest, { text: text.slice(0, CFG.FEED.MAX_CAPTION) }); // text fallback
+            } else {
+                await sock.sendMessage(dest, { text });
+            }
+            any = true;
+        } catch (e) {
+            console.error('[GWFeed] send failed:', e.message);
+        }
     }
+    return any;
 }
 
 // scoreboard post (called on cadence by tickAll)
+// ⚔️ Phase 2 #bookkeeping fix: scoreboardAt is NO LONGER pre-bumped — a
+// rate-window block used to eat the post AND reset its timer.
 async function postScoreboard(eventId, sock, BOT_MARKER) {
     const ev = await state.getEvent(eventId);
     if (!ev || ev.state !== 'ACTIVE') return;
     const s = st(eventId);
     if (Date.now() - s.scoreboardAt < CFG.FEED.SCOREBOARD_EVERY_MS) return;
-    s.scoreboardAt = Date.now();
+    const dests = destinationsFor(ev);
+    if (!dests.length) return;
     const rows = computeScoreboard(ev);
     const text = rows.map((r, i) => `${['🥇', '🥈', '🥉'][i] || '▫️'} ${r.name} — ${r.points} GP`).join('\n').slice(0, 700);
     if (windowAllows(s)) {
-        await sendToGroup(sock, ev.hostGroupId, BOT_MARKER + `🏆 *Guild War standings*\n${text}`, false);
-        markSent(s);
+        const useSock = sock || _sock;
+        if (!useSock) return;
+        const ok = await sendToGroup(useSock, dests, (BOT_MARKER || _marker) + `🏆 *Guild War standings*\n${text}`, false);
+        if (ok) { s.scoreboardAt = Date.now(); markSent(s); }
     }
 }
 
@@ -128,8 +271,14 @@ function computeScoreboard(ev) {
     return [...byGuild.values()].sort((a, b) => b.points - a.points);
 }
 
-async function tickAll(sock, BOT_MARKER) {
-    for (const eventId of [...feedStates.keys()]) {
+// flush every queue we know about: local feedStates keys ∪ the actives the
+// sweeper already fetched (cross-instance pickup — another bot's items flush
+// from THIS bot if this bot is the one that can reach the destination).
+async function tickAll(sock, BOT_MARKER, actives = null) {
+    registerSock(sock, BOT_MARKER);
+    const ids = new Set(feedStates.keys());
+    if (Array.isArray(actives)) for (const ev of actives) ids.add(ev.eventId);
+    for (const eventId of ids) {
         try {
             await flush(eventId, sock, BOT_MARKER);
             await postScoreboard(eventId, sock, BOT_MARKER);
@@ -141,4 +290,4 @@ async function tickAll(sock, BOT_MARKER) {
 
 function dispose(eventId) { feedStates.delete(eventId); }
 
-module.exports = { queue, tickAll, flush, dispose, computeScoreboard, buildDigest, st, _states: feedStates };
+module.exports = { queue, tickAll, flush, dispose, registerSock, computeScoreboard, buildDigest, st, _states: feedStates };

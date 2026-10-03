@@ -246,7 +246,18 @@ async function tick(sock, BOT_MARKER) {
         if (ev.state === 'REGISTRATION' && ev.registrationEndsAt && Date.now() > ev.registrationEndsAt) {
             if (ev.players.length >= 2) {
                 const res = await startEvent(ev.eventId);
-                if (res.ok) out.push({ eventId: ev.eventId, auto: 'started' });
+                if (res.ok) {
+                    out.push({ eventId: ev.eventId, auto: 'started' });
+                    // 💡 PHASE 2 (feed resurrection): auto-started wars were
+                    // SILENT — no GC announcement, no start-card DMs. Both now
+                    // fire on the auto path exactly like forcestart.
+                    getFeed().queue(ev.eventId, 'major',
+                        `The war has begun! ${res.event.players.length} champions deploy into the Ruins of a dead world.`);
+                    let prefix = '.';
+                    try { prefix = require('../../botConfig').getPrefix() || '.'; } catch (e) {}
+                    require('./index').dmWarStartCards(sock, BOT_MARKER || '\u200B', res.event, prefix)
+                        .catch((e) => console.error('[GW] auto-start cards:', e?.message));
+                }
             } else {
                 await abortEvent(ev.eventId, 'Not enough players registered.');
                 out.push({ eventId: ev.eventId, auto: 'aborted-low-attendance' });
@@ -270,19 +281,28 @@ async function tick(sock, BOT_MARKER) {
                     getFeed().queue(ev.eventId, 'minor', `${p.name} has gone quiet in the Ruins…`);
                 }
             }
+            // §15 #8: expired PvP challenge windows resolve (concede) exactly
+            // once across instances via the atomic pull-claim in ruinsPvp.
+            try { await require('./ruinsPvp').pruneExpired(ev.eventId); } catch (e) {}
         }
     }
-    getFeed().tickAll(sock, BOT_MARKER);
+    // 💡 PHASE 2: actives passed so tickAll flushes DB-queued items even when
+    // this instance never queued locally (cross-instance queue pickup).
+    getFeed().tickAll(sock, BOT_MARKER, actives);
     return out;
 }
 
-async function endEvent(eventId, reason) {
+async function endEvent(eventId, reason, { quietFeed = false } = {}) {
     const doc = await GuildWarEvent.findOneAndUpdate(
         { eventId, state: 'ACTIVE' },
         { $set: { state: 'ENDED' } },
         { new: true }
     );
     if (!doc) return null;
+    // 💡 PHASE 2: time-expiry ends were invisible to the feed (mods calling
+    // `.gw end` announce in the GC, but nobody heard auto-expiry). Queue the
+    // major here; mods may pass quietFeed since they post a richer card.
+    if (!quietFeed) getFeed().queue(eventId, 'major', `🏳️ THE WAR HAS ENDED. ${reason || ''}`.trim());
     const rewards = await getPoints().distribute(doc, reason);
     await GuildWarEvent.updateOne({ eventId }, { $set: { state: 'REWARDS' } });
     return { event: doc, rewards };

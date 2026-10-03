@@ -252,6 +252,24 @@ function payloadGet(payload, key) {
     return v;
 }
 
+// ── real HP damage (§15 #5): hazards/puzzles/anomalies used to be PURE TEXT
+// — damage was displayed, never written anywhere. The Ruins draw on the
+// player's PERSISTENT HP (same pool combat uses), so entering the next fight
+// wounded is now real. Never kills: floor of 1 HP — only combat takes lives.
+async function applyWarDamage(playerJid, dmg, maxHp) {
+    try {
+        const economy = require('../economy');
+        const cap = maxHp || 100;
+        const cur = economy.getPersistentHP(playerJid, cap);
+        const next = Math.max(1, (Number(cur) || cap) - Math.max(0, Math.round(dmg)));
+        economy.setPersistentHP(playerJid, next, cap);
+        return next;
+    } catch (e) {
+        console.error('[Ruins] war damage failed (non-fatal):', e?.message);
+        return null;
+    }
+}
+
 // ── resolve DM input against the CURRENT room's encounter ──
 // returns { text, handled, sentCombat, afterImage? }
 // afterImage = the CHANGED room scene (owner directive: show what the room
@@ -280,10 +298,12 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
                 return { handled: true, text: `Someone else solved this seal a heartbeat before you.` };
             }
             if (attempts >= CFG.PUZZLE.ATTEMPTS) {
-                const dmg = Math.round((player.stats?.maxHp || 100) * CFG.PUZZLE.FAIL_HAZARD_DAMAGE);
+                const maxHp = player.stats?.maxHp || 100;
+                const dmg = Math.round(maxHp * CFG.PUZZLE.FAIL_HAZARD_DAMAGE);
+                await applyWarDamage(player.jid, dmg, maxHp);
                 await state.updatePlayer(eventDoc.eventId, player.jid, {}, { lastActionAt: Date.now() });
                 feed.queue(eventDoc.eventId, 'minor', `${player.name} failed a seal and paid in blood.`);
-                return { handled: true, text: `💥 The mechanism rejects you with a shock (-${dmg} HP). The seal resets - try again from the first inscription.` };
+                return { handled: true, text: `💥 The mechanism rejects you with a shock (-${dmg} HP — that was real). The seal resets - try again from the first inscription.` };
             }
             await rooms.setRoomPayload(eventDoc.eventId, room.key, { 'puzzle.attemptsUsed': attempts });
             return { handled: true, text: `❌ Wrong. ${result.attemptsLeft} attempt${result.attemptsLeft === 1 ? '' : 's'} left.` };
@@ -335,8 +355,9 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
                 return { handled: true, text: `The hazard is spent - someone braved it first.` };
             }
             const dmg = Math.round((player.stats?.maxHp || 100) * (payloadGet(P, 'hazardDamage') || 0.08));
+            await applyWarDamage(player.jid, dmg, player.stats?.maxHp || 100);
             feed.queue(eventDoc.eventId, 'minor', `${player.name} took a hit from a ${roomFlavor(room)} hazard.`);
-            return { handled: true, text: `🩸 The hazard catches you (-${dmg} HP). Try crossing again.` };
+            return { handled: true, text: `🩸 The hazard catches you (-${dmg} HP — that was real). Try crossing again.` };
         }
 
         // ── anomaly ──
@@ -355,7 +376,8 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
                 return { handled: true, afterImage, text: `🌀 Old-world coin rains through the rift! (+GP)` };
             }
             if (kind === 'hp_drain') {
-                return { handled: true, afterImage, text: `🌀 The rift drinks deeply of you. You feel weaker...` };
+                await applyWarDamage(player.jid, (player.stats?.maxHp || 100) * 0.15, player.stats?.maxHp || 100);
+                return { handled: true, afterImage, text: `🌀 The rift drinks deeply of you (-15% HP — that was real). You feel weaker...` };
             }
             return { handled: true, afterImage, text: `🌀 The fog of war thins - distant paths flicker in your mind.` };
         }
@@ -463,6 +485,30 @@ function describeDirection(eventDoc, fromKey, toKey) {
 }
 
 // ── combat integration ──
+// ⚔️ §15 #6 (ward relics): a `ward_active` relic now REALLY wraps the next
+// fight — its buff rides into startRuinsCombat via spec.ward, and the ward
+// is consumed per CFG.RELICS.WARD_FIGHTS fights (removed at zero).
+async function consumeWard(eventId, playerJid, relicId) {
+    const GuildWarEvent = require('../../models/GuildWarEvent');
+    const doc = await GuildWarEvent.findOne({ eventId }, { players: { $elemMatch: { jid: playerJid } } }).lean();
+    const relic = doc?.players?.[0]?.relics?.find((r) => r.id === relicId);
+    if (!relic) return;
+    const meta = typeof relic.meta?.get === 'function' ? Object.fromEntries(relic.meta.entries()) : (relic.meta || {});
+    const fights = (meta.fights ?? CFG.RELICS.WARD_FIGHTS) - 1;
+    if (fights <= 0) {
+        await GuildWarEvent.updateOne(
+            { eventId, 'players.jid': playerJid },
+            { $pull: { 'players.$.relics': { id: relicId } } }
+        );
+    } else {
+        await GuildWarEvent.updateOne(
+            { eventId, 'players.jid': playerJid, 'players.relics.id': relicId },
+            { $set: { 'players.$.relics.$[r].meta.fights': fights } },
+            { arrayFilters: [{ 'r.id': relicId }] }
+        );
+    }
+}
+
 async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = {}) {
     const guildAdventure = require('../guildAdventure');
     const theme = worldTheme(payloadGet(room.payload, 'theme') || eventDoc.deadWorld);
@@ -479,8 +525,16 @@ async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = 
         return { type: template?.id, level: e.level || 10, name: template ? `${theme.flavor} ${template.name}` : undefined };
     });
 
+    // ward_active relic → real buff for THIS fight (atk/def percent or shield)
+    let ward = null;
+    const wardRelic = (player.relics || []).find((r) => r.category === 'ward_active');
+    if (wardRelic) {
+        const buff = relics.wardBuff(wardRelic);
+        if (buff) ward = { buff, relicId: wardRelic.id };
+    }
+
     await rooms.markActive(eventDoc.eventId, room.key);
-    return guildAdventure.startRuinsCombat(sock, chatId, player.jid, {
+    const started = await guildAdventure.startRuinsCombat(sock, chatId, player.jid, {
         enemies: enemies.filter((e) => e.type),
         eventId: eventDoc.eventId, roomKey: room.key,
         rank: 'C', background: theme.bg, groq,
@@ -488,7 +542,13 @@ async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = 
         name: isCore ? 'World Core Guardian' : (variant ? `Ruins ${variant.name}` : 'Ruins Encounter'),
         // ⚔️ square map rides into the battle scene (bottom-right panel)
         mapFragment: require('./encounterScenes').buildMapFragment(eventDoc, player, room),
+        ward: ward ? ward.buff : null,
     });
+    if (started.success && ward) {
+        await consumeWard(eventDoc.eventId, player.jid, ward.relicId).catch((e) =>
+            console.error('[Ruins] ward consume failed (non-fatal):', e?.message));
+    }
+    return started;
 }
 
 // ── room intro WITH encounter scene: { text, image, extraImage } ──
@@ -566,7 +626,12 @@ async function roomIntro(eventDoc, player, room) {
                 actionHint = 'Type record to claim it for your guild.';
                 break;
             default:
-                return { text }; // empty rooms need no card
+                // 💡 OVERHAUL MD §3: even EMPTY halls render the character
+                // standing in the environment ("I am here" before "here is
+                // the world"). Silence is a scene, not a missing image.
+                body = 'Nothing unusual here. The way onward is clear.';
+                actionHint = null;
+                break;
         }
         // primary visual: the battle-style scene (prop + square map, no UI).
         // 💡 cardBody/cardAction ride along so the caller's room-TYPE card can

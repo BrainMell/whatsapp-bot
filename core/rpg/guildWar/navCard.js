@@ -163,7 +163,7 @@ async function renderRoomTypeCard(opts = {}) {
     ctx.fillText('the room reveals itself as you enter', W / 2, H - 58);
     if (opts.prefix) {
         ctx.font = '15px "Cinzel"';
-        ctx.fillText(`dm me  "${opts.prefix} look"  to study this chamber`, W / 2, H - 38);
+        ctx.fillText(`walk with  w / a / s / d  - the ruins come to you`, W / 2, H - 38);
     }
 
     return c.toBuffer('image/png');

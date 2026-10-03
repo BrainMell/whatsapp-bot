@@ -2039,6 +2039,21 @@ async function startRuinsCombat(sock, chatId, senderJid, spec) {
   });
   state.botId = botScope();
   state.players.push(buildRuinsPlayerEntity(senderJid));
+  // ⚔️ §15 #6 FIX (2026-10-03): Ruins ward relics now REALLY apply. The
+  // guildWar router passes spec.ward = { type, value, mode } from the
+  // player's ward_active relic; the buff rides the combat player entity.
+  // Values arrive as fractions (0.25) — engine buffs read PERCENT (25).
+  if (spec.ward && state.players[0]) {
+    const wp = state.players[0];
+    const wVal = Math.round((Number(spec.ward.value) || 0) * 100);
+    if (spec.ward.type === 'attack' && wVal > 0) {
+      wp.buffs.push({ type: 'attack', value: wVal, duration: 999, icon: '🛡️' });
+    } else if (spec.ward.type === 'defense' && wVal > 0) {
+      wp.buffs.push({ type: 'defense', value: wVal, duration: 999, icon: '🛡️' });
+    } else if (spec.ward.type === 'shield') {
+      wp.statusEffects.push({ type: 'shield', duration: 999 });
+    }
+  }
   gameStates.set(sessionKey, state);
 
   const encounter = {

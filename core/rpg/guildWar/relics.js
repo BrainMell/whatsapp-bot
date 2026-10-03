@@ -31,7 +31,10 @@ function makeRelic(rng, { category, tier, meta = {} } = {}) {
         acquiredAt: Date.now(),
     };
     if (cat === 'ward') {
-        const kind = rng.weighted([['atk', 3], ['def', 3], ['shield', 2], ['flee', 2], ['firststrike', 2]]);
+        // ⚔️ §15 #6: only ward kinds the combat engine actually READ can roll
+        // (atk/def buffs, shield status). flee/firststrike had no engine
+        // reader — they rolled into dead relics.
+        const kind = rng.weighted([['atk', 3], ['def', 3], ['shield', 2]]);
         base.meta = { ...base.meta, kind, fights: CFG.RELICS.WARD_FIGHTS };
     }
     if (cat === 'cross') base.meta = { ...base.meta, piece: rng.pick(['alpha', 'beta']) };

@@ -12,6 +12,10 @@ const feed = require('./feed');
 
 // live award during the event (respects caps; adds to player score)
 // returns { ok, awarded, capped } — awarded GP after cap/clamp
+// ⚔️ §15 #2 FIX (atomic GP): the old read-modify-write read a possibly stale
+// cached score and wrote the WHOLE value back — back-to-back awards (core
+// breach fires three) read the same snapshot and last-write-wins silently
+// ate GP. Now: ONE atomic $inc, then an atomic $min clamp against the cap.
 async function award(eventId, playerJid, baseGp, activity, { coopBonus = false, ignoreCap = false } = {}) {
     const ev = await state.getEvent(eventId);
     if (!ev || ev.state !== 'ACTIVE') return { ok: false, awarded: 0, capped: false };
@@ -21,18 +25,31 @@ async function award(eventId, playerJid, baseGp, activity, { coopBonus = false, 
     let gp = Math.round(baseGp);
     if (coopBonus && activity !== 'pvp') gp = Math.round(gp * (1 + CFG.POINTS.COOP_BONUS));
     if (ev.type === 'alignment') gp = Math.round(gp * CFG.POINTS.ALIGNMENT_MULT);
+    if (gp <= 0) return { ok: true, awarded: 0, capped: false };
 
-    const cap = ev.type === 'alignment' ? CFG.POINTS.PLAYER_CAP_ALIGNMENT : CFG.POINTS.PLAYER_CAP_NORMAL;
-    const capped = !ignoreCap && (p.score + gp) > cap;
-    if (capped) gp = Math.max(0, cap - p.score);
-    if (gp <= 0) return { ok: true, awarded: 0, capped: true };
+    const GuildWarEvent = require('../../models/GuildWarEvent');
+    const res = await GuildWarEvent.findOneAndUpdate(
+        { eventId, state: 'ACTIVE', players: { $elemMatch: { jid: playerJid } } },
+        {
+            $inc: { 'players.$.score': gp, 'players.$.gpEarned': gp },
+            $set: { 'players.$.lastActionAt': Date.now() },
+        },
+        { new: true, projection: { players: { $elemMatch: { jid: playerJid } }, type: 1, state: 1 } }
+    ).lean();
+    if (!res || !res.players?.[0]) return { ok: false, awarded: 0, capped: false };
 
-    await state.updatePlayer(eventId, playerJid, {}, {
-        score: (p.score || 0) + gp,
-        gpEarned: (p.gpEarned || 0) + gp,
-        lastActionAt: Date.now(),
-    });
-    return { ok: true, awarded: gp, capped };
+    const newScore = res.players[0].score || 0;
+    const cap = res.type === 'alignment' ? CFG.POINTS.PLAYER_CAP_ALIGNMENT : CFG.POINTS.PLAYER_CAP_NORMAL;
+    if (!ignoreCap && newScore > cap) {
+        // atomic clamp (positional $min): score never exceeds the cap
+        await GuildWarEvent.updateOne(
+            { eventId, players: { $elemMatch: { jid: playerJid } } },
+            { $min: { 'players.$.score': cap } }
+        );
+        const cappedGp = Math.max(0, cap - (newScore - gp));
+        return { ok: true, awarded: cappedGp, capped: true };
+    }
+    return { ok: true, awarded: gp, capped: false };
 }
 
 // mongoose Maps forbid '.' in keys — jids contain dots → encode them

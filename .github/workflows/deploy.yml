@@ -5,6 +5,13 @@ on:
     branches:
       - audit/fix-pass-1
 
+# ⚔️ 2026-10-03: every push = full bot restart (~2.5-3 min all-tenant
+# downtime). Rapid successive pushes used to queue overlapping deploys and
+# multiplied the outage window. New commits now cancel a deploy in flight
+# and only the latest state ships.
+concurrency:
+  group: deploy-audit-fix-pass-1
+  cancel-in-progress: true
 
 jobs:
   deploy:
