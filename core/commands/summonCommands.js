@@ -1752,7 +1752,7 @@ async function cmdEvolve(sock, chatId, senderJid, args) {
 
   // Resolve the summon
   const summons = await summonSystem.getUserSummons(senderJid);
-  const summon = resolveSummon(summons, summonNum);
+  const summon = resolveSummon(summons, summonIdQuery);
   if (!summon) {
     await sock.sendMessage(chatId, { text: `❌ Summon not found. Use \`${getPrefix()} summon list\` to see your summons.` });
     return;
@@ -1943,7 +1943,7 @@ async function cmdBond(sock, chatId, senderJid, args) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
-  const summon = resolveSummon(summons, summonNum);
+  const summon = resolveSummon(summons, summonIdQuery);
   if (!summon) {
     await sock.sendMessage(chatId, { text: `❌ Summon not found.` });
     return;
@@ -1974,7 +1974,7 @@ async function cmdTraits(sock, chatId, senderJid, args) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
-  const summon = resolveSummon(summons, summonNum);
+  const summon = resolveSummon(summons, summonIdQuery);
   if (!summon) {
     await sock.sendMessage(chatId, { text: `❌ Summon not found.` });
     return;
@@ -2083,7 +2083,7 @@ async function cmdAIMode(sock, chatId, senderJid, args) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
-  const summon = resolveSummon(summons, summonNum);
+  const summon = resolveSummon(summons, summonIdQuery);
   if (!summon) {
     await sock.sendMessage(chatId, { text: `❌ Summon not found.` });
     return;

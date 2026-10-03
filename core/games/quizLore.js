@@ -72,7 +72,7 @@ const KNOWN_WIKIS = {
   minecraft: "minecraft", "gta": "gta", "grand theft auto": "gta",
   "harry potter": "harrypotter", hogwarts: "harrypotter",
   "lord of the rings": "lotr", lotr: "lotr", "the hobbit": "lotr",
-  "star wars": "starwars", "star trek": "startrek",
+  "star trek": "startrek",
   marvel: "marvel", "avengers": "marvel", "spider-man": "marvel", spiderman: "marvel",
   dc: "dc", "superman": "dc", "wonder woman": "dc",
   "god of war": "godofwar", zelda: "zelda", "breath of the wild": "zelda", "tears of the kingdom": "zelda",

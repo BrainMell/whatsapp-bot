@@ -2553,8 +2553,6 @@ module.exports = {
   incrementDragonKills,
   addQuestProgress,
   hasItem,
-  getGold,
-  getZENI,
   getCurrency,
 
   // Event Tokens

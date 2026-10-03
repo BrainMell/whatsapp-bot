@@ -3249,7 +3249,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     }
 
     const callLLM = normalizeSmartGroq(smartGroqCall);
-    const franchise = await buildFranchiseContext(sock, chatId, botMarker, m, parsed);
+    const franchise = await buildFranchiseContext(sock, chatId, botMarker, m, parsed, senderJid);
     // checkpoint 2: cancelled during wiki/anime resolution (the slow network phase)
     if (prep.cancelled) { abortPrep(); return; }
     if (!franchise) {
@@ -3429,7 +3429,7 @@ async function drawSectionFranchise(session) {
   return null;
 }
 
-async function buildFranchiseContext(sock, chatId, botMarker, m, parsed) {
+async function buildFranchiseContext(sock, chatId, botMarker, m, parsed, senderJid = "") {
   // random mode: the FIRST section's franchise is drawn here; further sections
   // each draw their own via drawSectionFranchise (owner brief §2: "random
   // questions across all of fiction, not pick a random world and stay inside

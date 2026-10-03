@@ -1491,6 +1491,81 @@ async function startBot(configInstance) {
   // O(1) admin lookup cache: groupJid -> { admins: Set<jid>, expires: number }
   const adminSetCache = new Map();
   const ADMIN_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+// ============================================================
+// 💡 FIX-PASS-2 (2026-10-03): MOVED UP from the messages-upsert
+// closure to startBot scope. canManageRanks / getMemberRankLevel /
+// canActOnMember (outer scope) call these, but JS lexical scope
+// means outer functions can never see inner-closure helpers -
+// every cached-admin fast path and metadata fetch from those
+// callers was throwing (masked by try/catch). Inner callers still
+// resolve these fine (inner sees outer).
+  /*
+   * Helper to get group metadata with caching
+   */
+  /**
+   * O(1) admin check using a per-group Set cache (TTL: 10 min)
+   */
+  function isAdminCached(groupJid, participantJid) {
+    const entry = adminSetCache.get(groupJid);
+    if (entry && Date.now() < entry.expires) {
+      return entry.admins.has(participantJid);
+    }
+    return null; // cache miss - caller falls back to metadata
+  }
+
+  function buildAdminCache(groupJid, participants) {
+    const admins = new Set();
+    for (const p of participants) {
+      if (p.admin === 'admin' || p.admin === 'superadmin') {
+        // Store the raw JID (could be @lid or @s.whatsapp.net)
+        admins.add(p.id);
+        // Also store the resolved phone JID so lookups work either way
+        // resolveToPhone is O(1) from in-memory lidCache for known mappings
+        const phoneJid = lidResolver.resolveToPhone(p.id, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
+        if (phoneJid && phoneJid !== p.id) admins.add(phoneJid);
+      }
+    }
+    adminSetCache.set(groupJid, { admins, expires: Date.now() + ADMIN_CACHE_TTL });
+    return admins;
+  }
+
+  const WA_WS_OPEN = 1; // (moved with getGroupMetadata; the local WS_OPEN lives in a sibling scope)
+
+  async function getGroupMetadata(id, forceRefresh = false) {
+    if (!id.endsWith("@g.us")) return null;
+
+    const cached = groupMetadataCache.get(id);
+    if (!forceRefresh && cached) return cached;
+
+    // If the socket isn't ready, don't block message handling on metadata fetch.
+    const wsOpen = sock?.ws
+      ? typeof sock.ws.isOpen === "boolean"
+        ? sock.ws.isOpen
+        : (sock.ws.readyState ?? sock.ws.socket?.readyState) === WA_WS_OPEN
+      : false;
+    if (!wsOpen) {
+      return cached || null;
+    }
+
+    try {
+      // Timeout so unstable connections don't stall the whole handler.
+      const metadata = await Promise.race([
+        sock.groupMetadata(id),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Metadata timeout")), 5000),
+        ),
+      ]);
+      groupMetadataCache.set(id, metadata);
+      return metadata;
+    } catch (e) {
+      console.error(
+        `❌ Failed to fetch metadata for ${id}:`,
+        e.message,
+      );
+      return cached || null;
+    }
+  }
   const commandCooldowns = new Map();
   let stockMarketInterval = null; // Prevent stock market interval leak on reconnect
 
@@ -2476,7 +2551,11 @@ async function startBot(configInstance) {
         return isGroupAdmin || isGroupSuperadmin;
       } else if (lockMode.startsWith('rank:')) {
         const requiredRank = parseInt(lockMode.split(':')[1], 10);
-        return level >= requiredRank;
+        // 💡 FIX-PASS-2 (2026-10-03): `level` was scoped to the ranksEnabled
+        // block above - referencing it here threw ReferenceError on every
+        // permission check in rank-locked chats. Compute the member level
+        // locally instead.
+        return getMemberRankLevel(chatId, userJid) >= requiredRank;
       }
 
       return false;
@@ -2484,7 +2563,12 @@ async function startBot(configInstance) {
 
     // ⚡ MODE: updates-feed control shared by '.jmode' and the bare
     // '.updates' alias. Returns the reply text (string).
-    async function handleModeUpdates(modeArgs) {
+    async function handleModeUpdates(modeArgs, ctx = {}) {
+      // 💡 FIX-PASS-2 (2026-10-03): this handler referenced chatId/senderJid/
+      // isOwner/canUseAdminCommands that were never in scope (variables of the
+      // caller's handler) - ReferenceError on every .mode updates invocation.
+      // The call sites now pass them explicitly.
+      const { chatId = null, senderJid = null, isOwner = false, canUseAdminCommands = false } = ctx || {};
       const p = botConfig.getPrefix().toLowerCase();
       const sub = modeArgs[0] || '';
       const sub2 = modeArgs[1] || '';
@@ -5435,16 +5519,18 @@ What to do:
         });
       }
 
-      // Update user stats (only if we have the profile and save function)
-      if (
-        userProfile &&
-        userProfile.stats &&
-        typeof saveUserProfile === "function"
-      ) {
+      // 💡 FIX-PASS-2 (2026-10-03): this block was dead code - it referenced
+      // saveUserProfile which exists NOWHERE in the codebase (the typeof guard
+      // silently hid the ReferenceError), so lastSeen/messageCount never
+      // updated. The profile lives on the economy user object, whose real
+      // persist API is economy.saveUser(jid).
+      if (userProfile && userProfile.stats) {
         userProfile.stats.lastSeen = new Date().toISOString();
         userProfile.stats.messageCount =
           (userProfile.stats.messageCount || 0) + 1;
-        saveUserProfile(senderJid, userProfile);
+        Promise.resolve(economy.saveUser(senderJid)).catch((err) =>
+          console.error("❌ Failed to persist user stats:", err.message)
+        );
       }
 
       return aiReply;
@@ -6707,7 +6793,9 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               });
               console.log(`✅ [${BOT_ID}] WhatsApp connected (open).`);
               isRekeying = false; // BOT IS STABLE
-              ignoreBroadcasts = false; // Allow broadcasts after successful connection
+              // 💡 FIX-PASS-2 (2026-10-03): removed `ignoreBroadcasts = false` -
+              // assigned here but read NOWHERE (dead implicit-global write; the
+              // reader it once served was removed in an earlier refactor).
 
               // 💡 PERF PATCH 2026-07-27: bind cardSystem.sock_ref SYNCHRONOUSLY
               // before any await in this handler. Without this, the first wave of
@@ -6978,71 +7066,6 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
             }
           });
         });
-
-        /*
-         * Helper to get group metadata with caching
-         */
-        /**
-         * O(1) admin check using a per-group Set cache (TTL: 10 min)
-         */
-        function isAdminCached(groupJid, participantJid) {
-          const entry = adminSetCache.get(groupJid);
-          if (entry && Date.now() < entry.expires) {
-            return entry.admins.has(participantJid);
-          }
-          return null; // cache miss - caller falls back to metadata
-        }
-
-        function buildAdminCache(groupJid, participants) {
-          const admins = new Set();
-          for (const p of participants) {
-            if (p.admin === 'admin' || p.admin === 'superadmin') {
-              // Store the raw JID (could be @lid or @s.whatsapp.net)
-              admins.add(p.id);
-              // Also store the resolved phone JID so lookups work either way
-              // resolveToPhone is O(1) from in-memory lidCache for known mappings
-              const phoneJid = lidResolver.resolveToPhone(p.id, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
-              if (phoneJid && phoneJid !== p.id) admins.add(phoneJid);
-            }
-          }
-          adminSetCache.set(groupJid, { admins, expires: Date.now() + ADMIN_CACHE_TTL });
-          return admins;
-        }
-
-        async function getGroupMetadata(id, forceRefresh = false) {
-          if (!id.endsWith("@g.us")) return null;
-
-          const cached = groupMetadataCache.get(id);
-          if (!forceRefresh && cached) return cached;
-
-          // If the socket isn't ready, don't block message handling on metadata fetch.
-          const wsOpen = sock?.ws
-            ? typeof sock.ws.isOpen === "boolean"
-              ? sock.ws.isOpen
-              : (sock.ws.readyState ?? sock.ws.socket?.readyState) === WS_OPEN
-            : false;
-          if (!wsOpen) {
-            return cached || null;
-          }
-
-          try {
-            // Timeout so unstable connections don't stall the whole handler.
-            const metadata = await Promise.race([
-              sock.groupMetadata(id),
-              new Promise((_, reject) =>
-                setTimeout(() => reject(new Error("Metadata timeout")), 5000),
-              ),
-            ]);
-            groupMetadataCache.set(id, metadata);
-            return metadata;
-          } catch (e) {
-            console.error(
-              `❌ Failed to fetch metadata for ${id}:`,
-              e.message,
-            );
-            return cached || null;
-          }
-        }
 
         // ============================================
         // 🐘 LARGE GROUP GUARD
@@ -9026,7 +9049,7 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                           await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Only the bot owner or a global mod can broadcast updates to all groups.' });
                         } else {
                           await sock.sendMessage(chatId, { text: BOT_MARKER + '🔄 *UPDATES ALL*\nEnabling the updates feed in every group and broadcasting now...' });
-                          const count = await handleModeUpdates(['updates', 'all']);
+                          const count = await handleModeUpdates(['updates', 'all'], { chatId, senderJid, isOwner });
                           await sock.sendMessage(chatId, { text: BOT_MARKER + count });
                         }
                       }
@@ -16394,7 +16417,7 @@ Moderation:
                       .trim()
                       .split(/\s+/)
                       .filter(Boolean);
-                    const replyMsg = await handleModeUpdates(modeArgs);
+                    const replyMsg = await handleModeUpdates(modeArgs, { chatId, senderJid, isOwner, canUseAdminCommands });
                     await sock.sendMessage(chatId, { text: BOT_MARKER + replyMsg }, { quoted: m });
                     return;
                   }
@@ -20037,7 +20060,11 @@ Admins can:
                         let msg = `┏━━━━━━━━━━━━━━━━━┓\n┃ 🏛️ *DONATION RECEIVED*\n┗━━━━━━━━━━━━━━━━━┛\n\n`;
                         msg += `💰 Donated: *${amount.toLocaleString()} Zeni* → *${userGuild}*\n`;
                         msg += `🏦 Guild bank: *${((guild.balance) || 0).toLocaleString()} Zeni*\n`;
-                        msg += `🎁 Guild XP: *+${xpAward}*\n\n`;
+                        // 💡 FIX-PASS-2 (2026-10-03): removed the 'Guild XP' line -
+                        // it referenced xpAward, deleted with the donation→XP
+                        // conversion (owner ban: GP is earned, not bought). The
+                        // ReferenceError fired AFTER the donation persisted, so
+                        // donors were told 'Failed' while their zeni had moved.
                         msg += `_The guild thanks you, benefactor._`;
                         return sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                       } catch (e) {

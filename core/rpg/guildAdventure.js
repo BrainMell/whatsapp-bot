@@ -1842,25 +1842,9 @@ const STATUS_EFFECTS = {
     effect: "reduce_defense",
     value: 30,
   },
-  blessing: {
-    name: "Shock",
-    icon: "⚡",
-    effect: "damage_over_time",
-    value: 15,
-    tickRate: "per_turn",
-  },
-  weak: {
-    name: "Weakened",
-    icon: "😵",
-    effect: "reduce_stats",
-    value: 20,
-  },
-  vulnerability: {
-    name: "Vulnerable",
-    icon: "💔",
-    effect: "reduce_defense",
-    value: 30,
-  },
+  // 💡 FIX-PASS-2 (2026-10-03): removed a duplicate `blessing:` key that held a
+  // mislabeled copy of the SHOCK effect - last-wins made it dead, but it was
+  // one rename away from silently breaking Blessing.
   blessing: {
     name: "Blessing",
     icon: "✨",
@@ -4446,7 +4430,6 @@ async function processCombatTurn(sock, sessionKey) {
           if (c.actionGauge >= gaugeThreshold) {
             alternativeFound = true;
             activeActor = c;
-            highestGauge = c.actionGauge;
             break;
           }
         }

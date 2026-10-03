@@ -1620,7 +1620,6 @@ module.exports = {
     MAX_ENHANCEMENT_BONUS,
     MAX_ENHANCEMENT_BONUS_BY_RARITY,
     DEFAULT_MAX_ENHANCEMENT_BONUS,
-    getMaxEnhancementLevel,
     getMaxEnhancementBonus,
     getRequiredRankForLevel,
     rankGte

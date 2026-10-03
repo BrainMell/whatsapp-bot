@@ -2529,7 +2529,7 @@ const SKILL_TREES = {
                         damageMultiplier: [7.0, 8.0, 9.0],
                         damageType: 'TRUE',
                         targeting: 'ALL_ENEMIES',
-                        description: 'Unleash total warfare upon all enemies.',
+                        // 💡 FIX-PASS-2: stale shorter description removed (dup key, last-wins kept the fuller text below)
                         description: 'Unleash total warfare upon all enemies. Party gains +50% ATK for 3 turns.',
                         effect: (level) => ({
                             type: 'aoe',
@@ -2685,7 +2685,7 @@ const SKILL_TREES = {
                         damageMultiplier: [10.0, 12.0, 15.0],
                         damageType: 'TRUE',
                         targeting: 'ALL_ENEMIES',
-                        description: 'Ancient weapon of pure destruction.',
+                        // 💡 FIX-PASS-2: stale shorter description removed (dup key, last-wins kept the fuller text below)
                         description: 'Ancient weapon of pure destruction. Self: +100% ATK for 2 turns (bloodlust).',
                         effect: (level) => ({
                             type: 'aoe',

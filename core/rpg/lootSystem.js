@@ -1075,7 +1075,7 @@ const ITEM_DATABASE = {
     'cracked_core':       { name: 'Cracked Core',       description: 'A cracked mana core. (+5 MAG for summon)', rarity: 'COMMON', value: 2000, type: 'SUMMON_GEAR', summonSlot: 'core', stats: { mag: 5 } },
     'mana_core':          { name: 'Mana Core',          description: 'A pulsing mana core. (+15 MAG for summon)', rarity: 'UNCOMMON', value: 8000, type: 'SUMMON_GEAR', summonSlot: 'core', stats: { mag: 15 } },
     'elemental_core':     { name: 'Elemental Core',     description: 'A core of pure elemental power. (+35 MAG, +10 HP for summon)', rarity: 'RARE', value: 25000, type: 'SUMMON_GEAR', summonSlot: 'core', stats: { mag: 35, hp: 10 } },
-    'abyssal_core':       { name: 'Abyssal Core',       description: 'A core drawn from the abyss itself. (+60 MAG, +20 HP for summon)', rarity: 'EPIC', value: 80000, type: 'SUMMON_GEAR', summonSlot: 'core', stats: { mag: 60, hp: 20 } },
+    'abyssal_core_gear':   { name: 'Abyssal Core',       description: 'A core drawn from the abyss itself. (+60 MAG, +20 HP for summon)', rarity: 'EPIC', value: 80000, type: 'SUMMON_GEAR', summonSlot: 'core', stats: { mag: 60, hp: 20 } },
 
     // --- ARMOR (DEF + HP bonus) ---
     'leather_summon_armor': { name: 'Leather Barding',  description: 'Simple leather armor for a summon. (+5 DEF, +20 HP for summon)', rarity: 'COMMON', value: 2000, type: 'SUMMON_GEAR', summonSlot: 'armor', stats: { def: 5, hp: 20 } },
