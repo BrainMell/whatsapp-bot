@@ -19,7 +19,7 @@ jobs:
           command_timeout: 10m
           script: |
             cd ~/whatsapp-bot
-            git fetch origin || exit 1
+            git fetch --force --prune origin || exit 1
             # self-bootstrap: always run the newest deploy script from git,
             # regardless of what state the working tree is in
             git show "origin/${{ github.ref_name }}:scripts/deploy_on_box.sh" > /tmp/deploy_on_box.sh \
