@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # Smart deploy for whatsapp-bot (runs ON Box 1).
 # Usage: bash scripts/deploy_on_box.sh <branch>
+#   SKIP_RESTART=1 bash scripts/deploy_on_box.sh <branch>   # no pm2 restarts
+#
+# TOPOLOGY (2026-10-03 evening): Box 1 hosts wa-jake + wa-subaru ONLY.
+#   wa-joker moved to Box 2 (own IP / own RAM; Box 1 was swap-thrashing
+#   with 3 tenants). This script must therefore NEVER pm2-start wa-joker
+#   on Box 1, and the idempotency gate only requires Box 1's two apps.
 #
 # Auth precedence rule (fixes historic "old auth over new" disasters):
 #   - per instance (Jake/Joker/Subaru): compare git auth commit timestamp
@@ -29,8 +35,9 @@ TARGET="$BRANCH"
 TARGET_HEAD=$(git rev-parse "origin/$TARGET" 2>/dev/null || echo "")
 CURRENT_HEAD=$(git rev-parse HEAD 2>/dev/null || echo "")
 if [ -n "$TARGET_HEAD" ] && [ "$TARGET_HEAD" = "$CURRENT_HEAD" ]; then
-  # 3-tenant split (2026-10-03): gate = ALL wa-* apps online.
-  PSTATE=$(pm2 jlist 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const p=JSON.parse(s);const want=['wa-jake','wa-joker','wa-subaru'];const ok=want.every(n=>(p||[]).some(x=>x&&x.name===n&&x.pm2_env&&x.pm2_env.status==='online'));console.log(ok?'online':'no')}catch(e){console.log('no')}})" 2>/dev/null || echo no)
+  # 3-tenant -> cross-box split (2026-10-03): gate = Box 1's apps online
+  # (wa-jake + wa-subaru; wa-joker lives on Box 2 now).
+  PSTATE=$(pm2 jlist 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const p=JSON.parse(s);const want=['wa-jake','wa-subaru'];const ok=want.every(n=>(p||[]).some(x=>x&&x.name===n&&x.pm2_env&&x.pm2_env.status==='online'));console.log(ok?'online':'no')}catch(e){console.log('no')}})" 2>/dev/null || echo no)
   if [ "$PSTATE" = "online" ]; then
     echo "=== deploy done: skip $(git rev-parse --short HEAD) already deployed, pm2 online $(date -u +%FT%TZ) ==="
     exit 0
@@ -113,19 +120,25 @@ if pm2 describe whatsapp-bot >/dev/null 2>&1; then
 fi
 
 # Staggered restart: keep WhatsApp same-IP reconnection gentle.
-for APP in wa-jake wa-joker wa-subaru; do
-  if pm2 describe "$APP" >/dev/null 2>&1; then
-    pm2 restart "$APP" --update-env >/dev/null 2>&1 || true
-  fi
-  sleep 15
-done
-pm2 start ecosystem.config.js 2>/dev/null || pm2 start index.js --name whatsapp-bot
-pm2 save 2>/dev/null | tail -1
-sleep 6
+# SKIP_RESTART=1 (used for config-only landings) skips all pm2 churn.
+SKIP_RESTART="${SKIP_RESTART:-0}"
+if [ "$SKIP_RESTART" != "1" ]; then
+  for APP in wa-jake wa-subaru; do
+    if pm2 describe "$APP" >/dev/null 2>&1; then
+      pm2 restart "$APP" --update-env >/dev/null 2>&1 || true
+    fi
+    sleep 15
+  done
+  pm2 start ecosystem.config.js 2>/dev/null || pm2 start index.js --name whatsapp-bot
+  pm2 save 2>/dev/null | tail -1
+  sleep 6
+else
+  echo "SKIP_RESTART=1 -> leaving pm2 processes untouched"
+fi
 echo "=== pm2 ==="
 pm2 list
 echo "=== boot log tails ==="
-for APP in wa-jake wa-joker wa-subaru; do
+for APP in wa-jake wa-subaru; do
   echo "--- $APP ---"
   tail -25 ~/.pm2/logs/$APP-out.log 2>/dev/null | grep -aE "Spawning|PAIRING|Connected|401|logged|Split|error" | tail -6
 done
