@@ -1323,7 +1323,7 @@ function useItem(userId, rawItemId, targetSlot = null) {
             frac = frac * dur;
         }
 
-        if (currentHP >= maxHP && itemKey !== 'elixir') {
+        if (currentHP >= maxHP && itemId !== 'elixir') {
             // Nothing to heal - never waste the player's item.
             // (elixir bypasses this guard: at full HP it still grants its
             // 60-minute Full Restore effect, so it's never a wasted use.)
@@ -1343,7 +1343,7 @@ function useItem(userId, rawItemId, targetSlot = null) {
         // 💡 FIX 2026-10-03 (owner elixir report): Full Restore Elixir now
         // grants a REAL timed effect with a clear lifecycle instead of being
         // just an instant heal whose benefit silently ended with the quest.
-        if (itemKey === 'elixir') {
+        if (itemId === 'elixir') {
           const fxMsg = economy.grantFullRestore(userId);
           if (fxMsg) healMsg += `\n${fxMsg}`;
         }
