@@ -414,6 +414,20 @@ async function awardRoomRelic(eventDoc, player, room) {
     await GuildWarEventPushRelic(eventDoc.eventId, player.jid, fresh);
     feed.queue(eventDoc.eventId, relics.isStealable(fresh) ? 'normal' : 'minor',
         `💎 ${player.name} now carries *${fresh.name}* (${fresh.tier}).`);
+
+    // 💡 NEW RUINS REWARD (2026-10-03, owner request): the Silver Veil Charm
+    // - a rare extra find in relic chambers (10%). Using it toggles the
+    // player's level veil; see inventorySystem.useItem + economy.displayLevel.
+    if (rng.next ? rng.next() < 0.10 : Math.random() < 0.10) {
+        try {
+            const inventorySystem = require('../inventorySystem');
+            await inventorySystem.addItem(player.jid, 'silver_veil', 1);
+            feed.queue(eventDoc.eventId, 'normal',
+                `🫥 ${player.name} unearthed a *Silver Veil Charm* among the relics.`);
+        } catch (e) {
+            console.error('[Ruins] silver_veil drop failed (non-fatal):', e?.message);
+        }
+    }
     return fresh;
 }
 
@@ -554,10 +568,12 @@ async function roomIntro(eventDoc, player, room) {
             default:
                 return { text }; // empty rooms need no card
         }
-        // primary visual: the battle-style scene (prop + square map, no UI)
+        // primary visual: the battle-style scene (prop + square map, no UI).
+        // 💡 cardBody/cardAction ride along so the caller's room-TYPE card can
+        // show the payload-specific flavour instead of a generic hint.
         const scene = await encounterScenes.renderScene(eventDoc, player, room, { state: 'intact' });
         if (scene) {
-            const out = { text, image: scene };
+            const out = { text, image: scene, cardBody: body, cardAction: actionHint };
             // puzzle rooms: the actual game board rides as the follow-up card
             if (room.type === 'puzzle') {
                 const pz = payloadGet(P, 'puzzle');
@@ -583,7 +599,7 @@ async function roomIntro(eventDoc, player, room) {
             ring: room.ring,
             boss: room.type === 'core' || (room.type === 'secret' && !!payloadGet(P, 'boss')),
         });
-        return { text, image };
+        return { text, image, cardBody: body, cardAction: actionHint };
     } catch (e) {
         return { text }; // card failure never blocks play
     }

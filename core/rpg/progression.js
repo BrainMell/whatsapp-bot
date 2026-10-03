@@ -523,7 +523,14 @@ function getCharacterSheet(userId) {
         level: user.level, xp: user.xp, xpNeeded: getXPForLevel(user.level + 1) - user.xp,
         xpProgress, xpForThisLevel, progressPercent: Math.floor((xpProgress / xpForThisLevel) * 100),
         stats, statPoints: user.statPoints, totalXPEarned: user.totalXPEarned,
-        totalLevelsGained: user.totalLevelsGained, class: mainUser.class, adventurerRank: mainUser.adventurerRank || 'F',
+        totalLevelsGained: user.totalLevelsGained,
+        // 💡 FIX 2026-10-03 (owner "Adventurer" class bug): emit a normalized
+        // class ID string - some legacy docs store an object here, and raw
+        // passthrough made card renderers fall back to "Adventurer".
+        class: (mainUser.class && typeof mainUser.class === 'object')
+            ? (mainUser.class.id || mainUser.class.name || null)
+            : (mainUser.class || null),
+        adventurerRank: mainUser.adventurerRank || 'F',
         gp: user.gp || 0, totalGP: user.totalGP || 0
     };
 }

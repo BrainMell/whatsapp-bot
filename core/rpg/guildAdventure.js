@@ -2029,6 +2029,7 @@ async function startRuinsCombat(sock, chatId, senderJid, spec) {
   if (isUserInAnyCombat(senderJid)) return { success: false, msg: '❌ You are already in combat.' };
   const sessionKey = scopedKey(`${chatId}_${senderJid}`);
   if (gameStates.has(sessionKey)) return { success: false, msg: '❌ You already have an active quest!' };
+  const isTutorial = !!spec.tutorialMode;
 
   const enemies = (spec.enemies || []).map((e) => {
     const en = createEnemy(e.type, e.level || 10);
@@ -2039,14 +2040,18 @@ async function startRuinsCombat(sock, chatId, senderJid, spec) {
 
   const state = JSON.parse(JSON.stringify(INITIAL_STATE_TEMPLATE));
   Object.assign(state, {
-    active: true, chatId, mode: 'RUINS', solo: true,
+    active: true, chatId,
+    // 💡 TUTORIAL (2026-10-03): the new-player practice fight runs the same
+    // pipeline in mode TUTORIAL - no ruins hooks (no GP, no lives, no room
+    // clears), and endCombat routes the outcome to the tutorial module.
+    mode: isTutorial ? 'TUTORIAL' : 'RUINS', solo: true,
     dungeonRank: spec.rank || 'C',
     encounter: 0, maxEncounters: 1,
     lastActivity: Date.now(), createdAt: Date.now(),
     groq: spec.groq || null, sock, sessionKey,
     isProcessing: false, inCombat: false,
-    ruinsMeta: { eventId: spec.eventId, roomKey: spec.roomKey },
-    dungeonName: 'The Ruins',
+    ruinsMeta: isTutorial ? null : { eventId: spec.eventId, roomKey: spec.roomKey },
+    dungeonName: isTutorial ? 'Training Hall' : 'The Ruins',
   });
   state.botId = botScope();
   state.players.push(buildRuinsPlayerEntity(senderJid));
@@ -2066,6 +2071,12 @@ async function startRuinsCombat(sock, chatId, senderJid, spec) {
   }
   await startCombat(sock, spec.groq || state.groq, encounter, sessionKey);
   return { success: true, sessionKey };
+}
+
+// 💡 TUTORIAL (2026-10-03): public entry for the new-player practice fight.
+// Same combat pipeline, mode TUTORIAL - no ruins hooks, no GP/lives.
+async function startTutorialCombat(sock, chatId, senderJid, spec = {}) {
+  return startRuinsCombat(sock, chatId, senderJid, { ...spec, tutorialMode: true });
 }
 function unscopeKey(key) {
   if (typeof key === "string") {
@@ -4000,6 +4011,17 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   // Both calls are idempotent (guarded by passivesApplied/skillPassivesApplied).
   if (state.players) {
     for (const p of state.players) {
+      // 💡 FIX 2026-10-03 (owner elixir report): an active Full Restore
+      // effect auto-tops the player up at the START of every fight too -
+      // the effect's lifecycle is its own 60-minute timer, not the quest.
+      try {
+        if (p.jid && !p.isDead && p.stats && p.stats.maxHp &&
+            economy.hasActiveEffect(p.jid, 'full_restore')) {
+          p.stats.hp = p.stats.maxHp;
+          p.currentHP = p.stats.maxHp;
+          economy.setPersistentHP(p.jid, p.stats.maxHp, p.stats.maxHp);
+        }
+      } catch (fxErr) { /* non-fatal */ }
       try { applyClassPassiveAtCombatStart(p, state); } catch (e) {
         console.error('[Passive] re-apply at startCombat failed:', e?.message || e);
       }
@@ -4218,8 +4240,16 @@ async function startCombat(sock, groq, encounter, sessionKey) {
     }
   }
 
-  // Wait before starting first turn - Instant for solo
-  const startDelay = state.solo ? 0 : 120000;
+  // Wait before starting first turn.
+  // 💡 FIX 2026-10-03 (owner quest report "enemy takes too long to respond"):
+  // this was 120000ms for group quests - a copy-paste of REGISTRATION_TIME
+  // that left the party staring at the "Combat Started" scene for TWO FULL
+  // MINUTES before the first turn (enemy or player) was processed. That was
+  // the entire bottleneck in the quest-start -> encounter -> enemy-response
+  // pipeline; every other combat cadence constant is 2.5-10s. A short
+  // beat (4s) gives players a moment to read the scene without feeling
+  // like the enemy went AFK.
+  const startDelay = state.solo ? 0 : 4000;
   state.timers.combatStart = setTimeout(async () => {
     try {
       if (!state.inCombat) return; // Safety check
@@ -5146,6 +5176,19 @@ async function performAction(sock, player, action, sessionKey) {
             target.currentHP = target.stats.hp; // Sync
             resultMsg += `\n💖 Restored ${actualHeal} HP to ${target.name}! (${Math.round(healVal * 100)}%)${hMult < 1 ? " (Healing Reduced)" : ""}`;
             turnInfo.healing = actualHeal;
+
+            // 💡 FIX 2026-10-03 (owner elixir report): the Full Restore Elixir
+            // now ALSO grants its 60-minute persistent effect when used in
+            // combat - same lifecycle as out-of-combat use (timestamp on the
+            // user doc, never cleared by quest end).
+            if (itemKey === "elixir" && target.jid) {
+              try {
+                const fxMsg = economy.grantFullRestore(target.jid);
+                if (fxMsg) resultMsg += `\n${fxMsg}`;
+              } catch (fxErr) {
+                console.error("[Elixir] effect grant failed:", fxErr?.message);
+              }
+            }
 
             if (itemKey === "elixir" || item.cureStatus) {
               const beforeCount = target.statusEffects ? target.statusEffects.length : 0;
@@ -6753,9 +6796,14 @@ async function endCombat(sock, victory, sessionKey) {
   const state = gameStates.get(sessionKey);
   if (!state || state.isEndingCombat) return;
   // ⚔️ RUINS: report the outcome to the Guild War module (GP + relic award /
-  // defeat respawn). Standard rewards below still apply.
+  // defeat respawn). Standard rewards below still apply. sock is passed so
+  // the hook can DM post-combat visuals (navigation card).
   if (state.mode === 'RUINS' && ruinsHooks.onEnd) {
-    try { ruinsHooks.onEnd(state, !!victory, sessionKey); } catch (e) { console.error('[Ruins] onEnd hook:', e?.message); }
+    try { await ruinsHooks.onEnd(state, !!victory, sessionKey, sock); } catch (e) { console.error('[Ruins] onEnd hook:', e?.message); }
+  }
+  // 💡 TUTORIAL: route the practice-fight outcome to the tutorial module.
+  if (state.mode === 'TUTORIAL') {
+    try { require('./tutorial').notifyCombatEnd(state, sock); } catch (e) { console.error('[Tutorial] combat end notify:', e?.message); }
   }
   state.isEndingCombat = true; // Guard to prevent double processing
 
@@ -6802,7 +6850,13 @@ async function endCombat(sock, victory, sessionKey) {
       // to 0..maxHP. On next combat start, getPersistentHP() will restore
       // to 1 if HP was 0 (defeated).
       if (p.jid && p.stats && p.stats.maxHp) {
-        const finalHP = p.currentHP !== undefined ? p.currentHP : p.stats.hp;
+        let finalHP = p.currentHP !== undefined ? p.currentHP : p.stats.hp;
+        // 💡 FIX 2026-10-03 (owner elixir report): an active Full Restore
+        // effect auto-tops the player up at combat end - the effect runs on
+        // its own timer and is NOT cleared by the quest ending.
+        try {
+          if (economy.hasActiveEffect(p.jid, 'full_restore')) finalHP = p.stats.maxHp;
+        } catch (fxErr) { /* non-fatal */ }
         economy.setPersistentHP(p.jid, finalHP, p.stats.maxHp);
       }
       // PERSISTENT ENERGY WRITE-BACK (2026-09-17): energy spent in combat
@@ -6822,23 +6876,22 @@ async function endCombat(sock, victory, sessionKey) {
   }, 0);
 
   // 💡 P4 Item 4 (2026-08-16): Rank-based zeni reward table.
-  // Replaces the old (5 + difficulty) × baseGold multiplier which produced
-  // rewards 10-100× too high. New averages per rank:
-  //   F=1K, E=3K, D=5-7K, C=8-10K, B=11-15K, A=16-20K,
-  //   S=21-30K, SS=31-40K, SSS=41-50K
-  // Individual payout scales within the range based on enemies defeated
-  // (contribution proxy: more enemies = higher end of range).
+  // 💡 ECONOMY RETUNE 2026-10-03 (owner progression report): S+ runs dumped
+  // 200-650K Zeni per player per run, which trivialized every shop price and
+  // made carried low-ranks instantly rich. Mid/high tiers rebalanced so a
+  // full S run nets ~120K per player (still the best income in the game,
+  // ~50x a daily claim), F-D unchanged for the early curve.
   const RANK_GOLD_TABLE = {
     F:   [800, 1200],     // avg ~1K
     E:   [2500, 3500],    // avg ~3K
-    D:   [5000, 7000],    // avg ~6K
-    C:   [8000, 10000],   // avg ~9K
-    B:   [11000, 15000],  // avg ~13K
-    A:   [16000, 20000],  // avg ~18K
-    S:   [21000, 30000],  // avg ~25K
-    SS:  [31000, 40000],  // avg ~35K
-    SSS: [41000, 50000],  // avg ~45K
-    GOD: [51000, 60000],  // avg ~55K
+    D:   [4000, 5500],    // avg ~4.8K (was 5-7K)
+    C:   [5000, 7000],    // avg ~6K (was 8-10K)
+    B:   [6500, 9000],    // avg ~7.8K (was 11-15K)
+    A:   [8000, 11000],   // avg ~9.5K (was 16-20K)
+    S:   [10000, 14000],  // avg ~12K (was 21-30K)
+    SS:  [12000, 16000],  // avg ~14K (was 31-40K)
+    SSS: [14000, 18000],  // avg ~16K (was 41-50K)
+    GOD: [16000, 22000],  // avg ~19K (was 51-60K)
   };
   const rankKey = state.dungeonRank || 'F';
   const goldRange = RANK_GOLD_TABLE[rankKey] || RANK_GOLD_TABLE.F;
@@ -6859,6 +6912,18 @@ async function endCombat(sock, victory, sessionKey) {
   // Total gold = base × player count (boss fights don't multiply by player count)
   const totalGold = baseGold * (isBossFight ? 1 : playerCount);
   let xpPerPlayer = Math.floor(totalXP / playerCount);
+  // 💡 ECONOMY RETUNE 2026-10-03 (owner progression report): enemy XP scales
+  // as xpReward x (1 + rankIndex^exponent) with exponents up to 1.55, which
+  // put a single S boss at ~14.9M XP - six times the entire L1->100 curve
+  // (2.4M) - so one carried S/SS run instant-100'd low-ranks. Hard per-fight
+  // ceiling per rank, calibrated so a FULL run lands ~250-800K XP per player
+  // (a healthy chunk of the curve, never the whole thing in one fight):
+  const XP_CAP_BY_RANK = {
+    F: 300, E: 800, D: 1800, C: 4000, B: 8000, A: 15000,
+    S: 28000, SS: 42000, SSS: 60000, DRAGON: 80000, GOD: 80000,
+  };
+  const xpCap = XP_CAP_BY_RANK[(state.dungeonRank || 'F').toUpperCase()] ?? 5000;
+  if (xpPerPlayer > xpCap) xpPerPlayer = xpCap;
   // 💡 TICKET #b5087a: solo Scout Pathfinder XP bonus (see helper above).
   if (playerCount === 1 && alivePlayers.length === 1) {
     xpPerPlayer = Math.floor(xpPerPlayer * _soloHunterXpMult(alivePlayers[0], state));
@@ -7363,8 +7428,16 @@ const initAdventure = async (
   state.botId = botScope(); // 💡 CROSS-BOT LEAK FIX: stamp the owning bot
   gameStates.set(sessionKey, state);
 
-  // Auto-join for solo
-  if (solo && senderJid) {
+  // 💡 FIX 2026-10-03 (owner quest report): the INITIATOR of a quest is a
+  // participant from the moment they create it. Previously only solo quests
+  // auto-joined their creator, so group initiators had to type ".j join"
+  // separately - they were missing from state.players entirely, which broke
+  // (a) the pre-quest shop player count (the shop's player list IS
+  // state.players, so the initiator could not buy while everyone else
+  // could) and (b) the MIN_PLAYERS check could cancel a quest the
+  // initiator obviously wanted. Auto-join now applies to BOTH modes; the
+  // join handler still dedupes if the initiator also types ".j join".
+  if (senderJid && !state.players.some((p) => p.jid === senderJid)) {
     const user = economy.getUser(senderJid);
     const name =
       user?.nickname || user?.profile?.nickname || economy.getDisplayName(senderJid);
@@ -7509,6 +7582,76 @@ const joinAdventure = (chatId, senderJid, senderName) => {
   return `✅ *${senderName}* has joined the adventure! (${state.players.length}/${state.solo ? 1 : GAME_CONFIG.MAX_PLAYERS})`;
 };
 
+// ============================================
+// 🎯 PARTY RANK RECALIBRATION (2026-10-03, owner directive)
+// ============================================
+// 💡 PROGRESSION OVERHAUL: the dungeon rank is NO LONGER whatever the
+// initiator typed. After the FULL participant list is known and before the
+// raid is generated (startJourney = roster locked, shop not yet run, rewards
+// not yet computed), the raid's rank is derived from the party itself:
+//   1. Read every participant's CURRENT adventurerRank from their user doc
+//      (fresh read - covers rank changes between creation and start).
+//      The initiator is included automatically (auto-join fix).
+//   2. Take the MOST COMMON rank among the group.
+//      - Tie between two ranks: the HIGHER of the tied ranks wins (a 2B/2C
+//        party plays as a B party, not a C party).
+//      - Ranks outside the normal ladder (DRAGON/GOD, mod-granted) are NOT
+//        counted - a high-rank carrier cannot drag the group's rank up.
+//   3. The raid runs ONE RANK ABOVE that most-common rank (capped at SSS).
+// A mostly-B party + one SS initiator therefore plays an A raid, not an
+// SS raid - mixed-rank groups can still play together, but nobody skips
+// the progression curve by piggybacking on a carrier.
+const PARTY_RANK_LADDER = ["F", "E", "D", "C", "B", "A", "S", "SS", "SSS"];
+
+function recalibratePartyRank(state) {
+  if (state.solo) return null; // solo keeps its initiator+1 creation gate
+
+  const counts = {};
+  for (const p of state.players) {
+    const u = p.jid ? economy.getUser(p.jid) : null;
+    const r = String((u && u.adventurerRank) || p.adventurerRank || "F")
+      .trim()
+      .toUpperCase();
+    if (!PARTY_RANK_LADDER.includes(r)) continue; // special ranks don't count
+    counts[r] = (counts[r] || 0) + 1;
+  }
+  const entries = Object.entries(counts);
+  if (!entries.length) return null;
+
+  // Most common rank; ties resolved to the higher of the tied ranks.
+  let commonRank = entries[0][0];
+  let commonCount = entries[0][1];
+  for (const [rank, n] of entries) {
+    if (
+      n > commonCount ||
+      (n === commonCount &&
+        PARTY_RANK_LADDER.indexOf(rank) > PARTY_RANK_LADDER.indexOf(commonRank))
+    ) {
+      commonRank = rank;
+      commonCount = n;
+    }
+  }
+
+  const commonIdx = PARTY_RANK_LADDER.indexOf(commonRank);
+  const newRank = PARTY_RANK_LADDER[
+    Math.min(PARTY_RANK_LADDER.length - 1, commonIdx + 1)
+  ];
+  const rankData = DUNGEON_RANKS[newRank];
+  if (!rankData) return null;
+
+  const oldRank = state.dungeonRank;
+  // Re-derive every rank-dependent field (mirrors initAdventure's setup):
+  state.dungeonRank = newRank;
+  state.difficulty = rankData.difficulty;
+  state.maxEncounters = rankData.encounters;
+  state.dungeonName = rankData.name;
+  // Special-rank dungeons (DRAGON/GOD) keep their bespoke handling - a
+  // recalibrated group can never be promoted into those.
+  if (state.trialTarget) state.trialTarget = null;
+
+  return { oldRank, newRank, commonRank, commonCount, total: state.players.length };
+}
+
 async function startJourney(sock, sessionKey) {
   const state = gameStates.get(sessionKey);
   if (!state) return;
@@ -7523,6 +7666,24 @@ async function startJourney(sock, sessionKey) {
     });
     deleteGameState(sessionKey);
     return;
+  }
+
+  // 💡 PROGRESSION OVERHAUL (owner directive): recalibrate the raid's rank
+  // from the FINAL party roster before anything is generated or priced.
+  // Runs after the min-player check (roster locked) and before SHOPPING.
+  if (!state.solo && !state.isRankRecalibrated) {
+    state.isRankRecalibrated = true; // never recalibrate twice on a session
+    const recal = recalibratePartyRank(state);
+    if (recal && recal.newRank !== recal.oldRank) {
+      state.rankNote =
+        `🎯 *Raid rank set by the party:* mostly ${recal.commonRank}-rank heroes` +
+        ` (${recal.commonCount}/${recal.total}) -> this raid runs at *${recal.newRank}-rank*` +
+        ` (one above the party's common rank).`;
+    } else if (recal) {
+      state.rankNote =
+        `🎯 *Raid rank set by the party:* mostly ${recal.commonRank}-rank heroes` +
+        ` -> this raid runs at *${recal.newRank}-rank*.`;
+    }
   }
   state.phase = "SHOPPING";
 
@@ -7799,6 +7960,9 @@ async function openShop(sock, sessionKey) {
 
   msg += `━━━━━━━━━━━━\n`;
   msg += `💬 \`${botConfig.getPrefix()} buy <#>\` to purchase`;
+  // 💡 Party-rank recalibration notice (owner progression overhaul) - rides
+  // on the shop menu, the first message after the roster locks.
+  if (state.rankNote) msg += `\n\n${state.rankNote}`;
 
   // 2026-09-14 r6 (owner: "why is there a second image card saying Guild
   // Shop with the dual-card UI? We don't need that - send the quest starting
@@ -9015,23 +9179,27 @@ async function endAdventure(sock, sessionKey, victory = true) {
   // just 0.43% of the run's total XP, making the "completion moment"
   // statistically irrelevant. With quadratic scaling, S-rank completion
   // gives 250,000 XP (~5% of total), SSS gives 1,000,000 XP.
-  //   F=64, E=144, D=400, C=1225, B=3600, A=10000,
-  //   S=250000, SS=490000, SSS=1000000
+  // 💡 ECONOMY RETUNE 2026-10-03 (owner progression report): quadratic
+  // completion XP blew up with the xpMult table (S=250K, SSS=1M in one
+  // lump). Completion now scales LINEARLY with a damped multiplier:
+  //   F=240, E=360, D=900, C=1050, B=1800, A=3000,
+  //   S=10500, SS=21000, SSS=30000
+  // - a meaningful bonus, never a whole day's grinding in one line.
   const _completionRankData =
     DUNGEON_RANKS[state.dungeonRank] || DUNGEON_RANKS["F"];
-  const _baseCompletionXP = Math.floor(Math.pow(_completionRankData.xpMult || 1, 2) * 100);
+  const _baseCompletionXP = Math.floor((_completionRankData.xpMult || 1) * 300);
 
   // 💡 ECONOMY REBALANCE (Phase 1): Cut S/SS/SSS completion bonus gold by
   // 60% to combat Zeni inflation. Original values were:
   //   S=50000, SS=70000, SSS=100000
   // New values:
   //   S=20000, SS=28000, SSS=40000
-  // Combined with boss goldReward cuts (see bossMechanics.js + classEncounters.js)
-  // and per-dungeon gold cap, this should slow inflation significantly.
-  // Lower ranks (F-B) unchanged - they were already balanced.
+  // 💡 ECONOMY RETUNE 2026-10-03: second pass alongside the per-fight gold
+  // table cut - S/SS/SSS completion bonuses now 8K/11K/14K so a full high
+  // run's Zeni lands ~6-8x a daily claim instead of ~100x.
   const rankGoldMap = {
     F: 800, E: 1200, D: 2000, C: 3500, B: 6000, A: 10000,
-    S: 20000, SS: 28000, SSS: 40000, DRAGON: 5000
+    S: 8000, SS: 11000, SSS: 14000, DRAGON: 5000
   };
   const _baseBonusGold = rankGoldMap[state.dungeonRank] || 800;
 
@@ -9508,6 +9676,15 @@ const handleCombatAction = async (
   }
 
   state.pendingActions[senderJid] = action;
+
+  // 💡 TUTORIAL: the action was ACCEPTED - tell the tutorial module so the
+  // next lesson step fires (no-op unless a tutorial session is active).
+  try {
+    const tutEvent = { attack: 'combat_attack', ability: 'combat_ability', item: 'combat_item', rest: 'combat_rest' }[normalizedAction];
+    if (tutEvent && state.mode === 'TUTORIAL') {
+      require('./tutorial').notify(senderJid, tutEvent, { sock, chatId }).catch(() => {});
+    }
+  } catch (e) { /* non-fatal */ }
   // 💡 AUDIT FIX 2026-08-01 (Round 4): update lastActivity so the stale-state
   // sweeper doesn't clean up an active combat session.
   state.lastActivity = Date.now();
@@ -11293,6 +11470,7 @@ module.exports = {
   GAME_CONFIG,
   startAbyssCombat,
   startRuinsCombat,
+  startTutorialCombat,
   setRuinsHooks,
   // 💡 Summoner System (Phase 2): export for summonAI.js to access.
   // summonAI does a lazy require('./guildAdventure') to avoid circular dep,

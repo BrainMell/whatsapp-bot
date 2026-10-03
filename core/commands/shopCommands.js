@@ -658,7 +658,8 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
             classData,
             stats,
             equipStats: styledEquipStats,
-            level: charSheet?.level || 1,
+            // 💡 SILVER VEIL: level renders as "??" when the charm is active
+            level: require('../rpg/economy').displayLevel(finalJid, charSheet?.level) ?? '??',
             rank: rank,
             xpPercent: charSheet?.progressPercent || 0,
             // 💡 Owner rule 2026-09-14: cards show the XP requirement itself,
@@ -672,7 +673,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
             guildTitle: _guildCard.title
         });
         if (styledBuffer && styledBuffer.length > 0) {
-            const styledCaption = `👤 *${user.nickname || finalName}* - ${classData?.icon || '🛡️'} ${classData?.name || 'Adventurer'}\n⭐ Lv.${charSheet?.level || 1} | 🏆 ${rank}-Rank | 💰 ${getZENI()}${(user.wallet || 0).toLocaleString()}\n\n🎨 Card style: *#${user.cardStyle || profileCardRenderer.getDefaultStyle()}* - change with \`${getPrefix()} cardstyle\``;
+            const styledCaption = `👤 *${user.nickname || finalName}* - ${classData?.icon || '🛡️'} ${classData?.name || 'Adventurer'}\n⭐ Lv.${require('../rpg/economy').displayLevel(finalJid, charSheet?.level) ?? '??'} | 🏆 ${rank}-Rank | 💰 ${getZENI()}${(user.wallet || 0).toLocaleString()}\n\n🎨 Card style: *#${user.cardStyle || profileCardRenderer.getDefaultStyle()}* - change with \`${getPrefix()} cardstyle\``;
             await sock.sendMessage(chatId, {
                 image: styledBuffer,
                 caption: styledCaption,

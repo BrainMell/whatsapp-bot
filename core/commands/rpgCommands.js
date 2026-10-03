@@ -69,6 +69,11 @@ async function displayKills(sock, chatId, senderJid) {
 
 async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
     inventorySystem.repairUserEquipmentStats(senderJid);
+    // 💡 FIX 2026-10-03 (owner "Adventurer" class bug): custom classes live in
+    // the DB and are rehydrated async at boot - profile renders must wait for
+    // that load (memoized, instant after the first call) before resolving the
+    // player's class, or mod-created classes render as "Adventurer".
+    try { await classSystem.ensureCustomClassesLoaded(); } catch (e) { /* non-fatal */ }
     const sheet = progression.getCharacterSheet(senderJid);
     const economyUser = economy.getUser(senderJid);
     
@@ -78,6 +83,19 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
         });
         return;
     }
+    // Self-heal legacy documents: class stored as an object, or a classless
+    // account that never got its starter roll (initializeClass used to run
+    // only on shop/profile-card paths, so ".j char" kept showing Adventurer).
+    if (economyUser.class && typeof economyUser.class === 'object') {
+        economyUser.class = economyUser.class.id || economyUser.class.name || null;
+        economy.saveUser(senderJid);
+    }
+    if (!economyUser.class) {
+        try { economy.initializeClass(senderJid); } catch (e) { /* non-fatal */ }
+    }
+    // 💡 TUTORIAL: the sheet was opened - advance the tutorial's stats step
+    // (no-op unless a tutorial session is active).
+    try { require('../rpg/tutorial').notify(senderJid, 'char', { sock, chatId }).catch(() => {}); } catch (e) { /* non-fatal */ }
     
     const classData = classSystem.getClassById(sheet.class);
     const stats = progression.getBaseStats(senderJid, sheet.class);
@@ -141,7 +159,8 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
           stats,
           equipStats,
           equipment,
-          level: sheet?.level || 1,
+          // 💡 SILVER VEIL: level renders as "??" when the charm is active
+          level: economy.displayLevel(senderJid, sheet?.level) ?? '??',
           rank: sheet?.adventurerRank || 'F',
           xpPercent: sheet?.progressPercent || 0,
           // 💡 Owner rule 2026-09-14: cards show the XP requirement itself,
@@ -166,7 +185,7 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
             : '';
           await sock.sendMessage(chatId, {
             image: cardBuffer,
-            caption: `👤 *${senderName}* - ${classData?.icon || '🛡️'} ${classData?.name || 'Adventurer'}\n⭐ Lv.${sheet?.level || 1} | 🏆 ${sheet?.adventurerRank || 'F'}-Rank | 💰 ${getCurrency().symbol}${(economyUser?.wallet || 0).toLocaleString()}${allocHint}`,
+            caption: `👤 *${senderName}* - ${classData?.icon || '🛡️'} ${classData?.name || 'Adventurer'}\n⭐ Lv.${economy.displayLevel(senderJid, sheet?.level) ?? '??'} | 🏆 ${sheet?.adventurerRank || 'F'}-Rank | 💰 ${getCurrency().symbol}${(economyUser?.wallet || 0).toLocaleString()}${allocHint}`,
             mentions: [senderJid]
           });
           return;
@@ -653,6 +672,9 @@ async function equipItem(sock, chatId, senderJid, itemId, slot) {
         ? ` (⚙️ ${equippedInstance.durability}/${equippedInstance.maxDurability})`
         : "";
     await sock.sendMessage(chatId, { text: `✅ Equipped *${itemInfo.name}* to *${result.slot}* slot!${durStr}` });
+    // 💡 TUTORIAL: gear step done - the practice fight fires next
+    // (no-op unless a tutorial session is active).
+    try { require('../rpg/tutorial').notify(senderJid, 'equip', { sock, chatId }).catch(() => {}); } catch (e) { /* non-fatal */ }
 }
 
 async function unequipItem(sock, chatId, senderJid, slot) { 

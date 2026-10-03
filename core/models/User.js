@@ -19,6 +19,32 @@ const UserSchema = new mongoose.Schema({
   lastClassChange: { type: Number, default: 0 },
   lastFishReset: { type: Number, default: 0 },
   fishCount: { type: Number, default: 0 },
+  // 💡 FIX 2026-10-03: server-side hunting daily limit (owner exploit report).
+  // huntCount resets whenever lastHuntDay (UTC "YYYY-MM-DD") stops matching
+  // today - enforced against the persisted player/day state, not the UI.
+  huntCount: { type: Number, default: 0 },
+  lastHuntDay: { type: String, default: '' },
+  // 💡 FIX 2026-10-03 (owner elixir report): persistent TEMP EFFECT state.
+  // shape: { [effectId]: expiresAt(ms) }. Before this, buffs had NO home on
+  // the player document - they only lived on in-memory combat entities and
+  // vanished when a quest ended, so "Full Restore Elixir" seemed to randomly
+  // stop working after a raid. Timed effects now have one clearly defined
+  // lifecycle: granted with an expiry, checked by timestamp, pruned on read,
+  // and NEVER tied to quest/raid lifecycle.
+  activeEffects: { type: Object, default: {} },
+  // Classes this player has already received a mod class-unlock for (so
+  // repeated `.j modclass` switches can't farm unlock/point grants).
+  modclassHistory: { type: Array, default: [] },
+  // 💡 Silver Veil Charm (2026-10-03): when true, every card/caption/chart
+  // shows the player's level as "??" instead of the number. Toggled by the
+  // silver_veil item - intentional, item-tied, not a hardcoded exception.
+  levelVeil: { type: Boolean, default: false },
+  // 💡 Interactive tutorial (2026-10-03): null = not offered/finished,
+  // 'active' = session running, 'done' = completed/skipped. tutorialLoadout
+  // records every item/skill/weapon granted during the lesson so it can be
+  // revoked exactly, even after a crash.
+  tutorial: { type: String, default: null },
+  tutorialLoadout: { type: Object, default: null },
   classChangeCount: { type: Number, default: 0 },
   lastClassChangeReset: { type: Number, default: 0 },
 

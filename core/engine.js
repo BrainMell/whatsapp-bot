@@ -8819,6 +8819,23 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                     } catch (e) {
                       console.error("[Encounter] DM routing error:", e.message);
                     }
+                    // 💡 NEW PLAYER TUTORIAL (2026-10-03): DM verbs for the
+                    // interactive tutorial (start/skip/next/finish/retry).
+                    try {
+                      const tutResult = await require("./rpg/tutorial").handleDM(
+                        sock, senderJid, chatId, txt, BOT_MARKER, { prefix: botConfig.getPrefix() },
+                      );
+                      if (tutResult) {
+                        if (tutResult.image) {
+                          await sock.sendMessage(chatId, { image: tutResult.image, caption: BOT_MARKER + (tutResult.text || "") });
+                        } else if (tutResult.text) {
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + tutResult.text });
+                        }
+                        return;
+                      }
+                    } catch (e) {
+                      console.error("[Tutorial] DM router error:", e.message);
+                    }
                   }
 
                   const handlePendingNameReply = async () => {
@@ -10899,6 +10916,8 @@ _💡 Reply with another number from your search list!_`.trim();
                         await sock.sendMessage(chatId, {
                           text: BOT_MARKER + `🏥 *HOSPITAL*\n\n❤️ HP restored: +${healed}\n📊 HP: ${maxHP}/${maxHP}\n\n_You are now at full health._\n\n⏳ _Next hospital visit available in 12 hours. Out-of-combat passive regen will keep you topped up between visits._`,
                         });
+                        // 💡 TUTORIAL: hospital step done (no-op unless active)
+                        try { require('./rpg/tutorial').notify(senderJid, 'hospital', { sock, chatId, prefix: botConfig.getPrefix() }).catch(() => {}); } catch (e) {}
                         if (__healDrop) {
                           try {
                             const loreDrops = require('./rpg/loreDrops');
@@ -11299,6 +11318,23 @@ _💡 Reply with another number from your search list!_`.trim();
 
                     // .j tutorial
                     if (primaryCmd === "tutorial") {
+                      // 💡 NEW PLAYER TUTORIAL (2026-10-03): `.j tutorial start`
+                      // launches the interactive hands-on version (messages land
+                      // in this chat; best experienced in DMs).
+                      if ((cmdArgs[1] || "").toLowerCase() === "start") {
+                        try {
+                          const tut = require("./rpg/tutorial");
+                          const res = await tut.handleDM(sock, senderJid, chatId, "tutorial start", BOT_MARKER, { prefix: botConfig.getPrefix() });
+                          if (res && res.text) await sock.sendMessage(chatId, { text: BOT_MARKER + res.text });
+                          if (cmdArgs[2] !== "silent") {
+                            await sock.sendMessage(chatId, { text: BOT_MARKER + `💡 Tip: run the tutorial in my DMs for the cleanest experience.` });
+                          }
+                        } catch (e) {
+                          console.error("[Tutorial] start error:", e.message);
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Tutorial could not start - try again in a moment." });
+                        }
+                        return;
+                      }
                       let msg = `🎓 *RPG ADVENTURE GUIDE* 🎓\n\n`;
                       msg += `Welcome to the legend! Here is how to navigate your new life:\n\n`;
                       msg += `━━━━━━━━━━━━━━━\n`;
@@ -11621,10 +11657,46 @@ _💡 Reply with another number from your search list!_`.trim();
                   if (
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} hunt`
                   ) {
+                    // 💡 FIX 2026-10-03 (owner hunting exploit report): hunts had
+                    // NO daily limit and NO spam guard at all - the counter was
+                    // never stored on the player document, the block ran fully
+                    // concurrent (engine processes messages via Promise.all) and
+                    // it returned BEFORE the global 5s cooldown map was set, so
+                    // rapid ".j hunt" spam dropped unlimited loot. The limit is
+                    // now enforced against the player/day state itself:
+                    // huntCount/lastHuntDay live on the user document (survive
+                    // restarts and re-registrations), and the check+increment
+                    // happens synchronously before any await so N simultaneous
+                    // messages still count against the same shared object.
+                    const HUNT_DAILY_LIMIT = 10; // owner spec: 7-15 per day
+                    if (busyUsers.has(senderJid)) {
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "⏳ Still processing your last action...",
+                      }, { quoted: m });
+                    }
                     if (!economy.isRegistered(senderJid))
                       return await sock.sendMessage(chatId, {
                         text: BOT_MARKER + "❌ Register first!",
                       });
+                    const hunter = economy.getUser(senderJid);
+                    const huntDayUtc = new Date().toISOString().slice(0, 10);
+                    if ((hunter.lastHuntDay || "") !== huntDayUtc) {
+                      hunter.lastHuntDay = huntDayUtc;
+                      hunter.huntCount = 0;
+                    }
+                    if ((hunter.huntCount || 0) >= HUNT_DAILY_LIMIT) {
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          `🏹 *HUNTING FATIGUE*\n\nThe wilderness is picked clean for today - you've already taken ${HUNT_DAILY_LIMIT} hunts. The animals know your scent now.\n\n▫️ Hunts today: ${hunter.huntCount}/${HUNT_DAILY_LIMIT}\n▫️ Resets at midnight UTC`,
+                      }, { quoted: m });
+                    }
+                    // Synchronous increment: every concurrent hunt message sees
+                    // the updated count (single event loop, shared cached user).
+                    hunter.huntCount = (hunter.huntCount || 0) + 1;
+                    economy.saveUser(senderJid);
+                    busyUsers.add(senderJid);
+                    try {
                     await sock.sendMessage(chatId, {
                       react: { text: "🏹", key: m.key },
                     });
@@ -11663,6 +11735,17 @@ _💡 Reply with another number from your search list!_`.trim();
                     const sellMultiplier = rarityInfo.sellMultiplier || 0.6;
                     const sellValue = Math.floor((item.value || 0) * sellMultiplier);
 
+                    // 💡 FIX 2026-10-03: the XP shown here was FAKE - the caption
+                    // promised "+N XP" but nothing ever called addXP. Grant it for
+                    // real so the card tells the truth. (xpReward is computed here
+                    // so both the grant and the card caption share one value.)
+                    const xpReward = Math.max(5, Math.floor(sellValue / 5));
+                    try {
+                      require('./rpg/progression').addXP(senderJid, xpReward, 'Hunt');
+                    } catch (xpErr) {
+                      console.error('[Hunt] XP grant failed (non-fatal):', xpErr.message);
+                    }
+
                     // 💡 NEW 2026-07-29: Render an image card for the hunt result
                     // (replaces the text-only banner). Falls back to text on failure.
                     let huntCardSent = false;
@@ -11672,8 +11755,8 @@ _💡 Reply with another number from your search list!_`.trim();
                       const animalName = (selected.id === 'rabbit_hide') ? 'Rabbit'
                         : (selected.id === 'deer_antler') ? 'Deer'
                         : (selected.id === 'bear_claw') ? 'Bear' : 'Creature';
-                      // XP reward scales with rarity
-                      const xpReward = Math.max(5, Math.floor(sellValue / 5));
+                      // XP reward scales with rarity (computed above, shared with
+                      // the real XP grant)
                       const huntCard = await combatImageGen.generateHuntCard({
                         playerName: freshUser.nickname || economy.getDisplayName(senderJid),
                         playerClass: String(freshUser.class?.id || freshUser.class || 'FIGHTER').toUpperCase(),
@@ -11716,6 +11799,9 @@ _💡 Reply with another number from your search list!_`.trim();
                       );
                     }
                     return;
+                    } finally {
+                      busyUsers.delete(senderJid);
+                    }
                   }
 
                   // SPAM PREVENTION: Intelligent Cooldowns
@@ -26249,6 +26335,17 @@ ${senderName} said y'all should know:
                       text: BOT_MARKER + result.message,
                     });
                     await awardProgression(senderJid, chatId);
+                    // 💡 NEW PLAYER TUTORIAL (2026-10-03): invite every fresh
+                    // registration to the hands-on walkthrough.
+                    if (result.success) {
+                      try {
+                        const isDM = typeof chatId === 'string' && !chatId.endsWith('@g.us');
+                        const tutLine = require('./rpg/tutorial').offerLine(botConfig.getPrefix());
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + (isDM ? tutLine : tutLine.replace(/\n\n/g, ' ')),
+                        });
+                      } catch (e) { /* non-fatal */ }
+                    }
                     return;
                   }
 

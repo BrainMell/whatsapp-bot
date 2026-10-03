@@ -134,42 +134,65 @@ async function handleModClass(sock, chatId, senderJid, args, BOT_MARKER, prefix)
     const oldClass = economy.getUserClass(senderJid);
     const oldClassName = oldClass ? `${oldClass.icon} ${oldClass.name}` : 'None';
 
-    // Switch class - bypass all evolution requirements
+    // Switch class - bypass all evolution requirements.
+    // 💡 FIX 2026-10-03 (owner class-change report): modclass used to grant
+    // +20 skill points on EVERY call, so repeated switches farmed infinite
+    // points, and it never touched the class_change_ticket flow. Now:
+    // - no free skill points (mods have `mod giveskillpoints` for that)
+    // - the full max-level unlock only happens the FIRST time a class is
+    //   taken (tracked in user.modclassHistory) - re-taking a class keeps
+    //   the skills already unlocked
+    // - a class_change_ticket in the inventory is consumed if present, so
+    //   the item and the mod path share one lifecycle.
     user.class = targetClass.id;
     economy.scheduleSave(senderJid);
 
-    // 💡 MOD CLASS UNLOCK: auto-grant ALL skills from the new class's tree
-    // at max level. Mods are testing - they shouldn't have to grind skills
-    // to test a class. This sets every skill in the class's skill tree to
-    // maxLevel so the mod can immediately use all abilities.
-    let unlockedCount = 0;
+    const firstTimeTaking = !(Array.isArray(user.modclassHistory) && user.modclassHistory.includes(targetClass.id));
+    if (firstTimeTaking) {
+      if (!Array.isArray(user.modclassHistory)) user.modclassHistory = [];
+      user.modclassHistory.push(targetClass.id);
+    }
+    // Consume a class_change_ticket if the player is holding one.
+    let ticketConsumed = false;
     try {
-        const skillTree = require('../rpg/skillTree');
-        const progression = require('../rpg/progression');
-        const level = progression.getLevel(senderJid);
-        const SK = skillTree.SKILL_TREES || skillTree;
-        const tree = SK[targetClass.id.toUpperCase()];
-        if (tree && tree.trees) {
-            if (!user.skills) user.skills = {};
-            for (const [, treeData] of Object.entries(tree.trees)) {
-                if (!treeData.skills) continue;
-                for (const [skillId, skill] of Object.entries(treeData.skills)) {
-                    // Skip ascended skills (tier 4) unless mod explicitly wants them
-                    // - actually for mod testing, unlock everything
-                    user.skills[skillId] = skill.maxLevel || 1;
-                    unlockedCount++;
+      const inv = inventorySystem.getInventory ? inventorySystem.getInventory(senderJid) : null;
+      if (inv && (inv.class_change_ticket || inv.reroll_ticket)) {
+        const rm = inventorySystem.removeItem(senderJid, inv.class_change_ticket ? 'class_change_ticket' : 'reroll_ticket', 1);
+        ticketConsumed = !!(rm && rm.success);
+      }
+    } catch (e) { /* non-fatal */ }
+
+    // 💡 MOD CLASS UNLOCK: auto-grant ALL skills from the new class's tree
+    // at max level on the FIRST time taking this class. Mods are testing -
+    // they shouldn't have to grind skills to test a class. Re-taking a
+    // class keeps the skills already unlocked (no re-grant, no freebies).
+    let unlockedCount = 0;
+    if (firstTimeTaking) {
+        try {
+            const skillTree = require('../rpg/skillTree');
+            const SK = skillTree.SKILL_TREES || skillTree;
+            const tree = SK[targetClass.id.toUpperCase()];
+            if (tree && tree.trees) {
+                if (!user.skills) user.skills = {};
+                for (const [, treeData] of Object.entries(tree.trees)) {
+                    if (!treeData.skills) continue;
+                    for (const [skillId, skill] of Object.entries(treeData.skills)) {
+                        user.skills[skillId] = skill.maxLevel || 1;
+                        unlockedCount++;
+                    }
                 }
             }
-            // Also grant bonus skill points so they can respec if needed
-            user.skillPoints = (user.skillPoints || 0) + 20;
             economy.saveUser(senderJid);
+        } catch (e) {
+            console.error('[ModClass] skill unlock failed:', e.message);
         }
-    } catch (e) {
-        console.error('[ModClass] skill unlock failed:', e.message);
     }
 
+    const unlockLine = firstTimeTaking
+        ? `✨ *All ${unlockedCount} class skills unlocked at max level!*`
+        : `📚 Skills kept as-is (you already unlocked this class before).`;
     return await sock.sendMessage(chatId, {
-        text: BOT_MARKER + `✅ *CLASS SWITCHED (MOD)*\n\n👤 Your character: *${user.nickname}*\n🔄 *${oldClassName}* → ${targetClass.icon} *${targetClass.name}*\n📝 ${targetClass.desc || ''}\n\n✨ *All ${unlockedCount} class skills unlocked at max level!*\n💎 +20 bonus skill points granted\n\n_All other stats, items, and progress unchanged._`
+        text: BOT_MARKER + `✅ *CLASS SWITCHED (MOD)*\n\n👤 Your character: *${user.nickname}*\n🔄 *${oldClassName}* → ${targetClass.icon} *${targetClass.name}*\n📝 ${targetClass.desc || ''}\n\n${unlockLine}\n${ticketConsumed ? '🎫 Consumed 1 Class Change Ticket from your bag.' : ''}\n\n_No free skill points on class switches - use \`${prefix} mod giveskillpoints\` if needed._`
     });
 }
 

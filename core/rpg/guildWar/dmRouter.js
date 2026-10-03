@@ -14,6 +14,7 @@ const points = require('./points');
 const visibility = require('./visibility');
 const mapEngine = require('./mapEngine');
 const feed = require('./feed');
+const navCard = require('./navCard');
 const CFG = require('./config');
 const GuildWarEvent = require('../../models/GuildWarEvent');
 
@@ -33,10 +34,131 @@ function roomOf(eventDoc, player) {
     return eventDoc.rooms.find((r) => r.key === player.roomId);
 }
 
+// 💡 NAVIGATION OVERHAUL (owner): W = forward, A = left, S = back,
+// D = right - game-style controls. "w" now means FORWARD (it no longer
+// means west; west is still reachable via "west" / "left" / "a").
+// Full compass words (north/south/east/west) keep working.
 const MOVE_WORDS = {
-    n: 'n', north: 'n', s: 's', south: 's', e: 'e', east: 'e', w: 'w', west: 'w',
-    forward: 'n', back: 's', left: 'w', right: 'e',
+    n: 'n', north: 'n', s: 's', south: 's', e: 'e', east: 'e',
+    w: 'n', a: 'w', d: 'e',
+    west: 'w', forward: 'n', back: 's', left: 'w', right: 'e',
 };
+const MOVE_TOKEN_RE = 'n|north|s|south|e|east|w|west|a|d|forward|back|left|right';
+
+// ── exits of the current room, for the visual navigation card ──
+async function computeExits(eventDoc, player) {
+    const topo = state.topologyOf(eventDoc);
+    const DIRS = [
+        { dir: 'n', rel: 'forward' },
+        { dir: 'e', rel: 'right' },
+        { dir: 's', rel: 'back' },
+        { dir: 'w', rel: 'left' },
+    ];
+    const discovered = new Set(player.discovered || []);
+    return DIRS.map(({ dir, rel }) => {
+        const dest = mapEngine.step(topo, player.roomId, dir);
+        if (!dest) return { dir, rel, edge: false };
+        const nr = (eventDoc.rooms || []).find((r) => r.key === dest);
+        return {
+            dir, rel, edge: true, known: discovered.has(dest),
+            kind: nr ? nr.type : null, cleared: nr ? nr.state === 'CLEARED' : false, key: dest,
+        };
+    });
+}
+
+async function navCardFor(eventDoc, player, room, prefix) {
+    return navCard.renderNavCard({
+        exits: await computeExits(eventDoc, player),
+        roomType: room ? room.type : null,
+        world: eventDoc.deadWorld,
+        prefix,
+    });
+}
+
+// ── ROOM ENTRY PRESENTATION (owner: "reactive and visual") ──
+// Order on EVERY room entry (move, look, first room):
+//   1. the MAP, clearly marking where the player is,
+//   2. the room-TYPE card (what kind of place am I entering),
+//   3. the encounter SCENE image (player standing in the room),
+//   with short captions instead of text walls. Puzzle rooms append the
+//   actual game board. Returns {} - everything was already sent.
+async function presentRoom(sock, chatId, BOT_MARKER, ctxDoc, me, newRoom, opts = {}) {
+    const prefix = opts.prefix || '.';
+    const withMap = opts.withMap !== false;
+    const send = async (payload) => {
+        try { await sock.sendMessage(chatId, payload); } catch (e) { /* best-effort */ }
+    };
+
+    const theme = encounters.worldTheme((newRoom.payload && newRoom.payload.theme) || eventDocWorldOf(ctxDoc));
+    const meta = navCard.typeMeta(newRoom.type);
+
+    // 1) map first - "clearly indicate where the player currently is"
+    if (withMap) {
+        try {
+            const fresh = await state.getEvent(ctxDoc.eventId, { fresh: true });
+            const freshMe = fresh.players.find((p) => p.jid === me.jid) || me;
+            const renderer = require('./mapRenderer');
+            const extras = visibility.extrasFor(fresh, freshMe, guildLevelOf(fresh, freshMe));
+            const buf = await renderer.renderRuinsMap(fresh, freshMe, { mates: extras.mates, enemyPings: extras.enemyPings });
+            if (buf) {
+                await send({ image: buf, caption: BOT_MARKER + `📍 *YOU ARE HERE* - ${meta.label} (chamber ${newRoom.key})` });
+            }
+        } catch (e) {
+            console.error('[RuinsNav] map render failed (non-fatal):', e?.message);
+        }
+    }
+
+    const intro = await encounters.roomIntro(ctxDoc, me, newRoom);
+
+    // meeting lines (kept short - they are gameplay-critical)
+    const others = (newRoom.occupants || []).filter((j) => j !== me.jid)
+        .map((j) => (ctxDoc.players || []).find((p) => p.jid === j)).filter(Boolean);
+    const foes = others.filter((o) => o.guildId !== me.guildId);
+    const mates = others.filter((o) => o.guildId === me.guildId);
+    let social = '';
+    if (mates.length) social += `\n\n🤝 ${mates.map((m) => m.name).join(', ')} of your guild ${mates.length > 1 ? 'are' : 'is'} here - fight together for a shared reward.`;
+    if (foes.length) social += `\n\n⚠️ ${foes.map((f) => f.name).join(', ')} (${foes[0].guildName}) ${foes.length > 1 ? 'are' : 'is'} here - rival guild. \`challenge @name\` or move carefully.`;
+
+    // 2) room-type card - what am I entering? (payload-specific flavour body,
+    // action hint as caption)
+    let typeBuf = null;
+    try {
+        typeBuf = await navCard.renderRoomTypeCard({
+            roomType: newRoom.type,
+            world: theme.name,
+            ring: newRoom.ring,
+            landmarkName: (newRoom.payload && newRoom.payload.landmarkName) || null,
+            cleared: newRoom.state === 'CLEARED',
+            body: intro.cardBody || null,
+            prefix,
+        });
+    } catch (e) { /* best-effort */ }
+    if (typeBuf) {
+        const typeCaption = intro.cardAction || (intro.text || '').split('\n')[0];
+        await send({ image: typeBuf, caption: BOT_MARKER + typeCaption });
+    }
+
+    // 3) the encounter scene (player standing in the room)
+    if (intro.image) {
+        await send({ image: intro.image, caption: BOT_MARKER + ((intro.text || '') + social).trim() });
+    } else if (typeBuf) {
+        // combat rooms: battle image comes later from startRoomCombat - the
+        // type card + one short line is the entry visual.
+        if (social) await send({ text: BOT_MARKER + social.trim() });
+    } else if (intro.text || social) {
+        await send({ text: BOT_MARKER + ((intro.text || '') + social).trim() });
+    }
+
+    // 4) puzzle rooms: the actual game board rides last, up close.
+    if (intro.extraImage) {
+        await send({ image: intro.extraImage, caption: BOT_MARKER + '_the mechanism, up close_' });
+    }
+    return {};
+}
+
+function eventDocWorldOf(doc) {
+    return (doc && doc.deadWorld) || 'ember';
+}
 
 // main entry: returns null if this DM text is not a Ruins action (bot falls
 // through to other handlers); otherwise { text, image?, mentions? }
@@ -52,7 +174,7 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
         : lower.replace(/^\.j\s*/, '');
 
     // ── ruins action grammar: any DM verb this router understands ──
-    const QUIET_ACTION_RE = /^(?:look|l|where(?:\s?am\s?i)?|map|gw map|relics|bag|status|score|rejoin|return|quit|leave|exit|accept|flee|handin(?:\s\S.*)?|use(?:\s\S.*)?|challenge(?:\s\S.*)?|share map(?:\s\S.*)?|move\s+(?:n|north|s|south|e|east|w|west|forward|back|left|right)|(?:n|north|s|south|e|east|w|west|forward|back|left|right))$/;
+    const QUIET_ACTION_RE = new RegExp(`^(?:look|l|where(?:\\s?am\\s?i)?|map|gw map|paths|relics|bag|status|score|rejoin|return|quit|leave|exit|accept|flee|handin(?:\\s\\S.*)?|use(?:\\s\\S.*)?|challenge(?:\\s\\S.*)?|share map(?:\\s\\S.*)?|move\\s+(?:${MOVE_TOKEN_RE})|(?:${MOVE_TOKEN_RE}))$`);
 
     const eventDoc = await getEventForPlayer(senderJid);
     if (!eventDoc) {
@@ -73,7 +195,7 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
             return { text: `🕊️ *No war is registering right now.*\nMods raise the call in the GC: \`${prefix} gw start\`. Once a war opens, \`${prefix} gw join\` (or DM me \`join\`) gets you in.` };
         }
         if (QUIET_ACTION_RE.test(norm)) {
-            return { text: `🕯️ *The Ruins stand quiet.* No war is running right now.\n\nWhen one deploys, my DMs become your game screen: \`look\`, \`move n/s/e/w\`, \`map\`, \`relics\`, \`handin\`, \`challenge @name\`, \`status\`, \`quit\`.\nMods start it with \`${prefix} gw start\` - players join with \`${prefix} gw join\`.` };
+            return { text: `🕯️ *The Ruins stand quiet.* No war is running right now.\n\nWhen one deploys, my DMs become your game screen: \`look\`, \`move w/a/s/d\` (or \`move forward/left/back/right\`), \`map\`, \`paths\`, \`relics\`, \`handin\`, \`challenge @name\`, \`status\`, \`quit\`.\nMods start it with \`${prefix} gw start\` - players join with \`${prefix} gw join\`.` };
         }
         return null;
     }
@@ -109,7 +231,7 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
     const touch = () => state.updatePlayer(eventDoc.eventId, senderJid, {}, { lastActionAt: Date.now() });
 
     // ── movement ──
-    const moveMatch = /^(?:move\s+)?(n|north|s|south|e|east|w|west|forward|back|left|right)$/.exec(norm);
+    const moveMatch = new RegExp(`^(?:move\\s+)?(${MOVE_TOKEN_RE})$`).exec(norm);
     if (moveMatch) {
         const topo = state.topologyOf(eventDoc);
         const dir = MOVE_WORDS[moveMatch[1]];
@@ -137,32 +259,22 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
         const ctxDoc = await state.getMoveContext(eventDoc.eventId, dest);
         const me = { ...player, roomId: dest, prevRoomId: player.roomId };
         const newRoom = ctxDoc.room;
-        const intro = await encounters.roomIntro(ctxDoc, me, newRoom);
-
-        // meeting other players
-        const others = (newRoom.occupants || []).filter((j) => j !== senderJid)
-            .map((j) => (ctxDoc.players || []).find((p) => p.jid === j)).filter(Boolean);
-        const foes = others.filter((o) => o.guildId !== me.guildId);
-        const mates = others.filter((o) => o.guildId === me.guildId);
-        const lines = [intro.text];
-        if (mates.length) lines.push(`🤝 Your guildmate${mates.length > 1 ? 's' : ''} ${mates.map((m) => m.name).join(', ')} ${mates.length > 1 ? 'are' : 'is'} here - work together for a shared reward.`);
-        if (foes.length) lines.push(`⚠️ ${foes.map((f) => `${f.name} of ${f.guildName}`).join(', ')} ${foes.length > 1 ? 'are' : 'is'} here - rival guild. \`challenge @${foes[0].name}\` or move carefully... (they may challenge YOU).`);
-        const fullText = lines.join('\n\n');
-
-        // ⚔️ puzzle rooms: intro scene first, then the ACTUAL game board card.
-        // Both sent here so the order is guaranteed; empty return keeps the
-        // engine from double-sending.
-        if (intro.extraImage) {
-            try {
-                if (intro.image) await sock.sendMessage(chatId, { image: intro.image, caption: BOT_MARKER + fullText });
-                else await sock.sendMessage(chatId, { text: BOT_MARKER + fullText });
-                await sock.sendMessage(chatId, { image: intro.extraImage, caption: BOT_MARKER + '_the mechanism, up close_' });
-            } catch (e) { /* best-effort: text fallback below */
-                return { text: fullText };
-            }
-            return {};
+        // 💡 NAVIGATION OVERHAUL: map first (you are here), then the room-type
+        // card, then the encounter scene - short captions, no text walls.
+        try {
+            return await presentRoom(sock, chatId, BOT_MARKER, ctxDoc, me, newRoom, { prefix, withMap: true });
+        } catch (e) {
+            console.error('[RuinsNav] presentRoom failed, falling back to text:', e?.message);
+            const intro = await encounters.roomIntro(ctxDoc, me, newRoom);
+            return { text: intro.text, image: intro.image || undefined };
         }
-        return { text: fullText, image: intro.image || undefined };
+    }
+
+    // ── visual navigation card (also sent after every resolved encounter) ──
+    if (/^paths$/.test(norm)) {
+        const room = roomOf(eventDoc, player);
+        const buf = await navCardFor(eventDoc, player, room, prefix);
+        return { text: `🧭 Your paths from chamber ${player.roomId}.`, image: buf };
     }
 
     // ── personal map ──
@@ -180,16 +292,15 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
         const ctxDoc = await state.getMoveContext(eventDoc.eventId, player.roomId);
         if (!ctxDoc || !ctxDoc.room) return { text: 'You are between chambers...' };
         const me = player;
-        const intro = await encounters.roomIntro(ctxDoc, me, ctxDoc.room);
-        if (intro.extraImage) {
-            try {
-                if (intro.image) await sock.sendMessage(chatId, { image: intro.image, caption: BOT_MARKER + (intro.text || '') });
-                else await sock.sendMessage(chatId, { text: BOT_MARKER + (intro.text || '') });
-                await sock.sendMessage(chatId, { image: intro.extraImage, caption: BOT_MARKER + '_the mechanism, up close_' });
-                return {};
-            } catch (e) { return { text: intro.text }; }
+        // 💡 NAVIGATION OVERHAUL: same visual flow as a move - map with
+        // "you are here" first, room-type card, then the scene.
+        try {
+            return await presentRoom(sock, chatId, BOT_MARKER, ctxDoc, me, ctxDoc.room, { prefix, withMap: true });
+        } catch (e) {
+            console.error('[RuinsNav] presentRoom(look) failed, falling back to text:', e?.message);
+            const intro = await encounters.roomIntro(ctxDoc, me, ctxDoc.room);
+            return { text: intro.text, image: intro.image || undefined };
         }
-        return { text: intro.text, image: intro.image || undefined };
     }
 
     // ── relics ──
@@ -283,8 +394,31 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
                 const started = await encounters.startRoomCombat(sock, chatId, player, eventDoc, room, { groq: null });
                 return { text: started.success ? null : started.msg };
             }
-            // ⚔️ changed room: the cleared-state scene rides the result text
-            if (res.afterImage) return { text: res.text, image: res.afterImage };
+            // ⚔️ changed room: the cleared-state scene rides the result text...
+            if (res.afterImage) {
+                try {
+                    await sock.sendMessage(chatId, { image: res.afterImage, caption: BOT_MARKER + (res.text || '') });
+                } catch (e) {
+                    return { text: res.text };
+                }
+                // 💡 NAVIGATION OVERHAUL: ...and the moment the encounter is
+                // resolved, the player gets the VISUAL choice of where to go
+                // next instead of a wall of exit text.
+                try {
+                    const freshRoomDoc = await GuildWarEvent.findOne(
+                        { eventId: eventDoc.eventId, 'rooms.key': player.roomId },
+                        { rooms: { $elemMatch: { key: player.roomId } } }
+                    ).lean();
+                    const freshRoom = freshRoomDoc && freshRoomDoc.rooms && freshRoomDoc.rooms[0];
+                    if (freshRoom && freshRoom.state === 'CLEARED') {
+                        const navBuf = await navCardFor(eventDoc, player, freshRoom, prefix);
+                        if (navBuf) await sock.sendMessage(chatId, { image: navBuf, caption: BOT_MARKER + '🧭 *The way onward is clear.* Choose your path:' });
+                    }
+                } catch (navErr) {
+                    console.error('[RuinsNav] post-resolve nav card failed (non-fatal):', navErr?.message);
+                }
+                return {};
+            }
             return { text: res.text };
         }
     }
@@ -400,4 +534,4 @@ function displayName(jid) {
     } catch (e) { return String(jid).split('@')[0]; }
 }
 
-module.exports = { handleDM, getEventForPlayer, displayName };
+module.exports = { handleDM, getEventForPlayer, displayName, navCardFor, computeExits };

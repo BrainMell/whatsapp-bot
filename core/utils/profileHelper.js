@@ -8,6 +8,10 @@ const botConfig = require('../../botConfig');
 async function buildCardData(userId, userName, pfpUrl = "") {
     // Initialize class if needed
     economy.initializeClass(userId);
+    // 💡 FIX 2026-10-03 (owner "Adventurer" class bug): wait for the async
+    // custom-class rehydration before resolving - Go profile cards used to
+    // render "Adventurer" for custom-class players after a fresh boot.
+    try { await classSystem.ensureCustomClassesLoaded(); } catch (e) { /* non-fatal */ }
 
     const sheet = progression.getCharacterSheet(userId);
     const economyUser = economy.getUser(userId);
@@ -28,6 +32,8 @@ async function buildCardData(userId, userName, pfpUrl = "") {
         nickname: economyUser.nickname || userName,
         whatsappName: economyUser.profile?.whatsappName || userName,
         level: sheet.level || 1,
+        // 💡 SILVER VEIL (2026-10-03): Go renders "??" when levelHidden is set.
+        levelHidden: !!economyUser.levelVeil,
         xp: sheet.xpProgress || 0,
         xpNeeded: sheet.xpForThisLevel || 100,
         gp: sheet.gp || 0,

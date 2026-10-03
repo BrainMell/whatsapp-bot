@@ -396,7 +396,7 @@ async function renderWarHelpCard(opts = {}) {
     ctx.fillText('ONCE DEPLOYED, ACT IN MY DMs', W / 2, H - 126);
     ctx.fillStyle = PAL.ink;
     ctx.font = '16px "IM Fell"';
-    ctx.fillText('look · move n/s/e/w · map · relics · handin · challenge @name · status · quit', W / 2, H - 100);
+    ctx.fillText('look · move w/a/s/d · map · paths · relics · handin · challenge @name · quit', W / 2, H - 100);
 
     ctx.font = 'italic 15px "IM Fell Italic"';
     ctx.fillStyle = PAL.inkSoft;
@@ -457,7 +457,7 @@ async function renderWarStartCard(opts = {}) {
     // how-you-play rows: verb (Cinzel, ink) + what it does (IM Fell, soft)
     const rows = [
         ['look', 'See the chamber you stand in.'],
-        ['move n/s/e/w', 'Travel between chambers. Bare  e  works too.'],
+        ['move w/a/s/d', 'W forward · A left · S back · D right. Or: move forward/left/back/right.'],
         ['map', 'Your chart of the Ruins - fog lifts as you explore.'],
         ['relics  ·  handin all', 'Carried relics are banked for guild GP.'],
         ['challenge @name', 'Duel a rival standing in your room.'],

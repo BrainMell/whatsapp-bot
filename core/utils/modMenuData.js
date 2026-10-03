@@ -30,7 +30,9 @@
 
 const MOD_MENU = {
   RPG: {
-    name: "RPG Tools",
+    // 💡 2026-10-03 owner: mod menu uses singular simple word names -
+    // no ampersands, no grouped labels like "RPG Tools"/"Group Tools".
+    name: "RPG",
     emoji: "🧬",
     tier: "rpg",
     commands: [
@@ -57,7 +59,7 @@ const MOD_MENU = {
   },
 
   FORGE: {
-    name: "Forge & Sandbox",
+    name: "Forge",
     emoji: "🏗️",
     tier: "rpg",
     commands: [
@@ -100,7 +102,7 @@ const MOD_MENU = {
   },
 
   TESTERS: {
-    name: "Testers & Issues",
+    name: "Testers",
     emoji: "🧪",
     tier: "rpg",
     commands: [
@@ -119,7 +121,7 @@ const MOD_MENU = {
   },
 
   QUIZ: {
-    name: "Quiz Tools",
+    name: "Quiz",
     emoji: "🎯",
     tier: "quiz",
     commands: [
@@ -208,7 +210,7 @@ const MOD_MENU = {
   },
 
   GROUP: {
-    name: "Group Tools",
+    name: "Group",
     emoji: "👥",
     tier: "any",
     commands: [
@@ -291,7 +293,7 @@ const MOD_TIPS = [
   `\`{p} debug\` dumps live internals - first stop when something feels off.`,
   `After manual DB edits, \`{p} reloaduser @user\` flushes the cache.`,
   `Target anyone with @mention, a reply, or omit it to target yourself.`,
-  `RPG tools run under \`{p} mod <command>\`; cards, system and group tools run standalone - each entry shows its real form.`,
+  `RPG commands run under \`{p} mod <command>\`; cards, system and group commands run standalone - each entry shows its real form.`,
   `Group commands (warn/mute/kick) also need the bot to be a WhatsApp group admin.`,
   `\`{p} spawn\` accepts card IDs or fuzzy names - partial works.`,
   `Audit \`{p} banlist\` and \`{p} blocklist\` now and then.`,

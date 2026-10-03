@@ -1242,24 +1242,44 @@ function getAllClasses() {
     return { ...STARTER_CLASSES, ...EVOLVED_CLASSES, ...CUSTOM_CLASSES };
 }
 
-// Rehydrate persisted custom classes. Fire-and-forget at module load - mongoose
-// buffers the query until the connection is up; a failure just means this boot
-// runs with code-defined classes only (same policy as the enemy editor).
-(async function _loadCustomClasses() {
-    try {
-        const System = require('../models/System');
-        const doc = await System.findOne({ key: CUSTOM_CLASSES_KEY }).lean();
-        if (doc && doc.value && typeof doc.value === 'object') {
-            const ids = Object.keys(doc.value);
-            Object.assign(CUSTOM_CLASSES, doc.value);
-            if (ids.length) {
-                console.log(`🎭 [classSystem] loaded ${ids.length} custom class(es) from DB: ${ids.join(', ')}`);
+// Rehydrate persisted custom classes.
+// 💡 FIX 2026-10-03 (owner "Adventurer" class bug): this used to be a single
+// fire-and-forget attempt - one transient DB error at boot and the bot ran
+// with code-defined classes only, so EVERY player holding a custom class
+// (e.g. HEAVEN_S_CONDUIT, KIRK) rendered as "Adventurer" on cards/captions
+// and silently fell back to generic stats in combat. The load is now
+// memoized with retries, and profile/combat render paths can await
+// ensureCustomClassesLoaded() before resolving a class.
+let _customClassesLoad = null;
+function ensureCustomClassesLoaded() {
+    if (!_customClassesLoad) {
+        _customClassesLoad = (async () => {
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    const System = require('../models/System');
+                    const doc = await System.findOne({ key: CUSTOM_CLASSES_KEY }).lean();
+                    if (doc && doc.value && typeof doc.value === 'object') {
+                        const ids = Object.keys(doc.value);
+                        Object.assign(CUSTOM_CLASSES, doc.value);
+                        if (ids.length) {
+                            console.log(`🎭 [classSystem] loaded ${ids.length} custom class(es) from DB: ${ids.join(', ')}`);
+                        }
+                    }
+                    return;
+                } catch (e) {
+                    if (attempt === 3) {
+                        console.error('[classSystem] custom class load failed after 3 attempts (continuing):', e.message);
+                    } else {
+                        await new Promise((r) => setTimeout(r, 2000 * attempt));
+                    }
+                }
             }
-        }
-    } catch (e) {
-        console.error('[classSystem] custom class load failed (continuing without):', e.message);
+        })();
     }
-})();
+    return _customClassesLoad;
+}
+// Kick off at boot (non-blocking); failures now retry instead of giving up.
+ensureCustomClassesLoaded();
 
 /**
  * Register + persist a mod-created class. Throws on invalid input so the
@@ -1302,8 +1322,24 @@ async function registerCustomClass(classData) {
 }
 
 function getClassById(classId) {
+    // 💡 FIX 2026-10-03 (owner "Adventurer" class bug): a few legacy user
+    // documents store the class as an OBJECT ({ id, name }) instead of the
+    // id string. Every reader used to hand that raw value here and got null
+    // back, which cascaded into the "Adventurer" fallback across captions
+    // and card images (while combat separately coerced to APPRENTICE, so the
+    // two systems disagreed). Normalize object/string input once, here, so
+    // every card style and every stat path resolves the SAME class data.
+    if (classId && typeof classId === 'object') {
+        classId = classId.id || classId.name || null;
+    }
+    if (!classId || typeof classId !== 'string') return null;
     const allClasses = getAllClasses();
-    return allClasses[classId] || null;
+    return (
+        allClasses[classId] ||
+        allClasses[classId.toUpperCase()] ||
+        allClasses[classId.toLowerCase()] ||
+        null
+    );
 }
 
 function getRandomStarterClass() {
@@ -1448,6 +1484,7 @@ module.exports = {
     CLASS_SHOP_ITEMS,
     getAllClasses,
     getClassById,
+    ensureCustomClassesLoaded,
     registerCustomClass,
     getRandomStarterClass,
     isFighterLineage,

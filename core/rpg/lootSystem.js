@@ -1017,6 +1017,12 @@ const ITEM_DATABASE = {
     'repair_kit_master': { name: 'Master Repair Kit', description: 'Fully restores durability to one equipped item.', rarity: 'RARE', value: 3000, type: 'CONSUMABLE', usable: true },
     
     // --- SPECIALS ---
+    // 💡 NEW RUINS REWARD (2026-10-03, owner request): an item that HIDES the
+    // player's level. Using it toggles a persistent veil state (user.levelVeil);
+    // while veiled, every card/caption/image shows "??" instead of the level.
+    // The effect is intentional (player-chosen) and tied to the item/state -
+    // not a hardcoded exception anywhere.
+    'silver_veil': { name: 'Silver Veil Charm', description: 'A whisper-thin silver charm. Use it to veil (or unveil) your level from every card and chart.', rarity: 'MYTHIC', value: 12000, type: 'SPECIAL', usable: true, effect: 'toggle_level_veil' },
     'essence_mirror': { name: 'Essence Mirror', description: 'Mirror skills from other classes.', rarity: 'LEGENDARY', value: 50000, type: 'ITEM' },
     'mirror_essence': { name: 'Mirror Essence', description: 'Crystallized dark power.', rarity: 'LEGENDARY', value: 5000, type: 'MATERIAL' },
 

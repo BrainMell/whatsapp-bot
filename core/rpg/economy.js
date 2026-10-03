@@ -2574,6 +2574,15 @@ module.exports = {
   setPersistentEnergy,
   healToFull,
 
+  // 💡 Persistent temp effects (2026-10-03, elixir lifecycle fix)
+  grantEffect,
+  getActiveEffect,
+  hasActiveEffect,
+  grantFullRestore,
+
+  // 💡 Silver Veil (2026-10-03, level hiding)
+  displayLevel,
+
   // 💡 FIX 2026-08-03: Mention display helpers - resolve LID→phone, use nicknames
   getDisplayName,
   getMentionJid,
@@ -2657,6 +2666,70 @@ function setPersistentHP(userId, hp, maxHP) {
   user.stats.currentHP = Math.max(0, Math.min(maxHP, Math.floor(hp)));
   user.stats.hpTs = Date.now(); // damage re-anchors the passive regen clock
   scheduleSave(userId);
+}
+
+// ============================================
+// ⏳ PERSISTENT TEMP EFFECTS (2026-10-03)
+// ============================================
+// 💡 FIX (owner class-change / elixir report): timed effects now have ONE
+// clearly defined lifecycle on the player document: granted with an absolute
+// expiry, validated by timestamp on every read, pruned lazily. They are
+// NEVER cleared or preserved because of quest/raid/class state changes -
+// a Full Restore Elixir bought before a raid keeps working (and keeps
+// auto-restoring) until its timer runs out, exactly what players expect.
+const FULL_RESTORE_EFFECT_MS = 60 * 60 * 1000; // 60 minutes of auto-full-heal
+
+function grantEffect(userId, effectId, durationMs) {
+  const user = getUser(userId);
+  if (!user) return 0;
+  if (!user.activeEffects || typeof user.activeEffects !== 'object' || Array.isArray(user.activeEffects)) {
+    user.activeEffects = {};
+  }
+  const expiresAt = Date.now() + Math.max(1000, Math.floor(Number(durationMs) || 0));
+  user.activeEffects[effectId] = expiresAt;
+  scheduleSave(userId);
+  return expiresAt;
+}
+
+// Returns the expiry timestamp (ms) of an active effect, or 0 if absent/expired.
+// Expired entries are pruned on read so the object never grows unbounded.
+function getActiveEffect(userId, effectId) {
+  const user = getUser(userId);
+  if (!user) return 0;
+  const fx = user.activeEffects;
+  if (!fx || typeof fx !== 'object' || Array.isArray(fx)) return 0;
+  const expiresAt = Number(fx[effectId]) || 0;
+  if (!expiresAt) return 0;
+  if (expiresAt <= Date.now()) {
+    delete fx[effectId];
+    scheduleSave(userId);
+    return 0;
+  }
+  return expiresAt;
+}
+
+function hasActiveEffect(userId, effectId) {
+  return getActiveEffect(userId, effectId) > 0;
+}
+
+// Convenience for the Full Restore Elixir: grants (or tops up) the 60-minute
+// auto-restore window and returns a player-facing description.
+function grantFullRestore(userId) {
+  const expiresAt = grantEffect(userId, 'full_restore', FULL_RESTORE_EFFECT_MS);
+  if (!expiresAt) return null;
+  const mins = Math.max(1, Math.round((expiresAt - Date.now()) / 60000));
+  return `✨ *Full Restore active!* HP auto-restores to full at the start and end of every fight for the next *${mins} minute${mins === 1 ? '' : 's'}* (survives quest ends - it runs on its own timer).`;
+}
+
+// 💡 SILVER VEIL (2026-10-03): single source of truth for "is this player's
+// level hidden?" - every caption/card/image renderer calls this instead of
+// improvising. Returns the level to DISPLAY, or null when veiled (renderers
+// show "??").
+function displayLevel(userId, level) {
+  const u = getUser(userId);
+  if (u && u.levelVeil) return null;
+  const n = Number(level);
+  return Number.isFinite(n) ? n : 1;
 }
 
 /**

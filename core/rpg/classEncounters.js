@@ -956,6 +956,33 @@ const BOSS_ENCOUNTERS = {
 };
 
 // ==========================================
+// 🎓 TUTORIAL ENEMY POOL (2026-10-03, owner tutorial request)
+// A dedicated, harmless training target for the interactive new-player
+// tutorial. With 0 ATK the dummy can never damage the player -
+// the tutorial fight is pure practice. findEnemyTemplate() indexes every
+// pool, so this is automatically resolvable by id.
+// ==========================================
+INFECTED_POOLS.TUTORIAL = {
+    theme: 'Training Hall',
+    description: 'The Guild Association practice yard',
+    levelRange: [1, 1],
+    COMMON: [
+        {
+            id: 'TRAINING_DUMMY',
+            name: 'Training Dummy',
+            icon: '🎯',
+            desc: 'A straw-stuffed practice target. It never hits back.',
+            stats: { hp: 80, atk: 0, def: 0, mag: 0, spd: 1, luck: 0, crit: 0 },
+            archetype: 'BRUTE',
+            xpReward: 30,
+            goldReward: [40, 60],
+            element: 'none',
+            tutorial: true,
+        },
+    ],
+};
+
+// ==========================================
 // 🎯 ENCOUNTER SELECTION
 // ==========================================
 
@@ -1312,7 +1339,13 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     // S-rank gives ~146× F-rank XP, dropping L75→L76 to ~10 clears.
     // Gold uses a gentler exponent (1.2) so the economy doesn't inflate
     // as fast as XP.
-    scaled.xpReward = Math.floor(enemy.xpReward * (1 + Math.pow(rankIndex, 1.4)));
+    // 💡 ECONOMY RETUNE 2026-10-03 (owner progression report): exponent
+    // 1.4 -> 0.8 on trash XP. At the old exponent a single S-rank trash mob
+    // paid ~40K XP (xpReward x 20.6) and a full carried run paid more XP
+    // than the entire L1->100 curve. 0.8 keeps S-rank trash ~5x F-rank
+    // instead of ~146x; the per-fight cap in guildAdventure.endCombat is
+    // the hard guarantee on top of this.
+    scaled.xpReward = Math.floor(enemy.xpReward * (1 + Math.pow(rankIndex, 0.8)));
     scaled.goldReward = [
         Math.floor(enemy.goldReward[0] * (1 + Math.pow(rankIndex, 1.2))),
         Math.floor(enemy.goldReward[1] * (1 + Math.pow(rankIndex, 1.2)))
@@ -1457,7 +1490,12 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
     //   SSS-rank: still ~1 boss kill per level
     // Trash XP (rankIndex^1.4 at L1155) is unchanged - this targets boss
     // XP only. Gold exponent (1.3) unchanged.
-    scaled.xpReward = Math.floor(xpRewardBase * (1 + Math.pow(rankIndex, 1.55)));
+    // 💡 ECONOMY RETUNE 2026-10-03: boss XP exponent 1.55 -> 0.75. The old
+    // exponent made an S boss worth ~248x its base XP (14.9M for ELDER_CHAOS
+    // = 6x the whole 2.4M L1->100 curve in ONE kill). 0.75 keeps bosses
+    // meaningfully above trash while the endCombat per-fight cap bounds the
+    // payout.
+    scaled.xpReward = Math.floor(xpRewardBase * (1 + Math.pow(rankIndex, 0.75)));
     scaled.goldReward = [
         Math.floor(goldRewardBase[0] * (1 + Math.pow(rankIndex, 1.3))),
         Math.floor(goldRewardBase[1] * (1 + Math.pow(rankIndex, 1.3)))

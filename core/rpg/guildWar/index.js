@@ -33,8 +33,10 @@ function installCombatHooks() {
             require('./index')._noteRetreat(meta.eventId, player.jid).catch((e) =>
                 console.error('[GW] onFlee note failed:', e?.message));
         },
-        // combat end → victory clears the room + awards; defeat respawns
-        async onEnd(state, victory, sessionKey) {
+        // combat end → victory clears the room + awards; defeat respawns.
+        // 💡 NAVIGATION OVERHAUL: on victory the player is DM'd the VISUAL
+        // navigation card (arrows for every open path) instead of text exits.
+        async onEnd(state, victory, sessionKey, sock) {
             const meta = state.ruinsMeta;
             if (!meta) return;
             const player = (state.players || [])[0];
@@ -79,6 +81,23 @@ function installCombatHooks() {
 
                     feed.queue(meta.eventId, 'normal',
                         `⚔️ ${me.name} cleared a ${room.type === 'core' ? 'World Core guardian' : 'guarded chamber'}${coopBonus ? ' (with guild help)' : ''}.`);
+
+                    // 💡 NAVIGATION OVERHAUL: post-victory visual path choice.
+                    if (sock) {
+                        try {
+                            const freshAfter = await state.getEvent(meta.eventId, { fresh: true });
+                            const meAfter = freshAfter.players.find((p) => p.jid === jid) || me;
+                            const roomAfter = freshAfter.rooms.find((r) => r.key === meAfter.roomId) || room;
+                            const dmRouter = require('./dmRouter');
+                            const navBuf = await dmRouter.navCardFor(freshAfter, meAfter, roomAfter, '.');
+                            await sock.sendMessage(state.chatId || jid, {
+                                image: navBuf,
+                                caption: '🧭 *The chamber is yours.* Choose your path:',
+                            });
+                        } catch (navErr) {
+                            console.error('[GW] victory nav card failed (non-fatal):', navErr?.message);
+                        }
+                    }
                 } else {
                     feed.queue(meta.eventId, 'minor', `${me.name} arrived a moment too late - the chamber was already taken.`);
                 }
@@ -204,7 +223,7 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
                     .map((g, i) => `${['🥇', '🥈', '🥉'][i] || '▫️'} *${g.name}:* ${g.points} GP`).join('\n') || '_no scores yet: chambers, relics and the World Core await_';
                 const minsLeft = ev.endsAt ? Math.round((ev.endsAt - Date.now()) / 60000) : null;
                 const caption = `⚔️ *GUILD WAR: THE RUINS* (${ev.type}, ${ev.state})\n` +
-                    `👥 ${ev.players.length} champions · ${minsLeft != null ? `${Math.max(0, minsLeft)} min left` : 'no clock'}\n\n${standings}\n\n_Act in my DMs: \`look\`, \`move n/s/e/w\`, \`map\`._`;
+                    `👥 ${ev.players.length} champions · ${minsLeft != null ? `${Math.max(0, minsLeft)} min left` : 'no clock'}\n\n${standings}\n\n_Act in my DMs: \`look\`, \`move w/a/s/d\`, \`map\`, \`paths\`._`;
                 try {
                     const buf = await notice.renderWarStatusCard({
                         type: ev.type, state: ev.state, players: ev.players.length,
@@ -331,7 +350,7 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
                 `\`${prefix} gw end\` mods: conclude and pay rewards\n` +
                 `\`${prefix} gw abort\` mods: shut it down, no rewards\n` +
                 `\`${prefix} gw rpg on|off\` admins: mark this GC for alignment calls\n\n` +
-                `In my DMs once deployed: \`look\`, \`move n/s/e/w\`, \`map\`, \`relics\`, \`handin\`, \`challenge @name\`, \`share map @mate\`, \`status\`, \`quit\`.`;
+                `In my DMs once deployed: \`look\`, \`move w/a/s/d\`, \`map\`, \`paths\`, \`relics\`, \`handin\`, \`challenge @name\`, \`share map @mate\`, \`status\`, \`quit\`.`;
             try {
                 const buf = await notice.renderWarHelpCard({ prefix });
                 await sock.sendMessage(chatId, { image: buf, caption });

@@ -1323,8 +1323,10 @@ function useItem(userId, rawItemId, targetSlot = null) {
             frac = frac * dur;
         }
 
-        if (currentHP >= maxHP) {
+        if (currentHP >= maxHP && itemKey !== 'elixir') {
             // Nothing to heal - never waste the player's item.
+            // (elixir bypasses this guard: at full HP it still grants its
+            // 60-minute Full Restore effect, so it's never a wasted use.)
             return {
                 success: false,
                 message: `❤️ *${itemInfo.name}* - you're already at full HP (${currentHP}/${maxHP})! Item not consumed.\n\nPotions shine *during* battle: when hurt in a fight, use \`${botConfig.getPrefix()} combat item <#>\`.`
@@ -1338,6 +1340,13 @@ function useItem(userId, rawItemId, targetSlot = null) {
         let healMsg = `🧪 *${itemInfo.name}* used!`;
         healMsg += `\n❤️ Restored *${actualHeal} HP* (${Math.round(frac * 100)}% of Max HP).`;
         healMsg += `\n❤️ HP: *${currentHP + actualHeal}/${maxHP}*`;
+        // 💡 FIX 2026-10-03 (owner elixir report): Full Restore Elixir now
+        // grants a REAL timed effect with a clear lifecycle instead of being
+        // just an instant heal whose benefit silently ended with the quest.
+        if (itemKey === 'elixir') {
+          const fxMsg = economy.grantFullRestore(userId);
+          if (fxMsg) healMsg += `\n${fxMsg}`;
+        }
         if (itemInfo.effect === 'regen') {
             healMsg += `\nℹ️ Out of battle the salve takes effect immediately (its ${Math.max(1, Number(itemInfo.duration) || 3)} turn ticks collapse into one application).`;
         }
@@ -1382,6 +1391,20 @@ function useItem(userId, rawItemId, targetSlot = null) {
         const enGain = Math.max(1, Math.floor(maxEn * enPct));
         user.energy = Math.min(maxEn, currentEn + enGain);
         effectMsg = `⚡ Restored **${enGain} Energy** (${Math.round(enPct * 100)}%)! (Now ${user.energy}/${maxEn})`;
+    }
+    else if (itemId === 'silver_veil' || itemInfo.effect === 'toggle_level_veil') {
+        // 💡 NEW RUINS REWARD (2026-10-03): toggle the level veil. NOT consumed
+        // - the charm stays in the bag as long as the veil is on; using it
+        // again unveils. The state is a single flag on the user doc that
+        // every card/caption/image renderer respects.
+        const veilUser = economy.getUser(userId);
+        if (!veilUser) return { success: false, message: '❌ You are not registered.' };
+        veilUser.levelVeil = !veilUser.levelVeil;
+        economy.saveUser(userId);
+        consumed = false; // charm persists - toggling is free
+        effectMsg = veilUser.levelVeil
+            ? `🫥 *SILVER VEIL RAISED.*\nYour level is now hidden - every card, caption and chart shows **??** in its place.\n\nUse the charm again to unveil.`
+            : `👁️ *SILVER VEIL LOWERED.*\nYour level is visible again on all cards and charts.`;
     }
     else if (itemId === 'class_change_ticket' || itemId === 'reroll_ticket') {
         const user = economy.getUser(userId);
