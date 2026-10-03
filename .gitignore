@@ -59,3 +59,4 @@ backups/
 core/data/quiz_pools/
 core/data/quiz_recent_used.json
 .gemini/
+scripts/_memmongo.pid

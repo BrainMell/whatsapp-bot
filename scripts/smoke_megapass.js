@@ -8,7 +8,7 @@ process.env.GW_TEST = "1";
 const path = require("path");
 const fs = require("fs");
 
-const ROOT = "/home/ubuntu/whatsapp-bot";
+const ROOT = process.env.BOT_ROOT || "/home/ubuntu/whatsapp-bot";
 const TS = Date.now();
 const A = `tutA${TS}@s.whatsapp.net`, B = `tutB${TS}@s.whatsapp.net`;
 const C = `tutC${TS}@s.whatsapp.net`, D = `tutD${TS}@s.whatsapp.net`;
