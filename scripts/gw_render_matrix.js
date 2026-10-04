@@ -65,6 +65,32 @@ const CASES = [
       room: { type: 'landmark', state: 'UNEXPLORED', payload: { landmarkName: 'The Pale Obelisk' } } },
     { name: 'variant_mossy', player: mkPlayer('3,2', '2,2'), exits: [['w'], ['e']],
       room: { type: 'empty', state: 'UNEXPLORED', variant: 'mossy', payload: {} } },
+    // ── Task 16: full POI-sprite coverage (discovery/reward/hazard/lore/
+    // anomaly/secret/puzzle) + smaller actor scale verification ──
+    { name: 'disc_intact', player: mkPlayer('1,2', '2,2'), exits: [['w'], ['e']],
+      room: { type: 'discovery', state: 'UNEXPLORED', payload: {} } },
+    { name: 'disc_dug', player: mkPlayer('1,2', '2,2'), exits: [['w'], ['e']],
+      room: { type: 'discovery', state: 'CLEARED', payload: {} } },
+    { name: 'reward_intact', player: mkPlayer('1,2', '2,2'), exits: [['w'], ['e']],
+      room: { type: 'reward', state: 'UNEXPLORED', payload: {} } },
+    { name: 'reward_open', player: mkPlayer('1,2', '2,2'), exits: [['w'], ['e']],
+      room: { type: 'reward', state: 'CLEARED', payload: {} } },
+    { name: 'hazard', player: mkPlayer('1,2', '2,2'), exits: [['w'], ['e']],
+      room: { type: 'hazard', state: 'UNEXPLORED', payload: {} } },
+    { name: 'lore', player: mkPlayer('1,2', '2,2'), exits: [['w'], ['e']],
+      room: { type: 'lore', state: 'UNEXPLORED', payload: {} } },
+    { name: 'anomaly', player: mkPlayer('1,2', '2,2'), exits: [['w'], ['e']],
+      room: { type: 'anomaly', state: 'UNEXPLORED', payload: {} } },
+    { name: 'secret', player: mkPlayer('1,2', '2,2'), exits: [['w'], ['e']],
+      room: { type: 'secret', state: 'UNEXPLORED', payload: {} } },
+    { name: 'core_boss', player: mkPlayer('1,2', '2,2'), exits: [['w'], ['e']],
+      room: { type: 'core', state: 'ACTIVE', payload: {} } },
+    { name: 'lore_e', player: mkPlayer('3,2', '2,2'), exits: [['w'], ['e']],
+      room: { type: 'lore', state: 'UNEXPLORED', payload: {} } },
+    { name: 'puzzle_board', player: mkPlayer('1,2', '2,2'), exits: [['w'], ['e']],
+      room: { type: 'puzzle', state: 'UNEXPLORED', payload: {} }, board: true },
+    { name: 'puzzle_board_e', player: mkPlayer('3,2', '2,2'), exits: [['w'], ['e']],
+      room: { type: 'puzzle', state: 'UNEXPLORED', payload: {} }, board: true },
 ];
 
 (async () => {
@@ -73,6 +99,20 @@ const CASES = [
         if (c.extraPlayers) eventDoc.players.push(...c.extraPlayers);
         const room = { key: '2,2', ring: 0, occupants: [], payload: {}, ...(c.room || {}) };
         const opts = { exits: exitsForKeys(eventDoc, c.player, c.exits), prefix: '.jk' };
+        if (c.board) {
+            // fake mechanism board (same IPC shape the real puzzle board uses)
+            const { createCanvas } = require('canvas');
+            const bc = createCanvas(520, 320);
+            const bx = bc.getContext('2d');
+            bx.fillStyle = '#171310'; bx.fillRect(0, 0, 520, 320);
+            bx.strokeStyle = '#FFD24A'; bx.lineWidth = 3; bx.strokeRect(8, 8, 504, 304);
+            bx.fillStyle = '#F5F0E1'; bx.font = 'bold 26px sans-serif'; bx.textAlign = 'center';
+            bx.fillText('MECHANISM RIDDLE', 260, 90);
+            bx.font = '18px sans-serif';
+            bx.fillText('I have cities but no houses,', 260, 160);
+            bx.fillText('mountains but no trees…', 260, 190);
+            opts.puzzleBoard = bc.toBuffer('image/png');
+        }
         try {
             const buf = await roomScene._renderInProcess(eventDoc, c.player, room, opts);
             fs.writeFileSync(path.join(OUT, c.name + '.png'), buf);

@@ -117,11 +117,13 @@ function entryDirOf(player) {
 }
 
 // perspective: the same floor-plane rule the enemy packs follow — the
-// farther back the feet, the smaller the actor. Calibrated so the classic
-// left-spot render keeps its old presence.
+// farther back the feet, the smaller the actor. Owner calibration pass
+// 2026-10-05: the first cut (205+145t → 205-350px) made actors tower over
+// the door arches — everyone read as a giant in the hall. Now ~78% of
+// that: characters stand clearly BELOW the arch mouths.
 function perspH(groundY) {
     const t = Math.max(0, Math.min(1, (groundY - 340) / (810 - 340)));
-    return Math.round(205 + 145 * t);
+    return Math.round(160 + 113 * t);
 }
 
 // ── enemy sprite pool (VERIFIED single sprites — sheet files excluded) ──
@@ -388,18 +390,19 @@ function planFor(eventDoc, player, room, exits) {
                 if (!zone) break;
                 const file = ENEMY_POOL[rng.int(0, ENEMY_POOL.length - 1)];
                 // farther rows slightly smaller (perspective) — but always a
-                // credible physical threat next to the champion
-                const h = Math.round(195 + (zone.y - 640) * 0.75 + (lvl >= 15 ? 22 : 0));
+                // credible physical threat next to the champion (heights
+                // rebalanced 2026-10-05 to match the smaller actor scale)
+                const h = Math.round(152 + (zone.y - 640) * 0.58 + (lvl >= 15 ? 18 : 0));
                 // monsters face the champion: native sprites look LEFT, so
                 // a monster standing LEFT of the champion flips to face right
                 plan.enemies.push({ file, x: zone.x + rng.int(-24, 24), y: zone.y, h, flip: zone.x < spot.x });
             }
         } else if (room.type === 'core') {
             const bx = spot.x > 700 ? 340 : 860;
-            plan.enemies.push({ file: BOSS_POOL[rng.int(0, BOSS_POOL.length - 1)], x: bx, y: 730, h: 330, flip: bx < spot.x, boss: true });
+            plan.enemies.push({ file: BOSS_POOL[rng.int(0, BOSS_POOL.length - 1)], x: bx, y: 730, h: 258, flip: bx < spot.x, boss: true });
         } else if (room.type === 'secret' && payloadGet(P, 'boss')) {
             const bx = spot.x > 700 ? 340 : 860;
-            plan.enemies.push({ file: BOSS_POOL[rng.int(0, BOSS_POOL.length - 1)], x: bx, y: 720, h: 290, flip: bx < spot.x, boss: true });
+            plan.enemies.push({ file: BOSS_POOL[rng.int(0, BOSS_POOL.length - 1)], x: bx, y: 720, h: 228, flip: bx < spot.x, boss: true });
         }
     }
 
@@ -656,14 +659,14 @@ async function drawRoomContent(ctx, room, plan) {
             // `dig` the rubble is GONE and the gold coins lie in its place.
             const propFile = room.state === 'CLEARED' ? 'cache_coins.png' : 'cache_rubble.png';
             glowSpot(ctx, ax, ay - 10, 90, room.state === 'CLEARED' ? 'rgba(255,215,90,0.20)' : 'rgba(255,200,80,0.14)');
-            await drawGroundedSprite(ctx, [GW_PROP_DIR], propFile, ax, ay, room.state === 'CLEARED' ? 96 : 150, { shadow: true });
+            await drawGroundedSprite(ctx, [GW_PROP_DIR], propFile, ax, ay, room.state === 'CLEARED' ? 76 : 118, { shadow: true });
             break;
         }
         case 'reward': {
             // old-world vault: the sealed reliquary chest as a real sprite
             glowSpot(ctx, ax, ay - 30, 100, 'rgba(255,215,90,0.20)');
             if (room.state !== 'CLEARED') {
-                await drawGroundedSprite(ctx, [GW_PROP_DIR], 'cache_chest.png', ax, ay, 190, { shadow: true });
+                await drawGroundedSprite(ctx, [GW_PROP_DIR], 'cache_chest.png', ax, ay, 150, { shadow: true });
             } else {
                 // opened/emptied: coins already claimed — faint scar only
                 glowSpot(ctx, ax, ay - 10, 60, 'rgba(255,215,90,0.10)');
@@ -671,22 +674,19 @@ async function drawRoomContent(ctx, room, plan) {
             break;
         }
         case 'hazard': {
-            // trapped passage: spike row + acid-green sheen on the floor
+            // trapped passage: the SPIKE TRAP as a real sprite (rusty iron
+            // row on a stone base) + acid-green sheen on the floor
             glowSpot(ctx, ax, ay - 10, 90, 'rgba(140,255,80,0.12)');
-            ctx.fillStyle = '#7d7a6a';
-            for (let i = 0; i < 5; i++) {
-                const sx = ax - 80 + i * 40;
-                ctx.beginPath();
-                ctx.moveTo(sx - 12, ay); ctx.lineTo(sx, ay - 34 - (i % 2) * 8); ctx.lineTo(sx + 12, ay);
-                ctx.closePath(); ctx.fill();
-            }
+            await drawGroundedSprite(ctx, [GW_PROP_DIR], 'hazard_spikes.png', ax, ay, 110, { shadow: true });
             ctx.fillStyle = 'rgba(140,255,80,0.10)';
             ctx.beginPath(); ctx.ellipse(ax, ay - 6, 110, 22, 0, 0, Math.PI * 2); ctx.fill();
             break;
         }
         case 'lore': {
-            // inscribed hall: warm glow band along the back wall + motes
+            // inscribed hall: the RUNE STELE as a real sprite (weathered
+            // stone tablet, teal glyphs), warm glow band + motes kept
             glowSpot(ctx, ax, 360, 150, 'rgba(120,220,240,0.14)');
+            await drawGroundedSprite(ctx, [GW_PROP_DIR], 'lore_stele.png', ax, ay, 175, { shadow: true });
             ctx.fillStyle = 'rgba(255,220,140,0.55)';
             ctx.font = '13px "Cinzel", sans-serif';
             for (let i = 0; i < 7; i++) {
@@ -698,64 +698,44 @@ async function drawRoomContent(ctx, room, plan) {
             break;
         }
         case 'anomaly': {
-            // world-thin hall: a shimmering rift standing on the floor
+            // world-thin hall: the shimmering RIFT as a real sprite standing
+            // on the floor, cool glow pooling under it
             glowSpot(ctx, ax, ay - 60, 120, 'rgba(90,120,255,0.20)');
-            const g = ctx.createLinearGradient(ax, ay - 190, ax, ay);
-            g.addColorStop(0, 'rgba(150,170,255,0.75)');
-            g.addColorStop(0.5, 'rgba(90,110,230,0.45)');
-            g.addColorStop(1, 'rgba(40,50,140,0.12)');
-            ctx.fillStyle = g;
-            ctx.beginPath(); ctx.ellipse(ax, ay - 95, 34, 95, 0, 0, Math.PI * 2); ctx.fill();
-            ctx.strokeStyle = 'rgba(190,200,255,0.5)'; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.ellipse(ax, ay - 95, 34, 95, 0, 0, Math.PI * 2); ctx.stroke();
+            await drawGroundedSprite(ctx, [GW_PROP_DIR], 'anomaly_rift.png', ax, ay, 230, { shadow: true });
             break;
         }
         case 'landmark': {
-            // the landmark itself: tall etched obelisk
+            // the landmark itself: the etched OBELISK as a real sprite
             const name = (typeof room.payload?.get === 'function' ? room.payload.get('landmarkName') : room.payload?.landmarkName) || '';
             glowSpot(ctx, ax, ay - 90, 110, 'rgba(200,210,255,0.10)');
-            ctx.fillStyle = '#3f3b33';
-            ctx.beginPath();
-            ctx.moveTo(ax - 38, ay); ctx.lineTo(ax - 22, ay - 210); ctx.lineTo(ax + 22, ay - 210); ctx.lineTo(ax + 38, ay);
-            ctx.closePath(); ctx.fill();
-            ctx.strokeStyle = 'rgba(220,200,150,0.35)'; ctx.lineWidth = 2;
-            for (let i = 1; i <= 4; i++) {
-                const ly = ay - i * 44;
-                ctx.beginPath(); ctx.moveTo(ax - 28 + i, ly); ctx.lineTo(ax + 28 - i, ly); ctx.stroke();
-            }
+            await drawGroundedSprite(ctx, [GW_PROP_DIR], 'landmark_obelisk.png', ax, ay, 260, { shadow: true });
             if (name) {
                 ctx.fillStyle = 'rgba(243,236,217,0.85)';
                 ctx.font = 'bold 15px "Cinzel", sans-serif';
                 ctx.textAlign = 'center';
-                ctx.fillText(String(name).slice(0, 22), ax, ay - 226);
+                ctx.fillText(String(name).slice(0, 22), ax, ay - 276);
                 ctx.textAlign = 'left';
             }
             break;
         }
         case 'secret': {
             if (!plan.enemies.length) {
-                // hidden chamber: radiant pedestal with the prize
+                // hidden chamber: the RELIC PEDESTAL as a real sprite — the
+                // prize stone with its glowing idol
                 glowSpot(ctx, ax, ay - 40, 110, 'rgba(240,110,230,0.18)');
-                ctx.fillStyle = STONE[1];
-                ctx.beginPath(); ctx.roundRect ? ctx.roundRect(ax - 34, ay - 24, 68, 26, 4) : ctx.rect(ax - 34, ay - 24, 68, 26); ctx.fill();
-                ctx.fillStyle = '#ffd24a';
-                ctx.beginPath(); ctx.arc(ax, ay - 44, 9, 0, Math.PI * 2); ctx.fill();
-                ctx.strokeStyle = 'rgba(255,210,74,0.65)'; ctx.lineWidth = 2;
-                ctx.beginPath(); ctx.arc(ax, ay - 44, 18, 0, Math.PI * 2); ctx.stroke();
+                await drawGroundedSprite(ctx, [GW_PROP_DIR], 'secret_relic.png', ax, ay, 150, { shadow: true });
             }
             break;
         }
         case 'puzzle': {
-            // glyph stones flanking the mechanism (the board overlays centre)
-            ctx.fillStyle = STONE[0];
-            for (const gx of [ax - 190, ax + 190]) {
-                ctx.beginPath(); ctx.roundRect ? ctx.roundRect(gx - 16, ay - 78, 32, 62, 8) : ctx.rect(gx - 16, ay - 78, 32, 62); ctx.fill();
-                ctx.fillStyle = 'rgba(90,170,255,0.6)';
-                ctx.font = '20px "Cinzel", sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText('ᚠ', gx, ay - 38);
-                ctx.fillStyle = STONE[0];
-                ctx.textAlign = 'left';
+            // carved RUNE STONES flanking the mechanism (the board overlays
+            // centre) — real sprites, mirrored for symmetry. Anchored just
+            // OUTSIDE the puzzle panel's footprint (drawPuzzleOverlay puts
+            // it at x 470-1030 / 170-730, y 452-812) so the stones read as
+            // the mechanism's flanking pillars, never swallowed by the board.
+            const boardX0 = (spot.x > 700) ? 170 : 470;
+            for (const [gx, flip] of [[boardX0 - 44, true], [boardX0 + 604, false]]) {
+                await drawGroundedSprite(ctx, [GW_PROP_DIR], 'puzzle_rune.png', gx, 726, 118, { shadow: true, flip });
             }
             glowSpot(ctx, ax, ay - 40, 90, 'rgba(90,170,255,0.12)');
             break;
