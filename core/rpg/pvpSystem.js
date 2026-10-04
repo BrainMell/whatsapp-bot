@@ -724,6 +724,23 @@ async function deployPvPSummons(duelState) {
 // finished - a killing blow processed twice paid the pot TWICE, and a
 // double-tapped flee applied penalties twice. This synchronous `processing`
 // guard (set before any await) makes re-entrant calls impossible.
+// ⚔️ RUINS DUELS (owner spec §15): cross-DM end declaration. The engine
+// echoes duel results into the ACTING player's chat only — regular duels
+// share one group chat, but ruins duelists fight from their OWN DMs, so the
+// other duelist never learned the duel had ended. Deliver the end card to
+// their DM too (fire-and-forget, never blocks the actor's reply).
+function _notifyOtherDuelist(sock, duel, senderJid, text, image) {
+    try {
+        if (!duel || !duel.ruins || !sock) return;
+        const other = (duel.players || []).find((p) => p && p.jid && p.jid !== senderJid);
+        if (!other) return;
+        const payload = (image && image.success && image.buffer)
+            ? { image: image.buffer, caption: text }
+            : { text };
+        sock.sendMessage(other.jid, payload).catch(() => {});
+    } catch (e) { /* non-fatal */ }
+}
+
 async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
     // ⚔️ RUINS: the actor may be in a cross-DM duel (virtual chat id)
     const duelForLock = activeDuels.get(chatId) || activeDuels.get(ruinsByPlayer.get(resolveJid(senderJid)));
@@ -735,8 +752,16 @@ async function handlePvPAction(sock, chatId, senderJid, action, target, m) {
         return await _handlePvPActionInner(sock, chatId, senderJid, action, target, m);
     } finally {
         // Clear only if this duel is still the live one (it's deleted on finish).
-        const stillLive = activeDuels.get(chatId);
-        if (duelForLock && stillLive === duelForLock) duelForLock.processing = false;
+        // ⚔️ RUINS FIX (S7 root cause): ruins duels are keyed by a VIRTUAL chat
+        // id (`ruins:…`) while the actor's chatId is their DM jid — so
+        // activeDuels.get(chatId) was always undefined here and `processing`
+        // was NEVER cleared. Every later action from EITHER player bounced off
+        // "⏳ Hold on - still processing" forever; the duel could never settle.
+        // Resolve the live key through the sender's ruins mapping instead.
+        const liveKey = activeDuels.get(chatId) === duelForLock
+            ? chatId
+            : ruinsByPlayer.get(resolveJid(senderJid));
+        if (duelForLock && liveKey && activeDuels.get(liveKey) === duelForLock) duelForLock.processing = false;
     }
 }
 
@@ -817,7 +842,9 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
         const result = await finishDuel(chatId, duel, opponent, currentPlayer);
         activeDuels.delete(duel?.chatId || chatId);
         const resultMsg = (result && result.message) ? result.message : (typeof result === 'string' ? result : '');
-        return { success: true, finished: true, message: statusMsg + '\n\n💀 *' + currentPlayer.name + '* died from status effects!\n\n' + resultMsg, image: result?.image || undefined };
+        const fullMsg = statusMsg + '\n\n💀 *' + currentPlayer.name + '* died from status effects!\n\n' + resultMsg;
+        _notifyOtherDuelist(sock, duel, resolvedSender, fullMsg, result?.image);
+        return { success: true, finished: true, message: fullMsg, image: result?.image || undefined };
     }
 
     if (skipTurn) {
@@ -1597,7 +1624,9 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
         const result = await finishDuel(chatId, duel, winner, loser);
         activeDuels.delete(duel?.chatId || chatId);
         const resultMsg = (result && result.message) ? result.message : (typeof result === 'string' ? result : '');
-        return { success: true, finished: true, message: actionResult + '\n\n' + resultMsg, image: result?.image || undefined };
+        const fullMsg = actionResult + '\n\n' + resultMsg;
+        _notifyOtherDuelist(sock, duel, resolvedSender, fullMsg, result?.image);
+        return { success: true, finished: true, message: fullMsg, image: result?.image || undefined };
     }
 
     // ── Advance turn ──────────────────────────────
@@ -2010,6 +2039,12 @@ async function generateDuelImage(duel) {
         {
             combatType: 'PVP',
             bypassQueue: true,
+            // ⚔️ RUINS DUELS (owner spec §15): duels that begin inside a Guild
+            // War room render IN that room — duel.ruinsBackground carries the
+            // room's own door-plate; regular duels keep the arena default.
+            backgroundPath: duel.ruinsBackground
+                ? `rpgasset/environment/${duel.ruinsBackground}`
+                : undefined,
             summons: duel.summons || [],
             action: {
                 attackerSide: 'player',

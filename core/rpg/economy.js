@@ -774,7 +774,7 @@ function addMoney(userId, amount, description = "Money Added") {
   user.wallet += val;
   // 💡 ANTI-INFLATION: clamp wallet to hard ceiling
   if (user.wallet > MAX_WALLET) user.wallet = MAX_WALLET;
-  user.stats.totalEarned += val;
+  user.stats.totalEarned = (Number(user.stats.totalEarned) || 0) + (Number(val) || 0);
 
   logTransaction(userId, description, val, user.wallet);
   // 💡 P4: Record canonical settlement (source = zeni created from nothing)
@@ -983,7 +983,7 @@ function sellItem(userId, itemId, quantity = 1) {
             }
         }
         user.wallet += total;
-        user.stats.totalEarned += total;
+        user.stats.totalEarned = (Number(user.stats.totalEarned) || 0) + (Number(total) || 0);
         scheduleSave(userId);
         return { success: true, msg: `💰 Sold ${count} items for ${getZENI()}${total.toLocaleString()}` };
     }
@@ -1011,7 +1011,7 @@ function sellItem(userId, itemId, quantity = 1) {
     } catch (e) {}
     const value = Math.floor(ITEMS[itemId].value * qty * sellMult);
     user.wallet += value;
-    user.stats.totalEarned += value;
+    user.stats.totalEarned = (Number(user.stats.totalEarned) || 0) + (Number(value) || 0);
     
     // 💡 GUILD CONTRIBUTION
     const guilds = require('./guilds');
@@ -1389,7 +1389,7 @@ function claimDaily(userId) {
   const totalReward = DAILY_REWARD + bonus;
   user.wallet += totalReward;
   user.lastDaily = now;
-  user.stats.totalEarned += totalReward;
+  user.stats.totalEarned = (Number(user.stats.totalEarned) || 0) + (Number(totalReward) || 0);
 
   logTransaction(userId, `Daily Reward${membershipLabel}`, totalReward, user.wallet);
 

@@ -8976,7 +8976,7 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                   ) {
                     const _gwVerb = String(txt).toLowerCase().slice(botConfig.getPrefix().length).trim();
                     const isWarVerb =
-                      /^(?:move\s+)?(?:forward|back|left|right|north|south|east|west|n|s|e|w|a|d)$/.test(_gwVerb) ||
+                      /^(?:move\s+)?(?:forward|back|left|right|north|south|east|west|n|s|e|w|a|d|foward|forwrd|faword|fwd|bck|bak)$/.test(_gwVerb) ||
                       /^(?:look|l|where|whereami|paths|map|mark|anchor|teleport|tp|recall|share\s+map|challenge|accept|flee|handin|rejoin|return|quit)\b/.test(_gwVerb);
                     if (isWarVerb) {
                       try {
@@ -10964,7 +10964,16 @@ _💡 Reply with another number from your search list!_`.trim();
 
                       // PvP Duel Intercept: If there is an active PvP duel and the sender is a player in it
                       const pvpDuel = pvpSystem.getDuel(chatId);
-                      const isSenderInPvP = pvpDuel && pvpDuel.players.some(p => p.jid === senderJid);
+                      // ⚔️ RUINS DUELS (owner spec §15): duels inside a Guild War
+                      // room are keyed by a VIRTUAL chat id, not the player's DM
+                      // jid — getDuel() can't see them. The duel-begin card
+                      // explicitly tells players to use `.j combat attack`, so
+                      // the intercept MUST resolve ruins duels per-player or the
+                      // documented command dead-ends into the adventure path.
+                      const _ruinsDuel = typeof pvpSystem.getRuinsDuelFor === 'function'
+                          ? pvpSystem.getRuinsDuelFor(senderJid)
+                          : null;
+                      const isSenderInPvP = (pvpDuel && pvpDuel.players.some(p => p.jid === senderJid)) || !!_ruinsDuel;
 
                       if (isSenderInPvP) {
                         let pvpAction = action;

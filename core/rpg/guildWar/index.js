@@ -128,11 +128,19 @@ function installCombatHooks() {
                         protectedUntil: Date.now() + CFG.COMBAT.RESPAWN_PROTECT_MS,
                         lastActionAt: Date.now(),
                     });
-                    feed.queue(meta.eventId, 'minor', `💀 ${player.name} fell in the Ruins - they will return at the edge (${freshLives} lives left).`);
+                    // ⚔️ WAR FEED (owner spec §20): a champion's death is an
+                    // EVENT, not a digest bullet — standalone, named, guilded,
+                    // with the stakes stated. Mirrors the owner's own example.
+                    feed.queue(meta.eventId, 'normal',
+                        `💀 *${player.name} of ${player.guildName || 'the unsworn'}* has fallen deep within the Ruins.\n` +
+                        `The dead world claims another life.\n` +
+                        `*${freshLives}* ${freshLives === 1 ? 'life' : 'lives'} remain${freshLives === 1 ? 's' : ''}.`);
                 } else {
                     await rooms.dropCarriedRelics(meta.eventId, jid, 'final death');
                     await state.updatePlayer(meta.eventId, jid, {}, { status: 'defeated', lives: 0 });
-                    feed.queue(meta.eventId, 'normal', `💀 ${player.name} has fallen for the last time this war.`);
+                    feed.queue(meta.eventId, 'normal',
+                        `💀 *${player.name} of ${player.guildName || 'the unsworn'}* has fallen for the last time this war.\n` +
+                        `The Ruins keep what they take — their carried relics lie where they fell.`);
                 }
             }
         },
@@ -223,7 +231,31 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
             // ⚔️ owner brief: DM every champion the start card ("the war has
             // begun + how you play") - fire and forget, never block the GC reply
             dmWarStartCards(sock, '\u200B', res.event, prefix).catch((e) => console.error('[GW] start-card DM:', e?.message));
-            return sock.sendMessage(chatId, { text: `⚔️ *DEPLOYED!* ${res.event.players.length} players, grid ${res.event.side}×${res.event.side}.\nPlayers: open my DMs and \`look\` around.` });
+
+            // ⚔️ STARTUP OVERHAUL (owner spec §5): the group announcement must
+            // feel like THE GUILD WAR HAS BEGUN — an event, not a debug log.
+            // No "N players, grid 8×8", no "look around" — the world, the
+            // stakes, and the fact that every champion's room already waits
+            // in their DMs.
+            const world = encounters.worldTheme(res.event.deadWorld);
+            const guildNames = [...new Set(res.event.players.map((p) => p.guildName).filter(Boolean))];
+            const guildLine = guildNames.length
+                ? guildNames.slice(0, 6).map((n) => `*${n}*`).join(' · ')
+                : 'the free companies';
+            const side = res.event.side || 8;
+            const deployText =
+                `⚔️ *THE GUILD WAR HAS BEGUN*\n\n` +
+                `${res.event.type === 'alignment' ? '🌐 *WORLD ALIGNMENT*' : '💀 *THE RUINS OF A DEAD WORLD*'}\n` +
+                `The ${world ? world.name : 'dead world'} opens its gates: ~${side * side} chambers of silent halls, sealed vaults and things that never finished dying.\n\n` +
+                `🚩 *Deploying now:* ${res.event.players.length} champion${res.event.players.length === 1 ? '' : 's'}\n` +
+                `${guildLine}\n\n` +
+                `📜 *How the war is fought*\n` +
+                `• Every champion's room is ALREADY WAITING in their DMs — the world shows itself.\n` +
+                `• Move: \`${prefix} move forward / left / right / back\` (bare words work too)\n` +
+                `• Clear chambers, unearth relics, hand them in for Guild Points\n` +
+                `• Meet rivals... or end them. The World Core crowns the boldest guild.\n\n` +
+                `🔥 This group is now the WAR FEED — falls, discoveries and standings will be reported here. Fight well.`;
+            return sock.sendMessage(chatId, { text: deployText });
         }
 
         case 'status': case 'score': {
@@ -239,7 +271,7 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
                     .map((g, i) => `${['🥇', '🥈', '🥉'][i] || '▫️'} *${g.name}:* ${g.points} GP`).join('\n') || '_no scores yet: chambers, relics and the World Core await_';
                 const minsLeft = ev.endsAt ? Math.round((ev.endsAt - Date.now()) / 60000) : null;
                 const caption = `⚔️ *GUILD WAR: THE RUINS* (${ev.type}, ${ev.state})\n` +
-                    `👥 ${ev.players.length} champions · ${minsLeft != null ? `${Math.max(0, minsLeft)} min left` : 'no clock'}\n\n${standings}\n\n_Act in my DMs: \`look\`, \`move w/a/s/d\`, \`map\`, \`paths\`._`;
+                    `👥 ${ev.players.length} champions · ${minsLeft != null ? `${Math.max(0, minsLeft)} min left` : 'no clock'}\n\n${standings}\n\n_Chambers open in my DMs — move with \`${prefix} move forward / left / right / back\`._`;
                 try {
                     const buf = await notice.renderWarStatusCard({
                         type: ev.type, state: ev.state, players: ev.players.length,
@@ -368,7 +400,7 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
                 `\`${prefix} gw end\` mods: conclude and pay rewards\n` +
                 `\`${prefix} gw abort\` mods: shut it down, no rewards\n` +
                 `\`${prefix} gw rpg on|off\` admins: mark this GC for alignment calls\n\n` +
-                `In my DMs once deployed: \`look\`, \`move w/a/s/d\`, \`map\`, \`paths\`, \`relics\`, \`handin\`, \`challenge @name\`, \`share map @mate\`, \`status\`, \`quit\`.`;
+                `In my DMs once deployed: \`map\`, \`move forward/left/back/right\`, \`paths\`, \`relics\`, \`handin\`, \`challenge @name\`, \`share map @mate\`, \`status\`, \`quit\`.`;
             try {
                 const buf = await notice.renderWarHelpCard({ prefix });
                 await sock.sendMessage(chatId, { image: buf, caption });
@@ -405,21 +437,65 @@ async function dmWarStartCards(sock, BOT_MARKER = '\u200B', event, prefix = '.')
         // auto-present the spawn room: MAP first (§2 order), then the scene
         // with the champion standing in it. deployOrder flag kept for any
         // caller that wants scene-first — default flow is map-first now.
+        let presented = null;
         try {
             const ctx = await state.getMoveContext(event.eventId, p.roomId);
             if (ctx && ctx.room) {
                 const me = ctx.players?.find?.((x) => x.jid === p.jid) || p;
+                presented = { ctx, me };
                 await dmRouter.presentRoom(sock, p.jid, BOT_MARKER, ctx, me, ctx.room, { prefix });
             }
         } catch (e) {
             console.error('[GW] spawn auto-present failed:', p.jid, e?.message);
+        }
+        // ⚔️ AUTO-ENCOUNTER AT DEPLOYMENT (owner spec §14: "the world reacts
+        // to the player; nobody has to poke the bot"): a champion who deploys
+        // into an unresolved combat/coop/core (or boss-sealed secret) chamber
+        // gets the encounter STARTED for them — the monster is standing in the
+        // room they were just shown, so the battle begins on its own. Without
+        // this, spawn-in-combat players were movement-locked with no session
+        // and no hint (the "blocked until resolved" dead-end).
+        try {
+            const ctx = presented ? presented.ctx : await state.getMoveContext(event.eventId, p.roomId);
+            const fresh = await state.getEvent(event.eventId, { fresh: true });
+            const meNow = fresh.players.find((x) => x.jid === p.jid) || p;
+            const roomNow = fresh.rooms.find((r) => r.key === meNow.roomId);
+            const autoCombat = ctx && roomNow && roomNow.state !== 'CLEARED' && (
+                ['combat', 'coop', 'core'].includes(roomNow.type)
+                || (roomNow.type === 'secret' && require('./encounters').payloadGet(roomNow.payload, 'boss'))
+            );
+            if (autoCombat) {
+                await require('./encounters').startRoomCombat(sock, p.jid, meNow, fresh, roomNow, { groq: null });
+            }
+        } catch (e) {
+            console.error('[GW] spawn auto-encounter failed (non-fatal):', p.jid, e?.message);
         }
         await new Promise((r) => setTimeout(r, 700)); // pace the deployment wave
     }
     return sent;
 }
 
+// ⚔️ ROOT-CAUSE FIX (the "war pays nothing" bug): installCombatHooks() was
+// exported but NO boot path ever called it — every ruins fight ran with DEAD
+// hooks: victories never cleared rooms, GP was never paid (standings sat at
+// 0), lives never dropped, defeat never respawned, the return map never came.
+// The hooks now self-install exactly once when this module is first required
+// (engine boot, sweeper, DM router — any entry point lights the fuse).
+let _hooksInstalled = false;
+function ensureCombatHooks() {
+    if (_hooksInstalled) return;
+    _hooksInstalled = true;
+    try {
+        installCombatHooks();
+        console.log('[GuildWar] ruins combat hooks installed');
+    } catch (e) {
+        _hooksInstalled = false;
+        console.error('[GuildWar] combat hook install failed:', e?.message);
+    }
+}
+ensureCombatHooks();
+
 module.exports = {
     CFG, state, feed, points, encounters, rooms, mapEngine,
-    installCombatHooks, handleGroupCommand, dmWarStartCards, _noteRetreat,
+    installCombatHooks, ensureCombatHooks, handleGroupCommand, dmWarStartCards, _noteRetreat,
 };

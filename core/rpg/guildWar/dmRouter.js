@@ -70,12 +70,16 @@ function roomOf(eventDoc, player) {
 // D = right - game-style controls. "w" now means FORWARD (it no longer
 // means west; west is still reachable via "west" / "left" / "a").
 // Full compass words (north/south/east/west) keep working.
+// ⚔️ TYPO TOLERANCE (owner brief §3: normalize "foward"): the owner's own
+// test literally typed `.j move foward` — typos must reach the same movement
+// system, never fall through to the generic pipeline.
 const MOVE_WORDS = {
     n: 'n', north: 'n', s: 's', south: 's', e: 'e', east: 'e',
     w: 'n', a: 'w', d: 'e',
     west: 'w', forward: 'n', back: 's', left: 'w', right: 'e',
+    foward: 'n', forwrd: 'n', faword: 'n', fwd: 'n', bck: 's', bak: 's',
 };
-const MOVE_TOKEN_RE = 'n|north|s|south|e|east|w|west|a|d|forward|back|left|right';
+const MOVE_TOKEN_RE = 'n|north|s|south|e|east|w|west|a|d|forward|back|left|right|foward|forwrd|faword|fwd|bck|bak';
 
 // ── exits of the current room, for the visual navigation card ──
 async function computeExits(eventDoc, player) {
@@ -256,7 +260,7 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
             return { text: `🕊️ *No war is registering right now.*\nMods raise the call in the GC: \`${prefix} gw start\`. Once a war opens, \`${prefix} gw join\` (or DM me \`join\`) gets you in.` };
         }
         if (QUIET_ACTION_RE.test(norm)) {
-            return { text: `🕯️ *The Ruins stand quiet.* No war is running right now.\n\nWhen one deploys, my DMs become your game screen: \`look\`, \`move w/a/s/d\` (or \`move forward/left/back/right\`), \`map\`, \`paths\`, \`relics\`, \`handin\`, \`challenge @name\`, \`status\`, \`quit\`.\nMods start it with \`${prefix} gw start\` - players join with \`${prefix} gw join\`.` };
+            return { text: `🕯️ *The Ruins stand quiet.* No war is running right now.\n\nWhen one deploys, my DMs become your game screen — your room will show itself the moment the war begins.\nMods start it with \`${prefix} gw start\` - players join with \`${prefix} gw join\`.` };
         }
         return null;
     }
@@ -477,7 +481,15 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         if (!res.ok) return { text: res.text };
         const pvp = require('../pvpSystem');
         const virtualId = `ruins:${eventDoc.eventId}:${player.roomId}:${Date.now()}`;
-        const begun = pvp.beginRuinsDuel(res.challenger.jid, senderJid, { eventId: eventDoc.eventId, roomKey: player.roomId, virtualChatId: virtualId });
+        // ⚔️ RUINS DUELS: the duel renders in THIS room's plate (no arena swap)
+        let ruinsBackground = null;
+        try {
+            const roomScene = require('./roomScene');
+            const exits = roomScene.exitsFor(eventDoc, player);
+            ruinsBackground = `ruins_door_${roomScene.plateKeyFor(exits, `${eventDoc.seed}:${player.roomId}`)}.png`;
+        } catch (e) {}
+        const begun = pvp.beginRuinsDuel(res.challenger.jid, senderJid, { eventId: eventDoc.eventId, roomKey: player.roomId, virtualChatId: virtualId, ruinsBackground });
+        if (begun.success && begun.duel && ruinsBackground) begun.duel.ruinsBackground = ruinsBackground;
         if (!begun.success) return { text: begun.message };
         await touch();
         return { text: `⚔️ *THE DUEL BEGINS!* ${begun.duel.players[0].name} vs ${begun.duel.players[1].name}.\nUse your standard combat commands: \`${prefix} combat attack\`, \`${prefix} combat ability <n>\`, \`${prefix} combat flee\`.\n_Stakes: ${CFG.PVP.WIN_GP} GP + carried relics (max ${CFG.PVP.RELIC_STEAL_CAP})._` };
@@ -486,7 +498,11 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         const room = roomOf(eventDoc, player);
         const pending = await ruinsPvp.openChallengeFor(eventDoc, senderJid)
             || [...ruinsPvp._openChallenges.values()].find((c) => c.challengedJid === senderJid && Date.now() < c.expiresAt) || null;
-        if (pending || room?.type === 'combat' || room?.type === 'coop' || room?.type === 'core') {
+        // ⚔️ RE-ENTRY SAFETY (owner brief §7 "leave during puzzle"): puzzle
+        // chambers MUST be escapable — a champion who cannot crack the seal
+        // retreats (room stays ACTIVE, spoils forfeited) instead of being
+        // trapped forever. The blocked-move message promises exactly this.
+        if (pending || ['combat', 'puzzle', 'coop', 'core'].includes(room?.type)) {
             // ⚔️ QA FIX: abandoning a live Ruins fight must also END the combat
             // session — otherwise the orphaned session answers every later
             // auto-start with "already in combat" until the 30-min reaper.
@@ -518,7 +534,11 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
     // ── room encounter interactions (dig/take/cross/touch/record/claim/fight/answers) ──
     const room = roomOf(eventDoc, player);
     if (room) {
-        const res = await encounters.resolveInput(eventDoc, player, room, raw, { sock, chatId, BOT_MARKER });
+        // ⚔️ GRAMMAR FIX: pass the PREFIX-STRIPPED verb (norm), not the raw
+        // input — resolveInput matches bare verbs ('dig'/'take'/'cross'…), so
+        // '.j dig' (the documented grammar!) fell through every comparison and
+        // every room interaction silently no-op'd under prefixed play.
+        const res = await encounters.resolveInput(eventDoc, player, room, norm, { sock, chatId, BOT_MARKER });
         if (res.handled) {
             await touch();
             if (res.sentCombat) {

@@ -32,6 +32,32 @@ const fs = require('fs');
 const path = require('path');
 const { createCanvas, loadImage } = require('canvas');
 
+// ── font registration (QA fix: fresh render workers fell back to sans-serif
+// because ONLY noticeCard/mapRenderer registered fonts in the PARENT — the
+// forked worker child needs its own registration before first draw) ──
+let _fontsReady = false;
+function ensureFonts() {
+    if (_fontsReady) return true;
+    try {
+        const canvas = require('canvas');
+        const registerFont = canvas.registerFont || (canvas.GlobalFonts && canvas.GlobalFonts.registerFromPath);
+        if (!registerFont) return false;
+        const F = path.join(__dirname, '..', '..', 'rpgasset', 'fonts');
+        const regs = [
+            ['CinzelDecorative-Black.ttf', { family: 'Cinzel Deco' }],
+            ['Cinzel-Variable.ttf', { family: 'Cinzel' }],
+            ['IMFellEnglish-Regular.ttf', { family: 'IM Fell' }],
+            ['MedievalSharp.ttf', { family: 'MedievalSharp' }],
+        ];
+        for (const [file, opts] of regs) {
+            const p = path.join(F, file);
+            if (fs.existsSync(p)) { try { registerFont(p, opts); } catch (e) { /* skip */ } }
+        }
+        _fontsReady = true;
+        return true;
+    } catch (e) { return false; }
+}
+
 const CFG = require('./config');
 const state = require('./state');
 const mapEngine = require('./mapEngine');
@@ -89,6 +115,13 @@ function getPlates() {
     plates = {
         '0': load('ruins_door_0.png'),
         L: [load('ruins_door_L_a.png'), load('ruins_door_L_b.png')],
+        // ⚔️ EXIT-CONSISTENCY FIX (owner spec §2/§6): plateKeyFor returns the
+        // SEEDED keys 'L_a'/'L_b' for left-only rooms, but this map only had
+        // the pair under 'L' — so P['L_b'] was undefined and EVERY left-only
+        // room silently fell back to the no-door plate: chevrons pointing at
+        // a solid wall while navigation said "go left".
+        L_a: load('ruins_door_L_a.png'),
+        L_b: load('ruins_door_L_b.png'),
         R: load('ruins_door_R.png'),
         F: load('ruins_door_F.png'),
         LF: load('ruins_door_LF.png'),
@@ -247,12 +280,30 @@ function hudFor(player, room) {
 // rules: content lives in the enemy zone (right/centre floor band), never
 // within 90px of a door chevron, the player, or the compass decal.
 function planFor(eventDoc, player, room, exits) {
-    const plan = { hud: hudFor(player, room), spriteFile: resolvePlayerSpriteFile(player), enemies: [], props: [] };
+    const plan = { hud: hudFor(player, room), spriteFile: resolvePlayerSpriteFile(player), enemies: [], props: [], mates: [], rivals: [] };
     const seedStr = `${eventDoc.seed}:${room.key}`;
     const rng = mapEngine.makeRng(`${seedStr}:plan`);
     const payloadGet = (p, k) => (p && typeof p.get === 'function') ? p.get(k) : (p || {})[k];
     const P = room.payload || {};
     const cleared = room.state === 'CLEARED';
+
+    // 💡 §16 MEETINGS: other players IN this room are drawn in the world —
+    // guildmates stand beside the champion, rivals across from them. One
+    // authoritative social render, seeded positions, capped for readability.
+    const others = (room.occupants || []).filter((j) => j && j !== player.jid)
+        .map((j) => (eventDoc.players || []).find((p) => p.jid === j)).filter(Boolean);
+    const mateRows = others.filter((o) => o.guildId === player.guildId).slice(0, 2);
+    const rivalRows = others.filter((o) => o.guildId !== player.guildId).slice(0, 2);
+    // guildmates: to the champion's right (never on a door, enemy or compass)
+    const MATE_SPOTS = [{ x: 470, y: 796 }, { x: 226, y: 780 }];
+    for (let i = 0; i < mateRows.length; i++) {
+        plan.mates.push({ file: resolvePlayerSpriteFile(mateRows[i]), x: MATE_SPOTS[i].x, y: MATE_SPOTS[i].y, h: 300, name: mateRows[i].name });
+    }
+    // rivals: in the far field opposite the champion, facing left
+    const RIVAL_SPOTS = [{ x: 640, y: 700 }, { x: 742, y: 662 }];
+    for (let i = 0; i < rivalRows.length; i++) {
+        plan.rivals.push({ file: resolvePlayerSpriteFile(rivalRows[i]), x: RIVAL_SPOTS[i].x, y: RIVAL_SPOTS[i].y, h: 262, name: rivalRows[i].name, flip: true });
+    }
 
     // enemy zone anchors (ground y, depth-ordered): far → near
     const ZONE = [
@@ -284,6 +335,8 @@ function planFor(eventDoc, player, room, exits) {
     const PROPS = ['crate', 'urn', 'bones', 'rocks', 'rubble', 'moss'];
     const occupied = (x, y) =>
         plan.enemies.some((e) => Math.hypot(e.x - x, e.y - y) < 120) ||
+        plan.mates.some((e) => Math.hypot(e.x - x, e.y - y) < 120) ||
+        plan.rivals.some((e) => Math.hypot(e.x - x, e.y - y) < 120) ||
         Math.hypot(PLAYER_X - x, PLAYER_GROUND - y) < 110 ||
         Math.hypot(880 - x, 762 - y) < 130; // compass decal
     const propSpots = [
@@ -749,9 +802,200 @@ function exitsFor(eventDoc, player) {
     });
 }
 
+// ── ROOM VISUAL VARIANTS (owner spec: five Ruins room variants) ────────────
+// Modular overlay system (spec §7 prefers this over regenerating backgrounds):
+// the door-plate stays the base; a seeded per-room ambience layer is painted
+// on top. Variants NEVER touch the doorway mouths, chevrons, player/enemy
+// zones, the compass or the HUD — they live on walls, wall-bases, ceiling and
+// open floor seams. The variant is assigned per-room at event start (state.js)
+// so a room always looks the SAME every time it is rendered.
+const ROOM_VARIANTS = ['intact', 'mossy', 'cracked', 'skulls', 'overgrown', 'dim'];
+
+// protected zones nothing decorative may enter (x, y, r)
+function protectedZones(exits) {
+    const z = [
+        { x: PLAYER_X, y: PLAYER_GROUND - 160, r: 190 },   // champion
+        { x: 880, y: 762, r: 130 },                        // compass decal
+        { x: 880, y: 690, r: 170 },                        // enemy/content zone
+        { x: 224, y: 792, r: 210 },                        // HUD panel area
+    ];
+    for (const ex of exits) {
+        if (!ex.edge) continue;
+        const d = DOORS[ex.dir];
+        if (d) z.push({ x: d.cx, y: d.cy, r: 150 });        // door mouths + chevrons
+    }
+    return z;
+}
+
+function zoneBlocked(zones, x, y, pad = 0) {
+    for (const z of zones) if (Math.hypot(z.x - x, z.y - y) < z.r + pad) return true;
+    return false;
+}
+
+// irregular blob (moss/lichen) — 3 overlapping ellipses + darker rim
+function blob(ctx, x, y, s, color, rim) {
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.ellipse(x, y, s, s * 0.62, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x - s * 0.55, y + s * 0.16, s * 0.62, s * 0.4, 0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x + s * 0.5, y - s * 0.12, s * 0.55, s * 0.36, -0.25, 0, Math.PI * 2); ctx.fill();
+    if (rim) {
+        ctx.fillStyle = rim;
+        ctx.beginPath(); ctx.ellipse(x, y + s * 0.5, s * 0.8, s * 0.16, 0, 0, Math.PI * 2); ctx.fill();
+    }
+}
+
+// branching crack — main vein with 1-2 forks, dark core + faint highlight
+function crack(ctx, x, y, len, angle, gen, rng) {
+    if (gen <= 0 || len < 8) return;
+    const segs = 4 + rng.int(0, 2);
+    let cx = x, cy = y, a = angle;
+    ctx.strokeStyle = 'rgba(18,15,10,0.72)';
+    ctx.lineWidth = Math.max(1.2, 2.6 - (3 - gen) * 0.7);
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(cx, cy);
+    for (let i = 0; i < segs; i++) {
+        a += (rng.next() - 0.5) * 0.7;
+        cx += Math.cos(a) * (len / segs);
+        cy += Math.sin(a) * (len / segs);
+        ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+    if (gen > 1 && rng.next() < 0.8) crack(ctx, cx - Math.cos(a) * len * 0.3, cy - Math.sin(a) * len * 0.3, len * 0.5, a + 0.9 + rng.next(), gen - 1, rng);
+    if (gen > 1 && rng.next() < 0.5) crack(ctx, cx, cy, len * 0.45, a - 1.1 - rng.next() * 0.4, gen - 1, rng);
+}
+
+// skull pile — 2-3 rounded craniums + scattered bones, sun-bleached
+function skullPile(ctx, x, y, s) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = 'rgba(0,0,0,0.30)';
+    ctx.beginPath(); ctx.ellipse(0, 2, s * 1.25, s * 0.32, 0, 0, Math.PI * 2); ctx.fill();
+    const BONE = 'rgba(206,196,164,0.92)';
+    const BONE_D = 'rgba(140,128,100,0.85)';
+    // bones first (behind)
+    ctx.strokeStyle = BONE; ctx.lineWidth = Math.max(2, s * 0.13); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-s * 1.1, -s * 0.1); ctx.lineTo(-s * 0.2, -s * 0.28); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(s * 0.3, -s * 0.05); ctx.lineTo(s * 1.15, -s * 0.2); ctx.stroke();
+    // two craniums
+    for (const [ox, oy, sc] of [[-s * 0.25, -s * 0.34, 1], [s * 0.55, -s * 0.22, 0.72]]) {
+        ctx.fillStyle = BONE;
+        ctx.beginPath(); ctx.arc(ox, oy, s * 0.42 * sc, Math.PI, 0); ctx.fill();
+        ctx.fillRect(ox - s * 0.42 * sc, oy, s * 0.84 * sc, s * 0.30 * sc);
+        ctx.fillStyle = BONE_D;
+        ctx.beginPath(); ctx.arc(ox - s * 0.15 * sc, oy + s * 0.06 * sc, s * 0.09 * sc, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(ox + s * 0.15 * sc, oy + s * 0.06 * sc, s * 0.09 * sc, 0, Math.PI * 2); ctx.fill();
+        ctx.fillRect(ox - s * 0.16 * sc, oy + s * 0.20 * sc, s * 0.32 * sc, s * 0.045 * sc);
+    }
+    ctx.restore();
+}
+
+// hanging vine — swaying chain of leaf pairs from the ceiling
+function vine(ctx, x, topY, len, rng) {
+    ctx.strokeStyle = 'rgba(64,92,44,0.9)';
+    ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+    let vx = x, vy = topY;
+    const segs = Math.max(3, Math.round(len / 26));
+    const sway = rng.next() < 0.5 ? -1 : 1;
+    ctx.beginPath(); ctx.moveTo(vx, vy);
+    for (let i = 0; i < segs; i++) {
+        vy += len / segs;
+        vx += sway * (2 + rng.next() * 3.2);
+        ctx.lineTo(vx, vy);
+    }
+    ctx.stroke();
+    for (let i = 0; i < segs; i += 1) {
+        const lx = vx - sway * (segs - i) * (len / segs) * 0.18;
+        const ly = topY + (i + 0.6) * (len / segs);
+        ctx.fillStyle = i % 2 ? 'rgba(74,108,48,0.88)' : 'rgba(58,88,40,0.9)';
+        ctx.beginPath(); ctx.ellipse(lx - 5, ly, 5.4, 2.6, -0.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(lx + 5, ly, 5.4, 2.6, 0.5, 0, Math.PI * 2); ctx.fill();
+    }
+}
+
+function variantOfRoom(room) {
+    const v = room && (typeof room.variant?.get === 'function' ? undefined : room.variant);
+    return ROOM_VARIANTS.includes(v) ? v : 'intact';
+}
+
+// the ambience layer itself — drawn AFTER tint, BEFORE props/enemies/player
+function drawVariantOverlay(ctx, room, exits, seedStr) {
+    const variant = variantOfRoom(room);
+    if (variant === 'intact') return;
+    const rng = mapEngine.makeRng(`${seedStr}:variant:${variant}`);
+    const zones = protectedZones(exits);
+    const trySpot = (band, pad = 26) => {
+        for (let t = 0; t < 14; t++) {
+            const x = band.x0 + rng.next() * (band.x1 - band.x0);
+            const y = band.y0 + rng.next() * (band.y1 - band.y0);
+            if (!zoneBlocked(zones, x, y, pad)) return { x, y };
+        }
+        return null;
+    };
+    // safe bands: upper back wall, side walls, wall-base strip, open floor-left seam
+    const BANDS = {
+        upperWall: { x0: 260, x1: 940, y0: 70, y1: 225 },
+        wallBaseL: { x0: 60, x1: 250, y0: 585, y1: 640 },
+        wallBaseR: { x0: 950, x1: 1140, y0: 585, y1: 640 },
+        floorL: { x0: 430, x1: 690, y0: 590, y1: 680 },
+        ceiling: { x0: 200, x1: 1000, y0: 0, y1: 26 },
+        sideWallL: { x0: 30, x1: 120, y0: 300, y1: 480 },
+        sideWallR: { x0: 1080, x1: 1170, y0: 300, y1: 480 },
+    };
+
+    if (variant === 'mossy') {
+        const MOSS = ['rgba(86,116,58,0.5)', 'rgba(70,100,48,0.55)', 'rgba(96,124,64,0.42)'];
+        const RIM = 'rgba(44,64,30,0.28)';
+        for (const b of [BANDS.upperWall, BANDS.wallBaseL, BANDS.wallBaseR, BANDS.floorL]) {
+            const n = b === BANDS.upperWall ? 4 : 2;
+            for (let i = 0; i < n; i++) {
+                const p = trySpot(b);
+                if (!p) continue;
+                blob(ctx, p.x, p.y, 14 + rng.next() * 26, MOSS[Math.floor(rng.next() * MOSS.length)], RIM);
+            }
+        }
+    } else if (variant === 'cracked') {
+        for (const b of [BANDS.upperWall, BANDS.sideWallL, BANDS.sideWallR, BANDS.floorL]) {
+            const n = b === BANDS.upperWall ? 3 : 2;
+            for (let i = 0; i < n; i++) {
+                const p = trySpot(b, 34);
+                if (!p) continue;
+                crack(ctx, p.x, p.y, 34 + rng.next() * 46, rng.next() * Math.PI * 2, 3, rng);
+            }
+        }
+        // fallen dust under a crack
+        const p = trySpot(BANDS.floorL);
+        if (p) { ctx.fillStyle = 'rgba(120,110,90,0.20)'; ctx.beginPath(); ctx.ellipse(p.x, p.y, 30, 7, 0, 0, Math.PI * 2); ctx.fill(); }
+    } else if (variant === 'skulls') {
+        for (const b of [BANDS.wallBaseL, BANDS.wallBaseR, BANDS.floorL]) {
+            const p = trySpot(b, 30);
+            if (p) skullPile(ctx, p.x, p.y, 13 + rng.next() * 9);
+        }
+    } else if (variant === 'overgrown') {
+        for (let i = 0; i < 4; i++) {
+            const x = BANDS.ceiling.x0 + rng.next() * (BANDS.ceiling.x1 - BANDS.ceiling.x0);
+            if (x > 520 && x < 680) continue; // keep the N arch head clear
+            vine(ctx, x, 0, 90 + rng.next() * 130, rng);
+        }
+        const p = trySpot(BANDS.wallBaseL);
+        if (p) blob(ctx, p.x, p.y, 18 + rng.next() * 16, 'rgba(74,104,50,0.45)', 'rgba(44,64,30,0.22)');
+        const p2 = trySpot(BANDS.wallBaseR);
+        if (p2) blob(ctx, p2.x, p2.y, 16 + rng.next() * 14, 'rgba(70,98,46,0.42)', null);
+    } else if (variant === 'dim') {
+        // cool dark grade + one deeper torch pool; keeps all geometry readable
+        ctx.fillStyle = 'rgba(10,10,26,0.22)';
+        ctx.fillRect(0, 0, W, H);
+        const g = ctx.createRadialGradient(600, 400, 60, 600, 400, 560);
+        g.addColorStop(0, 'rgba(255,180,90,0.05)');
+        g.addColorStop(1, 'rgba(4,4,14,0.30)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+    }
+}
+
 // ── main render (in worker; plan is computed by the parent) ──
 // opts: { exits?, prefix, puzzleBoard?(Buffer), labelOverride?, style?, plan? }
 async function _renderInProcess(eventDoc, player, room, opts = {}) {
+    ensureFonts();
     const exits = opts.exits || exitsFor(eventDoc, player);
     const bg = await plateFor(exits, `${eventDoc.seed}:${room.key}`);
     const plan = opts.plan || planFor(eventDoc, player, room, exits);
@@ -762,6 +1006,8 @@ async function _renderInProcess(eventDoc, player, room, opts = {}) {
     ctx.drawImage(bg, 0, 0, W, H);
     drawTint(ctx, room);
     if (room.state === 'CLEARED') drawClearedWash(ctx);
+    // 1b) the room's persistent visual variant (moss/cracks/skulls/vines/dim)
+    drawVariantOverlay(ctx, room, exits, `${eventDoc.seed}:${room.key}`);
 
     // 2) ambient props (under everything alive)
     for (const prop of plan.props || []) drawProp(ctx, prop.kind, prop.x, prop.y, prop.s);
@@ -769,16 +1015,16 @@ async function _renderInProcess(eventDoc, player, room, opts = {}) {
     // 3) room-type content (payload presentation — enemies drawn below)
     await drawRoomContent(ctx, room, plan);
 
-    // 4) the SEEDED enemy pack (combat/coop/core/boss) — depth-ordered so
-    // nearer packs overlap farther ones naturally
-    const CHAR_DIRS = [path.join(CHAR_DIR, 'clean'), CHAR_DIR];
-    const enemies = [...(plan.enemies || [])].sort((a, b) => a.y - b.y);
-    for (const e of enemies) {
-        await drawGroundedSprite(ctx, ENEMY_DIR, e.file, e.x, e.y, e.h, { flip: !!e.flip, shadow: true });
+    // 4) the SEEDED enemy pack (combat/coop/core/boss) + other players —
+    // depth-ordered so nearer packs overlap farther ones naturally
+    const SEARCH_DIRS = [ENEMY_DIR, path.join(CHAR_DIR, 'clean'), CHAR_DIR];
+    const actors = [...(plan.enemies || []), ...(plan.mates || []), ...(plan.rivals || [])].sort((a, b) => a.y - b.y);
+    for (const e of actors) {
+        await drawGroundedSprite(ctx, SEARCH_DIRS, e.file, e.x, e.y, e.h, { flip: !!e.flip, shadow: true });
     }
 
     // 5) the champion — ASSIGNED sprite, content-grounded, constant spot
-    await drawGroundedSprite(ctx, CHAR_DIRS, plan.spriteFile, PLAYER_X, PLAYER_GROUND, PLAYER_H, { shadow: true });
+    await drawGroundedSprite(ctx, [path.join(CHAR_DIR, 'clean'), CHAR_DIR], plan.spriteFile, PLAYER_X, PLAYER_GROUND, PLAYER_H, { shadow: true });
 
     // 6) compass decal on the open floor
     drawCompassHub(ctx, exits);
@@ -865,4 +1111,5 @@ module.exports = {
     renderRoomScene, _renderInProcess, exitsFor, plateKeyFor,
     DOORS, PLAYER_X, PLAYER_GROUND, TYPE_LABEL,
     planFor, hudFor, resolvePlayerSpriteFile, ENEMY_POOL, BOSS_POOL,
+    ROOM_VARIANTS, variantOfRoom, ensureFonts,
 };

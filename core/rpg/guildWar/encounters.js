@@ -536,6 +536,19 @@ async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = 
     const variant = variantOf(room);
     const isCore = !!payloadGet(room.payload, 'coreGuardian');
 
+    // ⚔️ THE RUINS IS THE ARENA (owner spec §12/§14: no more beach): the
+    // battle background is THIS room's own door-plate — the exact image the
+    // player was just shown — shipped to the Go service's environment assets.
+    // Falls back to the world theme bg only if the plate name is unavailable.
+    let background = theme.bg;
+    try {
+        const roomScene = require('./roomScene');
+        const exits = roomScene.exitsFor(eventDoc, player);
+        // plateKey ∈ {0, L_a, L_b, R, F, LF, FR, LR, LFR} — all exist as
+        // ruins_door_<key>.png files in the Go service environment assets.
+        background = `ruins_door_${roomScene.plateKeyFor(exits, `${eventDoc.seed}:${room.key}`)}.png`;
+    } catch (e) { /* keep theme bg */ }
+
     // pull enemies from the level pools (real enemy templates) + world flavor names
     const enemies = enemySpecs.map((e) => {
         const template = classEncounters.selectRandomEnemy(e.level || 10, 'COMMON');
@@ -554,7 +567,7 @@ async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = 
     const started = await guildAdventure.startRuinsCombat(sock, chatId, player.jid, {
         enemies: enemies.filter((e) => e.type),
         eventId: eventDoc.eventId, roomKey: room.key,
-        rank: 'C', background: theme.bg, groq,
+        rank: 'C', background, groq,
         greeting: variant ? `${variant.line}` : null,
         name: isCore ? 'World Core Guardian' : (variant ? `Ruins ${variant.name}` : 'Ruins Encounter'),
         // ⚔️ square map rides into the battle scene (bottom-right panel)

@@ -188,11 +188,32 @@ async function startEvent(eventId, { deadWorld = null, worldIds = null } = {}) {
     });
 
     // bake map into the doc (compact rooms)
-    const roomDocs = [...map.rooms.values()].map((r) => ({
-        key: r.key, x: r.x, y: r.y, region: r.region, type: r.type,
-        state: 'UNEXPLORED', payload: {}, ring: r.ring,
-        clearedBy: null, clearedByGuild: null, clearedAt: null, occupants: [], residue: null,
-    }));
+    // 💡 VISUAL VARIANTS (owner spec §7): each room gets a persistent Ruins
+    // ambience variant at bake time — weighted by ring (deeper rooms trend
+    // darker/damaged), seeded so the SAME room ALWAYS renders the SAME look.
+    const variantRng = mapEngine.makeRng(seed + ':variants');
+    const roomScene = require('./roomScene');
+    const VARIANT_BAG = roomScene.ROOM_VARIANTS;
+    const roomDocs = [...map.rooms.values()].map((r) => {
+        // weighting: intact/mossy common near spawn; cracked/dim/skulls/overgrown rise with depth
+        const depth = Math.min(1, (r.ring || 0) / 6);
+        const weights = VARIANT_BAG.map((v) => {
+            if (v === 'intact') return 3.2 - depth * 1.6;
+            if (v === 'mossy') return 2.4;
+            if (v === 'overgrown') return 1.2 + depth;
+            if (v === 'cracked') return 0.9 + depth * 1.4;
+            if (v === 'skulls') return 0.7 + depth * 1.2;
+            return 0.6 + depth * 1.5; // dim
+        });
+        const total = weights.reduce((a, b) => a + b, 0);
+        let roll = variantRng.next() * total, variant = VARIANT_BAG[0];
+        for (let i = 0; i < VARIANT_BAG.length; i++) { roll -= weights[i]; if (roll <= 0) { variant = VARIANT_BAG[i]; break; } }
+        return {
+            key: r.key, x: r.x, y: r.y, region: r.region, type: r.type,
+            state: 'UNEXPLORED', payload: {}, ring: r.ring, variant,
+            clearedBy: null, clearedByGuild: null, clearedAt: null, occupants: [], residue: null,
+        };
+    });
 
     // spawn assignment: shuffle spawn keys (same-guild adjacency already minimized by farthest-point)
     const spawnKeys = mapEngine.makeRng(seed + ':spawns').shuffle(map.spawns);

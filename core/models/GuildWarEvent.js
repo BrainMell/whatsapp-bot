@@ -20,6 +20,7 @@ const RoomSchema = new mongoose.Schema({
     clearedAt: Date,
     occupants: [String],    // jids currently inside
     residue: { type: Map, of: mongoose.Schema.Types.Mixed, default: null },
+    variant: { type: String, default: 'intact' }, // Ruins visual variant (baked at startEvent — a room never changes look between renders)
 }, { _id: false });
 
 const RelicSchema = new mongoose.Schema({
