@@ -722,9 +722,60 @@ function getSlotIcon(slot) {
 // 🛠️ CRAFTING & BREWING COMMANDS 
 // ========================================== 
 
-async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', searchQuery = null) { 
+// ── CRAFT-MENU SHOP PARITY (owner side-note: ".jk craft should have the same
+// look and all the functionality of the regular shop for easy navigation") ──
+// The crafting menu now behaves like displayShop:
+//   • numbered entries → `.craft <#>` crafts from the LIST YOU ARE LOOKING AT
+//     (remembered per chat, 10-min TTL — identical to the shop's `.buy <#>`)
+//   • category navigation + rank filter + search, same grammar as the shop
+//   • rarity icons match the shop's icon set
+//   • affordability marks (have/need) per ingredient — the craft equivalent
+//     of the shop's price line
+const RARITY_ICONS_CRAFT = { COMMON: '⚪', UNCOMMON: '🟢', RARE: '🔵', EPIC: '🟣', LEGENDARY: '🟠', MYTHIC: '🔴' };
+const RANK_ALIASES_CRAFT = {
+    common: 'COMMON', commons: 'COMMON',
+    uncommon: 'UNCOMMON', uncommons: 'UNCOMMON', uc: 'UNCOMMON',
+    rare: 'RARE', rares: 'RARE',
+    epic: 'EPIC', epics: 'EPIC',
+    legendary: 'LEGENDARY', legendaries: 'LEGENDARY', leg: 'LEGENDARY',
+    mythic: 'MYTHIC', mythics: 'MYTHIC', myth: 'MYTHIC',
+};
+const _lastCraftList = new Map(); // chatId → { list: [recipe...], expiresAt }
+const CRAFT_LIST_TTL_MS = 10 * 60 * 1000;
+const STATION_KEYWORDS = new Set(['forge', 'brew', 'brewing', 'cook', 'cooking', 'craft', 'all']);
+
+function rememberCraftList(chatId, list) {
+    _lastCraftList.set(chatId, { list, expiresAt: Date.now() + CRAFT_LIST_TTL_MS });
+    if (_lastCraftList.size > 500) {
+        const oldest = _lastCraftList.keys().next().value;
+        _lastCraftList.delete(oldest);
+    }
+}
+
+function getRememberedCraftList(chatId) {
+    const entry = _lastCraftList.get(chatId);
+    if (!entry || Date.now() > entry.expiresAt) {
+        _lastCraftList.delete(chatId);
+        return null;
+    }
+    return entry.list;
+}
+
+// split ".craft <args>" into { rank, rest }: rank = rarity keyword (or null)
+function parseCraftArgs(raw) {
+    const tokens = String(raw || '').trim().split(/\s+/).filter(Boolean);
+    let rank = null;
+    if (tokens.length && RANK_ALIASES_CRAFT[tokens[tokens.length - 1].toLowerCase()]) {
+        rank = RANK_ALIASES_CRAFT[tokens.pop().toLowerCase()];
+    } else if (tokens.length && RANK_ALIASES_CRAFT[tokens[0].toLowerCase()]) {
+        rank = RANK_ALIASES_CRAFT[tokens.shift().toLowerCase()];
+    }
+    return { rank, rest: tokens.join(' ') };
+}
+
+async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', searchQuery = null, rank = null) {
     let recipes = Object.values(craftingSystem.getRecipes());
-    
+
     const STATION_CATEGORIES = {
         'FORGE': ['WEAPON', 'ARMOR'],
         'BREWING': ['BREWING'],
@@ -739,17 +790,22 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
 
     if (searchQuery) {
         const query = searchQuery.toLowerCase().trim();
-        recipes = recipes.filter(r => 
-            r.name.toLowerCase().includes(query) || 
+        recipes = recipes.filter(r =>
+            r.name.toLowerCase().includes(query) ||
             r.id.toLowerCase().includes(query) ||
             (r.desc && r.desc.toLowerCase().includes(query))
         );
     }
 
+    if (rank) {
+        recipes = recipes.filter(r => {
+            const info = lootSystem.getItemInfo(r.id) || {};
+            return (info.rarity || 'COMMON').toUpperCase() === rank;
+        });
+    }
+
     // 💡 FIX 2026-08-03 (bug report #8): Sort by RARITY first (Mythic → Common),
     // then by reqLevel (lowest first), then alphabetically.
-    // The old sort was reqLevel-only, which made the 144+ item list feel
-    // unsorted - users wanted items grouped by rank/rarity tier.
     const RARITY_ORDER = ['MYTHIC', 'LEGENDARY', 'EPIC', 'RARE', 'UNCOMMON', 'COMMON'];
     recipes.sort((a, b) => {
         const aInfo = lootSystem.getItemInfo(a.id) || {};
@@ -784,60 +840,105 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
 
     const titleMap = { 'FORGE': '⚒️ BLACKSMITH', 'BREWING': '⚗️ ALCHEMY', 'COOKING': '🍳 KITCHEN', 'CRAFT': '⚒️ CRAFTING' };
     const baseTitle = titleMap[categoryFilter] || categoryFilter;
-    
-    let msg = `⚒️ *${baseTitle.toUpperCase()}* • Page ${currentPage}/${totalPages}\n`;
+    const p = getPrefix();
+    const rankTag = rank ? ` • ${RARITY_ICONS_CRAFT[rank] || '⚪'} ${rank}` : '';
+
+    // player inventory for affordability marks (shop-parity: the price line)
+    let invCounts = null;
+    try {
+        const inv = inventorySystem.getInventory(senderJidOf(chatId, sock) || chatId);
+        invCounts = new Map();
+        for (const it of (inv?.items || inv || [])) {
+            const id = typeof it === 'string' ? it : it?.id;
+            const qty = typeof it === 'string' ? 1 : (it?.quantity ?? it?.qty ?? 1);
+            if (id) invCounts.set(id, (invCounts.get(id) || 0) + qty);
+        }
+    } catch (e) { invCounts = null; }
+
+    let msg = `${baseTitle} *CRAFTING MENU*${rankTag} • Page ${currentPage}/${totalPages}\n`;
     msg += `━━━━━━━━━━━━━━━\n`;
-    
+    msg += `📂 \`${p} craft all · forge · brew · cook\` · 🏷️ \`${p} craft forge legendary\` · 🔍 \`${p} craft search <name>\`\n\n`;
+
     if (searchQuery) msg += `🔍 *Search:* _"${searchQuery}"_\n\n`;
     if (pageItems.length === 0) msg += `_No recipes found._\n\n`;
 
-    const rarityEmojis = {
-        'MYTHIC': '🌌',
-        'LEGENDARY': '👑',
-        'EPIC': '🔮',
-        'RARE': '🔷',
-        'UNCOMMON': '🟢',
-        'COMMON': '⚪'
-    };
+    const cmdName = categoryFilter === 'COOKING' ? 'cook' : (categoryFilter === 'BREWING' ? 'brew' : (categoryFilter === 'FORGE' ? 'forge' : 'craft'));
 
     pageItems.forEach((r, i) => {
         const info = lootSystem.getItemInfo(r.id) || {};
         const slotIcon = getSlotIcon(info.slot);
-        const rarityEmoji = rarityEmojis[info.rarity] || '⚪';
+        const rarityEmoji = RARITY_ICONS_CRAFT[(info.rarity || 'COMMON').toUpperCase()] || '⚪';
         const lvlStr = info.reqLevel !== undefined ? ` · Lvl ${info.reqLevel}` : '';
 
+        // affordability: ✔ when stocked, ✘ with have/need when short
         const ingredients = Object.entries(r.ingredients).map(([id, qty]) => {
             const ingInfo = lootSystem.getItemInfo(id);
-            return `${qty}x ${ingInfo.name || id}`;
+            const have = invCounts ? (invCounts.get(id) || 0) : null;
+            if (have === null) return `${qty}x ${ingInfo?.name || id}`;
+            return `${have >= qty ? '✔' : '✘'} ${qty}x ${ingInfo?.name || id}${have >= qty ? '' : ` (${have}/${qty})`}`;
         }).join(', ');
 
-        // Unified 2-line entry - no flavor text (owner: lists must not over-explain)
         msg += `*${startIdx + i + 1}.* ${slotIcon} ${rarityEmoji} *${r.name}* \`${r.id}\`${lvlStr}\n`;
         msg += `   🛠️ ${ingredients}\n`;
     });
 
-    const cmdName = categoryFilter === 'COOKING' ? 'cook' : (categoryFilter === 'BREWING' ? 'brew' : (categoryFilter === 'FORGE' ? 'forge' : 'craft'));
-    
+    // shop-parity: the menu powers `.craft <#>` — remember EXACTLY what was shown
+    rememberCraftList(chatId, pageItems.map(r => ({ ...r, _station: categoryFilter })));
+
     msg += `━━━━━━━━━━━━━━━\n`;
-    const pageHint = searchQuery
-        ? `${getPrefix()} ${cmdName} search ${searchQuery} <page>`
-        : `${getPrefix()} ${cmdName} <page>`;
-    msg += `💡 Page: \`${pageHint}\` • Craft: \`${getPrefix()} ${cmdName} <id>\` (e.g. \`${getPrefix()} ${cmdName} ${pageItems[0]?.id || 'refined_steel'}\`)`;
+    msg += `💡 Craft: \`${p} ${cmdName} <#>\` (numbers from this list) or \`${p} ${cmdName} <id>\` (e.g. \`${p} ${cmdName} ${pageItems[0]?.id || 'refined_steel'}\`)\n`;
+    msg += `📖 Page: \`${p} ${cmdName} page ${currentPage + 1 <= totalPages ? currentPage + 1 : 1}\`${searchQuery ? ` • \`${p} ${cmdName} search ${searchQuery} <page>\`` : ''}`;
     await sock.sendMessage(chatId, { text: msg });
+}
+
+// the menu's affordability marks need the VIEWER's jid; displayRecipes only
+// receives chatId — resolve the sender for DMs (chatId === jid), best-effort.
+function senderJidOf(chatId, sock) {
+    if (chatId && chatId.endsWith('@s.whatsapp.net')) return chatId;
+    return null;
 }
 
 async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CRAFT') {
     if (!recipeId || recipeId.trim() === '') {
         return displayRecipes(sock, chatId, 1, categoryFilter);
     }
-    
+
     const input = recipeId.trim();
-    
-    // Check if input is pagination page number
+
+    // 🏪 SHOP PARITY: ".craft page <n>" pages (old bare-number behavior kept
+    // reachable), ".craft <rank>" filters, ".craft <#>" crafts from the list
+    // currently shown in this chat — exactly how ".shop"/".buy <#>" behave.
+    const pageMatch = input.match(/^page\s+(\d+)$/i);
+    if (pageMatch) {
+        return displayRecipes(sock, chatId, parseInt(pageMatch[1]), categoryFilter);
+    }
+
+    // rank keyword anywhere in the args → filtered view (".craft forge epic")
+    const { rank, rest } = parseCraftArgs(input);
+    if (rank && (!rest || STATION_KEYWORDS.has(rest.toLowerCase()))) {
+        const station = rest ? rest.toLowerCase() : categoryFilter;
+        const stationMap = { forge: 'FORGE', brew: 'BREWING', brewing: 'BREWING', cook: 'COOKING', cooking: 'COOKING', craft: 'CRAFT', all: 'CRAFT' };
+        return displayRecipes(sock, chatId, 1, stationMap[station] || categoryFilter, null, rank);
+    }
+    if (/^all$/i.test(input)) {
+        return displayRecipes(sock, chatId, 1, categoryFilter);
+    }
+
+    // Check if input is pagination page number — ONLY when no remembered
+    // menu exists for this chat (with a menu on screen, numbers craft).
     if (/^\d+$/.test(input)) {
+        const remembered = getRememberedCraftList(chatId);
+        if (remembered) {
+            const idx = parseInt(input) - 1;
+            const recipe = remembered[idx];
+            if (!recipe) {
+                return sock.sendMessage(chatId, { text: `❌ No recipe #${input} in the menu you're viewing. Check the numbers, or use \`${getPrefix()} craft <id>\`.` });
+            }
+            return craftItem(sock, chatId, senderJid, recipe.id, recipe._station || categoryFilter);
+        }
         return displayRecipes(sock, chatId, parseInt(input), categoryFilter);
     }
-    
+
     // Check if input is search
     const searchMatch = input.match(/^search\s+(.+)$/i);
     if (searchMatch) {
@@ -845,7 +946,7 @@ async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CR
         const parts = queryStr.split(/\s+/);
         let page = 1;
         let searchQuery = queryStr;
-        
+
         const lastPart = parts[parts.length - 1];
         if (/^\d+$/.test(lastPart) && parts.length > 1) {
             page = parseInt(lastPart);

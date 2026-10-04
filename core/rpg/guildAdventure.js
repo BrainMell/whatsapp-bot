@@ -2234,6 +2234,31 @@ function isUserInAnyCombat(userId) {
   return false;
 }
 
+// ⚔️ QA FIX (owner brief §9/§11 "return safely to exploration"): a player who
+// retreats from a Ruins chamber via the DM `flee` verb used to leave their
+// guildAdventure combat session running — the session kept them "in combat",
+// so every later auto-start answered "❌ You are already in combat." until the
+// 30-min sweeper reaped it. abortRuinsSession ends the player's RUINS-mode
+// session cleanly (timers cleared, room left unresolved) and is safe to call
+// when no session exists. Non-ruins modes (tutorial, PvP duels, quests) are
+// deliberately untouched — their owners manage their own lifecycles.
+function abortRuinsSession(userId) {
+  if (!userId) return false;
+  let aborted = false;
+  for (const [key, state] of gameStates.entries()) {
+    if (state?.mode !== 'RUINS') continue;
+    if (!Array.isArray(state.players) || !state.players.some((p) => p.jid === userId)) continue;
+    try {
+      if (state.timers) Object.values(state.timers).forEach((t) => { if (t) clearTimeout(t); });
+      state.inCombat = false;
+      state.active = false;
+      gameStates.delete(key);
+      aborted = true;
+    } catch (e) { /* best-effort cleanup */ }
+  }
+  return aborted;
+}
+
 function getGameState(chatId, senderJid = null) {
   if (!chatId) return null;
 
@@ -11579,6 +11604,7 @@ module.exports = {
   startTutorialQuest,
   startTutorialGroupQuest,
   setRuinsHooks,
+  abortRuinsSession,
   // 💡 Summoner System (Phase 2): export for summonAI.js to access.
   // summonAI does a lazy require('./guildAdventure') to avoid circular dep,
   // so these must be on the exports.

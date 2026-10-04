@@ -347,7 +347,9 @@ const _renderPool = { children: [], queue: [], inflight: 0, max: 2 };
 let _renderSeq = 0;
 
 function _spawnChild() {
-    const child = fork(path.join(__dirname, 'renderWorker.js'), [], { stdio: 'ignore' });
+    // serialization 'advanced': structured-clone IPC (Buffers survive — JSON
+    // IPC silently degrades them to plain objects)
+    const child = fork(path.join(__dirname, 'renderWorker.js'), [], { stdio: 'ignore', serialization: 'advanced' });
     child.on('exit', () => {
         const i = _renderPool.children.indexOf(child);
         if (i !== -1) _renderPool.children.splice(i, 1);

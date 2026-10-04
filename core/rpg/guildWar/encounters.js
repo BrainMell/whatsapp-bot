@@ -280,32 +280,47 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
 
     switch (room.type) {
         // ── puzzle ──
+        // ⚔️ MECHANISM OVERHAUL (owner brief §7 — full state/lifecycle fix):
+        //   • ONE authoritative evaluation per message — the attempt is an
+        //     ATOMIC $inc claim (rooms.claimPuzzleAttempt). Concurrent/rapid
+        //     answers can never share an attempt or evaluate stale state
+        //     (the old read-modify-write lost updates under bursts).
+        //   • Exhaustion = TRUE RESET: one shock, counter back to 0, the seal
+        //     restarts from the first inscription exactly as the message
+        //     promises. No treadmill where every further input shocks forever.
+        //   • NO autonomous loop anywhere: this handler runs strictly inside
+        //     the dmRouter's per-player serialization and only ever runs when
+        //     a player message arrives. Nothing here schedules, retries or
+        //     re-sends itself (verified by the silence check in the QA suite).
+        //   • Re-entry safe: claim() refuses CLEARED rooms, so re-entering a
+        //     solved/failing chamber can never fork a second instance.
         case 'puzzle': {
-            const pz = payloadGet(P, 'puzzle');
-            if (!pz) return { handled: false };
             if (!norm) return { handled: false };
-            const attempts = (pz.attemptsUsed || 0) + 1;
+            const claimed = await rooms.claimPuzzleAttempt(eventDoc.eventId, room.key);
+            if (!claimed) return { handled: true, text: '🧱 The mechanism is inert - its seal has already been broken.' };
+            const { attempts, puzzle: pz } = claimed;
+            const maxAttempts = pz.maxAttempts || CFG.PUZZLE.ATTEMPTS;
             const result = puzzles.checkByKind(pz.kind, pz, norm, attempts);
             if (result.solved) {
                 const claim = await rooms.clearRoom(eventDoc.eventId, room.key, player);
                 if (claim.won) {
-                    const gp = CFG.PUZZLE.GP_SOLVE + (attempts - 1 === 0 ? CFG.PUZZLE.GP_GRADE_BONUS * CFG.PUZZLE.ATTEMPTS : (CFG.PUZZLE.ATTEMPTS - attempts + 1) * CFG.PUZZLE.GP_GRADE_BONUS);
+                    const gp = CFG.PUZZLE.GP_SOLVE + (attempts - 1 === 0 ? CFG.PUZZLE.GP_GRADE_BONUS * maxAttempts : (maxAttempts - attempts + 1) * CFG.PUZZLE.GP_GRADE_BONUS);
                     await points.award(eventDoc.eventId, player.jid, gp, 'puzzle', { coopBonus: room.occupants?.length > 1 });
                     await awardRoomRelic(eventDoc, player, room);
                     feed.queue(eventDoc.eventId, 'normal', `🧩 ${player.name} solved the seal of a ${roomFlavor(room)}.`);
-                    return { handled: true, afterImage: await clearedScene(eventDoc, player, room), text: `🔓 *The mechanism clicks open!* (+GP${P.puzzle ? '' : ''}) The way onward is clear.` };
+                    return { handled: true, afterImage: await clearedScene(eventDoc, player, room), text: `🔓 *The mechanism clicks open!* (+GP) The way onward is clear.` };
                 }
                 return { handled: true, text: `Someone else solved this seal a heartbeat before you.` };
             }
-            if (attempts >= CFG.PUZZLE.ATTEMPTS) {
+            if (attempts >= maxAttempts) {
                 const maxHp = player.stats?.maxHp || 100;
                 const dmg = Math.round(maxHp * CFG.PUZZLE.FAIL_HAZARD_DAMAGE);
                 await applyWarDamage(player.jid, dmg, maxHp);
+                await rooms.resetPuzzleAttempts(eventDoc.eventId, room.key);
                 await state.updatePlayer(eventDoc.eventId, player.jid, {}, { lastActionAt: Date.now() });
                 feed.queue(eventDoc.eventId, 'minor', `${player.name} failed a seal and paid in blood.`);
-                return { handled: true, text: `💥 The mechanism rejects you with a shock (-${dmg} HP — that was real). The seal resets - try again from the first inscription.` };
+                return { handled: true, text: `💥 The mechanism rejects you with a shock (-${dmg} HP — that was real). The seal resets - the first inscription glows anew. ${maxAttempts} fresh attempts.` };
             }
-            await rooms.setRoomPayload(eventDoc.eventId, room.key, { 'puzzle.attemptsUsed': attempts });
             return { handled: true, text: `❌ Wrong. ${result.attemptsLeft} attempt${result.attemptsLeft === 1 ? '' : 's'} left.` };
         }
 

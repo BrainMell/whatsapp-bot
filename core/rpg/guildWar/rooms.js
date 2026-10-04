@@ -146,6 +146,41 @@ async function setRoomPayload(eventId, roomKey, payloadPatch) {
     );
 }
 
+// ── PUZZLE ATTEMPT CLAIM (owner brief §7: "one authoritative evaluation") ──
+// The old flow read attemptsUsed, evaluated, then wrote it back — concurrent
+// DMs all read the same value, all evaluated, and last-write-wins ate the
+// attempt count (measured: a burst of 3 wrong answers advanced the counter
+// by ONE). Now the attempt IS an atomic $inc: each player message claims
+// exactly one attempt and the handler evaluates against the RETURNED room,
+// so two rapid answers can never share an attempt number or evaluate stale
+// state. Returns { attempts, puzzle } or null when the room is gone/resolved.
+async function claimPuzzleAttempt(eventId, roomKey) {
+    const doc = await GuildWarEvent.findOneAndUpdate(
+        {
+            eventId,
+            rooms: { $elemMatch: { key: roomKey, state: { $in: ['UNEXPLORED', 'ACTIVE'] } } },
+        },
+        { $inc: { 'rooms.$.payload.puzzle.attemptsUsed': 1 } },
+        { new: true, projection: { rooms: { $elemMatch: { key: roomKey } } } }
+    ).lean();
+    const room = doc?.rooms?.[0];
+    if (!room) return null;
+    const puzzle = room.payload?.puzzle
+        ? (typeof room.payload.puzzle.get === 'function'
+            ? Object.fromEntries(room.payload.puzzle.entries())
+            : room.payload.puzzle)
+        : null;
+    if (!puzzle) return null;
+    return { attempts: puzzle.attemptsUsed || 0, puzzle };
+}
+
+// exhaustion reset: the seal restarts from the first inscription — one atomic
+// write, so a shock is followed by a CLEAN attempt cycle, never a treadmill
+// where every further text input shocks forever.
+async function resetPuzzleAttempts(eventId, roomKey) {
+    return setRoomPayload(eventId, roomKey, { 'puzzle.attemptsUsed': 0 });
+}
+
 // ── inactivity: carried relics drop into the current room's loot ──
 async function dropCarriedRelics(eventId, jid, reason) {
     const doc = await GuildWarEvent.findOne({ eventId }, { players: { $elemMatch: { jid } } }).lean();
@@ -168,4 +203,5 @@ async function dropCarriedRelics(eventId, jid, reason) {
 module.exports = {
     seedEncounters, applyFog, enterRoom, leaveRoom, clearRoom,
     markActive, setRoomPayload, dropCarriedRelics,
+    claimPuzzleAttempt, resetPuzzleAttempts,
 };

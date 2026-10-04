@@ -48,6 +48,8 @@ function installCombatHooks() {
             if (!player) return;
             const GuildWarEvent = require('../../models/GuildWarEvent');
             const jid = player.jid;
+            let prefix = '.';
+            try { prefix = require('../../../botConfig').getPrefix() || '.'; } catch (e) {}
 
             if (victory) {
                 const ev = await state.getEvent(meta.eventId, { fresh: true });
@@ -105,7 +107,7 @@ function installCombatHooks() {
                             const retBuf = await dmRouter.returnMapFor(freshAfter, meAfter, roomAfter);
                             await sock.sendMessage(state.chatId || jid, {
                                 image: retBuf,
-                                caption: '🧭 *The chamber is yours.* The compass marks your exits.',
+                                caption: dmRouter.mapCaption('🧭 *The chamber is yours.* The compass marks your exits.', prefix),
                             });
                         } catch (navErr) {
                             console.error('[GW] victory return map failed (non-fatal):', navErr?.message);

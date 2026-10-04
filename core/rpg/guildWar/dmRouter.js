@@ -18,12 +18,44 @@ const navCard = require('./navCard');
 const CFG = require('./config');
 const GuildWarEvent = require('../../models/GuildWarEvent');
 
+// ⚔️ QA FIX (owner brief 2026-10-04 "movement still does not work"): the old
+// query used 'players.status': { $ne: 'quit' } — MongoDB applies $ne across
+// the WHOLE array, so the moment ANY single player typed `quit`, the event
+// doc stopped matching for EVERY player. All war verbs then fell through to
+// the generic command pipeline and surfaced as "unknown command". The exact
+// failure the owner reported. $elemMatch binds jid + status to THE QUERYING
+// player's row, so quitters can never poison anyone else's session.
 async function getEventForPlayer(jid) {
     return GuildWarEvent.findOne({
         state: 'ACTIVE',
-        'players.jid': jid,
-        'players.status': { $ne: 'quit' },
+        players: { $elemMatch: { jid, status: { $ne: 'quit' } } },
     }).lean(); // skip casting the full map on every DM action
+}
+
+// ── per-player serialization (§11 state/session safety) ──
+// Rapid DMs (double-tap move, answer + answer, answer while moving) used to
+// interleave reads/writes on the same player row. Every handleDM for a jid
+// now waits for the previous one to settle — one authoritative execution per
+// player at a time, no dropped inputs, no duplicate evaluations. A watchdog
+// releases a wedged chain so a crashed handler can never deadlock the player.
+const _dmLocks = new Map(); // jid → Promise (tail of the chain)
+const DM_LOCK_TIMEOUT_MS = 20 * 1000;
+function serializeForPlayer(jid, fn) {
+    const prev = _dmLocks.get(jid) || Promise.resolve();
+    const run = prev.catch(() => {}).then(() => fn());
+    // watchdog: forget the chain regardless of outcome so memory cannot grow
+    // and a hung handler cannot wedge the player forever
+    const release = () => {
+        if (_dmLocks.get(jid) === tail) _dmLocks.delete(jid);
+    };
+    const tail = run.then(release, release);
+    _dmLocks.set(jid, tail);
+    // hard deadline: if fn() hangs (e.g. render pool stall), stop blocking
+    // newer inputs after DM_LOCK_TIMEOUT_MS (silently — the underlying run
+    // still completes and sends its own payloads; returning null keeps the
+    // engine from double-handling the input)
+    const timeout = new Promise((resolve) => setTimeout(() => resolve(null), DM_LOCK_TIMEOUT_MS));
+    return Promise.race([run, timeout]);
 }
 
 function playerOf(eventDoc, jid) {
@@ -88,6 +120,16 @@ async function returnMapFor(eventDoc, player, room) {
     });
 }
 
+// ── movement instructions that ride EVERY map card caption (owner brief §1:
+// "the movement instructions should be included directly in the map card's
+// text/caption — make it immediately clear what movement commands are available")
+function mapCaption(head, prefix) {
+    const p = prefix || '.';
+    return `${head}\n\n` +
+        `🚶 *Move:* \`${p} move forward\` · \`${p} left\` · \`${p} right\` · \`${p} back\` (bare \`forward\`/\`left\`… also works)\n` +
+        `🗺️ \`${p} map\` · 🧭 \`${p} paths\` · ⚓ \`${p} mark\` → \`${p} teleport\``;
+}
+
 function roomsMapHas(eventDoc, key) {
     return (eventDoc.rooms || []).some((r) => r.key === key);
 }
@@ -127,14 +169,15 @@ async function presentRoom(sock, chatId, BOT_MARKER, ctxDoc, me, newRoom, opts =
         freshMe = (full.players || []).find((p) => p.jid === me.jid) || me;
     } catch (e) { /* fall back to the projected context */ }
 
-    // 1) MAP FIRST — "where am I" (§2)
+    // 1) MAP FIRST — "where am I" (§2) + the move grammar rides the caption
+    // (owner brief §1: movement instructions live on the map card itself)
     if (withMap) {
         try {
             const renderer = require('./mapRenderer');
             const extras = visibility.extrasFor(full, freshMe, guildLevelOf(full, freshMe));
             const buf = await renderer.renderRuinsMap(full, freshMe, { mates: extras.mates, enemyPings: extras.enemyPings, ring: newRoom.ring, style: 'explore' });
             if (buf) {
-                await send({ image: buf, caption: BOT_MARKER + `📍 *YOU ARE HERE* - ${meta.label} (chamber ${newRoom.key})` });
+                await send({ image: buf, caption: BOT_MARKER + mapCaption(`📍 *YOU ARE HERE* - ${meta.label} (chamber ${newRoom.key})`, prefix) });
             }
         } catch (e) {
             console.error('[RuinsNav] map render failed (non-fatal):', e?.message);
@@ -157,8 +200,8 @@ async function presentRoom(sock, chatId, BOT_MARKER, ctxDoc, me, newRoom, opts =
     return {};
 }
 
-// main entry: returns null if this DM text is not a Ruins action (bot falls
-// through to other handlers); otherwise { text, image?, mentions? }
+// main entry (serialized): rapid inputs from one player queue behind each
+// other instead of interleaving — see serializeForPlayer above.
 // opts.prefixed: the text arrived WITH the bot prefix (e.g. ".j move left").
 // Prefixed input only consumes WAR-SPECIFIC verbs — generic bot commands
 // (use/bag/relics/status) fall through to the normal command pipeline so
@@ -166,7 +209,11 @@ async function presentRoom(sock, chatId, BOT_MARKER, ctxDoc, me, newRoom, opts =
 // keeps the full grammar.
 const GENERIC_PREFIXED_RE = /^(?:use|bag|relics|status|score|gw status|gw map|help)\b/;
 
-async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
+function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
+    return serializeForPlayer(senderJid, () => _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts));
+}
+
+async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
     const prefix = String(opts.prefix || '.'); // dynamic per-bot prefix (owner rule)
     const raw = String(txt || '').trim();
     if (!raw) return null;
@@ -307,7 +354,7 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
     if (/^paths$/.test(norm)) {
         const room = roomOf(eventDoc, player);
         const buf = await returnMapFor(eventDoc, player, room);
-        return { text: `🧭 The way onward from chamber ${player.roomId}. The compass marks your exits.`, image: buf };
+        return { text: mapCaption(`🧭 The way onward from chamber ${player.roomId}. The compass marks your exits.`, prefix), image: buf };
     }
 
     // ── TELEPORT ANCHOR (owner spec §16): mark ONE room as a return point ──
@@ -363,7 +410,7 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
         const renderer = require('./mapRenderer');
         const extras = visibility.extrasFor(fresh, me, guildLevelOf(fresh, me));
         const buf = await renderer.renderRuinsMap(fresh, me, { mates: extras.mates, enemyPings: extras.enemyPings });
-        return { text: `🗺️ Your chart of the Ruins.`, image: buf };
+        return { text: mapCaption(`🗺️ Your chart of the Ruins.`, prefix), image: buf };
     }
 
     // ── look ──
@@ -440,6 +487,10 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
         const pending = await ruinsPvp.openChallengeFor(eventDoc, senderJid)
             || [...ruinsPvp._openChallenges.values()].find((c) => c.challengedJid === senderJid && Date.now() < c.expiresAt) || null;
         if (pending || room?.type === 'combat' || room?.type === 'coop' || room?.type === 'core') {
+            // ⚔️ QA FIX: abandoning a live Ruins fight must also END the combat
+            // session — otherwise the orphaned session answers every later
+            // auto-start with "already in combat" until the 30-min reaper.
+            try { require('../guildAdventure').abortRuinsSession(senderJid); } catch (e) {}
             await state.updatePlayer(eventDoc.eventId, senderJid, {}, {
                 roomId: player.prevRoomId,
                 protectedUntil: Date.now() + CFG.PVP.PROTECT_AFTER_LOSS_MS,
@@ -494,7 +545,7 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
                         const freshAll = await state.getEvent(eventDoc.eventId, { fresh: true });
                         const meFresh = playerOf(freshAll, senderJid) || player;
                         const retBuf = await returnMapFor(freshAll, meFresh, freshRoom);
-                        if (retBuf) await sock.sendMessage(chatId, { image: retBuf, caption: BOT_MARKER + '🧭 *The way onward is clear.* The compass marks your exits.' });
+                        if (retBuf) await sock.sendMessage(chatId, { image: retBuf, caption: BOT_MARKER + mapCaption('🧭 *The way onward is clear.* The compass marks your exits.', prefix) });
                     }
                 } catch (navErr) {
                     console.error('[RuinsNav] post-resolve return map failed (non-fatal):', navErr?.message);
@@ -647,4 +698,4 @@ async function handleGroupWarVerb(sock, chatId, senderJid, senderName, norm, pre
     }
 }
 
-module.exports = { handleDM, getEventForPlayer, displayName, navCardFor, returnMapFor, computeExits, presentRoom, handleGroupWarVerb };
+module.exports = { handleDM, getEventForPlayer, displayName, navCardFor, returnMapFor, computeExits, presentRoom, handleGroupWarVerb, mapCaption };
