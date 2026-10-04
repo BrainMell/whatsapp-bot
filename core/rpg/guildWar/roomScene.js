@@ -67,6 +67,11 @@ const W = 1200, H = 900;
 const ASSET_DIR = path.join(__dirname, '..', '..', 'rpgasset', 'guildwar', 'ruins');
 const CHAR_DIR = path.join(__dirname, '..', '..', 'rpgasset', 'characters');
 const ENEMY_DIR = path.join(__dirname, '..', '..', 'rpgasset', 'enemies');
+// ⚔️ ENCOUNTER-TYPE PROPS (owner directive 2026-10-05): every encounter kind
+// shows a real, style-matched sprite — discovery rooms show the RUBBLE the
+// caption talks about, and after `dig` the rubble is gone and the gold
+// coins are left in its place. Generated pixel-art, keyed + grounded.
+const GW_PROP_DIR = path.join(ASSET_DIR, 'props');
 
 // ── doorway geometry on the normalized plates (1200×900) ──
 const DOORS = {
@@ -638,37 +643,31 @@ async function drawRoomContent(ctx, room, plan) {
     const spot = plan.playerSpot || SPAWN_SPOTS[DEFAULT_ENTRY];
     const ax = spot.x > 700 ? 380 : 820, ay = 700;
     if (room.state === 'CLEARED') {
-        // cleared rooms keep a faint scar of what was here (never empty-identical)
+        // cleared rooms keep a faint scar of what was here (never empty-identical).
+        // discovery/reward fall through to the switch — their CLEARED branches
+        // draw the aftermath (coins left behind / emptied vault).
         if (t === 'combat' || t === 'coop' || t === 'core' || (t === 'secret')) glowSpot(ctx, ax, ay - 20, 70, 'rgba(120,140,90,0.10)');
-        return;
+        if (!['discovery', 'reward'].includes(t)) return;
     }
     switch (t) {
         case 'discovery': {
-            // buried cache: disturbed earth mound + broken rim + glint
-            glowSpot(ctx, ax, ay - 10, 90, 'rgba(255,200,80,0.16)');
-            ctx.fillStyle = '#57492f';
-            ctx.beginPath(); ctx.ellipse(ax, ay, 84, 26, 0, Math.PI, 0); ctx.fill();
-            ctx.fillStyle = 'rgba(30,24,14,0.5)';
-            ctx.beginPath(); ctx.ellipse(ax, ay, 46, 14, 0, Math.PI, 0); ctx.fill();
-            ctx.fillStyle = '#8a7248';
-            ctx.beginPath(); ctx.ellipse(ax - 34, ay - 8, 16, 8, 0.3, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = '#ffd24a';
-            ctx.beginPath(); ctx.arc(ax + 22, ay - 16, 4, 0, Math.PI * 2); ctx.fill();
+            // buried cache: the RUBBLE the caption promises (real sprite),
+            // with a faint gold glint breathing through the stones. After
+            // `dig` the rubble is GONE and the gold coins lie in its place.
+            const propFile = room.state === 'CLEARED' ? 'cache_coins.png' : 'cache_rubble.png';
+            glowSpot(ctx, ax, ay - 10, 90, room.state === 'CLEARED' ? 'rgba(255,215,90,0.20)' : 'rgba(255,200,80,0.14)');
+            await drawGroundedSprite(ctx, [GW_PROP_DIR], propFile, ax, ay, room.state === 'CLEARED' ? 96 : 150, { shadow: true });
             break;
         }
         case 'reward': {
-            // old-world vault: stone plinth + sealed reliquary chest
+            // old-world vault: the sealed reliquary chest as a real sprite
             glowSpot(ctx, ax, ay - 30, 100, 'rgba(255,215,90,0.20)');
-            ctx.fillStyle = STONE[1];
-            ctx.beginPath(); ctx.roundRect ? ctx.roundRect(ax - 60, ay - 26, 120, 30, 5) : ctx.rect(ax - 60, ay - 26, 120, 30); ctx.fill();
-            ctx.fillStyle = '#5b452a';
-            ctx.beginPath(); ctx.roundRect ? ctx.roundRect(ax - 44, ay - 74, 88, 50, 6) : ctx.rect(ax - 44, ay - 74, 88, 50); ctx.fill();
-            ctx.fillStyle = '#6f5636';
-            ctx.beginPath(); ctx.ellipse(ax, ay - 74, 44, 16, 0, Math.PI, 0); ctx.fill();
-            ctx.strokeStyle = '#c9a648'; ctx.lineWidth = 3;
-            ctx.beginPath(); ctx.moveTo(ax - 44, ay - 52); ctx.lineTo(ax + 44, ay - 52); ctx.stroke();
-            ctx.fillStyle = '#c9a648';
-            ctx.beginPath(); ctx.arc(ax, ay - 46, 6, 0, Math.PI * 2); ctx.fill();
+            if (room.state !== 'CLEARED') {
+                await drawGroundedSprite(ctx, [GW_PROP_DIR], 'cache_chest.png', ax, ay, 190, { shadow: true });
+            } else {
+                // opened/emptied: coins already claimed — faint scar only
+                glowSpot(ctx, ax, ay - 10, 60, 'rgba(255,215,90,0.10)');
+            }
             break;
         }
         case 'hazard': {
