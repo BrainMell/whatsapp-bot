@@ -66,6 +66,20 @@ function _wrap(ctx, text, maxWidth) {
         else line = test;
     }
     if (line) lines.push(line);
+    // 💡 polish (owner §22 visual QA): a lone trailing punctuation fragment
+    // (a closing quote orphaned by the wrap) must never sit on its own line —
+    // pull the previous line's last word down with it.
+    if (lines.length >= 2) {
+        const last = lines[lines.length - 1];
+        if (last.replace(/[^\p{L}\p{N}]/gu, '').length <= 2) {
+            const prevWords = lines[lines.length - 2].split(' ');
+            if (prevWords.length > 1) {
+                const carried = prevWords.pop();
+                lines[lines.length - 2] = prevWords.join(' ');
+                lines[lines.length - 1] = `${carried} ${last}`;
+            }
+        }
+    }
     return lines;
 }
 

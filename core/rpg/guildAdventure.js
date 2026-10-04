@@ -6905,6 +6905,15 @@ async function handleAbyssVictory(sock, sessionKey) {
 async function endCombat(sock, victory, sessionKey) {
   const state = gameStates.get(sessionKey);
   if (!state || state.isEndingCombat) return;
+  // ⚔️ RACE FIX 2026-10-04 (owner spec §18/§21 — "one evaluation per event"):
+  // the guard used to be claimed AFTER the awaited onEnd hook below, so a
+  // second combat action landing inside that async window re-entered
+  // endCombat and ran the defeat/victory hook TWICE (double war-feed death
+  // events, life-count races, inconsistent final states — observed directly
+  // by the defeat-path QA probe: "[Quest] Combat ended" logged twice per
+  // death). Claim the flag SYNCHRONOUSLY before any await; the existing
+  // resets (victory nextStage timer / defeat cleanup) are unchanged.
+  state.isEndingCombat = true; // claim FIRST — no re-entry during the async hook
   // ⚔️ RUINS: report the outcome to the Guild War module (GP + relic award /
   // defeat respawn). Standard rewards below still apply. sock is passed so
   // the hook can DM post-combat visuals (navigation card).
@@ -6916,7 +6925,6 @@ async function endCombat(sock, victory, sessionKey) {
   if (state.mode === 'TUTORIAL' || state.mode === 'TUTORIAL_QUEST' || state.mode === 'TUTORIAL_GROUP') {
     try { require('./tutorial').notifyCombatEnd(state, sock); } catch (e) { console.error('[Tutorial] combat end notify:', e?.message); }
   }
-  state.isEndingCombat = true; // Guard to prevent double processing
 
   const chatId = state.chatId;
   console.log(

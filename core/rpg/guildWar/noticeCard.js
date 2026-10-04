@@ -407,104 +407,6 @@ async function renderWarHelpCard(opts = {}) {
 }
 
 // ============================================
-// WAR START CARD — DM'd to every champion the moment a war deploys.
-// "The war has begun + here's how you play" (owner brief). Martial red
-// header (same family as the war-call card), DM verb rows, first-move strip.
-// ============================================
-async function renderWarStartCard(opts = {}) {
-    _ensureFonts();
-    const canvas = require('canvas');
-    const c = canvas.createCanvas(W, H);
-    const ctx = c.getContext('2d');
-    const P = String(opts.prefix || '.');
-
-    ctx.fillStyle = PAL.parchment;
-    ctx.fillRect(0, 0, W, H);
-    // martial red header band (matches the war-call / help card family)
-    ctx.fillStyle = PAL.wax;
-    ctx.fillRect(0, 0, W, 190);
-    ctx.fillStyle = 'rgba(0,0,0,0.12)';
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, 0, W, 190);
-    ctx.clip();
-    for (let i = 0; i < 6; i++) {
-        ctx.beginPath();
-        ctx.ellipse(80 + i * 170, 55 + (i % 3) * 65, 90, 34, i * 0.7, 0, Math.PI * 2);
-        ctx.fill();
-    }
-    ctx.restore();
-
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#F3ECD9';
-    ctx.font = '15px "Cinzel"';
-    ctx.fillText('GUILD WAR: THE RUINS', W / 2, 50);
-    ctx.font = '40px "Cinzel Deco"';
-    if ('letterSpacing' in ctx) {
-        ctx.letterSpacing = '3px';
-        ctx.fillText(opts.title || 'THE WAR HAS BEGUN', W / 2, 110);
-        ctx.letterSpacing = '0px';
-    } else {
-        ctx.fillText((opts.title || 'THE WAR HAS BEGUN').split('').join('\u2009'), W / 2, 110);
-    }
-    ctx.strokeStyle = '#F3ECD9';
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(W / 2 - 170, 140); ctx.lineTo(W / 2 + 170, 140); ctx.stroke();
-    ctx.fillStyle = '#F3ECD9';
-    ctx.font = '16px "Cinzel"';
-    ctx.fillText('You are deployed. My DMs are your game screen.', W / 2, 168);
-
-    // how-you-play rows: verb (Cinzel, ink) + what it does (IM Fell, soft)
-    const rows = [
-        ['look', 'See the chamber you stand in.'],
-        ['move w/a/s/d', 'W forward · A left · S back · D right. Or: move forward/left/back/right.'],
-        ['map', 'Your chart of the Ruins - fog lifts as you explore.'],
-        ['relics  ·  handin all', 'Carried relics are banked for guild GP.'],
-        ['challenge @name', 'Duel a rival standing in your room.'],
-        ['status  ·  quit', 'Live standings - or leave the war.'],
-        ['rejoin', 'Return if you ever go inactive.'],
-    ];
-    ctx.textAlign = 'left';
-    let ry = 250;
-    const rowGap = 41;
-    for (const [cmd, desc] of rows) {
-        ctx.fillStyle = PAL.ink;
-        ctx.font = '19px "Cinzel"';
-        ctx.fillText(cmd, 100, ry);
-        ctx.fillStyle = PAL.inkSoft;
-        ctx.font = '17px "IM Fell"';
-        const dLines = _wrap(ctx, desc, W - 560);
-        let dy = ry;
-        for (const dl of dLines.slice(0, 2)) { ctx.fillText(dl, 420, dy); dy += 21; }
-        ctx.strokeStyle = 'rgba(166,124,46,0.35)';
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(100, ry + 14); ctx.lineTo(W - 100, ry + 14); ctx.stroke();
-        ry += rowGap;
-        if (ry > H - 200) break;
-    }
-
-    // first-move strip
-    ctx.fillStyle = 'rgba(58,42,30,0.08)';
-    ctx.fillRect(90, H - 150, W - 180, 62);
-    ctx.strokeStyle = PAL.frame;
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(90, H - 150, W - 180, 62);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = PAL.wax;
-    ctx.font = '19px "Cinzel"';
-    ctx.fillText('YOUR FIRST MOVE:  DM ME  "look"', W / 2, H - 126);
-    ctx.fillStyle = PAL.ink;
-    ctx.font = '15px "IM Fell"';
-    ctx.fillText(`group commands stay live too:  ${P} gw status  ·  ${P} gw help`, W / 2, H - 100);
-
-    ctx.font = 'italic 15px "IM Fell Italic"';
-    ctx.fillStyle = PAL.inkSoft;
-    ctx.textAlign = 'left';
-    ctx.fillText('Carried relics can be stolen. Bank them often.', 110, H - 62);
-
-    return c.toBuffer('image/png');
-}
-
 // ============================================
 // STATUS / FINAL STANDINGS CARD — `.j gw status` live board and the final
 // standings board when a war ends. Night-ink band, ranked rows, right-aligned GP.
@@ -623,4 +525,4 @@ async function renderWarStatusCard(opts = {}) {
     return c.toBuffer('image/png');
 }
 
-module.exports = { renderNotice, renderAlignmentCard, renderWarCalledCard, renderWarHelpCard, renderWarStartCard, renderWarStatusCard };
+module.exports = { renderNotice, renderAlignmentCard, renderWarCalledCard, renderWarHelpCard, renderWarStatusCard };

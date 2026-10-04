@@ -119,12 +119,26 @@ function installCombatHooks() {
             } else {
                 // defeat: lives--, respawn at spawn corner with protection, room stays ACTIVE
                 // (§15 #1 fix: this path was unreachable before the shadowing fix)
-                const freshLives = Math.max(0, (player.lives ?? CFG.COMBAT.LIVES) - 1);
+                // 💬 DEFEAT-PATH BUGFIX 2026-10-04 (owner spec §23 "Win. Lose."):
+                // the combat session entity (buildRuinsPlayerEntity) carries NO
+                // lives / spawnRoomId / roomId / guildName. Reading them here meant
+                // (a) lives were always computed from the default 3 — a champion at
+                // 1 life who died in PvE was INFLATED back to 2; (b) respawn never
+                // relocated — the dead champion woke up inside the death room;
+                // (c) the death feed always said 'the unsworn'. Read the
+                // authoritative event player instead.
+                let src = player;
+                try {
+                    const evD = await state.getEvent(meta.eventId, { fresh: true });
+                    src = (evD && evD.players && evD.players.find((p) => p.jid === jid)) || player;
+                } catch (e) { /* keep session entity as fallback */ }
+                const freshLives = Math.max(0, (src.lives ?? CFG.COMBAT.LIVES) - 1);
+                const spawnRoom = src.spawnRoomId || src.roomId;
                 if (freshLives > 0) {
                     await state.updatePlayer(meta.eventId, jid, {}, {
                         lives: freshLives,
-                        roomId: player.spawnRoomId || player.roomId,
-                        prevRoomId: player.spawnRoomId || player.roomId,
+                        roomId: spawnRoom,
+                        prevRoomId: spawnRoom,
                         protectedUntil: Date.now() + CFG.COMBAT.RESPAWN_PROTECT_MS,
                         lastActionAt: Date.now(),
                     });
@@ -132,14 +146,14 @@ function installCombatHooks() {
                     // EVENT, not a digest bullet — standalone, named, guilded,
                     // with the stakes stated. Mirrors the owner's own example.
                     feed.queue(meta.eventId, 'normal',
-                        `💀 *${player.name} of ${player.guildName || 'the unsworn'}* has fallen deep within the Ruins.\n` +
+                        `💀 *${src.name || player.name} of ${src.guildName || 'the unsworn'}* has fallen deep within the Ruins.\n` +
                         `The dead world claims another life.\n` +
                         `*${freshLives}* ${freshLives === 1 ? 'life' : 'lives'} remain${freshLives === 1 ? 's' : ''}.`);
                 } else {
                     await rooms.dropCarriedRelics(meta.eventId, jid, 'final death');
                     await state.updatePlayer(meta.eventId, jid, {}, { status: 'defeated', lives: 0 });
                     feed.queue(meta.eventId, 'normal',
-                        `💀 *${player.name} of ${player.guildName || 'the unsworn'}* has fallen for the last time this war.\n` +
+                        `💀 *${src.name || player.name} of ${src.guildName || 'the unsworn'}* has fallen for the last time this war.\n` +
                         `The Ruins keep what they take — their carried relics lie where they fell.`);
                 }
             }
