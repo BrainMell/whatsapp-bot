@@ -8961,6 +8961,41 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                   // player has an active DM encounter session, their DMs go
                   // to the encounter framework - EXCEPT prefix commands, so
                   // players can still use normal bot commands mid-encounter.
+                  // ⚔️ GUILD WAR (2026-10-04, owner spec §11): PREFIXED war
+                  // verbs now reach the Ruins router FIRST — `.j move left`,
+                  // `.j move forward`, `.j look`, `.j map` are the canonical
+                  // grammar and must never surface as "unknown command".
+                  // Only the war-specific whitelist is consumed here; generic
+                  // commands (.j use/bag/relics/status/help…) fall through to
+                  // the normal pipeline untouched (dmRouter returns null).
+                  if (
+                    typeof chatId === "string" &&
+                    !chatId.endsWith("@g.us") &&
+                    txt &&
+                    String(txt).toLowerCase().startsWith(botConfig.getPrefix().toLowerCase())
+                  ) {
+                    const _gwVerb = String(txt).toLowerCase().slice(botConfig.getPrefix().length).trim();
+                    const isWarVerb =
+                      /^(?:move\s+)?(?:forward|back|left|right|north|south|east|west|n|s|e|w|a|d)$/.test(_gwVerb) ||
+                      /^(?:look|l|where|whereami|paths|map|mark|anchor|teleport|tp|recall|share\s+map|challenge|accept|flee|handin|rejoin|return|quit)\b/.test(_gwVerb);
+                    if (isWarVerb) {
+                      try {
+                        const gwResult = await require("./rpg/guildWar/dmRouter").handleDM(
+                          sock, senderJid, chatId, txt, BOT_MARKER, { prefix: botConfig.getPrefix(), prefixed: true },
+                        );
+                        if (gwResult) {
+                          if (gwResult.image) {
+                            await sock.sendMessage(chatId, { image: gwResult.image, caption: BOT_MARKER + (gwResult.text || "") });
+                          } else if (gwResult.text) {
+                            await sock.sendMessage(chatId, { text: BOT_MARKER + gwResult.text });
+                          }
+                          return;
+                        }
+                      } catch (e) {
+                        console.error("[GuildWar] prefixed DM router error:", e.message);
+                      }
+                    }
+                  }
                   if (
                     typeof chatId === "string" &&
                     !chatId.endsWith("@g.us") &&
@@ -29844,6 +29879,27 @@ _(or reply to their message)_
                   // handin/challenge) — see core/rpg/guildWar/. `wr` and `war` are
                   // first-class aliases of `gw` (owner ask: keep the old switch alive).
                   // ============================================
+                  // ⚔️ GUILD WAR group war-verbs (owner spec §11/§17): `.j move
+                  // left` / `.j look` / `.j map` typed in the FEED GROUP are
+                  // never "unknown command" — the sender gets their room view
+                  // in DMs and the group gets a one-line war-feed line.
+                  const _gwVerbProbe = lowerTxt.startsWith(prefix)
+                    ? lowerTxt.slice(prefix.length).trim()
+                    : "";
+                  const _isGwMoveVerb = /^(?:move\s+)?(?:forward|back|left|right|north|south|east|west|n|s|e|w|a|d)$/.test(_gwVerbProbe);
+                  const _isGwPlayVerb = /^(?:look|l|where|paths|map|mark|anchor|teleport|tp|recall|share\s+map|challenge|accept|flee|handin)\b/.test(_gwVerbProbe);
+                  if (chatId.endsWith("@g.us") && (_isGwMoveVerb || _isGwPlayVerb)) {
+                    try {
+                      let _gwName = "A champion";
+                      try { _gwName = economy.getDisplayName(senderJid) || _gwName; } catch (e) {}
+                      const handled = await require("./rpg/guildWar/dmRouter").handleGroupWarVerb(
+                        sock, chatId, senderJid, _gwName, _gwVerbProbe, prefix,
+                      );
+                      if (handled) return;
+                    } catch (e) {
+                      console.error("[GuildWar] group war-verb error:", e.message);
+                    }
+                  }
                   if (
                     lowerTxt.startsWith(`${prefix} gw`) ||
                     lowerTxt.startsWith(`${prefix} wr`) ||

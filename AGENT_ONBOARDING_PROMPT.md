@@ -237,14 +237,14 @@ If `pairingPhone` is set in `instances/<BotName>/botConfig.json`, the bot uses p
 ## Oracle Cloud infrastructure (SPLIT SERVER)
 
 ### Box 1 - Bot Server
-- **Host:** `84.8.130.156` (user: `ubuntu`)
+- **Host:** `84.12.91.128` (user: `ubuntu`)
 - **Private IP:** `10.0.1.247`
 - **Shape:** `VM.Standard.E2.1.Micro` (AMD x86, 1/8 OCPU, 954 MB RAM)
 - **Runs:** `whatsapp-bot` - Node.js bot (Jake + Joker + Subaru)
 - **Swap:** 2 GB at `/swapfile` (permanent in `/etc/fstab`). Do NOT remove.
 
 ### Box 2 - Go Service Server
-- **Host:** `92.4.134.161` (user: `ubuntu`)
+- **Host:** `84.8.136.110` (user: `ubuntu`)
 - **Private IP:** `10.0.1.56`
 - **Shape:** `VM.Standard.E2.1.Micro` (AMD x86, 1/8 OCPU, 954 MB RAM)
 - **Runs:** `bot-generation-go` (port 7860), `bot-generation-scraper` (port 7861), `warp-proxy` (port 1080)
@@ -252,11 +252,11 @@ If `pairingPhone` is set in `instances/<BotName>/botConfig.json`, the bot uses p
 
 ### Network path
 ```
-User → WhatsApp → Box 1 (84.8.130.156) → whatsapp-bot
+User → WhatsApp → Box 1 (84.12.91.128) → whatsapp-bot
                                                     ↓
                                               HTTP POST to Go service
                                                     ↓
-                                              Box 2 (10.0.1.56:7860) via VCN private IP
+                                              Go service (Box 2 84.8.136.110) via Box 1 local relay 127.0.0.1:7860
                                                     ↓
                                               Go service renders → PNG/MP4 back
 ```
@@ -266,9 +266,9 @@ User → WhatsApp → Box 1 (84.8.130.156) → whatsapp-bot
 import paramiko
 ssh = paramiko.SSHClient()
 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-ssh.connect("84.8.130.156", username="ubuntu", key_filename="/tmp/ssh_key", timeout=15)
+ssh.connect("84.12.91.128", username="ubuntu", key_filename="/tmp/ssh_key", timeout=15)
 # OR for Box 2:
-ssh.connect("92.4.134.161", username="ubuntu", key_filename="/tmp/ssh_key", timeout=15)
+ssh.connect("84.8.136.110", username="ubuntu", key_filename="/tmp/ssh_key", timeout=15)
 ```
 
 ### Go service deploy (manual - no deploy script on sandbox)
@@ -298,9 +298,9 @@ GROQ_API_KEYS=<comma-separated list of gsk_ keys, rotates on rate-limit>
 GROQ_MODEL=llama-3.3-70b-versatile
 
 # Go image microservice (renders combat scenes + card images)
-# Go service runs on Box 2 (92.4.134.161).
-# Bot reaches it via VCN private IP (10.0.1.56), NOT localhost.
-GO_IMAGE_SERVICE_URL=http://10.0.1.56:7860
+# Go service runs on Box 2 (84.8.136.110); Box 1 reaches it through a
+# local pm2 relay bound to 127.0.0.1:7860 (bot-generation-go relay).
+GO_IMAGE_SERVICE_URL=http://127.0.0.1:7860
 ```
 
 ### GitHub Personal Access Token
@@ -311,8 +311,8 @@ GO_IMAGE_SERVICE_URL=http://10.0.1.56:7860
 - **PATs expire every ~2 days.** Treat any PAT touched by a third-party chat interface as burned.
 
 ### Oracle SSH
-- Box 1 (bot): `84.8.130.156`
-- Box 2 (Go service): `92.4.134.161`
+- Box 1 (bot): `84.12.91.128`
+- Box 2 (Go service): `84.8.136.110`
 - User: `ubuntu`
 - Key: `ssh-key-2026-07-24.key` (provided by user)
 
@@ -330,7 +330,7 @@ Branch:  audit/fix-pass-1 (active - all recent work is here, NOT on main yet)
 ```
 GitHub:  https://github.com/BrainMell/Bot_genaration
 Branch:  main
-Deploy:  Oracle Cloud Box 2 (92.4.134.161, port 7860)
+Deploy:  Oracle Cloud Box 2 (84.8.136.110, port 7860)
 ```
 
 The Go service renders combat scenes, card grids, profile cards, transaction cards, eShop decks, and game boards. The JS bot sends HTTP requests to `http://10.0.1.56:7860/api/...` and receives PNG/MP4 buffers back.

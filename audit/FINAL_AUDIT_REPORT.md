@@ -182,3 +182,65 @@ EPIC summon-core as its own entry.)
    workflow or a user-authorized SSH key.
 5. **247 lint warnings** (`no-unused-vars`) — cosmetic, queued behind
    functional work.
+
+---
+
+## 8. FIX-PASS-3 (2026-10-04) — Guild War presentation & gameplay overhaul
+
+Owner directive: keep the architecture, make it feel like a game rendered
+through WhatsApp. All 23 spec sections addressed; details in the commit.
+
+**Presentation (new `roomScene.js` + rewritten `mapRenderer.js`):**
+- The parchment "THE WAR HAS BEGUN — to begin: LOOK" card is DEAD. Deployment
+  DM = text → MAP → scene. The world shows itself (§1).
+- Room entry order is now MAP → ENVIRONMENT → info captions (§2).
+- Landscape (1500×1000) dark-stone war map, self-zooming to the discovered
+  region, fog-aware, with TWO visual states: `explore` and `return`
+  (post-encounter ember frame + THE WAY ONWARD ribbon) (§3/§4).
+- Room scenes render in Node from the owner's own Ruins plates: door variant
+  selected from the room's REAL exits (N/E/W arches; S = indicator only;
+  mirrored/composited variants cover right-only, forward+right, left+right),
+  the player's ASSIGNED sprite at a consistent spot (Go-parity resolution),
+  yellow chevrons on every open arch, a floor compass generated from
+  adjacency, per-type ambience. NO banner, NO rank, NO cosmetic corner
+  sprite (§5-§13). Puzzle boards OVERLAY the scene (§11 note).
+- `.j move forward|left|back|right` is the canonical grammar; prefixed war
+  verbs reach the DM router (`.j left` is never "unknown command" again) and
+  group-typed war verbs nudge the player into DMs (§11).
+
+**Gameplay:**
+- Auto-encounters: combat/coop/core (and boss-sealed secrets) start the real
+  combat pipeline the moment the player walks in — no `fight` poking (§14).
+  The existing combat engine stays (§15) — verified hooks: victory/defeat/
+  flee all land.
+- Teleport anchor (§16): `mark` / `teleport`, ONE room, replaceable, blocked
+  inside unresolved encounters and pending duels.
+- Feed majors extended: boss/core guardian kills now headline in the host GC
+  (§17/§18).
+
+**Bugs found & fixed during the pass:**
+1. `state.getMoveContext` projection omitted `eventId` — every room-entry
+   fresh re-read returned null and **the map + scene silently never sent on
+   room entry in production**. Fixed; presentation sim now asserts the order.
+2. Participation GP was inverted (paid score-0 idlers, skipped fighters) —
+   fixed in `points.distribute` (§22).
+3. Legacy-prefix tolerance in the DM router was broken for `.`-prefix bots
+   (`.j <verb>` stripped only the dot) — fixed.
+4. `*.png` LFS rule would have shipped the new Ruins plates as pointer files
+   on `git reset --hard` deploys — plates are excluded from LFS and committed
+   as real blobs.
+
+**§22 verification (not assumed — tested):** ring + lastMoveAt survive the
+schema; combat-hook shadowing fix confirmed (victory/defeat/flee all land);
+ward buffs ride into combat and are consumed; hazard/anomaly damage draws on
+persistent HP; two-way spawn protection holds; cross-instance challenges are
+doc-persisted (the duel itself remains single-instance by design).
+
+**Battery after this pass:** presentation sim **57/57** (new,
+`scripts/gw_presentation_sim.js`) · gw_sim **558/558** · require smoke
+**134/134** · mega-pass **20/20** (tutorial section re-synced to the
+reworked step machine) · use-catalog **407/407** · eslint crash-class **0
+errors**.
+
+**Known open items remaining:** Bot_genaration 3-way divergence; Esdeath WA
+session; Box 2 deploy path (Actions covers Box 1 only); 247 lint warnings.

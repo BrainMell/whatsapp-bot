@@ -97,16 +97,25 @@ async function distribute(eventDoc, reason) {
     const guilds = require('../guilds');
     const summary = { reason, guilds: [], top: [], participation: [] };
 
-    // 1. participation floor for anyone who acted at least once
+    // 1-5. participation GP — ⚔️ §22 FIX (inverted logic): the old check
+    // selected score === 0, i.e. it PAID the players who did NOTHING and
+    // skipped everyone who actually fought. "Participated" now means the
+    // player took at least one action after joining (lastActionAt moved
+    // past joinedAt) and didn't quit.
     for (const p of eventDoc.players) {
-        if ((p.score || 0) === 0 && p.status !== 'quit' && p.joinedAt) {
+        if (p.status === 'quit' || !p.joinedAt) continue;
+        const acted = (p.lastActionAt || 0) > (new Date(p.joinedAt).getTime() || 0);
+        const scored = (p.score || 0) > 0;
+        if (acted || scored) {
             summary.participation.push(p.name);
+            const gp = CFG.POINTS.PARTICIPATION_GP;
+            try { guilds.addGuildPoints(p.guildId, gp, 'Guild War participation'); } catch (e) { /* gone */ }
         }
     }
 
-    // 2. aggregate per guild
+    // aggregate per guild
     const byGuild = feed.computeScoreboard(eventDoc);
-    // 3. push into the real guild level curve (earned, permanent)
+    // push into the real guild level curve (earned, permanent)
     for (const g of byGuild) {
         const total = eventDoc.players.filter((p) => p.guildId === g.guildId).reduce((s, p) => s + (p.score || 0), 0);
         try {
@@ -115,20 +124,12 @@ async function distribute(eventDoc, reason) {
         summary.guilds.push({ ...g, points: total });
     }
 
-    // 4. individual honors
+    // individual honors
     summary.top = eventDoc.players
         .filter((p) => (p.score || 0) > 0)
         .sort((a, b) => b.score - a.score)
         .slice(0, 5)
         .map((p) => ({ name: p.name, guild: p.guildName, score: p.score }));
-
-    // 5. participation GP (small, distinct from accomplishments)
-    for (const p of eventDoc.players) {
-        if ((p.score || 0) === 0 && p.status !== 'quit' && p.joinedAt) {
-            const gp = CFG.POINTS.PARTICIPATION_GP;
-            try { guilds.addGuildPoints(p.guildId, gp, 'Guild War participation'); } catch (e) { /* gone */ }
-        }
-    }
 
     await state.pushLog(eventDoc.eventId, 'rewards', 'system', `distributed ${summary.guilds.reduce((s, g) => s + g.points, 0)} GP — ${reason}`);
     return summary;

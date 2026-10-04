@@ -64,20 +64,33 @@ function mockSock() {
 
     // step: char → gear
     await tutorial.notify(A, "char", { sock, chatId: A });
-    check("gear step asks equip", sock.sent.some((m) => (m.content.text || "").includes("equip rusty dagger")));
+    // 💡 2026-10-04: the step text points at the item id (rusty_dagger) —
+    // assert the exact in-game instruction
+    check("gear step asks equip", sock.sent.some((m) => (m.content.text || "").includes("equip rusty_dagger")));
 
-    // step: equip → practice fight (auto-start)
+    // step: equip → bag → inventory → the TRAINING QUEST auto-opens (solo
+    // fight vs one docile Garden Slime). The old smoke expected an instant
+    // practice-dummy fight here; the reworked machine walks bag first.
     await tutorial.notify(A, "equip", { sock, chatId: A });
-    await new Promise((r) => setTimeout(r, 9000)); // combat start render + first turn (solo delay 0)
-    const userFighting = economy.getUser(A);
-    check("practice fight granted potions+skills", (userFighting.tutorialLoadout.items || []).some((i) => i.id === "minor_potion") && (userFighting.tutorialLoadout.skills || []).length >= 1);
+    await tutorial.notify(A, "inventory", { sock, chatId: A });
+    await new Promise((r) => setTimeout(r, 9000)); // quest render + intro turn (solo delay 0)
     check("combat started (scene sent)", sock.sent.some((m) => m.content.image));
 
     // attack through the REAL combat action path
+    const imgsBefore = sock.sent.filter((m) => m.content.image).length;
     const r1 = await guildAdventure.handleCombatAction(sock, A, A, "attack", "");
-    await new Promise((r) => setTimeout(r, 1500));
+    await new Promise((r) => setTimeout(r, 1800));
     check("attack accepted in tutorial fight", r1 === null || !String(r1).includes("Not in combat"), String(r1 || "ok").slice(0, 40));
-    check("attack advanced tutorial", sock.sent.some((m) => (m.content.text || "").includes("combat skill 1")));
+    check("attack resolved a turn (image came back)", sock.sent.filter((m) => m.content.image).length > imgsBefore);
+
+    // finish the slime → victory opens the demo raid ("demo raid" lesson)
+    let advanced = false;
+    for (let i = 0; i < 16 && !advanced; i++) {
+        await guildAdventure.handleCombatAction(sock, A, A, "attack", "");
+        await new Promise((r) => setTimeout(r, 1700));
+        advanced = sock.sent.some((m) => (m.content.text || "").includes("demo raid"));
+    }
+    check("solo victory → demo raid offered", advanced);
 
     // finish/skip → loadout revoked
     await tutorial.handleDM(sock, A, A, "skip", "", { prefix: ".j" });

@@ -173,8 +173,8 @@ async function onRoomEnter(eventDoc, player, room) {
             break;
         case 'combat':
             rooms.markActive(eventDoc.eventId, room.key);
-            lines.push(`⚔️ Something moves in the dark of this ${flavor.toLowerCase()} chamber - *enemies bar the way*. The room must be resolved before you may move on.`);
-            lines.push(`Use your standard combat commands here. _Fleeing retreats you to the previous room and forfeits this room\u2019s spoils._`);
+            lines.push(`⚔️ Something moves in the dark of this ${flavor.toLowerCase()} chamber - *enemies bar the way*. The battle begins!`);
+            lines.push(`_Fleeing retreats you to the previous room and forfeits this room\u2019s spoils._`);
             break;
         case 'puzzle':
             rooms.markActive(eventDoc.eventId, room.key);
@@ -196,7 +196,7 @@ async function onRoomEnter(eventDoc, player, room) {
             break;
         case 'secret':
             lines.push(`✨ A hidden chamber! The air shivers with concentrated power.`);
-            if (room.payload.boss) lines.push(`But something ancient guards it... Type \`fight\` - or \`flee\` now.`);
+            if (room.payload.boss) lines.push(`But something ancient guards it - *and it has noticed you!*`);
             else lines.push(`Type \`claim\` to take what it holds.`);
             break;
         case 'anomaly':
@@ -212,7 +212,7 @@ async function onRoomEnter(eventDoc, player, room) {
         case 'core':
             rooms.markActive(eventDoc.eventId, room.key);
             lines.push(`🌍 *THE WORLD CORE* - the heart of this dead world still beats here. A mighty guardian bars the way.`);
-            lines.push(`First guild to breach it earns lasting glory. Type \`fight\` to challenge the guardian.`);
+            lines.push(`First guild to breach it earns lasting glory. *The guardian attacks!*`);
             break;
         default:
             lines.push(`You stand in the ${flavor.toLowerCase()} ruins.`);
@@ -418,10 +418,12 @@ function roomFlavor(room) {
 }
 
 // the changed room: cleared-state scene (best-effort, never blocks)
+// 💡 OVERHAUL 2026-10-04: same roomScene renderer, cleared wash — the room
+// stays visually consistent before/after (no engine swap mid-flow).
 async function clearedScene(eventDoc, player, room) {
     try {
-        const encounterScenes = require('./encounterScenes');
-        return await encounterScenes.renderScene(eventDoc, player, room, { state: 'cleared' });
+        const roomScene = require('./roomScene');
+        return await roomScene.renderRoomScene(eventDoc, player, room, { prefix: '.' });
     } catch (e) {
         return null;
     }
@@ -551,122 +553,43 @@ async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = 
     return started;
 }
 
-// ── room intro WITH encounter scene: { text, image, extraImage } ──
-// 2026-10-02 owner directive: every room renders as a battle-style scene
-// (player standing, per-type prop, square map bottom-right, NO combat UI).
-// Exploration rooms: scene image rides the intro text. Puzzle rooms ALSO
-// emit the actual game board as a follow-up image card (extraImage).
-// Combat kinds keep the classic battle render (enemies + square map panel)
-// produced by startCombat, so no scene here. The parchment card remains
-// only as a render-failure fallback - never the primary visual.
-async function roomIntro(eventDoc, player, room) {
+// ── room intro WITH the environment scene: { text, image } ──
+// 💡 OVERHAUL 2026-10-04: the scene is rendered IN-PROCESS by roomScene.js
+// — the owner's own Ruins plates, door-variant selected from the room's
+// REAL exits, the player's ASSIGNED sprite standing at a consistent spot,
+// yellow chevrons on every open arch, floor compass generated from
+// adjacency, per-type ambience. NO banner, NO rank, NO cosmetic corner
+// sprite, NO parchment type card. The Go microservice is out of the
+// exploration flow (it still renders actual battle scenes — §15: the
+// existing combat engine stays).
+// Puzzle rooms: the game board OVERLAYS the scene panel (owner directive).
+async function roomIntro(eventDoc, player, room, opts = {}) {
     const text = await onRoomEnter(eventDoc, player, room);
     try {
-        const encounterScenes = require('./encounterScenes');
+        const roomScene = require('./roomScene');
         const P = room.payload || {};
-        const theme = worldTheme(payloadGet(P, 'theme') || eventDoc.deadWorld);
-        const variant = variantOf(room);
-        let body = null, actionHint = null, title = null;
-
-        // combat kinds: the battle image IS the intro (enemies + map panel)
-        if (['combat', 'coop', 'core'].includes(room.type)) return { text };
-
-        if (room.state === 'CLEARED') {
-            // the changed room: show what it looks like now
-            const cleared = await encounterScenes.renderScene(eventDoc, player, room, { state: 'cleared' });
-            if (cleared) return { text, image: cleared };
-            return { text };
-        }
-        switch (room.type) {
-            case 'combat':
-                body = variant ? variant.line : 'Something moves in the dark - enemies bar the way. The room must be resolved before you may move on.';
-                actionHint = 'Type fight to engage. Fleeing retreats you and forfeits this room\'s spoils.';
-                break;
-            case 'coop':
-                body = variant ? variant.line : 'A guardian pack blocks this hall. Allies in the room may fight it together.';
-                actionHint = 'Type fight to engage - allies share the reward.';
-                break;
-            case 'core':
-                body = 'The heart of this dead world still beats here. A mighty guardian bars the way. First guild to breach it earns lasting glory.';
-                actionHint = 'Type fight to challenge the guardian.';
-                break;
-            case 'puzzle': {
-                const pz = payloadGet(P, 'puzzle');
-                body = (pz && pz.prompt) || 'A mechanism blocks the far door.';
-                actionHint = `Reply with your answer - ${CFG.PUZZLE.ATTEMPTS} attempts. Wrong answers have a cost.`;
-                break;
-            }
-            case 'discovery':
-                body = payloadGet(P, 'text') || 'Something is hidden here.';
-                actionHint = 'Type dig to unearth it.';
-                break;
-            case 'reward':
-                body = 'A vault-chamber of the old world - untouched since the world died.';
-                actionHint = 'Type take to claim what lies within.';
-                break;
-            case 'hazard':
-                body = payloadGet(P, 'hazardText') || 'Danger lurks here.';
-                actionHint = 'Type cross to attempt passage.';
-                break;
-            case 'lore':
-                body = payloadGet(P, 'lore') || 'Old words cover these walls.';
-                actionHint = 'Type read to study the inscriptions.';
-                break;
-            case 'secret':
-                body = payloadGet(P, 'boss') ? 'A hidden chamber - and something ancient guards it.' : 'A hidden chamber! The air shivers with concentrated power.';
-                actionHint = payloadGet(P, 'boss') ? 'Type fight - or flee now.' : 'Type claim to take what it holds.';
-                break;
-            case 'anomaly':
-                body = 'Reality thins here - the walls between worlds bleed through.';
-                actionHint = 'Type touch to interact... or move on.';
-                break;
-            case 'landmark':
-                title = payloadGet(P, 'landmarkName') || null;
-                body = payloadGet(P, 'lore') || 'A marker of the old world.';
-                actionHint = 'Type record to claim it for your guild.';
-                break;
-            default:
-                // 💡 OVERHAUL MD §3: even EMPTY halls render the character
-                // standing in the environment ("I am here" before "here is
-                // the world"). Silence is a scene, not a missing image.
-                body = 'Nothing unusual here. The way onward is clear.';
-                actionHint = null;
-                break;
-        }
-        // primary visual: the battle-style scene (prop + square map, no UI).
-        // 💡 cardBody/cardAction ride along so the caller's room-TYPE card can
-        // show the payload-specific flavour instead of a generic hint.
-        const scene = await encounterScenes.renderScene(eventDoc, player, room, { state: 'intact' });
-        if (scene) {
-            const out = { text, image: scene, cardBody: body, cardAction: actionHint };
-            // puzzle rooms: the actual game board rides as the follow-up card
-            if (room.type === 'puzzle') {
-                const pz = payloadGet(P, 'puzzle');
-                if (pz) {
-                    const puzzleCards = require('./puzzleCards');
-                    out.extraImage = await puzzleCards.renderPuzzleCard({
+        // scene for EVERY room kind — combat kinds included (the scene is
+        // the "you walk in and see them" beat; the battle render follows it)
+        const sceneOpts = { prefix: opts.prefix || '.' };
+        if (room.type === 'puzzle' && room.state !== 'CLEARED') {
+            const pz = payloadGet(P, 'puzzle');
+            if (pz) {
+                try {
+                    sceneOpts.puzzleBoard = await require('./puzzleCards').renderPuzzleCard({
                         kind: pz.kind, prompt: pz.prompt,
                         attemptsUsed: pz.attemptsUsed || 0,
                         attemptsMax: pz.maxAttempts || CFG.PUZZLE.ATTEMPTS,
-                        world: theme.name, ring: Math.max(1, Math.round((room.ring || 0) * 4) + 1),
+                        world: worldTheme(payloadGet(P, 'theme') || eventDoc.deadWorld).name,
+                        ring: Math.max(1, Math.round((room.ring || 0) * 4) + 1),
                     });
-                }
+                } catch (e) { /* board overlay is best-effort */ }
             }
-            return out;
         }
-        // fallback: parchment decree card (scene render failure never blocks play)
-        const encounterCards = require('./encounterCards');
-        const image = await encounterCards.renderRoomCard({
-            type: room.type,
-            variant: (room.type === 'combat' || room.type === 'coop') ? variant : null,
-            title, body, actionHint,
-            world: theme.name,
-            ring: room.ring,
-            boss: room.type === 'core' || (room.type === 'secret' && !!payloadGet(P, 'boss')),
-        });
-        return { text, image, cardBody: body, cardAction: actionHint };
+        const scene = await roomScene.renderRoomScene(eventDoc, player, room, sceneOpts);
+        if (scene) return { text, image: scene };
+        return { text };
     } catch (e) {
-        return { text }; // card failure never blocks play
+        return { text }; // scene failure never blocks play
     }
 }
 
@@ -674,4 +597,5 @@ module.exports = {
     DEAD_WORLDS, worldTheme,
     buildRoomPayload, onRoomEnter, roomIntro, resolveInput, startRoomCombat,
     nearestRelicRoom, describeDirection, awardRoomRelic, variantOf, pickVariant,
+    payloadGet,
 };

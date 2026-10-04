@@ -70,6 +70,12 @@ function installCombatHooks() {
                         await encounters.awardRoomRelic(ev, me, room);
                     }
 
+                    // 💡 FEED (§17): boss-tier kills are war headlines
+                    if (room.type === 'core' || (room.type === 'secret' && room.payload && (room.payload.boss || room.payload.get?.('boss')))) {
+                        feed.queue(meta.eventId, 'major',
+                            `💀 ${me.name} of ${me.guildName} has SLAIN the guardian of a ${room.type === 'core' ? 'WORLD CORE' : 'hidden chamber'}! The way stands open.`);
+                    }
+
                     // World Core: first guild to breach
                     if (room.type === 'core' && !ev.coreClaimedBy) {
                         await GuildWarEvent.updateOne(
@@ -87,20 +93,22 @@ function installCombatHooks() {
                     feed.queue(meta.eventId, 'normal',
                         `⚔️ ${me.name} cleared a ${room.type === 'core' ? 'World Core guardian' : 'guarded chamber'}${coopBonus ? ' (with guild help)' : ''}.`);
 
-                    // 💡 NAVIGATION OVERHAUL: post-victory visual path choice.
+                    // 💡 NAVIGATION OVERHAUL §4/§15: post-victory the player
+                    // gets the RETURN map (same chart, post-encounter visual
+                    // state) — the world re-renders around them, no parchment.
                     if (sock) {
                         try {
                             const freshAfter = await state.getEvent(meta.eventId, { fresh: true });
                             const meAfter = freshAfter.players.find((p) => p.jid === jid) || me;
                             const roomAfter = freshAfter.rooms.find((r) => r.key === meAfter.roomId) || room;
                             const dmRouter = require('./dmRouter');
-                            const navBuf = await dmRouter.navCardFor(freshAfter, meAfter, roomAfter, '.');
+                            const retBuf = await dmRouter.returnMapFor(freshAfter, meAfter, roomAfter);
                             await sock.sendMessage(state.chatId || jid, {
-                                image: navBuf,
-                                caption: '🧭 *The chamber is yours.* Choose your path:',
+                                image: retBuf,
+                                caption: '🧭 *The chamber is yours.* The compass marks your exits.',
                             });
                         } catch (navErr) {
-                            console.error('[GW] victory nav card failed (non-fatal):', navErr?.message);
+                            console.error('[GW] victory return map failed (non-fatal):', navErr?.message);
                         }
                     }
                 } else {
@@ -371,36 +379,35 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
     }
 }
 
-// ⚔️ DM the "war has begun + how you play" start card to every champion.
-// Fired on deploy - both manual forcestart and auto registration-expiry start.
-// 💡 PHASE 3 (presentation overhaul): the start card is no longer the end of
-// the deployment DM - the champion's spawn room AUTO-PRESENTS itself right
-// after (map with YOU marker + scene + situation caption). The war opens on
-// their screen without anybody having to type `look` first.
+// ⚔️ DM the deployment to every champion. Fired on deploy — both manual
+// forcestart and auto registration-expiry start.
+// 💡 OVERHAUL 2026-10-04 (owner spec §1): the parchment 'THE WAR HAS BEGUN
+// — to begin: LOOK' card is DEAD. The deployment DM IS the game: a short
+// martial text, then the spawn room presents itself (map with the YOU
+// marker → the scene with the champion standing in it). Nobody is told to
+// "look" — the world shows itself.
 async function dmWarStartCards(sock, BOT_MARKER = '\u200B', event, prefix = '.') {
     if (!sock || !event) return 0;
-    const notice = require('./noticeCard');
     const dmRouter = require('./dmRouter');
-    const buf = await notice.renderWarStartCard({ prefix });
     const players = (event.players || []).filter((p) => p && p.jid && p.status !== 'quit');
     let sent = 0;
     for (const p of players) {
         try {
             await sock.sendMessage(p.jid, {
-                image: buf,
-                caption: `${BOT_MARKER}⚔️ *THE WAR HAS BEGUN, ${p.name}.*\nYou are deployed into the Ruins of a dead world. My DMs are now your game screen - your surroundings await below.`,
+                text: `${BOT_MARKER}⚔️ *THE WAR HAS BEGUN, ${p.name}.*\nYou are deployed into the Ruins of a dead world. My DMs are now your game screen - your surroundings await below.`,
             });
             sent += 1;
         } catch (e) {
-            console.error('[GW] start card DM failed:', p.jid, e?.message);
+            console.error('[GW] start DM failed:', p.jid, e?.message);
         }
-        // auto-present the spawn room (§3: the character stands in the scene
-        // first, the map rides underneath — the war opens on their screen)
+        // auto-present the spawn room: MAP first (§2 order), then the scene
+        // with the champion standing in it. deployOrder flag kept for any
+        // caller that wants scene-first — default flow is map-first now.
         try {
             const ctx = await state.getMoveContext(event.eventId, p.roomId);
             if (ctx && ctx.room) {
                 const me = ctx.players?.find?.((x) => x.jid === p.jid) || p;
-                await dmRouter.presentRoom(sock, p.jid, BOT_MARKER, ctx, me, ctx.room, { prefix, withMap: true, deployOrder: true });
+                await dmRouter.presentRoom(sock, p.jid, BOT_MARKER, ctx, me, ctx.room, { prefix });
             }
         } catch (e) {
             console.error('[GW] spawn auto-present failed:', p.jid, e?.message);

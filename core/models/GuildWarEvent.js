@@ -40,6 +40,7 @@ const PlayerSchema = new mongoose.Schema({
     roomId: String,
     prevRoomId: String,
     spawnRoomId: String,
+    markedRoom: String,         // §16 teleport anchor: ONE room, player-replaceable
     status: { type: String, default: 'active' }, // active|inactive|defeated|quit
     discovered: [String],
     relics: [RelicSchema],

@@ -83,9 +83,13 @@ async function getEvent(eventId, { fresh = false } = {}) {
 // the entire map (measured: 1849-room full reads per move = GC storms at
 // alignment scale). Players return as light rows for mate/foe detection.
 async function getMoveContext(eventId, roomKey) {
+    // ⚔️ FIX (2026-10-04): `eventId: 1` was MISSING from this projection —
+    // callers read ctxDoc.eventId and got undefined, so every presentRoom
+    // fresh re-read returned null and the MAP + SCENE silently never sent
+    // on room entry (the "navigation overhaul" shipped half-blind).
     const doc = await GuildWarEvent.findOne(
         { eventId },
-        { rooms: { $elemMatch: { key: roomKey } }, 'players.jid': 1, 'players.name': 1, 'players.guildId': 1, 'players.guildName': 1, 'players.roomId': 1, 'players.status': 1, side: 1, coreKey: 1, deadWorld: 1, type: 1, state: 1, seed: 1, edges: 1 }
+        { eventId: 1, rooms: { $elemMatch: { key: roomKey } }, 'players.jid': 1, 'players.name': 1, 'players.guildId': 1, 'players.guildName': 1, 'players.roomId': 1, 'players.status': 1, side: 1, coreKey: 1, deadWorld: 1, type: 1, state: 1, seed: 1, edges: 1 }
     ).lean();
     if (!doc) return null;
     doc.room = doc.rooms?.[0] || null;
