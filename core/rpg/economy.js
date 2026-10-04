@@ -34,9 +34,10 @@ function getTodayKey() {
   return new Date().toISOString().slice(0, 10);
 }
 
-// 💡 P4 Item 5 (2026-08-16): Daily quest cap - was 5, raised to 8 per owner request (2026-09-12).
+// 💡 P4 Item 5 (2026-08-16): Daily quest cap - was 5, raised to 8 per owner request (2026-09-12),
+// then to 17 per owner request (2026-10-04).
 // Enforced server-side at quest entry. Resets at UTC midnight.
-const DAILY_QUEST_CAP = 8;
+const DAILY_QUEST_CAP = 17;
 function checkDailyQuestCap(userId) {
   const user = getUser(userId);
   if (!user) return { allowed: true }; // fail open if user not loaded yet
@@ -2354,7 +2355,8 @@ function getMentionJid(jid) {
 // Default cap: 500 million total zeni across all players.
 // Reasoning: ~3700 players × ~135K avg wallet = ~500M. The new rank-based
 // reward table (F=1K, SSS=50K) means a player doing 8 quests/day at SSS
-// earns ~250K/day. With 3700 active players, that's ~925M/day if everyone
+// earns ~250K/day (quest cap raised to 17/day in Oct 2026 → ~530K/day max).
+// With 3700 active players, that's ~925M/day if everyone
 // maxes out - the cap prevents runaway inflation. Admin can adjust live.
 const DEFAULT_MARKET_CAP = 500_000_000;
 let _marketCap = null; // cached from DB
