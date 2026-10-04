@@ -2011,9 +2011,18 @@ function buildRuinsPlayerEntity(senderJid) {
 // spec: { enemies: [{type, level, name?}], eventId, roomKey, rank?, background?, groq?, greeting? }
 async function startRuinsCombat(sock, chatId, senderJid, spec) {
   if (isUserInAnyCombat(senderJid)) return { success: false, msg: '❌ You are already in combat.' };
-  const sessionKey = scopedKey(`${chatId}_${senderJid}`);
+  const isTutorialGroup = !!spec.tutorialGroup;
+  // 💡 Phase B FIX (2026-10-04): group demo states must live under the GROUP
+  // key (chatId) like every other group adventure. Previously ALL
+  // startRuinsCombat states used the solo key "chat_jid", so once the
+  // tutorial group demo went live, handleCombatAction computed the group
+  // key, performAction got "NO STATE" and silently no-op'd - combat froze
+  // on the player's first action (the exact "stuck tutorial" failure mode).
+  const sessionKey = isTutorialGroup ? scopedKey(chatId) : scopedKey(`${chatId}_${senderJid}`);
   if (gameStates.has(sessionKey)) return { success: false, msg: '❌ You already have an active quest!' };
   const isTutorial = !!spec.tutorialMode;
+  // 💡 Phase B: tutorial GROUP demo flags arrive via spec.tutorialGroup
+  // (declared above - it decides the session key before anything else).
 
   const enemies = (spec.enemies || []).map((e) => {
     const en = createEnemy(e.type, e.level || 10);
@@ -2028,17 +2037,58 @@ async function startRuinsCombat(sock, chatId, senderJid, spec) {
     // 💡 TUTORIAL (2026-10-03): the new-player practice fight runs the same
     // pipeline in mode TUTORIAL - no ruins hooks (no GP, no lives, no room
     // clears), and endCombat routes the outcome to the tutorial module.
-    mode: isTutorial ? 'TUTORIAL' : 'RUINS', solo: true,
+    // 💡 Phase B: TUTORIAL_QUEST (controlled solo quest) and TUTORIAL_GROUP
+    // (fake-party demo) reuse the same no-ruins safety but keep rewards.
+    mode: isTutorialGroup ? 'TUTORIAL_GROUP' : (isTutorial ? 'TUTORIAL' : (spec.tutorialQuest ? 'TUTORIAL_QUEST' : 'RUINS')),
+    solo: !isTutorialGroup,
     dungeonRank: spec.rank || 'C',
-    encounter: 0, maxEncounters: 1,
+    // 💡 Phase B FIX (2026-10-04): this fight IS encounter #1 of #max.
+    // Standard journeys enter combat via nextStage (which increments
+    // encounter 0→1 BEFORE the first fight). startRuinsCombat starts combat
+    // DIRECTLY, so encounter stayed 0 - after victory, nextStage incremented
+    // to 1, "1 > 1" was false, and a SECOND encounter spawned (the Training
+    // Dummy fight was followed by a wild Infected Colossus boss - the exact
+    // bug the owner's tutorial brief forbids). Starting at 1 makes the
+    // post-victory increment overflow into endAdventure: dummy dies →
+    // adventure over, nothing else can ever appear.
+    encounter: 1, maxEncounters: 1,
     lastActivity: Date.now(), createdAt: Date.now(),
     groq: spec.groq || null, sock, sessionKey,
     isProcessing: false, inCombat: false,
-    ruinsMeta: isTutorial ? null : { eventId: spec.eventId, roomKey: spec.roomKey },
-    dungeonName: isTutorial ? 'Training Hall' : 'The Ruins',
+    ruinsMeta: (isTutorial || isTutorialGroup || spec.tutorialQuest) ? null : { eventId: spec.eventId, roomKey: spec.roomKey },
+    dungeonName: (isTutorial || isTutorialGroup || spec.tutorialQuest) ? 'Training Hall' : 'The Ruins',
   });
   state.botId = botScope();
   state.players.push(buildRuinsPlayerEntity(senderJid));
+  // 💡 Phase B: fake guild-mates for the group demo. Synthetic entities with
+  // isTutorialAlly - auto-act in combat, excluded from all payouts/writes.
+  if (isTutorialGroup) {
+    const ALLY_NAMES = (spec.allyNames && spec.allyNames.length >= 3)
+      ? spec.allyNames
+      : ['Rin the Scout', 'Boro the Guard', 'Pia the Healer'];
+    const ALLY_ICONS = ['🏹', '🛡️', '🧪'];
+    for (let i = 0; i < 3; i++) {
+      state.players.push({
+        jid: `tutorial_ally_${i + 1}@tutorial`,
+        name: ALLY_NAMES[i] || `Ally ${i + 1}`,
+        class: { id: 'FIGHTER', name: 'Fighter', icon: ALLY_ICONS[i] || '⚔️' },
+        level: 1,
+        spriteIndex: 10 + i,
+        adventurerRank: 'F',
+        isTutorialAlly: true,
+        stats: {
+          hp: 60, maxHp: 60,
+          energy: 50, maxEnergy: 50,
+          atk: 8, def: 5, mag: 2, spd: 8, luck: 3, crit: 2,
+          dmgReduction: 0, evasion: 0,
+        },
+        equipment: {}, inventory: [], statusEffects: [], buffs: [],
+        isDead: false, xpEarned: 0, goldEarned: 0,
+        combatStats: { damageDealt: 0, damageTaken: 0, healed: 0, kills: 0 },
+        currentHP: 60, mana: 50, maxMana: 50,
+      });
+    }
+  }
   // ⚔️ §15 #6 FIX (2026-10-03): Ruins ward relics now REALLY apply. The
   // guildWar router passes spec.ward = { type, value, mode } from the
   // player's ward_active relic; the buff rides the combat player entity.
@@ -2076,6 +2126,37 @@ async function startRuinsCombat(sock, chatId, senderJid, spec) {
 // Same combat pipeline, mode TUTORIAL - no ruins hooks, no GP/lives.
 async function startTutorialCombat(sock, chatId, senderJid, spec = {}) {
   return startRuinsCombat(sock, chatId, senderJid, { ...spec, tutorialMode: true });
+}
+
+// 💡 Phase B (2026-10-04): controlled tutorial SOLO quest - the real combat
+// pipeline with one very weak enemy (Garden Slime), no boss, no surprise
+// rolls, safe parameters. Rewards stay (small, F-rank) - it's a real quest.
+async function startTutorialQuest(sock, chatId, senderJid, spec = {}) {
+  return startRuinsCombat(sock, chatId, senderJid, {
+    enemies: [{ type: spec.enemy || 'GARDEN_SLIME', level: 1 }],
+    rank: 'F',
+    background: spec.background || 'spark_1.png',
+    name: spec.name,
+    greeting: spec.greeting,
+    groq: spec.groq,
+    tutorialQuest: true,
+  });
+}
+
+// 💡 Phase B (2026-10-04): tutorial GROUP demo - the player + 3 fake guild
+// members (auto-acting, reward-excluded) against one weak enemy. Short,
+// controlled, and shows what group content feels like.
+async function startTutorialGroupQuest(sock, chatId, senderJid, spec = {}) {
+  return startRuinsCombat(sock, chatId, senderJid, {
+    enemies: [{ type: spec.enemy || 'GARDEN_SLIME', level: 1 }],
+    rank: 'F',
+    background: spec.background || 'spark_2.png',
+    name: spec.name,
+    greeting: spec.greeting,
+    groq: spec.groq,
+    allyNames: spec.allyNames,
+    tutorialGroup: true,
+  });
 }
 function unscopeKey(key) {
   if (typeof key === "string") {
@@ -4637,6 +4718,12 @@ async function processCombatTurn(sock, sessionKey) {
         // 💡 Phase 2: Summon AI Turn - personality-driven behavior,
         // loyalty decay, behavior tracking, optional betrayal.
         await summonAI.performSummonAction(sock, activeActor, sessionKey);
+      } else if (activeActor.isTutorialAlly) {
+        // 💡 Phase B (2026-10-04): TUTORIAL GROUP quest - fake party members
+        // auto-act after a short beat instead of waiting for input that will
+        // never come. Only reachable in tutorial_group demo sessions.
+        await new Promise((r) => setTimeout(r, 1200));
+        await performAction(sock, activeActor, { type: "attack" }, sessionKey);
       } else {
         // Player Turn - Wait for action
         await promptPlayerAction(sock, activeActor, sessionKey);
@@ -6800,7 +6887,8 @@ async function endCombat(sock, victory, sessionKey) {
     try { await ruinsHooks.onEnd(state, !!victory, sessionKey, sock); } catch (e) { console.error('[Ruins] onEnd hook:', e?.message); }
   }
   // 💡 TUTORIAL: route the practice-fight outcome to the tutorial module.
-  if (state.mode === 'TUTORIAL') {
+  // 💡 Phase B: also routes the tutorial solo-quest and group-demo fights.
+  if (state.mode === 'TUTORIAL' || state.mode === 'TUTORIAL_QUEST' || state.mode === 'TUTORIAL_GROUP') {
     try { require('./tutorial').notifyCombatEnd(state, sock); } catch (e) { console.error('[Tutorial] combat end notify:', e?.message); }
   }
   state.isEndingCombat = true; // Guard to prevent double processing
@@ -6831,6 +6919,9 @@ async function endCombat(sock, victory, sessionKey) {
   // the end of the entire dungeon, not per-encounter).
   if (state.players) {
     state.players.forEach(p => {
+      // 💡 Phase B: tutorial allies are synthetic entities - never write
+      // their combat state back to the economy (would fabricate users).
+      if (p.isTutorialAlly) return;
       if (p.skillCooldowns) p.skillCooldowns = {};
       p.passiveCombo = 0;
       p.passiveKillBonus = 1;
@@ -6906,9 +6997,14 @@ async function endCombat(sock, victory, sessionKey) {
 
   // Distribute rewards
   const alivePlayers = state.players.filter((p) => !p.isDead);
-  const playerCount = Math.max(1, alivePlayers.length);
+  // 💡 Phase B (2026-10-04): fake tutorial party members never count toward
+  // payouts (they don't exist in the economy) and TUTORIAL practice fights
+  // (the repeatable Training Dummy) pay nothing at all.
+  const isTutorialPractice = state.mode === 'TUTORIAL';
+  const rewardPlayers = alivePlayers.filter((p) => !p.isTutorialAlly);
+  const playerCount = Math.max(1, isTutorialPractice ? 1 : rewardPlayers.length);
   // Total gold = base × player count (boss fights don't multiply by player count)
-  const totalGold = baseGold * (isBossFight ? 1 : playerCount);
+  const totalGold = isTutorialPractice ? 0 : baseGold * (isBossFight ? 1 : playerCount);
   let xpPerPlayer = Math.floor(totalXP / playerCount);
   // 💡 ECONOMY RETUNE 2026-10-03 (owner progression report): enemy XP scales
   // as xpReward x (1 + rankIndex^exponent) with exponents up to 1.55, which
@@ -6933,11 +7029,16 @@ async function endCombat(sock, victory, sessionKey) {
 
   // Distribute rewards - only when we have alive players (prevents jid crash on defeat)
   // 💡 FIX P4: Skip loot distribution for Abyss - rewards go to lootAccumulator instead
+  // 💡 Phase B (2026-10-04): TUTORIAL practice fights (mode TUTORIAL, the
+  // Training Dummy) pay NOTHING - the fight is repeatable practice, so real
+  // payouts would be a zero-risk farm. Tutorial QUEST modes keep their small
+  // controlled rewards, but fake party members (isTutorialAlly) never receive
+  // any (they don't exist - paying them would fabricate economy users).
   let lootResults = { items: [], gold: totalGold, announcements: [] };
-  if (victory && alivePlayers.length > 0 && !state.isAbyss) {
+  if (victory && rewardPlayers.length > 0 && !state.isAbyss && !isTutorialPractice) {
     try {
       lootResults = await lootSystem.distributeLoot(
-        alivePlayers,
+        rewardPlayers,
         encounterType,
         bossName,
         state.difficulty,
@@ -7009,8 +7110,8 @@ async function endCombat(sock, victory, sessionKey) {
     // double payment. The floor-by-floor messages showed only the
     // lootAccumulator total, not the immediate payment, causing the
     // "rewards don't match" discrepancy reported in the system report.
-    if (!state.isAbyss) {
-      for (const player of alivePlayers) {
+    if (!state.isAbyss && !isTutorialPractice) {
+      for (const player of rewardPlayers) {
         player.xpEarned += xpPerPlayer;
         player.goldEarned += goldPerPlayer;
         // Gold and Items are now handled inside lootSystem.distributeLoot
@@ -7049,16 +7150,20 @@ async function endCombat(sock, victory, sessionKey) {
     });
 
     // 💡 GUILD BOARD TRACKING
-    const guilds_mod = require("./guilds");
-    const firstPlayerGuild = guilds_mod.getUserGuild(alivePlayers[0]?.jid);
-    if (firstPlayerGuild) {
-      state.enemies.forEach((enemy) => {
-        guilds_mod.updateBoardProgress(
-          firstPlayerGuild,
-          enemy.type || enemy.id,
-          1,
-        );
-      });
+    // 💡 Phase B: tutorial fights never count toward guild boards (the
+    // Training Dummy / Garden Slime are not real hunt targets).
+    if (!isTutorialPractice && state.mode !== 'TUTORIAL_GROUP' && state.mode !== 'TUTORIAL_QUEST') {
+      const guilds_mod = require("./guilds");
+      const firstPlayerGuild = guilds_mod.getUserGuild(alivePlayers[0]?.jid);
+      if (firstPlayerGuild) {
+        state.enemies.forEach((enemy) => {
+          guilds_mod.updateBoardProgress(
+            firstPlayerGuild,
+            enemy.type || enemy.id,
+            1,
+          );
+        });
+      }
     }
 
     setTimeout(
@@ -9677,10 +9782,12 @@ const handleCombatAction = async (
 
   // 💡 TUTORIAL: the action was ACCEPTED - tell the tutorial module so the
   // next lesson step fires (no-op unless a tutorial session is active).
+  // 💡 Phase B: added 'defend' (the defense lesson) and the bot's REAL
+  // prefix (the tutorial used to fall back to "." regardless of .jk/.j).
   try {
-    const tutEvent = { attack: 'combat_attack', ability: 'combat_ability', item: 'combat_item', rest: 'combat_rest' }[normalizedAction];
+    const tutEvent = { attack: 'combat_attack', defend: 'combat_defend', ability: 'combat_ability', item: 'combat_item', rest: 'combat_rest' }[normalizedAction];
     if (tutEvent && state.mode === 'TUTORIAL') {
-      require('./tutorial').notify(senderJid, tutEvent, { sock, chatId }).catch(() => {});
+      require('./tutorial').notify(senderJid, tutEvent, { sock, chatId, prefix: botConfig.getPrefix() }).catch(() => {});
     }
   } catch (e) { /* non-fatal */ }
   // 💡 AUDIT FIX 2026-08-01 (Round 4): update lastActivity so the stale-state
@@ -11469,6 +11576,8 @@ module.exports = {
   startAbyssCombat,
   startRuinsCombat,
   startTutorialCombat,
+  startTutorialQuest,
+  startTutorialGroupQuest,
   setRuinsHooks,
   // 💡 Summoner System (Phase 2): export for summonAI.js to access.
   // summonAI does a lazy require('./guildAdventure') to avoid circular dep,

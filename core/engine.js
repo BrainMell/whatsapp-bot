@@ -833,6 +833,44 @@ function isBotOwner(jid) {
   return BOT_OWNER_PHONES.some(phone => realJid.startsWith(phone) || realJid.includes(phone));
 }
 
+// 💡 ABYSS IMMUNITY (2026-10-04, Phase A): single source of truth for "this
+// user is exempt from Abyss restrictions". Covers owner + ALL mod tiers
+// (General Mods are unrestricted by design; RPG Mods run the RPG systems).
+//
+// Why this exists: the previous bypasses checked `isRpgMod(senderJid)` with
+// ONE JID form. Mod membership is stored as whatever JID form the mod had
+// when they were added (@lid vs @s.whatsapp.net vs device-suffixed), while
+// the caller's JID is canonicalized independently by resolveLidToPhone().
+// A form mismatch made `isRpgMod()` silently return false — the cooldown
+// kept applying to mods even though the UI implied immunity. We now bridge
+// BOTH ID spaces through the LID resolver before checking membership, so
+// the bypass actually removes the restriction instead of hiding the timer.
+function isAbyssImmune(jid) {
+  if (!jid || typeof jid !== 'string') return false;
+  const candidates = new Set();
+  const push = (v) => { if (v && typeof v === 'string') candidates.add(v); };
+  const bare = jid.startsWith('sandbox_') ? jid.substring(8) : jid;
+  push(jid);
+  push(bare);
+  try {
+    const { jidNormalizedUser } = require('@whiskeysockets/baileys');
+    push(jidNormalizedUser(bare));
+  } catch (e) {}
+  // Bridge LID <-> phone via the resolver's in-memory mapping
+  try {
+    const lidResolver = require('./utils/lidResolver');
+    const { lid, phone } = lidResolver.getMapping(bare);
+    if (lid) push(`${lid}@lid`);
+    if (phone) push(`${phone}@s.whatsapp.net`);
+  } catch (e) {}
+  for (const c of candidates) {
+    if (isBotOwner(c)) return true;
+    if (isGlobalMod(c)) return true;
+    if (isRpgMod(c)) return true;
+  }
+  return false;
+}
+
 // Helper for dynamic ESM import of got-scraping
 async function getGot() {
   const { gotScraping } = await import("got-scraping");
@@ -2484,6 +2522,8 @@ async function startBot(configInstance) {
             console.log(`📌 Pin active for chat ${chatId}, message ${pin.stanzaId}. Unpinning in ${timeLeft}ms`);
             settings.activePins.push(pin);
             const timerId = setTimeout(() => {
+              // 💡 Phase A: delete the expired timer entry (closure retained sock+pin)
+              activePinTimers.delete(`${chatId}_${pin.stanzaId}`);
               const s = getGroupSettings(chatId);
               s.activePins = (s.activePins || []).filter(p => p.stanzaId !== pin.stanzaId);
               saveGroupSettings();
@@ -4727,6 +4767,69 @@ What to do:
       for (const [jid, req] of pendingNameRequests.entries()) {
         if (now - req.timestamp > 120000) pendingNameRequests.delete(jid);
       }
+
+      // 💡 Phase A (2026-10-04) leak sweep — these per-user/per-chat maps
+      // previously only ever GREW. Each entry is small, but joker processes
+      // ~34 msg/min and every entry pins its key strings + closure objects,
+      // which is exactly the "granular accumulation" the heap snapshot showed.
+      // All entries are safe to drop: cooldowns are recomputed on demand,
+      // caches are refilled from source on next use.
+
+      // commandCooldowns: keep the last-use timestamp only if the cooldown
+      // window is still relevant (< 1h old); older entries are dead weight.
+      for (const [key, ts] of commandCooldowns.entries()) {
+        if (now - ts > 3600000) commandCooldowns.delete(key);
+      }
+
+      // gamblingSpamTracker: attempts self-filter to a 15s window; drop
+      // users whose last attempt is stale (nothing left to track).
+      for (const [key, data] of gamblingSpamTracker.entries()) {
+        if (!data.attempts.length && now - (data.lastWarning || 0) > 300000) {
+          gamblingSpamTracker.delete(key);
+        }
+      }
+
+      // aiUserCooldowns: cooldown keys "senderJid_chatId" — 80s makes any
+      // entry older than 10 min pointless.
+      for (const [key, ts] of aiUserCooldowns.entries()) {
+        if (now - ts > 600000) aiUserCooldowns.delete(key);
+      }
+
+      // aiResponseCache: TTL was declared (5 min) but never swept — only
+      // some explicit delete paths removed entries. Enforce the TTL.
+      for (const [key, entry] of aiResponseCache.entries()) {
+        if (!entry || now - (entry.ts || 0) > AI_CACHE_TTL_MS) {
+          aiResponseCache.delete(key);
+        }
+      }
+
+      // 💡 Phase A: sweep abandoned gambling sessions (blackjack/mines
+      // entries lived forever when a player walked away mid-game).
+      try {
+        const gambling = require('./gambling');
+        if (typeof gambling.sweepStaleGames === 'function') {
+          const _swept = gambling.sweepStaleGames();
+          if (_swept > 0) console.log(`🧹 [${BOT_ID}] Swept ${_swept} abandoned gambling session(s)`);
+        }
+      } catch (e) { /* sweep must never throw */ }
+
+      // Anime search caches: entries are only removed when a selection is
+      // made; abandoned searches leaked their item lists forever. 15 min
+      // covers any realistic selection window.
+      try {
+        const byChat = global[`__${BOT_ID}_anime_search_cache_by_chat`];
+        const byMsg = global[`__${BOT_ID}_anime_search_cache_by_msgid`];
+        if (byChat && byChat.size) {
+          for (const [key, entry] of byChat.entries()) {
+            if (!entry || now - (entry.ts || 0) > 900000) byChat.delete(key);
+          }
+        }
+        if (byMsg && byMsg.size) {
+          for (const [key, entry] of byMsg.entries()) {
+            if (!entry || now - (entry.ts || 0) > 900000) byMsg.delete(key);
+          }
+        }
+      } catch (e) { /* sweep must never throw */ }
     }, 120000); // every 2 min
 
     // Activity tracking - who sent how many messages
@@ -7722,9 +7825,19 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               // We can't know the command yet (it's parsed inside storage.run), so we
               // use a dynamic timeout that checks _cmdContext.primaryCmd.
               let _cmdEffectiveTimeout = _cmdTimeoutMs;
+              // 💡 Phase A (2026-10-04): the 5s poller below used to keep
+              // ticking every 5s until its limit even after the command
+              // finished normally — up to 36 dead ticks per command, each
+              // pinning the message context. This flag stops it the first
+              // tick after the race settles.
+              let _cmdSettled = false;
               const _cmdTimeoutPromise = new Promise((_, reject) => {
                 // Check every 5s if we should extend the timeout for slow commands
                 const checkInterval = setInterval(() => {
+                  if (_cmdSettled) {
+                    clearInterval(checkInterval);
+                    return;
+                  }
                   const elapsed = Date.now() - _cmdStartTime;
                   const cmdLimit = _cmdContext.primaryCmd
                     ? (CMD_TIMEOUT_OVERRIDES[_cmdContext.primaryCmd] || _cmdTimeoutMs)
@@ -9430,6 +9543,18 @@ _💡 Reply with another number from your search list!_`.trim();
                     _cmdContext.chatId = chatId;
                     _cmdContext.txt = txt;
 
+                    // 💡 Phase B (2026-10-04) TUTORIAL: single integration point.
+                    // While a tutorial session is active, every recognized game
+                    // command either advances the current lesson (state-driven:
+                    // only the REAL accepted action moves it) or draws a gentle
+                    // redirect. No-op when no session exists (zero overhead for
+                    // normal gameplay).
+                    try {
+                      require('./rpg/tutorial').notifyAction(senderJid, primaryCmd, {
+                        sock, chatId, sub: cmdArgs[1], prefix: botConfig.getPrefix(),
+                      }).catch(() => {});
+                    } catch (e) { /* tutorial must never break commands */ }
+
                     const disabledCat = isCommandDisabled(primaryCmd, botConfig.getBotId());
                   // 💡 PHASE 7 FIX 2026-08-29: RPG TEST MODE LOCK - fixed category lookup
                   // PHASE 7 FIX 2026-08-29: RPG test-mode lock - fixed category lookup
@@ -10950,6 +11075,9 @@ _💡 Reply with another number from your search list!_`.trim();
 
                         const currentHP = economy.getPersistentHP(senderJid, maxHP);
                         if (currentHP >= maxHP) {
+                          // 💡 Phase B TUTORIAL: already-full still counts as a
+                          // hospital visit for the lesson (no-op unless active).
+                          try { require('./rpg/tutorial').notify(senderJid, 'hospital', { sock, chatId, prefix: botConfig.getPrefix() }).catch(() => {}); } catch (e) {}
                           return sock.sendMessage(chatId, { text: BOT_MARKER + "🏥 You're already at full health!" });
                         }
 
@@ -10982,7 +11110,7 @@ _💡 Reply with another number from your search list!_`.trim();
                         await sock.sendMessage(chatId, {
                           text: BOT_MARKER + `🏥 *HOSPITAL*\n\n❤️ HP restored: +${healed}\n📊 HP: ${maxHP}/${maxHP}\n\n_You are now at full health._\n\n⏳ _Next hospital visit available in 12 hours. Out-of-combat passive regen will keep you topped up between visits._`,
                         });
-                        // 💡 TUTORIAL: hospital step done (no-op unless active)
+                        // 💡 Phase B TUTORIAL: hospital lesson advances on a real heal
                         try { require('./rpg/tutorial').notify(senderJid, 'hospital', { sock, chatId, prefix: botConfig.getPrefix() }).catch(() => {}); } catch (e) {}
                         if (__healDrop) {
                           try {
@@ -15463,6 +15591,8 @@ Usage: ${newUsage}/5${warningText}`;
                           clearTimeout(activePinTimers.get(key));
                         }
                         const timerId = setTimeout(() => {
+                          // 💡 Phase A: delete the expired timer entry
+                          activePinTimers.delete(key);
                           const s = getGroupSettings(chatId);
                           s.activePins = (s.activePins || []).filter(p => p.stanzaId !== contextInfo.stanzaId);
                           saveGroupSettings();
@@ -15516,6 +15646,8 @@ Usage: ${newUsage}/5${warningText}`;
                             clearTimeout(activePinTimers.get(key));
                           }
                           const timerId = setTimeout(() => {
+                            // 💡 Phase A: delete the expired timer entry
+                            activePinTimers.delete(key);
                             const s = getGroupSettings(chatId);
                             s.activePins = (s.activePins || []).filter(p => p.stanzaId !== contextInfo.stanzaId);
                             saveGroupSettings();
@@ -21338,7 +21470,10 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                               console.error('[Abyss] world-alignment system unavailable - gate fails CLOSED:', __gateErr.message);
                               __gateAlive = false;
                             }
-                            const __gateBypass = isBotOwner(senderJid) || isRpgMod(senderJid);
+                            // 💡 Phase A 2026-10-04: bypass now uses isAbyssImmune()
+                            // (owner + General Mods + RPG Mods, LID/phone bridged) so the
+                            // gate is actually OPEN for mods, not just displayed open.
+                            const __gateBypass = isAbyssImmune(senderJid);
                             if (!__gateAlive) {
                               // 💡 2026-09-21 owner: alignment failures get an
                               // IMAGE CARD that carries the refusal visually
@@ -30694,6 +30829,8 @@ _(or reply to their message)_
                   }), // END storage.run callback
                   _cmdTimeoutPromise,
                 ]); // END Promise.race
+                // 💡 Phase A: stop the timeout poller — command finished first
+                _cmdSettled = true;
               } catch (_cmdTimeoutErr) {
                 // 💡 This catch fires when the 90s timeout wins the race.
                 // The original storage.run promise is orphaned (we can't
@@ -30708,6 +30845,7 @@ _(or reply to their message)_
                 // are out of scope here. Previously this catch crashed with
                 // "ReferenceError: primaryCmd is not defined" - masking the
                 // real timeout error and producing an unhandled rejection.
+                _cmdSettled = true;
                 const elapsed = ((Date.now() - _cmdStartTime) / 1000).toFixed(1);
                 const _ctx = _cmdContext || {};
 
@@ -30836,5 +30974,7 @@ isGameTester, loadGameTesters,
   loadHardBannedUsers,
   loadHardMutedUsers,
   loadBannedUsers,
+  // 💡 Abyss immunity (Phase A 2026-10-04): real restriction removal for mods
+  isAbyssImmune,
   getBotInstancesHealth: () => botInstancesHealth,
 };

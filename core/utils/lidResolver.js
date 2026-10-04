@@ -21,6 +21,16 @@ async function loadLidMappings() {
         }
         console.log(`✅ [LID Resolver] Loaded ${mappings.length} LID mappings from MongoDB`);
 
+        // 💡 Phase A (2026-10-04): skip the disk rescan when the caches are
+        // already populated. This function used to readdir + statSync every
+        // instance auth dir and read every lid-mapping file on EVERY call —
+        // and it's called on every reconnect (initSocket). The Mongo load
+        // above is the authoritative refresh; the disk scan only matters on
+        // a cold start (empty caches) where files may hold unsaved mappings.
+        if (lidCache.size > 0 && phoneCache.size > 0) {
+            return;
+        }
+
         // 2. Scan local files for any missing mappings to sync to MongoDB
         const instancesDir = path.join(__dirname, "..", "..", "instances");
         if (fs.existsSync(instancesDir)) {
@@ -390,6 +400,10 @@ module.exports = {
     resolveJid,
     resolveToPhone,
     canonicalRankKey,
+    // 💡 Phase A (2026-10-04): exported for engine.isAbyssImmune — mod
+    // membership checks must bridge @lid <-> phone forms or the Abyss
+    // bypass silently fails for mods stored under the other JID form.
+    getMapping,
     lidCache,
     phoneCache
 };

@@ -591,6 +591,9 @@ async function sellItem(sock, chatId, senderJid, itemId, quantity = 1) {
     if (result.remaining > 0) msg += `📦 Remaining: ${result.remaining}`;
     
     await sock.sendMessage(chatId, { text: msg });
+    // 💡 Phase B TUTORIAL: selling lesson advances on a REAL sale
+    // (no-op unless a tutorial session is active).
+    try { require('../rpg/tutorial').notify(senderJid, 'sell', { sock, chatId }).catch(() => {}); } catch (e) {}
 }
 
 // ========================================== 

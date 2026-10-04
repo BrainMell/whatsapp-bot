@@ -249,24 +249,29 @@ async function startRun(userId, playerStats, ctx = {}) {
   // 💡 RPG Mods AND the bot owner are immune to the Abyss cooldown.
   // Owner bypass added 2026-08-03 per user request: owner account should
   // be able to test Abyss at any time without waiting 12h.
+  // 💡 Phase A 2026-10-04: the old bypass required `engine.isRpgMod(userId)`
+  // to match with the EXACT JID form stored in the mod set. A LID<->phone
+  // form mismatch made it silently return false, so mods still hit the
+  // cooldown (the timer was hidden in some UIs but the restriction stayed).
+  // Now uses engine.isAbyssImmune() which bridges both ID spaces and covers
+  // owner + General Mods + RPG Mods — the restriction is actually removed.
   const lastRun = await AbyssRun.findOne({ userId, status: { $in: ['completed', 'failed'] } }).sort({ updatedAt: -1 });
   if (lastRun) {
     const elapsed = Date.now() - new Date(lastRun.updatedAt).getTime();
     if (elapsed < RUN_COOLDOWN_MS) {
-      // Check if user is the bot owner OR an RPG mod - bypass cooldown if so
-      let isOwner = false;
-      let isRpgMod = false;
+      let immune = false;
       try {
         const engine = require('../engine');
-        if (typeof engine.isBotOwner === 'function') {
-          isOwner = engine.isBotOwner(userId);
-        }
-        if (typeof engine.isRpgMod === 'function') {
-          isRpgMod = engine.isRpgMod(userId);
+        if (typeof engine.isAbyssImmune === 'function') {
+          immune = engine.isAbyssImmune(userId);
+        } else {
+          // Fallback for stale module caches: old-style check
+          immune = (typeof engine.isBotOwner === 'function' && engine.isBotOwner(userId)) ||
+                   (typeof engine.isRpgMod === 'function' && engine.isRpgMod(userId));
         }
       } catch (e) {}
 
-      if (!isOwner && !isRpgMod) {
+      if (!immune) {
         const remaining = Math.ceil((RUN_COOLDOWN_MS - elapsed) / 3600000);
         return {
           success: false,

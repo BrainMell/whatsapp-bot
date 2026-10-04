@@ -452,6 +452,9 @@ async function buyItem(sock, chatId, senderJid, input) {
         await sock.sendMessage(chatId, {
             text: `✅ *PURCHASE SUCCESSFUL!*\n\n${result.message}\n\n💸 Paid: ${getZENI()}${item.cost.toLocaleString()}`
         });
+        // 💡 Phase B TUTORIAL: buying lesson advances on a REAL purchase
+        // (no-op unless a tutorial session is active).
+        try { require('../rpg/tutorial').notify(senderJid, 'buy', { sock, chatId }).catch(() => {}); } catch (e) {}
         try {
             const loreDrops = require('../rpg/loreDrops');
             await loreDrops.sendOwn(sock, chatId, __shopDrop);

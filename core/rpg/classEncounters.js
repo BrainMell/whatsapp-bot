@@ -972,10 +972,31 @@ INFECTED_POOLS.TUTORIAL = {
             name: 'Training Dummy',
             icon: '🎯',
             desc: 'A straw-stuffed practice target. It never hits back.',
-            stats: { hp: 80, atk: 0, def: 0, mag: 0, spd: 1, luck: 0, crit: 0 },
+            // 💡 Phase B (2026-10-04): HP raised 80 -> 400. Level-1 damage
+            // math (crits + element multipliers) one-shot the old dummy,
+            // ending the practice fight before the 5 combat lessons ran.
+            // 400 HP survives the full atk/def/skill/item/rest sequence and
+            // still dies in a few hits during the "finish him" step.
+            stats: { hp: 400, atk: 0, def: 0, mag: 0, spd: 1, luck: 0, crit: 0 },
             archetype: 'BRUTE',
             xpReward: 30,
             goldReward: [40, 60],
+            element: 'none',
+            tutorial: true,
+        },
+        // 💡 Phase B (2026-10-04): a harmless live-mob for the tutorial SOLO
+        // quest - unlike the dummy it "fights back", but at ATK 3 vs an
+        // armored starter it deals single-digit chip damage at worst. No
+        // boss, no surprise rolls, guaranteed single encounter.
+        {
+            id: 'GARDEN_SLIME',
+            name: 'Garden Slime',
+            icon: '🟢',
+            desc: 'A docile slime that wandered out of the training grounds.',
+            stats: { hp: 45, atk: 3, def: 0, mag: 0, spd: 2, luck: 0, crit: 0 },
+            archetype: 'BRUTE',
+            xpReward: 40,
+            goldReward: [60, 90],
             element: 'none',
             tutorial: true,
         },

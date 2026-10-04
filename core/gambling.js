@@ -640,7 +640,8 @@ ${profit > 0 ? `🎉 *CONGRATULATIONS!* 🎉\n+${getZENI()}${profit.toLocaleStri
     playerHand,
     dealerHand,
     bet: amount,
-    roundCtx: ctx
+    roundCtx: ctx,
+    startedAt: Date.now() // 💡 Phase A: TTL for abandoned-game sweep
   });
   
   return {
@@ -1276,7 +1277,10 @@ function startMines(userId, amount, mineCount, economyModule) {
     roundCtx: ctx
   };
 
-  activeMinesGames.set(userId, game);
+  activeMinesGames.set(userId, {
+    ...game,
+    startedAt: Date.now() // 💡 Phase A: TTL for abandoned-game sweep
+  });
 
   const gridVisual = renderMinesGrid(game, false);
 
@@ -2526,6 +2530,30 @@ ${outcomeMessage}
   };
 }
 
+// 💡 Phase A (2026-10-04): abandoned interactive games leaked their
+// session objects forever (deck + hands + round context per user). The
+// bet is deducted when the game starts, so a session older than 30 min is
+// a walk-away - same outcome as a crash mid-game (bet forfeited).
+// Sweep is called from the engine's periodic janitor - no new timer here.
+const GAME_STALE_MS = 30 * 60 * 1000;
+function sweepStaleGames() {
+  const now = Date.now();
+  let swept = 0;
+  for (const [userId, game] of activeBlackjackGames.entries()) {
+    if (!game || now - (game.startedAt || 0) > GAME_STALE_MS) {
+      activeBlackjackGames.delete(userId);
+      swept++;
+    }
+  }
+  for (const [userId, game] of activeMinesGames.entries()) {
+    if (!game || now - (game.startedAt || 0) > GAME_STALE_MS) {
+      activeMinesGames.delete(userId);
+      swept++;
+    }
+  }
+  return swept;
+}
+
 module.exports = {
   coinflip,
   diceRoll,
@@ -2548,6 +2576,7 @@ module.exports = {
   plinko,
   scratchCard,
   cupGame,
-  wheelOfFortune
+  wheelOfFortune,
+  sweepStaleGames
 };
 

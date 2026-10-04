@@ -637,6 +637,9 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
     successMsg += `Remaining Points: *${result.remainingPoints}*`;
 
     await sock.sendMessage(chatId, { text: getBotMarker() + successMsg }, { quoted: m });
+    // 💡 Phase B TUTORIAL: allocation lesson advances on a REAL spend
+    // (no-op unless a tutorial session is active).
+    try { require('../rpg/tutorial').notify(senderJid, 'allocate', { sock, chatId }).catch(() => {}); } catch (e) {}
 
   } catch (err) {
     console.error("Error in handleAllocateCommand:", err.message);
