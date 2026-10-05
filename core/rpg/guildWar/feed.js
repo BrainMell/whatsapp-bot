@@ -55,6 +55,25 @@ function registerSock(sock, BOT_MARKER) {
 let _seq = 0;
 function tierRank(t) { return t === 'major' ? 2 : t === 'normal' ? 1 : 0; }
 
+// 💬 COPY OVERHAUL (owner 2026-10-05: "the group chat messages are so bland
+// and boring fix that"): feed copy now carries its own emoji. When the queued
+// text ALREADY opens with one, skip the tier prefix — no more "⚔️ 💀 has
+// fallen" double-emoji stutters. Anything below U+2500 (letters, digits,
+// markdown) still earns its tier badge.
+function hasLeadEmoji(t) {
+    try { return (t.codePointAt(0) || 0) >= 0x2500; } catch (e) { return false; }
+}
+
+// digest headers rotate so a war-long spectator never reads the same line twice
+const DIGEST_HEADERS = [
+    '📜 *Ruins digest*',
+    '📜 *Dispatches from the Ruins*',
+    '📜 *Whispers from the dead world*',
+    '📜 *Word from the deep chambers*',
+];
+let _digestSeq = 0;
+function digestHeader() { return DIGEST_HEADERS[_digestSeq++ % DIGEST_HEADERS.length]; }
+
 // queue a feed item. Sync-local push (callers/sim read st().queue) + async
 // mirror into the event doc so any instance / post-restart flush can send it.
 function queue(eventId, tier, text) {
@@ -171,7 +190,7 @@ async function flush(eventId, sock, BOT_MARKER) {
     // majors: always sent (they are the designed image-card moments)
     for (const m of majors) {
         if (windowAllows(s)) {
-            const ok = await sendToGroup(useSock, dests, useMarker + `🚨 *${m.text}*`, true);
+            const ok = await sendToGroup(useSock, dests, useMarker + `${hasLeadEmoji(m.text) ? '' : '🚨 '}*${m.text}*`, true);
             if (ok) markSent(s); else failed.push({ ...m, tries: (m.tries || 0) + 1 });
         } else {
             minors.push(m); // degrade to digest under pressure
@@ -181,7 +200,7 @@ async function flush(eventId, sock, BOT_MARKER) {
     // normals: rate-limited
     for (const n of normals) {
         if (windowAllows(s) && Date.now() - s.lastNormalAt >= CFG.FEED.NORMAL_GAP_MS) {
-            const ok = await sendToGroup(useSock, dests, useMarker + `⚔️ ${n.text}`, false);
+            const ok = await sendToGroup(useSock, dests, useMarker + `${hasLeadEmoji(n.text) ? '' : '⚔️ '}${n.text}`, false);
             if (ok) markSent(s); else failed.push({ ...n, tries: (n.tries || 0) + 1 });
         } else {
             minors.push(n);
@@ -190,7 +209,7 @@ async function flush(eventId, sock, BOT_MARKER) {
 
     // minors: one digest per flush
     if (minors.length && windowAllows(s)) {
-        const ok = await sendToGroup(useSock, dests, useMarker + `📜 *Ruins digest*\n${buildDigest(minors)}`, false);
+        const ok = await sendToGroup(useSock, dests, useMarker + `${digestHeader()}\n${buildDigest(minors)}`, false);
         if (!ok) failed.push(...minors.map((m) => ({ ...m, tries: (m.tries || 0) + 1 })));
     } else if (minors.length) {
         failed.push(...minors.map((m) => ({ ...m, tries: (m.tries || 0) + 1 })));
@@ -252,11 +271,16 @@ async function postScoreboard(eventId, sock, BOT_MARKER) {
     const dests = destinationsFor(ev);
     if (!dests.length) return;
     const rows = computeScoreboard(ev);
-    const text = rows.map((r, i) => `${['🥇', '🥈', '🥉'][i] || '▫️'} ${r.name} — ${r.points} GP`).join('\n').slice(0, 700);
+    const text = rows.map((r, i) => `${['🥇', '🥈', '🥉'][i] || '▫️'} *${r.name}* — ${r.points} GP`).join('\n').slice(0, 700);
+    // 💬 live pulse line: the standings should read like a war bulletin,
+    // not a database dump (owner 2026-10-05 copy overhaul)
+    const cleared = (ev.rooms || []).filter((r) => r && r.state === 'CLEARED').length;
+    const alive = (ev.players || []).filter((p) => p.status === 'active').length;
+    const pulse = `_${cleared} chamber${cleared === 1 ? '' : 's'} cleared · ${alive} champion${alive === 1 ? '' : 's'} still standing_`;
     if (windowAllows(s)) {
         const useSock = sock || _sock;
         if (!useSock) return;
-        const ok = await sendToGroup(useSock, dests, (BOT_MARKER || _marker) + `🏆 *Guild War standings*\n${text}`, false);
+        const ok = await sendToGroup(useSock, dests, (BOT_MARKER || _marker) + `🏆 *War standings — the Association's ledger*\n${pulse}\n${text}`, false);
         if (ok) { s.scoreboardAt = Date.now(); markSent(s); }
     }
 }

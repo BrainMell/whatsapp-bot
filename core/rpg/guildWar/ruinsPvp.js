@@ -58,8 +58,9 @@ async function challenge(eventDoc, challenger, targetJid) {
         }
     }, CFG.PVP.CHALLENGE_WINDOW_MS + 1000);
 
-    feed.queue(eventDoc.eventId, 'normal', `⚔️ ${challenger.name} challenges ${target.name} in a ${roomLabel(challenger.roomId)}!`);
-    return { ok: true, text: `⚔️ Challenge issued to *${target.name}* - they have 60s to accept.\nThey may: \`accept\` the duel, or \`flee\` (retreat to their previous room and concede what was contested).` };
+    feed.queue(eventDoc.eventId, 'normal', `⚔️ ${challenger.name} calls out ${target.name} — steel is drawn and a duel hangs in the dust!`);
+    const windowS = Math.max(1, Math.round((CFG.PVP.CHALLENGE_WINDOW_MS || 60000) / 1000));
+    return { ok: true, text: `⚔️ Challenge issued to *${target.name}* - they have ${windowS}s to accept.\nThey may: \`accept\` the duel, or \`flee\` (retreat to their previous room and concede what was contested).` };
 }
 
 // atomic DB claim: the accept wins only if the window is still open — works
@@ -129,6 +130,13 @@ async function concede(eventDoc, loser, why, { sock = null, chatId = null } = {}
     return forfeitToRoom(eventDoc, loser, why);
 }
 
+// 💬 copy overhaul 2026-10-05: why-phrases become group-readable prose
+// (and never leak raw reason codes into the war feed)
+const CONCEDE_LINES = {
+    'ignored a challenge': 'left a challenge unanswered',
+    'fled': 'fled the duel',
+};
+
 // the prize stays with the ROOM for the next arrival; loser retreats
 async function forfeitToRoom(eventDoc, loser, why, { sock = null, chatId = null } = {}) {
     await state.updatePlayer(eventDoc.eventId, loser.jid, {}, {
@@ -136,7 +144,8 @@ async function forfeitToRoom(eventDoc, loser, why, { sock = null, chatId = null 
         protectedUntil: Date.now() + CFG.PVP.PROTECT_AFTER_LOSS_MS,
         lastActionAt: Date.now(),
     });
-    feed.queue(eventDoc.eventId, 'normal', `🏃 ${loser.name} ${why} - retreats to their previous room.`);
+    const whyLine = CONCEDE_LINES[why] || why;
+    feed.queue(eventDoc.eventId, 'normal', `🏃 ${loser.name} ${whyLine} — retreats to their previous room, the contested prize left to the dust.`);
     return { text: `🏃 You retreat to your previous room. Whatever was contested stays with the room.` };
 }
 
@@ -179,12 +188,15 @@ async function settle(eventDocOrId, winnerJid, loserJid) {
         protectedUntil: Date.now() + CFG.PVP.PROTECT_AFTER_LOSS_MS,
     });
 
+    const claimedNames = claimed.map((r) => `*${r.name}*`).join(' and ');
     feed.queue(eventDoc.eventId, 'normal',
-        `⚔️ ${winner.name} defeated ${loser.name} in the Ruins${gp ? ` (+${gp} GP)` : ''}${claimed.length ? ` and claimed ${claimed.length} relic${claimed.length > 1 ? 's' : ''}!` : '.'}`);
+        `⚔️ ${winner.name} cut down ${loser.name} in the Ruins${gp ? ` (+${gp} GP)` : ''}${claimed.length ? ` and claimed ${claimedNames} from the fallen!` : '.'}`);
 
     return { gp, claimed: claimed.length };
 }
 
+// 💬 roomLabel retired from the feed — raw coordinates ("chamber (4,0)")
+// read like a debug log. Kept as a helper in case QA wants it.
 function roomLabel(roomKey) {
     return `chamber (${roomKey})`;
 }

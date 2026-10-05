@@ -209,7 +209,12 @@ async function dropCarriedRelics(eventId, jid, reason) {
         { $push: { 'rooms.$.payload.droppedRelics': { $each: dropped.map((r) => r.toObject ? r.toObject() : r) } } }
     );
     await state.pushLog(eventId, 'relic-drop', jid, `${dropped.length} relics dropped (${reason})`);
-    feed.queue(eventId, 'normal', `💼 ${p.name}'s carried relics fell where they stood…`);
+    // 💬 dedupe (owner copy overhaul 2026-10-05): the FINAL-DEATH headline in
+    // index.js already tells the group the relics lie where the champion
+    // fell — the generic drop line only fires for silent-logouts.
+    if (reason !== 'final death') {
+        feed.queue(eventId, 'normal', `💼 ${p.name} has gone quiet — their carried relics lie scattered where they stood, ripe for the next passerby.`);
+    }
     return dropped.length;
 }
 

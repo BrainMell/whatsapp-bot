@@ -75,7 +75,7 @@ function installCombatHooks() {
                     // 💡 FEED (§17): boss-tier kills are war headlines
                     if (room.type === 'core' || (room.type === 'secret' && room.payload && (room.payload.boss || room.payload.get?.('boss')))) {
                         feed.queue(meta.eventId, 'major',
-                            `💀 ${me.name} of ${me.guildName} has SLAIN the guardian of a ${room.type === 'core' ? 'WORLD CORE' : 'hidden chamber'}! The way stands open.`);
+                            `💀 ${me.name} of ${me.guildName} has SLAIN the guardian of the ${room.type === 'core' ? 'WORLD CORE' : 'hidden chamber'}! The way stands open.`);
                     }
 
                     // World Core: first guild to breach
@@ -85,7 +85,7 @@ function installCombatHooks() {
                             { $set: { coreClaimedBy: me.guildId } }
                         );
                         feed.queue(meta.eventId, 'major',
-                            `WORLD EVENT - ${me.name} of ${me.guildName} has breached the WORLD CORE! First-guild glory: +${CFG.POINTS.CORE_FIRST_GUILD} GP to every member!`);
+                            `🌐 *WORLD EVENT* — ${me.name} of ${me.guildName} has breached the WORLD CORE! First-guild glory: +${CFG.POINTS.CORE_FIRST_GUILD} GP to every member!`);
                         for (const mate of ev.players.filter((p) => p.guildId === me.guildId)) {
                             await points.award(meta.eventId, mate.jid, CFG.POINTS.CORE_FIRST_GUILD, 'core-guild', { ignoreCap: false });
                         }
@@ -93,7 +93,7 @@ function installCombatHooks() {
                     }
 
                     feed.queue(meta.eventId, 'normal',
-                        `⚔️ ${me.name} cleared a ${room.type === 'core' ? 'World Core guardian' : 'guarded chamber'}${coopBonus ? ' (with guild help)' : ''}.`);
+                        `⚔️ ${me.name} cleared a ${room.type === 'core' ? 'World Core guardian' : 'guarded chamber'}${coopBonus ? ', standing shoulder to shoulder with guildmates' : ', alone in the dark'}.`);
 
                     // 💡 NAVIGATION OVERHAUL §4/§15: post-victory the player
                     // gets the RETURN map (same chart, post-encounter visual
@@ -114,7 +114,7 @@ function installCombatHooks() {
                         }
                     }
                 } else {
-                    feed.queue(meta.eventId, 'minor', `${me.name} arrived a moment too late - the chamber was already taken.`);
+                    feed.queue(meta.eventId, 'minor', `⏳ ${me.name} arrived a heartbeat too late — another's banner already flies over that chamber.`);
                 }
             } else {
                 // defeat: lives--, respawn at spawn corner with protection, room stays ACTIVE
@@ -225,7 +225,7 @@ async function _noteRetreat(eventId, jid) {
         protectedUntil: Date.now() + CFG.PVP.PROTECT_AFTER_LOSS_MS,
         lastActionAt: Date.now(),
     });
-    feed.queue(eventId, 'minor', `${p.name} fled a chamber - the spoils stay behind.`);
+    feed.queue(eventId, 'minor', `🏃 ${p.name} fled the chamber — whatever it held stays with the Ruins.`);
 }
 
 // ── group command surface: .j gw <sub> ──
@@ -291,7 +291,7 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
             if (!pending) return sock.sendMessage(chatId, { text: '❌ Nothing to start.' });
             const res = await state.startEvent(pending.eventId, { deadWorld: args[1] || null });
             if (!res.ok) return sock.sendMessage(chatId, { text: `❌ ${res.reason}` });
-            feed.queue(pending.eventId, 'major', `The war has begun! ${res.event.players.length} champions deploy into the Ruins of a dead world.`);
+            feed.queue(pending.eventId, 'major', `🌐 *WORLD EVENT* — THE WAR HAS BEGUN! ${res.event.players.length} champion${res.event.players.length === 1 ? '' : 's'} deploy into the Ruins of a dead world. Hold fast, champions — the feed below will tell their tale.`);
             // ⚔️ owner brief: DM every champion the start card ("the war has
             // begun + how you play") - fire and forget, never block the GC reply
             dmWarStartCards(sock, '\u200B', res.event, prefix).catch((e) => console.error('[GW] start-card DM:', e?.message));
@@ -370,7 +370,7 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
             // to the host GC — skip the generic feed major to avoid doubles.
             const ended = await state.endEvent(targetId, 'Called to an end by the Association.', { quietFeed: true });
             if (!ended) return sock.sendMessage(chatId, { text: '❌ No active war found.' });
-            feed.queue(targetId, 'major', `🏳️ THE WAR HAS ENDED. The Association tallies the spoils: ${ended.rewards.guilds.length} guilds took the field.`);
+            feed.queue(targetId, 'major', `🏳️ *THE WAR HAS ENDED* — the dust settles over the Ruins. The Association tallies the spoils of ${ended.rewards.guilds.length} guild${ended.rewards.guilds.length === 1 ? '' : 's'} that took the field.`);
 
             const board = ended.rewards.guilds.slice(0, 8).map((g, i) => `${['🥇', '🥈', '🥉'][i] || '▫️'} *${g.name}:* ${g.points} GP`).join('\n') || '_no guild scored_';
             const topPlayers = ended.rewards.top.slice(0, 3).map((p, i) => `${['🥇', '🥈', '🥉'][i] || '▫️'} ${p.name} (${p.guild})`).join('\n') || '';

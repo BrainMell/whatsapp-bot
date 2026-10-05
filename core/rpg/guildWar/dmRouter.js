@@ -458,7 +458,7 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         );
         await points.award(eventDoc.eventId, senderJid, gpTotal, 'relic-handin', { ignoreCap: false });
         await state.pushLog(eventDoc.eventId, 'relic-handin', senderJid, `${toHand.map((r) => r.name).join(', ')} → ${gpTotal} GP`);
-        feed.queue(eventDoc.eventId, 'normal', `🏛️ ${player.name} handed ${toHand.length === 1 ? `*${toHand[0].name}*` : `${toHand.length} relics`} to their guild (+${gpTotal} GP).`);
+        feed.queue(eventDoc.eventId, 'normal', `🏛️ ${player.name} delivers ${toHand.length === 1 ? `*${toHand[0].name}*` : `${toHand.length} relics`} to the guild vault — +${gpTotal} GP of glory secured.`);
         return { text: `🏛️ Handed in: ${toHand.map((r) => `${r.name} (${r.tier})`).join(', ')} - *+${gpTotal} GP* to you and your guild. Secured.` };
     }
 
@@ -513,7 +513,7 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
                 lastActionAt: Date.now(),
             });
             await rooms.leaveRoom(eventDoc.eventId, senderJid, player.roomId);
-            feed.queue(eventDoc.eventId, 'normal', `🏃 ${player.name} retreated from a ${room?.type || 'contest'} - the spoils stay behind.`);
+            feed.queue(eventDoc.eventId, 'normal', `🏃 ${player.name} withdrew from a ${room ? require('./encounters').roomFlavor(room) : 'contest'} — the spoils stay with the Ruins.`);
             return { text: '🏃 You retreat to your previous room. What was here stays here, unclaimed.' };
         }
         return { text: 'There is nothing here to flee from.' };

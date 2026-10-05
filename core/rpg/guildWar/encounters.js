@@ -231,7 +231,7 @@ async function maybeDiscoveryMilestone(eventDoc, player) {
     if (n > 0 && n % CFG.POINTS.DISCOVERY_EVERY === 0) {
         const res = await points.award(eventDoc.eventId, player.jid, CFG.POINTS.DISCOVERY_GP, 'discovery');
         if (res.awarded > 0) {
-            feed.queue(eventDoc.eventId, 'normal', `${player.name} has charted ${n} chambers of the Ruins.`);
+            feed.queue(eventDoc.eventId, 'normal', `🗺️ *${player.name}* has charted ${n} chambers of the Ruins — the dead world keeps fewer secrets with every step.`);
         }
     }
 }
@@ -349,7 +349,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
                     const gp = CFG.PUZZLE.GP_SOLVE + (attempts - 1 === 0 ? CFG.PUZZLE.GP_GRADE_BONUS * maxAttempts : (maxAttempts - attempts + 1) * CFG.PUZZLE.GP_GRADE_BONUS);
                     await points.award(eventDoc.eventId, player.jid, gp, 'puzzle', { coopBonus: room.occupants?.length > 1 });
                     await awardRoomRelic(eventDoc, player, room);
-                    feed.queue(eventDoc.eventId, 'normal', `🧩 ${player.name} solved the seal of a ${roomFlavor(room)}.`);
+                    feed.queue(eventDoc.eventId, 'normal', `🧩 The seal shatters — ${player.name} has out-thought a ${roomFlavor(room)}.`);
                     return { handled: true, afterImage: await clearedScene(eventDoc, player, room), text: `🔓 *The mechanism clicks open!* (+GP) The way onward is clear.` };
                 }
                 return { handled: true, text: `Someone else solved this seal a heartbeat before you.` };
@@ -360,7 +360,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
                 await applyWarDamage(player.jid, dmg, maxHp);
                 await rooms.resetPuzzleAttempts(eventDoc.eventId, room.key);
                 await state.updatePlayer(eventDoc.eventId, player.jid, {}, { lastActionAt: Date.now() });
-                feed.queue(eventDoc.eventId, 'minor', `${player.name} failed a seal and paid in blood.`);
+                feed.queue(eventDoc.eventId, 'minor', `🧩 ${player.name} gambled on a seal and the mechanism drew blood.`);
                 return { handled: true, text: `💥 The mechanism rejects you with a shock (-${dmg} HP — that was real). The seal resets - the first inscription glows anew. ${maxAttempts} fresh attempts.` };
             }
             return { handled: true, text: `❌ Wrong. ${result.attemptsLeft} attempt${result.attemptsLeft === 1 ? '' : 's'} left.` };
@@ -374,7 +374,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             markClearedLocal();
             await awardRoomRelic(eventDoc, player, room);
             if (P.zeni) await points.award(eventDoc.eventId, player.jid, 5, 'discovery');
-            feed.queue(eventDoc.eventId, 'normal', `🔍 ${player.name} unearthed something from a ${roomFlavor(room)}.`);
+            feed.queue(eventDoc.eventId, 'normal', `⛏️ Dust and bone give way — ${player.name} digs something old out of a ${roomFlavor(room)}.`);
             return { handled: true, afterImage: await clearedScene(eventDoc, player, room), text: `⛏️ You unearth it! ${P.zeni ? 'A small cache of Zeni comes with it. ' : ''}Check \`relics\` - hand it in with \`handin\` when ready.` };
         }
         case 'reward': {
@@ -384,7 +384,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             markClearedLocal();
             await awardRoomRelic(eventDoc, player, room);
             await points.award(eventDoc.eventId, player.jid, CFG.POINTS.ROOM_CLEAR.reward, 'reward');
-            feed.queue(eventDoc.eventId, 'normal', `💠 ${player.name} plundered an old-world vault.`);
+            feed.queue(eventDoc.eventId, 'normal', `💠 ${player.name} cracked a pre-war vault — its wards still sputtering as the spoils see daylight.`);
             return { handled: true, afterImage: await clearedScene(eventDoc, player, room), text: `💠 Claimed! The vault is yours. Hand the relic in with \`handin\` to secure its value.` };
         }
         case 'secret': {
@@ -398,7 +398,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             markClearedLocal();
             await awardRoomRelic(eventDoc, player, room);
             await points.award(eventDoc.eventId, player.jid, CFG.POINTS.ROOM_CLEAR.secret, 'secret');
-            feed.queue(eventDoc.eventId, 'major', `WORLD EVENT - ${player.name} uncovered a hidden chamber of the Ruins!`);
+            feed.queue(eventDoc.eventId, 'major', `🌐 *WORLD EVENT* — ${player.name} has torn open a HIDDEN CHAMBER the Ruins swallowed whole!`);
             return { handled: true, afterImage: await clearedScene(eventDoc, player, room), text: `✨ A true find! This will be remembered.` };
         }
 
@@ -417,7 +417,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             }
             const dmg = Math.round((player.stats?.maxHp || 100) * (payloadGet(P, 'hazardDamage') || 0.08));
             await applyWarDamage(player.jid, dmg, player.stats?.maxHp || 100);
-            feed.queue(eventDoc.eventId, 'minor', `${player.name} took a hit from a ${roomFlavor(room)} hazard.`);
+            feed.queue(eventDoc.eventId, 'minor', `🩸 A ${roomFlavor(room)} hazard caught ${player.name} — they limp onward, bleeding.`);
             return { handled: true, text: `🩸 The hazard catches you (-${dmg} HP — that was real). Try crossing again.` };
         }
 
@@ -459,7 +459,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             if (claim.won) {
                 markClearedLocal();
                 await points.award(eventDoc.eventId, player.jid, CFG.POINTS.ROOM_CLEAR.landmark, 'landmark');
-                feed.queue(eventDoc.eventId, 'major', `WORLD EVENT - ${player.name} of ${player.guildName} recorded *${P.landmarkName || 'a landmark'}* for their guild!`);
+                feed.queue(eventDoc.eventId, 'major', `🌐 *WORLD EVENT* — ${player.name} of ${player.guildName} inscribed *${P.landmarkName || 'a landmark'}* into the Association's maps for their guild!`);
                 return { handled: true, afterImage: await clearedScene(eventDoc, player, room), text: `🗿 Recorded for ${player.guildName}. The Association takes note. (+GP)` };
             }
             return { handled: true, text: `This landmark was already recorded.` };
@@ -500,8 +500,15 @@ async function awardRoomRelic(eventDoc, player, room) {
     const fresh = relics.makeRelic(rng, { category: rel.category, tier: rel.tier, meta: rel.meta || {} });
     fresh.name = rel.name || fresh.name;
     await GuildWarEventPushRelic(eventDoc.eventId, player.jid, fresh);
-    feed.queue(eventDoc.eventId, relics.isStealable(fresh) ? 'normal' : 'minor',
-        `💎 ${player.name} now carries *${fresh.name}* (${fresh.tier}).`);
+    // 💬 tier-flavored pickup lines (owner copy overhaul 2026-10-05): a
+    // Mythic find should NOT read like a Common one.
+    const tierIdx = CFG.RELICS.TIERS.indexOf(fresh.tier);
+    const carryLine = tierIdx >= 3
+        ? `💎 *${fresh.name}* (${fresh.tier}) — a treasure of the old world — now rides with ${player.name}!`
+        : tierIdx === 0
+            ? `💎 ${player.name} pried *${fresh.name}* (${fresh.tier}) loose from the Ruins.`
+            : `💎 ${player.name} walks out of the dark carrying *${fresh.name}* (${fresh.tier}).`;
+    feed.queue(eventDoc.eventId, relics.isStealable(fresh) ? 'normal' : 'minor', carryLine);
 
     // 💡 NEW RUINS REWARD (2026-10-03, owner request): the Silver Veil Charm
     // - a rare extra find in relic chambers (10%). Using it toggles the
@@ -511,7 +518,7 @@ async function awardRoomRelic(eventDoc, player, room) {
             const inventorySystem = require('../inventorySystem');
             await inventorySystem.addItem(player.jid, 'silver_veil', 1);
             feed.queue(eventDoc.eventId, 'normal',
-                `🫥 ${player.name} unearthed a *Silver Veil Charm* among the relics.`);
+                `🫥 Among the relics, ${player.name} finds a *Silver Veil Charm* — a whisper of silver that can veil their strength.`);
         } catch (e) {
             console.error('[Ruins] silver_veil drop failed (non-fatal):', e?.message);
         }
@@ -708,5 +715,5 @@ module.exports = {
     DEAD_WORLDS, worldTheme,
     buildRoomPayload, onRoomEnter, roomIntro, resolveInput, startRoomCombat,
     nearestRelicRoom, describeDirection, awardRoomRelic, variantOf, pickVariant,
-    payloadGet, puzzleStarted,
+    payloadGet, puzzleStarted, roomFlavor,
 };
