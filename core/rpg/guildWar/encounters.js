@@ -55,9 +55,17 @@ function buildRoomPayload(eventDoc, room, map) {
     const theme = worldTheme(eventDoc.deadWorld || rng.pick(DEAD_WORLDS).key);
     const enemyLvl = Math.max(1, Math.round(CFG.COMBAT.BASE_ENEMY_LEVEL + room.ring * 10 * CFG.COMBAT.LEVEL_RING_SCALE));
     const payload = { theme: theme.key, flavor: theme.flavor };
+    // 🛡️ OWNER RULE 2026-10-05 (live playtest): a champion must NEVER wake up
+    // in a room with monsters — "players that are weaker than the monsters
+    // in a ruin should never spawn into a room with monsters." state.startEvent
+    // rebakes combat/coop spawn rooms as 'empty' (first belt); this guard is
+    // the second: whatever a spawn room's type, it seeds NO enemies and NO
+    // boss. Weak or strong, everyone lands somewhere calm.
+    const isSpawnRoom = Array.isArray(map && map.spawns) && map.spawns.includes(room.key);
 
     switch (room.type) {
         case 'combat': {
+            if (isSpawnRoom) break; // safe landing hall — no pack
             const variant = pickVariant(rng);
             const ringSafe = Number.isFinite(room.ring) ? room.ring : 0; // NaN ring -> empty enemies (fight bricked)
             let count = rng.int(1, Math.max(1, Math.min(3, 1 + Math.floor(ringSafe * 3))));
@@ -117,6 +125,7 @@ function buildRoomPayload(eventDoc, room, map) {
         case 'secret': {
             payload.relic = relics.rollRoomRelic(rng, { ...room, ring: Math.max(0.8, room.ring) });
             payload.boss = rng.next() < CFG.COMBAT.BOSS_CHANCE_SECRET;
+            if (isSpawnRoom) payload.boss = false; // no boss at the landing hall
             if (payload.boss) payload.enemies = [{ level: enemyLvl + 8 }];
             break;
         }
@@ -130,6 +139,7 @@ function buildRoomPayload(eventDoc, room, map) {
             break;
         }
         case 'coop': {
+            if (isSpawnRoom) break; // safe landing hall — no guardian pack
             const variant = pickVariant(rng);
             payload.variant = variant ? variant.key : undefined;
             payload.gpMult = variant ? (variant.gpMult || 1) : 1;

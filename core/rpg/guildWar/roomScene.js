@@ -118,25 +118,23 @@ const DEFAULT_ENTRY = 's';
 const ENTRY_FLIP = { w: false, e: true, n: false, s: false };
 
 // 🔄 facing rule for the BACK position + FORWARD doorway (owner #5):
-// "the direction their sprite faces should be determined by the doorways
-// around them. If there are more doorways toward the left (e.g. forward and
-// left doorways, but no doorway to the right), the player should face RIGHT.
-// If there are more doorways toward the right, the player should face LEFT.
-// In short: the player faces toward the more open side of the room, away
-// from the concentration of doorways... If there are no doorways on either
-// side, or both sides have the same number, either direction is fine."
+// originally "face AWAY from the concentration of doorways" — REVERSED by
+// the owner's live playtest the same day: "bottom and left means it should
+// be facing left towards the door". The sprite now faces TOWARD an open
+// side arch (a door is something to look AT, not away from). If doorways
+// sit to the left (e.g. forward and left, none right) the player faces
+// LEFT; more to the right → faces RIGHT; tie or none → the spot's native
+// read. Walk-in entries through w/e keep the face-away-from-entry-door rule.
 // Implementation: count OPEN side arches in SCREEN space — west arch = left,
-// east arch = right (the centre arches n/s are neither side). More left →
-// face RIGHT (the sprites' native read); more right → face LEFT (mirrored);
-// tie → keep the spot's native read. Applies at the back position (spawn-in
-// + south walk-ins) and at the forward doorway (north walk-ins).
+// east arch = right (the centre arches n/s are neither side). Applies at
+// the back position (spawn-in + south walk-ins) and forward doorway (north).
 function facingForSpot(dir, exits) {
     if (dir !== 's' && dir !== 'n') return !!ENTRY_FLIP[dir];
     const open = (d) => Array.isArray(exits) && exits.some((x) => x && x.dir === d && x.edge);
     const left = open('w') ? 1 : 0;
     const right = open('e') ? 1 : 0;
-    if (left > right) return false;   // face RIGHT — the open side
-    if (right > left) return true;    // face LEFT — the open side
+    if (left > right) return true;    // face LEFT — toward the open west arch
+    if (right > left) return false;   // face RIGHT — toward the open east arch
     return !!ENTRY_FLIP[dir];         // tie: either is fine → native read
 }
 

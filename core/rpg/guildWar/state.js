@@ -217,6 +217,24 @@ async function startEvent(eventId, { deadWorld = null, worldIds = null } = {}) {
 
     // spawn assignment: shuffle spawn keys (same-guild adjacency already minimized by farthest-point)
     const spawnKeys = mapEngine.makeRng(seed + ':spawns').shuffle(map.spawns);
+
+    // 🛡️ OWNER RULE 2026-10-05 (live playtest): "players that are weaker than
+    // the monsters in a ruin should never spawn into a room with monsters."
+    // A champion's landing hall is now ALWAYS monster-free: combat/coop
+    // spawn rooms are rebaked as safe 'empty' halls BEFORE payloads are
+    // seeded — so the intro text, the render and the encounter payload all
+    // agree. Defeat respawn reuses spawnRoomId, so this guards both paths.
+    // (The buildRoomPayload spawn-guard in encounters.js is the second belt:
+    // it strips any enemies/boss a spawn room could still roll, e.g. a
+    // secret chamber's boss.)
+    const HOSTILE_TYPES = new Set(['combat', 'coop']);
+    for (const k of new Set(spawnKeys)) {
+        const rd = roomDocs.find((r) => r.key === k);
+        const mr = map.rooms.get(k);
+        if (rd && HOSTILE_TYPES.has(rd.type)) rd.type = 'empty';
+        if (mr && HOSTILE_TYPES.has(mr.type)) mr.type = 'empty';
+    }
+
     const playerDocs = doc.players.map((p, i) => ({
         ...(p.toObject ? p.toObject({ depopulate: true }) : p),
         spawnRoomId: spawnKeys[i % spawnKeys.length],
