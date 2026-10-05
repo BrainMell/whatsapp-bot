@@ -73,6 +73,15 @@ const ENEMY_DIR = path.join(__dirname, '..', '..', 'rpgasset', 'enemies');
 // coins are left in its place. Generated pixel-art, keyed + grounded.
 const GW_PROP_DIR = path.join(ASSET_DIR, 'props');
 
+// 🔄 ITEMS-BEHIND-THE-HUD (owner ruins_fixes.txt #3, 2026-10-05): the
+// default-encounter hub panel owns the bottom-left corner of the canvas
+// (panel spans x ≈ -26..505, y ≈ 644..900 at HUB_SCALE). Items must ALWAYS
+// render behind the HUD, no matter where they are positioned — so nothing
+// (room content, ambient props, potion-style urns) parks inside this
+// footprint, and everything still draws BEFORE the panel in the pipeline
+// so the panel wins the z-order wherever depth stacks them anyway.
+const HUB_ZONE = { x1: 530, y0: 610 };
+
 // ── doorway geometry on the normalized plates (1200×900) ──
 const DOORS = {
     w: { cx: 168, cy: 505 },   // left arch (player's left = west wall)
@@ -88,17 +97,48 @@ const DOORS = {
 // be facing away from the door, toward the rest of the scene"): the
 // champion PNGs read slightly RIGHT natively (front-facing sprites with a
 // rightward lean), so flip=false faces right. w-entry keeps native (faces
-// EAST, into the room); e-entry mirrors (faces WEST). n/s walk-ins keep
-// the native read, turned toward the content side. War start (no prior
-// room) = classic left-door entrance.
+// EAST, into the room); e-entry mirrors (faces WEST).
+//
+// 🔄 SPAWN/FACING OVERHAUL (owner ruins_fixes.txt #1+#5, 2026-10-05):
+//   #1 — when a player SPAWNS IN (war start / defeat respawn — no door they
+//        walked through), they stand at the BACK position: the bottom-centre
+//        spot circled green on the owner's screenshot (≈ 624, 780), NOT the
+//        old classic left-door entrance.
+//   #5 — at the BACK position and at the FORWARD doorway the sprite FACES
+//        THE MORE OPEN SIDE of the room — away from the concentration of
+//        doorways (see facingForSpot below). Walk-in entries through w/e
+//        keep the face-away-from-the-entry-door rule.
 const SPAWN_SPOTS = {
     w: { x: 258, y: 590 },   // just right of the left arch (owner circle 1)
     e: { x: 942, y: 612 },   // just left of the right arch (owner circle 2)
     n: { x: 596, y: 402 },   // in front of the back-wall arch (owner circle 3)
-    s: { x: 616, y: 796 },   // bottom-centre walk-in (owner circle 4)
+    s: { x: 624, y: 780 },   // the BACK position — owner's green circle (ruins_fixes #1)
 };
-const DEFAULT_ENTRY = 'w';
+const DEFAULT_ENTRY = 's';
 const ENTRY_FLIP = { w: false, e: true, n: false, s: false };
+
+// 🔄 facing rule for the BACK position + FORWARD doorway (owner #5):
+// "the direction their sprite faces should be determined by the doorways
+// around them. If there are more doorways toward the left (e.g. forward and
+// left doorways, but no doorway to the right), the player should face RIGHT.
+// If there are more doorways toward the right, the player should face LEFT.
+// In short: the player faces toward the more open side of the room, away
+// from the concentration of doorways... If there are no doorways on either
+// side, or both sides have the same number, either direction is fine."
+// Implementation: count OPEN side arches in SCREEN space — west arch = left,
+// east arch = right (the centre arches n/s are neither side). More left →
+// face RIGHT (the sprites' native read); more right → face LEFT (mirrored);
+// tie → keep the spot's native read. Applies at the back position (spawn-in
+// + south walk-ins) and at the forward doorway (north walk-ins).
+function facingForSpot(dir, exits) {
+    if (dir !== 's' && dir !== 'n') return !!ENTRY_FLIP[dir];
+    const open = (d) => Array.isArray(exits) && exits.some((x) => x && x.dir === d && x.edge);
+    const left = open('w') ? 1 : 0;
+    const right = open('e') ? 1 : 0;
+    if (left > right) return false;   // face RIGHT — the open side
+    if (right > left) return true;    // face LEFT — the open side
+    return !!ENTRY_FLIP[dir];         // tie: either is fine → native read
+}
 
 // the guardian's spot follows the same opposite-side rule as the pack
 // (owner 2026-10-05): it waits across the room from the champion's entry
@@ -244,7 +284,30 @@ async function contentBox(file, dir) {
                 }
             }
         }
-        if (maxX >= 0) box = { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+        if (maxX >= 0) {
+            box = { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+            // 🔄 FOOT BAND (owner ruins_fixes.txt #6 — shadows must match the
+            // sprites): the shadow used to span the FULL content width, so
+            // sprites with sweeping cloaks / wings / weapons got a shadow
+            // far wider than the feet actually planted on the floor. Measure
+            // the opaque extent of the BOTTOM ~16% of the content — the part
+            // that really touches the ground — and let the contact shadow
+            // hug THAT instead.
+            const bandTop = Math.max(minY, maxY - Math.max(4, Math.round(box.h * 0.16)));
+            let fMinX = img.width, fMaxX = -1;
+            for (let y = bandTop; y <= maxY; y++) {
+                for (let x = minX; x <= maxX; x++) {
+                    if (data[(y * img.width + x) * 4 + 3] > 16) {
+                        if (x < fMinX) fMinX = x;
+                        if (x > fMaxX) fMaxX = x;
+                    }
+                }
+            }
+            if (fMaxX >= 0) {
+                box.feetX = fMinX;
+                box.feetW = fMaxX - fMinX + 1;
+            }
+        }
     } catch (e) { box = null; }
     bboxCache.set(cacheKey, box);
     return box;
@@ -308,7 +371,15 @@ async function drawGroundedSprite(ctx, dirs, file, cx, groundY, ch, { shadow = t
     // content anchors (natural px) → canvas px
     const drawX = cx - (box.x + box.w / 2) * scale;
     const drawY = groundY - (box.y + box.h) * scale;
-    if (shadow) drawContactShadow(ctx, cx, groundY, box.w * scale, ch, alpha);
+    if (shadow) {
+        // 🔄 the shadow hugs the FEET, not the full sprite width (owner
+        // ruins_fixes.txt #6) — and its centre follows the foot band's
+        // centre (mirrored when the sprite flips), so it always sits under
+        // what actually touches the floor.
+        const footW = (box.feetW ?? box.w) * scale;
+        const footOff = ((box.feetX ?? (box.x + (box.w - (box.feetW ?? box.w)) / 2)) + (box.feetW ?? box.w) / 2 - (box.x + box.w / 2)) * scale;
+        drawContactShadow(ctx, flip ? cx - footOff : cx + footOff, groundY, footW, ch, alpha);
+    }
     ctx.save();
     if (alpha < 1) ctx.globalAlpha = alpha;
     if (flip) {
@@ -383,12 +454,16 @@ function planFor(eventDoc, player, room, exits) {
     const cleared = room.state === 'CLEARED';
 
     // ── the champion's entry-door spot (owner directive 2026-10-05) ──
+    // Spawn-in (war start / defeat respawn — no door walked through) lands
+    // at the BACK position (owner ruins_fixes.txt #1); facing at the back
+    // position + the forward doorway follows the doorway-distribution rule
+    // (owner #5) — see facingForSpot.
     const dir = entryDirOf(player) || DEFAULT_ENTRY;
     const spot = SPAWN_SPOTS[dir] || SPAWN_SPOTS[DEFAULT_ENTRY];
     plan.playerSpot = {
         dir, x: spot.x, y: spot.y,
         h: perspH(spot.y),
-        flip: !!ENTRY_FLIP[dir],
+        flip: facingForSpot(dir, exits),
     };
 
     // 💡 §16 MEETINGS: other players IN this room are drawn in the world —
@@ -404,8 +479,8 @@ function planFor(eventDoc, player, room, exits) {
     for (let i = 0; i < mateRows.length; i++) {
         const mx = clampX(spot.x + towardCentre * (95 + i * 92));
         const my = clampY(spot.y + (i === 0 ? 6 : -6));
-        // mates face the same way as the champion (into the room)
-        plan.mates.push({ file: resolvePlayerSpriteFile(mateRows[i]), x: mx, y: my, h: Math.round(perspH(my) * 0.92), name: mateRows[i].name, flip: !!ENTRY_FLIP[dir] });
+        // mates face the same way as the champion (same doorway-facing rule)
+        plan.mates.push({ file: resolvePlayerSpriteFile(mateRows[i]), x: mx, y: my, h: Math.round(perspH(my) * 0.92), name: mateRows[i].name, flip: plan.playerSpot.flip });
     }
     for (let i = 0; i < rivalRows.length; i++) {
         const rx = clampX(1200 - spot.x + (i === 0 ? 0 : (towardCentre * 80)));
@@ -475,12 +550,15 @@ function planFor(eventDoc, player, room, exits) {
         plan.rivals.some((e) => Math.hypot(e.x - x, e.y - y) < 120) ||
         Math.hypot(spot.x - x, spot.y - y) < 120;
     const propSpots = [
-        { x: 92, y: 652 }, { x: 1104, y: 648 }, { x: 244, y: 632 },
-        { x: 952, y: 628 }, { x: 62, y: 742 }, { x: 1136, y: 730 },
+        { x: 96, y: 596 }, { x: 1104, y: 648 }, { x: 248, y: 606 },
+        { x: 952, y: 628 }, { x: 66, y: 584 }, { x: 1136, y: 730 },
     ];
     for (const s of rng.shuffle(propSpots)) {
         if (plan.props.length >= rng.int(1, 3)) break;
         if (occupied(s.x, s.y)) continue;
+        // 🔄 never park a prop (crate/urn/potion-looking bits) inside the hub
+        // panel's corner — items always render behind the HUD (owner #3)
+        if (s.x < HUB_ZONE.x1 && s.y > HUB_ZONE.y0) continue;
         // keep door approaches clear
         if (Math.hypot(s.x - DOORS.w.cx, s.y - DOORS.w.cy) < 130) continue;
         if (Math.hypot(s.x - DOORS.e.cx, s.y - DOORS.e.cy) < 130) continue;
@@ -891,13 +969,15 @@ async function drawHudPanel(ctx, hud) {
 const STONE = ['#453f33', '#3a3529', '#514a3b'];
 const STONE_DARK = 'rgba(22,20,15,0.6)';
 function drawProp(ctx, kind, x, groundY, s) {
+    // 🔄 SHADOW UNIFICATION (owner ruins_fixes.txt #6): props drew their own
+    // flat dark ellipse — a different shadow language than the actors'
+    // two-layer depth-aware contact shadow. Same contact shadow now, scaled
+    // to the prop, so crates/urns/bones ground exactly like everyone else.
+    drawContactShadow(ctx, x, groundY, 46 * s, 32 * s);
     ctx.save();
     ctx.globalAlpha = 0.92;
     ctx.translate(x, groundY);
     ctx.scale(s, s);
-    // contact shadow
-    ctx.beginPath(); ctx.ellipse(0, 3, 24, 6, 0, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0,0,0,0.38)'; ctx.fill();
     if (kind === 'crate') {
         ctx.fillStyle = '#4f3f28';
         ctx.fillRect(-19, -32, 38, 32);
@@ -958,8 +1038,13 @@ async function drawRoomContent(ctx, room, plan) {
     const t = room.type;
     // content anchor: the point-of-interest zone sits OPPOSITE the champion
     // (mirrored to the left half when they entered from the right door)
+    // 🔄 ITEMS-BEHIND-THE-HUD (owner ruins_fixes.txt #3): when the mirrored
+    // anchor would park the item inside the hub panel's corner, lift it to
+    // the floor strip just ABOVE the panel so it always reads as behind the
+    // HUD (the panel also draws later and wins z-order regardless).
     const spot = plan.playerSpot || SPAWN_SPOTS[DEFAULT_ENTRY];
-    const ax = spot.x > 700 ? 380 : 820, ay = 700;
+    let ax = spot.x > 700 ? 380 : 820, ay = 700;
+    if (ax < HUB_ZONE.x1 && ay > HUB_ZONE.y0) ay = 588;
     if (room.state === 'CLEARED') {
         // cleared rooms keep a faint scar of what was here (never empty-identical).
         // discovery/reward fall through to the switch — their CLEARED branches
@@ -1050,11 +1135,10 @@ async function drawRoomContent(ctx, room, plan) {
         case 'puzzle': {
             // carved RUNE STONES flanking the mechanism (the board overlays
             // centre) — real sprites, mirrored for symmetry. Anchored just
-            // OUTSIDE the puzzle panel's footprint (drawPuzzleOverlay puts
-            // it at x 470-1030 / 170-730, y 452-812) so the stones read as
-            // the mechanism's flanking pillars, never swallowed by the board.
-            const boardX0 = (spot.x > 700) ? 170 : 470;
-            for (const [gx, flip] of [[boardX0 - 44, true], [boardX0 + 604, false]]) {
+            // OUTSIDE the encounter card's footprint (drawPuzzleOverlay now
+            // centres a ~70% board: x 180-1020, y 135-765) so the stones read
+            // as the mechanism's flanking pillars, never swallowed by it.
+            for (const [gx, flip] of [[140, true], [1060, false]]) {
                 await drawGroundedSprite(ctx, [GW_PROP_DIR], 'puzzle_rune.png', gx, 726, 118, { shadow: true, flip });
             }
             glowSpot(ctx, ax, ay - 40, 90, 'rgba(90,170,255,0.12)');
@@ -1072,8 +1156,14 @@ const TYPE_LABEL = {
     anomaly: 'WORLD-THIN HALL', landmark: 'LANDMARK', core: 'THE WORLD CORE',
 };
 
-// ── puzzle overlay: the board rides ON the scene (owner directive) ──
-async function drawPuzzleOverlay(ctx, boardBuf, spot) {
+// ── ENCOUNTER CARD OVERLAY (owner ruins_fixes.txt #7, 2026-10-05) ──────
+// The overlay used to ride UNDER the HUD panel (and behind the turn
+// crystal) — the bottom-left panel visibly clipped the card. New rules:
+//   • LAYERING: painted LAST — in front of the HUD, the pills, everything.
+//   • SIZE: ~70% of the screen (840×630 on the 1200×900 canvas), centred.
+//   • FOCUS: the whole scene dims behind the card (the room stays legible
+//     underneath, but the card is unmistakably the focus).
+async function drawPuzzleOverlay(ctx, boardBuf) {
     if (!boardBuf) return;
     // tolerate every IPC shape a Buffer can arrive in
     let buf = boardBuf;
@@ -1081,17 +1171,21 @@ async function drawPuzzleOverlay(ctx, boardBuf, spot) {
     if (!Buffer.isBuffer(buf)) return;
     let img = null;
     try { img = await loadImage(buf); } catch (e) { return; }
-    // panel sits opposite the champion so the actor stays in view — the
-    // puzzle is IN the room with you, not a wall between you and the scene
-    const pw = 560, ph = 360, px = (spot && spot.x > 700) ? 170 : 470, py = 452;
+    // dim backdrop — everything behind the card steps back
     ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 18;
-    ctx.fillStyle = 'rgba(16,14,10,0.88)';
-    roundRect(ctx, px, py, pw, ph, 14); ctx.fill();
+    ctx.fillStyle = 'rgba(6,5,10,0.55)';
+    ctx.fillRect(0, 0, W, H);
     ctx.restore();
-    ctx.strokeStyle = 'rgba(255,210,74,0.7)'; ctx.lineWidth = 2;
-    roundRect(ctx, px, py, pw, ph, 14); ctx.stroke();
-    const scale = Math.min((pw - 20) / img.width, (ph - 20) / img.height);
+    const pw = Math.round(W * 0.70), ph = Math.round(H * 0.70);
+    const px = Math.round((W - pw) / 2), py = Math.round((H - ph) / 2);
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.65)'; ctx.shadowBlur = 22;
+    ctx.fillStyle = 'rgba(16,14,10,0.94)';
+    roundRect(ctx, px, py, pw, ph, 16); ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(255,210,74,0.75)'; ctx.lineWidth = 2;
+    roundRect(ctx, px, py, pw, ph, 16); ctx.stroke();
+    const scale = Math.min((pw - 24) / img.width, (ph - 24) / img.height);
     const dw = img.width * scale, dh = img.height * scale;
     ctx.drawImage(img, px + (pw - dw) / 2, py + (ph - dh) / 2, dw, dh);
 }
@@ -1400,17 +1494,19 @@ async function _renderInProcess(eventDoc, player, room, opts = {}) {
         segBar(ctx, e.x, showName ? headTop - 11 : headTop - 14, e.boss ? 126 : 94, 9, hp / hpMax, '#d63c14', '#f59d2a');
     }
 
-    // 8) puzzle overlay (opposite the champion)
-    if (opts.puzzleBoard) await drawPuzzleOverlay(ctx, opts.puzzleBoard, spot);
-
-    // 9) THE DEFAULT ENCOUNTER HUB — the codebase's own player_state panel
+    // 8) THE DEFAULT ENCOUNTER HUB — the codebase's own player_state panel
     // (real ui assets, renderer.go geometry), topmost layer like the
     // default encounter's; battle renders feed it live pools.
     await drawHudPanel(ctx, plan.hud);
 
-    // 10) THE FLOATING BLUE CRYSTAL — the DEFAULT turn indicator — painted
-    // last so it hovers above the active actor's whole HUD stack
+    // 9) THE FLOATING BLUE CRYSTAL — the DEFAULT turn indicator — painted
+    // above the active actor's whole HUD stack
     for (const j of crystalJobs) await drawTurnCrystal(ctx, j.cx, j.headTop, j.spriteH, j.clearance);
+
+    // 10) ENCOUNTER CARD OVERLAY — LAST (owner ruins_fixes.txt #7): in
+    // front of the HUD and everything else, ~70% of the screen, centred,
+    // scene dimmed behind it.
+    if (opts.puzzleBoard) await drawPuzzleOverlay(ctx, opts.puzzleBoard);
 
     return c.toBuffer('image/png');
 }
@@ -1483,5 +1579,5 @@ module.exports = {
     renderRoomScene, _renderInProcess, exitsFor, plateKeyFor,
     DOORS, SPAWN_SPOTS, DEFAULT_ENTRY, ENTRY_FLIP, entryDirOf, perspH, TYPE_LABEL,
     planFor, hudFor, resolvePlayerSpriteFile, ENEMY_POOL, BOSS_POOL,
-    ROOM_VARIANTS, variantOfRoom, ensureFonts,
+    ROOM_VARIANTS, variantOfRoom, ensureFonts, facingForSpot, HUB_ZONE,
 };

@@ -146,6 +146,19 @@ async function setRoomPayload(eventId, roomKey, payloadPatch) {
     );
 }
 
+// 🔄 ENCOUNTER GATE (owner ruins_fixes.txt #8, 2026-10-05): puzzle
+// encounters no longer start on room entry — the player must interact
+// (`examine`) first. Marks the mechanism as started so later messages are
+// answers. Idempotent; only touches rooms still in play.
+async function startPuzzle(eventId, roomKey) {
+    try {
+        await GuildWarEvent.updateOne(
+            { eventId, rooms: { $elemMatch: { key: roomKey, state: { $in: ['UNEXPLORED', 'ACTIVE'] } } } },
+            { $set: { 'rooms.$.payload.puzzle.started': true } }
+        );
+    } catch (e) { /* best-effort — the in-memory flag still gates this turn */ }
+}
+
 // ── PUZZLE ATTEMPT CLAIM (owner brief §7: "one authoritative evaluation") ──
 // The old flow read attemptsUsed, evaluated, then wrote it back — concurrent
 // DMs all read the same value, all evaluated, and last-write-wins ate the
@@ -203,5 +216,5 @@ async function dropCarriedRelics(eventId, jid, reason) {
 module.exports = {
     seedEncounters, applyFog, enterRoom, leaveRoom, clearRoom,
     markActive, setRoomPayload, dropCarriedRelics,
-    claimPuzzleAttempt, resetPuzzleAttempts,
+    startPuzzle, claimPuzzleAttempt, resetPuzzleAttempts,
 };

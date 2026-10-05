@@ -181,8 +181,11 @@ async function onRoomEnter(eventDoc, player, room) {
             break;
         case 'puzzle':
             rooms.markActive(eventDoc.eventId, room.key);
-            lines.push(`🧩 A mechanism blocks the far door.\n\n${payloadGet(room.payload, 'puzzle')?.prompt || 'The mechanism awaits an answer.'}`);
-            lines.push(`_Reply with your answer. ${CFG.PUZZLE.ATTEMPTS} attempts. Wrong answers have a cost._`);
+            // 🔄 owner ruins_fixes.txt #8: the encounter does NOT start on
+            // entry — the player must interact first (spawn → interact →
+            // encounter begins). The prompt itself rides the `examine`.
+            lines.push(`🧩 A sealed mechanism blocks the far door. Ancient grooves wait under a skin of dust.`);
+            lines.push(`_Type \`examine\` to study it. Wrong answers have a cost._`);
             break;
         case 'discovery':
             lines.push(`🔍 ${payloadGet(room.payload, 'text') || 'Something is hidden here.'}`);
@@ -281,6 +284,22 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
     const norm = String(input || '').trim().toLowerCase();
     const P = room.payload || {};
 
+    // 🔄 IMMEDIATE OUTCOME SPRITE (owner ruins_fixes.txt #2/#4, 2026-10-05):
+    // clearRoom flips the room in the DB only — the in-memory room stayed
+    // ACTIVE, so the VERY NEXT render (the dig/take result image) still
+    // showed the rubble / closed chest. The outcome only appeared after the
+    // player LEFT the room — exactly when the sprite was supposed to
+    // despawn. Syncing the in-memory room to the won claim makes the
+    // outcome sprite generate IMMEDIATELY after the interaction.
+    const markClearedLocal = () => {
+        try {
+            room.state = 'CLEARED';
+            room.clearedBy = player.jid;
+            if (player.guildId) room.clearedByGuild = player.guildId;
+            room.clearedAt = new Date();
+        } catch (e) { /* read-only room objects just keep the old sprite */ }
+    };
+
     switch (room.type) {
         // ── puzzle ──
         // ⚔️ MECHANISM OVERHAUL (owner brief §7 — full state/lifecycle fix):
@@ -299,6 +318,25 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
         //     solved/failing chamber can never fork a second instance.
         case 'puzzle': {
             if (!norm) return { handled: false };
+            // 🔄 ENCOUNTER GATE (owner ruins_fixes.txt #8): spawn/appear →
+            // player interacts → encounter begins. The mechanism no longer
+            // wakes on entry: the board stays hidden and NO answer attempt
+            // is consumed until the player `examine`s it. Carved Verse and
+            // every other puzzle kind share this same gated flow.
+            const pzLive = payloadGet(P, 'puzzle');
+            const pzStarted = !!(pzLive && (pzLive.started || (pzLive.attemptsUsed || 0) > 0));
+            if (!pzStarted) {
+                if (!['examine', 'inspect', 'study', 'check', 'interact'].includes(norm)) {
+                    return { handled: true, text: '🧩 A sealed mechanism dominates the chamber. Type `examine` to study it.' };
+                }
+                await rooms.startPuzzle(eventDoc.eventId, room.key);
+                try { if (pzLive && typeof pzLive === 'object') pzLive.started = true; } catch (e) { /* immutable payload */ }
+                return {
+                    handled: true,
+                    afterImage: await puzzleBoardScene(eventDoc, player, room),
+                    text: `🧩 You study the mechanism - it hums awake under your fingers...\n\n${(pzLive && pzLive.prompt) || 'The mechanism awaits an answer.'}\n\n_Reply with your answer. ${(pzLive && pzLive.maxAttempts) || CFG.PUZZLE.ATTEMPTS} attempts. Wrong answers have a cost._`,
+                };
+            }
             const claimed = await rooms.claimPuzzleAttempt(eventDoc.eventId, room.key);
             if (!claimed) return { handled: true, text: '🧱 The mechanism is inert - its seal has already been broken.' };
             const { attempts, puzzle: pz } = claimed;
@@ -307,6 +345,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             if (result.solved) {
                 const claim = await rooms.clearRoom(eventDoc.eventId, room.key, player);
                 if (claim.won) {
+                    markClearedLocal();
                     const gp = CFG.PUZZLE.GP_SOLVE + (attempts - 1 === 0 ? CFG.PUZZLE.GP_GRADE_BONUS * maxAttempts : (maxAttempts - attempts + 1) * CFG.PUZZLE.GP_GRADE_BONUS);
                     await points.award(eventDoc.eventId, player.jid, gp, 'puzzle', { coopBonus: room.occupants?.length > 1 });
                     await awardRoomRelic(eventDoc, player, room);
@@ -332,6 +371,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             if (norm !== 'dig') return { handled: false };
             const claim = await rooms.clearRoom(eventDoc.eventId, room.key, player);
             if (!claim.won) return { handled: true, text: `Another explorer got here first - the chamber is bare.` };
+            markClearedLocal();
             await awardRoomRelic(eventDoc, player, room);
             if (P.zeni) await points.award(eventDoc.eventId, player.jid, 5, 'discovery');
             feed.queue(eventDoc.eventId, 'normal', `🔍 ${player.name} unearthed something from a ${roomFlavor(room)}.`);
@@ -341,6 +381,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             if (norm !== 'take') return { handled: false };
             const claim = await rooms.clearRoom(eventDoc.eventId, room.key, player);
             if (!claim.won) return { handled: true, text: `The vault has already been emptied.` };
+            markClearedLocal();
             await awardRoomRelic(eventDoc, player, room);
             await points.award(eventDoc.eventId, player.jid, CFG.POINTS.ROOM_CLEAR.reward, 'reward');
             feed.queue(eventDoc.eventId, 'normal', `💠 ${player.name} plundered an old-world vault.`);
@@ -354,6 +395,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             if (norm !== 'claim') return { handled: false };
             const claim = await rooms.clearRoom(eventDoc.eventId, room.key, player);
             if (!claim.won) return { handled: true, text: `Someone claimed this secret before you.` };
+            markClearedLocal();
             await awardRoomRelic(eventDoc, player, room);
             await points.award(eventDoc.eventId, player.jid, CFG.POINTS.ROOM_CLEAR.secret, 'secret');
             feed.queue(eventDoc.eventId, 'major', `WORLD EVENT - ${player.name} uncovered a hidden chamber of the Ruins!`);
@@ -367,6 +409,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             if (dodge) {
                 const claim = await rooms.clearRoom(eventDoc.eventId, room.key, player);
                 if (claim.won) {
+                    markClearedLocal();
                     await points.award(eventDoc.eventId, player.jid, CFG.POINTS.ROOM_CLEAR.hazard, 'hazard');
                     return { handled: true, afterImage: await clearedScene(eventDoc, player, room), text: `🤸 You slip past the hazard unscathed. (+GP) The way is open.` };
                 }
@@ -383,6 +426,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             if (norm !== 'touch') return { handled: false };
             const claim = await rooms.clearRoom(eventDoc.eventId, room.key, player);
             if (!claim.won) return { handled: true, text: `The anomaly has already been disturbed.` };
+            markClearedLocal();
             const kind = payloadGet(P, 'anomaly') || 'relic_ping';
             const afterImage = await clearedScene(eventDoc, player, room);
             if (kind === 'relic_ping') {
@@ -405,6 +449,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             if (!norm || norm === 'lore' || norm === 'read') {
                 await points.award(eventDoc.eventId, player.jid, CFG.POINTS.ROOM_CLEAR.lore, 'lore');
                 await rooms.clearRoom(eventDoc.eventId, room.key, player);
+                markClearedLocal();
                 return { handled: true, afterImage: await clearedScene(eventDoc, player, room), text: `📖 You study the inscriptions and carry their memory with you. (+GP)` };
             }
             return { handled: false };
@@ -412,6 +457,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             if (norm !== 'record') return { handled: false };
             const claim = await rooms.clearRoom(eventDoc.eventId, room.key, player);
             if (claim.won) {
+                markClearedLocal();
                 await points.award(eventDoc.eventId, player.jid, CFG.POINTS.ROOM_CLEAR.landmark, 'landmark');
                 feed.queue(eventDoc.eventId, 'major', `WORLD EVENT - ${player.name} of ${player.guildName} recorded *${P.landmarkName || 'a landmark'}* for their guild!`);
                 return { handled: true, afterImage: await clearedScene(eventDoc, player, room), text: `🗿 Recorded for ${player.guildName}. The Association takes note. (+GP)` };
@@ -599,27 +645,56 @@ async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = 
 // exploration flow (it still renders actual battle scenes — §15: the
 // existing combat engine stays).
 // Puzzle rooms: the game board OVERLAYS the scene panel (owner directive).
+// 🔄 ENCOUNTER GATE HELPERS (owner ruins_fixes.txt #8, 2026-10-05):
+// "spawn/appear -> player interacts -> encounter begins". A puzzle's board
+// card is attached ONLY once the encounter has actually started (the player
+// typed `examine`, or an attempt was already burned in a pre-gate war).
+function puzzleStarted(room) {
+    const pz = payloadGet(room.payload, 'puzzle');
+    return !!(pz && (pz.started || (pz.attemptsUsed || 0) > 0));
+}
+
+async function puzzleBoardOpts(eventDoc, room) {
+    const P = room.payload || {};
+    const pz = payloadGet(P, 'puzzle');
+    if (!pz) return {};
+    try {
+        const board = await require('./puzzleCards').renderPuzzleCard({
+            kind: pz.kind, prompt: pz.prompt,
+            attemptsUsed: pz.attemptsUsed || 0,
+            attemptsMax: pz.maxAttempts || CFG.PUZZLE.ATTEMPTS,
+            world: worldTheme(payloadGet(P, 'theme') || eventDoc.deadWorld).name,
+            ring: Math.max(1, Math.round((room.ring || 0) * 4) + 1),
+        });
+        return { puzzleBoard: board };
+    } catch (e) { return {}; }  // board overlay is best-effort
+}
+
+// the encounter-BEGIN scene: the room WITH the board card riding on it —
+// sent as the afterImage of `examine` (the moment the encounter starts).
+async function puzzleBoardScene(eventDoc, player, room) {
+    try {
+        const roomScene = require('./roomScene');
+        const sceneOpts = { prefix: '.' };
+        Object.assign(sceneOpts, await puzzleBoardOpts(eventDoc, room));
+        return await roomScene.renderRoomScene(eventDoc, player, room, sceneOpts);
+    } catch (e) {
+        return null;
+    }
+}
+
 async function roomIntro(eventDoc, player, room, opts = {}) {
     const text = await onRoomEnter(eventDoc, player, room);
     try {
         const roomScene = require('./roomScene');
-        const P = room.payload || {};
         // scene for EVERY room kind — combat kinds included (the scene is
         // the "you walk in and see them" beat; the battle render follows it)
         const sceneOpts = { prefix: opts.prefix || '.' };
-        if (room.type === 'puzzle' && room.state !== 'CLEARED') {
-            const pz = payloadGet(P, 'puzzle');
-            if (pz) {
-                try {
-                    sceneOpts.puzzleBoard = await require('./puzzleCards').renderPuzzleCard({
-                        kind: pz.kind, prompt: pz.prompt,
-                        attemptsUsed: pz.attemptsUsed || 0,
-                        attemptsMax: pz.maxAttempts || CFG.PUZZLE.ATTEMPTS,
-                        world: worldTheme(payloadGet(P, 'theme') || eventDoc.deadWorld).name,
-                        ring: Math.max(1, Math.round((room.ring || 0) * 4) + 1),
-                    });
-                } catch (e) { /* board overlay is best-effort */ }
-            }
+        // 🔄 owner ruins_fixes.txt #8: the encounter card only shows AFTER
+        // the player interacts — entry into a not-yet-examined puzzle room
+        // shows the room + a prompt to examine, never the board.
+        if (room.type === 'puzzle' && room.state !== 'CLEARED' && puzzleStarted(room)) {
+            Object.assign(sceneOpts, await puzzleBoardOpts(eventDoc, room));
         }
         const scene = await roomScene.renderRoomScene(eventDoc, player, room, sceneOpts);
         if (scene) return { text, image: scene };
@@ -633,5 +708,5 @@ module.exports = {
     DEAD_WORLDS, worldTheme,
     buildRoomPayload, onRoomEnter, roomIntro, resolveInput, startRoomCombat,
     nearestRelicRoom, describeDirection, awardRoomRelic, variantOf, pickVariant,
-    payloadGet,
+    payloadGet, puzzleStarted,
 };
