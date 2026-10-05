@@ -1959,10 +1959,14 @@ const scopedKey = (key) => `${botScope()}|${key}`;
 //   end   → victory awards room GP/relic via the Guild War module
 // No parallel combat system: this reuses gameStates/startCombat verbatim.
 // ============================================
-const ruinsHooks = { onFlee: null, onEnd: null };
+const ruinsHooks = { onFlee: null, onEnd: null, endCard: null };
 function setRuinsHooks(h) {
   if (h.onFlee) ruinsHooks.onFlee = h.onFlee;
   if (h.onEnd) ruinsHooks.onEnd = h.onEnd;
+  // ⚔️ RUINS end cards: the war module supplies the decree-style
+  // victory/defeat renderer (endCard.js) used INSTEAD of the default Go
+  // end screen for mode RUINS.
+  if (h.endCard) ruinsHooks.endCard = h.endCard;
 }
 
 // Build the solo-style player entity (same shape + stat enrichment as the
@@ -7116,9 +7120,27 @@ async function endCombat(sock, victory, sessionKey) {
   }
 
   // Try to render end-screen image
+  // ⚔️ RUINS (owner 2026-10-05): the war's end image is the ROYAL-DECREE
+  // parchment card themed to the Ruins (guildWar endCard hook) — the
+  // default Go VICTORY/DEFEAT portrait stays for every non-war mode.
   let endScreenSent = false;
+  if (state.mode === 'RUINS' && ruinsHooks.endCard) {
+    try {
+      const card = await ruinsHooks.endCard(state, !!victory);
+      if (card && card.length > 100) {
+        await sock.sendMessage(state.chatId, {
+          image: card,
+          caption: caption,
+          mimetype: 'image/png',
+        });
+        endScreenSent = true;
+      }
+    } catch (ruinsCardErr) {
+      console.error('[Ruins] decree end card failed (non-fatal):', ruinsCardErr.message);
+    }
+  }
   try {
-    if (combatIntegration && combatIntegration.renderCombatEnd) {
+    if (!endScreenSent && combatIntegration && combatIntegration.renderCombatEnd) {
       const endResult = await combatIntegration.renderCombatEnd(
         state.players, state.enemies, victory, rewards,
         { rank: state.dungeonRank, backgroundPath: state.backgroundPath }

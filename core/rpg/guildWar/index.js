@@ -149,6 +149,29 @@ function installCombatHooks() {
                         `💀 *${src.name || player.name} of ${src.guildName || 'the unsworn'}* has fallen deep within the Ruins.\n` +
                         `The dead world claims another life.\n` +
                         `*${freshLives}* ${freshLives === 1 ? 'life' : 'lives'} remain${freshLives === 1 ? 's' : ''}.`);
+                    // 💀 DEFEAT PRESENTATION (owner 2026-10-05): NO story text
+                    // about "returning to your last room / you got lucky" —
+                    // the war sends the fallen champion to their SPAWN
+                    // chamber and then SHOWS it: the map (YOU marker at the
+                    // spawn) + the room scene with them standing in it, so
+                    // they know exactly where they are and just continue.
+                    if (sock) {
+                        try {
+                            let prefix = '.';
+                            try { prefix = require('../../../botConfig').getPrefix() || '.'; } catch (e) {}
+                            await sock.sendMessage(jid, {
+                                text: `💀 *You have fallen, ${src.name || player.name}.*\nThe Association's wards drag you back to the chamber where you deployed. ${freshLives} ${freshLives === 1 ? 'life' : 'lives'} remain - the war goes on.`,
+                            });
+                            const dmRouter = require('./dmRouter');
+                            const ctxDoc = await state.getMoveContext(meta.eventId, spawnRoom);
+                            if (ctxDoc && ctxDoc.room) {
+                                const meNow = { ...src, roomId: spawnRoom, prevRoomId: spawnRoom };
+                                await dmRouter.presentRoom(sock, jid, '\u200B', ctxDoc, meNow, ctxDoc.room, { prefix });
+                            }
+                        } catch (e) {
+                            console.error('[GW] defeat presentation failed (non-fatal):', e?.message);
+                        }
+                    }
                 } else {
                     await rooms.dropCarriedRelics(meta.eventId, jid, 'final death');
                     await state.updatePlayer(meta.eventId, jid, {}, { status: 'defeated', lives: 0 });
@@ -156,6 +179,33 @@ function installCombatHooks() {
                         `💀 *${src.name || player.name} of ${src.guildName || 'the unsworn'}* has fallen for the last time this war.\n` +
                         `The Ruins keep what they take — their carried relics lie where they fell.`);
                 }
+            }
+        },
+        // ⚔️ RUINS END CARDS (owner 2026-10-05): the war's victory/defeat
+        // image is the ROYAL-DECREE parchment card themed to the Ruins —
+        // the default Go VICTORY/DEFEAT portrait is retired for war fights.
+        async endCard(session, victory) {
+            const meta = session.ruinsMeta;
+            const player = (session.players || [])[0];
+            if (!meta || !player) return null;
+            try {
+                const ev = await state.getEvent(meta.eventId, { fresh: true });
+                const me = ev && ev.players.find((p) => p.jid === player.jid);
+                const room = ev && ev.rooms.find((r) => r.key === meta.roomKey);
+                const TYPE_LABEL = require('./roomScene').TYPE_LABEL;
+                return await require('./endCard').renderRuinsEndCard({
+                    victory,
+                    playerName: player.name,
+                    guildName: (me && me.guildName) || player.guildName || '',
+                    roomLabel: room ? ((TYPE_LABEL[room.type] || 'chamber').toLowerCase()) : 'chamber',
+                    chamberKey: meta.roomKey,
+                    gp: (me && me.score) || 0,
+                    relicNames: ((me && me.relics) || []).map((r) => r.name).filter(Boolean),
+                    lives: Math.max(0, (player.lives ?? CFG.COMBAT.LIVES) - (victory ? 0 : 1)),
+                });
+            } catch (e) {
+                console.error('[GW] ruins end card failed (non-fatal):', e?.message);
+                return null;
             }
         },
     });

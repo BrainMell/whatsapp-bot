@@ -100,6 +100,15 @@ const SPAWN_SPOTS = {
 const DEFAULT_ENTRY = 'w';
 const ENTRY_FLIP = { w: false, e: true, n: false, s: false };
 
+// the guardian's spot follows the same opposite-side rule as the pack
+// (owner 2026-10-05): it waits across the room from the champion's entry
+const BOSS_ANCHOR = {
+    w: { x: 860, y: 730 },   // entered left → guardian right
+    e: { x: 340, y: 730 },   // entered right → guardian left
+    n: { x: 780, y: 745 },   // entered back wall → guardian blocks the front
+    s: { x: 655, y: 545 },   // front walk-in → guardian holds the back wall
+};
+
 // derive which door the player CAME THROUGH from their last move
 // (prevRoom→room). Moving east means entering the new room through its
 // WEST door, so the entry door is the INVERSE of the move delta:
@@ -241,6 +250,49 @@ async function contentBox(file, dir) {
     return box;
 }
 
+// ── contact shadow, depth-aware (owner note 2026-10-05: the old flat dark
+// ellipse read as a pasted blob — worst at the back wall, where it fought
+// the plate's own wall-base shading instead of melting into it) ──
+// Two layers: a tight dark CONTACT ellipse hugging the feet + a broad soft
+// PENUMBRA. Depth (0 = back wall → 1 = front edge) drives size, softness and
+// strength the way the plate's torch light implies: actors deep at the back
+// get a small, light, forward-shifted shadow that dissolves into the
+// wall-base shading; actors at the front get the full grounded shadow.
+function shadowDepthT(groundY) {
+    return Math.max(0, Math.min(1, (groundY - 340) / (810 - 340)));
+}
+function drawContactShadow(ctx, cx, groundY, w, h, alpha = 1) {
+    const t = shadowDepthT(groundY);
+    const rx = w * (0.30 + 0.10 * t);
+    const ry = Math.max(6, h * (0.034 + 0.020 * t));
+    // wall torches sit BEHIND the actors: the deeper the stance, the more
+    // the shadow spills toward the viewer instead of spreading sideways
+    const fwd = 2 + 6 * (1 - t);
+    const a = (0.26 + 0.22 * t) * alpha;
+    // penumbra — broad, faint
+    ctx.save();
+    ctx.translate(cx, groundY + fwd);
+    ctx.scale(rx * 1.35, ry * 1.7);
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+    g.addColorStop(0, `rgba(8,6,4,${(a * 0.5).toFixed(3)})`);
+    g.addColorStop(0.7, `rgba(8,6,4,${(a * 0.22).toFixed(3)})`);
+    g.addColorStop(1, 'rgba(8,6,4,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    // contact — tight, darkest
+    ctx.save();
+    ctx.translate(cx, groundY + 2);
+    ctx.scale(rx * 0.78, ry * 0.95);
+    const g2 = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+    g2.addColorStop(0, `rgba(6,5,3,${a.toFixed(3)})`);
+    g2.addColorStop(0.75, `rgba(6,5,3,${(a * 0.55).toFixed(3)})`);
+    g2.addColorStop(1, 'rgba(6,5,3,0)');
+    ctx.fillStyle = g2;
+    ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+}
+
 // draw a sprite so its VISIBLE CONTENT stands exactly on the ground line
 // (cx = content centre x, groundY = content bottom, ch = content height)
 async function drawGroundedSprite(ctx, dirs, file, cx, groundY, ch, { shadow = true, flip = false, alpha = 1 } = {}) {
@@ -256,15 +308,7 @@ async function drawGroundedSprite(ctx, dirs, file, cx, groundY, ch, { shadow = t
     // content anchors (natural px) → canvas px
     const drawX = cx - (box.x + box.w / 2) * scale;
     const drawY = groundY - (box.y + box.h) * scale;
-    if (shadow) {
-        ctx.save();
-        ctx.globalAlpha = 0.42 * alpha;
-        ctx.beginPath();
-        ctx.ellipse(cx, groundY + 5, (box.w * scale) * 0.36, Math.max(7, ch * 0.045), 0, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(0,0,0,0.55)';
-        ctx.fill();
-        ctx.restore();
-    }
+    if (shadow) drawContactShadow(ctx, cx, groundY, box.w * scale, ch, alpha);
     ctx.save();
     if (alpha < 1) ctx.globalAlpha = alpha;
     if (flip) {
@@ -375,16 +419,22 @@ function planFor(eventDoc, player, room, exits) {
         });
     }
 
-    // enemy zone anchors (ground y, depth-ordered): far → near. Mirrored to
-    // the LEFT half when the champion entered from the right door, so the
-    // pack is always OPPOSITE the actor; anchors too close to the champion
-    // are dropped. (Spread 2026-10-05: with the owner's bigger-enemy scale,
-    // the old anchors made pack members merge into one blob.)
-    let ZONE = [
-        { x: 795, y: 640 }, { x: 1010, y: 705 }, { x: 610, y: 700 },
-        { x: 880, y: 755 }, { x: 1075, y: 760 },
-    ];
-    if (spot.x > 700) ZONE = ZONE.map((s) => ({ x: 1200 - s.x, y: s.y }));
+    // enemy zone anchors (ground y, depth-ordered): far → near. OWNER RULE
+    // (2026-10-05): the pack always spawns on the OPPOSITE side of wherever
+    // the champion moved into the room from — left entry → pack blocks the
+    // right, right entry → pack blocks the left, back-wall entry (n) → pack
+    // blocks the FRONT floor, front walk-in (s) → pack holds the BACK wall.
+    // Anchors too close to the champion are dropped. (Spread: with the
+    // bigger-enemy scale the old anchors merged pack members into a blob.)
+    const ZONE_TABLE = {
+        w: [{ x: 795, y: 640 }, { x: 1010, y: 705 }, { x: 610, y: 700 }, { x: 880, y: 755 }, { x: 1075, y: 760 }],
+        e: [{ x: 405, y: 640 }, { x: 190, y: 705 }, { x: 590, y: 700 }, { x: 320, y: 755 }, { x: 125, y: 760 }],
+        // front pack stays at y ≤ 760 so the bottom S-chevrons stay visible
+        // below the pack's feet line
+        n: [{ x: 430, y: 752 }, { x: 648, y: 758 }, { x: 855, y: 746 }, { x: 520, y: 700 }, { x: 760, y: 712 }],
+        s: [{ x: 470, y: 545 }, { x: 640, y: 520 }, { x: 830, y: 560 }, { x: 545, y: 595 }, { x: 745, y: 605 }],
+    };
+    let ZONE = (ZONE_TABLE[dir] || ZONE_TABLE.w).slice();
     ZONE = ZONE.filter((s) => Math.hypot(s.x - spot.x, s.y - spot.y) > 150);
 
     if (!cleared) {
@@ -407,11 +457,11 @@ function planFor(eventDoc, player, room, exits) {
                 plan.enemies.push({ file, x: zone.x + rng.int(-24, 24), y: zone.y, h, flip: zone.x < spot.x });
             }
         } else if (room.type === 'core') {
-            const bx = spot.x > 700 ? 340 : 860;
-            plan.enemies.push({ file: BOSS_POOL[rng.int(0, BOSS_POOL.length - 1)], x: bx, y: 730, h: Math.round(Math.max(perspH(730) * 1.25, perspH(spot.y) * 1.18)), flip: bx < spot.x, boss: true });
+            const ba = BOSS_ANCHOR[dir] || BOSS_ANCHOR.w;
+            plan.enemies.push({ file: BOSS_POOL[rng.int(0, BOSS_POOL.length - 1)], x: ba.x, y: ba.y, h: Math.round(Math.max(perspH(ba.y) * 1.25, perspH(spot.y) * 1.18)), flip: ba.x < spot.x, boss: true });
         } else if (room.type === 'secret' && payloadGet(P, 'boss')) {
-            const bx = spot.x > 700 ? 340 : 860;
-            plan.enemies.push({ file: BOSS_POOL[rng.int(0, BOSS_POOL.length - 1)], x: bx, y: 720, h: Math.round(Math.max(perspH(720) * 1.15, perspH(spot.y) * 1.10)), flip: bx < spot.x, boss: true });
+            const ba = BOSS_ANCHOR[dir] || BOSS_ANCHOR.w;
+            plan.enemies.push({ file: BOSS_POOL[rng.int(0, BOSS_POOL.length - 1)], x: ba.x, y: ba.y - 10, h: Math.round(Math.max(perspH(ba.y) * 1.15, perspH(spot.y) * 1.10)), flip: ba.x < spot.x, boss: true });
         }
     }
 
@@ -578,18 +628,53 @@ function drawOverheadHud(ctx, plan) {
 }
 
 // ── battle-in-the-room overlay bits (owner directive 2026-10-05 23:39Z) ───
-// The fight happens ON the room scene: a gold ground ring marks the active
-// actor (the default encounter's turn indicator), enemies carry the
-// default-encounter name+HP plates, and the parchment DEFAULT HUD panel
-// (owner green-circle directive, same timestamp) rides bottom-left on
-// EVERY room scene, fed live combat pools during battle.
-function goldRing(ctx, cx, groundY, w, h) {
-    const rx = Math.max(34, w * 0.5), ry = Math.max(9, h * 0.06);
+// The fight happens ON the room scene: enemies carry the default-encounter
+// name+HP plates, and the DEFAULT HUD panel rides bottom-left on EVERY room
+// scene, fed live combat pools during battle. The old gold ground ring is
+// RETIRED — the turn indicator is now the main game's floating blue crystal
+// (owner 2026-10-05: "instead of the golden circle turn indicator, scrap
+// that. The main game already uses that floating blue crystal, so use that
+// here too.")
+
+// ── the DEFAULT turn indicator: the main game's floating blue crystal ────
+// Same owner-supplied asset the Go combat renderer floats above the active
+// unit's head (Bot_genaration assets/rpgasset/ui/crystal.png — mirrored into
+// core/rpgasset/ui/), same geometry recipe as renderer.go's crystal pass:
+// h = clamp(spriteH·0.30, 24, 90), twin glow halos, painted LAST so it
+// hovers over name pills and HP bars.
+let _crystalImg;                                   // undefined=untried null=missing
+function crystalImg() {
+    if (_crystalImg !== undefined) return Promise.resolve(_crystalImg);
+    const p = path.join(UI_DIR, 'crystal.png');
+    try {
+        // PNG-signature fast-fail (LFS-pointer environments skip to null)
+        const fd = fs.openSync(p, 'r');
+        const head = Buffer.alloc(8);
+        fs.readSync(fd, head, 0, 8, 0);
+        fs.closeSync(fd);
+        if (!head.equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+            _crystalImg = null;
+            return Promise.resolve(null);
+        }
+    } catch (e) { _crystalImg = null; return Promise.resolve(null); }
+    return loadImage(p).then((img) => { _crystalImg = img; return img; })
+        .catch(() => { _crystalImg = null; return null; });
+}
+async function drawTurnCrystal(ctx, cx, headTopY, spriteH, clearance) {
+    const src = await crystalImg();
+    if (!src) return;
+    const ch = Math.max(24, Math.min(90, spriteH * 0.30));
+    const cw = Math.max(12, ch * (src.width / src.height));
+    const bottom = headTopY - clearance - 6;
+    const cy = bottom - ch / 2;
     ctx.save();
-    ctx.strokeStyle = 'rgba(255,210,74,0.30)'; ctx.lineWidth = 8;
-    ctx.beginPath(); ctx.ellipse(cx, groundY + 4, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,210,74,0.95)'; ctx.lineWidth = 3.5;
-    ctx.beginPath(); ctx.ellipse(cx, groundY + 4, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
+    // twin glow halos (straight alpha, renderer.go recipe)
+    ctx.fillStyle = 'rgba(160,210,255,0.14)';
+    ctx.beginPath(); ctx.arc(cx, cy, cw * 1.05, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(110,170,255,0.24)';
+    ctx.beginPath(); ctx.arc(cx, cy, cw * 0.72, 0, Math.PI * 2); ctx.fill();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(src, cx - cw / 2, bottom - ch, cw, ch);
     ctx.restore();
 }
 
@@ -891,13 +976,18 @@ async function drawRoomContent(ctx, room, plan) {
             break;
         }
         case 'reward': {
-            // old-world vault: the sealed reliquary chest as a real sprite
+            // old-world vault: the reliquary chest as a real sprite. After
+            // `take` the chest stands OPEN (lid up, gold glow in the cavity)
+            // with the CLAIMED marker (owner directive 2026-10-05: "the
+            // chest is supposed to be open in the next sprite that says
+            // Claimed")
             glowSpot(ctx, ax, ay - 30, 100, 'rgba(255,215,90,0.20)');
-            if (room.state !== 'CLEARED') {
-                await drawGroundedSprite(ctx, [GW_PROP_DIR], 'cache_chest.png', ax, ay, 150, { shadow: true });
-            } else {
-                // opened/emptied: coins already claimed — faint scar only
-                glowSpot(ctx, ax, ay - 10, 60, 'rgba(255,215,90,0.10)');
+            const open = room.state === 'CLEARED';
+            await drawGroundedSprite(ctx, [GW_PROP_DIR], open ? 'cache_chest_open.png' : 'cache_chest.png', ax, ay, 150, { shadow: true });
+            if (open) {
+                glowSpot(ctx, ax, ay - 64, 46, 'rgba(255,215,90,0.16)');
+                pill(ctx, ax, ay - 188, 'CLAIMED', 'bold 12px "Cinzel", sans-serif', 10,
+                    'rgba(26,21,13,0.94)', 'rgba(255,210,74,0.85)', '#FFD24A');
             }
             break;
         }
@@ -1268,20 +1358,23 @@ async function _renderInProcess(eventDoc, player, room, opts = {}) {
     await drawRoomContent(ctx, room, plan);
 
     // 4) the SEEDED enemy pack (combat/coop/core/boss) + other players —
-    // depth-ordered so nearer packs overlap farther ones naturally
+    // depth-ordered so nearer packs overlap farther ones naturally. The
+    // active actor collects a crystal job instead of an inline marker — the
+    // crystal pass paints LAST so it hovers over pills and bars.
     const SEARCH_DIRS = [ENEMY_DIR, path.join(CHAR_DIR, 'clean'), CHAR_DIR];
+    const crystalJobs = [];
     const actors = [...(plan.enemies || []), ...(plan.mates || []), ...(plan.rivals || [])].sort((a, b) => a.y - b.y);
     for (const e of actors) {
         const drawn = await drawGroundedSprite(ctx, SEARCH_DIRS, e.file, e.x, e.y, e.h, { flip: !!e.flip, shadow: true });
-        if (e.active && drawn) goldRing(ctx, e.x, e.y, drawn.w, drawn.h);
+        if (e.active && drawn) crystalJobs.push({ cx: e.x, headTop: e.y - e.h, spriteH: e.h, clearance: 40 });
     }
 
     // 5) the champion — ASSIGNED sprite, grounded at their ENTRY-DOOR spot,
     // facing AWAY from that door into the room (owner directive
-    // 2026-10-05 23:39Z) + the gold ring when it's their beat
+    // 2026-10-05 23:39Z) + the crystal when it's their beat
     const spot = plan.playerSpot;
     const drawnMe = await drawGroundedSprite(ctx, [path.join(CHAR_DIR, 'clean'), CHAR_DIR], plan.spriteFile, spot.x, spot.y, spot.h, { shadow: true, flip: !!spot.flip });
-    if (battle && battle.active === 'player' && drawnMe) goldRing(ctx, spot.x, spot.y, drawnMe.w, drawnMe.h);
+    if (battle && battle.active === 'player' && drawnMe) crystalJobs.push({ cx: spot.x, headTop: spot.y - spot.h, spriteH: spot.h, clearance: 78 });
 
     // 6) exit chevrons at the arches (yellow — §9)
     drawExitArrows(ctx, exits);
@@ -1312,6 +1405,10 @@ async function _renderInProcess(eventDoc, player, room, opts = {}) {
     // (real ui assets, renderer.go geometry), topmost layer like the
     // default encounter's; battle renders feed it live pools.
     await drawHudPanel(ctx, plan.hud);
+
+    // 10) THE FLOATING BLUE CRYSTAL — the DEFAULT turn indicator — painted
+    // last so it hovers above the active actor's whole HUD stack
+    for (const j of crystalJobs) await drawTurnCrystal(ctx, j.cx, j.headTop, j.spriteH, j.clearance);
 
     return c.toBuffer('image/png');
 }
