@@ -281,10 +281,45 @@ function topologyOf(doc) {
 }
 
 // ── sweeper: hard end + inactivity (called from engine 60s interval) ──
+
+// ⚔️ CROSS-BOX FLOW LEASE (2026-10-05): all 3 instances tick every event on
+// one shared DB. Proactive flows — auto-start, the start-card DMs, hard end,
+// inactivity sweeps — used to fire on EVERY instance (Mellow's playtest got
+// 4× start cards: the atomic state guard stops double-START, but nothing
+// stopped double-ANNOUNCE). The lease names the single instance allowed to
+// flow an event; refresh is free for the holder, takeover after 90s TTL.
+function _tenantId() {
+    try { return require('../../../botConfig').getBotName() || 'gw-inst'; }
+    catch (e) { return 'gw-inst'; }
+}
+async function claimFlow(eventId, ttlMs = 90 * 1000) {
+    const me = _tenantId();
+    const now = Date.now();
+    try {
+        const res = await GuildWarEvent.findOneAndUpdate(
+            { eventId, $or: [
+                { 'flow.owner': me },
+                { 'flow.at': { $lt: now - ttlMs } },
+                { flow: null },   // covers fresh docs (Mixed default null) AND pre-lease docs (field absent)
+            ] },
+            { $set: { flow: { owner: me, at: now } } },
+            { new: true, projection: { _id: 1 } }
+        ).lean();
+        return !!res;
+    } catch (e) { return true; } // lease infra failure → legacy behavior (don't freeze flows)
+}
+
 async function tick(sock, BOT_MARKER) {
     const actives = await getActiveEvents();
     const out = [];
     for (const ev of actives) {
+        // 🏠 cross-box isolation: a bot that is not a member of the host group
+        // is a pure SPECTATOR for this war — no flows, no lease, no start
+        // cards, no sweeps (it also cannot post the feed; feed.js gates that
+        // independently). DM command handling stays open to every bot.
+        if (ev.hostGroupId && !(await getFeed().isMemberOf(sock, ev.hostGroupId))) continue;
+        // flow lease: exactly ONE member instance runs the proactive blocks
+        if (!(await claimFlow(ev.eventId))) continue;
         // registration expiry → force start
         if (ev.state === 'REGISTRATION' && ev.registrationEndsAt && Date.now() > ev.registrationEndsAt) {
             if (ev.players.length >= 2) {
@@ -383,5 +418,6 @@ module.exports = {
     createEvent, registerPlayer, startEvent, endEvent, archiveEvent, abortEvent,
     getEvent, getActiveEvents, updateRoom, updatePlayer, pushLog, tick,
     topologyOf, recoverOnBoot, viewOf,
+    claimFlow, _tenantId, // cross-box flow lease (QA seam + engine reuse)
     _activeViews: activeViews, // QA seam
 };

@@ -82,6 +82,13 @@ const GuildWarEventSchema = new mongoose.Schema({
     feedQueue: [{ id: String, tier: String, text: String, t: Number, tries: { type: Number, default: 0 } }],
     // Phase 1 #8: PvP challenge windows are shared state (was per-process Map)
     pvpChallenges: [{ key: String, challengerJid: String, challengedJid: String, roomKey: String, expiresAt: Number }],
+    // ⚔️ Cross-box flow lease (2026-10-05): both servers share this MongoDB,
+    // so every instance ticks every war. {owner, at} names the ONE instance
+    // allowed to run proactive flows (auto-start + start-card DMs, hard end,
+    // inactivity sweep). Stale after 90s → any member instance takes over.
+    // Mixed + default null (NOT a subdoc): mongoose instantiates subdoc
+    // fields as {} on create, which breaks the {flow: null} lease claim.
+    flow: { type: mongoose.Schema.Types.Mixed, default: null },
     createdAt: { type: Date, default: Date.now },
 }, { collection: 'guildwarevents', minimize: false });
 

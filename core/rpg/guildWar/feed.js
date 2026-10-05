@@ -64,6 +64,33 @@ function hasLeadEmoji(t) {
     try { return (t.codePointAt(0) || 0) >= 0x2500; } catch (e) { return false; }
 }
 
+// ⚔️ CROSS-BOX MEMBERSHIP GATE (2026-10-05): both servers share one MongoDB,
+// so every instance sees every war's queue. A bot that is NOT a participant
+// of the destination group used to claim the shared queue and burn items on
+// guaranteed "forbidden" sends (300+ dropped messages/day observed on Box1).
+// Membership is cached per group — positives 10 min, negatives 5 min.
+// Unknown sock types (QA mocks) count as members to keep legacy sims alive.
+const _memberCache = new WeakMap(); // sock → Map(jid → { ok, at })  [per-BOT cache: membership is bot-scoped, never jid-global]
+async function isMemberOf(sock, jid) {
+    if (!sock || !jid) return true;                            // nothing to verify → legacy path
+    if (typeof sock.groupMetadata !== 'function') return true; // mock sock (QA/sim)
+    let cache = _memberCache.get(sock);
+    if (!cache) { cache = new Map(); _memberCache.set(sock, cache); }
+    const now = Date.now();
+    const hit = cache.get(jid);
+    if (hit && now - hit.at < (hit.ok ? 10 : 5) * 60 * 1000) return hit.ok;
+    let ok = false;
+    try { const meta = await sock.groupMetadata(jid); ok = !!(meta && meta.id); }
+    catch (e) { ok = false; }
+    cache.set(jid, { ok, at: now });
+    return ok;
+}
+async function reachableDests(sock, dests) {
+    const out = [];
+    for (const d of dests || []) if (await isMemberOf(sock, d)) out.push(d);
+    return out;
+}
+
 // digest headers rotate so a war-long spectator never reads the same line twice
 const DIGEST_HEADERS = [
     '📜 *Ruins digest*',
@@ -150,6 +177,25 @@ async function flush(eventId, sock, BOT_MARKER) {
     const useMarker = BOT_MARKER || _marker;
     if (!useSock) return;
 
+    // ⚔️ membership gate BEFORE claiming: resolve the destination first and
+    // leave the queue untouched when this bot cannot post to it — a member
+    // instance will claim and deliver. Claiming here used to burn items with
+    // 3× "forbidden" retries on cross-box wars (never succeedable).
+    const GuildWarEventEarly = require('../../models/GuildWarEvent');
+    const evGate = await GuildWarEventEarly.findOne({ eventId }, { hostGroupId: 1, state: 1 }).lean().catch(() => null);
+    if (evGate) {
+        const gateDests = destinationsFor(evGate);
+        const reachable = await reachableDests(useSock, gateDests);
+        if (gateDests.length && !reachable.length) {
+            if (Date.now() - (s.lastGateLog || 0) > 5 * 60 * 1000) {
+                s.lastGateLog = Date.now();
+                console.error(`[GWFeed] ${eventId}: not a member of ${gateDests.join(',')} — leaving queue for a member bot`);
+            }
+            await maybeDispose(eventId);
+            return;
+        }
+    }
+
     // claim the DB queue + merge any items queued locally this instant
     const claimed = await claimFromDoc(eventId);
     const local = (s.queue || []).splice(0, (s.queue || []).length);
@@ -177,10 +223,10 @@ async function flush(eventId, sock, BOT_MARKER) {
         await requeueToDoc(eventId, back);
         return;
     }
-    // NOTE (Phase 2): no membership pre-gate here — a bot that cannot post
-    // to a destination simply fails the send below, and failed sends REQUEUE
-    // (tries+1) instead of burning items. A member instance will usually
-    // claim the queue first; a lone non-member drops after 3 tries, logged.
+    // NOTE (2026-10-05 cross-box isolation): the membership gate ABOVE now
+    // refuses the claim when this bot cannot reach any destination, so the
+    // "guaranteed-forbidden send" case is gone. Failed sends on MEMBER bots
+    // still requeue (tries+1) instead of burning items; drop after 3 tries.
 
     const minors = items.filter((i) => tierRank(i.tier) === 0);
     const normals = items.filter((i) => tierRank(i.tier) === 1);
@@ -270,6 +316,9 @@ async function postScoreboard(eventId, sock, BOT_MARKER) {
     if (Date.now() - s.scoreboardAt < CFG.FEED.SCOREBOARD_EVERY_MS) return;
     const dests = destinationsFor(ev);
     if (!dests.length) return;
+    // ⚔️ cross-box gate: a non-member bot must not even TRY the scoreboard
+    // (it cannot succeed; the member bot's own tickAll posts it there)
+    if (!(await reachableDests(sock || _sock, dests)).length) return;
     const rows = computeScoreboard(ev);
     const text = rows.map((r, i) => `${['🥇', '🥈', '🥉'][i] || '▫️'} *${r.name}* — ${r.points} GP`).join('\n').slice(0, 700);
     // 💬 live pulse line: the standings should read like a war bulletin,
@@ -314,4 +363,4 @@ async function tickAll(sock, BOT_MARKER, actives = null) {
 
 function dispose(eventId) { feedStates.delete(eventId); }
 
-module.exports = { queue, tickAll, flush, dispose, registerSock, computeScoreboard, buildDigest, st, _states: feedStates };
+module.exports = { queue, tickAll, flush, dispose, registerSock, computeScoreboard, buildDigest, st, isMemberOf, reachableDests, _states: feedStates };

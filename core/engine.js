@@ -4127,23 +4127,13 @@ What to do:
         }
         // ⚔️ GUILD WAR sweeper: registration expiry, hard end times,
         // inactivity relic drops, feed flush. Cheap no-op without events.
+        // ⚔️ cross-box isolation (2026-10-05): start-card DMs fire ONCE inside
+        // state.tick (lease holder only). The old .then() re-DM'd every
+        // 'started' event AGAIN on the same instance — champions got each
+        // start card twice even on a single bot.
         if (sock) {
           require("./rpg/guildWar")
             .state.tick(sock, BOT_MARKER)
-            .then(async (out) => {
-              // Wars auto-deployed on registration expiry: DM every champion
-              // the start card ("the war has begun + how you play").
-              const started = (out || []).filter((o) => o && o.auto === "started");
-              for (const s of started) {
-                try {
-                  const gw = require("./rpg/guildWar");
-                  const ev = await gw.state.getEvent(s.eventId, { fresh: true });
-                  if (ev) await gw.dmWarStartCards(sock, BOT_MARKER, ev, botConfig.getPrefix());
-                } catch (e) {
-                  console.error("[GuildWar] start-card DM:", e?.message);
-                }
-              }
-            })
             .catch((e) => console.error("[GuildWar] sweeper:", e?.message));
         }
         const results = loans.checkDueLoans();
