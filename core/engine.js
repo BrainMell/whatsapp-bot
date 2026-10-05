@@ -7842,6 +7842,20 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           // Process batch in parallel so one slow group doesn't block the bot
           await Promise.all(
             messages.map(async (m) => {
+              // ⚔️ SELF-ECHO GUARD (Task 19, 2026-10-05): the bot's OWN
+              // outgoing messages arrive back through messages.upsert with
+              // key.fromMe=true. In DMs they carry no key.participant, so the
+              // sender resolved to the PEER (the human) — the bot read its
+              // own sends as player input. With the Guild War DM router live
+              // this fed itself forever: deploy into a puzzle room -> the
+              // bot's own riddle caption counted as answer #1 -> "Wrong" ->
+              // that reply counted as answer #2 ... an AUTONOMOUS
+              // Wrong->shock->reset loop draining real HP (-8/cycle) with no
+              // player input at all (incident gw_muujwihd, 01:08-01:09Z,
+              // dozens of cycles in 90s). Nothing downstream may ever
+              // process our own transmissions; every feature guard below
+              // already excludes fromMe, so skipping at the door is safe.
+              if (m.key.fromMe) return;
               if (!m.message) return;
 
               // Skip stale backlog messages sent while the bot was offline (older than 180 seconds)

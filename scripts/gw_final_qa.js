@@ -667,7 +667,12 @@ async function main() {
     await state.updatePlayer(EV, P2, {}, { roomId: meM.roomId });
     dmSockReset(dm2);
     await dm2(P2, `${PREFIX} look`);
-    await wait(500);
+    // ⚔️ 1500ms (was 500): the look path renders map + scene sequentially and
+    // the 🤝 meeting line rides the SCENE caption — under load the chain
+    // crosses 500ms and this check read the sock before the scene landed
+    // (the documented S8 rotating flake). The product path is unaffected;
+    // the harness window now matches reality.
+    await wait(1500);
     const meetText = dm2.sock.texts().join('\n');
     check('S8 meeting text announces guildmate', /🤝/.test(meetText) && /Alice/.test(meetText), /🤝[^\n]*/.exec(meetText)?.[0]?.slice(0, 80) || 'missing');
     // occupants visible in scene: assert the room scene was sent with the meeting

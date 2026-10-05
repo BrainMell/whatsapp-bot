@@ -644,53 +644,155 @@ function segRow(ctx, x, y, w, h, pct, from, to) {
     }
 }
 
-// THE DEFAULT ENCOUNTER HUD PANEL — owner green-circle directive
-// 2026-10-05 23:39Z: "THAT'S THE DEFAULT HUD I SAID I WANTED". Ornate
-// parchment card, dark name plate, heart icon + segmented red HP bar,
-// drop icon + segmented blue mana bar — the default encounter's
-// bottom-left presentation, drawn on every room scene.
-function drawHudPanel(ctx, hud) {
+// ═══ THE DEFAULT ENCOUNTER HUB — the codebase's own, from its own assets ═══
+// Owner directive 2026-10-05 01:48Z: "YOU STILL AREN'T USING THE DEFAULT
+// ENCOUNTER HUB... THE ASSETS AND CODE IS RIGHT THERE, JUST TAKE IT. IT'S
+// THE DEFAULT FOR ENCOUNTERS — FIND AND ISOLATE THAT PART." Isolated: this
+// is the Go combat renderer's bottom-left player_state panel, rebuilt 1:1
+// from the SAME REAL ASSETS it draws (core/rpgasset/ui/: player_state.png
+// panel, heart.png, mana.png icons, hp1-5.png / mana1-5.png bar sprites —
+// the exact files renderer.go loads via uiPath()). Geometry mirrors
+// renderer.go on its 1024x687 canvas — panel normX(-716) normY(113)
+// 453x244 (22px cropped off-canvas left, 26px bottom), heart (16,565)
+// 38x47, mana icon (21,612) 29x44, HP segments x 54/144/235 (121x47) @
+// y565, EN segments x 50/139/229 (119x42) @ y612, name centered at panel
+// centre y=519 — scaled x1.171875 onto this 1200x900 room canvas and
+// anchored bottom-left with the same crops. Segment fill follows
+// renderer.go's drawBar exactly: each 1/3-of-max segment picks sprite
+// clamp(round(pct*4)+1, 1, 5).
+const UI_DIR = path.join(__dirname, '..', '..', 'rpgasset', 'ui');
+const HUB_SCALE = W / 1024;                        // 1.171875 (Go canvas → room canvas)
+const _hubAssets = { state: 0, imgs: null };       // 0=untried 1=ready -1=failed
+function hubAssets() {
+    if (_hubAssets.state !== 0) return _hubAssets.state === 1 ? _hubAssets.imgs : null;
+    try {
+        // ⚡ fast-fail: this repo stores most art as Git-LFS pointers (the
+        // real pixels only exist where git-lfs smudged the checkout — i.e.
+        // the game boxes). Probe the 8-byte PNG signature FIRST so pointer
+        // environments fall back after a few header reads instead of 13
+        // failed image decodes on the render hot path.
+        const isRealPng = (p) => {
+            try {
+                const fd = fs.openSync(p, 'r');
+                const head = Buffer.alloc(8);
+                fs.readSync(fd, head, 0, 8, 0);
+                fs.closeSync(fd);
+                return head.equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+            } catch (e) { return false; }
+        };
+        const { loadImage } = require('canvas');
+        const names = ['player_state.png', 'heart.png', 'mana.png',
+            'hp1.png', 'hp2.png', 'hp3.png', 'hp4.png', 'hp5.png',
+            'mana1.png', 'mana2.png', 'mana3.png', 'mana4.png', 'mana5.png'];
+        if (!names.every((n) => isRealPng(path.join(UI_DIR, n)))) {
+            _hubAssets.state = -1;
+            return Promise.resolve(null);
+        }
+        const imgs = {};
+        for (const n of names) imgs[n] = loadImage(path.join(UI_DIR, n));
+        _hubAssets.imgs = Promise.all(Object.values(imgs).map((p) => p.catch(() => null)))
+            .then((bufs) => {
+                const out = {};
+                const keys = Object.keys(imgs);
+                let ok = 0;
+                bufs.forEach((b, i) => { if (b) { out[keys[i]] = b; ok += 1; } });
+                if (ok < names.length) throw new Error(`only ${ok}/${names.length} hub assets loaded`);
+                _hubAssets.state = 1;
+                return out;
+            })
+            .catch((e) => {
+                _hubAssets.state = -1;
+                console.error('[roomScene] default hub assets unavailable — vector fallback panel in use:', e.message);
+                return null;
+            });
+        // first caller awaits the promise; later callers get the cached verdict
+        _hubAssets.imgs = _hubAssets.imgs.then((r) => r);
+        return _hubAssets.imgs;
+    } catch (e) {
+        _hubAssets.state = -1;
+        return Promise.resolve(null);
+    }
+}
+function _hubSegSprite(pct) {
+    return Math.max(1, Math.min(5, Math.round(Math.max(0, Math.min(1, pct)) * 4) + 1));
+}
+function _hubGeom() {
+    const s = HUB_SCALE;
+    const pw = Math.round(453 * s), ph = Math.round(244 * s);
+    const px = -Math.round(22 * s);                          // Go: 22px off-canvas left
+    const py = H - ph + Math.round(26 * s);                  // Go: 26px off-canvas bottom
+    return {
+        px, py, pw, ph,
+        heartX: px + 38 * s, heartY: py + 96 * s, heartW: 38 * s, heartH: 47 * s,
+        manaIx: px + 43 * s, manaIy: py + 143 * s, manaIw: 29 * s, manaIh: 44 * s,
+        hpY: py + 96 * s, hpW: 121 * s, hpH: 47 * s, hpXs: [76, 166, 257].map((v) => px + v * s),
+        enY: py + 143 * s, enW: 119 * s, enH: 42 * s, enXs: [72, 161, 251].map((v) => px + v * s),
+        nameX: px + 226.5 * s, nameY: py + 50 * s, nameMaxW: 393 * s, nameSize: Math.round(28 * s),
+    };
+}
+async function drawHudPanel(ctx, hud) {
     if (!hud) return;
-    const P = { x: 16, y: 720, w: 474, h: 166 };
+    const imgs = await hubAssets();
+    if (imgs) {
+        const G = _hubGeom();
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;                  // Go resizes with NearestNeighbor
+        ctx.drawImage(imgs['player_state.png'], G.px, G.py, G.pw, G.ph);
+        ctx.drawImage(imgs['heart.png'], G.heartX, G.heartY, G.heartW, G.heartH);
+        ctx.drawImage(imgs['mana.png'], G.manaIx, G.manaIy, G.manaIw, G.manaIh);
+        const maxHp = Math.max(1, Math.floor(hud.maxHp || 1));
+        const hp = Math.max(0, Math.floor(hud.hp || 0));
+        const maxEn = Math.max(1, Math.floor(hud.maxEnergy || 1));
+        const en = Math.max(0, Math.floor(hud.energy || 0));
+        const hpSeg = maxHp / 3, enSeg = maxEn / 3;
+        for (let i = 0; i < 3; i++) {
+            const hCur = Math.max(0, Math.min(hpSeg, hp - i * hpSeg));
+            const eCur = Math.max(0, Math.min(enSeg, en - i * enSeg));
+            const hs = `hp${_hubSegSprite(hCur / hpSeg)}.png`;
+            const es = `mana${_hubSegSprite(eCur / enSeg)}.png`;
+            if (imgs[hs]) ctx.drawImage(imgs[hs], G.hpXs[i], G.hpY, G.hpW, G.hpH);
+            if (imgs[es]) ctx.drawImage(imgs[es], G.enXs[i], G.enY, G.enW, G.enH);
+        }
+        // name — white bold with black shadow, shrink-to-fit (renderer.go
+        // uses ui/Inter-Bold.ttf; the bot repo ships without it, so the
+        // registered Cinzel kit stands in, same placement/colour treatment)
+        const name = String(hud.name || 'Explorer').slice(0, 16);
+        for (let size = G.nameSize; size >= 14; size -= 2) {
+            ctx.font = `bold ${size}px "Cinzel", sans-serif`;
+            if (ctx.measureText(name).width <= G.nameMaxW || size === 14) {
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillStyle = 'rgba(0,0,0,0.78)';
+                ctx.fillText(name, G.nameX + 2, G.nameY + 2);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillText(name, G.nameX, G.nameY);
+                break;
+            }
+        }
+        ctx.restore();
+        return;
+    }
+    // ── vector fallback (assets missing in this environment): dark panel
+    // approximation of player_state.png — never the rejected parchment.
+    const G = _hubGeom();
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 4;
-    const pg = ctx.createLinearGradient(0, P.y, 0, P.y + P.h);
-    pg.addColorStop(0, '#EBDDB9'); pg.addColorStop(1, '#DBC89E');
+    const pg = ctx.createLinearGradient(0, G.py, 0, G.py + G.ph);
+    pg.addColorStop(0, '#232a3a'); pg.addColorStop(1, '#161b28');
     ctx.fillStyle = pg;
-    roundRect(ctx, P.x, P.y, P.w, P.h, 12); ctx.fill();
+    roundRect(ctx, G.px, G.py, G.pw, G.ph, 10); ctx.fill();
     ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-    ctx.strokeStyle = '#6B4A22'; ctx.lineWidth = 4;
-    roundRect(ctx, P.x, P.y, P.w, P.h, 12); ctx.stroke();
-    ctx.strokeStyle = 'rgba(250,244,226,0.8)'; ctx.lineWidth = 1.5;
-    roundRect(ctx, P.x + 6, P.y + 6, P.w - 12, P.h - 12, 8); ctx.stroke();
-    // corner brackets (the reference panel's ornate corners)
-    ctx.strokeStyle = '#4A3113'; ctx.lineWidth = 3; ctx.lineCap = 'round';
-    const B = 15, o = 13;
-    for (const [sx, sy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
-        const px = sx === 1 ? P.x + o : P.x + P.w - o;
-        const py = sy === 1 ? P.y + o : P.y + P.h - o;
-        ctx.beginPath();
-        ctx.moveTo(px + sx * B, py); ctx.lineTo(px, py); ctx.lineTo(px, py + sy * B);
-        ctx.stroke();
-    }
-    // dark name plate
+    ctx.strokeStyle = '#8a7a4e'; ctx.lineWidth = 3;
+    roundRect(ctx, G.px + 5, G.py + 5, G.pw - 10, G.ph - 10, 8); ctx.stroke();
     const name = String(hud.name || 'Explorer').slice(0, 16);
-    ctx.font = 'bold 24px "Cinzel", sans-serif';
-    const nw = Math.min(P.w - 110, ctx.measureText(name).width + 64);
-    const nx = P.x + P.w / 2 - nw / 2, ny = P.y + 14, nh = 42;
-    ctx.fillStyle = '#221A10';
-    roundRect(ctx, nx, ny, nw, nh, 8); ctx.fill();
-    ctx.strokeStyle = '#6B4A22'; ctx.lineWidth = 1.5;
-    roundRect(ctx, nx, ny, nw, nh, 8); ctx.stroke();
-    ctx.fillStyle = '#F5F0E1'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(name, P.x + P.w / 2, ny + nh / 2 + 1);
-    ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
-    // heart + HP row, drop + mana row
-    const rowHpY = P.y + 98, rowEnY = P.y + 140, barX = P.x + 88, barW = P.w - 88 - 26;
-    drawHeart(ctx, P.x + 52, rowHpY, 27);
-    segRow(ctx, barX, rowHpY - 13, barW, 26, (hud.hp || 0) / (hud.maxHp || 1), '#C93A2E', '#E8795B');
-    drawDrop(ctx, P.x + 52, rowEnY, 25);
-    segRow(ctx, barX, rowEnY - 12, barW, 24, (hud.energy || 0) / (hud.maxEnergy || 1), '#3E7CD6', '#66A9E8');
+    ctx.font = 'bold 30px "Cinzel", sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(name, G.nameX, G.nameY);
+    const rowHpY = G.py + 96 * HUB_SCALE + G.hpH / 2, rowEnY = G.py + 143 * HUB_SCALE + G.enH / 2;
+    segRow(ctx, G.hpXs[0] - 10 * HUB_SCALE, rowHpY - G.hpH / 2, G.hpXs[2] + G.hpW - G.hpXs[0] + 20 * HUB_SCALE, G.hpH,
+        (hud.hp || 0) / (hud.maxHp || 1), '#C93A2E', '#E8795B');
+    segRow(ctx, G.enXs[0] - 10 * HUB_SCALE, rowEnY - G.enH / 2, G.enXs[2] + G.enW - G.enXs[0] + 20 * HUB_SCALE, G.enH,
+        (hud.energy || 0) / (hud.maxEnergy || 1), '#3E7CD6', '#66A9E8');
     ctx.restore();
 }
 
@@ -1206,11 +1308,10 @@ async function _renderInProcess(eventDoc, player, room, opts = {}) {
     // 8) puzzle overlay (opposite the champion)
     if (opts.puzzleBoard) await drawPuzzleOverlay(ctx, opts.puzzleBoard, spot);
 
-    // 9) THE DEFAULT ENCOUNTER HUD PANEL — owner green-circle directive
-    // 2026-10-05 23:39Z: "THAT'S THE DEFAULT HUD I SAID I WANTED". The
-    // parchment player card (name / heart+HP / drop+mana), topmost layer
-    // like the default encounter's; battle renders feed it live pools.
-    drawHudPanel(ctx, plan.hud);
+    // 9) THE DEFAULT ENCOUNTER HUB — the codebase's own player_state panel
+    // (real ui assets, renderer.go geometry), topmost layer like the
+    // default encounter's; battle renders feed it live pools.
+    await drawHudPanel(ctx, plan.hud);
 
     return c.toBuffer('image/png');
 }
