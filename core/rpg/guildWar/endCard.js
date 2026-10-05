@@ -113,13 +113,40 @@ function _ruinedArch(ctx, cx, baseY, s, color) {
 }
 
 // ── main render: { victory, playerName, guildName, roomLabel, chamberKey,
-//    gp, relicNames, lives, worldName } → PNG buffer ──
+//    gp, relicNames, lives, worldName } → image buffer (JPEG from the Go
+//    service's ROYAL DECREE royal bake, PNG from the node fallback) ──
+// OWNER 2026-10-05: "by royal decree style, I mean the royal decree style on
+// the royal decree [card], but a landscape image" — i.e. THE in-game ROYAL
+// DECREE card itself (economy DECREE royal bake, bg_DECREE.png, landscape
+// 1000x600). We therefore call the same Go endpoint the rank-up decree uses,
+// feeding the war's fields into its fixed decree slots:
+//   name plate → champion, big centre → VICTORY/DEFEAT,
+//   arrow ledger → CHAMBER -> CLEARED/RETREAT, wax seal → V/D.
+// The baked banner, LET IT BE KNOWN rule and guild tagline come for free.
 async function renderRuinsEndCard(opts = {}) {
+    const victory = !!opts.victory;
+    // 1) THE ROYAL DECREE (Go service royal bake) — pixel-identical to the
+    //    rank-up decree the owner signed off on.
+    try {
+        const goService = require('../../utils/goImageService');
+        const buf = await goService.generateTransactionCard({
+            nickname: opts.playerName || 'Adventurer',
+            type: 'DECREE',
+            style: 0, // 0/7 = the royal bake (drawRPGDecree)
+            itemName: victory ? 'VICTORY' : 'DEFEAT',
+            sealText: victory ? 'V' : 'D',
+            details: `${(opts.roomLabel || 'chamber').toUpperCase()} -> ${victory ? 'CLEARED' : 'RETREAT'}`,
+            amount: 1, newWallet: 0, newBank: 0, zeniSymbol: 'Z',
+        });
+        if (buf && buf.length > 100) return buf;
+    } catch (e) {
+        console.error('[endCard] royal-decree Go bake unavailable — node fallback:', e.message);
+    }
+    // 2) fallback: node decree (service down) — kept close to the bake.
     _ensureFonts();
     const canvas = require('canvas');
     const c = canvas.createCanvas(W, H);
     const ctx = c.getContext('2d');
-    const victory = !!opts.victory;
 
     // parchment + age stains (the decree kit's paper)
     ctx.fillStyle = PAL.parchment;

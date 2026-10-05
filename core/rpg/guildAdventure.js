@@ -7128,10 +7128,13 @@ async function endCombat(sock, victory, sessionKey) {
     try {
       const card = await ruinsHooks.endCard(state, !!victory);
       if (card && card.length > 100) {
+        // the war card is the Go royal-bake decree (JPEG) or the node
+        // fallback (PNG) — sniff the magic bytes instead of guessing.
+        const isJpeg = card[0] === 0xff && card[1] === 0xd8;
         await sock.sendMessage(state.chatId, {
           image: card,
           caption: caption,
-          mimetype: 'image/png',
+          mimetype: isJpeg ? 'image/jpeg' : 'image/png',
         });
         endScreenSent = true;
       }
