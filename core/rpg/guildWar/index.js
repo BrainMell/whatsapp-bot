@@ -98,21 +98,13 @@ function installCombatHooks() {
                     // 💡 NAVIGATION OVERHAUL §4/§15: post-victory the player
                     // gets the RETURN map (same chart, post-encounter visual
                     // state) — the world re-renders around them, no parchment.
-                    if (sock) {
-                        try {
-                            const freshAfter = await state.getEvent(meta.eventId, { fresh: true });
-                            const meAfter = freshAfter.players.find((p) => p.jid === jid) || me;
-                            const roomAfter = freshAfter.rooms.find((r) => r.key === meAfter.roomId) || room;
-                            const dmRouter = require('./dmRouter');
-                            const retBuf = await dmRouter.returnMapFor(freshAfter, meAfter, roomAfter);
-                            await sock.sendMessage(state.chatId || jid, {
-                                image: retBuf,
-                                caption: dmRouter.mapCaption('🧭 *The chamber is yours.* The compass marks your exits.', prefix),
-                            });
-                        } catch (navErr) {
-                            console.error('[GW] victory return map failed (non-fatal):', navErr?.message);
-                        }
-                    }
+                    // 🔄 ORDERING (owner 2026-10-05 11:48Z: "the defeat or
+                    // victory image card should come in before the map and
+                    // new encounter one"): onEnd no longer DMs the visuals
+                    // itself — it returns a descriptor and presentAfterBattle
+                    // replays the navigation card AFTER the decree end card
+                    // (endCombat calls it right behind the card send).
+                    return { kind: 'victory', claimed: true };
                 } else {
                     feed.queue(meta.eventId, 'minor', `⏳ ${me.name} arrived a heartbeat too late — another's banner already flies over that chamber.`);
                 }
@@ -155,30 +147,65 @@ function installCombatHooks() {
                     // chamber and then SHOWS it: the map (YOU marker at the
                     // spawn) + the room scene with them standing in it, so
                     // they know exactly where they are and just continue.
-                    if (sock) {
-                        try {
-                            let prefix = '.';
-                            try { prefix = require('../../../botConfig').getPrefix() || '.'; } catch (e) {}
-                            await sock.sendMessage(jid, {
-                                text: `💀 *You have fallen, ${src.name || player.name}.*\nThe Association's wards drag you back to the chamber where you deployed. ${freshLives} ${freshLives === 1 ? 'life' : 'lives'} remain - the war goes on.`,
-                            });
-                            const dmRouter = require('./dmRouter');
-                            const ctxDoc = await state.getMoveContext(meta.eventId, spawnRoom);
-                            if (ctxDoc && ctxDoc.room) {
-                                const meNow = { ...src, roomId: spawnRoom, prevRoomId: spawnRoom };
-                                await dmRouter.presentRoom(sock, jid, '\u200B', ctxDoc, meNow, ctxDoc.room, { prefix });
-                            }
-                        } catch (e) {
-                            console.error('[GW] defeat presentation failed (non-fatal):', e?.message);
-                        }
-                    }
+                    // 🔄 ORDERING (see victory branch note): the respawn
+                    // presentation — death text, map, room encounter — is
+                    // replayed by presentAfterBattle AFTER the decree card.
+                    return { kind: 'respawn', name: src.name || player.name, lives: freshLives, spawnRoom };
                 } else {
                     await rooms.dropCarriedRelics(meta.eventId, jid, 'final death');
                     await state.updatePlayer(meta.eventId, jid, {}, { status: 'defeated', lives: 0 });
                     feed.queue(meta.eventId, 'normal',
                         `💀 *${src.name || player.name} of ${src.guildName || 'the unsworn'}* has fallen for the last time this war.\n` +
                         `The Ruins keep what they take — their carried relics lie where they fell.`);
+                    return { kind: 'final' };
                 }
+            }
+        },
+        // 🔄 POST-BATTLE PRESENTATION (owner 2026-10-05 11:48Z: "the defeat
+        // or victory image card should come in before the map and new
+        // encounter one"): the decree card used to arrive LAST because onEnd
+        // sent the map/encounter long before endCombat reached the endCard
+        // block. onEnd now only mutates state and returns a descriptor;
+        // endCombat calls THIS hook immediately after the card is sent, so
+        // the DM order becomes: decree card → navigation map → room encounter.
+        async presentAfterBattle(session, victory, sessionKey, sock, desc) {
+            const meta = session.ruinsMeta;
+            const player = (session.players || [])[0];
+            if (!meta || !player || !sock || !desc) return;
+            const jid = player.jid;
+            let prefix = '.';
+            try { prefix = require('../../../botConfig').getPrefix() || '.'; } catch (e) {}
+            try {
+                if (desc.kind === 'victory' && desc.claimed) {
+                    // victory: the RETURN map (same chart, post-encounter state)
+                    const freshAfter = await state.getEvent(meta.eventId, { fresh: true });
+                    const meAfter = freshAfter.players.find((p) => p.jid === jid) || player;
+                    const roomAfter = freshAfter.rooms.find((r) => r.key === meAfter.roomId);
+                    if (meAfter && roomAfter) {
+                        const dmRouter = require('./dmRouter');
+                        const retBuf = await dmRouter.returnMapFor(freshAfter, meAfter, roomAfter);
+                        await sock.sendMessage(jid, {
+                            image: retBuf,
+                            caption: dmRouter.mapCaption('🧭 *The chamber is yours.* The compass marks your exits.', prefix),
+                        });
+                    }
+                } else if (desc.kind === 'respawn') {
+                    // defeat: the fall text + the spawn chamber they wake up in
+                    await sock.sendMessage(jid, {
+                        text: `💀 *You have fallen, ${desc.name}.*\nThe Association's wards drag you back to the chamber where you deployed. ${desc.lives} ${desc.lives === 1 ? 'life' : 'lives'} remain - the war goes on.`,
+                    });
+                    const dmRouter = require('./dmRouter');
+                    const ctxDoc = await state.getMoveContext(meta.eventId, desc.spawnRoom);
+                    if (ctxDoc && ctxDoc.room) {
+                        const evNow = await state.getEvent(meta.eventId, { fresh: true });
+                        const src = (evNow.players || []).find((p) => p.jid === jid) || {};
+                        const meNow = { ...src, roomId: desc.spawnRoom, prevRoomId: desc.spawnRoom };
+                        await dmRouter.presentRoom(sock, jid, '\u200B', ctxDoc, meNow, ctxDoc.room, { prefix });
+                    }
+                }
+                // kind 'final': no navigation to show — the war is over for them
+            } catch (e) {
+                console.error('[GW] post-battle presentation failed (non-fatal):', e?.message);
             }
         },
         // ⚔️ RUINS END CARDS (owner 2026-10-05): the war's victory/defeat
@@ -201,7 +228,11 @@ function installCombatHooks() {
                     chamberKey: meta.roomKey,
                     gp: (me && me.score) || 0,
                     relicNames: ((me && me.relics) || []).map((r) => r.name).filter(Boolean),
-                    lives: Math.max(0, (player.lives ?? CFG.COMBAT.LIVES) - (victory ? 0 : 1)),
+                    // 🔄 lives read from the FRESH event player (post-onEnd,
+                    // since the card renders after the hook mutates state) —
+                    // the session entity carries no lives, so the old fallback
+                    // always printed the default 3 (−1 on defeat).
+                    lives: Math.max(0, (me && me.lives) ?? player.lives ?? CFG.COMBAT.LIVES),
                 });
             } catch (e) {
                 console.error('[GW] ruins end card failed (non-fatal):', e?.message);

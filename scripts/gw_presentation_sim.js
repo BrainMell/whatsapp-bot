@@ -187,7 +187,7 @@ async function s4_hooks() {
     ga.setRuinsHooks = (h) => { captured = h; };
     gw.installCombatHooks();
     ga.setRuinsHooks = orig;
-    check('hooks installed with onFlee + onEnd', captured && typeof captured.onEnd === 'function' && typeof captured.onFlee === 'function');
+    check('hooks installed with onFlee + onEnd + presentAfterBattle', captured && typeof captured.onEnd === 'function' && typeof captured.onFlee === 'function' && typeof captured.presentAfterBattle === 'function');
 
     const ev = await freshEvent({ players: 1 });
     let doc = await state.getEvent(ev.eventId, { fresh: true });
@@ -196,24 +196,43 @@ async function s4_hooks() {
     const combat = doc.rooms.find((r) => r.type === 'combat') || doc.rooms.find((r) => r.type !== 'empty');
     await state.updatePlayer(doc.eventId, me.jid, {}, { roomId: combat.key, prevRoomId: me.roomId });
 
-    // ── VICTORY: room clears, GP paid, return map DM'd ──
+    // ── VICTORY: room clears, GP paid, decree-then-map order ──
     const sock = mockSock();
     const session = { ruinsMeta: { eventId: doc.eventId, roomKey: combat.key }, players: [{ jid: me.jid, name: me.name, lives: 3, spawnRoomId: me.spawnRoomId, roomId: combat.key }] };
-    await captured.onEnd(session, true, 'sim-key', sock);
+    // 🔄 ORDERING (owner 2026-10-05 11:48Z): onEnd must be SILENT (the decree
+    // end card is sent by endCombat before presentAfterBattle replays the
+    // map/encounter) and must return a presentation descriptor.
+    const vdesc = await captured.onEnd(session, true, 'sim-key', sock);
+    check('victory: onEnd sends NOTHING (decree card goes first)', sock.sent.length === 0, JSON.stringify(sock.sent.map((s) => s.text)));
+    check('victory: onEnd returns victory descriptor', vdesc && vdesc.kind === 'victory' && vdesc.claimed === true, JSON.stringify(vdesc));
     doc = await state.getEvent(doc.eventId, { fresh: true });
     const after = playerOf(doc, me.jid);
     check('victory: hook runs without shadowing crash (§22 #1)', true);
     check('victory: room cleared + claimed by winner', (doc.rooms.find((r) => r.key === combat.key) || {}).state === 'CLEARED');
     check('victory: GP awarded', (after.score || 0) > 0, `score=${after.score}`);
-    check('victory: RETURN map image sent (§4)', sock.sent.some((s) => s.hasImage && /chamber is yours/i.test(s.text)), JSON.stringify(sock.sent.map((s) => s.text)));
+    await captured.presentAfterBattle(session, true, 'sim-key', sock, vdesc);
+    check('victory: RETURN map image sent AFTER the card slot (§4)', sock.sent.some((s) => s.hasImage && /chamber is yours/i.test(s.text)), JSON.stringify(sock.sent.map((s) => s.text)));
 
-    // ── DEFEAT: life lost, respawn at spawn corner ──
+    // ── DEFEAT: life lost, respawn at spawn corner, silent onEnd ──
     const sock2 = mockSock();
-    await captured.onEnd({ ruinsMeta: { eventId: doc.eventId, roomKey: combat.key }, players: [{ jid: me.jid, name: me.name, lives: 2, spawnRoomId: me.spawnRoomId, roomId: combat.key }] }, false, 'sim-key', sock2);
+    const dsession = { ruinsMeta: { eventId: doc.eventId, roomKey: combat.key }, players: [{ jid: me.jid, name: me.name, lives: 2, spawnRoomId: me.spawnRoomId, roomId: combat.key }] };
+    // §23: the hook reads the AUTHORITATIVE event player's lives (the session
+    // entity's lives field is ignored), so derive expectations from the DB.
+    const preDoc = await state.getEvent(doc.eventId, { fresh: true });
+    const preLives = playerOf(preDoc, me.jid).lives ?? 3;
+    const ddesc = await captured.onEnd(dsession, false, 'sim-key', sock2);
+    check('defeat: onEnd sends NOTHING (decree card goes first)', sock2.sent.length === 0, JSON.stringify(sock2.sent.map((s) => s.text)));
+    check('defeat: onEnd returns respawn descriptor', ddesc && ddesc.kind === 'respawn' && ddesc.lives === Math.max(0, preLives - 1) && ddesc.spawnRoom === me.spawnRoomId, JSON.stringify(ddesc));
     doc = await state.getEvent(doc.eventId, { fresh: true });
     const defeated = playerOf(doc, me.jid);
-    check('defeat: life decremented', (defeated.lives || 0) === 1, `lives=${defeated.lives}`);
+    check('defeat: life decremented (authoritative, §23)', (defeated.lives || 0) === Math.max(0, preLives - 1), `lives=${defeated.lives} expected=${Math.max(0, preLives - 1)}`);
     check('defeat: respawned at spawn corner with protection', defeated.roomId === me.spawnRoomId && (defeated.protectedUntil || 0) > Date.now() - 1000);
+    // 🔄 presentation replay: fall text FIRST, then the map/encounter images
+    await captured.presentAfterBattle(dsession, false, 'sim-key', sock2, ddesc);
+    const textIdx = sock2.sent.findIndex((s) => /You have fallen/i.test(s.text));
+    const imgIdx = sock2.sent.findIndex((s) => s.hasImage);
+    check('defeat: fall text sent', textIdx >= 0, JSON.stringify(sock2.sent.map((s) => s.text)));
+    check('defeat: respawn map/encounter images sent after the fall text', imgIdx > textIdx, `text@${textIdx} img@${imgIdx}: ${JSON.stringify(sock2.sent.map((s) => s.text))}`);
 
     // ── FLEE: retreats to previous room ──
     await state.updatePlayer(doc.eventId, me.jid, {}, { roomId: combat.key, prevRoomId: me.spawnRoomId });

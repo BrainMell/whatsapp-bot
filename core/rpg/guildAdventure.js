@@ -1959,7 +1959,7 @@ const scopedKey = (key) => `${botScope()}|${key}`;
 //   end   → victory awards room GP/relic via the Guild War module
 // No parallel combat system: this reuses gameStates/startCombat verbatim.
 // ============================================
-const ruinsHooks = { onFlee: null, onEnd: null, endCard: null };
+const ruinsHooks = { onFlee: null, onEnd: null, endCard: null, presentAfterBattle: null };
 function setRuinsHooks(h) {
   if (h.onFlee) ruinsHooks.onFlee = h.onFlee;
   if (h.onEnd) ruinsHooks.onEnd = h.onEnd;
@@ -1967,6 +1967,9 @@ function setRuinsHooks(h) {
   // victory/defeat renderer (endCard.js) used INSTEAD of the default Go
   // end screen for mode RUINS.
   if (h.endCard) ruinsHooks.endCard = h.endCard;
+  // 🔄 ORDERING (owner 2026-10-05 11:48Z): replays the war module's
+  // navigation visuals AFTER the decree card (see endCombat below).
+  if (h.presentAfterBattle) ruinsHooks.presentAfterBattle = h.presentAfterBattle;
 }
 
 // Build the solo-style player entity (same shape + stat enrichment as the
@@ -6934,8 +6937,14 @@ async function endCombat(sock, victory, sessionKey) {
   // ⚔️ RUINS: report the outcome to the Guild War module (GP + relic award /
   // defeat respawn). Standard rewards below still apply. sock is passed so
   // the hook can DM post-combat visuals (navigation card).
+  let ruinsEndDesc = null;
   if (state.mode === 'RUINS' && ruinsHooks.onEnd) {
-    try { await ruinsHooks.onEnd(state, !!victory, sessionKey, sock); } catch (e) { console.error('[Ruins] onEnd hook:', e?.message); }
+    // 🔄 onEnd returns a presentation descriptor (kind: victory / respawn /
+    // final) and NO LONGER sends the map/encounter itself — presentAfterBattle
+    // replays those AFTER the end card below (owner ordering rule
+    // 2026-10-05 11:48Z: "the defeat or victory image card should come in
+    // before the map and new encounter one").
+    try { ruinsEndDesc = await ruinsHooks.onEnd(state, !!victory, sessionKey, sock); } catch (e) { console.error('[Ruins] onEnd hook:', e?.message); }
   }
   // 💡 TUTORIAL: route the practice-fight outcome to the tutorial module.
   // 💡 Phase B: also routes the tutorial solo-quest and group-demo fights.
@@ -7167,6 +7176,15 @@ async function endCombat(sock, victory, sessionKey) {
     } catch (err) {
       console.error("Failed to send end combat text:", err.message);
     }
+  }
+
+  // ⚔️ RUINS ORDERING (owner 2026-10-05 11:48Z: "the defeat or victory
+  // image card should come in before the map and new encounter one"): the
+  // decree card above now goes out FIRST; the war module's navigation
+  // visuals (victory return map / respawn map + room encounter) replay
+  // here via presentAfterBattle — onEnd no longer sends them itself.
+  if (state.mode === 'RUINS' && ruinsHooks.presentAfterBattle) {
+    try { await ruinsHooks.presentAfterBattle(state, !!victory, sessionKey, sock, ruinsEndDesc); } catch (e) { console.error('[Ruins] presentAfterBattle hook:', e?.message); }
   }
 
   if (victory) {
