@@ -65,7 +65,9 @@ function buildRoomPayload(eventDoc, room, map) {
             if (variant) {
                 payload.variant = variant.key;
                 payload.gpMult = variant.gpMult || 1;
-                count = Math.max(1, Math.min(4, count + (variant.countDelta || 0)));
+                // OWNER RULE 2026-10-05: max THREE enemies in any given room —
+                // variant bumps can no longer push a pack past the cap.
+                count = Math.max(1, Math.min(3, count + (variant.countDelta || 0)));
                 lvl = Math.max(1, enemyLvl + (variant.levelDelta || 0));
             }
             payload.enemies = Array.from({ length: count }, () => ({ level: lvl }));
@@ -131,7 +133,8 @@ function buildRoomPayload(eventDoc, room, map) {
             const variant = pickVariant(rng);
             payload.variant = variant ? variant.key : undefined;
             payload.gpMult = variant ? (variant.gpMult || 1) : 1;
-            const count = Math.max(1, Math.min(4, rng.int(2, 3) + (variant ? (variant.countDelta || 0) : 0)));
+            // OWNER RULE 2026-10-05: max THREE enemies in any given room.
+            const count = Math.max(1, Math.min(3, rng.int(2, 3) + (variant ? (variant.countDelta || 0) : 0)));
             payload.enemies = Array.from({ length: count }, () => ({ level: Math.max(1, enemyLvl + 2 + (variant ? (variant.levelDelta || 0) : 0)) }));
             payload.coopEncounter = true;
             break;
@@ -532,7 +535,11 @@ async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = 
     // ⚔️ robustness: an empty enemies array (e.g. NaN-ring map build) must
     // never brick a fight - always fall back to a ring-scaled default spec.
     const rawSpecs = payloadGet(room.payload, 'enemies');
-    const enemySpecs = (Array.isArray(rawSpecs) && rawSpecs.length) ? rawSpecs : [{ level: 10 + Math.round((room.ring || 0) * 6) }];
+    // OWNER RULE 2026-10-05: max THREE enemies in any given room. The slice
+    // also clamps ALREADY-SEEDED events whose stored payload still carries 4.
+    const enemySpecs = ((Array.isArray(rawSpecs) && rawSpecs.length)
+        ? rawSpecs
+        : [{ level: 10 + Math.round((room.ring || 0) * 6) }]).slice(0, 3);
     const variant = variantOf(room);
     const isCore = !!payloadGet(room.payload, 'coreGuardian');
 

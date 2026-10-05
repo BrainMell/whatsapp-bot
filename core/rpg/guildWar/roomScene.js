@@ -440,7 +440,9 @@ function planFor(eventDoc, player, room, exits) {
     if (!cleared) {
         if (['combat', 'coop'].includes(room.type)) {
             const raw = payloadGet(P, 'enemies');
-            const n = Math.max(1, Math.min(4, Array.isArray(raw) ? raw.length : 1));
+            // OWNER RULE 2026-10-05: max THREE enemies in any given room —
+            // also caps the DRAWN pack for already-seeded 4-enemy payloads.
+            const n = Math.max(1, Math.min(3, Array.isArray(raw) ? raw.length : 1));
             const lvl = (Array.isArray(raw) && raw[0]?.level) || 10;
             for (let i = 0; i < n; i++) {
                 const zone = ZONE[i % ZONE.length];
