@@ -81,7 +81,12 @@ const GuildWarEventSchema = new mongoose.Schema({
     // every instance can flush it and a restart loses nothing.
     feedQueue: [{ id: String, tier: String, text: String, t: Number, tries: { type: Number, default: 0 } }],
     // Phase 1 #8: PvP challenge windows are shared state (was per-process Map)
-    pvpChallenges: [{ key: String, challengerJid: String, challengedJid: String, roomKey: String, expiresAt: Number }],
+    // ⚔️ eventId rides each challenge record (2026-10-05): resolveTimeout —
+    // the sweeper that concedes/voids expired windows — reads c.eventId.
+    // The old schema stripped it (mongoose strict subdoc), so every DB-pulled
+    // resolution got eventId=undefined → getEvent(null) → silent no-op:
+    // expired challenges NEVER resolved (measured in the multiplayer sim).
+    pvpChallenges: [{ key: String, eventId: String, challengerJid: String, challengedJid: String, roomKey: String, expiresAt: Number }],
     // ⚔️ Cross-box flow lease (2026-10-05): both servers share this MongoDB,
     // so every instance ticks every war. {owner, at} names the ONE instance
     // allowed to run proactive flows (auto-start + start-card DMs, hard end,

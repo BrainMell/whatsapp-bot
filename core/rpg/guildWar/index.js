@@ -95,6 +95,13 @@ function installCombatHooks() {
                     feed.queue(meta.eventId, 'normal',
                         `⚔️ ${me.name} cleared a ${room.type === 'core' ? 'World Core guardian' : 'guarded chamber'}${coopBonus ? ', standing shoulder to shoulder with guildmates' : ', alone in the dark'}.`);
 
+                    // ⚔️ MULTIPLAYER BRIEF §6 (waiter resume): players who
+                    // waited out this fight are told the moment it resolves —
+                    // fire-and-forget so the fighter's own decree → map →
+                    // scene ordering (below) is untouched.
+                    encounters.notifyRoomResolved(meta.eventId, room.key, jid, sock, { prefix, kind: 'victory' })
+                        .catch((e) => console.error('[GW] waiter resume failed:', e?.message));
+
                     // 💡 NAVIGATION OVERHAUL §4/§15: post-victory the player
                     // gets the RETURN map (same chart, post-encounter visual
                     // state) — the world re-renders around them, no parchment.
@@ -127,6 +134,10 @@ function installCombatHooks() {
                 const freshLives = Math.max(0, (src.lives ?? CFG.COMBAT.LIVES) - 1);
                 const spawnRoom = src.spawnRoomId || src.roomId;
                 if (freshLives > 0) {
+                    // ⚔️ occupancy sync (multiplayer sim finding): the respawn
+                    // is a REAL move — the fallen champion was still listed in
+                    // the DEATH room's occupants after the old bare rewrite.
+                    try { await rooms.enterRoom(meta.eventId, jid, src.roomId, spawnRoom); } catch (e) {}
                     await state.updatePlayer(meta.eventId, jid, {}, {
                         lives: freshLives,
                         roomId: spawnRoom,
@@ -134,6 +145,11 @@ function installCombatHooks() {
                         protectedUntil: Date.now() + CFG.COMBAT.RESPAWN_PROTECT_MS,
                         lastActionAt: Date.now(),
                     });
+                    // ⚔️ MULTIPLAYER BRIEF §6: waiters in the death chamber
+                    // get told the fight is up for grabs (the encounter payload
+                    // is still live — they may `fight` it themselves or flee).
+                    encounters.notifyRoomResolved(meta.eventId, meta.roomKey, jid, sock, { prefix, kind: 'defeat' })
+                        .catch((e) => console.error('[GW] waiter resume (defeat) failed:', e?.message));
                     // ⚔️ WAR FEED (owner spec §20): a champion's death is an
                     // EVENT, not a digest bullet — standalone, named, guilded,
                     // with the stakes stated. Mirrors the owner's own example.
@@ -153,7 +169,12 @@ function installCombatHooks() {
                     return { kind: 'respawn', name: src.name || player.name, lives: freshLives, spawnRoom };
                 } else {
                     await rooms.dropCarriedRelics(meta.eventId, jid, 'final death');
+                    // ⚔️ occupancy sync: a finally-dead champion leaves the
+                    // room's occupants array for good.
+                    try { await rooms.leaveRoom(meta.eventId, jid, src.roomId); } catch (e) {}
                     await state.updatePlayer(meta.eventId, jid, {}, { status: 'defeated', lives: 0 });
+                    encounters.notifyRoomResolved(meta.eventId, meta.roomKey, jid, sock, { prefix, kind: 'defeat' })
+                        .catch((e) => console.error('[GW] waiter resume (final) failed:', e?.message));
                     feed.queue(meta.eventId, 'normal',
                         `💀 *${src.name || player.name} of ${src.guildName || 'the unsworn'}* has fallen for the last time this war.\n` +
                         `The Ruins keep what they take — their carried relics lie where they fell.`);

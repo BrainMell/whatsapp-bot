@@ -284,7 +284,7 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
     if (opts.prefixed && GENERIC_PREFIXED_RE.test(norm)) return null;
 
     // ── ruins action grammar: any DM verb this router understands ──
-    const QUIET_ACTION_RE = new RegExp(`^(?:look|l|where(?:\\s?am\\s?i)?|map|gw map|paths|relics|bag|status|score|rejoin|return|quit|leave|exit|accept|flee|mark|teleport|tp|recall|handin(?:\\s\\S.*)?|use(?:\\s\\S.*)?|challenge(?:\\s\\S.*)?|share map(?:\\s\\S.*)?|move\\s+(?:${MOVE_TOKEN_RE})|(?:${MOVE_TOKEN_RE}))$`);
+    const QUIET_ACTION_RE = new RegExp(`^(?:look|l|where(?:\\s?am\\s?i)?|map|gw map|paths|relics|bag|status|score|rejoin|return|quit|leave|exit|accept|flee|mark|teleport|tp|recall|handin(?:\\s\\S.*)?|use(?:\\s\\S.*)?|challenge(?:\\s\\S.*)?|share map(?:\\s\\S.*)?|talk(?:\\s\\S.*)?|say(?:\\s\\S.*)?|move\\s+(?:${MOVE_TOKEN_RE})|(?:${MOVE_TOKEN_RE}))$`);
 
     const eventDoc = await getEventForPlayer(senderJid);
     if (!eventDoc) {
@@ -409,6 +409,25 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
             || (roomNow.type === 'secret' && encounters.payloadGet(roomNow.payload, 'boss'))
         );
         if (autoCombat) {
+            // ⚔️ MULTIPLAYER BRIEF §6/§7 (occupied gate): someone is already
+            // fighting in this chamber — the arrival must NOT start a parallel
+            // fight. The scene they were just shown stands them at their own
+            // entry door (never on top of the fighter); they choose: wait for
+            // the chamber to resolve (they'll be told), or `flee` out the way
+            // they came.
+            const othersHere = (roomNow.occupants || []).filter((j) => j && j !== senderJid);
+            const puzzleLive = roomNow.type === 'puzzle' && encounters.puzzleStarted(roomNow);
+            const fightLive = othersHere.length > 0 && (
+                ['combat', 'coop', 'core'].includes(roomNow.type)
+                || puzzleLive
+                || (roomNow.type === 'secret' && encounters.payloadGet(roomNow.payload, 'boss')));
+            if (fightLive) {
+                const names = othersHere
+                    .map((j) => (freshAfterPresent.players || []).find((p) => p.jid === j))
+                    .filter(Boolean).map((p) => p.name).join(', ');
+                return { text: `⚔️ *${names || 'Someone'} ${othersHere.length > 1 ? 'are' : 'is'} already fighting in this chamber.* You hold the edge of the room — you cannot join a fight already underway.
+⏳ Wait here — the moment it resolves you'll be told and the chamber returns to normal. \`flee\` retreats out the way you came.` };
+            }
             const started = await encounters.startRoomCombat(sock, chatId, meNow, freshAfterPresent, roomNow, { groq: null });
             if (!started.success) return { text: started.msg || 'The encounter failed to begin - type `fight` to try again.' };
         }
@@ -535,6 +554,16 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         const target = eventDoc.players.find((p) => p.name.toLowerCase() === targetName && (p.roomId === player.roomId) && p.jid !== senderJid);
         if (!target) return { text: '❌ No such rival in this room. `challenge @name` - they must stand here.' };
         const res = await ruinsPvp.challenge(eventDoc, player, target.jid);
+        // ⚔️ MULTIPLAYER BRIEF §5: the challenged player learns of the duel
+        // IN THEIR DMs the moment it's issued (the GC feed line alone left
+        // them fighting the window blind).
+        if (res.ok) {
+            try {
+                await sock.sendMessage(target.jid, {
+                    text: BOT_MARKER + `⚔️ *${player.name}* calls you out in chamber ${player.roomId}!\nYou have ${Math.max(1, Math.round((CFG.PVP.CHALLENGE_WINDOW_MS || 60000) / 1000))}s: \`accept\` the duel, \`flee\` to concede — or move out of the chamber to slip away before it begins.`,
+                });
+            } catch (e) { /* notification is best-effort */ }
+        }
         return { text: res.text };
     }
     if (/^accept$/.test(norm)) {
@@ -611,6 +640,25 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
             { $addToSet: { 'players.$.discovered': { $each: (player.discovered || []) } } }
         );
         return { text: `🗺️ Your chart has been copied to ${mate.name}.` };
+    }
+
+    // ── talk: relay speech to co-located players' DMs (multiplayer brief §2) ──
+    if (/^(talk|say)\b/.test(norm)) {
+        const msg = norm.replace(/^(?:talk|say)\s*/, '').trim();
+        if (!msg) return { text: '💬 Say what? `talk <message>` — everyone standing in this chamber hears it in their DMs.' };
+        const here = roomOf(eventDoc, player);
+        const others = ((here && here.occupants) || [])
+            .filter((j) => j && j !== senderJid)
+            .map((j) => eventDoc.players.find((p) => p.jid === j && p.status !== 'quit'))
+            .filter(Boolean);
+        const spoken = msg.slice(0, 200);
+        const line = `💬 *${player.name}* says: "${spoken}"`;
+        for (const o of others) {
+            try { await sock.sendMessage(o.jid, { text: BOT_MARKER + line }); } catch (e) { /* best-effort */ }
+        }
+        return { text: others.length
+            ? `💬 You say: "${spoken}"\n_Heard by ${others.map((o) => o.name).join(', ')}._`
+            : `💬 You say: "${spoken}"\n_The empty chamber swallows your words — no one else is here._` };
     }
 
     // ── room encounter interactions (dig/take/cross/touch/record/claim/fight/answers) ──
