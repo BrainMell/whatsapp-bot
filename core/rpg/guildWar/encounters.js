@@ -570,8 +570,9 @@ async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = 
         rank: 'C', background, groq,
         greeting: variant ? `${variant.line}` : null,
         name: isCore ? 'World Core Guardian' : (variant ? `Ruins ${variant.name}` : 'Ruins Encounter'),
-        // ⚔️ square map rides into the battle scene (bottom-right panel)
-        mapFragment: require('./encounterScenes').buildMapFragment(eventDoc, player, room),
+        // ⚔️ owner directive 2026-10-05 23:39Z: the square map panel is GONE
+        // from ruins battles (the fight stays IN the room scene — see
+        // guildWar/battleScene.js); no map fragment rides to any renderer.
         ward: ward ? ward.buff : null,
     });
     if (started.success && ward) {

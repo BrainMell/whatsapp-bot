@@ -4266,7 +4266,14 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   // NEW: Generate combat image and caption (with Turn Order merged)
   // 💡 FIX 2026-07-31: 10s timeout - if Go service is slow, skip image
   // 💡 FIX 2026-08-15: Pass floor so Abyss renders "FLOOR N" banner, not rank.
-  const scenePromise = combatIntegration.generateCombatScene(
+  // ⚔️ RUINS (owner directive 2026-10-05 23:39Z): the battle happens IN the
+  // room — NO scene jump to the Go service's arena render (no banner, no
+  // map panel, no sprite swap). The image is the SAME roomScene render the
+  // player was just shown, with the live combat pools layered on top.
+  const isRuinsFight = state.mode === 'RUINS' && state.ruinsMeta;
+  const scenePromise = isRuinsFight
+    ? require('./guildWar/battleScene').renderBattleImage(state, { phase: 'START', turnOrderStr })
+    : combatIntegration.generateCombatScene(
     state.players,
     state.enemies,
     "START",
@@ -6429,7 +6436,11 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
       // timeout. If the Go service is slow/unresponsive, skip the image
       // and just send the text caption. This prevents one slow image
       // render from blocking the entire bot's event loop.
-      const scenePromise = combatIntegration.generateCombatScene(
+      // ⚔️ RUINS: same room-scene path as the START render (owner directive
+      // 2026-10-05 23:39Z) — the fight never leaves the room image.
+      const scenePromise = (state.mode === 'RUINS' && state.ruinsMeta)
+        ? require('./guildWar/battleScene').renderBattleImage(state, { phase: 'TURN', turnInfo: lastTurnInfo })
+        : combatIntegration.generateCombatScene(
         state.players,
         state.enemies,
         "TURN",
@@ -6914,6 +6925,8 @@ async function endCombat(sock, victory, sessionKey) {
   // death). Claim the flag SYNCHRONOUSLY before any await; the existing
   // resets (victory nextStage timer / defeat cleanup) are unchanged.
   state.isEndingCombat = true; // claim FIRST — no re-entry during the async hook
+  // ⚔️ RUINS: free the frozen battle-scene layout for this session
+  try { require('./guildWar/battleScene').clearLayout(sessionKey); } catch (e) {}
   // ⚔️ RUINS: report the outcome to the Guild War module (GP + relic award /
   // defeat respawn). Standard rewards below still apply. sock is passed so
   // the hook can DM post-combat visuals (navigation card).

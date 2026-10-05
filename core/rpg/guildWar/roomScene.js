@@ -83,11 +83,14 @@ const DOORS = {
 
 // ⚔️ OWNER-CIRCLED SPAWN SPOTS (annotated screenshot 2026-10-05):
 // the champion stands IN FRONT OF the door they entered through — just
-// inside the arch. Character PNGs face LEFT natively, so flip=true means
-// facing RIGHT. Facing rule: you just walked IN, so you face INTO the
-// room, away from the door (w→east, e→west); n/s walk-ins keep a side
-// pose (pixel-art illusion for vertical entries), turned toward the
-// interior. War start (no prior room) = classic left-door entrance.
+// inside the arch. Facing rule (owner follow-up 2026-10-05 23:39Z: "the
+// player shouldn't be facing the door they just came out of — they should
+// be facing away from the door, toward the rest of the scene"): the
+// champion PNGs read slightly RIGHT natively (front-facing sprites with a
+// rightward lean), so flip=false faces right. w-entry keeps native (faces
+// EAST, into the room); e-entry mirrors (faces WEST). n/s walk-ins keep
+// the native read, turned toward the content side. War start (no prior
+// room) = classic left-door entrance.
 const SPAWN_SPOTS = {
     w: { x: 258, y: 590 },   // just right of the left arch (owner circle 1)
     e: { x: 942, y: 612 },   // just left of the right arch (owner circle 2)
@@ -95,7 +98,7 @@ const SPAWN_SPOTS = {
     s: { x: 616, y: 796 },   // bottom-centre walk-in (owner circle 4)
 };
 const DEFAULT_ENTRY = 'w';
-const ENTRY_FLIP = { w: true, e: false, n: false, s: true };
+const ENTRY_FLIP = { w: false, e: true, n: false, s: false };
 
 // derive which door the player CAME THROUGH from their last move
 // (prevRoom→room). Moving east means entering the new room through its
@@ -357,7 +360,8 @@ function planFor(eventDoc, player, room, exits) {
     for (let i = 0; i < mateRows.length; i++) {
         const mx = clampX(spot.x + towardCentre * (95 + i * 92));
         const my = clampY(spot.y + (i === 0 ? 6 : -6));
-        plan.mates.push({ file: resolvePlayerSpriteFile(mateRows[i]), x: mx, y: my, h: Math.round(perspH(my) * 0.92), name: mateRows[i].name });
+        // mates face the same way as the champion (into the room)
+        plan.mates.push({ file: resolvePlayerSpriteFile(mateRows[i]), x: mx, y: my, h: Math.round(perspH(my) * 0.92), name: mateRows[i].name, flip: !!ENTRY_FLIP[dir] });
     }
     for (let i = 0; i < rivalRows.length; i++) {
         const rx = clampX(1200 - spot.x + (i === 0 ? 0 : (towardCentre * 80)));
@@ -365,17 +369,20 @@ function planFor(eventDoc, player, room, exits) {
         plan.rivals.push({
             file: resolvePlayerSpriteFile(rivalRows[i]), x: rx, y: ry,
             h: Math.round(perspH(ry) * 0.82), name: rivalRows[i].name,
-            flip: rx < spot.x, // face the champion (native sprites face left)
+            // champion PNGs read slightly RIGHT natively → a rival standing
+            // RIGHT of the champion mirrors to face LEFT toward them
+            flip: rx > spot.x,
         });
     }
 
     // enemy zone anchors (ground y, depth-ordered): far → near. Mirrored to
     // the LEFT half when the champion entered from the right door, so the
     // pack is always OPPOSITE the actor; anchors too close to the champion
-    // are dropped.
+    // are dropped. (Spread 2026-10-05: with the owner's bigger-enemy scale,
+    // the old anchors made pack members merge into one blob.)
     let ZONE = [
-        { x: 830, y: 640 }, { x: 985, y: 690 }, { x: 735, y: 690 },
-        { x: 900, y: 748 }, { x: 1040, y: 745 },
+        { x: 795, y: 640 }, { x: 1010, y: 705 }, { x: 610, y: 700 },
+        { x: 880, y: 755 }, { x: 1075, y: 760 },
     ];
     if (spot.x > 700) ZONE = ZONE.map((s) => ({ x: 1200 - s.x, y: s.y }));
     ZONE = ZONE.filter((s) => Math.hypot(s.x - spot.x, s.y - spot.y) > 150);
@@ -389,20 +396,22 @@ function planFor(eventDoc, player, room, exits) {
                 const zone = ZONE[i % ZONE.length];
                 if (!zone) break;
                 const file = ENEMY_POOL[rng.int(0, ENEMY_POOL.length - 1)];
-                // farther rows slightly smaller (perspective) — but always a
-                // credible physical threat next to the champion (heights
-                // rebalanced 2026-10-05 to match the smaller actor scale)
-                const h = Math.round(152 + (zone.y - 640) * 0.58 + (lvl >= 15 ? 18 : 0));
+                // owner 2026-10-05 23:39Z: "make the enemies a little bigger
+                // than the characters" — the shrink pass had caught the pack
+                // too. Pack members now stand ~1.18× the plate's perspective
+                // height at their OWN ground line (so nearer rows read
+                // naturally bigger), always over the champion's height.
+                const h = Math.round(perspH(zone.y) * 1.18 + (lvl >= 15 ? 18 : 0));
                 // monsters face the champion: native sprites look LEFT, so
                 // a monster standing LEFT of the champion flips to face right
                 plan.enemies.push({ file, x: zone.x + rng.int(-24, 24), y: zone.y, h, flip: zone.x < spot.x });
             }
         } else if (room.type === 'core') {
             const bx = spot.x > 700 ? 340 : 860;
-            plan.enemies.push({ file: BOSS_POOL[rng.int(0, BOSS_POOL.length - 1)], x: bx, y: 730, h: 258, flip: bx < spot.x, boss: true });
+            plan.enemies.push({ file: BOSS_POOL[rng.int(0, BOSS_POOL.length - 1)], x: bx, y: 730, h: Math.round(Math.max(perspH(730) * 1.25, perspH(spot.y) * 1.18)), flip: bx < spot.x, boss: true });
         } else if (room.type === 'secret' && payloadGet(P, 'boss')) {
             const bx = spot.x > 700 ? 340 : 860;
-            plan.enemies.push({ file: BOSS_POOL[rng.int(0, BOSS_POOL.length - 1)], x: bx, y: 720, h: 228, flip: bx < spot.x, boss: true });
+            plan.enemies.push({ file: BOSS_POOL[rng.int(0, BOSS_POOL.length - 1)], x: bx, y: 720, h: Math.round(Math.max(perspH(720) * 1.15, perspH(spot.y) * 1.10)), flip: bx < spot.x, boss: true });
         }
     }
 
@@ -566,6 +575,123 @@ function drawOverheadHud(ctx, plan) {
     // segmented EN bar (the default panel's cyan, thinner)
     const enPct = (hud.energy || 0) / (hud.maxEnergy || 1);
     segBar(ctx, spot.x, enY, 92, 8, enPct, '#12d7f5', '#0a86c8');
+}
+
+// ── battle-in-the-room overlay bits (owner directive 2026-10-05 23:39Z) ───
+// The fight happens ON the room scene: a gold ground ring marks the active
+// actor (the default encounter's turn indicator), enemies carry the
+// default-encounter name+HP plates, and the parchment DEFAULT HUD panel
+// (owner green-circle directive, same timestamp) rides bottom-left on
+// EVERY room scene, fed live combat pools during battle.
+function goldRing(ctx, cx, groundY, w, h) {
+    const rx = Math.max(34, w * 0.5), ry = Math.max(9, h * 0.06);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,210,74,0.30)'; ctx.lineWidth = 8;
+    ctx.beginPath(); ctx.ellipse(cx, groundY + 4, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,210,74,0.95)'; ctx.lineWidth = 3.5;
+    ctx.beginPath(); ctx.ellipse(cx, groundY + 4, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+}
+
+function drawHeart(ctx, cx, cy, s) {
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(s / 20, s / 20);
+    ctx.beginPath();
+    ctx.moveTo(0, 8);
+    ctx.bezierCurveTo(-12, -2, -8.5, -12.5, 0, -6);
+    ctx.bezierCurveTo(8.5, -12.5, 12, -2, 0, 8);
+    ctx.closePath();
+    ctx.fillStyle = '#C6392E'; ctx.fill();
+    ctx.strokeStyle = '#38110D'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.38)';
+    ctx.beginPath(); ctx.ellipse(-3.6, -4.4, 2.2, 1.5, -0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+}
+
+function drawDrop(ctx, cx, cy, s) {
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(s / 20, s / 20);
+    ctx.beginPath();
+    ctx.moveTo(0, -10);
+    ctx.quadraticCurveTo(7.5, -1, 7.2, 3.4);
+    ctx.arc(0, 3.4, 7.2, 0, Math.PI, false);
+    ctx.quadraticCurveTo(-7.5, -1, 0, -10);
+    ctx.closePath();
+    ctx.fillStyle = '#3F7FD9'; ctx.fill();
+    ctx.strokeStyle = '#0E2246'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.38)';
+    ctx.beginPath(); ctx.ellipse(-2.6, 3.4, 2.0, 2.9, 0.35, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+}
+
+// one segmented bar row of the default panel (chunky blocks + bevel)
+function segRow(ctx, x, y, w, h, pct, from, to) {
+    pct = Math.max(0, Math.min(1, pct));
+    ctx.fillStyle = '#221910';
+    roundRect(ctx, x, y, w, h, h / 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 2;
+    roundRect(ctx, x, y, w, h, h / 2); ctx.stroke();
+    if (pct > 0) {
+        const inner = 5, segs = 8, gap = 3;
+        const segW = (w - inner * 2 - gap * (segs - 1)) / segs;
+        const g = ctx.createLinearGradient(0, y, 0, y + h);
+        g.addColorStop(0, to); g.addColorStop(0.5, from); g.addColorStop(1, from);
+        ctx.save(); roundRect(ctx, x, y, w, h, h / 2); ctx.clip();
+        const fw = Math.max(h * 0.8, (w - inner * 2) * pct);
+        ctx.fillStyle = g; ctx.fillRect(x + inner, y + 2, fw, h - 4);
+        ctx.fillStyle = 'rgba(255,255,255,0.22)'; ctx.fillRect(x + inner, y + 2, fw, 4);
+        ctx.fillStyle = 'rgba(20,14,8,0.85)';
+        for (let i = 1; i < segs; i++) ctx.fillRect(x + inner + i * (segW + gap) - gap / 2, y + 2, gap, h - 4);
+        ctx.restore();
+    }
+}
+
+// THE DEFAULT ENCOUNTER HUD PANEL — owner green-circle directive
+// 2026-10-05 23:39Z: "THAT'S THE DEFAULT HUD I SAID I WANTED". Ornate
+// parchment card, dark name plate, heart icon + segmented red HP bar,
+// drop icon + segmented blue mana bar — the default encounter's
+// bottom-left presentation, drawn on every room scene.
+function drawHudPanel(ctx, hud) {
+    if (!hud) return;
+    const P = { x: 16, y: 720, w: 474, h: 166 };
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 4;
+    const pg = ctx.createLinearGradient(0, P.y, 0, P.y + P.h);
+    pg.addColorStop(0, '#EBDDB9'); pg.addColorStop(1, '#DBC89E');
+    ctx.fillStyle = pg;
+    roundRect(ctx, P.x, P.y, P.w, P.h, 12); ctx.fill();
+    ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+    ctx.strokeStyle = '#6B4A22'; ctx.lineWidth = 4;
+    roundRect(ctx, P.x, P.y, P.w, P.h, 12); ctx.stroke();
+    ctx.strokeStyle = 'rgba(250,244,226,0.8)'; ctx.lineWidth = 1.5;
+    roundRect(ctx, P.x + 6, P.y + 6, P.w - 12, P.h - 12, 8); ctx.stroke();
+    // corner brackets (the reference panel's ornate corners)
+    ctx.strokeStyle = '#4A3113'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    const B = 15, o = 13;
+    for (const [sx, sy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+        const px = sx === 1 ? P.x + o : P.x + P.w - o;
+        const py = sy === 1 ? P.y + o : P.y + P.h - o;
+        ctx.beginPath();
+        ctx.moveTo(px + sx * B, py); ctx.lineTo(px, py); ctx.lineTo(px, py + sy * B);
+        ctx.stroke();
+    }
+    // dark name plate
+    const name = String(hud.name || 'Explorer').slice(0, 16);
+    ctx.font = 'bold 24px "Cinzel", sans-serif';
+    const nw = Math.min(P.w - 110, ctx.measureText(name).width + 64);
+    const nx = P.x + P.w / 2 - nw / 2, ny = P.y + 14, nh = 42;
+    ctx.fillStyle = '#221A10';
+    roundRect(ctx, nx, ny, nw, nh, 8); ctx.fill();
+    ctx.strokeStyle = '#6B4A22'; ctx.lineWidth = 1.5;
+    roundRect(ctx, nx, ny, nw, nh, 8); ctx.stroke();
+    ctx.fillStyle = '#F5F0E1'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(name, P.x + P.w / 2, ny + nh / 2 + 1);
+    ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+    // heart + HP row, drop + mana row
+    const rowHpY = P.y + 98, rowEnY = P.y + 140, barX = P.x + 88, barW = P.w - 88 - 26;
+    drawHeart(ctx, P.x + 52, rowHpY, 27);
+    segRow(ctx, barX, rowHpY - 13, barW, 26, (hud.hp || 0) / (hud.maxHp || 1), '#C93A2E', '#E8795B');
+    drawDrop(ctx, P.x + 52, rowEnY, 25);
+    segRow(ctx, barX, rowEnY - 12, barW, 24, (hud.energy || 0) / (hud.maxEnergy || 1), '#3E7CD6', '#66A9E8');
+    ctx.restore();
 }
 
 // ── ambient props (vector, palette-matched, subtle) ─────────────────────
@@ -997,6 +1123,32 @@ async function _renderInProcess(eventDoc, player, room, opts = {}) {
     const exits = opts.exits || exitsFor(eventDoc, player);
     const bg = await plateFor(exits, `${eventDoc.seed}:${room.key}`);
     const plan = opts.plan || planFor(eventDoc, player, room, exits);
+    const battle = opts.battle || null;
+
+    // ⚔️ BATTLE-IN-THE-ROOM (owner directive 2026-10-05 23:39Z: "the battle
+    // system should happen directly on top of that existing room scene"):
+    // the fight re-uses THIS EXACT scene — only live state layers on. The
+    // champion's pools feed the HUD, dead enemies simply leave the scene
+    // (no pose swap, no corpse sprite), and the active actor is ringed.
+    if (battle) {
+        if (battle.player) {
+            plan.hud.hp = Math.max(0, Math.floor(battle.player.hp ?? plan.hud.hp));
+            plan.hud.maxHp = Math.max(1, Math.floor(battle.player.maxHp ?? plan.hud.maxHp));
+            plan.hud.energy = Math.max(0, Math.floor(battle.player.energy ?? 0));
+            plan.hud.maxEnergy = Math.max(1, Math.floor(battle.player.maxEnergy ?? 1));
+            if (battle.player.state) plan.hud.state = String(battle.player.state).slice(0, 24);
+        }
+        if (Array.isArray(battle.enemyStates) && battle.enemyStates.length) {
+            plan.enemies = (plan.enemies || [])
+                .map((e, i) => ({ ...e, st: battle.enemyStates[i] || null }))
+                .filter((e) => (e.st ? e.st.alive !== false : true));
+            const ai = battle.active;
+            if (typeof ai === 'number' && ai >= 0 && battle.enemyStates[ai]?.alive) {
+                const target = plan.enemies.find((e) => e.st === battle.enemyStates[ai]);
+                if (target) target.active = true;
+            }
+        }
+    }
     const c = createCanvas(W, H);
     const ctx = c.getContext('2d');
 
@@ -1018,24 +1170,47 @@ async function _renderInProcess(eventDoc, player, room, opts = {}) {
     const SEARCH_DIRS = [ENEMY_DIR, path.join(CHAR_DIR, 'clean'), CHAR_DIR];
     const actors = [...(plan.enemies || []), ...(plan.mates || []), ...(plan.rivals || [])].sort((a, b) => a.y - b.y);
     for (const e of actors) {
-        await drawGroundedSprite(ctx, SEARCH_DIRS, e.file, e.x, e.y, e.h, { flip: !!e.flip, shadow: true });
+        const drawn = await drawGroundedSprite(ctx, SEARCH_DIRS, e.file, e.x, e.y, e.h, { flip: !!e.flip, shadow: true });
+        if (e.active && drawn) goldRing(ctx, e.x, e.y, drawn.w, drawn.h);
     }
 
     // 5) the champion — ASSIGNED sprite, grounded at their ENTRY-DOOR spot,
-    // facing into the room (owner directive 2026-10-05)
+    // facing AWAY from that door into the room (owner directive
+    // 2026-10-05 23:39Z) + the gold ring when it's their beat
     const spot = plan.playerSpot;
-    await drawGroundedSprite(ctx, [path.join(CHAR_DIR, 'clean'), CHAR_DIR], plan.spriteFile, spot.x, spot.y, spot.h, { shadow: true, flip: !!spot.flip });
+    const drawnMe = await drawGroundedSprite(ctx, [path.join(CHAR_DIR, 'clean'), CHAR_DIR], plan.spriteFile, spot.x, spot.y, spot.h, { shadow: true, flip: !!spot.flip });
+    if (battle && battle.active === 'player' && drawnMe) goldRing(ctx, spot.x, spot.y, drawnMe.w, drawnMe.h);
 
     // 6) exit chevrons at the arches (yellow — §9)
     drawExitArrows(ctx, exits);
 
     // 7) DEFAULT-ENCOUNTER over-head HUD (name pill + segmented bars +
-    // state/turn pill). The banner and the bottom-left panel are LEFT OUT
-    // per the owner's 2026-10-05 directive.
+    // state/turn pill) — the owner LIKES this ("keep that", 23:39Z); in
+    // battle it carries the live combat pools and the turn counter.
     drawOverheadHud(ctx, plan);
+
+    // 7b) enemy over-head plates — the default-encounter language: name
+    // pill (battle only) + segmented HP bar over every LIVING enemy. On
+    // the pre-fight intro they show full bars (the pack at full strength).
+    for (const e of plan.enemies || []) {
+        const st = e.st || null;
+        const hpMax = Math.max(1, Math.floor(st?.maxHp || 100));
+        const hp = st ? Math.max(0, Math.floor(st.hp)) : hpMax;
+        const headTop = e.y - e.h;
+        const showName = !!(battle && st?.name);
+        if (showName) pill(ctx, e.x, headTop - 25, String(st.name).slice(0, 22), 'bold 11px sans-serif', 9,
+            'rgba(26,21,13,0.95)', 'rgba(61,48,19,0.95)', '#FFFFFF');
+        segBar(ctx, e.x, showName ? headTop - 11 : headTop - 14, e.boss ? 126 : 94, 9, hp / hpMax, '#d63c14', '#f59d2a');
+    }
 
     // 8) puzzle overlay (opposite the champion)
     if (opts.puzzleBoard) await drawPuzzleOverlay(ctx, opts.puzzleBoard, spot);
+
+    // 9) THE DEFAULT ENCOUNTER HUD PANEL — owner green-circle directive
+    // 2026-10-05 23:39Z: "THAT'S THE DEFAULT HUD I SAID I WANTED". The
+    // parchment player card (name / heart+HP / drop+mana), topmost layer
+    // like the default encounter's; battle renders feed it live pools.
+    drawHudPanel(ctx, plan.hud);
 
     return c.toBuffer('image/png');
 }

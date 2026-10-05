@@ -91,6 +91,54 @@ const CASES = [
       room: { type: 'puzzle', state: 'UNEXPLORED', payload: {} }, board: true },
     { name: 'puzzle_board_e', player: mkPlayer('3,2', '2,2'), exits: [['w'], ['e']],
       room: { type: 'puzzle', state: 'UNEXPLORED', payload: {} }, board: true },
+    // ── Task 17: battle happens IN the room (owner directive 23:39Z) ──
+    // same plate/spawn/facing/pack as the intro; live pools layered on:
+    // enemy name+HP plates, gold turn ring, default HUD panel, no map.
+    { name: 'battle_start', player: mkPlayer('1,2', '2,2'), exits: [['w'], ['e']],
+      room: { type: 'combat', state: 'ACTIVE', payload: { enemies: [{ level: 10 }, { level: 10 }, { level: 12 }] } },
+      battle: { player: { hp: 84, maxHp: 120, energy: 62, maxEnergy: 100, state: 'BATTLE!' },
+                enemyStates: [
+                    { name: 'Frost Shambling Terror', hp: 210, maxHp: 210, alive: true },
+                    { name: 'Frost Grave Ghoul', hp: 180, maxHp: 180, alive: true },
+                    { name: 'Frost Wretch', hp: 240, maxHp: 240, alive: true } ],
+                active: null } },
+    { name: 'battle_turn_player', player: mkPlayer('1,2', '2,2'), exits: [['w'], ['e']],
+      room: { type: 'combat', state: 'ACTIVE', payload: { enemies: [{ level: 10 }, { level: 10 }, { level: 12 }] } },
+      battle: { player: { hp: 84, maxHp: 120, energy: 48, maxEnergy: 100, state: 'TURN 3' },
+                enemyStates: [
+                    { name: 'Frost Shambling Terror', hp: 64, maxHp: 210, alive: true },
+                    { name: 'Frost Grave Ghoul', hp: 180, maxHp: 180, alive: true },
+                    { name: 'Frost Wretch', hp: 240, maxHp: 240, alive: true } ],
+                active: 'player' } },
+    { name: 'battle_turn_enemy', player: mkPlayer('1,2', '2,2'), exits: [['w'], ['e']],
+      room: { type: 'combat', state: 'ACTIVE', payload: { enemies: [{ level: 10 }, { level: 10 }, { level: 12 }] } },
+      battle: { player: { hp: 41, maxHp: 120, energy: 48, maxEnergy: 100, state: 'TURN 4' },
+                enemyStates: [
+                    { name: 'Frost Shambling Terror', hp: 64, maxHp: 210, alive: true },
+                    { name: 'Frost Grave Ghoul', hp: 95, maxHp: 180, alive: true },
+                    { name: 'Frost Wretch', hp: 240, maxHp: 240, alive: true } ],
+                active: 1 } },
+    { name: 'battle_after_kill', player: mkPlayer('1,2', '2,2'), exits: [['w'], ['e']],
+      room: { type: 'combat', state: 'ACTIVE', payload: { enemies: [{ level: 10 }, { level: 10 }, { level: 12 }] } },
+      battle: { player: { hp: 73, maxHp: 120, energy: 31, maxEnergy: 100, state: 'TURN 6' },
+                enemyStates: [
+                    { name: 'Frost Shambling Terror', hp: 0, maxHp: 210, alive: false },
+                    { name: 'Frost Grave Ghoul', hp: 95, maxHp: 180, alive: true },
+                    { name: 'Frost Wretch', hp: 55, maxHp: 240, alive: true } ],
+                active: 'player' } },
+    { name: 'battle_e_entry', player: mkPlayer('3,2', '2,2'), exits: [['w'], ['e']],
+      room: { type: 'combat', state: 'ACTIVE', payload: { enemies: [{ level: 10 }, { level: 10 }] } },
+      battle: { player: { hp: 91, maxHp: 120, energy: 77, maxEnergy: 100, state: 'BATTLE!' },
+                enemyStates: [
+                    { name: 'Ash Crypt Stalker', hp: 165, maxHp: 165, alive: true },
+                    { name: 'Ash Wretch', hp: 132, maxHp: 198, alive: true } ],
+                active: null } },
+    { name: 'battle_core_boss', player: mkPlayer('1,2', '2,2'), exits: [['w'], ['e']],
+      room: { type: 'core', state: 'ACTIVE', payload: {} },
+      battle: { player: { hp: 132, maxHp: 150, energy: 90, maxEnergy: 100, state: 'BATTLE!' },
+                enemyStates: [
+                    { name: 'World Core Guardian', hp: 1400, maxHp: 1400, alive: true } ],
+                active: 0 } },
 ];
 
 (async () => {
@@ -99,6 +147,7 @@ const CASES = [
         if (c.extraPlayers) eventDoc.players.push(...c.extraPlayers);
         const room = { key: '2,2', ring: 0, occupants: [], payload: {}, ...(c.room || {}) };
         const opts = { exits: exitsForKeys(eventDoc, c.player, c.exits), prefix: '.jk' };
+        if (c.battle) opts.battle = c.battle;
         if (c.board) {
             // fake mechanism board (same IPC shape the real puzzle board uses)
             const { createCanvas } = require('canvas');
