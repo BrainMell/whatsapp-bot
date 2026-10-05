@@ -1039,7 +1039,20 @@ async function mineOre(sock, chatId, senderJid, locationId) {
 
     const locations = craftingSystem.getMiningLocations();
     const miningLevel = economy.getProfessionLevel(senderJid, 'mining');
-    
+    // ⚔️ OWNER FIX (2026-10-05 "energy never gets finished"): the pool scales
+    // to 1000+ (100 + 15/level + 3×MAG) while costs were FLAT (15-60) with a
+    // mining-level discount flooring at 5 — and the 25% recovery roll (8-22)
+    // often EXCEEDED the discounted cost, so endgame mining could never run
+    // the bar dry. Costs (and the display) now stay PROPORTIONAL to the pool,
+    // preserving the original 15/25/40/60-per-100 balance at every level:
+    // a starting pool of 100 pays exactly the old flat 15.
+    const user = economy.getUser(senderJid);
+    const derivedStats = progression.getBaseStats(senderJid, user && user.class);
+    const maxEn = derivedStats.maxEnergy || 100;
+    // the discount shrinks the RATE, never below 5% of the pool — otherwise a
+    // maxed profession pays 5 flat energy (0.5% of an endgame pool) forever
+    const pctCost = (loc) => Math.max(5, Math.round(maxEn * Math.max(5, loc.energyCost - Math.floor(miningLevel / 2)) / 100));
+
     if (!locationId) { 
         let msg = `⛏️ *MINING* • Mining Lv.${miningLevel}\n━━━━━━━━━━━━━━━\n\n`;
         const rankOrder = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS'];
@@ -1049,7 +1062,7 @@ async function mineOre(sock, chatId, senderJid, locationId) {
             const reqRankIdx = rankOrder.indexOf(loc.req.rank);
             const levelReq = loc.req.miningLevel || 1;
             const isLocked = sheet.level < loc.req.level || userRankIdx < reqRankIdx || miningLevel < levelReq;
-            const cost = Math.max(5, loc.energyCost - Math.floor(miningLevel/2));
+            const cost = pctCost(loc);
             if (isLocked) msg += `🔒 *${loc.name}* · Req Lv.${loc.req.level} + ${loc.req.rank}-Rank\n`;
             else msg += `✅ *${loc.name}* \`${loc.id}\` · ⚡ ${cost} Energy\n`;
         });
@@ -1071,17 +1084,9 @@ async function mineOre(sock, chatId, senderJid, locationId) {
         return await sock.sendMessage(chatId, { text: `❌ *LOCATION LOCKED*\n\nYou need to be Lv.${loc.req.level}, ${loc.req.rank}-Rank, and Mining Lv.${miningLevelReq} to enter the ${loc.name}.` });
     }
 
-    const user = economy.getUser(senderJid);
-    // PERSISTENT ENERGY SYSTEM (2026-09-17): mining now drains the SAME
+    // PERSISTENT ENERGY SYSTEM (2026-09-17): mining drains the SAME
     // canonical pool every other RPG system uses (see economy.getPersistentEnergy).
-    // The old code read `user.energy`, which the strict User schema never had,
-    // so it silently reset to the 100 sentinel on every save while the display
-    // used the progression-derived max - the "87/964" inconsistency.
-    const energyCost = Math.max(5, loc.energyCost - Math.floor(miningLevel/2));
-    // Use progression-derived maxEnergy - computed dynamically from level + MAG,
-    // identical to the max duels and adventures show.
-    const derivedStats = progression.getBaseStats(senderJid, user.class);
-    const maxEn = derivedStats.maxEnergy || 100;
+    const energyCost = pctCost(loc);
     const currentEnergy = economy.getPersistentEnergy(senderJid, maxEn);
 
     if (currentEnergy < energyCost) return await sock.sendMessage(chatId, { text: `❌ Not enough energy! Need ${energyCost}, have ${currentEnergy}/${maxEn}. It recharges over time (~6h for a full bar).` });
@@ -1092,7 +1097,9 @@ async function mineOre(sock, chatId, senderJid, locationId) {
     const levelUp = economy.addProfessionXP(senderJid, 'mining', xpGained);
 
     if (Math.random() < 0.25) {
-        const energyRecovered = Math.floor(Math.random() * 15) + 8;
+        // ⚔️ recovery is a fraction of the SPEND now — it can never net-gain
+        // energy (the old flat 8-22 could exceed a discounted 5-cost mine).
+        const energyRecovered = Math.max(1, Math.round(energyCost * 0.25));
         economy.setPersistentEnergy(senderJid, leftAfterMine + energyRecovered, maxEn);
     }
 

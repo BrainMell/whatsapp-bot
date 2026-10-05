@@ -58,6 +58,51 @@ function serializeForPlayer(jid, fn) {
     return Promise.race([run, timeout]);
 }
 
+// ── movement typo matching (owner playtest 2026-10-05: "move lwft") ──
+// The hand-picked alias list (foward/bck/bak…) can never cover every typo.
+// "lwft" slipped past it, never reached this router, and the generic game
+// pipeline answered tictactoe's "No active game in this chat" — the war
+// LOOKED dead to the owner. Near-direction words now resolve by edit
+// distance; ambiguous words (tie between two directions) resolve to nothing.
+// Damerau-Levenshtein (OSA): transpositions cost 1 — "bakc" is THE classic
+// typo shape and plain Levenshtein would score it 2 (over the cap)
+function editDistance(a, b) {
+    const m = a.length, n = b.length;
+    const d = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+    for (let i = 0; i <= m; i++) d[i][0] = i;
+    for (let j = 0; j <= n; j++) d[0][j] = j;
+    for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+            const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+            d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+            if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+                d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+            }
+        }
+    }
+    return d[m][n];
+}
+function fuzzyMoveToken(word) {
+    // returns the matched ALIAS KEY ('left'), never the direction value —
+    // the caller runs it through MOVE_WORDS itself (double-mapping 'w'→'n'
+    // turned "move lwft" into FORWARD once; caught by the QA battery)
+    // tie-break on the RESOLVED direction: 'bakc' hits both 'bak' and 'back'
+    // at distance 1 — same direction 's', so that is NOT a tie. 'wast' hits
+    // west('w') and east('e') — a real tie → unresolved → null.
+    let best = null, bestVal = null, bestDist = Infinity, tie = false;
+    for (const key of Object.keys(MOVE_WORDS)) {
+        if (key.length < 3) continue; // single letters never fuzzy
+        const cap = key.length >= 6 ? 2 : 1;
+        if (Math.abs(key.length - word.length) > cap) continue;
+        const d = editDistance(word, key);
+        if (d > cap) continue;
+        const val = MOVE_WORDS[key];
+        if (d < bestDist) { bestDist = d; best = key; bestVal = val; tie = false; }
+        else if (d === bestDist && val !== bestVal) tie = true;
+    }
+    return tie ? null : best;
+}
+
 function playerOf(eventDoc, jid) {
     return eventDoc.players.find((p) => p.jid === jid);
 }
@@ -259,7 +304,9 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
             }
             return { text: `🕊️ *No war is registering right now.*\nMods raise the call in the GC: \`${prefix} gw start\`. Once a war opens, \`${prefix} gw join\` (or DM me \`join\`) gets you in.` };
         }
-        if (QUIET_ACTION_RE.test(norm)) {
+        // ⚔️ 2026-10-05: "move …" always answers here — never falls through to
+        // the games pipeline (tictactoe's "No active game in this chat").
+        if (QUIET_ACTION_RE.test(norm) || /^move\b/.test(norm)) {
             return { text: `🕯️ *The Ruins stand quiet.* No war is running right now.\n\nWhen one deploys, my DMs become your game screen — your room will show itself the moment the war begins.\nMods start it with \`${prefix} gw start\` - players join with \`${prefix} gw join\`.` };
         }
         return null;
@@ -296,10 +343,24 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
     const touch = () => state.updatePlayer(eventDoc.eventId, senderJid, {}, { lastActionAt: Date.now() });
 
     // ── movement ──
+    let moveToken = null;
     const moveMatch = new RegExp(`^(?:move\\s+)?(${MOVE_TOKEN_RE})$`).exec(norm);
-    if (moveMatch) {
+    if (moveMatch) moveToken = moveMatch[1];
+    // ⚔️ TYPO TOLERANCE v2: fuzzy path fires ONLY after an explicit "move "
+    // intent ("move lwft" → left) so random bare English words (rest/last/
+    // best are one substitution from west/east) can never hijack a DM.
+    if (!moveToken) {
+        const fuzzy = /^move\s+([a-z]{3,})$/.exec(norm);
+        if (fuzzy) moveToken = fuzzyMoveToken(fuzzy[1]);
+    }
+    // "move <garbage>" dies HERE with a real answer — never again falls
+    // through to the generic pipeline and its tictactoe error.
+    if (!moveToken && /^move\b/.test(norm)) {
+        return { text: `🧭 Unknown direction. The Ruins obey:\n🚶 *Move:* \`${prefix} move forward\` · \`${prefix} left\` · \`${prefix} right\` · \`${prefix} back\` (bare \`forward\`/\`left\`… also works)` };
+    }
+    if (moveToken) {
         const topo = state.topologyOf(eventDoc);
-        const dir = MOVE_WORDS[moveMatch[1]];
+        const dir = MOVE_WORDS[moveToken];
         // Ruins rule: cannot move while the room's encounter is unresolved
         const room = roomOf(eventDoc, player);
         if (room && room.state === 'ACTIVE' && ['combat', 'puzzle', 'coop', 'core'].includes(room.type)) {
@@ -514,7 +575,28 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
             });
             await rooms.leaveRoom(eventDoc.eventId, senderJid, player.roomId);
             feed.queue(eventDoc.eventId, 'normal', `🏃 ${player.name} withdrew from a ${room ? require('./encounters').roomFlavor(room) : 'contest'} — the spoils stay with the Ruins.`);
-            return { text: '🏃 You retreat to your previous room. What was here stays here, unclaimed.' };
+            // ⚔️ OWNER FIX (playtest 2026-10-05: "after you fail no generated
+            // encounter image of you in the last room with the map, no
+            // nothing"): retreating used to send TEXT ONLY — no scene of the
+            // room you fall back into, no return map — so every forced-room
+            // type (combat/puzzle/coop/core) felt like the game died on flee.
+            // Replay the standard room entry (map → scene → captions) after
+            // the retreat line, exactly like a move does.
+            try {
+                await sock.sendMessage(chatId, { text: BOT_MARKER + '🏃 You retreat to your previous room. What was here stays here, unclaimed.' });
+            } catch (e) { /* best-effort */ }
+            try {
+                const freshAll = await state.getEvent(eventDoc.eventId, { fresh: true });
+                const meFresh = playerOf(freshAll, senderJid) || player;
+                const destRoom = roomOf(freshAll, meFresh);
+                if (destRoom) {
+                    const ctxDoc = await state.getMoveContext(eventDoc.eventId, meFresh.roomId);
+                    if (ctxDoc) await presentRoom(sock, chatId, BOT_MARKER, ctxDoc, meFresh, destRoom, { prefix });
+                }
+            } catch (e) {
+                console.error('[RuinsNav] post-flee presentation failed (non-fatal):', e?.message);
+            }
+            return {};
         }
         return { text: 'There is nothing here to flee from.' };
     }
@@ -718,4 +800,4 @@ async function handleGroupWarVerb(sock, chatId, senderJid, senderName, norm, pre
     }
 }
 
-module.exports = { handleDM, getEventForPlayer, displayName, navCardFor, returnMapFor, computeExits, presentRoom, handleGroupWarVerb, mapCaption };
+module.exports = { handleDM, getEventForPlayer, displayName, navCardFor, returnMapFor, computeExits, presentRoom, handleGroupWarVerb, mapCaption, fuzzyMoveToken };
