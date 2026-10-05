@@ -324,30 +324,39 @@ function shadowDepthT(groundY) {
 }
 function drawContactShadow(ctx, cx, groundY, w, h, alpha = 1) {
     const t = shadowDepthT(groundY);
-    const rx = w * (0.30 + 0.10 * t);
-    const ry = Math.max(6, h * (0.034 + 0.020 * t));
+    // 🔄 RECALIBRATED (owner playtest 2026-10-05: "the shadows are like tiny
+    // specs now"): these multipliers were originally tuned back when w was
+    // the FULL sprite content width — then ruins_fixes #6 swapped w down to
+    // the much narrower foot band WITHOUT retuning, so shadows collapsed to
+    // specks (~40×21px under a 210px-tall champion, with the gradient falloff
+    // hiding even that). Re-sized so the CONTACT ellipse actually spans the
+    // feet (≈0.9–1.1× foot width) and the penumbra breathes ≈1.5–1.9× beyond
+    // it — still depth-aware, still melting into the wall-base shading.
+    const rx = w * (0.55 + 0.15 * t);
+    const ry = Math.max(9, h * (0.055 + 0.030 * t));
     // wall torches sit BEHIND the actors: the deeper the stance, the more
     // the shadow spills toward the viewer instead of spreading sideways
     const fwd = 2 + 6 * (1 - t);
-    const a = (0.26 + 0.22 * t) * alpha;
+    const a = (0.30 + 0.22 * t) * alpha;
     // penumbra — broad, faint
     ctx.save();
     ctx.translate(cx, groundY + fwd);
     ctx.scale(rx * 1.35, ry * 1.7);
     const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
-    g.addColorStop(0, `rgba(8,6,4,${(a * 0.5).toFixed(3)})`);
-    g.addColorStop(0.7, `rgba(8,6,4,${(a * 0.22).toFixed(3)})`);
+    g.addColorStop(0, `rgba(8,6,4,${(a * 0.55).toFixed(3)})`);
+    g.addColorStop(0.72, `rgba(8,6,4,${(a * 0.26).toFixed(3)})`);
     g.addColorStop(1, 'rgba(8,6,4,0)');
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
-    // contact — tight, darkest
+    // contact — tight, darkest (gentler falloff so the dark core isn't a
+    // fraction of an already-tight ellipse)
     ctx.save();
     ctx.translate(cx, groundY + 2);
     ctx.scale(rx * 0.78, ry * 0.95);
     const g2 = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
     g2.addColorStop(0, `rgba(6,5,3,${a.toFixed(3)})`);
-    g2.addColorStop(0.75, `rgba(6,5,3,${(a * 0.55).toFixed(3)})`);
+    g2.addColorStop(0.78, `rgba(6,5,3,${(a * 0.55).toFixed(3)})`);
     g2.addColorStop(1, 'rgba(6,5,3,0)');
     ctx.fillStyle = g2;
     ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2); ctx.fill();
@@ -373,9 +382,14 @@ async function drawGroundedSprite(ctx, dirs, file, cx, groundY, ch, { shadow = t
         // 🔄 the shadow hugs the FEET, not the full sprite width (owner
         // ruins_fixes.txt #6) — and its centre follows the foot band's
         // centre (mirrored when the sprite flips), so it always sits under
-        // what actually touches the floor.
-        const footW = (box.feetW ?? box.w) * scale;
-        const footOff = ((box.feetX ?? (box.x + (box.w - (box.feetW ?? box.w)) / 2)) + (box.feetW ?? box.w) / 2 - (box.x + box.w / 2)) * scale;
+        // what actually touches the floor. FLOORED at half the content
+        // width (owner playtest 2026-10-05: shadows read as "tiny specs"):
+        // a wispy tail or a single claw tip at the bottom of a sprite must
+        // never collapse the contact shadow to nothing.
+        const feetW = box.feetW ?? box.w;
+        const feetCx = (box.feetX ?? (box.x + (box.w - feetW) / 2)) + feetW / 2;
+        const footW = Math.max(feetW, box.w * 0.5) * scale;
+        const footOff = (feetCx - (box.x + box.w / 2)) * scale;
         drawContactShadow(ctx, flip ? cx - footOff : cx + footOff, groundY, footW, ch, alpha);
     }
     ctx.save();
