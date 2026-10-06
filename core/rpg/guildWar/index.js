@@ -400,7 +400,9 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
                 jid: senderJid, name: senderName, guildId: ug, guildName: g?.name || ug,
             });
             if (!res) return sock.sendMessage(chatId, { text: '✅ You are already registered.' });
-            return sock.sendMessage(chatId, { text: `✅ ${senderName} of *${g?.name || ug}* joins the war! (${pending.players.length} registered)\nWait for deployment, then act in my DMs.` });
+            // count from the UPDATED doc — registerPlayer returns findOneAndUpdate({new:true}),
+            // the `pending` snapshot was fetched BEFORE this join, so the first joiner showed "(0 registered)"
+            return sock.sendMessage(chatId, { text: `✅ ${senderName} of *${g?.name || ug}* joins the war! (${res.players.length} registered)\nWait for deployment, then act in my DMs.` });
         }
 
         case 'forcestart': {
