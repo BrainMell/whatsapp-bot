@@ -12,6 +12,7 @@ function getSettlementModel() {
 
 // NEW: Database Imports
 const mongoose = require('mongoose');
+const { isDeepStrictEqual } = require('util');
 const User = require('../models/User');
 const connectDB = require('../../db');
 // 💡 FIX 2026-08-06: Removed self-require `const economy = require('./economy')`.
@@ -119,6 +120,8 @@ async function loadEconomy() {
       }
 
       economyData.set(user.userId, user);
+      // stale-guard baseline: this boot snapshot is what OUR process knows
+      stampSyncMeta(user.userId, user);
     }
     console.log(`✅ Loaded ${users.length} users from MongoDB`);
     // 💡 FIX 2026-08-31: warm the market-cap cache at startup. addMoney() gates
@@ -139,6 +142,68 @@ async function loadEconomy() {
 // Deprecated: No longer writes to file. Used as a placeholder for old calls.
 function saveEconomy() {
     // No-op: We now save specific users asynchronously
+}
+
+// ── CROSS-INSTANCE STALE-WRITE GUARD (owner report 2026-10-05) ──────────
+// Two bot processes share ONE MongoDB (Box1: jake + subaru). Each loads a
+// full in-memory copy of every user at boot and flushes WHOLE documents
+// ({$set: data}) on a 500ms debounce — so a process holding a stale
+// snapshot silently rewrote a player back to older quests, money and
+// actions ("things reverting"). Owner rule: ALWAYS KEEP THE NEWEST DATA.
+// Mechanism: every cache entry carries a sync stamp (the DB updatedAt it
+// was loaded from) + a JSON snapshot of that loaded doc, kept in a SIDE
+// TABLE so user objects never grow keys that could leak into DM output.
+// saveUser() compares the LIVE doc's updatedAt against our stamp:
+//   • live.updatedAt <= stamp → nobody wrote since we synced → our copy IS
+//     the newest → write wholesale (previous behavior, fast path).
+//   • live.updatedAt >  stamp → a sibling wrote NEWER data while our copy
+//     aged → THREE-WAY MERGE: the live DB doc is the base, then only the
+//     fields this process actually changed since its snapshot are
+//     overlaid. Untouched fields keep the sibling's newer values.
+// updatedAt is set explicitly on every write (single-host clocks match),
+// so sibling writes are always visible to this compare.
+const syncMeta = new Map(); // cacheKey -> { syncedAt: Date|null, baseJson: string }
+const META_STRIP = ['_id', '__v', 'createdAt', 'updatedAt'];
+function stripMeta(doc) {
+    const out = {};
+    for (const k of Object.keys(doc)) {
+        if (!META_STRIP.includes(k)) out[k] = doc[k];
+    }
+    return out;
+}
+function stampSyncMeta(cacheKey, doc) {
+    if (!cacheKey) return;
+    try {
+        syncMeta.set(cacheKey, {
+            syncedAt: (doc && doc.updatedAt instanceof Date) ? doc.updatedAt : null,
+            baseJson: JSON.stringify(doc ? stripMeta(doc) : {}),
+        });
+    } catch (e) {
+        // unserializable cache object (circular ref) → no baseline → guard
+        // stays off for this user and saveUser behaves exactly as before
+        syncMeta.delete(cacheKey);
+    }
+}
+function jsonNorm(v) {
+    if (v === undefined) return null;
+    try { return JSON.parse(JSON.stringify(v)); } catch (e) { return String(v); }
+}
+// theirs (live DB doc) is the base — it holds the newest data by
+// definition; overlay only what WE changed since the shared sync point.
+function threeWayMerge(ours, base, theirs) {
+    const merged = {};
+    for (const k of Object.keys(theirs)) {
+        if (META_STRIP.includes(k)) continue;
+        merged[k] = theirs[k];
+    }
+    for (const k of Object.keys(ours)) {
+        if (META_STRIP.includes(k)) continue;
+        if (!Object.prototype.hasOwnProperty.call(base, k)) { merged[k] = ours[k]; continue; }
+        let same = false;
+        try { same = isDeepStrictEqual(jsonNorm(ours[k]), base[k] === undefined ? null : base[k]); } catch (e) { same = false; }
+        if (!same) merged[k] = ours[k]; // genuinely changed by us → ours wins
+    }
+    return merged;
 }
 
 // NEW: Save specific user to MongoDB (Background Sync)
@@ -171,11 +236,45 @@ async function saveUser(userId) {
         // for the same player, splitting their wallet across two docs
         // depending on which bot/prefix they typed at.
         const canonicalId = (typeof data.userId === 'string' && data.userId) ? data.userId : resolvedId;
-        await User.findOneAndUpdate(
+
+        // ── STALE-WRITE GUARD (see block comment above) ──
+        let payload = stripMeta(data);
+        let merged = false;
+        const meta = syncMeta.get(resolvedId) || syncMeta.get(canonicalId) || null;
+        if (meta && meta.syncedAt) {
+            const live = await User.findOne({ userId: canonicalId }).lean();
+            if (live && live.updatedAt instanceof Date && live.updatedAt.getTime() > meta.syncedAt.getTime()) {
+                let base = {};
+                try { base = JSON.parse(meta.baseJson || '{}'); } catch (e) { base = {}; }
+                payload = threeWayMerge(payload, base, live);
+                merged = true;
+                const oursKept = Object.keys(payload).filter((k) => !(k in live) || !isDeepStrictEqual(jsonNorm(live[k] === undefined ? null : live[k]), payload[k] === undefined ? null : payload[k]));
+                console.log(`🔀 [economy] stale-guard merge for ${canonicalId}: sibling wrote newer doc (${live.updatedAt.toISOString()} > sync ${meta.syncedAt.toISOString()}) — DB kept as base, our changed fields overlay: [${oursKept.slice(0, 12).join(', ')}${oursKept.length > 12 ? ', …' : ''}]`);
+            }
+        }
+
+        const now = new Date();
+        const after = await User.findOneAndUpdate(
             { userId: canonicalId },
-            { $set: data },
+            { $set: { ...payload, updatedAt: now } },
             { upsert: true, returnDocument: 'after' }
         );
+        // our next save's baseline = the doc AS WRITTEN, so a later sibling
+        // write is detected against THIS point and our own writes never
+        // register as "stale" to ourselves
+        stampSyncMeta(resolvedId, { ...payload, updatedAt: (after && after.updatedAt instanceof Date) ? after.updatedAt : now });
+        if (canonicalId !== resolvedId) stampSyncMeta(canonicalId, { ...payload, updatedAt: (after && after.updatedAt instanceof Date) ? after.updatedAt : now });
+
+        if (merged) {
+            // refresh the cache IN PLACE (object identity preserved —
+            // in-flight handlers keep their references) so subsequent
+            // reads and the next save start from the merged state
+            for (const k of Object.keys(data)) {
+                if (k in payload || k === '_id' || k === '__v') continue;
+                delete data[k];
+            }
+            Object.assign(data, payload);
+        }
     } catch (err) {
         console.error(`❌ Failed to save user ${resolvedId}:`, err.message);
     }
@@ -200,10 +299,12 @@ async function reloadUserFromDB(userId) {
         if (!dbUser) return false;
         const userData = dbUser.toObject();
         economyData.set(resolvedId, userData);
+        stampSyncMeta(resolvedId, userData);
         // 💡 Also alias under the account's own DB key so later lookups in
         // either format hit the same cached object (same as syncUserFromDB).
         if (userData.userId && userData.userId !== resolvedId) {
             economyData.set(userData.userId, userData);
+            stampSyncMeta(userData.userId, userData);
         }
         console.log(`🔄 Reloaded user ${resolvedId} from DB (statPoints: ${userData?.progression?.statPoints})`);
         return true;
@@ -354,6 +455,7 @@ function registerUser(userId, nickname) {
   };
   
   economyData.set(resolvedId, userData);
+  stampSyncMeta(resolvedId, userData);
   
   // log the bonus
   logTransaction(resolvedId, "Registration Bonus", STARTING_BALANCE, userData.wallet);
@@ -574,6 +676,7 @@ function getOrCreateUser(userId, defaultNickname = "Adventurer") {
       }
     };
     economyData.set(resolvedId, newUser);
+    stampSyncMeta(resolvedId, newUser);
     scheduleSave(resolvedId);
   }
   const user = economyData.get(resolvedId);
@@ -2178,9 +2281,11 @@ async function syncUserFromDB(userId) {
       // (which might be a different format). This ensures future lookups
       // with either JID format will find the user in cache.
       economyData.set(user.userId, user);
+      stampSyncMeta(user.userId, user);
       // Also store under the resolved ID as an alias
       if (user.userId !== resolvedId) {
         economyData.set(resolvedId, user);
+        stampSyncMeta(resolvedId, user);
       }
     }
   } catch (err) {

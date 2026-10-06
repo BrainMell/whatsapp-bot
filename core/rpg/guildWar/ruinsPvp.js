@@ -38,8 +38,12 @@ async function challenge(eventDoc, challenger, targetJid) {
     }
 
     const challengeKey = `${eventDoc.eventId}:${challenger.roomId}:${targetJid}`;
+    // ⚔️ eventId MUST ride the record — resolveTimeout (the sweeper hook)
+    // reads c.eventId; the old record omitted it, so every expired challenge
+    // resolved against eventId=undefined and silently NO-OP'd (measured in
+    // the multiplayer sim: timeout concede never fired, ever).
     const rec = {
-        key: challengeKey, challengerJid: challenger.jid, challengedJid: targetJid,
+        key: challengeKey, eventId: eventDoc.eventId, challengerJid: challenger.jid, challengedJid: targetJid,
         roomKey: challenger.roomId, expiresAt: Date.now() + CFG.PVP.CHALLENGE_WINDOW_MS,
     };
     openChallenges.set(challengeKey, rec);
@@ -83,6 +87,11 @@ async function accept(eventDoc, challenged) {
     }
     const challenger = eventDoc.players.find((p) => p.jid === c.challengerJid);
     if (!challenger) return { ok: false, text: '❌ The challenger has moved on.' };
+    // ⚔️ MULTIPLAYER BRIEF §5: a duel needs BOTH blades in the chamber — an
+    // accept against a challenger who already walked out dissolves cleanly.
+    if (challenger.roomId !== challenged.roomId) {
+        return { ok: false, text: '❌ The challenger is no longer in this chamber — the challenge has dissolved.' };
+    }
     return { ok: true, challenger, text: null };
 }
 
@@ -93,6 +102,21 @@ async function resolveTimeout(c) {
     if (!ev || ev.state !== 'ACTIVE') return;
     const challenged = ev.players.find((p) => p.jid === c.challengedJid);
     if (!challenged || challenged.status !== 'active') return;
+    // ⚔️ MULTIPLAYER BRIEF §5 (escape hatch): a player who MOVED out of the
+    // chamber before the window lapsed has successfully escaped — the duel
+    // never initiates, the challenge is VOID (no concede, no retreat, no
+    // protection bump). Only a challenged player still standing in the
+    // chamber when the window closes concedes by silence. The issuer leaving
+    // dissolves the duel just the same.
+    if (challenged.roomId !== c.roomKey) {
+        feed.queue(ev.eventId, 'minor', `💨 ${challenged.name} slipped away before the duel could begin — the challenge dies unanswered.`);
+        return;
+    }
+    const challenger = ev.players.find((p) => p.jid === c.challengerJid);
+    if (!challenger || challenger.status !== 'active' || challenger.roomId !== c.roomKey) {
+        feed.queue(ev.eventId, 'minor', `💨 The challenge lapses — its issuer is no longer in the chamber.`);
+        return;
+    }
     await concede(ev, challenged, 'ignored a challenge');
 }
 
@@ -139,6 +163,11 @@ const CONCEDE_LINES = {
 
 // the prize stays with the ROOM for the next arrival; loser retreats
 async function forfeitToRoom(eventDoc, loser, why, { sock = null, chatId = null } = {}) {
+    // ⚔️ occupancy sync (multiplayer sim finding): the retreat is a REAL
+    // move — pull from the current room's occupants, push into the retreat
+    // room. The old code rewrote roomId only, leaving the loser listed in
+    // BOTH rooms' occupants arrays.
+    await rooms.enterRoom(eventDoc.eventId, loser.jid, loser.roomId, loser.prevRoomId || loser.roomId);
     await state.updatePlayer(eventDoc.eventId, loser.jid, {}, {
         roomId: loser.prevRoomId,
         protectedUntil: Date.now() + CFG.PVP.PROTECT_AFTER_LOSS_MS,
@@ -182,7 +211,8 @@ async function settle(eventDocOrId, winnerJid, loserJid) {
         await state.pushLog(eventDoc.eventId, 'relic-theft', winnerJid, `claimed ${claimed.map((r) => r.name).join(', ')} from ${loserJid}`);
     }
 
-    // loser: retreat + protection
+    // loser: retreat + protection — occupancy synced (see forfeitToRoom)
+    await rooms.enterRoom(eventDoc.eventId, loserJid, loser.roomId, loser.prevRoomId || loser.roomId);
     await state.updatePlayer(eventDoc.eventId, loserJid, {}, {
         roomId: loser.prevRoomId,
         protectedUntil: Date.now() + CFG.PVP.PROTECT_AFTER_LOSS_MS,
