@@ -682,7 +682,8 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         // POV scene (them as champion, the rival across).
         try {
             const roomScene = require('./roomScene');
-            const duelRoom = room || roomOf(eventDoc, player);
+            // ⚠️ scope: `room` is declared LATER in this function (TDZ) — resolve fresh here
+            const duelRoom = roomOf(eventDoc, player) || eventDoc.rooms?.find((r) => r.key === player.roomId);
             const firstMover = begun.duel.players[begun.duel.turn]?.name || '?';
             for (const jid of [res.challenger.jid, senderJid]) {
                 const row = (eventDoc.players || []).find((p) => p.jid === jid);

@@ -182,16 +182,10 @@ async function freshEvent(host) {
     const evA = await freshEvent('arrqa@g.us');
     const docA = await state.getEvent(evA.eventId, { fresh: true });
     const roomA = docA.players.find((p) => p.jid === 'pp1@s.whatsapp.net').roomId;
-    await state.updatePlayer(evA.eventId, 'pp1@s.whatsapp.net', {}, { roomId: roomA, prevRoomId: roomA, protectedUntil: 0 });
-    await GuildWarEvent.updateOne({ eventId: evA.eventId }, [
-        { $set: { rooms: { $map: { input: '$rooms', as: 'r', in: {
-            $mergeObjects: ['$$r', { occupants: { $cond: [
-                { $eq: ['$$r.key', roomA] },
-                { $setUnion: [{ $ifNull: ['$$r.occupants', []] }, ['pp1@s.whatsapp.net']] },
-                { $setDifference: [{ $ifNull: ['$$r.occupants', []] }, ['pp1@s.whatsapp.net']] },
-            ] } }] },
-        } } } },
-    ]);
+    const rooms = require('../core/rpg/guildWar/rooms');
+    // seat pp1 in roomA via the REAL enterRoom (fromKey=null → pure push branch)
+    await state.updatePlayer(evA.eventId, 'pp1@s.whatsapp.net', {}, { roomId: roomA, prevRoomId: docA.players.find((p) => p.jid === 'pp1@s.whatsapp.net').spawnRoomId || roomA, protectedUntil: 0 });
+    await rooms.enterRoom(evA.eventId, 'pp1@s.whatsapp.net', null, roomA);
     const docA2 = await state.getEvent(evA.eventId, { fresh: true });
     const roomA2 = docA2.rooms.find((r) => r.key === roomA);
     const logA = [];
