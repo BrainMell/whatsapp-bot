@@ -13,17 +13,19 @@ const path = require('path');
 const { createCanvas, loadImage } = require('canvas');
 const roomScene = require('../core/rpg/guildWar/roomScene');
 
-const OUT = '/home/z/my-project/download/gw_qa_1005d';
+const OUT = process.env.GW_QA_OUT || '/home/z/my-project/download/gw_qa_1005d';
 fs.mkdirSync(OUT, { recursive: true });
 
 const results = [];
 const check = (name, ok, detail) => { results.push({ name, ok, detail }); console.log(`${ok ? 'PASS ✓' : 'FAIL ✗'}  ${name}${detail ? '  — ' + detail : ''}`); };
 
-const SRC = fs.readFileSync('/home/z/my-project/repo/core/rpg/guildWar/roomScene.js', 'utf8');
+// repo-relative so the suite runs on the boxes too (owner-rule: QA is portable)
+const REPO = path.join(__dirname, '..');
+const SRC = fs.readFileSync(path.join(REPO, 'core/rpg/guildWar/roomScene.js'), 'utf8');
 
 // ── replicate contentBox foot-band measurement on a real sprite ──
-const CHAR_DIR = '/home/z/my-project/repo/core/rpgasset/characters/clean';
-const PROP_DIR = '/home/z/my-project/repo/core/rpgasset/guildwar/ruins/props';
+const CHAR_DIR = path.join(REPO, 'core/rpgasset/characters/clean');
+const PROP_DIR = path.join(REPO, 'core/rpgasset/guildwar/ruins/props');
 
 async function measure(dir, file) {
     const img = await loadImage(path.join(dir, file));
