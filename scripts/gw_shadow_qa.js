@@ -10,8 +10,8 @@
 // Verifies: source retune present + measured shadow dims + render proofs.
 const fs = require('fs');
 const path = require('path');
-const { createCanvas, loadImage } = require('/home/z/my-project/repo/node_modules/canvas');
-const roomScene = require('/home/z/my-project/repo/core/rpg/guildWar/roomScene');
+const { createCanvas, loadImage } = require('canvas');
+const roomScene = require('../core/rpg/guildWar/roomScene');
 
 const OUT = '/home/z/my-project/download/gw_qa_1005d';
 fs.mkdirSync(OUT, { recursive: true });

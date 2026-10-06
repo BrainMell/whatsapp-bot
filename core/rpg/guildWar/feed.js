@@ -441,4 +441,4 @@ async function tickAll(sock, BOT_MARKER, actives = null) {
 
 function dispose(eventId) { feedStates.delete(eventId); }
 
-module.exports = { queue, tickAll, flush, dispose, registerSock, computeScoreboard, buildDigest, st, isMemberOf, reachableDests, _states: feedStates };
+module.exports = { queue, tickAll, flush, postScoreboard, dispose, registerSock, computeScoreboard, buildDigest, st, isMemberOf, reachableDests, _states: feedStates };
