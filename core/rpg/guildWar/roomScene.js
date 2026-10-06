@@ -489,17 +489,32 @@ function planFor(eventDoc, player, room, exits) {
     const clampX = (x) => Math.max(90, Math.min(1110, x));
     const clampY = (y) => Math.max(560, Math.min(838, y));
     for (let i = 0; i < mateRows.length; i++) {
-        const mx = clampX(spot.x + towardCentre * (95 + i * 92));
-        const my = clampY(spot.y + (i === 0 ? 6 : -6));
-        // mates face the same way as the champion (same doorway-facing rule)
-        plan.mates.push({ file: resolvePlayerSpriteFile(mateRows[i]), x: mx, y: my, h: Math.round(perspH(my) * 0.92), name: mateRows[i].name, flip: plan.playerSpot.flip });
+        // spacing 130/110: humanoid sprites draw ~107px wide at mate depth,
+        // so the old 95px pitch made "beside" players overlap into a blob
+        const mx = clampX(spot.x + towardCentre * (130 + i * 110));
+        // "beside" = the champion's own depth (spot.y is a valid floor
+        // position by definition, so no clamp — the old clampY floor
+        // teleported a back-arch champion's mates 158px nearer the camera,
+        // which read as "some characters are larger than others")
+        const my = spot.y + (i === 0 ? 6 : -6);
+        // OWNER FIX 2026-10-05: every humanoid obeys ONE size law — the
+        // perspective height at their own ground line (same as the
+        // champion). The old ×0.92/×0.82 fudges stacked on top of the
+        // perspective curve and made same-depth players look mis-sized.
+        plan.mates.push({ file: resolvePlayerSpriteFile(mateRows[i]), x: mx, y: my, h: Math.round(perspH(my)), name: mateRows[i].name, flip: plan.playerSpot.flip });
     }
     for (let i = 0; i < rivalRows.length; i++) {
-        const rx = clampX(1200 - spot.x + (i === 0 ? 0 : (towardCentre * 80)));
+        let rx = clampX(1200 - spot.x + (i === 0 ? 0 : (towardCentre * 80)));
+        // a champion entering from the back arch (n) or the front (s) sits
+        // near x=600, so the mirrored "across" lane lands within 8-48px of
+        // their own lane and everyone stacks vertically. Enforce a minimum
+        // lane gap: shove the rival clear to the opposite side of the
+        // champion from the mates → champion centre, mate right, rival left.
+        if (Math.abs(rx - spot.x) < 140) rx = clampX(spot.x - towardCentre * 160);
         const ry = clampY(spot.y - 92 - i * 34);
         plan.rivals.push({
             file: resolvePlayerSpriteFile(rivalRows[i]), x: rx, y: ry,
-            h: Math.round(perspH(ry) * 0.82), name: rivalRows[i].name,
+            h: Math.round(perspH(ry)), name: rivalRows[i].name,
             // champion PNGs read slightly RIGHT natively → a rival standing
             // RIGHT of the champion mirrors to face LEFT toward them
             flip: rx > spot.x,

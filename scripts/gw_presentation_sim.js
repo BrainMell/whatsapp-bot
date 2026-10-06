@@ -288,6 +288,11 @@ async function s5_teleport() {
     const moved = playerOf(doc, me.jid);
     check('moved away from anchor', moved.roomId !== moved.markedRoom, `${moved.roomId} vs ${moved.markedRoom}`);
     await state.updatePlayer(doc.eventId, me.jid, {}, { lastMoveAt: 0 });
+    // 🤝 co-op era (2026-10-05): the walk may have auto-started a REAL room
+    // fight (flee sessions are cleaned properly now, so nothing blocks the
+    // start). §16 teleport must refuse a live fight — that's separately
+    // checked below — so settle any live session before testing the anchor.
+    require('../core/rpg/guildAdventure').abortRuinsSession('pp0@s.whatsapp.net');
     sock = mockSock();
     res = await dm('teleport', sock);
     doc = await state.getEvent(doc.eventId, { fresh: true });

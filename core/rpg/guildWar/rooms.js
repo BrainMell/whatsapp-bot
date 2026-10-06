@@ -196,10 +196,13 @@ async function resetPuzzleAttempts(eventId, roomKey) {
 
 // ── ⏳ FINALE (owner 2026-10-05 23:09Z): the war timer ran out — the war
 // does NOT end. FOUR WARDEN bosses rise "around the map" and the war only
-// concludes when all four fall. Room selection is farthest-point sampling
-// (each new warden maximizes the minimum Manhattan distance to the ones
-// already placed), so the wardens genuinely spread across the four quarters
-// of the ruins instead of clustering. Each warden room:
+// concludes when all four fall. Room selection SCATTERS like the current
+// (secret-room) bosses do — random mid-map rooms, organically spread — but
+// never pinned to the border corners the way the old farthest-point sampler
+// did (owner 2026-10-06 01:07Z: "shouldn't be at the 4 edges, scattered
+// around like the current boss"). Eligibility is tiered, relaxing only when
+// a small map forces it, and a minimum pairwise separation keeps them
+// from clustering. Each warden room:
 //   • type 'finale' + payload {finaleBoss, wardenIndex, wardenName, enemies, boss, theme}
 //   • revealed on EVERY active champion's map (fog push) — hunting them is
 //     the whole point of the phase
@@ -216,26 +219,50 @@ async function spawnFinaleBosses(eventDoc) {
     const cands = eventDoc.rooms.filter((r) => r.type !== 'core' && !spawnSet.has(r.key));
     if (!cands.length) return { ok: false, reason: 'no-candidate-rooms' };
 
-    // farthest-point sampling by Manhattan distance
-    const [cx, cy] = [eventDoc.side / 2, eventDoc.side / 2];
-    const dist2 = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
-    let picked = [];
-    // seed with the candidate farthest from the map centre
-    let first = cands[0], firstD = -1;
-    for (const r of cands) {
-        const d = Math.abs(r.x - cx) + Math.abs(r.y - cy);
-        if (d > firstD) { firstD = d; first = r; }
-    }
-    picked.push(first);
-    while (picked.length < Math.min(CFG.FINALE.BOSS_COUNT, cands.length)) {
-        let best = null, bestD = -1;
-        for (const r of cands) {
-            if (picked.includes(r)) continue;
-            const d = Math.min(...picked.map((p) => dist2(p, r)));
-            if (d > bestD) { bestD = d; best = r; }
+    // scatter sampling (owner fix 01:07Z — see block comment above):
+    //   T0 interior rooms ≥2 steps from every landing hall
+    //   T1 interior rooms (warden may sit next to a landing hall)
+    //   T2 anywhere except core + landing halls (tiny maps only)
+    // The border ring is excluded in T0/T1 so wardens never hug the map
+    // edges; the pairwise Manhattan separation starts at ≈30% of the map
+    // side and relaxes until the quota fills. Random shuffle = the organic
+    // "like the current boss" feel instead of deterministic corners.
+    const side = eventDoc.side;
+    const last = side - 1;
+    const mdist = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+    const spawnRooms = (eventDoc.players || [])
+        .map((p) => eventDoc.rooms.find((r) => r.key === p.spawnRoomId))
+        .filter(Boolean);
+    const interior = (r) => r.x > 0 && r.y > 0 && r.x < last && r.y < last;
+    const spawnDist = (r) => (spawnRooms.length ? Math.min(...spawnRooms.map((s) => mdist(s, r))) : 99);
+    const tiers = [
+        (r) => interior(r) && spawnDist(r) >= 2,
+        interior,
+        () => true,
+    ];
+    const want = Math.min(CFG.FINALE.BOSS_COUNT, cands.length);
+    const shuffle = (arr) => {
+        const a = arr.slice();
+        for (let i = a.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [a[i], a[j]] = [a[j], a[i]];
         }
-        if (!best) break;
-        picked.push(best);
+        return a;
+    };
+    let picked = [];
+    outer: for (const tier of tiers) {
+        for (let sep = Math.max(2, Math.round(side * 0.3)); sep >= 1; sep--) {
+            picked = [];
+            for (const r of shuffle(cands.filter(tier))) {
+                if (picked.every((p) => mdist(p, r) >= sep)) picked.push(r);
+                if (picked.length === want) break outer;
+            }
+        }
+    }
+    // absolute fallback: top up from any untouched candidate so the finale
+    // can never fail to place its wardens
+    if (picked.length < want) {
+        picked = picked.concat(cands.filter((r) => !picked.includes(r)).slice(0, want - picked.length));
     }
 
     const bosses = [];

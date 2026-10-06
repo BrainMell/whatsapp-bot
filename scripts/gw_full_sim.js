@@ -305,6 +305,17 @@ async function scenarioDuo() {
     const bosses = (finDoc && finDoc.finale && finDoc.finale.bosses) || [];
     rep('D', 'timer expiry → FINALE with 4 wardens placed around the map', bosses.length === 4, bosses.map((b) => `${b.name}@${b.key}`).join(', '));
     if (!finDoc) { await cleanup([doc.eventId], roster.map((r) => r.jid)); return; }
+    // owner 01:07Z: wardens scatter like the current bosses — never on the border ring
+    const wxyD = bosses.map((b) => b.key.split(',').map(Number));
+    const lastD = finDoc.side - 1;
+    const borderHitsD = wxyD.filter(([x, y]) => x === 0 || y === 0 || x === lastD || y === lastD).length;
+    rep('D', 'wardens scattered mid-map — none on the border ring', bosses.length === 4 && borderHitsD === 0, `border hits=${borderHitsD} at side=${finDoc.side}`);
+    let minSepD = 99;
+    for (let i = 0; i < wxyD.length; i++) for (let j = i + 1; j < wxyD.length; j++) {
+        const sep = Math.abs(wxyD[i][0] - wxyD[j][0]) + Math.abs(wxyD[i][1] - wxyD[j][1]);
+        if (sep < minSepD) minSepD = sep;
+    }
+    rep('D', 'wardens keep a healthy distance apart (no clustering)', wxyD.length < 2 || minSepD >= 2, `min pairwise sep=${minSepD}`);
     const discovered = finDoc.players.filter((p) => bosses.every((b) => (p.discovered || []).includes(b.key))).length;
     rep('D', 'warden chambers revealed on champions\' maps', discovered >= 1, `${discovered}/2 champions see all 4 markers`);
     const dFeed = feedTexts(doc.eventId).join(' | ');
@@ -436,6 +447,20 @@ async function scenarioBig() {
     const bosses = (finDoc && finDoc.finale && finDoc.finale.bosses) || [];
     rep('X', 'timer expiry → 4 wardens rise around the 10-player map', bosses.length === 4, bosses.map((b) => `${b.name}@${b.key}`).join(', '));
     if (!finDoc) { await cleanup([doc.eventId], roster.map((r) => r.jid)); return; }
+    // owner 01:07Z: same scatter invariants on the big map
+    const wxyX = bosses.map((b) => b.key.split(',').map(Number));
+    const lastX = finDoc.side - 1;
+    const borderHitsX = wxyX.filter(([x, y]) => x === 0 || y === 0 || x === lastX || y === lastX).length;
+    rep('X', 'wardens scattered mid-map — none on the border ring', bosses.length === 4 && borderHitsX === 0, `border hits=${borderHitsX} at side=${finDoc.side}`);
+    let minSepX = 99;
+    for (let i = 0; i < wxyX.length; i++) for (let j = i + 1; j < wxyX.length; j++) {
+        const sep = Math.abs(wxyX[i][0] - wxyX[j][0]) + Math.abs(wxyX[i][1] - wxyX[j][1]);
+        if (sep < minSepX) minSepX = sep;
+    }
+    rep('X', 'wardens keep a healthy distance apart (no clustering)', wxyX.length < 2 || minSepX >= 2, `min pairwise sep=${minSepX}`);
+    const spawnKeysX = new Set(finDoc.players.map((p) => p.spawnRoomId).filter(Boolean));
+    const onSpawnX = bosses.filter((b) => spawnKeysX.has(b.key)).length;
+    rep('X', 'no warden camps a landing hall', onSpawnX === 0, `spawn-hall hits=${onSpawnX}`);
     const seeAll = finDoc.players.filter((p) => p.status === 'active' && bosses.every((b) => (p.discovered || []).includes(b.key))).length;
     rep('X', 'wardens revealed on the hunters\' maps', seeAll >= 1, `${seeAll} active champions see all four markers`);
 

@@ -562,6 +562,16 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         const target = eventDoc.players.find((p) => p.name.toLowerCase() === targetName && (p.roomId === player.roomId) && p.jid !== senderJid);
         if (!target) return { text: '❌ No such rival in this room. `challenge @name` - they must stand here.' };
         const res = await ruinsPvp.challenge(eventDoc, player, target.jid);
+        // ⚔️ MULTIPLAYER BRIEF §5: the challenged player learns of the duel
+        // IN THEIR DMs the moment it's issued (the GC feed line alone left
+        // them fighting the window blind).
+        if (res.ok) {
+            try {
+                await sock.sendMessage(target.jid, {
+                    text: BOT_MARKER + `⚔️ *${player.name}* calls you out in chamber ${player.roomId}!\nYou have ${Math.max(1, Math.round((CFG.PVP.CHALLENGE_WINDOW_MS || 60000) / 1000))}s: \`accept\` the duel, \`flee\` to concede — or move out of the chamber to slip away before it begins.`,
+                });
+            } catch (e) { /* notification is best-effort */ }
+        }
         return { text: res.text };
     }
     if (/^accept$/.test(norm)) {

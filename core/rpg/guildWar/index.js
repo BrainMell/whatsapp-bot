@@ -23,6 +23,11 @@ const guilds = require('../guilds');
 // ledger on the event doc is updated atomically; when all four are dead the
 // war ENDS right there (rewards distribute immediately — no waiting for the
 // next tick).
+// shared prefix lookup for hook-side DM copy (waiter resume etc.)
+function _gwPrefix() {
+    try { return require('../../../botConfig').getPrefix() || '.'; } catch (e) { return '.'; }
+}
+
 async function _wardenDown(eventId, room) {
     const GuildWarEvent = require('../../models/GuildWarEvent');
     const payload = room.payload || {};
@@ -177,6 +182,17 @@ function installCombatHooks() {
                     feed.queue(meta.eventId, 'normal',
                         `⚔️ ${heroNames} cleared a ${room.type === 'core' ? 'World Core guardian' : room.type === 'finale' ? 'WARDEN of the Ruins' : 'guarded chamber'}${coop ? ', standing shoulder to shoulder with guildmates' : ', alone in the dark'}.`);
 
+                    // ⚔️ waiter resume (multiplayer brief §6, merged from the
+                    // parallel branch): rivals who waited this fight out are
+                    // told the moment it resolves — fire-and-forget so the
+                    // winner's decree → map → scene ordering stays untouched.
+                    // rawSock: the multicast sock would echo to the seated party.
+                    // All victors are excluded (array-aware clearer list).
+                    try { encounters.notifyRoomResolved(meta.eventId, room.key,
+                        results.filter((r) => r.kind === 'victory').map((r) => r.jid),
+                        session.rawSock || sock, { prefix: _gwPrefix(), kind: 'victory' })
+                        .catch((e) => console.error('[GW] waiter resume failed:', e?.message)); } catch (e) {}
+
                     // ⏳ FINALE: a warden died here — update the ledger; when the
                     // fourth falls, the war ENDS (rewards pay immediately).
                     let finaleDone = null;
@@ -207,6 +223,12 @@ function installCombatHooks() {
                     const src = (evD && evD.players && evD.players.find((x) => x.jid === p.jid)) || p;
                     results.push(await _defeatPlayer(meta.eventId, src));
                 }
+                // ⚔️ waiter resume (defeat): the chamber is still live — rivals
+                // who waited out the wipe may `fight` it themselves or flee.
+                // All fallen participants are excluded (array-aware list).
+                try { encounters.notifyRoomResolved(meta.eventId, meta.roomKey,
+                    results.map((r) => r.jid), session.rawSock || sock, { prefix: _gwPrefix(), kind: 'defeat' })
+                    .catch((e) => console.error('[GW] waiter resume (defeat) failed:', e?.message)); } catch (e) {}
                 return { kind: 'defeat-multi', players: results };
             }
         },

@@ -727,6 +727,46 @@ async function puzzleBoardScene(eventDoc, player, room) {
     }
 }
 
+// ⚔️ MULTIPLAYER BRIEF §6 (waiter resume): players who waited out a live
+// fight are told the moment it resolves — normal room behavior resumes.
+// kind 'victory': chamber cleared, way open. kind 'defeat': the fighter
+// fell — the encounter is still live, a waiter may take it up with `fight`.
+// Fire-and-forget from the victory/defeat branches; also a sim seam.
+async function notifyRoomResolved(eventId, roomKey, clearerJid, sock, { prefix = '.', kind = 'victory' } = {}) {
+    try {
+        const ev = await state.getEvent(eventId, { fresh: true });
+        if (!ev) return 0;
+        const room = ev.rooms.find((r) => r.key === roomKey);
+        if (!room) return 0;
+        const clearer = Array.isArray(clearerJid)
+            ? ev.players.find((p) => p.jid === clearerJid[0])
+            : ev.players.find((p) => p.jid === clearerJid);
+        const clearerName = clearer ? clearer.name : 'a champion';
+        // 🤝 co-op merge: the clearer list may be the WHOLE seated party —
+        // every participant is excluded from the waiter pings
+        const exclude = new Set(Array.isArray(clearerJid) ? clearerJid : [clearerJid]);
+        const waiters = (room.occupants || []).filter((j) => j && !exclude.has(j));
+        let n = 0;
+        for (const w of waiters) {
+            try {
+                const wRow = ev.players.find((p) => p.jid === w);
+                if (!wRow || wRow.status !== 'active') continue;
+                const head = kind === 'defeat'
+                    ? `💀 *${clearerName}* fell in this chamber. The fight is up for grabs — \`fight\` to engage it yourself, or \`flee\` back the way you came.`
+                    : `🔁 The fight is over — *${clearerName}* cleared the chamber. Normal room behavior resumes; the way onward is open.`;
+                await sock.sendMessage(w, { text: head });
+                const ctxDoc = await state.getMoveContext(eventId, wRow.roomId);
+                if (ctxDoc && ctxDoc.room) {
+                    const dmRouter = require('./dmRouter');
+                    await dmRouter.presentRoom(sock, w, '\u200B', ctxDoc, wRow, ctxDoc.room, { prefix });
+                }
+                n++;
+            } catch (e) { /* per-waiter best-effort */ }
+        }
+        return n;
+    } catch (e) { return 0; }
+}
+
 async function roomIntro(eventDoc, player, room, opts = {}) {
     const text = await onRoomEnter(eventDoc, player, room);
     try {
@@ -752,5 +792,5 @@ module.exports = {
     DEAD_WORLDS, worldTheme,
     buildRoomPayload, onRoomEnter, roomIntro, resolveInput, startRoomCombat,
     nearestRelicRoom, describeDirection, awardRoomRelic, variantOf, pickVariant,
-    payloadGet, puzzleStarted, roomFlavor,
+    payloadGet, puzzleStarted, roomFlavor, notifyRoomResolved,
 };
