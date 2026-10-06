@@ -15,7 +15,7 @@ const roomScene = require('../core/rpg/guildWar/roomScene');
 const encounters = require('../core/rpg/guildWar/encounters');
 const puzzleCards = require('../core/rpg/guildWar/puzzleCards');
 
-const OUT = '/home/z/my-project/download/gw_qa_1005b';
+const OUT = process.env.GW_QA_OUT || '/home/z/my-project/download/gw_qa_1005b';
 fs.mkdirSync(OUT, { recursive: true });
 
 const results = [];
