@@ -95,6 +95,11 @@ const GuildWarEventSchema = new mongoose.Schema({
     // Mixed + default null (NOT a subdoc): mongoose instantiates subdoc
     // fields as {} on create, which breaks the {flow: null} lease claim.
     flow: { type: mongoose.Schema.Types.Mixed, default: null },
+    // 🎚️ PvE band ladder (owner spec 2026-10-06): roster-derived anchors
+    // {p50, p80, maxLvl, n, at} computed once at first engage and cached here
+    // so every instance reads one truth (guildWar/encounters.js getRosterBands).
+    // Mixed + default null: absent = not computed yet → legacy ring curve.
+    bands: { type: mongoose.Schema.Types.Mixed, default: null },
     // ⏳ FINALE (owner 2026-10-05 23:09Z: "If a timer brings the Guild War to
     // an end, place 4 bosses around the map. After all 4 bosses die, then the
     // Guild War ends."): set when endsAt passes. { started, startedAt,

@@ -55,6 +55,36 @@ const CFG = {
         LEVEL_RING_SCALE: 0.6,              // +levels per ring distance from spawn ring
         BOSS_CHANCE_SECRET: 0.5,            // secret room boss
         CORE_GUARD_LEVEL_MULT: 2.5,         // world-core guardian level multiplier
+        // ── 🎚️ PvE BAND LADDER (owner spec 2026-10-06, ruins_pve_boss_scaling_prompt) ──
+        // Regular encounters resolve at ENGAGE time against the ENGAGING
+        // player + the guild's SHARED exploration progress. Enemy levels stay
+        // set-in-stone per band: LOW/MED/HIGH anchors are drawn from the
+        // ROSTER distribution (percentiles), never from one player's level.
+        //   LOW  ≈ at/below the player, capped by roster median
+        //   MED  ≈ slightly above the player, capped by roster p80
+        //   HIGH = the LOWER EDGE of the roster's high range (owner rule:
+        //          "high end enemies sit at the lower ends of the high range")
+        // Bosses (secret / warden / world core) anchor to the roster too,
+        // capped just above the strongest player so the top champion can
+        // still SOLO them (owner rule). With ENABLED, buildRoomPayload's
+        // seeded levels remain only as the fallback (solo rosters / compute
+        // failure) — legacy ring curve.
+        BANDS: {
+            ENABLED: true,
+            MIX_EARLY: { low: 0.70, mid: 0.25, high: 0.05 },   // exploration 0.0
+            MIX_MID:   { low: 0.40, mid: 0.40, high: 0.20 },   // exploration 0.5
+            MIX_LATE:  { low: 0.15, mid: 0.45, high: 0.40 },   // exploration 1.0
+            RING_LOCAL_WEIGHT: 0.3,         // deep rooms (ring 0..1) push the mix hotter
+            LOW_DROP: 2,                    // LOW band level ≈ player-2 (floor 1)
+            MED_GAP: 2,                     // MED band level ≈ player+2
+            HIGH_GAP: 5,                    // HIGH band level ≈ player+5 ("slightly above")
+            MAX_PLAYER_GAP: 8,              // hard clamp: no regular pack beyond player+8 (variant bumps included)
+            BOSS_LEVEL_ADD_SECRET: 6,       // secret boss = roster p80 + 6
+            BOSS_LEVEL_ADD_CORE: 10,        // warden / world-core guardian = roster p80 + 10
+            BOSS_CAP_ABOVE_TOP: 4,          // …but never more than +4 over the strongest player (solo rule)
+            RANK_BY_BAND: { low: 'C', mid: 'B', high: 'A' },   // rank badge keys to the rolled band
+            RANK_BOSS: 'S',
+        },
         LIVES: 3,                           // per player per event
         RESPAWN_PROTECT_MS: 60 * 1000,
         // ── battle encounter variants ("the various adjustments") ──

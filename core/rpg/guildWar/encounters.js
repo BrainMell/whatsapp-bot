@@ -614,6 +614,110 @@ async function consumeWard(eventId, playerJid, relicId) {
     }
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// 🎚️ PvE BAND LADDER — owner spec 2026-10-06 (ruins_pve_boss_scaling_prompt)
+// Regular encounters resolve at ENGAGE time against the ENGAGING player and
+// the guild's SHARED exploration progress; bosses anchor to the roster's
+// high range, capped so the strongest champion can solo them. The map's
+// spatial danger (room.ring 0..1) keeps pushing the mix hotter — deep rooms
+// are scary even in an unexplored ruin, outer halls stay calm late into a
+// well-explored one. Team co-op seating follows the ENGAGER's lane (the
+// player who opened the fight set its difficulty). Falls back to the seeded
+// payload levels (legacy ring curve) whenever bands can't be computed.
+// ══════════════════════════════════════════════════════════════════════
+
+const _bandCache = new Map(); // eventId → bands (in-process fast path; doc copy is shared truth)
+
+// Roster percentiles → band anchors. Nearest-rank over the REAL progression
+// levels of every registered player. Cached on the event doc so both boxes
+// read one truth (each box computing independently yields the same values —
+// percentiles over the same roster are deterministic).
+async function getRosterBands(eventDoc) {
+    if (!CFG.COMBAT.BANDS.ENABLED) return null;
+    if (eventDoc.bands && eventDoc.bands.p80) return eventDoc.bands;
+    if (_bandCache.has(eventDoc.eventId)) return _bandCache.get(eventDoc.eventId);
+    try {
+        const progression = require('../progression');
+        const players = Array.isArray(eventDoc.players) ? eventDoc.players : [];
+        const levels = players.map((p) => Math.max(1, Math.round(Number(progression.getLevel(p.jid)) || 1)));
+        if (levels.length < 2) return null; // solo registrations: keep the legacy ring curve
+        levels.sort((a, b) => a - b);
+        const q = (f) => levels[Math.min(levels.length - 1, Math.max(0, Math.ceil(f * levels.length) - 1))];
+        const bands = { p50: q(0.5), p80: q(0.8), maxLvl: levels[levels.length - 1], n: levels.length, at: Date.now() };
+        _bandCache.set(eventDoc.eventId, bands);
+        require('../../models/GuildWarEvent').updateOne(
+            { eventId: eventDoc.eventId },
+            { $set: { bands } }
+        ).catch((e) => console.error('[Ruins] bands persist failed (non-fatal):', e?.message));
+        return bands;
+    } catch (e) {
+        console.error('[Ruins] band compute failed (non-fatal):', e?.message);
+        return null;
+    }
+}
+
+// Shared exploration progress 0..1: share of rooms no longer UNEXPLORED.
+// Rooms only ever move UNEXPLORED→ACTIVE→CLEARED, so this is monotonic —
+// the map expanding never un-earns progress, no ratchet needed.
+function explorationProgress(eventDoc) {
+    const roomsList = Array.isArray(eventDoc.rooms) ? eventDoc.rooms : [];
+    if (!roomsList.length) return 0;
+    let touched = 0;
+    for (const r of roomsList) if (r && r.state && r.state !== 'UNEXPLORED') touched++;
+    return Math.min(1, touched / roomsList.length);
+}
+
+// Mix of {low, mid, high} rolls at shared exploration t∈[0..1]: piecewise
+// lerp EARLY→MID→LATE, normalized defensively.
+function bandWeights(t) {
+    const B = CFG.COMBAT.BANDS;
+    const lerp = (a, b, u) => a + (b - a) * u;
+    const [from, to, u] = t <= 0.5
+        ? [B.MIX_EARLY, B.MIX_MID, t / 0.5]
+        : [B.MIX_MID, B.MIX_LATE, (t - 0.5) / 0.5];
+    const w = { low: lerp(from.low, to.low, u), mid: lerp(from.mid, to.mid, u), high: lerp(from.high, to.high, u) };
+    const total = (w.low + w.mid + w.high) || 1;
+    return { low: w.low / total, mid: w.mid / total, high: w.high / total };
+}
+
+function pickBand(w, roll) {
+    if (roll < w.high) return 'high';
+    if (roll < w.high + w.mid) return 'mid';
+    return 'low';
+}
+
+// Per-engage resolution → { level, band, boss } or null (→ legacy curve).
+// - Regular bands key to the ENGAGING player: LOW sits at/below them, MED
+//   is slightly above, HIGH is the roster's high lower-edge — but never a
+//   wall (MAX_PLAYER_GAP). A lvl-1 tester rolling HIGH meets a +5 fight,
+//   not the ace's tier; the ace rolling anything meets the roster ceiling.
+// - Bosses are ROSTER-anchored (same fight for every party that walks in)
+//   and capped at strongest+BOSS_CAP_ABOVE_TOP so the top champion can solo.
+async function resolveEngagement(eventDoc, room, player, { boss = false, bossKind = 'secret', coop = false, variantDelta = 0, rng = Math.random } = {}) {
+    const B = CFG.COMBAT.BANDS;
+    const bands = await getRosterBands(eventDoc);
+    if (!bands) return null;
+    const pl = Math.max(1, Math.round(Number(player && player.level) || 1));
+    const ring = Math.min(1, Math.max(0, Number(room && room.ring) || 0));
+    const t = Math.min(1, explorationProgress(eventDoc) + ring * B.RING_LOCAL_WEIGHT);
+    const band = boss ? 'boss' : pickBand(bandWeights(t), rng());
+    let level;
+    if (boss) {
+        level = Math.max(2, Math.min(
+            bands.p80 + (bossKind === 'core' ? B.BOSS_LEVEL_ADD_CORE : B.BOSS_LEVEL_ADD_SECRET),
+            bands.maxLvl + B.BOSS_CAP_ABOVE_TOP
+        ));
+    } else {
+        const base = band === 'low'
+            ? Math.min(bands.p50, Math.max(1, pl - B.LOW_DROP))
+            : band === 'mid'
+                ? Math.min(bands.p80, pl + B.MED_GAP)
+                : Math.min(bands.p80, pl + B.HIGH_GAP);
+        level = Math.max(1, Math.min(base + variantDelta + (coop ? 2 : 0), pl + B.MAX_PLAYER_GAP));
+    }
+    return { level, band, boss };
+}
+
 async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = {}) {
     const guildAdventure = require('../guildAdventure');
     const theme = worldTheme(payloadGet(room.payload, 'theme') || eventDoc.deadWorld);
@@ -629,6 +733,30 @@ async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = 
     const isCore = !!payloadGet(room.payload, 'coreGuardian');
     const isFinale = !!payloadGet(room.payload, 'finaleBoss');
 
+    // 🎚️ BAND RESOLUTION (owner spec 2026-10-06): regular encounters key to
+    // the ENGAGING player's level + the guild's SHARED exploration progress;
+    // bosses (secret / warden / world core) key to the roster's high range,
+    // solo-capped. Falls back to the seeded payload levels (legacy ring
+    // curve) whenever bands are absent — already-seeded events and solo
+    // rosters behave exactly as before. Co-op seats follow the engager.
+    const isBossRoom = isCore || isFinale || !!payloadGet(room.payload, 'boss');
+    const engagement = await resolveEngagement(eventDoc, room, player, {
+        boss: isBossRoom,
+        bossKind: (isCore || isFinale) ? 'core' : 'secret',
+        coop: !!payloadGet(room.payload, 'coopEncounter'),
+        variantDelta: variant ? (variant.levelDelta || 0) : 0,
+    });
+    let engageSpecs = enemySpecs;
+    let bandRank = 'C';
+    if (engagement) {
+        engageSpecs = enemySpecs.map((e) => ({ ...e, level: engagement.level }));
+        bandRank = engagement.boss
+            ? CFG.COMBAT.BANDS.RANK_BOSS
+            : (CFG.COMBAT.BANDS.RANK_BY_BAND[engagement.band] || 'C');
+    } else {
+        bandRank = isFinale ? 'B' : 'C'; // legacy path keeps the warden B badge
+    }
+
     // ⚔️ THE RUINS IS THE ARENA (owner spec §12/§14: no more beach): the
     // battle background is THIS room's own door-plate — the exact image the
     // player was just shown — shipped to the Go service's environment assets.
@@ -643,7 +771,7 @@ async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = 
     } catch (e) { /* keep theme bg */ }
 
     // pull enemies from the level pools (real enemy templates) + world flavor names
-    const enemies = enemySpecs.map((e) => {
+    const enemies = engageSpecs.map((e) => {
         const template = classEncounters.selectRandomEnemy(e.level || 10, 'COMMON');
         return { type: template?.id, level: e.level || 10, name: template ? `${theme.flavor} ${template.name}` : undefined };
     });
@@ -672,7 +800,10 @@ async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = 
     const started = await guildAdventure.startRuinsCombat(sock, chatId, player.jid, {
         enemies: enemies.filter((e) => e.type),
         eventId: eventDoc.eventId, roomKey: room.key,
-        rank: isFinale ? 'B' : 'C', background, groq,
+        // 🎚️ rank badge keys to the resolved band (C outer → B mid → A deep,
+        // S bosses/wardens) — a difficulty read at a glance, per the owner's
+        // balance brief. Legacy C (wardens B) whenever bands didn't resolve.
+        rank: bandRank, background, groq,
         greeting: variant ? `${variant.line}` : null,
         name: isCore ? 'World Core Guardian'
             : (isFinale ? `Warden — ${payloadGet(room.payload, 'wardenName') || 'the Warden'}`
@@ -806,4 +937,6 @@ module.exports = {
     buildRoomPayload, onRoomEnter, roomIntro, resolveInput, startRoomCombat,
     nearestRelicRoom, describeDirection, awardRoomRelic, variantOf, pickVariant,
     payloadGet, puzzleStarted, roomFlavor, notifyRoomResolved,
+    // 🎚️ band ladder (owner spec 2026-10-06) — exported for QA probes
+    getRosterBands, explorationProgress, bandWeights, pickBand, resolveEngagement,
 };
