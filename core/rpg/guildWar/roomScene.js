@@ -1462,6 +1462,12 @@ async function _renderInProcess(eventDoc, player, room, opts = {}) {
     // 2) ambient props (under everything alive)
     for (const prop of plan.props || []) drawProp(ctx, prop.kind, prop.x, prop.y, prop.s);
 
+    // 2b) exit chevrons at the arches (yellow — §9). GROUND LAYER — painted
+    // UNDER room content, enemies and the champion so the pointers read as
+    // floor markings, never cover a sprite (owner 2026-10-06: "they render
+    // over player sprites and such — they should render behind things").
+    drawExitArrows(ctx, exits);
+
     // 3) room-type content (payload presentation — enemies drawn below)
     await drawRoomContent(ctx, room, plan);
 
@@ -1483,9 +1489,6 @@ async function _renderInProcess(eventDoc, player, room, opts = {}) {
     const spot = plan.playerSpot;
     const drawnMe = await drawGroundedSprite(ctx, [path.join(CHAR_DIR, 'clean'), CHAR_DIR], plan.spriteFile, spot.x, spot.y, spot.h, { shadow: true, flip: !!spot.flip });
     if (battle && battle.active === 'player' && drawnMe) crystalJobs.push({ cx: spot.x, headTop: spot.y - spot.h, spriteH: spot.h, clearance: 78 });
-
-    // 6) exit chevrons at the arches (yellow — §9)
-    drawExitArrows(ctx, exits);
 
     // 7) DEFAULT-ENCOUNTER over-head HUD (name pill + segmented bars +
     // state/turn pill) — the owner LIKES this ("keep that", 23:39Z); in

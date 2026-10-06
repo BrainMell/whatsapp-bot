@@ -143,6 +143,43 @@ const playerBase = {
     }
     check('#3 room content renders clear of the panel (see image)', contentLift);
 
+    // ── #9: chevron ground layer (owner 2026-10-06: "the yellow pointers…
+    // they render over player sprites and such — they should render behind
+    // things") — the chevron pass must sit BEFORE room content + sprites in
+    // the render pipeline (source pin) and a champion standing in the arch
+    // mouth must occlude the pointer (occlusion proof + visual evidence).
+    {
+        const src = fs.readFileSync(path.join(__dirname, '..', 'core', 'rpg', 'guildWar', 'roomScene.js'), 'utf8');
+        const drawIdx = src.indexOf('function drawExitArrows');
+        const callIdx = src.indexOf('drawExitArrows(ctx, exits);');
+        const contentIdx = src.indexOf('await drawRoomContent(ctx, room, plan);');
+        const spriteIdx = src.indexOf('const drawnMe = await drawGroundedSprite');
+        check('#9 chevron call sits BEFORE room content + sprites (ground layer)',
+            drawIdx !== -1 && callIdx !== -1 && callIdx < contentIdx && contentIdx < spriteIdx,
+            `call@${callIdx} < content@${contentIdx} < sprites@${spriteIdx}`);
+    }
+    {
+        // champion enters THROUGH the north door → stands in the back-wall
+        // arch mouth (596,402) — exactly where the N chevrons paint
+        // (600, 292/266/240). Sprite presence must change the chevron band.
+        const docChev = makeDoc(20261012, { rooms: { '0,0': { type: 'empty' } }, edges: ['0,0|n'] });
+        const pChev = { ...playerBase, roomId: '0,0', prevRoomId: '0,-1' };
+        const roomChev = docChev.rooms[0];
+        const exitsChev = [{ dir: 'n', edge: true }, { dir: 's', edge: false }, { dir: 'w', edge: false }, { dir: 'e', edge: false }];
+        const planChev = roomScene.planFor(docChev, pChev, roomChev, exitsChev);
+        check('#9 n-entry champion stands at the back-wall arch (over the chevrons)',
+            planChev.playerSpot.x === 596 && planChev.playerSpot.y === 402, JSON.stringify(planChev.playerSpot));
+        const spriteFile = planChev.spriteFile;
+        planChev.spriteFile = null; // drawGroundedSprite skips → champion absent
+        const withoutMe = await roomScene._renderInProcess(docChev, pChev, roomChev, { exits: exitsChev, plan: planChev });
+        fs.writeFileSync(path.join(OUT, 'fix9_chevron_alone.png'), withoutMe);
+        planChev.spriteFile = spriteFile;
+        const withMe = await roomScene._renderInProcess(docChev, pChev, roomChev, { exits: exitsChev, plan: planChev });
+        fs.writeFileSync(path.join(OUT, 'fix9_chevron_behind_player.png'), withMe);
+        check('#9 champion occludes the N-arch chevron (pointer behind sprite)',
+            withoutMe.equals(withMe) === false, 'see fix9_chevron_*.png');
+    }
+
     // ── #7: encounter card overlay ──
     const board = await puzzleCards.renderPuzzleCard({
         kind: 'mapriddle',
