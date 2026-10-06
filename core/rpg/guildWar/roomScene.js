@@ -1104,7 +1104,10 @@ async function drawRoomContent(ctx, room, plan) {
             // Claimed")
             glowSpot(ctx, ax, ay - 30, 100, 'rgba(255,215,90,0.20)');
             const open = room.state === 'CLEARED';
-            await drawGroundedSprite(ctx, [GW_PROP_DIR], open ? 'cache_chest_open.png' : 'cache_chest.png', ax, ay, 150, { shadow: true, shadowBoost: 1.35, shadowRyMin: 15 });
+            // 🧰 open sprite carries the raised lid on top (210 vs 195 content
+            // rows, identical 126-row body) — render height 162 keeps the BOX
+            // the same visual size so the closed→open swap doesn't shrink it.
+            await drawGroundedSprite(ctx, [GW_PROP_DIR], open ? 'cache_chest_open.png' : 'cache_chest.png', ax, ay, open ? 162 : 150, { shadow: true, shadowBoost: 1.35, shadowRyMin: 15 });
             if (open) {
                 glowSpot(ctx, ax, ay - 64, 46, 'rgba(255,215,90,0.16)');
                 pill(ctx, ax, ay - 188, 'CLAIMED', 'bold 12px "Cinzel", sans-serif', 10,
@@ -1255,7 +1258,73 @@ function exitsFor(eventDoc, player) {
 // zones, the compass or the HUD — they live on walls, wall-bases, ceiling and
 // open floor seams. The variant is assigned per-room at event start (state.js)
 // so a room always looks the SAME every time it is rendered.
-const ROOM_VARIANTS = ['intact', 'mossy', 'cracked', 'skulls', 'overgrown', 'dim'];
+//
+// 🏛️ ROOM DESIGNS (owner 2026-10-06 "10 other room designs"): ten further
+// visually-distinct room types shipped as pre-baked LAYER TRIPLES built from
+// the SAME foundation plate (ruins_door_0) — grade (blend mode), detail
+// (source-over), glow (screen). Ground-change designs reskin the floor by
+// mapping the plate's own floor luminance through a palette ramp, so the
+// brick pattern survives pixel-perfect and only the material changes; the
+// walkway/door system is untouched (every design composites over ANY of the
+// 8 exit plates → 10 designs × 8 combos = 80 looks from 10 layer sets, no
+// 80-sprite explosion). Door mouths, torches and the south chevron strip are
+// keep-out zones baked into the layers at build time.
+const ROOM_VARIANTS = [
+    'intact', 'mossy', 'cracked', 'skulls', 'overgrown', 'dim',
+    // 🎨 the ten room designs
+    'mossfloor', 'sandy', 'frost', 'flooded', 'ember',
+    'blight', 'gilded', 'hallowed', 'arcane', 'crimson',
+];
+
+const VARIANT_DIR = path.join(ASSET_DIR, 'variants');
+const VARIANT_DESIGNS = {
+    mossfloor: { gradeMode: 'multiply' },
+    sandy: { gradeMode: 'multiply' },
+    frost: { gradeMode: 'soft-light' },
+    flooded: { gradeMode: 'multiply' },
+    ember: { gradeMode: 'multiply' },
+    blight: { gradeMode: 'multiply' },
+    gilded: { gradeMode: 'multiply' },
+    hallowed: { gradeMode: 'soft-light' },
+    arcane: { gradeMode: 'multiply' },
+    crimson: { gradeMode: 'multiply' },
+};
+
+// decoded layer cache (promise → Image), capped so a worker that roams a big
+// war never holds every design at once (~4.3MB per decoded full-canvas layer)
+const designCache = new Map();
+function designLayer(name, kind) {
+    const k = name + '|' + kind;
+    if (designCache.has(k)) return designCache.get(k);
+    if (designCache.size > 24) {
+        const first = designCache.keys().next().value;
+        designCache.delete(first);
+    }
+    const p = loadImage(path.join(VARIANT_DIR, `v_${name}_${kind}.png`)).catch(() => null);
+    designCache.set(k, p);
+    return p;
+}
+
+async function drawDesignLayers(ctx, variant) {
+    const cfg = VARIANT_DESIGNS[variant];
+    if (!cfg) return;
+    const grade = await designLayer(variant, 'grade');
+    if (grade) {
+        ctx.save();
+        ctx.globalCompositeOperation = cfg.gradeMode;
+        ctx.drawImage(grade, 0, 0, W, H);
+        ctx.restore();
+    }
+    const detail = await designLayer(variant, 'detail');
+    if (detail) ctx.drawImage(detail, 0, 0, W, H);
+    const glow = await designLayer(variant, 'glow');
+    if (glow) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        ctx.drawImage(glow, 0, 0, W, H);
+        ctx.restore();
+    }
+}
 
 // protected zones nothing decorative may enter (x, y, r)
 function protectedZones(exits, playerSpot) {
@@ -1365,9 +1434,14 @@ function variantOfRoom(room) {
 }
 
 // the ambience layer itself — drawn AFTER tint, BEFORE props/enemies/player
-function drawVariantOverlay(ctx, room, exits, seedStr, playerSpot) {
+async function drawVariantOverlay(ctx, room, exits, seedStr, playerSpot) {
     const variant = variantOfRoom(room);
     if (variant === 'intact') return;
+    // 🎨 pre-baked design layers (10 room designs) — composite and done
+    if (VARIANT_DESIGNS[variant]) {
+        await drawDesignLayers(ctx, variant);
+        return;
+    }
     const rng = mapEngine.makeRng(`${seedStr}:variant:${variant}`);
     const zones = protectedZones(exits, playerSpot);
     const trySpot = (band, pad = 26) => {
@@ -1479,8 +1553,9 @@ async function _renderInProcess(eventDoc, player, room, opts = {}) {
     ctx.drawImage(bg, 0, 0, W, H);
     drawTint(ctx, room);
     if (room.state === 'CLEARED') drawClearedWash(ctx);
-    // 1b) the room's persistent visual variant (moss/cracks/skulls/vines/dim)
-    drawVariantOverlay(ctx, room, exits, `${eventDoc.seed}:${room.key}`, plan.playerSpot);
+    // 1b) the room's persistent visual variant (moss/cracks/skulls/vines/dim
+    //     + the ten pre-baked room designs — ground reskins, grades, glows)
+    await drawVariantOverlay(ctx, room, exits, `${eventDoc.seed}:${room.key}`, plan.playerSpot);
 
     // 2) ambient props (under everything alive)
     for (const prop of plan.props || []) drawProp(ctx, prop.kind, prop.x, prop.y, prop.s);
