@@ -7,3 +7,7 @@ core/rpgasset/guildwar/ruins/props/*.png -filter -diff -merge -text
 # the turn-crystal must be real pixels everywhere (reset --hard deploys on
 # the boxes would otherwise serve an LFS pointer to the renderer)
 core/rpgasset/ui/crystal.png -filter -diff -merge -text
+# the runic glyph font must be real bytes everywhere (reset --hard deploys on
+# the boxes would otherwise serve an LFS pointer; the renderer's isRealFont
+# check would skip it and rune tiles hexbox again)
+core/rpgasset/fonts/NotoSansRunic-Regular.ttf -filter -diff -merge -text

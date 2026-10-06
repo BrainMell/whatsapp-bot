@@ -183,7 +183,15 @@ async function s2_lifecycle() {
     const after = (await state.getEvent(fresh.eventId, { fresh: true })).players.find((p) => p.jid === p0.jid);
     check('handin clears carried relic', (after.relics || []).length === 0 && (before.relics || []).length === 1);
     check('handin awards GP', after.score >= CFG.RELICS.HANDIN_GP.Rare, `score=${after.score}`);
-    check('handin feed queued', feed.st(fresh.eventId).queue.length > 0);
+    // ⚔️ mirror-ack aware (2026-10-06 feed dedup): the item may already have
+    // drained the local mirror into the doc's feedQueue — either place counts.
+    let handinQueued = feed.st(fresh.eventId).queue.length > 0;
+    for (let i = 0; i < 20 && !handinQueued; i++) {
+        await new Promise((r) => setTimeout(r, 50));
+        const qdoc = await GuildWarEvent.findOne({ eventId: fresh.eventId }, { feedQueue: 1 }).lean();
+        handinQueued = feed.st(fresh.eventId).queue.length > 0 || ((qdoc && qdoc.feedQueue) || []).length > 0;
+    }
+    check('handin feed queued', handinQueued);
 
     // personal map render
     const mapRes = await dmRouter.handleDM(sock, p0.jid, p0.jid, 'map', 'GW');

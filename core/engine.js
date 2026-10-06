@@ -2460,10 +2460,21 @@ async function startBot(configInstance) {
     // First bot to see traffic in an owner-less enabled group claims it.
     // Atomic at the Mongo level (findOneAndUpdate on a missing field) so two
     // instances racing cannot both win; the loser re-reads and stands down.
+    // ⚔️ ABORTIVE CLAIM (owner 2026-10-06 20:01Z: "sometimes even different
+    // bots responding"): this used to be fire-and-forget — the losing bots
+    // STILL processed the very first message of an owner-less group (the
+    // optimistic cache set below made the gate pass for every sibling), so
+    // the same command could be answered by 2-3 bots at once. It now returns
+    // whether THIS instance owns the chat and the caller drops the message
+    // when it lost. Concurrent claims share one in-flight promise per chat.
+    const _gcClaimInflight = new Map();
     function claimGcOwnership(chatId) {
       const mine = String(BOT_ID).toLowerCase();
-      gcOwner.set(chatId, mine); // optimistic - prevents repeated claim attempts
-      (async () => {
+      const cached = gcOwner.get(chatId);
+      if (cached) return Promise.resolve(cached === mine);
+      const inflight = _gcClaimInflight.get(chatId);
+      if (inflight) return inflight;
+      const p = (async () => {
         try {
           const SystemModel = require("../models/System");
           const claimPath = `value.${encGid(chatId)}`;
@@ -2475,17 +2486,26 @@ async function startBot(configInstance) {
         } catch (e) {
           // lost the race (E11000 duplicate key) or write failed - re-read decides
         }
+        let winner = null;
         try {
           const own = await system.getFresh(GC_OWNER_KEY, {});
           gcOwner.clear();
           for (const [k, v] of Object.entries(own || {})) {
             if (typeof v === "string" && v) gcOwner.set(decGid(k), v.toLowerCase());
           }
-          if (gcOwner.get(chatId) !== mine) {
-            console.log(`🤝 [${BOT_ID}] single-owner gate: lost claim for ${chatId} -> '${gcOwner.get(chatId)}', standing down`);
-          }
+          winner = gcOwner.get(chatId) || null;
         } catch (e) {}
+        if (winner && winner !== mine) {
+          console.log(`🤝 [${BOT_ID}] single-owner gate: lost claim for ${chatId} -> '${winner}', standing down`);
+        }
+        // unknown winner (both writes and the re-read failed): fail OPEN —
+        // process the message rather than drop commands on a Mongo blip;
+        // the next message re-claims via the 30s refresh.
+        _gcClaimInflight.delete(chatId);
+        return !winner || winner === mine;
       })();
+      _gcClaimInflight.set(chatId, p);
+      return p;
     }
 
     // Cross-process freshness (30s): the system KV cache is only populated at
@@ -7817,6 +7837,10 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         // ============================================
         // MESSAGE HANDLER - processes every incoming message
         // ============================================
+        // ⚔️ re-delivery dedup LRU (see messages.upsert below): Baileys
+        // replays the same key.id after reconnects/retries — each replay
+        // used to re-run the whole command pipeline (double sends).
+        const _processedMsgIds = new Set();
         sock.ev.on("messages.upsert", async ({ messages, type }) => {
           if (type !== "notify" && type !== "append") return;
           global.waLastInbound = global.waLastInbound || {};
@@ -7847,6 +7871,26 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               // already excludes fromMe, so skipping at the door is safe.
               if (m.key.fromMe) return;
               if (!m.message) return;
+
+              // ⚔️ RE-DELIVERY DEDUP (owner 2026-10-06 20:01Z double-send
+              // audit): Baileys can hand the SAME message id to us twice
+              // (reconnect replay, server retry). Every replay re-ran the
+              // full pipeline — war verbs, economy, feed — producing visible
+              // double replies. One in-process LRU keyed by message id:
+              // first arrival wins, replays are dropped at the door.
+              try {
+                if (m.key && m.key.id) {
+                  if (_processedMsgIds.has(m.key.id)) {
+                    console.log(`⏭️ [${BOT_ID}] duplicate message delivery dropped (id=${String(m.key.id).slice(0, 18)}…)`);
+                    return;
+                  }
+                  _processedMsgIds.add(m.key.id);
+                  if (_processedMsgIds.size > 800) {
+                    const _oldest = _processedMsgIds.values().next().value;
+                    _processedMsgIds.delete(_oldest);
+                  }
+                }
+              } catch (_dedupErr) { /* never block the pipeline */ }
 
               // Skip stale backlog messages sent while the bot was offline (older than 180 seconds)
               // Only apply this check during the first 30 seconds of connection startup to avoid clock drift issues on live messages
@@ -8262,6 +8306,10 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     // bot instance. Siblings (same box or the other server)
                     // stay silent - two processes writing the same war/
                     // economy docs is what kept resetting shared data.
+                    // ⚔️ ABORTIVE (2026-10-06): in an owner-less group the
+                    // claim is now awaited — exactly ONE instance wins and
+                    // processes this first message; the losers drop it
+                    // silently. Cached owners stay zero-latency.
                     const _gcOwnerBot = gcOwner.get(chatId);
                     if (_gcOwnerBot && _gcOwnerBot !== String(BOT_ID).toLowerCase()) {
                       const _nowTs = Date.now();
@@ -8271,7 +8319,10 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                       }
                       return;
                     }
-                    if (!_gcOwnerBot) claimGcOwnership(chatId);
+                    if (!_gcOwnerBot) {
+                      const _won = await claimGcOwnership(chatId);
+                      if (!_won) return; // another instance won the first message
+                    }
                   }
 
                   // Persist message to MongoDB (1-hour TTL)

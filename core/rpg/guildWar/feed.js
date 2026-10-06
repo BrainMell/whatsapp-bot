@@ -103,16 +103,31 @@ function digestHeader() { return DIGEST_HEADERS[_digestSeq++ % DIGEST_HEADERS.le
 
 // queue a feed item. Sync-local push (callers/sim read st().queue) + async
 // mirror into the event doc so any instance / post-restart flush can send it.
+// ⚔️ DOUBLE-SEND FIX (owner 2026-10-06 20:01Z: "bot double-sending Ruins
+// updates… different bots responding"): the local mirror used to live on
+// forever, so when ANOTHER instance claimed the doc copy and sent it, this
+// instance's next flush still found the item locally and sent it AGAIN (3
+// instances × 20s flush cadence = routine dupes). Now:
+//   • the doc mirror ACK is the handoff — once $push resolves, the local copy
+//     is dropped and the DOC is the item's only source;
+//   • flush() awaits the mirror-settled promise before claiming, so a flush
+//     racing our own pending write can never see the item twice;
+//   • a DB-mirror failure keeps the item local-only (single source, no dup).
 function queue(eventId, tier, text) {
     if (!text) return;
     const item = { id: `fq_${Date.now().toString(36)}_${(_seq++).toString(36)}`, tier, text: String(text).slice(0, 300), t: Date.now(), tries: 0 };
-    st(eventId).queue.push(item);
+    const s = st(eventId);
+    s.queue.push(item);
     // DB mirror (source of truth; bounded, atomic, multi-instance safe)
     const GuildWarEvent = require('../../models/GuildWarEvent');
-    GuildWarEvent.updateOne(
+    const write = GuildWarEvent.updateOne(
         { eventId },
         { $push: { feedQueue: { $each: [item], $slice: -250 } } }
-    ).catch((e) => console.error('[GWFeed] queue mirror failed:', e.message));
+    ).then(() => {
+        const cur = st(eventId);
+        cur.queue = (cur.queue || []).filter((q) => q.id !== item.id);
+    }).catch((e) => console.error('[GWFeed] queue mirror failed (item stays local-only):', e.message));
+    s.mirror = (s.mirror || Promise.resolve()).then(() => write.catch(() => {}));
 }
 
 // rate-window accounting: max MAX_MSGS_PER_5MIN group messages
@@ -133,15 +148,39 @@ function buildDigest(items) {
 }
 
 // where does this event's feed go?
-// explicit host GC for hosted wars; this bot's RPG-friendly GCs for hostless
-// (organic alignment) wars — the "dead by construction" case, now alive.
-function destinationsFor(ev) {
+// explicit host GC for hosted wars. For hostless (organic alignment) wars the
+// destination used to be THIS BOT'S OWN rpg-GC list — whichever instance won
+// the claim sent the wave to a DIFFERENT set of group chats (owner 2026-10-06:
+// "sometimes responding in different group chats, and sometimes even different
+// bots responding"). Now the destination set is resolved ONCE and pinned on
+// the event doc (feedDestinations) with an atomic first-writer-wins update —
+// every instance then routes identical waves to identical chats.
+async function destinationsFor(ev) {
     if (ev.hostGroupId) return [ev.hostGroupId];
+    if (Array.isArray(ev.feedDestinations) && ev.feedDestinations.length) return ev.feedDestinations.slice(0, 4);
+    let mine = [];
     try {
         const botId = require('../../../botConfig').getBotId() || 'global';
         const list = require('../../../core/utils/system').get(`gw_rpg_gcs_${botId}`, []) || [];
-        return list.slice(0, 4); // pace: at most 4 groups per flush wave
-    } catch (e) { return []; }
+        mine = list.slice(0, 4); // pace: at most 4 groups per flush wave
+    } catch (e) { mine = []; }
+    if (!mine.length) return [];
+    // pin: only the FIRST instance to reach the doc wins; losers re-read and
+    // route to the winner's set (atomic — no read-modify-write race).
+    try {
+        const GuildWarEvent = require('../../models/GuildWarEvent');
+        // {field: null} matches BOTH missing and stored-null (the schema
+        // default) — $exists:false alone missed stored nulls and the pin
+        // never landed (caught by gw_feed_routing_qa S4).
+        const r = await GuildWarEvent.updateOne(
+            { eventId: ev.eventId, $or: [{ feedDestinations: null }, { feedDestinations: { $size: 0 } }] },
+            { $set: { feedDestinations: mine } }
+        );
+        if (r && r.modifiedCount) return mine;
+        const doc = await GuildWarEvent.findOne({ eventId: ev.eventId }, { feedDestinations: 1 }).lean();
+        if (doc && Array.isArray(doc.feedDestinations) && doc.feedDestinations.length) return doc.feedDestinations.slice(0, 4);
+    } catch (e) { /* fall through to local list */ }
+    return mine;
 }
 
 // atomic claim: whoever's findOneAndUpdate matches FIRST gets the items and
@@ -176,15 +215,34 @@ async function flush(eventId, sock, BOT_MARKER) {
     const useSock = sock || _sock;
     const useMarker = BOT_MARKER || _marker;
     if (!useSock) return;
+    // ⚔️ same-instance mutex: the 20s fast timer and the 60s sweeper can
+    // overlap on a slow send wave; two concurrent flushes on ONE instance
+    // claim+splice independently and both send the local mirror.
+    if (s.flushing) return;
+    s.flushing = true;
+    try {
+        return await _flushLocked(eventId, s, useSock, useMarker);
+    } finally {
+        s.flushing = false;
+    }
+}
+
+async function _flushLocked(eventId, s, useSock, useMarker) {
+    // ⚔️ mirror-settled barrier: pending queue() writes must land (or fail)
+    // BEFORE the claim — otherwise a claim by anyone sees neither the doc
+    // copy nor ours and the item later double-posts from the doc.
+    try { if (s.mirror) await s.mirror; } catch (e) {}
 
     // ⚔️ membership gate BEFORE claiming: resolve the destination first and
     // leave the queue untouched when this bot cannot post to it — a member
     // instance will claim and deliver. Claiming here used to burn items with
     // 3× "forbidden" retries on cross-box wars (never succeedable).
     const GuildWarEventEarly = require('../../models/GuildWarEvent');
-    const evGate = await GuildWarEventEarly.findOne({ eventId }, { hostGroupId: 1, state: 1 }).lean().catch(() => null);
+    // eventId rides the projection — destinationsFor pins feedDestinations
+    // via ev.eventId (a lean doc without it can never pin — caught by S4).
+    const evGate = await GuildWarEventEarly.findOne({ eventId }, { eventId: 1, hostGroupId: 1, feedDestinations: 1, state: 1 }).lean().catch(() => null);
     if (evGate) {
-        const gateDests = destinationsFor(evGate);
+        const gateDests = await destinationsFor(evGate);
         const reachable = await reachableDests(useSock, gateDests);
         if (gateDests.length && !reachable.length) {
             if (Date.now() - (s.lastGateLog || 0) > 5 * 60 * 1000) {
@@ -214,9 +272,9 @@ async function flush(eventId, sock, BOT_MARKER) {
     // projected read: flush only needs routing info (hostGroupId + state) —
     // a full 1800-room lean read here stalled the loop at alignment scale.
     const GuildWarEvent = require('../../models/GuildWarEvent');
-    const evLite = await GuildWarEvent.findOne({ eventId }, { hostGroupId: 1, state: 1 }).lean();
+    const evLite = await GuildWarEvent.findOne({ eventId }, { eventId: 1, hostGroupId: 1, feedDestinations: 1, state: 1 }).lean();
     if (!evLite) { await maybeDispose(eventId); return; }
-    const dests = destinationsFor(evLite);
+    const dests = await destinationsFor(evLite);
     if (!dests.length) {
         // no destination on THIS bot: keep items for a bot that has one
         const back = items.map((i) => ({ ...i, tries: (i.tries || 0) + 1 }));
@@ -314,7 +372,7 @@ async function postScoreboard(eventId, sock, BOT_MARKER) {
     if (!ev || ev.state !== 'ACTIVE') return;
     const s = st(eventId);
     if (Date.now() - s.scoreboardAt < CFG.FEED.SCOREBOARD_EVERY_MS) return;
-    const dests = destinationsFor(ev);
+    const dests = await destinationsFor(ev);
     if (!dests.length) return;
     // ⚔️ cross-box gate: a non-member bot must not even TRY the scoreboard
     // (it cannot succeed; the member bot's own tickAll posts it there)

@@ -81,6 +81,13 @@ const GuildWarEventSchema = new mongoose.Schema({
     // Phase 2 (feed resurrection): the live feed queue lives in the DOC so
     // every instance can flush it and a restart loses nothing.
     feedQueue: [{ id: String, tier: String, text: String, t: Number, tries: { type: Number, default: 0 } }],
+    // 🎯 FEED DESTINATION PIN (owner 2026-10-06: "sometimes responding in
+    // different group chats, and sometimes even different bots responding"):
+    // hostless events used to route each flush wave to the flushing bot's OWN
+    // rpg-GC list — 3 instances = 3 different destination sets. The first
+    // flusher pins ONE set here (atomic first-writer-wins, guildWar/feed.js
+    // destinationsFor) and every instance routes identical waves identically.
+    feedDestinations: { type: [String], default: null },
     // Phase 1 #8: PvP challenge windows are shared state (was per-process Map)
     // ⚔️ eventId rides each challenge record (2026-10-05): resolveTimeout —
     // the sweeper that concedes/voids expired windows — reads c.eventId.

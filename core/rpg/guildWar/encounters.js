@@ -644,7 +644,13 @@ async function getRosterBands(eventDoc) {
         const progression = require('../progression');
         const players = Array.isArray(eventDoc.players) ? eventDoc.players : [];
         const levels = players.map((p) => Math.max(1, Math.round(Number(progression.getLevel(p.jid)) || 1)));
-        if (levels.length < 2) return null; // solo registrations: keep the legacy ring curve
+        // 🔧 SOLO FIX (owner 2026-10-06 20:01Z: solo-entered a war and met
+        // 4×-HP lvl-13 packs — the old `levels.length < 2 → null` guard meant
+        // EVERY beta solo run silently kept the legacy ring curve; bands=null
+        // on all 6 recent prod events). A solo entrant IS the roster: his own
+        // level anchors every band, exactly the spec's "determined by the
+        // stats of the people who enter".
+        if (!levels.length) return null; // empty roster only — nothing to anchor to
         levels.sort((a, b) => a - b);
         const q = (f) => levels[Math.min(levels.length - 1, Math.max(0, Math.ceil(f * levels.length) - 1))];
         const bands = { p50: q(0.5), p80: q(0.8), maxLvl: levels[levels.length - 1], n: levels.length, at: Date.now() };
@@ -701,7 +707,14 @@ async function resolveEngagement(eventDoc, room, player, { boss = false, bossKin
     const B = CFG.COMBAT.BANDS;
     const bands = await getRosterBands(eventDoc);
     if (!bands) return null;
-    const pl = Math.max(1, Math.round(Number(player && player.level) || 1));
+    // 🔧 REAL LEVEL FIX (found in the same audit): event player docs have NO
+    // `level` field (PlayerSchema), so `player.level` was ALWAYS undefined →
+    // every engagement resolved as if the engager were level 1. Read the REAL
+    // progression level by jid — the same call buildRuinsPlayerEntity uses —
+    // and fall back to a manually-attached level, then 1.
+    let progLvl = 0;
+    try { progLvl = Number(require('../progression').getLevel(player && player.jid)) || 0; } catch (e) { progLvl = 0; }
+    const pl = Math.max(1, Math.round(progLvl || Number(player && player.level) || 1));
     const ring = Math.min(1, Math.max(0, Number(room && room.ring) || 0));
     const t = Math.min(1, explorationProgress(eventDoc) + ring * B.RING_LOCAL_WEIGHT);
     const band = boss ? 'boss' : pickBand(bandWeights(t), rng());

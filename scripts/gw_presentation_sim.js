@@ -356,6 +356,7 @@ async function s8_feed() {
     const state = require('../core/rpg/guildWar/state');
     const gw = require('../core/rpg/guildWar');
     const ga = require('../core/rpg/guildAdventure');
+    const GuildWarEvent = require('../core/models/GuildWarEvent'); // scope fix: my poll below uses it
     let captured = null;
     const orig = ga.setRuinsHooks;
     ga.setRuinsHooks = (h) => { captured = h; };
@@ -374,7 +375,14 @@ async function s8_feed() {
     const sock = mockSock();
     await captured.onEnd({ ruinsMeta: { eventId: doc.eventId, roomKey: core.key }, players: [{ jid: me.jid, name: me.name, lives: 3, spawnRoomId: me.spawnRoomId, roomId: core.key }] }, true, 'k', sock);
     const feed = require('../core/rpg/guildWar/feed');
-    const queued = feed.st(doc.eventId).queue;
+    // ⚔️ mirror-ack aware (2026-10-06 feed dedup): the queued item may have
+    // drained from the local mirror into the doc — check both, briefly.
+    let queued = feed.st(doc.eventId).queue;
+    for (let i = 0; i < 20 && !queued.some((q) => q.tier === 'major'); i++) {
+        await new Promise((r) => setTimeout(r, 50));
+        const qdoc = await GuildWarEvent.findOne({ eventId: doc.eventId }, { feedQueue: 1 }).lean();
+        queued = [...feed.st(doc.eventId).queue, ...((qdoc && qdoc.feedQueue) || [])];
+    }
     check('core breach queued a MAJOR headline', queued.some((q) => q.tier === 'major' && /WORLD CORE/i.test(q.text)), JSON.stringify(queued.map((q) => q.tier)));
     check('core breach granted the first-guild GP', (await state.getEvent(doc.eventId, { fresh: true })).coreClaimedBy === 'GwTestA');
 }

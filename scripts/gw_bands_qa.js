@@ -207,11 +207,40 @@ function rngForRoll(band) {
     check('low guild: secret boss = min(1+6, 2+4) = 6', rbLow.level === 6, rbLow.level);
     check('low guild: LOW band = 1 (clamped to floor)', rLowLow.level === 1, rLowLow.level);
 
-    // ═══ 6. fallbacks ═══
-    console.log('\n══ 6. fallbacks (solo roster / bands disabled) ══');
-    const evSolo = eventFixture(`gw_bandsqa_solo_${Date.now().toString(36)}`, [7], makeRooms(50, 10));
-    check('solo roster → null (legacy ring curve)', await encounters.getRosterBands(evSolo) === null);
-    check('solo roster: resolveEngagement → null', await encounters.resolveEngagement(evSolo, roomMid, { jid: 'x@s.whatsapp.net', level: 5 }, { rng: Math.random }) === null);
+    // ═══ 6. fallbacks + SOLO FIX + REAL-LEVEL FIX ═══
+    // 🔧 2026-10-06 20:01Z owner audit: solo-entered war met 4×-HP lvl-13
+    // packs. Two bugs fixed:
+    //   (a) solo rosters used to return null → legacy ring curve on EVERY
+    //       beta solo run (bands=null on all 6 recent prod events);
+    //   (b) player.level was read off the event doc (PlayerSchema has no
+    //       level field) → engagers always resolved as lvl 1.
+    console.log('\n══ 6. solo bands + real-level resolution + bands disabled ══');
+    fakeLevels['so0@s.whatsapp.net'] = 7;
+    const evSolo = eventFixture(`gw_bandsqa_solo_${Date.now().toString(36)}`, [7], makeRooms(50, 10), {}, 'so');
+    const soloBands = await encounters.getRosterBands(evSolo);
+    check('solo roster → bands computed (no more legacy fallback)', !!soloBands && soloBands.n === 1, JSON.stringify(soloBands));
+    check('solo bands anchor to OWN level (p50=p80=max=7)', soloBands && soloBands.p50 === 7 && soloBands.p80 === 7 && soloBands.maxLvl === 7);
+    const soloP = { jid: 'so0@s.whatsapp.net' };
+    const rSoloLow = await encounters.resolveEngagement(evSolo, roomMid, soloP, { rng: rngForRoll('low') });
+    const rSoloMid = await encounters.resolveEngagement(evSolo, roomMid, soloP, { rng: rngForRoll('mid') });
+    const rSoloHigh = await encounters.resolveEngagement(evSolo, roomMid, soloP, { rng: rngForRoll('high') });
+    const rSoloBoss = await encounters.resolveEngagement(evSolo, roomSecret, soloP, { boss: true, bossKind: 'secret', rng: rngForRoll('high') });
+    check('solo lvl7: LOW = min(p50, 7-2) = 5', rSoloLow.level === 5, rSoloLow.level);
+    check('solo lvl7: MED = min(p80, 7+2) = 7', rSoloMid.level === 7, rSoloMid.level);
+    check('solo lvl7: HIGH = min(p80, 7+5) = 7', rSoloHigh.level === 7, rSoloHigh.level);
+    check('solo lvl7: secret boss = min(7+6, 7+4) = 11 — soloable', rSoloBoss.level === 11, rSoloBoss.level);
+    check('solo lvl7 boss: legacy curve would have been 19+ — no more 4×-HP wall', rSoloBoss.level < 13);
+    // REAL-LEVEL FIX: player doc WITHOUT a level field resolves via progression
+    fakeLevels['rl0@s.whatsapp.net'] = 7;
+    fakeLevels['rl1@s.whatsapp.net'] = 42;
+    const evReal = eventFixture(`gw_bandsqa_real_${Date.now().toString(36)}`, [7, 42], makeRooms(50, 10), {}, 'rl');
+    const rReal = await encounters.resolveEngagement(evReal, roomMid, { jid: 'rl1@s.whatsapp.net' }, { rng: rngForRoll('mid') });
+    check('missing player.level → REAL progression level (42) drives the lane (min(p80=42, 42+2)=42)', rReal.level === 42, rReal.level);
+    const rRealHigh = await encounters.resolveEngagement(evReal, roomMid, { jid: 'rl1@s.whatsapp.net' }, { rng: rngForRoll('high') });
+    check('real lvl42: HIGH capped by roster p80 (42), not phantom lvl 1', rRealHigh.level === 42, rRealHigh.level);
+    // empty roster still safe
+    const evEmpty = eventFixture(`gw_bandsqa_empty_${Date.now().toString(36)}`, [], makeRooms(50, 10));
+    check('empty roster → null (nothing to anchor to)', await encounters.getRosterBands(evEmpty) === null);
     const prevEnabled = CFG.COMBAT.BANDS.ENABLED;
     CFG.COMBAT.BANDS.ENABLED = false;
     check('BANDS.ENABLED=false → null (payload levels win)', await encounters.resolveEngagement(evMid, roomMid, ace, { rng: Math.random }) === null);

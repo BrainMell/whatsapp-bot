@@ -9,6 +9,16 @@
 const fs = require('fs');
 const path = require('path');
 
+// 🔤 GLYPH FIX (owner 2026-10-06 20:01Z: "glyphs don't render properly on the
+// image cards"): the 52-glyph pool is U+16A0–U+16EA (Runic). Neither Cinzel
+// nor IM Fell nor ANY font installed on the boxes covers the Runic block, so
+// cairo drew its hexbox fallback ("16 CA" in a box — the codepoint, not the
+// rune). Noto Sans Runic (OFL, bundled below) is registered here and every
+// text run containing runes is drawn with it explicitly — cairo's toy API
+// does not reliably cross families mid-string, so runs, not strings.
+const RUNIC_RE = /[\u16A0-\u16FF]/;
+const RUNIC_FONT = '"Noto Runic", "Cinzel", serif';
+
 const PAL = {
     parchment: '#EADDC4', parchmentDeep: '#E1D1AF',
     ink: '#3A2A1E', inkSoft: '#5A4634',
@@ -46,6 +56,7 @@ function _ensureFonts() {
             ['Cinzel-Variable.ttf', { family: 'Cinzel' }],
             ['IMFellEnglish-Regular.ttf', { family: 'IM Fell' }],
             ['IMFellEnglish-Italic.ttf', { family: 'IM Fell Italic' }],
+            ['NotoSansRunic-Regular.ttf', { family: 'Noto Runic' }],
         ];
         for (const [file, opts] of regs) {
             const p = path.join(F, file);
@@ -81,6 +92,41 @@ function _wrap(ctx, text, maxWidth) {
         }
     }
     return lines;
+}
+
+// split a string into {runic, text} runs so each can be measured/drawn with
+// the font that actually covers it (see GLYPH FIX note at the top)
+function splitRuns(text) {
+    const out = [];
+    for (const ch of String(text || '')) {
+        const runic = RUNIC_RE.test(ch);
+        const last = out[out.length - 1];
+        if (last && last.runic === runic) last.text += ch;
+        else out.push({ runic, text: ch });
+    }
+    return out;
+}
+
+function fontFor(runic, size) { return `${size}px ` + (runic ? RUNIC_FONT : '"IM Fell", serif'); }
+
+// width of a mixed-script string under the per-run fonts
+function measureMixed(ctx, text) {
+    let w = 0;
+    for (const run of splitRuns(text)) {
+        ctx.font = fontFor(run.runic, 30);
+        w += ctx.measureText(run.text).width;
+    }
+    return w;
+}
+
+// draw a mixed-script string at baseline y starting at x; returns end x
+function drawMixed(ctx, text, x, y) {
+    for (const run of splitRuns(text)) {
+        ctx.font = fontFor(run.runic, 30);
+        ctx.fillText(run.text, x, y);
+        x += ctx.measureText(run.text).width;
+    }
+    return x;
 }
 
 // parse "*tokens*" out of the prompt for tile rendering
@@ -166,17 +212,31 @@ async function renderPuzzleCard(opts = {}) {
                     ctx.fill(); ctx.stroke();
                     ctx.fillStyle = PAL.ink;
                     const label = t.length > 4 ? t.slice(0, 4) : t;
-                    ctx.font = (label.length > 2 ? '28px' : '38px') + ' "Cinzel", serif';
+                    // GLYPH FIX: rune tiles get the runic font (Cinzel has no
+                    // U+16A0 block — hexboxes on the boxes); sizes unchanged
+                    if (RUNIC_RE.test(label)) ctx.font = (label.length > 2 ? '28px' : '38px') + ' ' + RUNIC_FONT;
+                    else ctx.font = (label.length > 2 ? '28px' : '38px') + ' "Cinzel", serif';
                     ctx.fillText(label, tx + tileW / 2, y + tileH / 2 + 2);
                     tx += tileW + gap;
                 }
                 y += tileH + 20;
             } else {
+                // GLYPH FIX: prompts can embed runes OUTSIDE the emphasis
+                // tiles too (the "(e.g. `ᛏ ᚨ`)" example). One fillText with
+                // IM Fell hexboxes them — so wrap and paint per-RUN, with the
+                // runic font carrying exactly the rune characters.
                 ctx.fillStyle = PAL.ink;
-                ctx.font = '30px "IM Fell", serif';
                 ctx.textAlign = 'left';
-                const lines = _wrap(ctx, part.text, maxW);
-                for (const line of lines) { ctx.fillText(line, 90, y + 12); y += 40; }
+                const words = String(part.text || '').split(/\s+/).filter(Boolean);
+                const lines = [];
+                let line = '';
+                for (const w of words) {
+                    const test = line ? line + ' ' + w : w;
+                    if (measureMixed(ctx, test) > maxW && line) { lines.push(line); line = w; }
+                    else line = test;
+                }
+                if (line) lines.push(line);
+                for (const lineText of lines) { drawMixed(ctx, lineText, 90, y + 12); y += 40; }
                 ctx.textAlign = 'center';
                 y += 8;
             }
