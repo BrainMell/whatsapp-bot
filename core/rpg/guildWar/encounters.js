@@ -320,6 +320,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             room.clearedBy = player.jid;
             if (player.guildId) room.clearedByGuild = player.guildId;
             room.clearedAt = new Date();
+            room.lootFresh = true;   // 🪙 spoils still render for THIS presence; despawns when the looter leaves
         } catch (e) { /* read-only room objects just keep the old sprite */ }
     };
 

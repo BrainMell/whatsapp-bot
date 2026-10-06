@@ -18,6 +18,7 @@ const RoomSchema = new mongoose.Schema({
     clearedBy: String,      // player jid
     clearedByGuild: String,
     clearedAt: Date,
+    lootFresh: Boolean,     // 🪙 consumable spoils still on the floor (owner 2026-10-06): true while the clearer is present; the enterRoom/leaveRoom pipelines flip it to false the moment they leave — renders then show the permanent LOOTED marker. Undefined on legacy rooms = already-looted (falsy on purpose)
     occupants: [String],    // jids currently inside
     residue: { type: Map, of: mongoose.Schema.Types.Mixed, default: null },
     variant: { type: String, default: 'intact' }, // Ruins visual variant (baked at startEvent — a room never changes look between renders)

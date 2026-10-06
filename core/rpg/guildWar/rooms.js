@@ -56,7 +56,18 @@ async function enterRoom(eventId, jid, fromKey, toKey) {
                             $switch: {
                                 branches: [
                                     { case: { $and: [{ $ne: [fromKey, null] }, { $eq: ['$$r.key', fromKey] }] },
-                                        then: { $mergeObjects: ['$$r', { occupants: { $setDifference: ['$$r.occupants', [jid]] } }] } },
+                                        then: { $mergeObjects: ['$$r', {
+                                            occupants: { $setDifference: ['$$r.occupants', [jid]] },
+                                            // 🪙 LOOT DESPAWN (owner 2026-10-06): when the player who
+                                            // CLEARED a consumable room walks out, the fresh-loot sprite
+                                            // (gold pile / cavity coins / idol) dies with their presence —
+                                            // every later render (theirs or anyone's) shows the looted marker.
+                                            lootFresh: { $cond: [
+                                                { $and: [{ $eq: ['$$r.state', 'CLEARED'] }, { $eq: ['$$r.clearedBy', jid] }, { $eq: ['$$r.lootFresh', true] }] },
+                                                false,
+                                                '$$r.lootFresh',
+                                            ] },
+                                        }] } },
                                     { case: { $eq: ['$$r.key', toKey] },
                                         then: { $mergeObjects: ['$$r', { occupants: { $setUnion: ['$$r.occupants', [jid]] } }] } },
                                 ],
@@ -73,9 +84,34 @@ async function enterRoom(eventId, jid, fromKey, toKey) {
 }
 
 async function leaveRoom(eventId, jid, roomKey) {
+    // 🪙 LOOT DESPAWN (owner 2026-10-06): upgraded from a bare $pull to a
+    // pipeline so the looter's exit ALSO kills the fresh-loot sprite in the
+    // same atomic pass (flee/return/war-end paths route through here).
     await GuildWarEvent.updateOne(
-        { eventId, rooms: { $elemMatch: { key: roomKey } } },
-        { $pull: { 'rooms.$.occupants': jid } }
+        { eventId },
+        [
+            { $set: {
+                rooms: {
+                    $map: {
+                        input: '$rooms',
+                        as: 'r',
+                        in: {
+                            $cond: [{ $eq: ['$$r.key', roomKey] }, {
+                                $mergeObjects: ['$$r', {
+                                    occupants: { $setDifference: [{ $ifNull: ['$$r.occupants', []] }, [jid]] },
+                                    lootFresh: { $cond: [
+                                        { $and: [{ $eq: ['$$r.state', 'CLEARED'] }, { $eq: ['$$r.clearedBy', jid] }, { $eq: ['$$r.lootFresh', true] }] },
+                                        false,
+                                        '$$r.lootFresh',
+                                    ] },
+                                }],
+                            }, '$$r'],
+                        },
+                    },
+                },
+            } },
+        ],
+        { updatePipeline: true }
     );
 }
 
@@ -105,6 +141,7 @@ async function clearRoom(eventId, roomKey, player, { extraPayload = null } = {})
                 'rooms.$.clearedBy': player.jid,
                 'rooms.$.clearedByGuild': player.guildId,
                 'rooms.$.clearedAt': new Date(),
+                'rooms.$.lootFresh': true,   // 🪙 spoils render while the clearer stays; despawns on their exit
                 ...(extraPayload || {}),
             },
         },

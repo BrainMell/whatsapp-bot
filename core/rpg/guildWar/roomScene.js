@@ -1100,16 +1100,28 @@ async function drawRoomContent(ctx, room, plan) {
     if (ax < HUB_ZONE.x1 && ay > HUB_ZONE.y0) ay = 588;
     if (room.state === 'CLEARED') {
         // cleared rooms keep a faint scar of what was here (never empty-identical).
-        // discovery/reward fall through to the switch — their CLEARED branches
-        // draw the aftermath (coins left behind / emptied vault).
-        if (t === 'combat' || t === 'coop' || t === 'core' || (t === 'secret')) glowSpot(ctx, ax, ay - 20, 70, 'rgba(120,140,90,0.10)');
-        if (!['discovery', 'reward'].includes(t)) return;
+        // discovery/reward/secret fall through to the switch — their CLEARED
+        // branches draw the aftermath (dig scar / emptied vault / torn-out idol).
+        if (t === 'combat' || t === 'coop' || t === 'core') glowSpot(ctx, ax, ay - 20, 70, 'rgba(120,140,90,0.10)');
+        if (!['discovery', 'reward', 'secret'].includes(t)) return;
     }
     switch (t) {
         case 'discovery': {
             // buried cache: the RUBBLE the caption promises (real sprite),
             // with a faint gold glint breathing through the stones. After
-            // `dig` the rubble is GONE and the gold coins lie in its place.
+            // `dig` the rubble is GONE and the gold coins lie in its place —
+            // but ONLY while the digger stays in the room (owner 2026-10-06:
+            // "the gold is supposed to despawn after you leave the room").
+            // Once they walk away the coins despawn with their presence and
+            // the room keeps a permanent LOOTED marker: the excavated pit.
+            const looted = room.state === 'CLEARED' && !room.lootFresh;
+            if (looted) {
+                glowSpot(ctx, ax, ay - 8, 70, 'rgba(70,58,40,0.10)');
+                await drawGroundedSprite(ctx, [GW_PROP_DIR], 'cache_dug.png', ax, ay, 96, { shadow: true, shadowBoost: 1.2, shadowRyMin: 15 });
+                pill(ctx, ax, ay - 122, 'LOOTED', 'bold 12px "Cinzel", sans-serif', 10,
+                    'rgba(26,21,13,0.94)', 'rgba(255,210,74,0.85)', '#FFD24A');
+                break;
+            }
             const propFile = room.state === 'CLEARED' ? 'cache_coins.png' : 'cache_rubble.png';
             glowSpot(ctx, ax, ay - 10, 90, room.state === 'CLEARED' ? 'rgba(255,215,90,0.20)' : 'rgba(255,200,80,0.14)');
             await drawGroundedSprite(ctx, [GW_PROP_DIR], propFile, ax, ay, room.state === 'CLEARED' ? 76 : 118, { shadow: true, shadowBoost: 1.35, shadowRyMin: 15 });
@@ -1120,15 +1132,18 @@ async function drawRoomContent(ctx, room, plan) {
             // `take` the chest stands OPEN (lid up, gold glow in the cavity)
             // with the CLAIMED marker (owner directive 2026-10-05: "the
             // chest is supposed to be open in the next sprite that says
-            // Claimed")
-            glowSpot(ctx, ax, ay - 30, 100, 'rgba(255,215,90,0.20)');
+            // Claimed"). Owner 2026-10-06: the COINS in the cavity despawn
+            // with the taker's presence — returns show the same open chest,
+            // cavity empty (cache_chest_empty), still CLAIMED.
             const open = room.state === 'CLEARED';
+            const fresh = open && !!room.lootFresh;   // taker still in the room → coins still gleam
+            glowSpot(ctx, ax, ay - 30, 100, 'rgba(255,215,90,0.20)');
             // 🧰 open sprite carries the raised lid on top (210 vs 195 content
             // rows, identical 126-row body) — render height 162 keeps the BOX
             // the same visual size so the closed→open swap doesn't shrink it.
-            await drawGroundedSprite(ctx, [GW_PROP_DIR], open ? 'cache_chest_open.png' : 'cache_chest.png', ax, ay, open ? 162 : 150, { shadow: true, shadowBoost: 1.35, shadowRyMin: 15 });
+            await drawGroundedSprite(ctx, [GW_PROP_DIR], open ? (fresh ? 'cache_chest_open.png' : 'cache_chest_empty.png') : 'cache_chest.png', ax, ay, open ? 162 : 150, { shadow: true, shadowBoost: 1.35, shadowRyMin: 15 });
             if (open) {
-                glowSpot(ctx, ax, ay - 64, 46, 'rgba(255,215,90,0.16)');
+                glowSpot(ctx, ax, ay - 64, 46, fresh ? 'rgba(255,215,90,0.16)' : 'rgba(255,215,90,0.05)');
                 pill(ctx, ax, ay - 188, 'CLAIMED', 'bold 12px "Cinzel", sans-serif', 10,
                     'rgba(26,21,13,0.94)', 'rgba(255,210,74,0.85)', '#FFD24A');
             }
@@ -1182,9 +1197,16 @@ async function drawRoomContent(ctx, room, plan) {
         case 'secret': {
             if (!plan.enemies.length) {
                 // hidden chamber: the RELIC PEDESTAL as a real sprite — the
-                // prize stone with its glowing idol
-                glowSpot(ctx, ax, ay - 40, 110, 'rgba(240,110,230,0.18)');
-                await drawGroundedSprite(ctx, [GW_PROP_DIR], 'secret_relic.png', ax, ay, 150, { shadow: true, shadowBoost: 1.35, shadowRyMin: 15 });
+                // prize stone with its glowing idol. Owner 2026-10-06: after
+                // `claim` the idol despawns with the taker's presence —
+                // returns see the torn-out setting gape empty + CLAIMED.
+                const looted = room.state === 'CLEARED' && !room.lootFresh;
+                glowSpot(ctx, ax, ay - 40, 110, looted ? 'rgba(150,130,160,0.07)' : 'rgba(240,110,230,0.18)');
+                await drawGroundedSprite(ctx, [GW_PROP_DIR], looted ? 'secret_pedestal_empty.png' : 'secret_relic.png', ax, ay, 150, { shadow: true, shadowBoost: 1.35, shadowRyMin: 15 });
+                if (looted) {
+                    pill(ctx, ax, ay - 178, 'CLAIMED', 'bold 12px "Cinzel", sans-serif', 10,
+                        'rgba(26,21,13,0.94)', 'rgba(255,210,74,0.85)', '#FFD24A');
+                }
             }
             break;
         }
