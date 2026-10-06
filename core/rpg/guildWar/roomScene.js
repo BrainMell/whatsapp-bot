@@ -322,8 +322,15 @@ async function contentBox(file, dir) {
 function shadowDepthT(groundY) {
     return Math.max(0, Math.min(1, (groundY - 340) / (810 - 340)));
 }
-function drawContactShadow(ctx, cx, groundY, w, h, alpha = 1) {
+function drawContactShadow(ctx, cx, groundY, w, h, alpha = 1, opts = {}) {
     const t = shadowDepthT(groundY);
+    // ⚔️ ITEM BOOST (owner 2026-10-06 "the shadow of the encounter items"):
+    // solid props (chests, steles, rubble…) sit under their own baked glow
+    // and read as floating with the actor-calibrated shadow. Items opt into
+    // a stronger, taller contact via opts — characters keep the calibrated
+    // defaults (boost 1, ryMin 9) untouched.
+    const boost = opts.boost || 1;
+    const ryMin = opts.ryMin || 9;
     // 🔄 RECALIBRATED (owner playtest 2026-10-05: "the shadows are like tiny
     // specs now"): these multipliers were originally tuned back when w was
     // the FULL sprite content width — then ruins_fixes #6 swapped w down to
@@ -333,11 +340,11 @@ function drawContactShadow(ctx, cx, groundY, w, h, alpha = 1) {
     // feet (≈0.9–1.1× foot width) and the penumbra breathes ≈1.5–1.9× beyond
     // it — still depth-aware, still melting into the wall-base shading.
     const rx = w * (0.55 + 0.15 * t);
-    const ry = Math.max(9, h * (0.055 + 0.030 * t));
+    const ry = Math.max(ryMin, h * (0.055 + 0.030 * t));
     // wall torches sit BEHIND the actors: the deeper the stance, the more
     // the shadow spills toward the viewer instead of spreading sideways
     const fwd = 2 + 6 * (1 - t);
-    const a = (0.30 + 0.22 * t) * alpha;
+    const a = Math.min(0.85, (0.30 + 0.22 * t) * alpha * boost);
     // penumbra — broad, faint
     ctx.save();
     ctx.translate(cx, groundY + fwd);
@@ -365,7 +372,7 @@ function drawContactShadow(ctx, cx, groundY, w, h, alpha = 1) {
 
 // draw a sprite so its VISIBLE CONTENT stands exactly on the ground line
 // (cx = content centre x, groundY = content bottom, ch = content height)
-async function drawGroundedSprite(ctx, dirs, file, cx, groundY, ch, { shadow = true, flip = false, alpha = 1 } = {}) {
+async function drawGroundedSprite(ctx, dirs, file, cx, groundY, ch, { shadow = true, flip = false, alpha = 1, shadowBoost = 1, shadowRyMin = 9 } = {}) {
     const dirList = Array.isArray(dirs) ? dirs : [dirs];
     let img = null, foundDir = null;
     for (const dir of dirList) {
@@ -390,7 +397,7 @@ async function drawGroundedSprite(ctx, dirs, file, cx, groundY, ch, { shadow = t
         const feetCx = (box.feetX ?? (box.x + (box.w - feetW) / 2)) + feetW / 2;
         const footW = Math.max(feetW, box.w * 0.5) * scale;
         const footOff = (feetCx - (box.x + box.w / 2)) * scale;
-        drawContactShadow(ctx, flip ? cx - footOff : cx + footOff, groundY, footW, ch, alpha);
+        drawContactShadow(ctx, flip ? cx - footOff : cx + footOff, groundY, footW, ch, alpha, { boost: shadowBoost, ryMin: shadowRyMin });
     }
     ctx.save();
     if (alpha < 1) ctx.globalAlpha = alpha;
@@ -1086,7 +1093,7 @@ async function drawRoomContent(ctx, room, plan) {
             // `dig` the rubble is GONE and the gold coins lie in its place.
             const propFile = room.state === 'CLEARED' ? 'cache_coins.png' : 'cache_rubble.png';
             glowSpot(ctx, ax, ay - 10, 90, room.state === 'CLEARED' ? 'rgba(255,215,90,0.20)' : 'rgba(255,200,80,0.14)');
-            await drawGroundedSprite(ctx, [GW_PROP_DIR], propFile, ax, ay, room.state === 'CLEARED' ? 76 : 118, { shadow: true });
+            await drawGroundedSprite(ctx, [GW_PROP_DIR], propFile, ax, ay, room.state === 'CLEARED' ? 76 : 118, { shadow: true, shadowBoost: 1.35, shadowRyMin: 15 });
             break;
         }
         case 'reward': {
@@ -1097,7 +1104,7 @@ async function drawRoomContent(ctx, room, plan) {
             // Claimed")
             glowSpot(ctx, ax, ay - 30, 100, 'rgba(255,215,90,0.20)');
             const open = room.state === 'CLEARED';
-            await drawGroundedSprite(ctx, [GW_PROP_DIR], open ? 'cache_chest_open.png' : 'cache_chest.png', ax, ay, 150, { shadow: true });
+            await drawGroundedSprite(ctx, [GW_PROP_DIR], open ? 'cache_chest_open.png' : 'cache_chest.png', ax, ay, 150, { shadow: true, shadowBoost: 1.35, shadowRyMin: 15 });
             if (open) {
                 glowSpot(ctx, ax, ay - 64, 46, 'rgba(255,215,90,0.16)');
                 pill(ctx, ax, ay - 188, 'CLAIMED', 'bold 12px "Cinzel", sans-serif', 10,
@@ -1109,7 +1116,7 @@ async function drawRoomContent(ctx, room, plan) {
             // trapped passage: the SPIKE TRAP as a real sprite (rusty iron
             // row on a stone base) + acid-green sheen on the floor
             glowSpot(ctx, ax, ay - 10, 90, 'rgba(140,255,80,0.12)');
-            await drawGroundedSprite(ctx, [GW_PROP_DIR], 'hazard_spikes.png', ax, ay, 110, { shadow: true });
+            await drawGroundedSprite(ctx, [GW_PROP_DIR], 'hazard_spikes.png', ax, ay, 110, { shadow: true, shadowBoost: 1.35, shadowRyMin: 15 });
             ctx.fillStyle = 'rgba(140,255,80,0.10)';
             ctx.beginPath(); ctx.ellipse(ax, ay - 6, 110, 22, 0, 0, Math.PI * 2); ctx.fill();
             break;
@@ -1118,7 +1125,7 @@ async function drawRoomContent(ctx, room, plan) {
             // inscribed hall: the RUNE STELE as a real sprite (weathered
             // stone tablet, teal glyphs), warm glow band + motes kept
             glowSpot(ctx, ax, 360, 150, 'rgba(120,220,240,0.14)');
-            await drawGroundedSprite(ctx, [GW_PROP_DIR], 'lore_stele.png', ax, ay, 175, { shadow: true });
+            await drawGroundedSprite(ctx, [GW_PROP_DIR], 'lore_stele.png', ax, ay, 175, { shadow: true, shadowBoost: 1.35, shadowRyMin: 15 });
             ctx.fillStyle = 'rgba(255,220,140,0.55)';
             ctx.font = '13px "Cinzel", sans-serif';
             for (let i = 0; i < 7; i++) {
@@ -1133,14 +1140,14 @@ async function drawRoomContent(ctx, room, plan) {
             // world-thin hall: the shimmering RIFT as a real sprite standing
             // on the floor, cool glow pooling under it
             glowSpot(ctx, ax, ay - 60, 120, 'rgba(90,120,255,0.20)');
-            await drawGroundedSprite(ctx, [GW_PROP_DIR], 'anomaly_rift.png', ax, ay, 230, { shadow: true });
+            await drawGroundedSprite(ctx, [GW_PROP_DIR], 'anomaly_rift.png', ax, ay, 230, { shadow: true, shadowBoost: 1.35, shadowRyMin: 15 });
             break;
         }
         case 'landmark': {
             // the landmark itself: the etched OBELISK as a real sprite
             const name = (typeof room.payload?.get === 'function' ? room.payload.get('landmarkName') : room.payload?.landmarkName) || '';
             glowSpot(ctx, ax, ay - 90, 110, 'rgba(200,210,255,0.10)');
-            await drawGroundedSprite(ctx, [GW_PROP_DIR], 'landmark_obelisk.png', ax, ay, 260, { shadow: true });
+            await drawGroundedSprite(ctx, [GW_PROP_DIR], 'landmark_obelisk.png', ax, ay, 260, { shadow: true, shadowBoost: 1.35, shadowRyMin: 15 });
             if (name) {
                 ctx.fillStyle = 'rgba(243,236,217,0.85)';
                 ctx.font = 'bold 15px "Cinzel", sans-serif';
@@ -1155,7 +1162,7 @@ async function drawRoomContent(ctx, room, plan) {
                 // hidden chamber: the RELIC PEDESTAL as a real sprite — the
                 // prize stone with its glowing idol
                 glowSpot(ctx, ax, ay - 40, 110, 'rgba(240,110,230,0.18)');
-                await drawGroundedSprite(ctx, [GW_PROP_DIR], 'secret_relic.png', ax, ay, 150, { shadow: true });
+                await drawGroundedSprite(ctx, [GW_PROP_DIR], 'secret_relic.png', ax, ay, 150, { shadow: true, shadowBoost: 1.35, shadowRyMin: 15 });
             }
             break;
         }
@@ -1166,7 +1173,7 @@ async function drawRoomContent(ctx, room, plan) {
             // centres a ~70% board: x 180-1020, y 135-765) so the stones read
             // as the mechanism's flanking pillars, never swallowed by it.
             for (const [gx, flip] of [[140, true], [1060, false]]) {
-                await drawGroundedSprite(ctx, [GW_PROP_DIR], 'puzzle_rune.png', gx, 726, 118, { shadow: true, flip });
+                await drawGroundedSprite(ctx, [GW_PROP_DIR], 'puzzle_rune.png', gx, 726, 118, { shadow: true, flip, shadowBoost: 1.35, shadowRyMin: 15 });
             }
             glowSpot(ctx, ax, ay - 40, 90, 'rgba(90,170,255,0.12)');
             break;
@@ -1608,4 +1615,6 @@ module.exports = {
     DOORS, SPAWN_SPOTS, DEFAULT_ENTRY, ENTRY_FLIP, entryDirOf, perspH, TYPE_LABEL,
     planFor, hudFor, resolvePlayerSpriteFile, ENEMY_POOL, BOSS_POOL,
     ROOM_VARIANTS, variantOfRoom, ensureFonts, facingForSpot, HUB_ZONE,
+    // test surface: sprite-shadow isolation probes (owner item-shadow fix)
+    drawGroundedSprite, drawContactShadow, contentBox,
 };

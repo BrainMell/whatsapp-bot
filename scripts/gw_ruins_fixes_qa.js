@@ -46,10 +46,13 @@ const playerBase = {
     const exitsW = [{ dir: 'n', edge: true }, { dir: 'w', edge: true }, { dir: 'e', edge: false }, { dir: 's', edge: false }];
     const exitsE = [{ dir: 'n', edge: false }, { dir: 'w', edge: false }, { dir: 'e', edge: true }, { dir: 's', edge: false }];
     const exitsNone = [{ dir: 'n', edge: false }, { dir: 'w', edge: false }, { dir: 'e', edge: false }, { dir: 's', edge: false }];
-    check('#5 more doors LEFT (n+w) → face RIGHT', roomScene.facingForSpot('s', exitsW) === false);
-    check('#5 more doors RIGHT (e) → face LEFT', roomScene.facingForSpot('s', exitsE) === true);
+    // 🔄 fc37622e: the champion faces TOWARD the open side arch (deliberate
+    // owner-directed inversion of the original away-rule) — suite updated to
+    // the shipped rule 2026-10-06.
+    check('#5 more doors LEFT (n+w) → face the west arch', roomScene.facingForSpot('s', exitsW) === true);
+    check('#5 more doors RIGHT (e) → face the east arch', roomScene.facingForSpot('s', exitsE) === false);
     check('#5 no side doors → native (right)', roomScene.facingForSpot('s', exitsNone) === false);
-    check('#5 forward doorway (n) follows same rule', roomScene.facingForSpot('n', exitsE) === true && roomScene.facingForSpot('n', exitsW) === false);
+    check('#5 forward doorway (n) follows same rule', roomScene.facingForSpot('n', exitsE) === false && roomScene.facingForSpot('n', exitsW) === true);
 
     // spawn-in render: war start (no prevRoomId) in a room with w+n exits
     const docSpawn = makeDoc(20261005, {
@@ -64,14 +67,14 @@ const playerBase = {
     const pngSpawn = await roomScene._renderInProcess(docSpawn, pSpawn, roomSpawn, { exits: exitsSpawn, plan: planSpawn });
     fs.writeFileSync(path.join(OUT, 'fix1_spawn_back.png'), pngSpawn);
 
-    // facing render: same room, doors w+n open → face right (into the open east)
-    check('#5 spawn room with w+n doors → face right', planSpawn.playerSpot.flip === false, `flip=${planSpawn.playerSpot.flip}`);
+    // facing render: same room, doors w+n open → face the west arch (fc37622e)
+    check('#5 spawn room with w+n doors → face left (west arch)', planSpawn.playerSpot.flip === true, `flip=${planSpawn.playerSpot.flip}`);
 
     // mirrored room: only east exit → face LEFT
     const docMirror = makeDoc(20261005, { rooms: { '0,0': { type: 'empty' } }, edges: ['0,0|e'] });
     const exitsM = roomScene.exitsFor(docMirror, pSpawn);
     const planM = roomScene.planFor(docMirror, pSpawn, docMirror.rooms[0], exitsM);
-    check('#5 spawn room with only e door → face left', planM.playerSpot.flip === true, `flip=${planM.playerSpot.flip}`);
+    check('#5 spawn room with only e door → face right (east arch)', planM.playerSpot.flip === false, `flip=${planM.playerSpot.flip}`);
     const pngMirror = await roomScene._renderInProcess(docMirror, pSpawn, docMirror.rooms[0], { exits: exitsM, plan: planM });
     fs.writeFileSync(path.join(OUT, 'fix5_face_left.png'), pngMirror);
 

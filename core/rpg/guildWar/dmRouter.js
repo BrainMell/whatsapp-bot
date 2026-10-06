@@ -730,6 +730,13 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
                 } catch (e) {
                     return { text: res.text };
                 }
+                // 🖨️ owner 2026-10-06: symbol puzzles (rune lock, memory
+                // mosaic) follow the board with a STANDALONE copy-paste line —
+                // nothing on it but the symbols, so the player can copy,
+                // reorder and send without retyping glyphs.
+                if (res.afterText) {
+                    try { await sock.sendMessage(chatId, { text: BOT_MARKER + res.afterText }); } catch (e) { /* best-effort */ }
+                }
                 // 💡 OVERHAUL §4/§15: the moment an encounter resolves, the
                 // player gets the RETURN map — same chart, post-encounter
                 // visual state — instead of a parchment compass card.

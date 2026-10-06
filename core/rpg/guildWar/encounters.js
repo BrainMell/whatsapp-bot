@@ -85,7 +85,12 @@ function buildRoomPayload(eventDoc, room, map) {
         case 'puzzle': {
             const p = puzzles.generate(rng, room, map);
             payload.puzzle = { kind: p.kind, prompt: p.prompt, answer: p.answer, altAnswers: p.altAnswers || [],
-                normalize: String(p.normalize ? p.normalize(p.answer) : p.answer), maxAttempts: CFG.PUZZLE.ATTEMPTS };
+                normalize: String(p.normalize ? p.normalize(p.answer) : p.answer), maxAttempts: CFG.PUZZLE.ATTEMPTS,
+                // 🖨️ owner 2026-10-06: symbol puzzles carry their glyph/shape
+                // list so `examine` can follow with the STANDALONE copy-paste
+                // line (the prompt embeds them in prose/markup — annoying to
+                // copy). Symbols are shown to the player anyway: no leak.
+                symbols: Array.isArray(p.symbols) ? p.symbols : null };
             payload.puzzleRaw = { meta: p.meta || null };
             break;
         }
@@ -349,10 +354,17 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
                 }
                 await rooms.startPuzzle(eventDoc.eventId, room.key);
                 try { if (pzLive && typeof pzLive === 'object') pzLive.started = true; } catch (e) { /* immutable payload */ }
+                // 🖨️ owner 2026-10-06: for the symbol games (rune lock, memory
+                // mosaic) the examine reply is FOLLOWED by a standalone
+                // message holding just the symbols — the player copies that
+                // line, reorders it, sends it back. No markup, no prose.
+                const symLine = pzLive && Array.isArray(pzLive.symbols) && pzLive.symbols.length
+                    ? pzLive.symbols.join(' ') : null;
                 return {
                     handled: true,
                     afterImage: await puzzleBoardScene(eventDoc, player, room),
                     text: `🧩 You study the mechanism - it hums awake under your fingers...\n\n${(pzLive && pzLive.prompt) || 'The mechanism awaits an answer.'}\n\n_Reply with your answer. ${(pzLive && pzLive.maxAttempts) || CFG.PUZZLE.ATTEMPTS} attempts. Wrong answers have a cost._`,
+                    afterText: symLine || undefined,
                 };
             }
             const claimed = await rooms.claimPuzzleAttempt(eventDoc.eventId, room.key);
