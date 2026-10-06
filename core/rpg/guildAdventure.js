@@ -2404,6 +2404,69 @@ function joinRuinsSession(eventId, roomKey, playerJid) {
   for (const p of st.players) _coopIndex.set(p.jid, st.sessionKey?.includes('|') ? st.sessionKey.slice(st.sessionKey.indexOf('|') + 1) : ruinsRoomRawKey(eventId, roomKey));
   return { ok: true, session: st, entity };
 }
+// ⚔️ CO-OP JOINER PRESENTATION (owner live-test bug report #2/#3, 2026-10-06:
+// "the active combat UI sometimes fails to spawn for some players" — the
+// joiner seated via joinRuinsSession got a TEXT-ONLY ack: no battle image,
+// no turn state, so they had to ask "tell me when it's my turn 😭"). The
+// multicast sock only covers sends AFTER the seat — the joiner missed the
+// START scene entirely. This re-presents the CURRENT battle to ONE
+// participant from THEIR own perspective: live turn state + enemy HP +
+// their own sheet + the TURN battle image (fresh POV plan incl. them).
+// Returns { text, image } or null when the session is gone.
+async function presentRuinsBattleTo(eventId, roomKey, playerJid) {
+  const st = ruinsRoomSession(eventId, roomKey);
+  if (!st || !st.inCombat) return null;
+  const me = (st.players || []).find((p) => p.jid === playerJid);
+  if (!me) return null;
+
+  const hpBar = (cur, max, len = 10) => {
+    const filled = Math.max(0, Math.round((Math.max(0, cur) / max) * len));
+    return '▰'.repeat(filled) + '▱'.repeat(len - filled);
+  };
+  const prefix = botConfig.getPrefix();
+  const actor = st.activeCombatant || null;
+  let turnLine;
+  if (actor && actor.jid === playerJid) {
+    turnLine = `⚔️ *YOUR TURN*`;
+  } else if (actor && actor.isEnemy) {
+    turnLine = `⏳ *The pack is moving* — ${actor.name} acts. Hold fast, your turn is loading.`;
+  } else if (actor) {
+    turnLine = `⏳ *Waiting for: ${actor.name}*`;
+  } else {
+    turnLine = `⏳ *Next action loading...*`;
+  }
+
+  let msg = `🤝 *YOU JOINED THE BATTLE* — chamber ${roomKey}\n${turnLine}\n\n`;
+  msg += `${me.class?.icon || '👤'} *${me.name}*\n`;
+  msg += `❤️ ${Math.floor(me.stats.hp)}/${Math.floor(me.stats.maxHp)} HP\n`;
+  msg += `⚡ ${Math.floor(me.stats.energy)}/${Math.floor(me.stats.maxEnergy)} EN\n`;
+  const livingEnemies = (st.enemies || []).filter((e) => !e.isDead);
+  if (livingEnemies.length) {
+    msg += `\n*ENEMIES:*\n`;
+    for (const e of livingEnemies) {
+      const maxHp = e.stats?.maxHp || e.stats?.hp || 1;
+      const curHp = Math.max(0, Math.floor(e.currentHP ?? e.stats?.hp ?? 0));
+      msg += `👾 ${e.name} [${hpBar(curHp, maxHp)}] ${curHp}/${Math.floor(maxHp)} HP\n`;
+    }
+  }
+  const allies = (st.players || []).filter((p) => p.jid && p.jid !== playerJid && !p.isTutorialAlly && !p.isDead);
+  if (allies.length) msg += `\n🤝 Fighting beside: ${allies.map((p) => p.name).join(', ')}\n`;
+  msg += `\n⚔️ \`${prefix} combat atk\` on your turn · \`${prefix} flee\` retreats you (the fight continues for whoever stays).`;
+
+  let image = null;
+  try {
+    const scene = await require('./guildWar/battleScene').renderBattleImage(st, {
+      phase: 'TURN',
+      turnInfo: { actor, turnNumber: st.round },
+      povJid: playerJid,
+      freshPlan: true,
+    });
+    if (scene && scene.success && scene.buffer) image = scene.buffer;
+  } catch (e) { /* image is best-effort — the text state still lands */ }
+
+  return { text: msg, image };
+}
+
 // 🏃 co-op aware retreat: a co-op participant leaves THE SESSION (their
 // entity is withdrawn; the battle continues for whoever remains), a solo
 // session aborts entirely. Safe on missing sessions.
@@ -11872,6 +11935,7 @@ module.exports = {
   ruinsRoomSession,
   ruinsRoomRawKey,
   joinRuinsSession,
+  presentRuinsBattleTo,
   leaveRuinsSession,
   makeRuinsSock,
   _coopIndex,

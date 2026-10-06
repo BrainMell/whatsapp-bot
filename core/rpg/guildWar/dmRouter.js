@@ -183,6 +183,29 @@ function roomsMapHas(eventDoc, key) {
     return (eventDoc.rooms || []).some((r) => r.key === key);
 }
 
+// ⚔️ PRESENCE SYMMETRY (owner live-test bug report #1, 2026-10-06: "Player A
+// sees Player B's sprite; Player B does not see Player A's"): the room scene
+// only rendered for whoever MOVED — the players ALREADY in the chamber were
+// never told anyone arrived (no scene, no sprite, no warning before a rival
+// challenge window opened on them). Every arrival now pushes the OTHER
+// occupants a scene from THEIR OWN perspective (newcomer drawn as mate or
+// rival). Best-effort, capped, and skipped when nobody else is present.
+async function announceArrival(sock, eventDoc, mover, room, { prefix }) {
+    try {
+        if (!sock || !room || !mover) return;
+        const others = ((room.occupants || []).filter((j) => j && j !== mover.jid)).slice(0, 2);
+        for (const jid of others) {
+            const row = (eventDoc.players || []).find((p) => p.jid === jid && p.status === 'active');
+            if (!row) continue;
+            let scene = null;
+            try { scene = await require('./roomScene').renderRoomScene(eventDoc, row, room, { prefix: prefix || '.' }); } catch (e) { scene = null; }
+            const payload = { text: `🚶 *${mover.name}* strides into your chamber.` };
+            if (scene) payload.image = scene;
+            await sock.sendMessage(jid, payload).catch(() => {});
+        }
+    } catch (e) { /* presence sync is best-effort */ }
+}
+
 // ── ROOM ENTRY PRESENTATION (owner overhaul 2026-10-04: "a game rendered
 // through WhatsApp") — the order is LAW (spec §2):
 //   1. the LANDSCAPE map (where am I — self-zooming, fog-aware)
@@ -417,6 +440,8 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
                 await sock.sendMessage(chatId, payload).catch(() => {});
             }
         }
+        // ⚔️ presence sync: the occupants SEE the newcomer (report #1)
+        await announceArrival(sock, ctxDoc, me, newRoom, { prefix });
         // AUTO-ENCOUNTER (§14): unresolved combat kinds (and boss-sealed
         // secret chambers) engage the REAL combat pipeline immediately.
         const freshAfterPresent = await state.getEvent(eventDoc.eventId, { fresh: true });
@@ -444,6 +469,16 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
                     if (joined.ok) {
                         const mateNames = (live.players || []).map((p) => p.name).filter(Boolean).join(', ');
                         await touch();
+                        // ⚔️ CO-OP JOINER PRESENTATION (owner live-test report #2/#3,
+                        // 2026-10-06: "combat UI sometimes fails to spawn for some
+                        // players" — the joiner got a TEXT-ONLY ack: no battle image,
+                        // no turn state, so they had to ask "tell me when it's my turn
+                        // 😭"). The multicast sock only covers sends AFTER the seat.
+                        // Re-present the CURRENT battle to the joiner from THEIR POV.
+                        try {
+                            const pres = await require('../guildAdventure').presentRuinsBattleTo(eventDoc.eventId, roomNow.key, senderJid);
+                            if (pres) return { text: pres.text, image: pres.image || undefined };
+                        } catch (e) { /* fall through to the plain ack */ }
                         return { text: `🤝 You draw steel beside your guildmates — *${mateNames}* are already locked in battle here, and now the fight is yours too!\n\`${prefix} combat atk\` on your turn.` };
                     }
                 } else {
@@ -514,6 +549,8 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         } catch (e) {
             return { text: `✨ The anchor pulls you back to chamber ${dest}.` };
         }
+        // ⚔️ presence sync (report #1): teleport arrivals are arrivals too
+        await announceArrival(sock, ctxDoc, me, ctxDoc.room, { prefix });
         return {};
     }
 
@@ -580,18 +617,45 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
     // ── pvp ──
     if (/^challenge\b/.test(norm)) {
         const room = roomOf(eventDoc, player);
-        const targetName = norm.replace(/^challenge\s*@?/, '').trim();
-        const target = eventDoc.players.find((p) => p.name.toLowerCase() === targetName && (p.roomId === player.roomId) && p.jid !== senderJid);
-        if (!target) return { text: '❌ No such rival in this room. `challenge @name` - they must stand here.' };
+        // ⚔️ DM-FRIENDLY TARGETING (owner live-test report #11: ruins PvP still
+        // leaned on group-tag habits): `challenge` with NO name auto-targets a
+        // lone rival in the chamber; with several, it lists them. Named targets
+        // match exact → prefix → unique-contains. Never a WhatsApp @tag parse.
+        const here = (eventDoc.players || []).filter((p) => p.jid !== senderJid
+            && p.status === 'active' && p.roomId === player.roomId);
+        const rivals = here.filter((p) => p.guildId !== player.guildId);
+        const arg = norm.replace(/^challenge\s*@?/, '').trim().toLowerCase();
+        let target = null;
+        if (arg) {
+            target = rivals.find((p) => p.name.toLowerCase() === arg)
+                || rivals.find((p) => p.name.toLowerCase().startsWith(arg));
+            if (!target) {
+                const contains = rivals.filter((p) => p.name.toLowerCase().includes(arg));
+                if (contains.length === 1) target = contains[0];
+            }
+            if (!target) return { text: '❌ No such rival in this chamber. Bare `challenge` targets a lone rival — or type their name.' };
+        } else {
+            if (!rivals.length) return { text: '⚔️ No rival stands in this chamber. Rivals are champions of OTHER guilds.' };
+            if (rivals.length === 1) target = rivals[0];
+            else return { text: `⚔️ Several rivals stand here: *${rivals.map((r) => r.name).join('*, *')}*.\n\`challenge <name>\` picks one.` };
+        }
         const res = await ruinsPvp.challenge(eventDoc, player, target.jid);
         // ⚔️ MULTIPLAYER BRIEF §5: the challenged player learns of the duel
         // IN THEIR DMs the moment it's issued (the GC feed line alone left
         // them fighting the window blind).
+        // ⚔️ PRESENCE SYMMETRY (owner report #1): the challenger already saw
+        // the target's sprite in their own scene — the notification now rides
+        // a scene rendered from the TARGET's perspective, rival across.
         if (res.ok) {
+            const windowS = Math.max(1, Math.round((CFG.PVP.CHALLENGE_WINDOW_MS || 60000) / 1000));
+            const notifyText = `⚔️ *${player.name}* calls you out in chamber ${player.roomId}!\nYou have ${windowS}s: \`accept\` the duel, \`flee\` to concede — or move out of the chamber to slip away before it begins.`;
             try {
-                await sock.sendMessage(target.jid, {
-                    text: BOT_MARKER + `⚔️ *${player.name}* calls you out in chamber ${player.roomId}!\nYou have ${Math.max(1, Math.round((CFG.PVP.CHALLENGE_WINDOW_MS || 60000) / 1000))}s: \`accept\` the duel, \`flee\` to concede — or move out of the chamber to slip away before it begins.`,
-                });
+                let scene = null;
+                try {
+                    const targetRow = (eventDoc.players || []).find((p) => p.jid === target.jid);
+                    scene = await require('./roomScene').renderRoomScene(eventDoc, targetRow, room, { prefix });
+                } catch (e) { scene = null; }
+                await sock.sendMessage(target.jid, scene ? { text: BOT_MARKER + notifyText, image: scene } : { text: BOT_MARKER + notifyText });
             } catch (e) { /* notification is best-effort */ }
         }
         return { text: res.text };
@@ -612,6 +676,22 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         if (begun.success && begun.duel && ruinsBackground) begun.duel.ruinsBackground = ruinsBackground;
         if (!begun.success) return { text: begun.message };
         await touch();
+        // ⚔️ DUEL START PRESENTATION (owner report #1/#2): the accept used to
+        // send a TEXT line only — neither duelist ever saw the other's sprite
+        // or a battle scene at duel start. Each duelist now gets their OWN
+        // POV scene (them as champion, the rival across).
+        try {
+            const roomScene = require('./roomScene');
+            const duelRoom = room || roomOf(eventDoc, player);
+            const firstMover = begun.duel.players[begun.duel.turn]?.name || '?';
+            for (const jid of [res.challenger.jid, senderJid]) {
+                const row = (eventDoc.players || []).find((p) => p.jid === jid);
+                if (!row) continue;
+                const scene = await roomScene.renderRoomScene(eventDoc, row, duelRoom, { prefix }).catch(() => null);
+                const cap = `⚔️ *THE DUEL BEGINS!* ${begun.duel.players[0].name} vs ${begun.duel.players[1].name}.\n*First move: ${firstMover}* (speed decides).\n_Stakes: ${CFG.PVP.WIN_GP} GP + carried relics (max ${CFG.PVP.RELIC_STEAL_CAP})._`;
+                await sock.sendMessage(jid, scene ? { text: BOT_MARKER + cap, image: scene } : { text: BOT_MARKER + cap }).catch(() => {});
+            }
+        } catch (e) { /* duel scene is best-effort — the turn engine takes over */ }
         return { text: `⚔️ *THE DUEL BEGINS!* ${begun.duel.players[0].name} vs ${begun.duel.players[1].name}.\nUse your standard combat commands: \`${prefix} combat attack\`, \`${prefix} combat ability <n>\`, \`${prefix} combat flee\`.\n_Stakes: ${CFG.PVP.WIN_GP} GP + carried relics (max ${CFG.PVP.RELIC_STEAL_CAP})._` };
     }
     if (/^flee$/.test(norm)) {
@@ -928,4 +1008,4 @@ async function handleGroupWarVerb(sock, chatId, senderJid, senderName, norm, pre
     }
 }
 
-module.exports = { handleDM, getEventForPlayer, displayName, navCardFor, returnMapFor, computeExits, presentRoom, handleGroupWarVerb, mapCaption, fuzzyMoveToken };
+module.exports = { handleDM, getEventForPlayer, displayName, navCardFor, returnMapFor, computeExits, presentRoom, handleGroupWarVerb, mapCaption, fuzzyMoveToken, announceArrival };

@@ -88,6 +88,15 @@ const GuildWarEventSchema = new mongoose.Schema({
     // flusher pins ONE set here (atomic first-writer-wins, guildWar/feed.js
     // destinationsFor) and every instance routes identical waves identically.
     feedDestinations: { type: [String], default: null },
+    // ⚔️ SCOREBOARD LEASE (owner live-test bug report #10, 2026-10-06:
+    // "standings emitted repeatedly by both Subaru and Joker, identical text
+    // more than once"): the standings cadence timer lived in PER-PROCESS
+    // memory (feed.js feedStates), so all 3 bot processes posted the
+    // standings on their OWN cadence — 3 instances × identical numbers =
+    // routine duplicate standings. The cadence is now claimed ON THE DOC
+    // (atomic first-writer-wins in feed.js postScoreboard): exactly one
+    // post per SCOREBOARD_EVERY_MS across the whole fleet.
+    scoreboardAt: { type: Number, default: null },
     // Phase 1 #8: PvP challenge windows are shared state (was per-process Map)
     // ⚔️ eventId rides each challenge record (2026-10-05): resolveTimeout —
     // the sweeper that concedes/voids expired windows — reads c.eventId.

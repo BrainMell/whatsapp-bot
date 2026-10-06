@@ -367,16 +367,25 @@ async function sendToGroup(sock, dests, text, isCard) {
 // scoreboard post (called on cadence by tickAll)
 // ⚔️ Phase 2 #bookkeeping fix: scoreboardAt is NO LONGER pre-bumped — a
 // rate-window block used to eat the post AND reset its timer.
+// ⚔️ CROSS-INSTANCE SCOREBOARD CLAIM (owner live-test report #10, 2026-10-06:
+// "standings emitted repeatedly by both Subaru and Joker, with some identical
+// standings appearing more than once"): `s.scoreboardAt` lived in PER-PROCESS
+// memory, so every bot instance posted the standings on its own cadence —
+// and the same-process fast-timer/sweeper overlap could even double-post
+// from ONE bot. The cadence is now an atomic first-writer-wins claim on the
+// event DOC (scoreboardAt): exactly one post per SCOREBOARD_EVERY_MS across
+// the fleet; a failed send releases the claim for the next tick.
 async function postScoreboard(eventId, sock, BOT_MARKER) {
     const ev = await state.getEvent(eventId);
     if (!ev || ev.state !== 'ACTIVE') return;
     const s = st(eventId);
-    if (Date.now() - s.scoreboardAt < CFG.FEED.SCOREBOARD_EVERY_MS) return;
     const dests = await destinationsFor(ev);
     if (!dests.length) return;
     // ⚔️ cross-box gate: a non-member bot must not even TRY the scoreboard
     // (it cannot succeed; the member bot's own tickAll posts it there)
     if (!(await reachableDests(sock || _sock, dests)).length) return;
+    // per-bot quota FIRST — never eat a claim this bot cannot spend
+    if (!windowAllows(s)) return;
     const rows = computeScoreboard(ev);
     const text = rows.map((r, i) => `${['🥇', '🥈', '🥉'][i] || '▫️'} *${r.name}* — ${r.points} GP`).join('\n').slice(0, 700);
     // 💬 live pulse line: the standings should read like a war bulletin,
@@ -384,11 +393,22 @@ async function postScoreboard(eventId, sock, BOT_MARKER) {
     const cleared = (ev.rooms || []).filter((r) => r && r.state === 'CLEARED').length;
     const alive = (ev.players || []).filter((p) => p.status === 'active').length;
     const pulse = `_${cleared} chamber${cleared === 1 ? '' : 's'} cleared · ${alive} champion${alive === 1 ? '' : 's'} still standing_`;
-    if (windowAllows(s)) {
-        const useSock = sock || _sock;
-        if (!useSock) return;
-        const ok = await sendToGroup(useSock, dests, (BOT_MARKER || _marker) + `🏆 *War standings — the Association's ledger*\n${pulse}\n${text}`, false);
-        if (ok) { s.scoreboardAt = Date.now(); markSent(s); }
+    const GuildWarEvent = require('../../models/GuildWarEvent');
+    const now = Date.now();
+    // atomic claim: only the FIRST instance inside the cadence window wins
+    const claim = await GuildWarEvent.updateOne(
+        { eventId, $or: [{ scoreboardAt: null }, { scoreboardAt: { $lt: now - CFG.FEED.SCOREBOARD_EVERY_MS } }] },
+        { $set: { scoreboardAt: now } }
+    );
+    if (!claim || !claim.modifiedCount) return; // another instance posted this cycle
+    const useSock = sock || _sock;
+    if (!useSock) return;
+    const ok = await sendToGroup(useSock, dests, (BOT_MARKER || _marker) + `🏆 *War standings — the Association's ledger*\n${pulse}\n${text}`, false);
+    if (ok) {
+        markSent(s);
+    } else {
+        // release the claim so a later tick (this or another bot) can retry
+        await GuildWarEvent.updateOne({ eventId, scoreboardAt: now }, { $set: { scoreboardAt: now - CFG.FEED.SCOREBOARD_EVERY_MS } }).catch(() => {});
     }
 }
 

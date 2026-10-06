@@ -54,12 +54,17 @@ function startCaption(state, turnOrderStr) {
 //   state   — guildAdventure combat state (players/enemies/ruinsMeta/sessionKey)
 //   phase   - 'START' | 'TURN'
 //   turnInfo- the last turn payload (TURN renders; drives caption + ring)
+//   povJid  — render from THIS participant's perspective (co-op joiners who
+//             arrived after START; the frozen layout belongs to the starter)
+//   freshPlan — compute a NEW plan for the POV instead of the frozen one
 // Returns { success, buffer, caption } — same shape generateCombatScene
 // returns, so the existing send/timeout logic in guildAdventure applies.
-async function renderBattleImage(state, { phase = 'START', turnInfo = null, turnOrderStr = null } = {}) {
+async function renderBattleImage(state, { phase = 'START', turnInfo = null, turnOrderStr = null, povJid = null, freshPlan = false } = {}) {
     try {
         const meta = state.ruinsMeta;
-        const me = state.players && state.players[0];
+        const me = povJid
+            ? (state.players || []).find((p) => p.jid === povJid)
+            : state.players && state.players[0];
         if (!meta || !me) return { success: false };
 
         const doc = await GuildWarEventModel().findOne({ eventId: meta.eventId }).lean();
@@ -71,9 +76,16 @@ async function renderBattleImage(state, { phase = 'START', turnInfo = null, turn
         const prow = (doc.players || []).find((p) => p.jid === me.jid)
             || { jid: me.jid, roomId: meta.roomKey, prevRoomId: meta.roomKey, discovered: [] };
 
-        // frozen layout (plan + exits) — computed once per fight
-        const layout = layoutFor(state.sessionKey);
-        if (!layout.plan) {
+        // frozen layout (plan + exits) — computed once per fight. A POV render
+        // (freshPlan) deliberately skips the cache: the joiner gets their OWN
+        // entry-spot composition incl. themselves, everyone else stays
+        // pixel-stable on the starter's frozen plan.
+        let layout = freshPlan ? null : layoutFor(state.sessionKey);
+        if (!layout) {
+            // POV render: fresh plan, never cached
+            layout = { exits: roomScene.exitsFor(doc, prow) };
+            layout.plan = roomScene.planFor(doc, prow, room, layout.exits);
+        } else if (!layout.plan) {
             layout.exits = roomScene.exitsFor(doc, prow);
             layout.plan = roomScene.planFor(doc, prow, room, layout.exits);
         }
