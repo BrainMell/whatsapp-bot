@@ -225,6 +225,14 @@ async function onRoomEnter(eventDoc, player, room) {
             rooms.markActive(eventDoc.eventId, room.key);
             lines.push(`🤝 A guardian pack blocks this hall. Allies in the room may fight it together (shared reward).`);
             break;
+        case 'finale': {
+            // ⏳ WARDEN FINALE (owner 2026-10-05): the timer-end boss hunt
+            rooms.markActive(eventDoc.eventId, room.key);
+            const wName = payloadGet(room.payload, 'wardenName') || 'the Warden';
+            lines.push(`⏳ *${wName.toUpperCase()}* rises from the floor of this ${flavor.toLowerCase()} hall — one of the four wardens holding the war open.`);
+            lines.push(`*It attacks!* Allies in the room fight it together. The war ends when all four wardens fall.`);
+            break;
+        }
         case 'core':
             rooms.markActive(eventDoc.eventId, room.key);
             lines.push(`🌍 *THE WORLD CORE* - the heart of this dead world still beats here. A mighty guardian bars the way.`);
@@ -476,6 +484,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
         }
         case 'combat':
         case 'coop':
+        case 'finale':
         case 'core': {
             if (!['fight', 'attack', 'engage'].includes(norm)) return { handled: false };
             return { handled: true, sentCombat: true, text: null };
@@ -605,6 +614,7 @@ async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = 
         : [{ level: 10 + Math.round((room.ring || 0) * 6) }]).slice(0, 3);
     const variant = variantOf(room);
     const isCore = !!payloadGet(room.payload, 'coreGuardian');
+    const isFinale = !!payloadGet(room.payload, 'finaleBoss');
 
     // ⚔️ THE RUINS IS THE ARENA (owner spec §12/§14: no more beach): the
     // battle background is THIS room's own door-plate — the exact image the
@@ -625,7 +635,7 @@ async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = 
         return { type: template?.id, level: e.level || 10, name: template ? `${theme.flavor} ${template.name}` : undefined };
     });
 
-    // ward_active relic → real buff for THIS fight (atk/def percent or shield)
+    // ward relic → real buff for THIS fight (atk/def percent or shield)
     let ward = null;
     const wardRelic = (player.relics || []).find((r) => r.category === 'ward_active');
     if (wardRelic) {
@@ -633,17 +643,34 @@ async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = 
         if (buff) ward = { buff, relicId: wardRelic.id };
     }
 
+    // 🤝 TEAM CO-OP (owner 2026-10-05 23:09Z): every ACTIVE same-guild
+    // champion standing in this room is seated at ONE shared battle — the
+    // quest/raid party shape on the Ruins PvE engine. Rivals (other guilds)
+    // are NOT seated; the router handles them with the occupied-room rule.
+    const mates = (room.occupants || [])
+        .filter((j) => j && j !== player.jid)
+        .map((j) => (eventDoc.players || []).find((p) => p.jid === j))
+        .filter((p) => p && p.guildId === player.guildId && p.status === 'active'
+            && !guildAdventure.isUserInAnyCombat(p.jid))
+        .map((p) => p.jid);
+    const participants = [player.jid, ...mates];
+
     await rooms.markActive(eventDoc.eventId, room.key);
     const started = await guildAdventure.startRuinsCombat(sock, chatId, player.jid, {
         enemies: enemies.filter((e) => e.type),
         eventId: eventDoc.eventId, roomKey: room.key,
-        rank: 'C', background, groq,
+        rank: isFinale ? 'B' : 'C', background, groq,
         greeting: variant ? `${variant.line}` : null,
-        name: isCore ? 'World Core Guardian' : (variant ? `Ruins ${variant.name}` : 'Ruins Encounter'),
+        name: isCore ? 'World Core Guardian'
+            : (isFinale ? `Warden — ${payloadGet(room.payload, 'wardenName') || 'the Warden'}`
+                : (variant ? `Ruins ${variant.name}` : 'Ruins Encounter')),
         // ⚔️ owner directive 2026-10-05 23:39Z: the square map panel is GONE
         // from ruins battles (the fight stays IN the room scene — see
         // guildWar/battleScene.js); no map fragment rides to any renderer.
         ward: ward ? ward.buff : null,
+        // 🤝 co-op: room-scoped shared session + every guildmate in the room
+        sessionKey: guildAdventure.ruinsRoomRawKey(eventDoc.eventId, room.key),
+        participants,
     });
     if (started.success && ward) {
         await consumeWard(eventDoc.eventId, player.jid, ward.relicId).catch((e) =>

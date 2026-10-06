@@ -24,6 +24,7 @@ const TYPES = {
     empty:     { label: 'QUIET HALL',      glyph: '🌫️', accent: '#7A6A58', hint: 'The way is clear.' },
     combat:    { label: 'ENEMY PATROL',    glyph: '⚔️', accent: '#8B1A2B', hint: 'Enemies bar the way - fight to pass.' },
     coop:      { label: 'GUARDIAN PACK',   glyph: '🤝', accent: '#8B1A2B', hint: 'A pack blocks the hall - allies may fight it together.' },
+    finale:    { label: 'WARDEN LAIR',     glyph: '💀', accent: '#6A1E8A', hint: 'A WARDEN holds this hall - the war ends when all four fall.' },
     core:      { label: 'THE WORLD CORE',  glyph: '🌍', accent: '#4A2A8A', hint: 'The heart of the dead world - a guardian bars the way.' },
     puzzle:    { label: 'SEALED MECHANISM', glyph: '🧩', accent: '#2E5E8A', hint: 'Answer the mechanism to unseal the door.' },
     discovery: { label: 'BURIED CACHE',    glyph: '🔍', accent: '#3E6B3E', hint: 'Something is buried here - dig it up.' },

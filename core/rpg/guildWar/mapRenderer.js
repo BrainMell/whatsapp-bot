@@ -29,6 +29,7 @@ const PAL = {
     mate: '#5fc4b0',
     enemy: '#e0a040',
     core: '#a97ef0',
+    warden: '#b04030',
     ember: 'rgba(224,120,64,0.55)',
 };
 
@@ -36,12 +37,13 @@ const PAL = {
 const TYPE_GLYPH = {
     empty: '', combat: '⚔', puzzle: '✥', discovery: '⚑', reward: '◈',
     hazard: '☠', lore: '✺', coop: '✚', secret: '✦', anomaly: '✷',
-    landmark: '▲', core: '⨀',
+    landmark: '▲', core: '⨀', finale: '☠',
 };
 const TYPE_LABEL = {
     empty: 'Empty hall', combat: 'Guarded', puzzle: 'Sealed', discovery: 'Buried find',
     reward: 'Vault', hazard: 'Trapped', lore: 'Inscribed', coop: 'Guardians (co-op)',
     secret: 'Hidden', anomaly: 'Anomaly', landmark: 'Landmark', core: 'World Core',
+    finale: 'Warden',
 };
 
 // ─── font registration (same kit as the parchment cards) ─────────────────
@@ -245,6 +247,8 @@ function _renderInProcess(eventDoc, player, extras = {}) {
         const x = px(r), y = py(r);
         let color = r.state === 'CLEARED' ? PAL.cleared : r.state === 'ACTIVE' ? PAL.active : PAL.unexplored;
         if (r.type === 'core') color = PAL.core;
+        // ⏳ warden lairs burn red on every chart — the finale hunt targets
+        if (r.type === 'finale' && r.state !== 'CLEARED') color = PAL.warden;
         const size = (chamberMode ? cell : cell * 0.5) - inset * 2;
         const rad = chamberMode ? Math.max(4, size * 0.22) : size;
 

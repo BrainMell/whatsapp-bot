@@ -1166,6 +1166,7 @@ const TYPE_LABEL = {
     discovery: 'BURIED CACHE', reward: 'OLD-WORLD VAULT', hazard: 'TRAPPED PASSAGE',
     lore: 'INSCRIBED HALL', coop: 'GUARDIAN PACK', secret: 'HIDDEN CHAMBER',
     anomaly: 'WORLD-THIN HALL', landmark: 'LANDMARK', core: 'THE WORLD CORE',
+    finale: 'THE WARDEN',
 };
 
 // ── ENCOUNTER CARD OVERLAY (owner ruins_fixes.txt #7, 2026-10-05) ──────

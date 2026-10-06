@@ -284,7 +284,7 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
     if (opts.prefixed && GENERIC_PREFIXED_RE.test(norm)) return null;
 
     // ── ruins action grammar: any DM verb this router understands ──
-    const QUIET_ACTION_RE = new RegExp(`^(?:look|l|where(?:\\s?am\\s?i)?|map|gw map|paths|relics|bag|status|score|rejoin|return|quit|leave|exit|accept|flee|mark|teleport|tp|recall|handin(?:\\s\\S.*)?|use(?:\\s\\S.*)?|challenge(?:\\s\\S.*)?|share map(?:\\s\\S.*)?|move\\s+(?:${MOVE_TOKEN_RE})|(?:${MOVE_TOKEN_RE}))$`);
+    const QUIET_ACTION_RE = new RegExp(`^(?:look|l|where(?:\\s?am\\s?i)?|map|gw map|paths|relics|bag|status|score|rejoin|return|quit|leave|exit|accept|flee|mark|teleport|tp|recall|handin(?:\\s\\S.*)?|use(?:\\s\\S.*)?|challenge(?:\\s\\S.*)?|share map(?:\\s\\S.*)?|talk(?:\\s\\S.*)?|say(?:\\s\\S.*)?|move\\s+(?:${MOVE_TOKEN_RE})|(?:${MOVE_TOKEN_RE}))$`);
 
     const eventDoc = await getEventForPlayer(senderJid);
     if (!eventDoc) {
@@ -363,7 +363,7 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         const dir = MOVE_WORDS[moveToken];
         // Ruins rule: cannot move while the room's encounter is unresolved
         const room = roomOf(eventDoc, player);
-        if (room && room.state === 'ACTIVE' && ['combat', 'puzzle', 'coop', 'core'].includes(room.type)) {
+        if (room && room.state === 'ACTIVE' && ['combat', 'puzzle', 'coop', 'core', 'finale'].includes(room.type)) {
             return { text: '🚪 The way onward is blocked until this chamber is resolved (or you `flee`).' };
         }
         const cooldownLeft = CFG.MAP.MOVE_COOLDOWN_MS - (Date.now() - (player.lastMoveAt || 0));
@@ -405,12 +405,37 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         const meNow = playerOf(freshAfterPresent, senderJid) || me;
         const roomNow = roomOf(freshAfterPresent, meNow);
         const autoCombat = roomNow && roomNow.state !== 'CLEARED' && (
-            ['combat', 'coop', 'core'].includes(roomNow.type)
+            ['combat', 'coop', 'core', 'finale'].includes(roomNow.type)
             || (roomNow.type === 'secret' && encounters.payloadGet(roomNow.payload, 'boss'))
         );
         if (autoCombat) {
-            const started = await encounters.startRoomCombat(sock, chatId, meNow, freshAfterPresent, roomNow, { groq: null });
-            if (!started.success) return { text: started.msg || 'The encounter failed to begin - type `fight` to try again.' };
+            // 🤝 TEAM CO-OP + OCCUPIED-ROOM RULE (owner 2026-10-05 23:09Z):
+            // the fight in an ACTIVE room is ONE shared battle.
+            //   • same guild      → you are SEATED at it (quest-style co-op)
+            //   • different guild → the chamber is OCCUPIED: wait (stay put) or
+            //     `flee` back the way you came — never a second fight on the
+            //     same pack (the old double-fight bug the playtest caught).
+            // A NOT-inCombat session object (victory cleanup window) is stale —
+            // ignore it and start fresh (startRuinsCombat reaps stale states).
+            const live = require('../guildAdventure').ruinsRoomSession(eventDoc.eventId, roomNow.key);
+            if (live && live.inCombat && !live.players.some((p) => p.jid === senderJid)) {
+                const anySameGuild = (live.players || []).some((p) => p.jid
+                    && (freshAfterPresent.players.find((x) => x.jid === p.jid) || {}).guildId === player.guildId);
+                if (anySameGuild) {
+                    const joined = require('../guildAdventure').joinRuinsSession(eventDoc.eventId, roomNow.key, senderJid);
+                    if (joined.ok) {
+                        const mateNames = (live.players || []).map((p) => p.name).filter(Boolean).join(', ');
+                        await touch();
+                        return { text: `🤝 You draw steel beside your guildmates — *${mateNames}* are already locked in battle here, and now the fight is yours too!\n\`${prefix} combat atk\` on your turn.` };
+                    }
+                } else {
+                    return { text: `⚔️ *This chamber is OCCUPIED.* A battle is already being fought here by ${live.players.map((p) => p.name).filter(Boolean).join(', ')} of a rival guild.\nStay put and wait for it to finish — or \`flee\` back the way you came.` };
+                }
+            }
+            if (!live || !live.inCombat || !live.players.some((p) => p.jid === senderJid)) {
+                const started = await encounters.startRoomCombat(sock, chatId, meNow, freshAfterPresent, roomNow, { groq: null });
+                if (!started.success) return { text: started.msg || 'The encounter failed to begin - type `fight` to try again.' };
+            }
         }
         return {};
     }
@@ -426,8 +451,10 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
     if (/^(mark|mark room|anchor)$/.test(norm)) {
         const room = roomOf(eventDoc, player);
         if (!room) return { text: '❌ Nowhere to anchor.' };
-        if (room.state === 'ACTIVE' && ['combat', 'coop', 'core'].includes(room.type)) {
-            return { text: '🚫 You cannot anchor inside an unresolved encounter.' };
+        if (room) {
+            if (room.state === 'ACTIVE' && ['combat', 'coop', 'core', 'finale'].includes(room.type)) {
+                return { text: '🚫 You cannot anchor inside an unresolved encounter.' };
+            }
         }
         const prev = player.markedRoom || null;
         await state.updatePlayer(eventDoc.eventId, senderJid, {}, { markedRoom: player.roomId, lastActionAt: Date.now() });
@@ -436,7 +463,7 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
     if (/^(teleport|tp|recall)$/.test(norm)) {
         const room = roomOf(eventDoc, player);
         // 1) never out of a live fight — unresolved encounter OR pending duel
-        if (room && room.state === 'ACTIVE' && ['combat', 'puzzle', 'coop', 'core'].includes(room.type)) {
+        if (room && room.state === 'ACTIVE' && ['combat', 'puzzle', 'coop', 'core', 'finale'].includes(room.type)) {
             return { text: '🚫 *The way is shut.* Resolve this chamber first - teleporting out of a live fight is not granted.' };
         }
         const pendingDuel = (eventDoc.pvpChallenges || []).some((c) =>
@@ -563,11 +590,13 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         // chambers MUST be escapable — a champion who cannot crack the seal
         // retreats (room stays ACTIVE, spoils forfeited) instead of being
         // trapped forever. The blocked-move message promises exactly this.
-        if (pending || ['combat', 'puzzle', 'coop', 'core'].includes(room?.type)) {
+        if (pending || ['combat', 'puzzle', 'coop', 'core', 'finale'].includes(room?.type)) {
             // ⚔️ QA FIX: abandoning a live Ruins fight must also END the combat
             // session — otherwise the orphaned session answers every later
             // auto-start with "already in combat" until the 30-min reaper.
-            try { require('../guildAdventure').abortRuinsSession(senderJid); } catch (e) {}
+            // 🤝 co-op (owner 2026-10-05): a shared room battle keeps going for
+            // whoever stays — retreat only unseats YOU.
+            try { require('../guildAdventure').leaveRuinsSession(senderJid) || require('../guildAdventure').abortRuinsSession(senderJid); } catch (e) {}
             await state.updatePlayer(eventDoc.eventId, senderJid, {}, {
                 roomId: player.prevRoomId,
                 protectedUntil: Date.now() + CFG.PVP.PROTECT_AFTER_LOSS_MS,
@@ -613,6 +642,24 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         return { text: `🗺️ Your chart has been copied to ${mate.name}.` };
     }
 
+    // ── talk to the room (owner brief #1: `.j talk <text>` reaches everyone
+    // standing in the same chamber) ──
+    if (/^talk\b/.test(norm) || /^say\b/.test(norm)) {
+        const msg = (norm.replace(/^(?:talk|say)\s*/, '') || '').trim();
+        if (!msg) return { text: '🗣️ Say something: `talk <message>`.' };
+        const here = (roomOf(eventDoc, player)?.occupants || []).filter((j) => j !== senderJid);
+        let delivered = 0;
+        for (const j of here) {
+            const mate = eventDoc.players.find((p) => p.jid === j);
+            if (!mate || mate.status === 'quit') continue;
+            try {
+                await sock.sendMessage(j, { text: `🗣️ *${player.name}* (${roomOf(eventDoc, player)?.key}): ${msg}` });
+                delivered += 1;
+            } catch (e) { /* best-effort */ }
+        }
+        return { text: delivered > 0 ? `🗣️ You say: _${msg}_ (${delivered} champion${delivered === 1 ? '' : 's'} heard you)` : '🗣️ You speak into the empty hall… only the dust answers.' };
+    }
+
     // ── room encounter interactions (dig/take/cross/touch/record/claim/fight/answers) ──
     const room = roomOf(eventDoc, player);
     if (room) {
@@ -624,6 +671,21 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         if (res.handled) {
             await touch();
             if (res.sentCombat) {
+                // 🤝 same occupied/co-op rule as the auto-encounter: one shared
+                // battle per room — guildmates get seated, rivals wait.
+                const live = require('../guildAdventure').ruinsRoomSession(eventDoc.eventId, room.key);
+                if (live && live.inCombat && !live.players.some((p) => p.jid === senderJid)) {
+                    const anySameGuild = (live.players || []).some((p) => p.jid
+                        && (eventDoc.players.find((x) => x.jid === p.jid) || {}).guildId === player.guildId);
+                    if (anySameGuild) {
+                        const joined = require('../guildAdventure').joinRuinsSession(eventDoc.eventId, room.key, senderJid);
+                        if (joined.ok) {
+                            const mateNames = (live.players || []).map((p) => p.name).filter(Boolean).join(', ');
+                            return { text: `🤝 You draw steel beside your guildmates — *${mateNames}* are already locked in battle here!\n\`${prefix} combat atk\` on your turn.` };
+                        }
+                    }
+                    return { text: `⚔️ *This chamber is OCCUPIED.* A battle is already being fought here — stay and wait, or \`flee\` the way you came.` };
+                }
                 const started = await encounters.startRoomCombat(sock, chatId, player, eventDoc, room, { groq: null });
                 return { text: started.success ? null : started.msg };
             }
@@ -662,7 +724,17 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
     if (/^(status|gw status|score)$/.test(norm)) {
         const byGuild = feed.computeScoreboard(eventDoc);
         const standings = byGuild.slice(0, 8).map((g, i) => `${['🥇', '🥈', '🥉'][i] || '▫️'} ${g.name}: ${g.points}`).join('\n');
-        return { text: `⚔️ *Guild War* (${eventDoc.type}) - ends <t:${Math.floor((eventDoc.endsAt || 0) / 1000)}:R>\nYou: ${player.score} GP · lives ${player.lives} · position ${player.roomId}\n\n${standings}` };
+        // ⏳ finale: the clock line becomes the warden tally
+        let clockLine;
+        const fin = eventDoc.finale;
+        if (fin && fin.started) {
+            const bosses = Array.isArray(fin.bosses) ? fin.bosses : [];
+            const down = bosses.filter((b) => b.dead).length;
+            clockLine = `⏳ *FINALE* — wardens slain ${down}/${bosses.length || CFG.FINALE.BOSS_COUNT}. The war ends when all four fall.`;
+        } else {
+            clockLine = `ends <t:${Math.floor((eventDoc.endsAt || 0) / 1000)}:R>`;
+        }
+        return { text: `⚔️ *Guild War* (${eventDoc.type}) - ${clockLine}\nYou: ${player.score} GP · lives ${player.lives} · position ${player.roomId}\n\n${standings}` };
     }
 
     if (/^(quit|leave war|abandon)$/.test(norm)) {

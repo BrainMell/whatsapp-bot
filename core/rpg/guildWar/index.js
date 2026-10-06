@@ -19,6 +19,68 @@ const notice = require('./noticeCard');
 const guilds = require('../guilds');
 
 // ── combat hooks (installed once at boot) ──
+// ⏳ FINALE SUPPORT (owner 2026-10-05 23:09Z): when a warden boss dies, the
+// ledger on the event doc is updated atomically; when all four are dead the
+// war ENDS right there (rewards distribute immediately — no waiting for the
+// next tick).
+async function _wardenDown(eventId, room) {
+    const GuildWarEvent = require('../../models/GuildWarEvent');
+    const payload = room.payload || {};
+    const idx = typeof payload.get === 'function' ? payload.get('wardenIndex') : payload.wardenIndex;
+    const name = (typeof payload.get === 'function' ? payload.get('wardenName') : payload.wardenName) || 'a Warden';
+    // mark this warden dead (arrayFilter binds ONE ledger entry)
+    await GuildWarEvent.updateOne(
+        { eventId, 'finale.bosses.index': idx },
+        { $set: { 'finale.bosses.$[b].dead': true } },
+        { arrayFilters: [{ 'b.index': idx }] }
+    ).catch(() => {});
+    const ev = await state.getEvent(eventId, { fresh: true });
+    const bosses = (ev && ev.finale && Array.isArray(ev.finale.bosses)) ? ev.finale.bosses : [];
+    const dead = bosses.filter((b) => b.dead).length;
+    const total = bosses.length || CFG.FINALE.BOSS_COUNT;
+    feed.queue(eventId, 'major',
+        `⏳💀 *${name.toUpperCase()} HAS FALLEN* — warden ${dead} of ${total} destroyed!${dead < total ? `\n${total - dead} still hold the Ruins. The war goes on.` : ''}`);
+    if (dead >= total && total > 0) {
+        feed.queue(eventId, 'major', '⏳ *ALL FOUR WARDENS ARE DEAD.* The Ruins fall silent — the war is OVER. The Association tallies the final spoils…');
+        await state.endEvent(eventId, 'All four wardens have fallen. The Ruins fall silent.');
+        return { allDead: true, dead, total, ended: true };
+    }
+    return { allDead: false, dead, total, ended: false };
+}
+
+// defeat bookkeeping for ONE event player (life lost → respawn / final death)
+async function _defeatPlayer(eventId, evPlayer) {
+    const jid = evPlayer.jid;
+    const freshLives = Math.max(0, (evPlayer.lives ?? CFG.COMBAT.LIVES) - 1);
+    const spawnRoom = evPlayer.spawnRoomId || evPlayer.roomId;
+    if (freshLives > 0) {
+        await state.updatePlayer(eventId, jid, {}, {
+            lives: freshLives,
+            roomId: spawnRoom,
+            prevRoomId: spawnRoom,
+            protectedUntil: Date.now() + CFG.COMBAT.RESPAWN_PROTECT_MS,
+            lastActionAt: Date.now(),
+        });
+        // 🤝 occupancy hygiene: the body leaves the death chamber and wakes
+        // at its spawn hall — otherwise the dead champion lingers in the old
+        // room's occupants (talk ghosts, co-op seating reads stale mates).
+        await rooms.leaveRoom(eventId, jid, evPlayer.roomId).catch(() => {});
+        await rooms.enterRoom(eventId, jid, null, spawnRoom).catch(() => {});
+        feed.queue(eventId, 'normal',
+            `💀 *${evPlayer.name || jid} of ${evPlayer.guildName || 'the unsworn'}* has fallen deep within the Ruins.\n` +
+            `The dead world claims another life.\n` +
+            `*${freshLives}* ${freshLives === 1 ? 'life' : 'lives'} remain${freshLives === 1 ? 's' : ''}.`);
+        return { jid, kind: 'respawn', name: evPlayer.name, lives: freshLives, spawnRoom };
+    }
+    await rooms.dropCarriedRelics(eventId, jid, 'final death');
+    await rooms.leaveRoom(eventId, jid, evPlayer.roomId).catch(() => {});
+    await state.updatePlayer(eventId, jid, {}, { status: 'defeated', lives: 0 });
+    feed.queue(eventId, 'normal',
+        `💀 *${evPlayer.name || jid} of ${evPlayer.guildName || 'the unsworn'}* has fallen for the last time this war.\n` +
+        `The Ruins keep what they take — their carried relics lie where they fell.`);
+    return { jid, kind: 'final', name: evPlayer.name, lives: 0, spawnRoom };
+}
+
 function installCombatHooks() {
     const guildAdventure = require('../guildAdventure');
     guildAdventure.setRuinsHooks({
@@ -28,11 +90,17 @@ function installCombatHooks() {
         // threw `state.getEvent is not a function` and was swallowed
         // upstream, so rooms never cleared, GP never paid, lives never
         // dropped. Param renamed to `session` (the combat session object).
-        onFlee(session) {
+        // 🤝 co-op (owner 2026-10-05): guildAdventure identifies WHO fled —
+        // only that champion is unseated; the shared battle continues.
+        onFlee(session, fleeJid) {
             const meta = session.ruinsMeta;
             if (!meta) return;
-            const player = (session.players || [])[0];
+            const player = (session.players || []).find((p) => p.jid === fleeJid) || (session.players || [])[0];
             if (!player) return;
+            const realCount = (session.players || []).filter((p) => p.jid && !p.isTutorialAlly).length;
+            if (realCount > 1) {
+                try { require('../guildAdventure').leaveRuinsSession(player.jid); } catch (e) {}
+            }
             // teleport the session's player back to their previous room
             session.playerRetreated = true; // hint for any group combat flows
             require('./index')._noteRetreat(meta.eventId, player.jid).catch((e) =>
@@ -41,124 +109,105 @@ function installCombatHooks() {
         // combat end → victory clears the room + awards; defeat respawns.
         // 💡 NAVIGATION OVERHAUL: on victory the player is DM'd the VISUAL
         // navigation card (arrows for every open path) instead of text exits.
+        // 🤝 TEAM CO-OP (owner 2026-10-05 23:09Z): the session now carries a
+        // PARTY (every same-guild champion seated in the room). Outcomes are
+        // resolved per participant: shared room GP for the living, life-loss +
+        // respawn for the fallen, warden-ledger updates for the finale.
         async onEnd(session, victory, sessionKey, sock) {
             const meta = session.ruinsMeta;
             if (!meta) return;
-            const player = (session.players || [])[0];
-            if (!player) return;
+            const realPlayers = (session.players || []).filter((p) => p.jid && !p.isTutorialAlly);
+            if (!realPlayers.length) return;
             const GuildWarEvent = require('../../models/GuildWarEvent');
-            const jid = player.jid;
-            let prefix = '.';
-            try { prefix = require('../../../botConfig').getPrefix() || '.'; } catch (e) {}
 
             if (victory) {
                 const ev = await state.getEvent(meta.eventId, { fresh: true });
                 if (!ev || ev.state !== 'ACTIVE') return;
-                const me = ev.players.find((p) => p.jid === jid);
                 const room = ev.rooms.find((r) => r.key === meta.roomKey);
-                if (!me || !room) return;
+                if (!room) return;
+                const firstEv = realPlayers.map((p) => ev.players.find((x) => x.jid === p.jid)).find(Boolean) || realPlayers[0];
 
-                const claim = await rooms.clearRoom(meta.eventId, room.key, me);
+                const claim = await rooms.clearRoom(meta.eventId, room.key, firstEv);
                 if (claim.won) {
                     // battle-variant adjustment: elite/cursed/bounty rooms pay more
                     const variant = require('./encounters').variantOf(room);
                     const gpValue = Math.round((CFG.POINTS.ROOM_CLEAR[room.type] ?? 10) * (variant?.gpMult || 1));
-                    const coopBonus = (room.occupants || []).filter((j) => j !== jid)
-                        .some((j) => ev.players.find((p) => p.jid === j)?.guildId === me.guildId);
-                    await points.award(meta.eventId, jid, gpValue, 'room-clear', { coopBonus });
-
-                    // relic award for relic-bearing room types
-                    if (['discovery', 'reward', 'secret'].includes(room.type)) {
-                        await encounters.awardRoomRelic(ev, me, room);
+                    const coop = realPlayers.length > 1;
+                    const results = [];
+                    for (const p of realPlayers) {
+                        const evP = ev.players.find((x) => x.jid === p.jid);
+                        if (!evP) continue;
+                        const alive = !p.isDead && (p.currentHP ?? p.stats?.hp ?? 1) > 0;
+                        if (alive) {
+                            // shared reward: every living participant is paid
+                            await points.award(meta.eventId, p.jid, gpValue, 'room-clear', { coopBonus: coop });
+                            // relic award for relic-bearing room types (per-player roll)
+                            if (['discovery', 'reward', 'secret'].includes(room.type)) {
+                                await encounters.awardRoomRelic(ev, evP, room);
+                            }
+                            results.push({ jid: p.jid, kind: 'victory', name: evP.name || p.name });
+                        } else {
+                            // fell mid-fight, but the chamber was won — a life is
+                            // still lost and the body wakes at the spawn hall
+                            results.push(await _defeatPlayer(meta.eventId, evP));
+                        }
                     }
 
                     // 💡 FEED (§17): boss-tier kills are war headlines
                     if (room.type === 'core' || (room.type === 'secret' && room.payload && (room.payload.boss || room.payload.get?.('boss')))) {
                         feed.queue(meta.eventId, 'major',
-                            `💀 ${me.name} of ${me.guildName} has SLAIN the guardian of the ${room.type === 'core' ? 'WORLD CORE' : 'hidden chamber'}! The way stands open.`);
+                            `💀 ${firstEv.name} of ${firstEv.guildName} has SLAIN the guardian of the ${room.type === 'core' ? 'WORLD CORE' : 'hidden chamber'}! The way stands open.`);
                     }
 
                     // World Core: first guild to breach
                     if (room.type === 'core' && !ev.coreClaimedBy) {
                         await GuildWarEvent.updateOne(
                             { eventId: meta.eventId, coreClaimedBy: null },
-                            { $set: { coreClaimedBy: me.guildId } }
+                            { $set: { coreClaimedBy: firstEv.guildId } }
                         );
                         feed.queue(meta.eventId, 'major',
-                            `🌐 *WORLD EVENT* — ${me.name} of ${me.guildName} has breached the WORLD CORE! First-guild glory: +${CFG.POINTS.CORE_FIRST_GUILD} GP to every member!`);
-                        for (const mate of ev.players.filter((p) => p.guildId === me.guildId)) {
+                            `🌐 *WORLD EVENT* — ${firstEv.name} of ${firstEv.guildName} has breached the WORLD CORE! First-guild glory: +${CFG.POINTS.CORE_FIRST_GUILD} GP to every member!`);
+                        for (const mate of ev.players.filter((p) => p.guildId === firstEv.guildId)) {
                             await points.award(meta.eventId, mate.jid, CFG.POINTS.CORE_FIRST_GUILD, 'core-guild', { ignoreCap: false });
                         }
-                        await points.award(meta.eventId, jid, CFG.POINTS.CORE_BREACH_PLAYER, 'core-breach');
+                        await points.award(meta.eventId, firstEv.jid, CFG.POINTS.CORE_BREACH_PLAYER, 'core-breach');
                     }
 
+                    const heroNames = results.filter((r) => r.kind === 'victory').map((r) => r.name).join(' & ') || firstEv.name;
                     feed.queue(meta.eventId, 'normal',
-                        `⚔️ ${me.name} cleared a ${room.type === 'core' ? 'World Core guardian' : 'guarded chamber'}${coopBonus ? ', standing shoulder to shoulder with guildmates' : ', alone in the dark'}.`);
+                        `⚔️ ${heroNames} cleared a ${room.type === 'core' ? 'World Core guardian' : room.type === 'finale' ? 'WARDEN of the Ruins' : 'guarded chamber'}${coop ? ', standing shoulder to shoulder with guildmates' : ', alone in the dark'}.`);
 
-                    // 💡 NAVIGATION OVERHAUL §4/§15: post-victory the player
-                    // gets the RETURN map (same chart, post-encounter visual
-                    // state) — the world re-renders around them, no parchment.
-                    // 🔄 ORDERING (owner 2026-10-05 11:48Z: "the defeat or
-                    // victory image card should come in before the map and
-                    // new encounter one"): onEnd no longer DMs the visuals
-                    // itself — it returns a descriptor and presentAfterBattle
-                    // replays the navigation card AFTER the decree end card
-                    // (endCombat calls it right behind the card send).
-                    return { kind: 'victory', claimed: true };
+                    // ⏳ FINALE: a warden died here — update the ledger; when the
+                    // fourth falls, the war ENDS (rewards pay immediately).
+                    let finaleDone = null;
+                    if (room.type === 'finale' || (room.payload && (room.payload.finaleBoss || room.payload.get?.('finaleBoss')))) {
+                        finaleDone = await _wardenDown(meta.eventId, room);
+                    }
+
+                    // 🔄 ORDERING (owner 2026-10-05 11:48Z): onEnd returns a
+                    // descriptor; presentAfterBattle replays the navigation
+                    // AFTER the decree end card.
+                    return { kind: 'victory', claimed: true, players: results, finaleDone };
                 } else {
-                    feed.queue(meta.eventId, 'minor', `⏳ ${me.name} arrived a heartbeat too late — another's banner already flies over that chamber.`);
+                    const late = ev.players.find((p) => p.jid === firstEv.jid);
+                    feed.queue(meta.eventId, 'minor', `⏳ ${late ? late.name : firstEv.name} arrived a heartbeat too late — another's banner already flies over that chamber.`);
+                    return { kind: 'victory', claimed: false, players: [] };
                 }
             } else {
                 // defeat: lives--, respawn at spawn corner with protection, room stays ACTIVE
                 // (§15 #1 fix: this path was unreachable before the shadowing fix)
                 // 💬 DEFEAT-PATH BUGFIX 2026-10-04 (owner spec §23 "Win. Lose."):
-                // the combat session entity (buildRuinsPlayerEntity) carries NO
-                // lives / spawnRoomId / roomId / guildName. Reading them here meant
-                // (a) lives were always computed from the default 3 — a champion at
-                // 1 life who died in PvE was INFLATED back to 2; (b) respawn never
-                // relocated — the dead champion woke up inside the death room;
-                // (c) the death feed always said 'the unsworn'. Read the
-                // authoritative event player instead.
-                let src = player;
-                try {
-                    const evD = await state.getEvent(meta.eventId, { fresh: true });
-                    src = (evD && evD.players && evD.players.find((p) => p.jid === jid)) || player;
-                } catch (e) { /* keep session entity as fallback */ }
-                const freshLives = Math.max(0, (src.lives ?? CFG.COMBAT.LIVES) - 1);
-                const spawnRoom = src.spawnRoomId || src.roomId;
-                if (freshLives > 0) {
-                    await state.updatePlayer(meta.eventId, jid, {}, {
-                        lives: freshLives,
-                        roomId: spawnRoom,
-                        prevRoomId: spawnRoom,
-                        protectedUntil: Date.now() + CFG.COMBAT.RESPAWN_PROTECT_MS,
-                        lastActionAt: Date.now(),
-                    });
-                    // ⚔️ WAR FEED (owner spec §20): a champion's death is an
-                    // EVENT, not a digest bullet — standalone, named, guilded,
-                    // with the stakes stated. Mirrors the owner's own example.
-                    feed.queue(meta.eventId, 'normal',
-                        `💀 *${src.name || player.name} of ${src.guildName || 'the unsworn'}* has fallen deep within the Ruins.\n` +
-                        `The dead world claims another life.\n` +
-                        `*${freshLives}* ${freshLives === 1 ? 'life' : 'lives'} remain${freshLives === 1 ? 's' : ''}.`);
-                    // 💀 DEFEAT PRESENTATION (owner 2026-10-05): NO story text
-                    // about "returning to your last room / you got lucky" —
-                    // the war sends the fallen champion to their SPAWN
-                    // chamber and then SHOWS it: the map (YOU marker at the
-                    // spawn) + the room scene with them standing in it, so
-                    // they know exactly where they are and just continue.
-                    // 🔄 ORDERING (see victory branch note): the respawn
-                    // presentation — death text, map, room encounter — is
-                    // replayed by presentAfterBattle AFTER the decree card.
-                    return { kind: 'respawn', name: src.name || player.name, lives: freshLives, spawnRoom };
-                } else {
-                    await rooms.dropCarriedRelics(meta.eventId, jid, 'final death');
-                    await state.updatePlayer(meta.eventId, jid, {}, { status: 'defeated', lives: 0 });
-                    feed.queue(meta.eventId, 'normal',
-                        `💀 *${src.name || player.name} of ${src.guildName || 'the unsworn'}* has fallen for the last time this war.\n` +
-                        `The Ruins keep what they take — their carried relics lie where they fell.`);
-                    return { kind: 'final' };
+                // read the authoritative event players, not the session entities
+                // (they carry no lives/spawnRoomId). 🤝 co-op: a party wipe
+                // resolves EVERY participant's death individually — each
+                // champion loses their own life and wakes at their own spawn.
+                const evD = await state.getEvent(meta.eventId, { fresh: true }).catch(() => null);
+                const results = [];
+                for (const p of realPlayers) {
+                    const src = (evD && evD.players && evD.players.find((x) => x.jid === p.jid)) || p;
+                    results.push(await _defeatPlayer(meta.eventId, src));
                 }
+                return { kind: 'defeat-multi', players: results };
             }
         },
         // 🔄 POST-BATTLE PRESENTATION (owner 2026-10-05 11:48Z: "the defeat
@@ -170,37 +219,49 @@ function installCombatHooks() {
         // the DM order becomes: decree card → navigation map → room encounter.
         async presentAfterBattle(session, victory, sessionKey, sock, desc) {
             const meta = session.ruinsMeta;
-            const player = (session.players || [])[0];
-            if (!meta || !player || !sock || !desc) return;
-            const jid = player.jid;
+            if (!meta || !sock || !desc) return;
+            // 🤝 co-op: per-PLAYER sends use the RAW sock (respawn chambers
+            // differ per champion); shared visuals ride the multicast.
+            const rawSock = session.rawSock || sock;
             let prefix = '.';
             try { prefix = require('../../../botConfig').getPrefix() || '.'; } catch (e) {}
             try {
+                // multi-player descriptor: results per participant. Legacy
+                // single-player descriptors (kind victory/respawn/final with
+                // top-level fields) are normalized into the same loop.
+                let results = Array.isArray(desc.players) ? desc.players : [];
+                if (!results.length && desc.kind === 'respawn') {
+                    const jid = (session.players || [])[0]?.jid;
+                    if (jid) results = [{ jid, kind: 'respawn', name: desc.name, lives: desc.lives, spawnRoom: desc.spawnRoom }];
+                }
                 if (desc.kind === 'victory' && desc.claimed) {
                     // victory: the RETURN map (same chart, post-encounter state)
                     const freshAfter = await state.getEvent(meta.eventId, { fresh: true });
-                    const meAfter = freshAfter.players.find((p) => p.jid === jid) || player;
-                    const roomAfter = freshAfter.rooms.find((r) => r.key === meAfter.roomId);
-                    if (meAfter && roomAfter) {
-                        const dmRouter = require('./dmRouter');
+                    const dmRouter = require('./dmRouter');
+                    for (const r of results.filter((x) => x.kind === 'victory' && x.jid)) {
+                        const meAfter = freshAfter.players.find((p) => p.jid === r.jid);
+                        if (!meAfter) continue;
+                        const roomAfter = freshAfter.rooms.find((rr) => rr.key === meAfter.roomId);
+                        if (!roomAfter) continue;
                         const retBuf = await dmRouter.returnMapFor(freshAfter, meAfter, roomAfter);
-                        await sock.sendMessage(jid, {
+                        await rawSock.sendMessage(r.jid, {
                             image: retBuf,
                             caption: dmRouter.mapCaption('🧭 *The chamber is yours.* The compass marks your exits.', prefix),
                         });
                     }
-                } else if (desc.kind === 'respawn') {
+                }
+                for (const r of results.filter((x) => x.kind === 'respawn' && x.jid)) {
                     // defeat: the fall text + the spawn chamber they wake up in
-                    await sock.sendMessage(jid, {
-                        text: `💀 *You have fallen, ${desc.name}.*\nThe Association's wards drag you back to the chamber where you deployed. ${desc.lives} ${desc.lives === 1 ? 'life' : 'lives'} remain - the war goes on.`,
+                    await rawSock.sendMessage(r.jid, {
+                        text: `💀 *You have fallen, ${r.name}.*\nThe Association's wards drag you back to the chamber where you deployed. ${r.lives} ${r.lives === 1 ? 'life' : 'lives'} remain - the war goes on.`,
                     });
                     const dmRouter = require('./dmRouter');
-                    const ctxDoc = await state.getMoveContext(meta.eventId, desc.spawnRoom);
+                    const ctxDoc = await state.getMoveContext(meta.eventId, r.spawnRoom);
                     if (ctxDoc && ctxDoc.room) {
                         const evNow = await state.getEvent(meta.eventId, { fresh: true });
-                        const src = (evNow.players || []).find((p) => p.jid === jid) || {};
-                        const meNow = { ...src, roomId: desc.spawnRoom, prevRoomId: desc.spawnRoom };
-                        await dmRouter.presentRoom(sock, jid, '\u200B', ctxDoc, meNow, ctxDoc.room, { prefix });
+                        const src = (evNow.players || []).find((p) => p.jid === r.jid) || {};
+                        const meNow = { ...src, roomId: r.spawnRoom, prevRoomId: r.spawnRoom };
+                        await dmRouter.presentRoom(rawSock, r.jid, '\u200B', ctxDoc, meNow, ctxDoc.room, { prefix });
                     }
                 }
                 // kind 'final': no navigation to show — the war is over for them
@@ -220,9 +281,13 @@ function installCombatHooks() {
                 const me = ev && ev.players.find((p) => p.jid === player.jid);
                 const room = ev && ev.rooms.find((r) => r.key === meta.roomKey);
                 const TYPE_LABEL = require('./roomScene').TYPE_LABEL;
+                // 🤝 co-op: the decree names the whole party (capped)
+                const partyNames = (session.players || [])
+                    .filter((p) => p.jid && !p.isTutorialAlly).map((p) => p.name).filter(Boolean);
+                const playerName = (partyNames.length > 1 ? partyNames.join(' · ') : (player.name || '')).slice(0, 60);
                 return await require('./endCard').renderRuinsEndCard({
                     victory,
-                    playerName: player.name,
+                    playerName,
                     guildName: (me && me.guildName) || player.guildName || '',
                     roomLabel: room ? ((TYPE_LABEL[room.type] || 'chamber').toLowerCase()) : 'chamber',
                     chamberKey: meta.roomKey,
@@ -364,13 +429,23 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
                 const board = feed.computeScoreboard(ev).slice(0, 8);
                 const standings = board
                     .map((g, i) => `${['🥇', '🥈', '🥉'][i] || '▫️'} *${g.name}:* ${g.points} GP`).join('\n') || '_no scores yet: chambers, relics and the World Core await_';
-                const minsLeft = ev.endsAt ? Math.round((ev.endsAt - Date.now()) / 60000) : null;
+                // ⏳ finale: the clock becomes the warden tally
+                let clock;
+                if (ev.finale && ev.finale.started) {
+                    const bs = Array.isArray(ev.finale.bosses) ? ev.finale.bosses : [];
+                    const down = bs.filter((b) => b.dead).length;
+                    clock = `⏳ *FINALE* — wardens slain ${down}/${bs.length || CFG.FINALE.BOSS_COUNT}`;
+                } else {
+                    const minsLeft = ev.endsAt ? Math.round((ev.endsAt - Date.now()) / 60000) : null;
+                    clock = minsLeft != null ? `${Math.max(0, minsLeft)} min left` : 'no clock';
+                }
                 const caption = `⚔️ *GUILD WAR: THE RUINS* (${ev.type}, ${ev.state})\n` +
-                    `👥 ${ev.players.length} champions · ${minsLeft != null ? `${Math.max(0, minsLeft)} min left` : 'no clock'}\n\n${standings}\n\n_Chambers open in my DMs — move with \`${prefix} move forward / left / right / back\`._`;
+                    `👥 ${ev.players.length} champions · ${clock}\n\n${standings}\n\n_Chambers open in my DMs — move with \`${prefix} move forward / left / right / back\`._`;
                 try {
                     const buf = await notice.renderWarStatusCard({
                         type: ev.type, state: ev.state, players: ev.players.length,
-                        endsInMin: minsLeft, standings: board,
+                        endsInMin: (ev.finale && ev.finale.started) ? 0 : (ev.endsAt ? Math.max(0, Math.round((ev.endsAt - Date.now()) / 60000)) : null),
+                        standings: board,
                     });
                     await sock.sendMessage(chatId, { image: buf, caption });
                 } catch (e) {
@@ -556,7 +631,7 @@ async function dmWarStartCards(sock, BOT_MARKER = '\u200B', event, prefix = '.')
             const meNow = fresh.players.find((x) => x.jid === p.jid) || p;
             const roomNow = fresh.rooms.find((r) => r.key === meNow.roomId);
             const autoCombat = ctx && roomNow && roomNow.state !== 'CLEARED' && (
-                ['combat', 'coop', 'core'].includes(roomNow.type)
+                ['combat', 'coop', 'core', 'finale'].includes(roomNow.type)
                 || (roomNow.type === 'secret' && require('./encounters').payloadGet(roomNow.payload, 'boss'))
             );
             if (autoCombat) {

@@ -9146,7 +9146,7 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                     const isWarVerb =
                       /^move\b/.test(_gwVerb) ||
                       /^(?:forward|back|left|right|north|south|east|west|n|s|e|w|a|d|foward|forwrd|faword|fwd|bck|bak)$/.test(_gwVerb) ||
-                      /^(?:look|l|where|whereami|paths|map|mark|anchor|teleport|tp|recall|share\s+map|challenge|accept|flee|handin|rejoin|return|quit)\b/.test(_gwVerb);
+                      /^(?:look|l|where|whereami|paths|map|mark|anchor|teleport|tp|recall|share\s+map|challenge|accept|flee|handin|rejoin|return|quit|talk|say)\b/.test(_gwVerb);
                     if (isWarVerb) {
                       try {
                         const gwResult = await require("./rpg/guildWar/dmRouter").handleDM(

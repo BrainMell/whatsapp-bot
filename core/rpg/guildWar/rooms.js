@@ -194,6 +194,89 @@ async function resetPuzzleAttempts(eventId, roomKey) {
     return setRoomPayload(eventId, roomKey, { 'puzzle.attemptsUsed': 0 });
 }
 
+// ── ⏳ FINALE (owner 2026-10-05 23:09Z): the war timer ran out — the war
+// does NOT end. FOUR WARDEN bosses rise "around the map" and the war only
+// concludes when all four fall. Room selection is farthest-point sampling
+// (each new warden maximizes the minimum Manhattan distance to the ones
+// already placed), so the wardens genuinely spread across the four quarters
+// of the ruins instead of clustering. Each warden room:
+//   • type 'finale' + payload {finaleBoss, wardenIndex, wardenName, enemies, boss, theme}
+//   • revealed on EVERY active champion's map (fog push) — hunting them is
+//     the whole point of the phase
+// All writes are atomic room updates; the caller (state.tick) already holds
+// the flow lease and the {finale: null} flip guards double-spawns.
+async function spawnFinaleBosses(eventDoc) {
+    const encounters = require('./encounters');
+    const CFG = require('./config');
+    const bossLvl = Math.max(1, Math.round(CFG.COMBAT.BASE_ENEMY_LEVEL * CFG.FINALE.BOSS_LEVEL_MULT));
+    const theme = encounters.worldTheme(eventDoc.deadWorld);
+    const spawnSet = new Set((eventDoc.players || []).map((p) => p.spawnRoomId).filter(Boolean));
+
+    // candidates: not the World Core, not a landing hall
+    const cands = eventDoc.rooms.filter((r) => r.type !== 'core' && !spawnSet.has(r.key));
+    if (!cands.length) return { ok: false, reason: 'no-candidate-rooms' };
+
+    // farthest-point sampling by Manhattan distance
+    const [cx, cy] = [eventDoc.side / 2, eventDoc.side / 2];
+    const dist2 = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+    let picked = [];
+    // seed with the candidate farthest from the map centre
+    let first = cands[0], firstD = -1;
+    for (const r of cands) {
+        const d = Math.abs(r.x - cx) + Math.abs(r.y - cy);
+        if (d > firstD) { firstD = d; first = r; }
+    }
+    picked.push(first);
+    while (picked.length < Math.min(CFG.FINALE.BOSS_COUNT, cands.length)) {
+        let best = null, bestD = -1;
+        for (const r of cands) {
+            if (picked.includes(r)) continue;
+            const d = Math.min(...picked.map((p) => dist2(p, r)));
+            if (d > bestD) { bestD = d; best = r; }
+        }
+        if (!best) break;
+        picked.push(best);
+    }
+
+    const bosses = [];
+    const bulk = [];
+    picked.forEach((r, i) => {
+        const name = CFG.FINALE.WARDEN_NAMES[i % CFG.FINALE.WARDEN_NAMES.length];
+        bosses.push({ key: r.key, index: i, name, dead: false });
+        bulk.push({
+            updateOne: {
+                filter: { eventId: eventDoc.eventId, rooms: { $elemMatch: { key: r.key } } },
+                update: {
+                    $set: {
+                        'rooms.$.type': 'finale',
+                        'rooms.$.payload': {
+                            theme: theme.key,
+                            flavor: theme.flavor,
+                            boss: true,
+                            finaleBoss: true,
+                            wardenIndex: i,
+                            wardenName: name,
+                            enemies: [{ level: bossLvl }],
+                        },
+                    },
+                },
+            },
+        });
+    });
+    await GuildWarEvent.bulkWrite(bulk, { ordered: false });
+
+    // persist the warden ledger on the doc (the tick + onEnd hook read it)
+    await GuildWarEvent.updateOne({ eventId: eventDoc.eventId }, { $set: { 'finale.bosses': bosses } });
+
+    // reveal every warden on every active champion's map
+    const reveal = bosses.map((b) => b.key);
+    for (const p of eventDoc.players || []) {
+        if (p.status !== 'active') continue;
+        await applyFog(eventDoc.eventId, p.jid, reveal).catch(() => {});
+    }
+    return { ok: true, bosses, bossLvl };
+}
+
 // ── inactivity: carried relics drop into the current room's loot ──
 async function dropCarriedRelics(eventId, jid, reason) {
     const doc = await GuildWarEvent.findOne({ eventId }, { players: { $elemMatch: { jid } } }).lean();
@@ -222,4 +305,5 @@ module.exports = {
     seedEncounters, applyFog, enterRoom, leaveRoom, clearRoom,
     markActive, setRoomPayload, dropCarriedRelics,
     startPuzzle, claimPuzzleAttempt, resetPuzzleAttempts,
+    spawnFinaleBosses,
 };

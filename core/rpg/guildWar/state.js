@@ -270,6 +270,15 @@ async function startEvent(eventId, { deadWorld = null, worldIds = null } = {}) {
     for (const p of updated.players) {
         await getRooms().applyFog(updated.eventId, p.jid, mapEngine.revealAround(map, p.roomId));
     }
+    // 🤝 CO-OP FOUNDATION (owner 2026-10-05 23:09Z): room occupancy must
+    // include DEPLOYED champions — `.j talk` listeners, co-op party-at-start
+    // seating (encounters.startRoomCombat reads room.occupants) and the
+    // shared-battle rules all key off it. Moves maintained the list; the
+    // deployment write above never did, so a champion who had not moved yet
+    // was invisible inside their own spawn chamber.
+    for (const p of updated.players) {
+        await getRooms().enterRoom(updated.eventId, p.jid, null, p.roomId).catch(() => {});
+    }
     return { ok: true, event: updated, map };
 }
 
@@ -342,10 +351,61 @@ async function tick(sock, BOT_MARKER) {
             }
             continue;
         }
-        // hard end
+        // ⏳ FINALE (owner 2026-10-05 23:09Z: "If a timer brings the Guild War
+        // to an end, place 4 bosses around the map. After all 4 bosses die,
+        // then the Guild War ends."): time-expiry no longer ENDS the war — it
+        // starts the WARDEN FINALE. The atomic {finale: null} flip means the
+        // lease holder that sees the expiry first spawns the bosses exactly
+        // once; every other instance's update misses and moves on.
         if (ev.state === 'ACTIVE' && ev.endsAt && Date.now() > ev.endsAt) {
-            await endEvent(ev.eventId, 'Time expired.');
-            out.push({ eventId: ev.eventId, auto: 'ended-time' });
+            const alreadyFinale = ev.finale && ev.finale.started;
+            if (!alreadyFinale) {
+                const flipped = await GuildWarEvent.findOneAndUpdate(
+                    { eventId: ev.eventId, state: 'ACTIVE', $or: [{ finale: null }, { 'finale.started': { $ne: true } }] },
+                    { $set: { finale: { started: true, startedAt: Date.now(), bosses: [] } } },
+                    { new: true }
+                ).lean();
+                if (flipped) {
+                    const spawned = await getRooms().spawnFinaleBosses(flipped).catch((e) => {
+                        console.error('[GW] finale spawn failed:', e?.message);
+                        return { ok: false };
+                    });
+                    if (spawned.ok) {
+                        out.push({ eventId: ev.eventId, auto: 'finale-started' });
+                        const names = (spawned.bosses || []).map((b) => b.name).join(', ');
+                        getFeed().queue(ev.eventId, 'major',
+                            `⏳ *THE HOURGLASS IS EMPTY* — the war clock has run out, but the Ruins are NOT done with you. Four WARDENS rise around the dead world: *${names}*.\n` +
+                            `They are marked on every champion's map. The war ends ONLY when all four fall — slay them for the final glory.`);
+                        // DM every active champion: the game they were playing
+                        // just changed under their feet.
+                        try {
+                            for (const p of flipped.players || []) {
+                                if (p.status !== 'active') continue;
+                                await sock.sendMessage(p.jid, {
+                                    text: `${BOT_MARKER || ''}⏳ *THE WAR TIMER HAS RUN OUT, ${p.name}.*\nFour WARDENS now hold the Ruins — their chambers are marked on your map (\`map\`).\nThe war ends only when ALL FOUR are slain. Hunt them with your guild — champions who fight a warden together share the battle.`,
+                                }).catch(() => {});
+                                await new Promise((r) => setTimeout(r, 400));
+                            }
+                        } catch (e) { /* best-effort */ }
+                    } else {
+                        // spawn failed (no candidate rooms) → end the war the old way
+                        await endEvent(ev.eventId, 'Time expired.');
+                        out.push({ eventId: ev.eventId, auto: 'ended-time' });
+                    }
+                }
+                continue;
+            }
+            // finale is running: the war closes when the ledger says all
+            // wardens are dead (belt — onEnd also ends it), or on the safety
+            // timeout so an empty ruins can never hold the war open forever.
+            const bosses = (ev.finale && Array.isArray(ev.finale.bosses)) ? ev.finale.bosses : [];
+            const allDead = bosses.length > 0 && bosses.every((b) => b.dead);
+            const timedOut = CFG.FINALE.TIMEOUT_MS > 0
+                && ev.finale.startedAt && Date.now() > ev.finale.startedAt + CFG.FINALE.TIMEOUT_MS;
+            if (allDead || timedOut) {
+                await endEvent(ev.eventId, allDead ? 'All four wardens have fallen. The Ruins fall silent.' : 'The finale burned out with the wardens still standing.');
+                out.push({ eventId: ev.eventId, auto: allDead ? 'ended-finale-clear' : 'ended-finale-timeout' });
+            }
             continue;
         }
         // inactivity → drop carried relics in current room

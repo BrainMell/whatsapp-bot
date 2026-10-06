@@ -89,6 +89,12 @@ const GuildWarEventSchema = new mongoose.Schema({
     // Mixed + default null (NOT a subdoc): mongoose instantiates subdoc
     // fields as {} on create, which breaks the {flow: null} lease claim.
     flow: { type: mongoose.Schema.Types.Mixed, default: null },
+    // ⏳ FINALE (owner 2026-10-05 23:09Z: "If a timer brings the Guild War to
+    // an end, place 4 bosses around the map. After all 4 bosses die, then the
+    // Guild War ends."): set when endsAt passes. { started, startedAt,
+    // bosses: [{ key, name, index, dead }] }. Mixed + default null — the
+    // atomic flip condition ({finale: null}) must match fresh docs exactly.
+    finale: { type: mongoose.Schema.Types.Mixed, default: null },
     createdAt: { type: Date, default: Date.now },
 }, { collection: 'guildwarevents', minimize: false });
 

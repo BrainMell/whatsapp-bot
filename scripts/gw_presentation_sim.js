@@ -159,7 +159,10 @@ async function s3_auto_encounter() {
         await dmRouter.handleDM(sock, me.jid, me.jid, ['forward', 'right', 'back', 'left'][guard % 4], '\u200B', { prefix: '.', prefixed: true });
     }
     check('combat room auto-started the fight (no "fight" typed)', combatStarts >= 1, `starts=${combatStarts}`);
-    check('combat spec carries room key + map fragment', lastSpec && lastSpec.roomKey && lastSpec.mapFragment, JSON.stringify(lastSpec ? Object.keys(lastSpec) : 'none'));
+    // ⚔️ owner directive 2026-10-05 23:39Z: the square map panel is GONE from
+    // ruins battles — the spec must carry the room key and must NOT carry any
+    // map fragment (the fight stays IN the room scene, guildWar/battleScene.js).
+    check('combat spec carries room key, NO map fragment (owner 23:39Z)', lastSpec && lastSpec.roomKey && !lastSpec.mapFragment, JSON.stringify(lastSpec ? Object.keys(lastSpec) : 'none'));
     check('no manual fight prompt needed', !sock.sent.some((s) => /type .fight./i.test(s.text)));
 
     // puzzle rooms must NOT auto-combat
@@ -222,7 +225,13 @@ async function s4_hooks() {
     const preLives = playerOf(preDoc, me.jid).lives ?? 3;
     const ddesc = await captured.onEnd(dsession, false, 'sim-key', sock2);
     check('defeat: onEnd sends NOTHING (decree card goes first)', sock2.sent.length === 0, JSON.stringify(sock2.sent.map((s) => s.text)));
-    check('defeat: onEnd returns respawn descriptor', ddesc && ddesc.kind === 'respawn' && ddesc.lives === Math.max(0, preLives - 1) && ddesc.spawnRoom === me.spawnRoomId, JSON.stringify(ddesc));
+    // 🤝 co-op (2026-10-05): the descriptor is MULTI-PLAYER —
+    // { kind:'defeat-multi', players:[{jid,kind:'respawn',name,lives,spawnRoom}] }.
+    // The legacy single-player shape ({kind:'respawn',…}) is still accepted.
+    const leg = ddesc && ddesc.kind === 'respawn' ? ddesc : null;
+    const multi = ddesc && Array.isArray(ddesc.players) ? (ddesc.players.find((x) => x.kind === 'respawn') || null) : null;
+    const row = leg || multi;
+    check('defeat: onEnd returns respawn descriptor', row && row.lives === Math.max(0, preLives - 1) && row.spawnRoom === me.spawnRoomId, JSON.stringify(ddesc));
     doc = await state.getEvent(doc.eventId, { fresh: true });
     const defeated = playerOf(doc, me.jid);
     check('defeat: life decremented (authoritative, §23)', (defeated.lives || 0) === Math.max(0, preLives - 1), `lives=${defeated.lives} expected=${Math.max(0, preLives - 1)}`);

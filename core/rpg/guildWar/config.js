@@ -15,6 +15,16 @@ const CFG = {
     REJOIN_PROTECT_MS: 60 * 1000,
     MAX_CONCURRENT_EVENTS: 2,
 
+    // ── ⏳ FINALE (owner 2026-10-05 23:09Z) ──
+    // When the war timer runs out the war does NOT end: four WARDEN bosses
+    // rise around the map and the war continues until all four are slain.
+    FINALE: {
+        BOSS_COUNT: 4,
+        BOSS_LEVEL_MULT: 3.0,               // warden level = BASE_ENEMY_LEVEL × this
+        WARDEN_NAMES: ['the Ashen Warden', 'the Hollow Warden', 'the Thorn Warden', 'the Ember Warden'],
+        TIMEOUT_MS: 60 * 60 * 1000,         // safety: if the wardens outlive every champion, the war still closes
+    },
+
     // ── map ──
     MAP: {
         K_NORMAL: 8,                        // rooms per player (side = ceil(sqrt(players*K)))

@@ -2025,8 +2025,29 @@ async function startRuinsCombat(sock, chatId, senderJid, spec) {
   // tutorial group demo went live, handleCombatAction computed the group
   // key, performAction got "NO STATE" and silently no-op'd - combat froze
   // on the player's first action (the exact "stuck tutorial" failure mode).
-  const sessionKey = isTutorialGroup ? scopedKey(chatId) : scopedKey(`${chatId}_${senderJid}`);
-  if (gameStates.has(sessionKey)) return { success: false, msg: '❌ You already have an active quest!' };
+  // 🤝 TEAM CO-OP (2026-10-05): real Ruins room fights use a ROOM-SCOPED key
+  // (spec.sessionKey = gwr:<eventId>:<roomKey>) so every same-guild champion
+  // in the room shares ONE battle — quest-style co-op on the Ruins engine.
+  // Solo/tutorial keys are unchanged.
+  let sessionKey;
+  if (spec.sessionKey) {
+    sessionKey = scopedKey(spec.sessionKey);
+  } else {
+    sessionKey = isTutorialGroup ? scopedKey(chatId) : scopedKey(`${chatId}_${senderJid}`);
+  }
+  if (gameStates.has(sessionKey)) {
+    // 🧹 stale room session (fight over, state awaiting the next-stage
+    // cleanup window) → clear it and proceed; a LIVE fight still blocks.
+    const stale = gameStates.get(sessionKey);
+    if (stale && stale.mode === 'RUINS' && !stale.inCombat) {
+      try { if (stale.timers) Object.values(stale.timers).forEach((t) => { if (t) clearTimeout(t); }); } catch (e) {}
+      stale.active = false;
+      gameStates.delete(sessionKey);
+      cleanupCoopIndexForSession(sessionKey);
+    } else {
+      return { success: false, msg: '❌ You already have an active quest!' };
+    }
+  }
   const isTutorial = !!spec.tutorialMode;
   // 💡 Phase B: tutorial GROUP demo flags arrive via spec.tutorialGroup
   // (declared above - it decides the session key before anything else).
@@ -2039,6 +2060,16 @@ async function startRuinsCombat(sock, chatId, senderJid, spec) {
   if (!enemies.length) return { success: false, msg: '❌ Encounter generation failed.' };
 
   const state = JSON.parse(JSON.stringify(INITIAL_STATE_TEMPLATE));
+  // 🤝 co-op participants: initiator + every same-guild champion seated by
+  // the war router (encounters.startRoomCombat). Each gets a REAL entity —
+  // the raid/quest party shape — so turns, rewards and deaths split properly.
+  const participantJids = [senderJid];
+  if (Array.isArray(spec.participants)) {
+    for (const j of spec.participants) {
+      if (j && j !== senderJid && !participantJids.includes(j)) participantJids.push(j);
+    }
+  }
+  const isCoop = participantJids.length > 1;
   Object.assign(state, {
     active: true, chatId,
     // 💡 TUTORIAL (2026-10-03): the new-player practice fight runs the same
@@ -2047,7 +2078,7 @@ async function startRuinsCombat(sock, chatId, senderJid, spec) {
     // 💡 Phase B: TUTORIAL_QUEST (controlled solo quest) and TUTORIAL_GROUP
     // (fake-party demo) reuse the same no-ruins safety but keep rewards.
     mode: isTutorialGroup ? 'TUTORIAL_GROUP' : (isTutorial ? 'TUTORIAL' : (spec.tutorialQuest ? 'TUTORIAL_QUEST' : 'RUINS')),
-    solo: !isTutorialGroup,
+    solo: !isTutorialGroup && !isCoop,
     dungeonRank: spec.rank || 'C',
     // 💡 Phase B FIX (2026-10-04): this fight IS encounter #1 of #max.
     // Standard journeys enter combat via nextStage (which increments
@@ -2062,11 +2093,21 @@ async function startRuinsCombat(sock, chatId, senderJid, spec) {
     lastActivity: Date.now(), createdAt: Date.now(),
     groq: spec.groq || null, sock, sessionKey,
     isProcessing: false, inCombat: false,
-    ruinsMeta: (isTutorial || isTutorialGroup || spec.tutorialQuest) ? null : { eventId: spec.eventId, roomKey: spec.roomKey },
+    ruinsMeta: (isTutorial || isTutorialGroup || spec.tutorialQuest) ? null : { eventId: spec.eventId, roomKey: spec.roomKey, coop: isCoop },
     dungeonName: (isTutorial || isTutorialGroup || spec.tutorialQuest) ? 'Training Hall' : 'The Ruins',
   });
   state.botId = botScope();
-  state.players.push(buildRuinsPlayerEntity(senderJid));
+  // 🤝 multicast: every combat visual (turn prompts, battle renders, decree
+  // card) reaches EVERY participant's DM. rawSock is kept for per-player
+  // sends (defeat respawn maps differ per player).
+  state.rawSock = sock;
+  if (isCoop) state.sock = makeRuinsSock(sock, sessionKey);
+  for (const jid of participantJids) {
+    state.players.push(buildRuinsPlayerEntity(jid));
+    // seat every participant in the resolver index so their `.combat …`
+    // DMs find this shared room session (see getGameState probe)
+    _coopIndex.set(jid, spec.sessionKey || `${chatId}_${senderJid}`);
+  }
   // 💡 Phase B: fake guild-mates for the group demo. Synthetic entities with
   // isTutorialAlly - auto-act in combat, excluded from all payouts/writes.
   if (isTutorialGroup) {
@@ -2263,7 +2304,138 @@ function abortRuinsSession(userId) {
       aborted = true;
     } catch (e) { /* best-effort cleanup */ }
   }
+  cleanupCoopIndexFor(userId);
   return aborted;
+}
+
+// ============================================
+// 🤝 RUINS TEAM CO-OP (owner 2026-10-05 23:09Z: "if multiple members of the
+// same team face off against a boss or an enemy, make it play like the quest
+// version of our current PvE system… using our current PvE system from The
+// Ruins"): every Ruins room fight now runs as a ROOM-SCOPED session — the
+// same turn loop, the same battle pipeline, but keyed per ROOM instead of
+// per player, with every same-guild champion in the room as a real
+// participant. Exactly how raids/quests seat multiple players at one battle,
+// layered on the Ruins combat engine.
+//   • state.sessionKey = scoped(`gwr:<eventId>:<roomKey>`)
+//   • state.players   = one entity per participant (initiator + guildmates)
+//   • state.sock      = multicast wrapper → every visual reaches EVERY
+//                       participant's DM (turn prompts, battle renders,
+//                       decree end card); state.rawSock keeps the original
+//                       for per-player sends (respawn maps differ per player)
+//   • _coopIndex      = jid → raw session key, so each participant's
+//                       `.combat …` resolves to the shared session from
+//                       their own DM (getGameState probe below)
+// ============================================
+const _coopIndex = new Map(); // participant jid → RAW (unscoped) session key
+function cleanupCoopIndexFor(jid) {
+  if (!jid) return;
+  for (const [key, raw] of _coopIndex.entries()) {
+    if (key === jid || raw === jid) _coopIndex.delete(key);
+  }
+}
+function cleanupCoopIndexForSession(sessionKey) {
+  const raw = typeof sessionKey === 'string' && sessionKey.includes('|')
+    ? sessionKey.slice(sessionKey.indexOf('|') + 1)
+    : sessionKey;
+  for (const [jid, r] of _coopIndex.entries()) {
+    if (r === raw || r === sessionKey) _coopIndex.delete(jid);
+  }
+}
+// raw session key for a room fight — stable, room-scoped, bot-agnostic here
+// (scopedKey() adds the bot prefix at use time)
+function ruinsRoomRawKey(eventId, roomKey) {
+  return `gwr:${eventId}:${roomKey}`;
+}
+// the live session for a room fight, or null
+function ruinsRoomSession(eventId, roomKey) {
+  if (!eventId || !roomKey) return null;
+  const st = gameStates.get(scopedKey(ruinsRoomRawKey(eventId, roomKey)));
+  return st || null;
+}
+// Dynamic multicast sock: every send fans out to the session's CURRENT
+// participants (late joiners start receiving the fight immediately). The
+// target argument is intentionally ignored — Ruins combat always DMs.
+function makeRuinsSock(rawSock, sessionKey) {
+  const send = async (_target, payload) => {
+    const st = gameStates.get(sessionKey);
+    const jids = st && Array.isArray(st.players)
+      ? [...new Set(st.players.filter((p) => p.jid && !p.isTutorialAlly).map((p) => p.jid))]
+      : [];
+    if (!jids.length) {
+      const t = typeof _target === 'string' ? _target : null;
+      if (t) jids.push(t);
+    }
+    let first = null;
+    for (const jid of jids) {
+      if (!jid) continue;
+      try {
+        const r = await rawSock.sendMessage(jid, payload);
+        if (!first) first = r;
+      } catch (e) { /* one silent DM must not break the fight */ }
+    }
+    return first;
+  };
+  return {
+    sendMessage: send,
+    // pass-throughs some flows probe for
+    groupMetadata: rawSock && rawSock.groupMetadata ? rawSock.groupMetadata.bind(rawSock) : undefined,
+    profilePictureUrl: rawSock && rawSock.profilePictureUrl ? rawSock.profilePictureUrl.bind(rawSock) : undefined,
+  };
+}
+// 🤝 mid-fight join: seat a same-guild champion at the room battle (their
+// entity is appended to players + turnOrder with a fresh gauge, so the gauge
+// scheduler seats them naturally on the next round).
+function joinRuinsSession(eventId, roomKey, playerJid) {
+  const st = ruinsRoomSession(eventId, roomKey);
+  if (!st || !st.inCombat) return { ok: false, reason: 'no-live-session' };
+  if (st.players.some((p) => p.jid === playerJid)) return { ok: false, reason: 'already-seated' };
+  let entity;
+  try { entity = buildRuinsPlayerEntity(playerJid); } catch (e) {
+    return { ok: false, reason: 'entity-failed' };
+  }
+  st.players.push(entity);
+  if (Array.isArray(st.turnOrder)) {
+    entity.actionGauge = 0;
+    st.turnOrder.push(entity);
+  }
+  // rescale party reward math context
+  st.solo = false;
+  for (const p of st.players) _coopIndex.set(p.jid, st.sessionKey?.includes('|') ? st.sessionKey.slice(st.sessionKey.indexOf('|') + 1) : ruinsRoomRawKey(eventId, roomKey));
+  return { ok: true, session: st, entity };
+}
+// 🏃 co-op aware retreat: a co-op participant leaves THE SESSION (their
+// entity is withdrawn; the battle continues for whoever remains), a solo
+// session aborts entirely. Safe on missing sessions.
+function leaveRuinsSession(playerJid) {
+  if (!playerJid) return false;
+  let left = false;
+  for (const [key, st] of gameStates.entries()) {
+    if (st?.mode !== 'RUINS' || !Array.isArray(st.players)) continue;
+    const idx = st.players.findIndex((p) => p.jid === playerJid);
+    if (idx === -1) continue;
+    try {
+      st.players.splice(idx, 1);
+      if (Array.isArray(st.turnOrder)) {
+        const ti = st.turnOrder.findIndex((c) => c.jid === playerJid);
+        if (ti !== -1) st.turnOrder.splice(ti, 1);
+      }
+      if (st.activeCombatant && st.activeCombatant.jid === playerJid) st.activeCombatant = null;
+      delete st.pendingActions?.[playerJid];
+      left = true;
+      // nobody left holding the line → tear the session down
+      const realLeft = st.players.filter((p) => p.jid && !p.isTutorialAlly);
+      if (!realLeft.length) {
+        if (st.timers) Object.values(st.timers).forEach((t) => { if (t) clearTimeout(t); });
+        st.inCombat = false;
+        st.active = false;
+        gameStates.delete(key);
+        cleanupCoopIndexForSession(key);
+      }
+    } catch (e) { /* best-effort */ }
+  }
+  cleanupCoopIndexFor(playerJid);
+  return left;
 }
 
 function getGameState(chatId, senderJid = null) {
@@ -2289,6 +2461,13 @@ function getGameState(chatId, senderJid = null) {
   if (player) {
     const soloKey = scopedKey(`${chat}_${player}`);
     if (gameStates.has(soloKey)) return gameStates.get(soloKey);
+    // 🤝 TEAM CO-OP: a Ruins room-session participant acts from their OWN DM —
+    // resolve the shared room session through the participant index.
+    const coopRaw = _coopIndex.get(player);
+    if (coopRaw) {
+      const coopKey = scopedKey(coopRaw);
+      if (gameStates.has(coopKey)) return gameStates.get(coopKey);
+    }
   }
 
   // 2. Check for group raid (keyed by chatId)
@@ -5173,7 +5352,11 @@ async function performAction(sock, player, action, sessionKey) {
       // forfeits whatever was in the room to the enemy. The room stays ACTIVE
       // (encounter intact for the next player), unclaimed rewards stay with it.
       if (state.mode === 'RUINS' && ruinsHooks.onFlee) {
-        try { ruinsHooks.onFlee(state); } catch (e) { console.error('[Ruins] onFlee hook:', e?.message); }
+        // 🤝 co-op: identify WHO fled so the war module can unseat exactly
+        // that champion (solo sessions keep their old shape).
+        const __fleeJid = (state.activeCombatant && state.activeCombatant.jid)
+          || (state.players && state.players[0] && state.players[0].jid) || null;
+        try { ruinsHooks.onFlee(state, __fleeJid); } catch (e) { console.error('[Ruins] onFlee hook:', e?.message); }
       }
     } else {
       resultMsg += `❌ *FLEE FAILED!* The party stumbled and lost their turns.`;
@@ -6934,6 +7117,9 @@ async function endCombat(sock, victory, sessionKey) {
   state.isEndingCombat = true; // claim FIRST — no re-entry during the async hook
   // ⚔️ RUINS: free the frozen battle-scene layout for this session
   try { require('./guildWar/battleScene').clearLayout(sessionKey); } catch (e) {}
+  // 🤝 TEAM CO-OP: the room session is over — drop every participant's
+  // resolver entry so later fights seat them fresh.
+  cleanupCoopIndexForSession(sessionKey);
   // ⚔️ RUINS: report the outcome to the Guild War module (GP + relic award /
   // defeat respawn). Standard rewards below still apply. sock is passed so
   // the hook can DM post-combat visuals (navigation card).
@@ -9740,6 +9926,12 @@ const handleCombatAction = async (
   if (!state || !state.inCombat) {
     return "❌ Not in combat!";
   }
+  // 🤝 TEAM CO-OP: route this participant's sends through the session's
+  // multicast sock so turn results / battle renders reach EVERY seat (the
+  // engine's 40+ send sites all target state.chatId with this sock).
+  if (state.ruinsMeta && state.sock && state.rawSock && state.sock !== sock) {
+    sock = state.sock;
+  }
 
   const player = state.players.find((p) => p.jid === senderJid);
   if (!player || player.isDead) {
@@ -9883,8 +10075,14 @@ const handleCombatAction = async (
   // sweeper doesn't clean up an active combat session.
   state.lastActivity = Date.now();
 
-  // Execute action immediately
-  const sessionKey = state.solo ? scopedKey(`${chatId}_${senderJid}`) : scopedKey(chatId);
+  // ⚔️ KEY FIX (2026-10-05, found by the full-game sims): the key was
+  // RECOMPUTED here (solo → "chat_jid", party → "chat") — correct for
+  // legacy quests but WRONG for room-scoped Ruins co-op sessions
+  // ("gwr:event:room"), so performAction got "NO STATE" and silently
+  // no-op'd (the exact tutorial freeze shape). state.sessionKey is the
+  // authoritative key this session actually lives under.
+  const sessionKey = state.sessionKey
+    || (state.solo ? scopedKey(`${chatId}_${senderJid}`) : scopedKey(chatId));
   await performAction(sock, player, action, sessionKey);
 
   return null; // Action processed
@@ -11669,6 +11867,14 @@ module.exports = {
   startTutorialGroupQuest,
   setRuinsHooks,
   abortRuinsSession,
+  // 🤝 TEAM CO-OP (owner 2026-10-05): room-scoped Ruins sessions — the war
+  // router seats guildmates at one shared battle and resolves their DMs.
+  ruinsRoomSession,
+  ruinsRoomRawKey,
+  joinRuinsSession,
+  leaveRuinsSession,
+  makeRuinsSock,
+  _coopIndex,
   // 💡 Summoner System (Phase 2): export for summonAI.js to access.
   // summonAI does a lazy require('./guildAdventure') to avoid circular dep,
   // so these must be on the exports.
