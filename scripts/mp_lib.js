@@ -20,7 +20,11 @@ async function connectDB() {
         const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
         if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
     }
-    const uri = (process.env.MONGO_URI || '').replace(/\/[^/?]+(\?|$)/, '/gwtest$1');
+    // GW_SIM_DB: run a sim on its OWN database so concurrent agents iterating
+    // the shared gwtest sandbox (they wipe events) can never delete each
+    // other's wars mid-run. Default stays gwtest.
+    const simDb = process.env.GW_SIM_DB || 'gwtest';
+    const uri = (process.env.MONGO_URI || '').replace(/\/[^/?]+(\?|$)/, `/${simDb}$1`);
     process.env.MONGO_URI = uri;
     await require('mongoose').connect(uri, { serverSelectionTimeoutMS: 8000 });
 }
