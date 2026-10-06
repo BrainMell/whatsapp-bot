@@ -383,6 +383,11 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
 
         // ⚔️ projected context (room + light players) — no full-map re-read
         const ctxDoc = await state.getMoveContext(eventDoc.eventId, dest);
+        if (!ctxDoc || !ctxDoc.room) {
+            // the war ENDED between the move check and this read (4th-warden
+            // race, found by the full-game sims) — never crash the input
+            return { text: '🌫️ The chamber is gone before you arrive — the Ruins have moved on.' };
+        }
         const me = { ...player, roomId: dest, prevRoomId: player.roomId };
         const newRoom = ctxDoc.room;
         // 💡 OVERHAUL 2026-10-04: map → scene → (auto) encounter. Combat
@@ -486,6 +491,10 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         });
         await touch();
         const ctxDoc = await state.getMoveContext(eventDoc.eventId, dest);
+        if (!ctxDoc || !ctxDoc.room) {
+            // same war-ended race as the main move path — guard, don't crash
+            return { text: '🌫️ The chamber is gone before you arrive — the Ruins have moved on.' };
+        }
         const me = { ...player, roomId: dest, prevRoomId: player.roomId };
         try {
             await presentRoom(sock, chatId, BOT_MARKER, ctxDoc, me, ctxDoc.room, { prefix });
