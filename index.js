@@ -868,6 +868,15 @@ async function boot() {
 }
 
 if (require.main === module) {
+    // 🫀 event-loop stall canary (2026-10-06): a sync spin hung a bot >1h with
+    // every in-process watchdog equally blocked. The canary child survives the
+    // stall and SIGKILLs us so pm2 restarts within ~90s. LIVENESS_CANARY=0 off.
+    try {
+        require('./core/utils/livenessCanary').arm();
+    } catch (e) {
+        console.error('[Liveness] canary failed to arm (non-fatal):', e.message);
+    }
+
     boot();
 
     // 💡 SPRITE WARM-UP: fetch all missing Digimon sprites in the background

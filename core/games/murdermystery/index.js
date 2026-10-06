@@ -46,6 +46,13 @@ const DAWN_EXTEND_MS = 60000;  // one extension while a required actor sleeps
 const DISCUSS_MS = 300000;     // 5 minutes of accusations (and one search each)
 const VOTE_MS = 90000;         // 90s on the ballot
 const LOBBY_TTL_MS = 30 * 60000;
+// --- zombie retirement (2026-10-06): an abandoned game cycles
+// night->dawn->discussion->vote forever (~9.5 min/round) and was found on
+// NIGHT 361 after ~2.4 DAYS of round-the-clock cards to the group, and its
+// endless re-resolution is the prime suspect in a 95%-CPU event-loop spin
+// that hung the whole bot for >1h. Old manors now crumble on their own. ---
+const ZOMBIE_NIGHT_CAP = 40;          // a real game never reaches night 40
+const ZOMBIE_AGE_MS = 24 * 3600000;   // or lives past 24h
 // --- self-healing phase machine (the live game froze when phase timers fired
 // late/never under load) - the watchdog forces every stalled transition ---
 const WATCHDOG_MS = 15000;          // tick every 15s
@@ -125,14 +132,22 @@ function loadPersisted() {
     const mine = botIdSafe();
     // v2 (per-bot) state first
     const saved = system.get(`${GAMES_KEY_BASE}_${mine}`, null);
+    let retiredZombies = 0;
     if (saved && typeof saved === 'object') {
-      for (const [chatId, g] of Object.entries(saved)) adoptGame(chatId, g, now);
+      for (const [chatId, g] of Object.entries(saved)) {
+        // zombie retirement at the gate: a stale ancient game must never
+        // re-enter the phase machine (its watchdog-forced re-resolution of a
+        // 300+ night state is the suspected boot-loop/spin trigger)
+        if (isZombieGame(g)) { retiredZombies++; continue; }
+        adoptGame(chatId, g, now);
+      }
     }
+    if (retiredZombies) console.log(`🔪 [MurderMystery] retired ${retiredZombies} zombie game(s) at rehydrate (night cap ${ZOMBIE_NIGHT_CAP} / age cap 24h)`);
     // legacy v1 flat map - adopt only this bot's games (migration)
     if (system.get(LEGACY_GAMES_KEY, null)) {
       const legacy = system.get(LEGACY_GAMES_KEY, null);
       for (const [chatId, g] of Object.entries(legacy || {})) {
-        if (g && g.botId === mine && !games.has(chatId)) adoptGame(chatId, g, now);
+        if (g && !isZombieGame(g) && g.botId === mine && !games.has(chatId)) adoptGame(chatId, g, now);
       }
       system.set(LEGACY_GAMES_KEY, {}); // consumed
     }
@@ -228,6 +243,15 @@ function gameChatIdOf(g) {
 // ---------- game access ----------
 function getGame(chatId) {
   return games.get(chatId) || null;
+}
+
+// a game nobody has played for a day (or 40+ nights) is not a mystery any
+// more - it is an ambush for the next reboot. Retire it wherever it surfaces.
+function isZombieGame(g) {
+  if (!g) return false;
+  if ((g.night || 0) > ZOMBIE_NIGHT_CAP) return true;
+  const started = g.createdAt || g.startedAt || 0;
+  return started > 0 && (Date.now() - started) > ZOMBIE_AGE_MS;
 }
 
 function getPlayer(game, jid) {
@@ -523,6 +547,18 @@ async function watchdogTick() {
         g._resolving2 = false;
       }
       if (g.phase === 'ENDED' || !g.deadline) continue;
+      // zombie retirement in the wild: end it with a farewell instead of
+      // letting the machine cycle darkness around the clock
+      if (g.phase !== PHASE.LOBBY && isZombieGame(g)) {
+        console.log(`🔪 [MurderMystery] watchdog: retiring zombie game in ${chatId} (night=${g.night})`);
+        g.phase = 'ENDED';
+        clearTimers(chatId);
+        games.delete(chatId);
+        persistGames();
+        await sendGroup(sockForGame(g), chatId,
+          `🏚️ The manor, untenanted too long, crumbles into the fog. The mystery dissolves - start afresh with \`${g.prefix || '.j'} mm start\` whenever you dare.`);
+        continue;
+      }
       if (now <= g.deadline + WATCHDOG_GRACE_MS) continue;
       // VOTING with every ballot already in: resolve now, don't wait for anything
       if (g.phase === PHASE.VOTING) {
@@ -2120,6 +2156,8 @@ module.exports = {
     unsilenceChat,
     isSilenced,
     clearTimers,
+    isZombieGame,        // QA: zombie retirement gate
+    ZOMBIE_NIGHT_CAP,
     resolveRoom,
     roomListOf,
     rollPrize,
