@@ -330,11 +330,24 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
     // rejoin after inactivity
     if (player.status === 'inactive') {
         if (/^(rejoin|return)$/.test(norm)) {
+            const protectedUntil = Date.now() + CFG.REJOIN_PROTECT_MS;
             await state.updatePlayer(eventDoc.eventId, senderJid, {}, {
-                status: 'active', lastActionAt: Date.now(),
-                protectedUntil: Date.now() + CFG.REJOIN_PROTECT_MS,
+                status: 'active', lastActionAt: Date.now(), protectedUntil,
             });
-            return { text: `🛡️ Welcome back. Spawn protection for ${CFG.REJOIN_PROTECT_MS / 1000}s. Your carried relics dropped where you fell - your position is unchanged.` };
+            const welcome = `🛡️ Welcome back. Spawn protection for ${CFG.REJOIN_PROTECT_MS / 1000}s. Your carried relics dropped where you fell - your position is unchanged.`;
+            // 🖼️ owner 2026-10-06: a returning champion gets the standard
+            // presentation — the map card ("YOU ARE HERE") + the chamber's
+            // encounter card — exactly like any room entry, never bare text.
+            try {
+                const ctxDoc = await state.getMoveContext(eventDoc.eventId, player.roomId);
+                if (ctxDoc && ctxDoc.room) {
+                    const me = { ...player, status: 'active', protectedUntil };
+                    await presentRoom(sock, chatId, BOT_MARKER, ctxDoc, me, ctxDoc.room, { prefix });
+                }
+            } catch (e) {
+                console.error('[RuinsNav] rejoin presentation failed (non-fatal):', e?.message);
+            }
+            return { text: welcome };
         }
         return { text: '💤 You went inactive. Type `rejoin` to return to the war.' };
     }
