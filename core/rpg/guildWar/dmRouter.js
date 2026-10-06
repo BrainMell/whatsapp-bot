@@ -652,22 +652,24 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         return { text: `🗺️ Your chart has been copied to ${mate.name}.` };
     }
 
-    // ── talk to the room (owner brief #1: `.j talk <text>` reaches everyone
-    // standing in the same chamber) ──
-    if (/^talk\b/.test(norm) || /^say\b/.test(norm)) {
-        const msg = (norm.replace(/^(?:talk|say)\s*/, '') || '').trim();
-        if (!msg) return { text: '🗣️ Say something: `talk <message>`.' };
-        const here = (roomOf(eventDoc, player)?.occupants || []).filter((j) => j !== senderJid);
-        let delivered = 0;
-        for (const j of here) {
-            const mate = eventDoc.players.find((p) => p.jid === j);
-            if (!mate || mate.status === 'quit') continue;
-            try {
-                await sock.sendMessage(j, { text: `🗣️ *${player.name}* (${roomOf(eventDoc, player)?.key}): ${msg}` });
-                delivered += 1;
-            } catch (e) { /* best-effort */ }
+    // ── talk: relay speech to co-located players' DMs (multiplayer brief §2;
+    // merged 2026-10-06: keeps the bot marker + named-heard-by list) ──
+    if (/^(talk|say)\b/.test(norm)) {
+        const msg = norm.replace(/^(?:talk|say)\s*/, '').trim();
+        if (!msg) return { text: '💬 Say what? `talk <message>` — everyone standing in this chamber hears it in their DMs.' };
+        const here = roomOf(eventDoc, player);
+        const others = ((here && here.occupants) || [])
+            .filter((j) => j && j !== senderJid)
+            .map((j) => eventDoc.players.find((p) => p.jid === j && p.status !== 'quit'))
+            .filter(Boolean);
+        const spoken = msg.slice(0, 200);
+        const line = `💬 *${player.name}* says: "${spoken}"`;
+        for (const o of others) {
+            try { await sock.sendMessage(o.jid, { text: BOT_MARKER + line }); } catch (e) { /* best-effort */ }
         }
-        return { text: delivered > 0 ? `🗣️ You say: _${msg}_ (${delivered} champion${delivered === 1 ? '' : 's'} heard you)` : '🗣️ You speak into the empty hall… only the dust answers.' };
+        return { text: others.length
+            ? `💬 You say: "${spoken}"\n_Heard by ${others.map((o) => o.name).join(', ')}._`
+            : `💬 You say: "${spoken}"\n_The empty chamber swallows your words — no one else is here._` };
     }
 
     // ── room encounter interactions (dig/take/cross/touch/record/claim/fight/answers) ──
