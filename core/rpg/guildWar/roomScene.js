@@ -337,6 +337,45 @@ function drawContactShadow(ctx, cx, groundY, w, h, alpha = 1, opts = {}) {
     // defaults (boost 1, ryMin 9) untouched.
     const boost = opts.boost || 1;
     const ryMin = opts.ryMin || 9;
+    // 🫧 GROUND-HUG MODE (owner 2026-10-06: "the item shadows are literally
+    // making it look like the things are floating… it's deadass a floating
+    // hole in the ground"): the ACTOR shadow parks its dark core BELOW the
+    // base line — right for standing characters (the shadow peeks out in
+    // front of the feet) — but items drawn with that same offset levitate
+    // above their own shadow, and a recess painted with a drop shadow reads
+    // as a hole hovering over a blob. Hug mode centres the ellipses ON the
+    // base line so the sprite's own footprint overlaps the dark core and
+    // only a thin rim peeks out: the item sits IN its shadow, not above it.
+    // ry is capped flat — a shadow is a contact patch, not a pedestal.
+    if (opts.hug) {
+        const rxH = w * 0.62;
+        const ryH = Math.max(4.5, Math.min(9.5, w * 0.085));
+        const aH = Math.min(0.55, (0.24 + 0.16 * t) * alpha * boost);
+        // faint flat penumbra — soft floor darkening hugging the footprint
+        ctx.save();
+        ctx.translate(cx, groundY + ryH * 0.3);
+        ctx.scale(rxH * 1.25, ryH * 1.45);
+        const gp = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+        gp.addColorStop(0, `rgba(8,6,4,${(aH * 0.38).toFixed(3)})`);
+        gp.addColorStop(1, 'rgba(8,6,4,0)');
+        ctx.fillStyle = gp;
+        ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        // tight contact — centred ON the base line, tucked a fifth of a ry
+        // UP behind it so the sprite's bottom edge lands inside the dark
+        // core (contact, never hover)
+        ctx.save();
+        ctx.translate(cx, groundY - ryH * 0.22);
+        ctx.scale(rxH, ryH);
+        const gc = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+        gc.addColorStop(0, `rgba(6,5,3,${aH.toFixed(3)})`);
+        gc.addColorStop(0.75, `rgba(6,5,3,${(aH * 0.6).toFixed(3)})`);
+        gc.addColorStop(1, 'rgba(6,5,3,0)');
+        ctx.fillStyle = gc;
+        ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        return;
+    }
     // 🔄 RECALIBRATED (owner playtest 2026-10-05: "the shadows are like tiny
     // specs now"): these multipliers were originally tuned back when w was
     // the FULL sprite content width — then ruins_fixes #6 swapped w down to
@@ -378,7 +417,7 @@ function drawContactShadow(ctx, cx, groundY, w, h, alpha = 1, opts = {}) {
 
 // draw a sprite so its VISIBLE CONTENT stands exactly on the ground line
 // (cx = content centre x, groundY = content bottom, ch = content height)
-async function drawGroundedSprite(ctx, dirs, file, cx, groundY, ch, { shadow = true, flip = false, alpha = 1, shadowBoost = 1, shadowRyMin = 9 } = {}) {
+async function drawGroundedSprite(ctx, dirs, file, cx, groundY, ch, { shadow = true, flip = false, alpha = 1, shadowBoost = 1, shadowRyMin = 9, shadowHug = false } = {}) {
     const dirList = Array.isArray(dirs) ? dirs : [dirs];
     let img = null, foundDir = null;
     for (const dir of dirList) {
@@ -401,9 +440,14 @@ async function drawGroundedSprite(ctx, dirs, file, cx, groundY, ch, { shadow = t
         // never collapse the contact shadow to nothing.
         const feetW = box.feetW ?? box.w;
         const feetCx = (box.feetX ?? (box.x + (box.w - feetW) / 2)) + feetW / 2;
-        const footW = Math.max(feetW, box.w * 0.5) * scale;
+        // 🫧 hug items ground on their FOOTPRINT (bottom-heavy props): the
+        // foot band alone can be a single coin's edge on a wide pile, which
+        // would leave the pile's edges floating over lit floor — widen the
+        // floor to most of the content width for hugs.
+        const footW = Math.max(feetW, box.w * (shadowHug ? 0.72 : 0.5)) * scale;
         const footOff = (feetCx - (box.x + box.w / 2)) * scale;
-        drawContactShadow(ctx, flip ? cx - footOff : cx + footOff, groundY, footW, ch, alpha, { boost: shadowBoost, ryMin: shadowRyMin });
+        drawContactShadow(ctx, flip ? cx - footOff : cx + footOff, groundY, footW, ch, alpha,
+            shadowHug ? { hug: true, boost: shadowBoost } : { boost: shadowBoost, ryMin: shadowRyMin });
     }
     ctx.save();
     if (alpha < 1) ctx.globalAlpha = alpha;
@@ -1020,7 +1064,7 @@ function drawProp(ctx, kind, x, groundY, s) {
     // flat dark ellipse — a different shadow language than the actors'
     // two-layer depth-aware contact shadow. Same contact shadow now, scaled
     // to the prop, so crates/urns/bones ground exactly like everyone else.
-    drawContactShadow(ctx, x, groundY, 46 * s, 32 * s);
+    drawContactShadow(ctx, x, groundY, 46 * s, 32 * s, 1, { hug: true });
     ctx.save();
     ctx.globalAlpha = 0.92;
     ctx.translate(x, groundY);
@@ -1116,15 +1160,20 @@ async function drawRoomContent(ctx, room, plan) {
             // the room keeps a permanent LOOTED marker: the excavated pit.
             const looted = room.state === 'CLEARED' && !room.lootFresh;
             if (looted) {
-                glowSpot(ctx, ax, ay - 8, 70, 'rgba(70,58,40,0.10)');
-                await drawGroundedSprite(ctx, [GW_PROP_DIR], 'cache_dug.png', ax, ay, 96, { shadow: true, shadowBoost: 1.2, shadowRyMin: 15 });
+                // 🕳️ a RECESS casts no drop shadow (owner 2026-10-06: the old
+                // actor shadow under the pit read as "a floating hole in the
+                // ground") — the pit is grounded by a disturbed-earth AO wash
+                // drawn BEFORE the sprite, so the floor darkens AROUND the rim
+                // and the baked interior does the depth. No ellipse below it.
+                glowSpot(ctx, ax, ay - 30, 84, 'rgba(28,22,14,0.20)');
+                await drawGroundedSprite(ctx, [GW_PROP_DIR], 'cache_dug.png', ax, ay, 96, { shadow: false });
                 pill(ctx, ax, ay - 122, 'LOOTED', 'bold 12px "Cinzel", sans-serif', 10,
                     'rgba(26,21,13,0.94)', 'rgba(255,210,74,0.85)', '#FFD24A');
                 break;
             }
             const propFile = room.state === 'CLEARED' ? 'cache_coins.png' : 'cache_rubble.png';
             glowSpot(ctx, ax, ay - 10, 90, room.state === 'CLEARED' ? 'rgba(255,215,90,0.20)' : 'rgba(255,200,80,0.14)');
-            await drawGroundedSprite(ctx, [GW_PROP_DIR], propFile, ax, ay, room.state === 'CLEARED' ? 76 : 118, { shadow: true, shadowBoost: 1.35, shadowRyMin: 15 });
+            await drawGroundedSprite(ctx, [GW_PROP_DIR], propFile, ax, ay, room.state === 'CLEARED' ? 76 : 118, { shadow: true, shadowHug: true, shadowBoost: 1.35 });
             break;
         }
         case 'reward': {
@@ -1141,7 +1190,7 @@ async function drawRoomContent(ctx, room, plan) {
             // 🧰 open sprite carries the raised lid on top (210 vs 195 content
             // rows, identical 126-row body) — render height 162 keeps the BOX
             // the same visual size so the closed→open swap doesn't shrink it.
-            await drawGroundedSprite(ctx, [GW_PROP_DIR], open ? (fresh ? 'cache_chest_open.png' : 'cache_chest_empty.png') : 'cache_chest.png', ax, ay, open ? 162 : 150, { shadow: true, shadowBoost: 1.35, shadowRyMin: 15 });
+            await drawGroundedSprite(ctx, [GW_PROP_DIR], open ? (fresh ? 'cache_chest_open.png' : 'cache_chest_empty.png') : 'cache_chest.png', ax, ay, open ? 162 : 150, { shadow: true, shadowHug: true, shadowBoost: 1.35 });
             if (open) {
                 glowSpot(ctx, ax, ay - 64, 46, fresh ? 'rgba(255,215,90,0.16)' : 'rgba(255,215,90,0.05)');
                 pill(ctx, ax, ay - 188, 'CLAIMED', 'bold 12px "Cinzel", sans-serif', 10,
@@ -1153,7 +1202,7 @@ async function drawRoomContent(ctx, room, plan) {
             // trapped passage: the SPIKE TRAP as a real sprite (rusty iron
             // row on a stone base) + acid-green sheen on the floor
             glowSpot(ctx, ax, ay - 10, 90, 'rgba(140,255,80,0.12)');
-            await drawGroundedSprite(ctx, [GW_PROP_DIR], 'hazard_spikes.png', ax, ay, 110, { shadow: true, shadowBoost: 1.35, shadowRyMin: 15 });
+            await drawGroundedSprite(ctx, [GW_PROP_DIR], 'hazard_spikes.png', ax, ay, 110, { shadow: true, shadowHug: true, shadowBoost: 1.35 });
             ctx.fillStyle = 'rgba(140,255,80,0.10)';
             ctx.beginPath(); ctx.ellipse(ax, ay - 6, 110, 22, 0, 0, Math.PI * 2); ctx.fill();
             break;
@@ -1162,7 +1211,7 @@ async function drawRoomContent(ctx, room, plan) {
             // inscribed hall: the RUNE STELE as a real sprite (weathered
             // stone tablet, teal glyphs), warm glow band + motes kept
             glowSpot(ctx, ax, 360, 150, 'rgba(120,220,240,0.14)');
-            await drawGroundedSprite(ctx, [GW_PROP_DIR], 'lore_stele.png', ax, ay, 175, { shadow: true, shadowBoost: 1.35, shadowRyMin: 15 });
+            await drawGroundedSprite(ctx, [GW_PROP_DIR], 'lore_stele.png', ax, ay, 175, { shadow: true, shadowHug: true, shadowBoost: 1.35 });
             ctx.fillStyle = 'rgba(255,220,140,0.55)';
             ctx.font = '13px "Cinzel", sans-serif';
             for (let i = 0; i < 7; i++) {
@@ -1177,14 +1226,14 @@ async function drawRoomContent(ctx, room, plan) {
             // world-thin hall: the shimmering RIFT as a real sprite standing
             // on the floor, cool glow pooling under it
             glowSpot(ctx, ax, ay - 60, 120, 'rgba(90,120,255,0.20)');
-            await drawGroundedSprite(ctx, [GW_PROP_DIR], 'anomaly_rift.png', ax, ay, 230, { shadow: true, shadowBoost: 1.35, shadowRyMin: 15 });
+            await drawGroundedSprite(ctx, [GW_PROP_DIR], 'anomaly_rift.png', ax, ay, 230, { shadow: true, shadowHug: true, shadowBoost: 1.35 });
             break;
         }
         case 'landmark': {
             // the landmark itself: the etched OBELISK as a real sprite
             const name = (typeof room.payload?.get === 'function' ? room.payload.get('landmarkName') : room.payload?.landmarkName) || '';
             glowSpot(ctx, ax, ay - 90, 110, 'rgba(200,210,255,0.10)');
-            await drawGroundedSprite(ctx, [GW_PROP_DIR], 'landmark_obelisk.png', ax, ay, 260, { shadow: true, shadowBoost: 1.35, shadowRyMin: 15 });
+            await drawGroundedSprite(ctx, [GW_PROP_DIR], 'landmark_obelisk.png', ax, ay, 260, { shadow: true, shadowHug: true, shadowBoost: 1.35 });
             if (name) {
                 ctx.fillStyle = 'rgba(243,236,217,0.85)';
                 ctx.font = 'bold 15px "Cinzel", sans-serif';
@@ -1202,7 +1251,7 @@ async function drawRoomContent(ctx, room, plan) {
                 // returns see the torn-out setting gape empty + CLAIMED.
                 const looted = room.state === 'CLEARED' && !room.lootFresh;
                 glowSpot(ctx, ax, ay - 40, 110, looted ? 'rgba(150,130,160,0.07)' : 'rgba(240,110,230,0.18)');
-                await drawGroundedSprite(ctx, [GW_PROP_DIR], looted ? 'secret_pedestal_empty.png' : 'secret_relic.png', ax, ay, 150, { shadow: true, shadowBoost: 1.35, shadowRyMin: 15 });
+                await drawGroundedSprite(ctx, [GW_PROP_DIR], looted ? 'secret_pedestal_empty.png' : 'secret_relic.png', ax, ay, 150, { shadow: true, shadowHug: true, shadowBoost: 1.35 });
                 if (looted) {
                     pill(ctx, ax, ay - 178, 'CLAIMED', 'bold 12px "Cinzel", sans-serif', 10,
                         'rgba(26,21,13,0.94)', 'rgba(255,210,74,0.85)', '#FFD24A');
@@ -1217,7 +1266,7 @@ async function drawRoomContent(ctx, room, plan) {
             // centres a ~70% board: x 180-1020, y 135-765) so the stones read
             // as the mechanism's flanking pillars, never swallowed by it.
             for (const [gx, flip] of [[140, true], [1060, false]]) {
-                await drawGroundedSprite(ctx, [GW_PROP_DIR], 'puzzle_rune.png', gx, 726, 118, { shadow: true, flip, shadowBoost: 1.35, shadowRyMin: 15 });
+                await drawGroundedSprite(ctx, [GW_PROP_DIR], 'puzzle_rune.png', gx, 726, 118, { shadow: true, flip, shadowHug: true, shadowBoost: 1.35 });
             }
             glowSpot(ctx, ax, ay - 40, 90, 'rgba(90,170,255,0.12)');
             break;

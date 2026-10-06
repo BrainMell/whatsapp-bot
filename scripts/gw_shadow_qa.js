@@ -73,7 +73,7 @@ const base = { name: 'Brainard', classId: 'FIGHTER', spriteIndex: 0, discovered:
     // ── 1. source retune present ──
     check('src: rx multiplier retuned (0.55+0.15t)', SRC.includes('0.55 + 0.15 * t'));
     check('src: ry retuned + min raised (max(ryMin||9, 0.055+0.030t))', SRC.includes('0.055 + 0.030 * t') && SRC.includes('Math.max(ryMin') && SRC.includes("opts.ryMin || 9"));
-    check('src: footW floored at half content width', SRC.includes('Math.max(feetW, box.w * 0.5)'));
+    check('src: footW floored at half content width (0.72 for hugs)', SRC.includes('Math.max(feetW, box.w * (shadowHug ? 0.72 : 0.5))'));
     check('src: old spec multipliers gone', !SRC.includes('0.30 + 0.10 * t') && !SRC.includes('0.034 + 0.020 * t'));
 
     // ── 2. measured dims on real sprites ──
