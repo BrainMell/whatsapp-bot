@@ -62,6 +62,9 @@ function ensureFonts() {
 const CFG = require('./config');
 const state = require('./state');
 const mapEngine = require('./mapEngine');
+// 🎨 ROOM DESIGN VARIANTS (owner directive 2026-10-06): pixel-level plate
+// re-texturing — variants are BAKED INTO the background art, never pasted on.
+const roomVariants = require('./roomVariants');
 
 const W = 1200, H = 900;
 const ASSET_DIR = path.join(__dirname, '..', '..', 'rpgasset', 'guildwar', 'ruins');
@@ -249,12 +252,15 @@ function plateKeyFor(exits, seedStr) {
     return key;
 }
 
-async function plateFor(exits, seedStr) {
+async function plateFor(exits, seedStr, variant) {
     const P = getPlates();
     const key = plateKeyFor(exits, seedStr);
     const entry = P[key];
     const img = Array.isArray(entry) ? entry[mapEngine.hashSeed(String(seedStr || '')) % entry.length] : entry;
-    return (await img) || (await P['0']);
+    const base = (await img) || (await P['0']);
+    // the room's design variant is baked INTO the plate pixels (arches,
+    // walkways, torches and chains stay pixel-identical — see roomVariants.js)
+    return roomVariants.applyVariant(base, variant, String(seedStr || ''));
 }
 
 // ── sprite helpers ─────────────────────────────────────────────────────────
@@ -620,13 +626,20 @@ const TYPE_TINT = {
 function drawTint(ctx, room) {
     const t = TYPE_TINT[room.type];
     if (!t) return;
-    ctx.fillStyle = t[0];
+    // 🎨 owner 2026-10-06: no more full-screen flat washes (read as "colored
+    // squares layered on the art"). The ambience is now a corner vignette +
+    // the pooled glow where the point of interest sits — same hue language,
+    // nothing that reads as a pasted rectangle.
+    const g = ctx.createRadialGradient(W / 2, H * 0.42, 180, W / 2, H * 0.42, 940);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, t[0]);
+    ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
     // pooled glow on the floor where the "point of interest" sits
-    const g = ctx.createRadialGradient(820, 660, 10, 820, 660, 260);
-    g.addColorStop(0, t[1]);
-    g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = g;
+    const g2 = ctx.createRadialGradient(820, 660, 10, 820, 660, 260);
+    g2.addColorStop(0, t[1]);
+    g2.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g2;
     ctx.fillRect(0, 0, W, H);
 }
 
@@ -1031,10 +1044,9 @@ function drawProp(ctx, kind, x, groundY, s) {
         ctx.strokeStyle = 'rgba(24,18,12,0.8)'; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.moveTo(-6, -34); ctx.lineTo(6, -34); ctx.stroke();
     } else if (kind === 'bones') {
-        ctx.strokeStyle = 'rgba(190,180,150,0.85)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
-        ctx.beginPath(); ctx.moveTo(-14, -3); ctx.lineTo(8, -6); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(-9, -6); ctx.lineTo(11, -2); ctx.stroke();
-        ctx.beginPath(); ctx.arc(15, -7, 5, 0, Math.PI * 2); ctx.fillStyle = 'rgba(190,180,150,0.85)'; ctx.fill();
+        // pixel-coherent bone scatter — same language as the skulls variant
+        const r2 = mapEngine.makeRng(`prop:bones:${Math.round(x)}:${Math.round(groundY)}`);
+        roomVariants.drawBoneCluster(ctx, 0, 0, 0.42, () => r2.next());
     } else if (kind === 'rocks') {
         ctx.fillStyle = STONE[0];
         ctx.beginPath(); ctx.ellipse(-8, -5, 12, 7, 0.15, 0, Math.PI * 2); ctx.fill();
@@ -1050,10 +1062,17 @@ function drawProp(ctx, kind, x, groundY, s) {
         ctx.fillStyle = STONE_DARK;
         ctx.beginPath(); ctx.ellipse(0, -1, 18, 3, 0, 0, Math.PI * 2); ctx.fill();
     } else if (kind === 'moss') {
-        ctx.fillStyle = 'rgba(80,100,48,0.5)';
-        ctx.beginPath(); ctx.ellipse(0, -2, 20, 5, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.ellipse(-11, -4, 8, 3.5, 0.4, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.ellipse(10, -5, 7, 3.5, -0.3, 0, Math.PI * 2); ctx.fill();
+        // dithered pixel speck patch — no more flat green ellipse
+        const r2 = mapEngine.makeRng(`prop:moss:${Math.round(x)}:${Math.round(groundY)}`);
+        for (let k = 0; k < 30; k++) {
+            const a = r2.next() * Math.PI * 2;
+            const rr = r2.next();
+            const px = Math.round(Math.cos(a) * 21 * rr);
+            const py = Math.round(Math.sin(a) * 6 * rr - 2);
+            ctx.fillStyle = r2.next() < 0.5 ? 'rgba(62,88,38,0.9)' : 'rgba(80,106,48,0.85)';
+            ctx.fillRect(px, py, 2, 2);
+            if (r2.next() < 0.25) { ctx.fillStyle = 'rgba(96,124,58,0.9)'; ctx.fillRect(px + 1, py - 1, 1, 1); }
+        }
     }
     ctx.restore();
 }
@@ -1251,274 +1270,42 @@ function exitsFor(eventDoc, player) {
     });
 }
 
-// ── ROOM VISUAL VARIANTS (owner spec: five Ruins room variants) ────────────
-// Modular overlay system (spec §7 prefers this over regenerating backgrounds):
-// the door-plate stays the base; a seeded per-room ambience layer is painted
-// on top. Variants NEVER touch the doorway mouths, chevrons, player/enemy
-// zones, the compass or the HUD — they live on walls, wall-bases, ceiling and
-// open floor seams. The variant is assigned per-room at event start (state.js)
-// so a room always looks the SAME every time it is rendered.
+// ── ROOM DESIGN VARIANTS (owner directive 2026-10-06) ──────────────────────
+// The roster lives in roomVariants.js: `intact` (the untouched plate) + 10
+// designs — mossy / sandy / flooded / cracked / skulls / overgrown / dim /
+// skill / crystal / emberfall — each BAKED into the plate pixels per room
+// (state.js assigns the variant at event start; a room always renders the
+// SAME design). Doorway mouths, walkways, torch flames and chains are never
+// repainted, so navigation imagery stays pixel-identical across variants.
 //
-// 🏛️ ROOM DESIGNS (owner 2026-10-06 "10 other room designs"): ten further
-// visually-distinct room types shipped as pre-baked LAYER TRIPLES built from
-// the SAME foundation plate (ruins_door_0) — grade (blend mode), detail
-// (source-over), glow (screen). Ground-change designs reskin the floor by
-// mapping the plate's own floor luminance through a palette ramp, so the
-// brick pattern survives pixel-perfect and only the material changes; the
-// walkway/door system is untouched (every design composites over ANY of the
-// 8 exit plates → 10 designs × 8 combos = 80 looks from 10 layer sets, no
-// 80-sprite explosion). Door mouths, torches and the south chevron strip are
-// keep-out zones baked into the layers at build time.
-const ROOM_VARIANTS = [
-    'intact', 'mossy', 'cracked', 'skulls', 'overgrown', 'dim',
-    // 🎨 the ten room designs
-    'mossfloor', 'sandy', 'frost', 'flooded', 'ember',
-    'blight', 'gilded', 'hallowed', 'arcane', 'crimson',
-];
-
-const VARIANT_DIR = path.join(ASSET_DIR, 'variants');
-const VARIANT_DESIGNS = {
-    mossfloor: { gradeMode: 'multiply' },
-    sandy: { gradeMode: 'multiply' },
-    frost: { gradeMode: 'soft-light' },
-    flooded: { gradeMode: 'multiply' },
-    ember: { gradeMode: 'multiply' },
-    blight: { gradeMode: 'multiply' },
-    gilded: { gradeMode: 'multiply' },
-    hallowed: { gradeMode: 'soft-light' },
-    arcane: { gradeMode: 'multiply' },
-    crimson: { gradeMode: 'multiply' },
+// 🔁 The interim layer-triple designs (mossfloor/frost/ember/blight/gilded/
+// hallowed/arcane/crimson — plain PNG sheets blended over the art, the ones
+// the owner rejected as "a white square layered poorly on the floor") map
+// onto their baked equivalents, so rooms baked in live events keep a design.
+const VARIANT_ALIASES = {
+    mossfloor: 'mossy',
+    frost: 'crystal',
+    ember: 'emberfall',
+    blight: 'dim',
+    gilded: 'crystal',
+    hallowed: 'skill',
+    arcane: 'skill',
+    crimson: 'emberfall',
 };
-
-// decoded layer cache (promise → Image), capped so a worker that roams a big
-// war never holds every design at once (~4.3MB per decoded full-canvas layer)
-const designCache = new Map();
-function designLayer(name, kind) {
-    const k = name + '|' + kind;
-    if (designCache.has(k)) return designCache.get(k);
-    if (designCache.size > 24) {
-        const first = designCache.keys().next().value;
-        designCache.delete(first);
-    }
-    const p = loadImage(path.join(VARIANT_DIR, `v_${name}_${kind}.png`)).catch(() => null);
-    designCache.set(k, p);
-    return p;
-}
-
-async function drawDesignLayers(ctx, variant) {
-    const cfg = VARIANT_DESIGNS[variant];
-    if (!cfg) return;
-    const grade = await designLayer(variant, 'grade');
-    if (grade) {
-        ctx.save();
-        ctx.globalCompositeOperation = cfg.gradeMode;
-        ctx.drawImage(grade, 0, 0, W, H);
-        ctx.restore();
-    }
-    const detail = await designLayer(variant, 'detail');
-    if (detail) ctx.drawImage(detail, 0, 0, W, H);
-    const glow = await designLayer(variant, 'glow');
-    if (glow) {
-        ctx.save();
-        ctx.globalCompositeOperation = 'screen';
-        ctx.drawImage(glow, 0, 0, W, H);
-        ctx.restore();
-    }
-}
-
-// protected zones nothing decorative may enter (x, y, r)
-function protectedZones(exits, playerSpot) {
-    const base = playerSpot || {
-        ...SPAWN_SPOTS[DEFAULT_ENTRY],
-        h: perspH(SPAWN_SPOTS[DEFAULT_ENTRY].y),
-    };
-    const z = [
-        { x: base.x, y: base.y - (base.h || 280) / 2, r: 190 },   // champion + over-head HUD
-    ];
-    for (const ex of exits) {
-        if (!ex.edge) continue;
-        const d = DOORS[ex.dir];
-        if (d) z.push({ x: d.cx, y: d.cy, r: 150 });        // door mouths + chevrons
-    }
-    return z;
-}
-
-function zoneBlocked(zones, x, y, pad = 0) {
-    for (const z of zones) if (Math.hypot(z.x - x, z.y - y) < z.r + pad) return true;
-    return false;
-}
-
-// irregular blob (moss/lichen) — 3 overlapping ellipses + darker rim
-function blob(ctx, x, y, s, color, rim) {
-    ctx.fillStyle = color;
-    ctx.beginPath(); ctx.ellipse(x, y, s, s * 0.62, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(x - s * 0.55, y + s * 0.16, s * 0.62, s * 0.4, 0.3, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(x + s * 0.5, y - s * 0.12, s * 0.55, s * 0.36, -0.25, 0, Math.PI * 2); ctx.fill();
-    if (rim) {
-        ctx.fillStyle = rim;
-        ctx.beginPath(); ctx.ellipse(x, y + s * 0.5, s * 0.8, s * 0.16, 0, 0, Math.PI * 2); ctx.fill();
-    }
-}
-
-// branching crack — main vein with 1-2 forks, dark core + faint highlight
-function crack(ctx, x, y, len, angle, gen, rng) {
-    if (gen <= 0 || len < 8) return;
-    const segs = 4 + rng.int(0, 2);
-    let cx = x, cy = y, a = angle;
-    ctx.strokeStyle = 'rgba(18,15,10,0.72)';
-    ctx.lineWidth = Math.max(1.2, 2.6 - (3 - gen) * 0.7);
-    ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(cx, cy);
-    for (let i = 0; i < segs; i++) {
-        a += (rng.next() - 0.5) * 0.7;
-        cx += Math.cos(a) * (len / segs);
-        cy += Math.sin(a) * (len / segs);
-        ctx.lineTo(cx, cy);
-    }
-    ctx.stroke();
-    if (gen > 1 && rng.next() < 0.8) crack(ctx, cx - Math.cos(a) * len * 0.3, cy - Math.sin(a) * len * 0.3, len * 0.5, a + 0.9 + rng.next(), gen - 1, rng);
-    if (gen > 1 && rng.next() < 0.5) crack(ctx, cx, cy, len * 0.45, a - 1.1 - rng.next() * 0.4, gen - 1, rng);
-}
-
-// skull pile — 2-3 rounded craniums + scattered bones, sun-bleached
-function skullPile(ctx, x, y, s) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.fillStyle = 'rgba(0,0,0,0.30)';
-    ctx.beginPath(); ctx.ellipse(0, 2, s * 1.25, s * 0.32, 0, 0, Math.PI * 2); ctx.fill();
-    const BONE = 'rgba(206,196,164,0.92)';
-    const BONE_D = 'rgba(140,128,100,0.85)';
-    // bones first (behind)
-    ctx.strokeStyle = BONE; ctx.lineWidth = Math.max(2, s * 0.13); ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(-s * 1.1, -s * 0.1); ctx.lineTo(-s * 0.2, -s * 0.28); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(s * 0.3, -s * 0.05); ctx.lineTo(s * 1.15, -s * 0.2); ctx.stroke();
-    // two craniums
-    for (const [ox, oy, sc] of [[-s * 0.25, -s * 0.34, 1], [s * 0.55, -s * 0.22, 0.72]]) {
-        ctx.fillStyle = BONE;
-        ctx.beginPath(); ctx.arc(ox, oy, s * 0.42 * sc, Math.PI, 0); ctx.fill();
-        ctx.fillRect(ox - s * 0.42 * sc, oy, s * 0.84 * sc, s * 0.30 * sc);
-        ctx.fillStyle = BONE_D;
-        ctx.beginPath(); ctx.arc(ox - s * 0.15 * sc, oy + s * 0.06 * sc, s * 0.09 * sc, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(ox + s * 0.15 * sc, oy + s * 0.06 * sc, s * 0.09 * sc, 0, Math.PI * 2); ctx.fill();
-        ctx.fillRect(ox - s * 0.16 * sc, oy + s * 0.20 * sc, s * 0.32 * sc, s * 0.045 * sc);
-    }
-    ctx.restore();
-}
-
-// hanging vine — swaying chain of leaf pairs from the ceiling
-function vine(ctx, x, topY, len, rng) {
-    ctx.strokeStyle = 'rgba(64,92,44,0.9)';
-    ctx.lineWidth = 2.2; ctx.lineCap = 'round';
-    let vx = x, vy = topY;
-    const segs = Math.max(3, Math.round(len / 26));
-    const sway = rng.next() < 0.5 ? -1 : 1;
-    ctx.beginPath(); ctx.moveTo(vx, vy);
-    for (let i = 0; i < segs; i++) {
-        vy += len / segs;
-        vx += sway * (2 + rng.next() * 3.2);
-        ctx.lineTo(vx, vy);
-    }
-    ctx.stroke();
-    for (let i = 0; i < segs; i += 1) {
-        const lx = vx - sway * (segs - i) * (len / segs) * 0.18;
-        const ly = topY + (i + 0.6) * (len / segs);
-        ctx.fillStyle = i % 2 ? 'rgba(74,108,48,0.88)' : 'rgba(58,88,40,0.9)';
-        ctx.beginPath(); ctx.ellipse(lx - 5, ly, 5.4, 2.6, -0.5, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.ellipse(lx + 5, ly, 5.4, 2.6, 0.5, 0, Math.PI * 2); ctx.fill();
-    }
-}
+const { ROOM_VARIANTS } = roomVariants;
 
 function variantOfRoom(room) {
-    const v = room && (typeof room.variant?.get === 'function' ? undefined : room.variant);
+    let v = room && (typeof room.variant?.get === 'function' ? undefined : room.variant);
+    if (VARIANT_ALIASES[v]) v = VARIANT_ALIASES[v];
     return ROOM_VARIANTS.includes(v) ? v : 'intact';
 }
 
-// the ambience layer itself — drawn AFTER tint, BEFORE props/enemies/player
-async function drawVariantOverlay(ctx, room, exits, seedStr, playerSpot) {
-    const variant = variantOfRoom(room);
-    if (variant === 'intact') return;
-    // 🎨 pre-baked design layers (10 room designs) — composite and done
-    if (VARIANT_DESIGNS[variant]) {
-        await drawDesignLayers(ctx, variant);
-        return;
-    }
-    const rng = mapEngine.makeRng(`${seedStr}:variant:${variant}`);
-    const zones = protectedZones(exits, playerSpot);
-    const trySpot = (band, pad = 26) => {
-        for (let t = 0; t < 14; t++) {
-            const x = band.x0 + rng.next() * (band.x1 - band.x0);
-            const y = band.y0 + rng.next() * (band.y1 - band.y0);
-            if (!zoneBlocked(zones, x, y, pad)) return { x, y };
-        }
-        return null;
-    };
-    // safe bands: upper back wall, side walls, wall-base strip, open floor-left seam
-    const BANDS = {
-        upperWall: { x0: 260, x1: 940, y0: 70, y1: 225 },
-        wallBaseL: { x0: 60, x1: 250, y0: 585, y1: 640 },
-        wallBaseR: { x0: 950, x1: 1140, y0: 585, y1: 640 },
-        floorL: { x0: 430, x1: 690, y0: 590, y1: 680 },
-        ceiling: { x0: 200, x1: 1000, y0: 0, y1: 26 },
-        sideWallL: { x0: 30, x1: 120, y0: 300, y1: 480 },
-        sideWallR: { x0: 1080, x1: 1170, y0: 300, y1: 480 },
-    };
-
-    if (variant === 'mossy') {
-        const MOSS = ['rgba(86,116,58,0.5)', 'rgba(70,100,48,0.55)', 'rgba(96,124,64,0.42)'];
-        const RIM = 'rgba(44,64,30,0.28)';
-        for (const b of [BANDS.upperWall, BANDS.wallBaseL, BANDS.wallBaseR, BANDS.floorL]) {
-            const n = b === BANDS.upperWall ? 4 : 2;
-            for (let i = 0; i < n; i++) {
-                const p = trySpot(b);
-                if (!p) continue;
-                blob(ctx, p.x, p.y, 14 + rng.next() * 26, MOSS[Math.floor(rng.next() * MOSS.length)], RIM);
-            }
-        }
-    } else if (variant === 'cracked') {
-        for (const b of [BANDS.upperWall, BANDS.sideWallL, BANDS.sideWallR, BANDS.floorL]) {
-            const n = b === BANDS.upperWall ? 3 : 2;
-            for (let i = 0; i < n; i++) {
-                const p = trySpot(b, 34);
-                if (!p) continue;
-                crack(ctx, p.x, p.y, 34 + rng.next() * 46, rng.next() * Math.PI * 2, 3, rng);
-            }
-        }
-        // fallen dust under a crack
-        const p = trySpot(BANDS.floorL);
-        if (p) { ctx.fillStyle = 'rgba(120,110,90,0.20)'; ctx.beginPath(); ctx.ellipse(p.x, p.y, 30, 7, 0, 0, Math.PI * 2); ctx.fill(); }
-    } else if (variant === 'skulls') {
-        for (const b of [BANDS.wallBaseL, BANDS.wallBaseR, BANDS.floorL]) {
-            const p = trySpot(b, 30);
-            if (p) skullPile(ctx, p.x, p.y, 13 + rng.next() * 9);
-        }
-    } else if (variant === 'overgrown') {
-        for (let i = 0; i < 4; i++) {
-            const x = BANDS.ceiling.x0 + rng.next() * (BANDS.ceiling.x1 - BANDS.ceiling.x0);
-            if (x > 520 && x < 680) continue; // keep the N arch head clear
-            vine(ctx, x, 0, 90 + rng.next() * 130, rng);
-        }
-        const p = trySpot(BANDS.wallBaseL);
-        if (p) blob(ctx, p.x, p.y, 18 + rng.next() * 16, 'rgba(74,104,50,0.45)', 'rgba(44,64,30,0.22)');
-        const p2 = trySpot(BANDS.wallBaseR);
-        if (p2) blob(ctx, p2.x, p2.y, 16 + rng.next() * 14, 'rgba(70,98,46,0.42)', null);
-    } else if (variant === 'dim') {
-        // cool dark grade + one deeper torch pool; keeps all geometry readable
-        ctx.fillStyle = 'rgba(10,10,26,0.22)';
-        ctx.fillRect(0, 0, W, H);
-        const g = ctx.createRadialGradient(600, 400, 60, 600, 400, 560);
-        g.addColorStop(0, 'rgba(255,180,90,0.05)');
-        g.addColorStop(1, 'rgba(4,4,14,0.30)');
-        ctx.fillStyle = g;
-        ctx.fillRect(0, 0, W, H);
-    }
-}
-
 // ── main render (in worker; plan is computed by the parent) ──
+
 // opts: { exits?, prefix, puzzleBoard?(Buffer), labelOverride?, style?, plan? }
 async function _renderInProcess(eventDoc, player, room, opts = {}) {
     ensureFonts();
     const exits = opts.exits || exitsFor(eventDoc, player);
-    const bg = await plateFor(exits, `${eventDoc.seed}:${room.key}`);
     const plan = opts.plan || planFor(eventDoc, player, room, exits);
     const battle = opts.battle || null;
 
@@ -1549,13 +1336,11 @@ async function _renderInProcess(eventDoc, player, room, opts = {}) {
     const c = createCanvas(W, H);
     const ctx = c.getContext('2d');
 
-    // 1) the world
+    // 1) the world — with the room's design variant baked into the plate
+    const bg = await plateFor(exits, `${eventDoc.seed}:${room.key}`, variantOfRoom(room));
     ctx.drawImage(bg, 0, 0, W, H);
     drawTint(ctx, room);
     if (room.state === 'CLEARED') drawClearedWash(ctx);
-    // 1b) the room's persistent visual variant (moss/cracks/skulls/vines/dim
-    //     + the ten pre-baked room designs — ground reskins, grades, glows)
-    await drawVariantOverlay(ctx, room, exits, `${eventDoc.seed}:${room.key}`, plan.playerSpot);
 
     // 2) ambient props (under everything alive)
     for (const prop of plan.props || []) drawProp(ctx, prop.kind, prop.x, prop.y, prop.s);
@@ -1692,4 +1477,5 @@ module.exports = {
     ROOM_VARIANTS, variantOfRoom, ensureFonts, facingForSpot, HUB_ZONE,
     // test surface: sprite-shadow isolation probes (owner item-shadow fix)
     drawGroundedSprite, drawContactShadow, contentBox,
+    roomVariants,
 };

@@ -188,37 +188,16 @@ async function startEvent(eventId, { deadWorld = null, worldIds = null } = {}) {
     });
 
     // bake map into the doc (compact rooms)
-    // 💡 VISUAL VARIANTS (owner spec §7): each room gets a persistent Ruins
-    // ambience variant at bake time — weighted by ring (deeper rooms trend
-    // darker/damaged), seeded so the SAME room ALWAYS renders the SAME look.
+    // 💡 VISUAL VARIANTS (owner spec §7 + 2026-10-06 directive): each room gets
+    // a persistent Ruins DESIGN variant at bake time — weighted by ring (deeper
+    // rooms trend darker/damaged/arcane), seeded so the SAME room ALWAYS renders
+    // the SAME look. Weights live in roomVariants.variantWeight (single source).
     const variantRng = mapEngine.makeRng(seed + ':variants');
     const roomScene = require('./roomScene');
     const VARIANT_BAG = roomScene.ROOM_VARIANTS;
     const roomDocs = [...map.rooms.values()].map((r) => {
-        // weighting: intact/mossy common near spawn; cracked/dim/skulls/overgrown
-        // rise with depth; the ten DESIGN variants (owner 2026-10-06 "10 other
-        // room designs") spread across the war — ground-change halls early,
-        // hostile grades (ember/blight/crimson) deeper down.
         const depth = Math.min(1, (r.ring || 0) / 6);
-        const weights = VARIANT_BAG.map((v) => {
-            if (v === 'intact') return 3.2 - depth * 1.6;
-            if (v === 'mossy') return 2.4;
-            if (v === 'overgrown') return 1.2 + depth;
-            if (v === 'cracked') return 0.9 + depth * 1.4;
-            if (v === 'skulls') return 0.7 + depth * 1.2;
-            if (v === 'dim') return 0.6 + depth * 1.5;
-            // 🎨 the ten room designs
-            if (v === 'mossfloor') return 1.5;
-            if (v === 'sandy') return 1.3;
-            if (v === 'frost') return 1.0 + depth * 0.4;
-            if (v === 'flooded') return 0.9 + depth * 0.5;
-            if (v === 'ember') return 0.8 + depth * 0.7;
-            if (v === 'blight') return 0.7 + depth * 0.8;
-            if (v === 'gilded') return 0.8;
-            if (v === 'hallowed') return 0.7;
-            if (v === 'arcane') return 0.6 + depth * 0.4;
-            return 0.5 + depth * 0.9; // crimson
-        });
+        const weights = VARIANT_BAG.map((v) => roomScene.roomVariants.variantWeight(v, depth));
         const total = weights.reduce((a, b) => a + b, 0);
         let roll = variantRng.next() * total, variant = VARIANT_BAG[0];
         for (let i = 0; i < VARIANT_BAG.length; i++) { roll -= weights[i]; if (roll <= 0) { variant = VARIANT_BAG[i]; break; } }
