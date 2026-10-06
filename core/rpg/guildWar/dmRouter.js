@@ -723,6 +723,21 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
                 const started = await encounters.startRoomCombat(sock, chatId, player, eventDoc, room, { groq: null });
                 return { text: started.success ? null : started.msg };
             }
+            // 🔁 owner 2026-10-07 ("after you fail you don't go back to the
+            // previous room with a map and encounter card"): a failed puzzle
+            // answer re-anchors the player — the map card ("YOU ARE HERE" +
+            // move grammar) and the chamber's encounter card re-send FIRST,
+            // then the verdict text. Never a bare "Wrong." floating in the
+            // void after the board stole the screen.
+            if (res.represent) {
+                try {
+                    const ctxDoc = await state.getMoveContext(eventDoc.eventId, player.roomId);
+                    if (ctxDoc && ctxDoc.room) {
+                        await presentRoom(sock, chatId, BOT_MARKER, ctxDoc, player, ctxDoc.room, { prefix });
+                    }
+                } catch (e) { /* re-presentation is best-effort; the verdict still lands */ }
+                return { text: res.text };
+            }
             // ⚔️ changed room: the cleared-state scene rides the result text...
             if (res.afterImage) {
                 try {

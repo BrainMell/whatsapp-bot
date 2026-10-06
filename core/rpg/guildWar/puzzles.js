@@ -181,28 +181,15 @@ function genLevers(rng, room) {
     };
 }
 
-// 6. map riddle — describes another room; solving reveals it (encounter layer handles)
-// 🔄 2026-10-06: the sought keyword now matches the target's nature
-// (cache/vault/relic) instead of always "vault".
-const SEEK_WORD = { discovery: 'cache', reward: 'vault', secret: 'relic' };
-function genMapRiddle(rng, room, map) {
-    const cands = [...map.rooms.values()].filter((r) => r.type === 'discovery' || r.type === 'reward' || r.type === 'secret');
-    if (!cands.length) return genRiddle(rng, room);
-    const target = rng.pick(cands);
-    const seek = SEEK_WORD[target.type] || 'vault';
-    const [tx, ty] = target.key.split(',').map(Number);
-    const [ox, oy] = room.key.split(',').map(Number);
-    const dx = tx - ox, dy = ty - oy;
-    const dirDesc = `${Math.abs(dx)} room${Math.abs(dx) === 1 ? '' : 's'} ${dx >= 0 ? 'east' : 'west'}, ${Math.abs(dy)} room${Math.abs(dy) === 1 ? '' : 's'} ${dy >= 0 ? 'south' : 'north'}`;
-    return {
-        kind: 'mapriddle',
-        prompt: `A carved verse: "Seek the hidden chamber - ${dirDesc} from this very hall. Speak 'open' and name what you seek: *${seek}*."`,
-        answer: seek,
-        normalize: (s) => String(s).toLowerCase().replace(/[^a-z]/g, ''),
-        maxAttempts: 3,
-        meta: { revealsRoom: target.key },
-    };
-}
+// 6. map riddle — REMOVED 2026-10-07 (owner verdict after the beta playtest:
+// "the cursed verse is still fucking broken… get rid of this stupid annoying
+// game"). The verse TOLD players to "speak 'open' and name what you seek" —
+// the stored answer was the bare seek word, so the instructed "open relic"
+// graded WRONG, burned attempts, shocked and reset. The revealsRoom meta was
+// never read anywhere either — even a correct solve revealed nothing. The
+// generator is gone from the pool and the exports; the mapriddle NORMALIZER
+// and its card label stay so seals already seeded in live Mongo rooms remain
+// renderable and solvable (see checkByKind legacy branch).
 
 function ordinal(n) {
     const words = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth'];
@@ -224,18 +211,38 @@ function normalizeByKind(kind, input) {
 
 // pick a puzzle kind by room ring; returns generator output
 function generate(rng, room, map) {
+    // 🔄 2026-10-07: genMapRiddle (Carved Verse) REMOVED from the pool — deep
+    // rooms now weight cipher heavier instead. Five kinds remain.
     const pool = [genSequence, genRiddle, genMemory, genLevers];
-    if (room.ring > 0.4) pool.push(genCipher, genMapRiddle);
+    if (room.ring > 0.4) pool.push(genCipher);
     return rng.pick(pool)(rng, room, map);
 }
 
 // graded check: returns {solved, attemptsLeft} — kind-based normalization so
 // the server-side stored answer (a string in Mongo) is comparable to input.
+// ⚔️ 2026-10-07 tolerance rules (born from the Carved Verse rage-quit: the
+// player answered EXACTLY as instructed and still graded wrong):
+//   • mapriddle (legacy, no longer spawns): the verse says "speak 'open' and
+//     name what you seek" — accept the seek word ANYWHERE in the reply
+//     ("open relic", "relic", "the relic" all pass).
+//   • riddle: natural-language answers — a leading article must never eat an
+//     attempt ("a towel", "it is a towel", "towel!" all pass). Word-boundary
+//     match, so 'age' can't ride inside 'cabbage'.
 function checkByKind(kind, puzzle, input, attempt) {
     const norm = normalizeByKind(kind, input);
     const answers = [puzzle.answer, ...(puzzle.altAnswers || [])].map((a) => normalizeByKind(kind, a)).filter(Boolean);
-    const correct = answers.includes(norm);
+    // riddle words come from the RAW input — the normalizer strips spaces, so
+    // splitting the normalized string could never recover word boundaries.
+    const rawWords = String(input || '').toLowerCase().split(/[^a-z]+/).filter(Boolean);
+    let correct;
+    if (kind === 'mapriddle') {
+        correct = answers.some((a) => norm === a || norm.includes(a));
+    } else if (kind === 'riddle') {
+        correct = answers.some((a) => a && (norm === a || rawWords.includes(a)));
+    } else {
+        correct = answers.includes(norm);
+    }
     return { solved: correct, attemptsLeft: Math.max(0, (puzzle.maxAttempts || 3) - attempt) };
 }
 
-module.exports = { generate, checkByKind, normalizeByKind, genSequence, genRiddle, genCipher, genMemory, genLevers, genMapRiddle, GLYPHS, SHAPES, RIDDLES, CIPHER_WORDS };
+module.exports = { generate, checkByKind, normalizeByKind, genSequence, genRiddle, genCipher, genMemory, genLevers, GLYPHS, SHAPES, RIDDLES, CIPHER_WORDS };

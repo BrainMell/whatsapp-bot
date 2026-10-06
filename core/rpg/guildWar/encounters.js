@@ -392,9 +392,13 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
                 await rooms.resetPuzzleAttempts(eventDoc.eventId, room.key);
                 await state.updatePlayer(eventDoc.eventId, player.jid, {}, { lastActionAt: Date.now() });
                 feed.queue(eventDoc.eventId, 'minor', `🧩 ${player.name} gambled on a seal and the mechanism drew blood.`);
-                return { handled: true, text: `💥 The mechanism rejects you with a shock (-${dmg} HP — that was real). The seal resets - the first inscription glows anew. ${maxAttempts} fresh attempts.` };
+                // 🔁 owner 2026-10-07 (Carved Verse rage-quit): a fail must
+                // never strand the player on a bare text line — the verdict
+                // rides AFTER a full re-presentation (map card + encounter
+                // card) so they always know where they stand.
+                return { handled: true, represent: true, text: `💥 The mechanism rejects you with a shock (-${dmg} HP — that was real). The seal resets - the first inscription glows anew. ${maxAttempts} fresh attempts.` };
             }
-            return { handled: true, text: `❌ Wrong. ${result.attemptsLeft} attempt${result.attemptsLeft === 1 ? '' : 's'} left.` };
+            return { handled: true, represent: true, text: `❌ Wrong. ${result.attemptsLeft} attempt${result.attemptsLeft === 1 ? '' : 's'} left.` };
         }
 
         // ── discovery / reward / secret claim ──
