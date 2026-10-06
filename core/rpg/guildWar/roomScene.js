@@ -278,9 +278,12 @@ async function contentBox(file, dir) {
         ctx.drawImage(img, 0, 0);
         const data = ctx.getImageData(0, 0, img.width, img.height).data;
         let minX = img.width, minY = img.height, maxX = -1, maxY = -1;
+        // per-row opaque width — feeds the MASS-BOTTOM anchor (🫧 below)
+        const rowW = new Array(img.height).fill(0);
         for (let y = 0; y < img.height; y++) {
             for (let x = 0; x < img.width; x++) {
                 if (data[(y * img.width + x) * 4 + 3] > 16) {
+                    rowW[y]++;
                     if (x < minX) minX = x;
                     if (x > maxX) maxX = x;
                     if (y < minY) minY = y;
@@ -290,6 +293,24 @@ async function contentBox(file, dir) {
         }
         if (maxX >= 0) {
             box = { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+            // 🫧 MASS-BOTTOM anchor (owner 2026-10-06 "the shadows should be
+            // touching the thing"): several props end in a thin dangly bit —
+            // the chest's lock hasp hangs 7px under the body, the gold pile
+            // tapers into a one-coin tip 10px under the mound. Anchoring the
+            // contact shadow to the CONTENT bottom parks it under that nub,
+            // a hairline gap away from the visible mass → the body reads as
+            // hovering above its own shadow. The MASS bottom (last row that
+            // still carries ≥22% of the sprite's widest row) is where the
+            // prop really meets the floor — anchor the shadow THERE.
+            let maxRowW = 0;
+            for (let y = minY; y <= maxY; y++) if (rowW[y] > maxRowW) maxRowW = rowW[y];
+            box.massY = maxY;
+            if (maxRowW > 8) {
+                const massMin = Math.max(3, Math.ceil(maxRowW * 0.22));
+                for (let y = maxY; y >= minY; y--) {
+                    if (rowW[y] >= massMin) { box.massY = y; break; }
+                }
+            }
             // 🔄 FOOT BAND (owner ruins_fixes.txt #6 — shadows must match the
             // sprites): the shadow used to span the FULL content width, so
             // sprites with sweeping cloaks / wings / weapons got a shadow
@@ -348,24 +369,46 @@ function drawContactShadow(ctx, cx, groundY, w, h, alpha = 1, opts = {}) {
     // only a thin rim peeks out: the item sits IN its shadow, not above it.
     // ry is capped flat — a shadow is a contact patch, not a pedestal.
     if (opts.hug) {
-        const rxH = w * 0.62;
-        const ryH = Math.max(4.5, Math.min(9.5, w * 0.085));
-        const aH = Math.min(0.55, (0.24 + 0.16 * t) * alpha * boost);
-        // faint flat penumbra — soft floor darkening hugging the footprint
+        // 🔄 V2 (owner 2026-10-06 "the shadows should be touching the thing —
+        // specifically the 3rd version of the gold thing"): V1 centred a
+        // TIGHT ellipse (rx 0.62×footW) on the base line — correct contact
+        // geometry, but for a wide, dark-bodied prop (the reliquary chest is
+        // near-black on dark iron bands) the whole ellipse hides BEHIND the
+        // silhouette (0.62 × 0.72 = 0.45× content width < half-width) and
+        // the item reads as pasted on lit floor: nothing anchors it. V2
+        // anchors on the sprite's MASS bottom (contentBox.massY — the hasp /
+        // coin-tip nubs no longer push the shadow below the visible body)
+        // and splits the shadow into two VISIBLE, TOUCHING parts:
+        //   1. front spill pool — a soft ellipse spilling TOWARD the viewer
+        //      from under the base line (top edge tucks up behind the mass,
+        //      body crescents out in front) — the part the eye reads as
+        //      "this thing is sitting on the floor";
+        //   2. tight contact — centred on the mass line, wings wide enough
+        //      (0.86×footW ≈ 0.62× content width) to peek past BOTH sides
+        //      of the silhouette.
+        const my = Math.min(groundY, opts.massY ?? groundY);
+        const rxH = w * 0.95;
+        const ryH = Math.max(4.5, Math.min(10, w * 0.075));
+        const aH = Math.min(0.62, (0.28 + 0.18 * t) * alpha * boost);
+        // front spill pool — the readable shadow, touching the base. Centre
+        // sits 1·ry under the mass line so the pool's DARKEST ring lands in
+        // the first rows below the sprite's base (contact the eye can see),
+        // its upper half tucking up behind the mass (no gap, no hover).
         ctx.save();
-        ctx.translate(cx, groundY + ryH * 0.3);
-        ctx.scale(rxH * 1.25, ryH * 1.45);
+        ctx.translate(cx, my + ryH * 1.0);
+        ctx.scale(rxH * 0.95, ryH * 1.85);
         const gp = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
-        gp.addColorStop(0, `rgba(8,6,4,${(aH * 0.38).toFixed(3)})`);
+        gp.addColorStop(0, `rgba(8,6,4,${(aH * 0.72).toFixed(3)})`);
+        gp.addColorStop(0.65, `rgba(8,6,4,${(aH * 0.32).toFixed(3)})`);
         gp.addColorStop(1, 'rgba(8,6,4,0)');
         ctx.fillStyle = gp;
         ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
-        // tight contact — centred ON the base line, tucked a fifth of a ry
+        // tight contact — centred ON the mass line, tucked a sixth of a ry
         // UP behind it so the sprite's bottom edge lands inside the dark
         // core (contact, never hover)
         ctx.save();
-        ctx.translate(cx, groundY - ryH * 0.22);
+        ctx.translate(cx, my - ryH * 0.15);
         ctx.scale(rxH, ryH);
         const gc = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
         gc.addColorStop(0, `rgba(6,5,3,${aH.toFixed(3)})`);
@@ -446,8 +489,11 @@ async function drawGroundedSprite(ctx, dirs, file, cx, groundY, ch, { shadow = t
         // floor to most of the content width for hugs.
         const footW = Math.max(feetW, box.w * (shadowHug ? 0.72 : 0.5)) * scale;
         const footOff = (feetCx - (box.x + box.w / 2)) * scale;
+        // 🫧 mass-bottom anchor in canvas px: the visible body meets the
+        // floor here (content bbox bottom − dangly nubs)
+        const massCanvasY = groundY - (box.y + box.h - 1 - (box.massY ?? (box.y + box.h - 1))) * scale;
         drawContactShadow(ctx, flip ? cx - footOff : cx + footOff, groundY, footW, ch, alpha,
-            shadowHug ? { hug: true, boost: shadowBoost } : { boost: shadowBoost, ryMin: shadowRyMin });
+            shadowHug ? { hug: true, boost: shadowBoost, massY: massCanvasY } : { boost: shadowBoost, ryMin: shadowRyMin });
     }
     ctx.save();
     if (alpha < 1) ctx.globalAlpha = alpha;
