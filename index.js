@@ -4,6 +4,15 @@ require("dotenv").config();
 const dns = require('dns');
 try { dns.setDefaultResultOrder('ipv4first'); } catch (e) {}
 
+// OWNER DIRECTIVE 2026-10-07 ("queued image processing" — approved "I'd
+// prefer you go"): every canvas render — current AND future code — flows
+// through the render queue automatically (memory brake + serialization +
+// telemetry). This MUST run before core/engine requires the renderer
+// modules: the patch hooks the shared 'canvas' module cache, so even
+// top-level destructured imports (`const { createCanvas } = require('canvas')`)
+// receive the gated versions. Escape hatch: RENDERQ_DISABLE=1 + pm2 restart.
+require('./core/utils/canvasAutoGate').install();
+
 /*
  * GLOBAL RAM TRAP - ULTRA AGGRESSIVE
  * Intercepts hardcoded library logs that serialize large Buffer objects.

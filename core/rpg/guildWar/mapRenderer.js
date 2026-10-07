@@ -351,6 +351,8 @@ function roundRect(ctx, x, y, w, h, r) {
 // serialized every map render. Now spawns up to `max` children and routes
 // each task to the LEAST-LOADED child (true parallel canvas).
 const { fork } = require('child_process');
+// lazy (keeps this module worker-safe): memory probe for the child pool
+const _renderQ = () => require('../../utils/renderQueue');
 const _renderPool = { children: [], queue: [], inflight: 0, max: 4 };
 let _renderSeq = 0;
 
@@ -368,12 +370,14 @@ function _spawnChild() {
 }
 
 // least-loaded live child, spawning one while under the cap
+// OWNER QUEUE RULE (2026-10-08): no NEW canvas child spawn when box memory
+// is critical (mirrors roomScene.js).
 function _pickChild() {
     let best = null;
     for (const c of _renderPool.children) {
         if (!best || (c._gwBusy || 0) < (best._gwBusy || 0)) best = c;
     }
-    if (!best || ((best._gwBusy || 0) > 0 && _renderPool.children.length < _renderPool.max)) best = _spawnChild();
+    if (!best || ((best._gwBusy || 0) > 0 && _renderPool.children.length < _renderPool.max && _renderQ().canSpawnChild())) best = _spawnChild();
     return best;
 }
 
@@ -415,6 +419,9 @@ async function renderRuinsMap(eventDoc, player, extras = {}) {
         const plainPlayer = typeof player.toObject === 'function' ? player.toObject({ depopulate: true }) : player;
         return await _renderViaChild(plainDoc, plainPlayer, extras);
     } catch (e) {
+        // OWNER QUEUE RULE (2026-10-08): memory/queue refusals are FINAL —
+        // no in-process retry on a box that just said "no" (mirrors roomScene.js).
+        if (e && (e.code === 'EMEM' || e.code === 'EQUEUEFULL')) throw e;
         return _renderInProcess(eventDoc, player, extras);
     }
 }

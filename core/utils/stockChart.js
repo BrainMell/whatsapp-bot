@@ -457,7 +457,15 @@ module.exports = {
   parseStockArgs,
   resolveSymbol,
   fetchChart,
-  renderStockChart,
+  // OWNER QUEUE RULE (2026-10-08): serialized + 45s dedup — same quote
+  // inside the window renders ONCE (identical payloads share the result).
+  renderStockChart: (...args) => {
+    const rq = require('./renderQueue');
+    const key = rq.keyFor('stockchart:v1', args[0]);
+    return key
+      ? rq.getOrRender(key, () => renderStockChart(...args), { label: 'stockChart', ttlMs: 45000 })
+      : rq.run('stockChart', () => renderStockChart(...args));
+  },
   formatQuoteCaption,
   RANGES,
   _internal: { fmtPrice, fmtVol, _axisTicks, _quoteCache, _searchCache },

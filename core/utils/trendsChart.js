@@ -647,7 +647,15 @@ module.exports = {
   handleTrends,
   parseTrendsArgs,
   getTrends,
-  renderTrendsChart,
+  // OWNER QUEUE RULE (2026-10-08): serialized + 45s dedup — identical trend
+  // data inside the window renders ONCE (burst = 1 render + N cache hits).
+  renderTrendsChart: (...args) => {
+    const rq = require('./renderQueue');
+    const key = rq.keyFor('trends:v1', args[0]);
+    return key
+      ? rq.getOrRender(key, () => renderTrendsChart(...args), { label: 'trendsChart', ttlMs: 45000 })
+      : rq.run('trendsChart', () => renderTrendsChart(...args));
+  },
   formatTrendsCaption,
   RANGES,
   _internal: { parseTrendsBody, _cache, SERIES_COLORS, MAX_KEYWORDS, _browserTrends, _launchBrowser, _resolveLaunchOpts, getTier1State: () => ({ fails: _tier1Fails, disabledUntil: _tier1DisabledUntil }) },

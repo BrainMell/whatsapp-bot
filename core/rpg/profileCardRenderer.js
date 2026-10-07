@@ -1060,4 +1060,10 @@ async function renderAllocateCard(params) {
   return canvas.toBuffer('image/png');
 }
 
-module.exports = { renderProfileCard, renderAllocateCard, renderStyleSheet, clearCaches, DEFAULT_STYLE, getDefaultStyle, RANK_COLORS, RANK_GRADIENTS, STAT_COLORS, EQUIP_RARITY, EQUIPMENT_SLOTS, CLASS_SPRITE_SETS };
+// OWNER QUEUE RULE (2026-10-08): profile renders take the shared render slot
+// (serialized + memory-gated). No cache — cards are per-user by design.
+const _renderQ = require('../utils/renderQueue');
+module.exports = {
+  renderProfileCard: (...args) => _renderQ.run('profileCard', () => renderProfileCard(...args)),
+  renderAllocateCard: (...args) => _renderQ.run('allocateCard', () => renderAllocateCard(...args)),
+  renderStyleSheet, clearCaches, DEFAULT_STYLE, getDefaultStyle, RANK_COLORS, RANK_GRADIENTS, STAT_COLORS, EQUIP_RARITY, EQUIPMENT_SLOTS, CLASS_SPRITE_SETS };

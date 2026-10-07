@@ -1539,6 +1539,8 @@ async function _renderInProcess(eventDoc, player, room, opts = {}) {
 // ("No active game in this chat"). The pool now spawns up to `max` children
 // and routes each task to the LEAST-LOADED child — true parallel canvas.
 const { fork } = require('child_process');
+// lazy (keeps this module worker-safe): memory probe for the child pool
+const _renderQ = () => require('../../utils/renderQueue');
 const _pool = { children: [], queue: [], inflight: 0, max: 6 };
 let _seq = 0;
 
@@ -1558,12 +1560,15 @@ function _spawnChild() {
 }
 
 // least-loaded live child, spawning one while under the cap
+// OWNER QUEUE RULE (2026-10-08): never spawn a NEW canvas child when box
+// memory is critical — reuse the loaded ones instead; a fresh child's first
+// render under memory pressure is exactly the spike that got us SIGKILLed.
 function _pickChild() {
     let best = null;
     for (const c of _pool.children) {
         if (!best || (c._gwBusy || 0) < (best._gwBusy || 0)) best = c;
     }
-    if (!best || ((best._gwBusy || 0) > 0 && _pool.children.length < _pool.max)) best = _spawnChild();
+    if (!best || ((best._gwBusy || 0) > 0 && _pool.children.length < _pool.max && _renderQ().canSpawnChild())) best = _spawnChild();
     return best;
 }
 
@@ -1607,6 +1612,11 @@ async function renderRoomScene(eventDoc, player, room, opts = {}) {
         const childOpts = { ...opts, exits, plan };
         return await _renderViaChild(plain(eventDoc), plain(player), roomPlain, childOpts);
     } catch (e) {
+        // OWNER QUEUE RULE (2026-10-08): a memory-brake or queue-full refusal
+        // is FINAL — re-rendering in-process would pile canvas memory onto
+        // the same box that just said "no". Fail through to the caller's
+        // text path instead.
+        if (e && (e.code === 'EMEM' || e.code === 'EQUEUEFULL')) throw e;
         // fallback: block briefly rather than fail the player's room
         return _renderInProcess(eventDoc, player, room, opts);
     }
