@@ -341,12 +341,15 @@ async function tick(sock, BOT_MARKER) {
     const actives = await getActiveEvents();
     const out = [];
     for (const ev of actives) {
-        // 🏠 cross-box isolation: a bot that is not a member of the host group
-        // is a pure SPECTATOR for this war — no flows, no lease, no start
-        // cards, no sweeps (it also cannot post the feed; feed.js gates that
-        // independently). DM command handling stays open to every bot.
-        if (ev.hostGroupId && !(await getFeed().isMemberOf(sock, ev.hostGroupId))) continue;
-        // flow lease: exactly ONE member instance runs the proactive blocks
+        // 🤝 GC COEXISTENCE (2026-10-07): the old "one group per bot"
+        // spectator rule is SCRAPPED (owner directive: "allow all the bots
+        // to exist in any gc together"). Every instance may now lease and
+        // run the flows; the flow lease below still guarantees exactly ONE
+        // runner per event, and the feed's reachability gate routes group
+        // deliveries to a bot that can actually post them. A bot that wins
+        // the lease simply becomes this event's flow-runner — any bot can
+        // DM start cards and mutate state atomically.
+        // flow lease: exactly ONE instance runs the proactive blocks
         if (!(await claimFlow(ev.eventId))) continue;
         // registration expiry → force start
         if (ev.state === 'REGISTRATION' && ev.registrationEndsAt && Date.now() > ev.registrationEndsAt) {

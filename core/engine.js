@@ -57,6 +57,39 @@ const ytdl = require("@distube/ytdl-core");
 const { Sticker, StickerTypes } = require("wa-sticker-formatter");
 const { parseHTML } = require("linkedom");
 
+// ═══ 🤝 GC COEXISTENCE (owner 2026-10-07: "scrape the one-group-per-bot
+// concept … allow all the bots to exist in any gc together") ═══
+// Every tenant ships its own prefix in instances/*/botConfig.json
+// (".jk" Jake, ".j" Joker, ".s" Subaru, ".e" Esdeath, ".g" Goten). When
+// several bots share a group chat, each instance receives EVERY message —
+// so the pipeline must (a) recognize commands that belong to a SIBLING bot
+// and stay silent, and (b) claim each command atomically in the shared DB
+// so exactly ONE instance answers (core/utils/msgClaim.js).
+// The prefix list is disk-static → cached at module level; "mine" is
+// resolved per call via the AsyncLocalStorage-backed botConfig so a
+// multi-tenant process (BOT_INSTANCES=a,b) never poisons the cache.
+let _allInstancePrefixes = null;
+function getAllInstancePrefixes() {
+    if (_allInstancePrefixes) return _allInstancePrefixes;
+    const out = [];
+    try {
+        const dir = path.join(__dirname, '..', 'instances');
+        for (const f of fs.readdirSync(dir)) {
+            try {
+                const cfg = JSON.parse(fs.readFileSync(path.join(dir, f, 'botConfig.json'), 'utf8'));
+                const p = String(cfg.prefix || '').toLowerCase().trim();
+                if (p && !out.includes(p)) out.push(p);
+            } catch (e) { /* malformed instance config → skip */ }
+        }
+    } catch (e) { /* no instances dir (single-instance deploy) → legacy behavior */ }
+    _allInstancePrefixes = out;
+    return out;
+}
+function getSiblingPrefixes() {
+    const mine = String(botConfig.getPrefix() || '.').toLowerCase().trim();
+    return getAllInstancePrefixes().filter((p) => p !== mine);
+}
+
 // Instance-bound sets map (botId -> Set)
 const blockedUsersByBot = new Map();
 const globalModsByBot = new Map();
@@ -9640,6 +9673,38 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                   // 💡 Hardmute check now happens EARLY (line ~6458) before MongoDB persist.
                   // If we reach here, the user is NOT hard-muted (or it's a DM).
                   // No need to re-check here.
+
+                  // ═══ 🤝 GC COEXISTENCE GATE (owner 2026-10-07) ═══
+                  // Runs for prefix-shaped GROUP messages only, BEFORE any
+                  // handler that could reply (cards, core commands, unknown-
+                  // command suggestions). Two guards:
+                  //  (a) SIBLING-PREFIX GUARD — ".j" is a substring of ".jk",
+                  //      so Jake's ".jk bal" would match Joker's intercept and
+                  //      draw an "unknown command" reply from the WRONG bot.
+                  //      If the text starts with a LONGER sibling prefix, it
+                  //      belongs to that sibling → walk away silently.
+                  //  (b) CROSS-INSTANCE CLAIM — atomic insert into the shared
+                  //      msgclaims collection; the FIRST instance to win the
+                  //      E11000 race handles the command, every other instance
+                  //      (and this instance's own reconnect-backfill copy)
+                  //      skips without replying. Fail-open on claim-infra
+                  //      errors (rare DB blip → legacy behavior, not a freeze).
+                  // DMs are untouched: each bot only ever receives its own DMs.
+                  if (isGroupChat && lowerTxt) {
+                    const _myPfx = String(botConfig.getPrefix() || '.').toLowerCase().trim();
+                    if (lowerTxt.startsWith(_myPfx)) {
+                      const _sibPfx = getSiblingPrefixes().find((sp) => sp.length > _myPfx.length && lowerTxt.startsWith(sp));
+                      if (_sibPfx) {
+                        if (_looksLikeCmd) console.log(`🤝 [Coexistence] ${chatId}: "${lowerTxt.slice(0, 40)}" starts with sibling prefix ${_sibPfx} — not ours, skipping`);
+                        return;
+                      }
+                      const _claimed = await require('./utils/msgClaim').claimGroupCommand(chatId, (m.key && m.key.participant) || senderJid, m.key && m.key.id);
+                      if (!_claimed) {
+                        if (_looksLikeCmd) console.log(`🤝 [Coexistence] ${chatId}: "${lowerTxt.slice(0, 40)}" already claimed by another instance — skipping`);
+                        return;
+                      }
+                    }
+                  }
 
                   if (_looksLikeCmd) console.log(`🃏 [Pipeline:3] Entering cardSystem.handleCommand | lowerTxt=${JSON.stringify(lowerTxt.slice(0,60))}`);
                   const cardHandled = await cardSystem.handleCommand({
