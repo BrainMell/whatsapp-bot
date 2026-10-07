@@ -1734,10 +1734,15 @@ async function updateAdventurerRank(userId) {
     // user.stats, but pvpSystem writes duel wins to the TOP LEVEL
     // (user.pvpWins) and quest wins also mirror to the top level.
     if (!eligibility.canPromote && eligibility.mission) {
+      // ⚖️ MAX-MERGE (QA R3): the User schema defaults pvpWins/questsWon to
+      // 0, so `??` never fell through to the alternate shape — a duel count
+      // living in user.stats.pvpWins read as 0. Lifetime counters are
+      // monotonic, so taking the max of both doc shapes is always safe.
+      const st = user.stats || {};
       const missionStats = {
-        ...(user.stats || {}),
-        questsWon: user.stats?.questsWon ?? user.questsWon ?? 0,
-        pvpWins: user.pvpWins ?? user.stats?.pvpWins ?? 0,
+        ...st,
+        questsWon: Math.max(st.questsWon || 0, user.questsWon || 0),
+        pvpWins: Math.max(st.pvpWins || 0, user.pvpWins || 0),
       };
       const trial = classSystem.checkMissionProgress(eligibility.mission.id, missionStats);
       if (trial.complete) {

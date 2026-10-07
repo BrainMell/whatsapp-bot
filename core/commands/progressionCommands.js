@@ -418,8 +418,8 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
         } else {
           const missionStats = {
             ...(userDoc?.stats || {}),
-            questsWon: userDoc?.stats?.questsWon ?? userDoc?.questsWon ?? 0,
-            pvpWins: userDoc?.pvpWins ?? (userDoc?.stats?.pvpWins ?? 0),
+            questsWon: Math.max(userDoc?.stats?.questsWon || 0, userDoc?.questsWon || 0),
+            pvpWins: Math.max(userDoc?.stats?.pvpWins || 0, userDoc?.pvpWins || 0),
           };
           let mp = { progress: [] };
           try { mp = classSystem.checkMissionProgress(gateMission.id, missionStats); } catch {}
@@ -454,8 +454,8 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
         if (doneMissions.includes(gm.id)) return '';
         const ms = {
           ...(userDoc?.stats || {}),
-          questsWon: userDoc?.stats?.questsWon ?? userDoc?.questsWon ?? 0,
-          pvpWins: userDoc?.pvpWins ?? (userDoc?.stats?.pvpWins ?? 0),
+          questsWon: Math.max(userDoc?.stats?.questsWon || 0, userDoc?.questsWon || 0),
+          pvpWins: Math.max(userDoc?.stats?.pvpWins || 0, userDoc?.pvpWins || 0),
         };
         const mp = classSystem.checkMissionProgress(gm.id, ms);
         const parts = mp.progress.map((o) => `${o.done ? '✅' : '▫️'} ${o.label} ${Math.min(o.current || 0, o.target)}/${o.target}`).join(' · ');

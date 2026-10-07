@@ -15,6 +15,7 @@
 //      in ONE call, persisted.
 //   R2 honest block — objectives NOT all met → stays D, blocked_by_mission.
 //   R3 stats-shape pvpWins (user.stats.pvpWins) also counts.
+//   R9 max-merge — counts split across BOTH doc shapes take the higher one.
 //   R4 free gate unaffected — F→E promotes with no trial.
 //   R5 legacy manual path — missions pre-seeded [1] → still promotes.
 //   R6 no downgrade / no re-promote on the next check.
@@ -56,6 +57,7 @@ function check(name, cond, extra) {
         hero: '15551110001@s.whatsapp.net',   // R1 headline
         short: '15551110002@s.whatsapp.net',  // R2 honest block (pvp 2)
         statShape: '15551110003@s.whatsapp.net', // R3 pvp in stats
+        split: '15551110006@s.whatsapp.net',  // R9 split shapes (stats 1 + top 3)
         free: '15551110004@s.whatsapp.net',   // R4 F→E
         legacy: '15551110005@s.whatsapp.net', // R5 missions pre-done
     };
@@ -64,6 +66,7 @@ function check(name, cond, extra) {
         mk(J.hero, { pvpWins: 3 }),
         mk(J.short, { pvpWins: 2 }),
         mk(J.statShape, { stats: { questsWon: 32, bossesDefeated: 37, pvpWins: 3 } }),
+        mk(J.split, { pvpWins: 3, stats: { questsWon: 32, bossesDefeated: 37, pvpWins: 1 } }),
         mk(J.free, { adventurerRank: 'F', questsCompleted: 12, questsWon: 12, level: undefined, progression: { xp: 900, level: 12, gp: 3, totalGP: 3, statPoints: 0, allocatedStats: {} }, stats: { questsWon: 12 } }),
         mk(J.legacy, { pvpWins: 3, completedRankMissions: [1] }),
     ]);
@@ -88,6 +91,10 @@ function check(name, cond, extra) {
     // ── R3: pvpWins stored in user.stats also counts ──
     const r3 = await economy.updateAdventurerRank(J.statShape);
     check('R3 stats-shape pvpWins promotes', !!(r3 && r3.ranked_up && r3.new_rank === 'C'), r3 && { up: r3.ranked_up, to: r3.new_rank });
+
+    // ── R9: counts split across both doc shapes take the MAX ──
+    const r9 = await economy.updateAdventurerRank(J.split);
+    check('R9 max-merge promotes (max(1,3)=3)', !!(r9 && r9.ranked_up && r9.new_rank === 'C'), r9 && { up: r9.ranked_up, to: r9.new_rank });
 
     // ── R4: free gate (F→E) unaffected by trial logic ──
     const r4 = await economy.updateAdventurerRank(J.free);
