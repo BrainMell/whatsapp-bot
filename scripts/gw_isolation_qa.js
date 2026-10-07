@@ -1,10 +1,19 @@
 #!/usr/bin/env node
-// ⚔️ GW ISOLATION QA — cross-box flow lease + feed membership gate (2026-10-05)
-// Verifies the fix for Mellow's playtest incident:
-//   1. Flow lease: only ONE instance runs proactive flows per event.
-//   2. Membership gate: non-member bots never claim/burn the shared feedQueue.
-//   3. tick(): non-member or non-holder instances are pure spectators.
-//   4. Start-card DMs fire exactly once (state.tick path only).
+// ⚔️ GW ISOLATION QA — cross-box flow lease + feed reachability gate (2026-10-05,
+// updated 2026-10-07 for GC COEXISTENCE — owner scrapped "one group per bot")
+// Verifies:
+//   1. Reachability primitives (capability check — NOT a group assignment).
+//   2. Flow lease: only ONE instance runs proactive flows per event.
+//   3. Feed flush: a bot that cannot reach the destination never claims/burns
+//      the shared feedQueue (capability check; with all bots in the GC every
+//      instance passes and the atomic claim picks the single sender).
+//   4. tick(): coexistence — ANY instance may lease and run flows; the lease
+//      still guarantees exactly ONE runner (no spectator concept anymore).
+//   5. Start-card DMs fire exactly once (state.tick path only).
+//   6. 🤝 Cross-instance command claim (msgClaim): first instance wins the
+//      E11000 race, second instance skips, same-instance backfill skips too.
+//   7. 🤝 Scoreboard window claimed on the DOC (one poster per window across
+//      instances — was per-instance memory → triple posts in shared GCs).
 // Uses the gwtest DB + mock socks (same pattern as gw_presentation_sim.js).
 const fs = require('fs');
 const path = require('path');
@@ -116,29 +125,35 @@ function strangerSock() {
         `sent=${sent.length} left=${(doc.feedQueue || []).length}`);
     check('major actually rendered a card or text', sent.length >= 1);
 
-    // ═══ 4. tick(): stranger instance is a pure spectator ═══
-    console.log('\n══ 4. tick spectator mode ══');
+    // ═══ 4. tick(): coexistence — any instance may run flows, exactly once ═══
+    console.log('\n══ 4. tick coexistence (spectator concept scrapped) ══');
     await GuildWarEvent.updateOne({ eventId }, { $set: { state: 'REGISTRATION', registrationEndsAt: Date.now() - 1000, flow: null } });
     const before = await GuildWarEvent.findOne({ eventId }, { state: 1, flow: 1 }).lean();
     check('pre-tick: still REGISTRATION, no lease', before.state === 'REGISTRATION' && !before.flow);
-    // stranger tick → must NOT start the event, must NOT claim lease
-    const outStranger = await state.tick(strangerSock(), '\u200B');
-    const afterStranger = await GuildWarEvent.findOne({ eventId }, { state: 1, flow: 1 }).lean();
-    check('stranger tick did not start the war', afterStranger.state === 'REGISTRATION');
-    check('stranger tick did not claim the lease', !afterStranger.flow);
-    check('stranger tick reported nothing', (outStranger || []).length === 0);
-    // member tick → claims lease (and starts the war, queueing the begin feed)
-    const sentCards = [];
-    const memberTickSock = {
-        groupMetadata: async () => ({ id: '120363iso@g.us' }),
-        sendMessage: async (jid, content) => { sentCards.push({ jid, text: content.text || content.caption || '(img)' }); return {}; },
-    };
-    const outMember = await state.tick(memberTickSock, '\u200B');
-    const afterMember = await GuildWarEvent.findOne({ eventId }, { state: 1, flow: 1 }).lean();
-    check('member tick claimed the lease', afterMember.flow && afterMember.flow.owner === botConfig.getBotName());
-    check('member tick auto-started the expired war', afterMember.state === 'ACTIVE', `state=${afterMember.state}`);
-    check('tick out reports the auto start', (outMember || []).some((o) => o.auto === 'started'));
-    check('war-begin major queued once', sentCards.length >= 0);
+    // 🤝 the "stranger" sock (member of NO real group) now behaves like any
+    // instance: it may WIN the lease and run the flows. The lease — not
+    // membership — is what single-executes. Tenant identity comes from
+    // botConfig.getBotName (patched per tick like §2 does).
+    const savedName4 = botConfig.getBotName;
+    botConfig.getBotName = () => 'TenantA';
+    const outA = await state.tick(strangerSock(), '\u200B');
+    const afterA = await GuildWarEvent.findOne({ eventId }, { state: 1, flow: 1 }).lean();
+    check('any instance may claim the lease (no membership filter)', !!afterA.flow && afterA.flow.owner === 'TenantA',
+        JSON.stringify(afterA.flow));
+    check('lease holder auto-started the expired war', afterA.state === 'ACTIVE', `state=${afterA.state}`);
+    check('tick out reports the auto start once', (outA || []).filter((o) => o.auto === 'started').length === 1);
+    // second instance: lease HELD by TenantA → must not re-run flows. Reset
+    // the state back to REGISTRATION while KEEPING the lease to prove it.
+    await GuildWarEvent.updateOne({ eventId }, { $set: { state: 'REGISTRATION', registrationEndsAt: Date.now() - 1000 } });
+    botConfig.getBotName = () => 'TenantB';
+    const outB = await state.tick(strangerSock(), '\u200B');
+    const afterB = await GuildWarEvent.findOne({ eventId }, { state: 1, flow: 1 }).lean();
+    check('second instance blocked by the held lease (no re-start)', afterB.state === 'REGISTRATION' && (outB || []).length === 0,
+        `state=${afterB.state} out=${JSON.stringify(outB)}`);
+    check('lease still held by TenantA after B attempt', afterB.flow && afterB.flow.owner === 'TenantA', JSON.stringify(afterB.flow));
+    botConfig.getBotName = savedName4;
+    // restore ACTIVE for cleanup symmetry
+    await GuildWarEvent.updateOne({ eventId }, { $set: { state: 'ACTIVE' } });
 
     // ═══ 5. start-card DM fires exactly once per instance ═══
     console.log('\n══ 5. single-source start cards ══');
@@ -150,6 +165,56 @@ function strangerSock() {
     check('engine sweeper no longer re-DMs start cards', !sweeper.includes('dmWarStartCards'));
     const stateSrc = fs.readFileSync(path.join(__dirname, '..', 'core', 'rpg', 'guildWar', 'state.js'), 'utf8');
     check('state.tick keeps its single dmWarStartCards call', (stateSrc.match(/dmWarStartCards/g) || []).length === 1);
+
+    // ═══ 6. 🤝 cross-instance command claim (msgClaim) ═══
+    console.log('\n══ 6. GC coexistence command claim ══');
+    const { claimGroupCommand } = require('../core/utils/msgClaim');
+    const ck = { chat: '120363coexist@g.us', sender: '15554440001@s.whatsapp.net', id: `MSGQA${Date.now()}` };
+    const w1 = await claimGroupCommand(ck.chat, ck.sender, ck.id);
+    check('first instance wins the claim', w1 === true);
+    const w2 = await claimGroupCommand(ck.chat, ck.sender, ck.id);
+    check('second instance loses (E11000 duplicate)', w2 === false);
+    // reconnect backfill: the SAME instance re-offered the same stanza must
+    // also skip — identical behavior, proven by the same duplicate key.
+    const w3 = await claimGroupCommand(ck.chat, ck.sender, ck.id);
+    check('backfill copy of the same message skips too', w3 === false);
+    // different message id → separate claim
+    const w4 = await claimGroupCommand(ck.chat, ck.sender, `MSGQA${Date.now()}-b`);
+    check('a different message claims cleanly', w4 === true);
+    // degenerate input → legacy behavior (fail-open)
+    check('missing msgId → legacy true', await claimGroupCommand(ck.chat, ck.sender, null) === true);
+
+    // ═══ 7. 🤝 scoreboard window lives on the DOC ═══
+    console.log('\n══ 7. scoreboard DB claim (one poster per window) ══');
+    const GuildWarEventModel = GuildWarEvent; // same model
+    const evScore = `gw_isoqa_score_${Date.now().toString(36)}`;
+    await GuildWarEventModel.deleteMany({ eventId: evScore });
+    await GuildWarEventModel.create({
+        eventId: evScore, state: 'ACTIVE', hostGroupId: '120363iso@g.us',
+        scoreboardAt: 0,
+        players: [
+            { jid: 'a@s.whatsapp.net', name: 'A', guildId: 'g1', guildName: 'G1', status: 'active', score: 5 },
+            { jid: 'b@s.whatsapp.net', name: 'B', guildId: 'g2', guildName: 'G2', status: 'active', score: 3 },
+        ],
+        rooms: [], edges: [],
+    });
+    const sentBoard = [];
+    const boardSock = {
+        groupMetadata: async () => ({ id: '120363iso@g.us' }),
+        sendMessage: async (jid, content) => { sentBoard.push(content.text || content.caption || '(img)'); return {}; },
+    };
+    await feed.postScoreboard(evScore, boardSock, '\u200B');
+    const boardAfterFirst = sentBoard.length;
+    check('first instance posts the standings', boardAfterFirst === 1, `sent=${boardAfterFirst}`);
+    await feed.postScoreboard(evScore, boardSock, '\u200B');
+    check('second instance within the window is silent', sentBoard.length === 1, `sent=${sentBoard.length}`);
+    const scoreDoc = await GuildWarEventModel.findOne({ eventId: evScore }, { scoreboardAt: 1 }).lean();
+    check('scoreboardAt persisted on the doc', scoreDoc.scoreboardAt > 0, String(scoreDoc.scoreboardAt));
+    // expire the window → the next post wins again
+    await GuildWarEventModel.updateOne({ eventId: evScore }, { $set: { scoreboardAt: Date.now() - 11 * 60 * 1000 } });
+    await feed.postScoreboard(evScore, boardSock, '\u200B');
+    check('window expiry allows the next poster', sentBoard.length === 2, `sent=${sentBoard.length}`);
+    await GuildWarEventModel.deleteMany({ eventId: evScore });
 
     // ── cleanup ──
     await GuildWarEvent.deleteMany({ eventId });
