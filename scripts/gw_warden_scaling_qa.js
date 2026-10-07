@@ -178,6 +178,7 @@ async function connectDB() {
     });
     const started = await state.startEvent(eventId);
     check('startEvent ok', started.ok === true, started.reason || '');
+    await new Promise((r) => setTimeout(r, 1500)); // feed.queue's DB mirror is async — let it land
     const ev1 = await GuildWarEvent.findOne({ eventId }).lean();
     check('finale ledger opened at start', ev1.finale && ev1.finale.started === true);
     check('ledger carries 4 bosses', Array.isArray(ev1.finale.bosses) && ev1.finale.bosses.length === 4);
