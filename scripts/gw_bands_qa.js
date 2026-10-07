@@ -204,7 +204,11 @@ function rngForRoll(band) {
     const evLow = eventFixture(`gw_bandsqa_low_${Date.now().toString(36)}`, LOWG, makeRooms(50, 10), {}, 'lo');
     const rbLow = await encounters.resolveEngagement(evLow, roomSecret, { jid: 'lo0@s.whatsapp.net', level: 1 }, { boss: true, bossKind: 'secret', rng: rngForRoll('high') });
     const rLowLow = await encounters.resolveEngagement(evLow, roomMid, { jid: 'lo0@s.whatsapp.net', level: 1 }, { rng: rngForRoll('low') });
-    check('low guild: secret boss = min(1+6, 2+4) = 6', rbLow.level === 6, rbLow.level);
+    // 🔧 DEEP-PASS FIX 2026-10-07: secret stays strictly BELOW the core
+    // (core−1) when the solo cap binds — core = min(2+10, 2+4) = 6,
+    // secret = min(1+6, core−1, 2+4) = 5 (old code collapsed both to 6)
+    check('low guild: core = min(2+10, 2+4) = 6', (await encounters.resolveEngagement(evLow, roomCore, { jid: 'lo0@s.whatsapp.net', level: 1 }, { boss: true, bossKind: 'core', rng: rngForRoll('high') })).level === 6);
+    check('low guild: secret boss = core−1 = 5 (hierarchy preserved)', rbLow.level === 5, rbLow.level);
     check('low guild: LOW band = 1 (clamped to floor)', rLowLow.level === 1, rLowLow.level);
 
     // ═══ 6. fallbacks + SOLO FIX + REAL-LEVEL FIX ═══
@@ -228,7 +232,8 @@ function rngForRoll(band) {
     check('solo lvl7: LOW = min(p50, 7-2) = 5', rSoloLow.level === 5, rSoloLow.level);
     check('solo lvl7: MED = min(p80, 7+2) = 7', rSoloMid.level === 7, rSoloMid.level);
     check('solo lvl7: HIGH = min(p80, 7+5) = 7', rSoloHigh.level === 7, rSoloHigh.level);
-    check('solo lvl7: secret boss = min(7+6, 7+4) = 11 — soloable', rSoloBoss.level === 11, rSoloBoss.level);
+    // 🔧 DEEP-PASS FIX 2026-10-07: solo secret = core−1 = 10, core stays 11
+    check('solo lvl7: secret boss = core−1 = 10 — soloable, apex intact', rSoloBoss.level === 10, rSoloBoss.level);
     check('solo lvl7 boss: legacy curve would have been 19+ — no more 4×-HP wall', rSoloBoss.level < 13);
     // REAL-LEVEL FIX: player doc WITHOUT a level field resolves via progression
     fakeLevels['rl0@s.whatsapp.net'] = 7;

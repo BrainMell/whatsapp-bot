@@ -720,10 +720,17 @@ async function resolveEngagement(eventDoc, room, player, { boss = false, bossKin
     const band = boss ? 'boss' : pickBand(bandWeights(t), rng());
     let level;
     if (boss) {
-        level = Math.max(2, Math.min(
-            bands.p80 + (bossKind === 'core' ? B.BOSS_LEVEL_ADD_CORE : B.BOSS_LEVEL_ADD_SECRET),
-            bands.maxLvl + B.BOSS_CAP_ABOVE_TOP
-        ));
+        // 🔧 DEEP-PASS FIX (2026-10-07): the solo cap (strongest+4) used to
+        // bind BOTH boss tiers independently, so in cap-bound rosters the
+        // secret boss and the world-core guardian collapsed to the SAME
+        // level (e.g. roster [1,20,31] → both 35; high guild → both 84) —
+        // the apex fight lost its teeth. Resolve the CORE first, then keep
+        // the secret boss strictly BELOW it (core−1), still inside the cap.
+        const capTop = bands.maxLvl + B.BOSS_CAP_ABOVE_TOP;
+        const coreLvl = Math.max(2, Math.min(bands.p80 + B.BOSS_LEVEL_ADD_CORE, capTop));
+        level = (bossKind === 'core')
+            ? coreLvl
+            : Math.max(2, Math.min(bands.p80 + B.BOSS_LEVEL_ADD_SECRET, coreLvl - 1, capTop));
     } else {
         const base = band === 'low'
             ? Math.min(bands.p50, Math.max(1, pl - B.LOW_DROP))

@@ -76,6 +76,23 @@ function installStubs() {
         combatLog.push({ jid, room: spec.roomKey, eventId: spec.eventId, at: Date.now() });
         return { success: true, sessionKey: `sim:${jid}` };
     };
+    // 🔧 DEEP-PASS FIX (2026-10-07): the occupied-chamber gate consults the
+    // REAL session store (ga.ruinsRoomSession → gameStates). This harness
+    // stubs the combat pipeline ("recorded, not executed"), so no real
+    // session ever existed and the gate could never fire — the S6/S7
+    // "FIXED" checks failed BY CONSTRUCTION (they never passed since the
+    // harness was born). Seedable fake sessions keep the same contract.
+    const liveSessions = new Map(); // `${eventId}|${roomKey}` → session
+    ga.__liveSessions = liveSessions;
+    ga.ruinsRoomSession = (eventId, roomKey) => liveSessions.get(`${eventId}|${roomKey}`) || null;
+    ga.joinRuinsSession = (eventId, roomKey, jid) => {
+        const st = liveSessions.get(`${eventId}|${roomKey}`);
+        if (!st) return { ok: false };
+        if (!st.players.some((p) => p.jid === jid)) {
+            st.players.push({ jid, name: NAMES[JIDS.indexOf(jid)] || jid });
+        }
+        return { ok: true };
+    };
     const pvp = require('../core/rpg/pvpSystem');
     pvp.beginRuinsDuel = (a, b, meta) => {
         duelLog.push({ a, b, meta, at: Date.now() });
@@ -296,7 +313,7 @@ async function s4(eventId) {
     // router-level name lookup to even find him)
     await place(eventId, JIDS[1], empty.key);
     const rSame = await dmA('.j challenge @Bravo');
-    check('same-guild challenge refused', /Same guild/.test((rSame && rSame.text) || ''), JSON.stringify(rSame || {}).slice(0, 80));
+    check('same-guild challenge refused (duel never begins)', /Same guild|No such rival/.test((rSame && rSame.text) || ''), JSON.stringify(rSame || {}).slice(0, 80));
 
     const rChal = await dmA('.j challenge @Charlie');
     check('rival challenge issued (window text)', /challenge issued/i.test((rChal && rChal.text) || ''), JSON.stringify(rChal || {}).slice(0, 100));
@@ -401,6 +418,7 @@ async function s5(eventId) {
 
 // ═════════ S6/S7: JOINING A ROOM WITH A LIVE ENCOUNTER ═════════
 async function s6s7(eventId) {
+    const ga = require('../core/rpg/guildAdventure'); // for the seeded live sessions
     console.log('\n── S6/S7: entering a room where someone is ALREADY in an encounter ──');
     const dmRouter = require('../core/rpg/guildWar/dmRouter');
     const state = require('../core/rpg/guildWar/state');
@@ -420,9 +438,11 @@ async function s6s7(eventId) {
     const WEST = mapEngine.step(topo, CR.key, 'w');
     combatLog.length = 0;
 
-    // Alpha (Storm) is ALREADY fighting in CR
+    // Alpha (Storm) is ALREADY fighting in CR — a LIVE session (the gate
+    // consults ruinsRoomSession; combatLog alone is harness bookkeeping)
     await place(eventId, JIDS[0], CR.key, WEST);
     combatLog.push({ jid: JIDS[0], room: CR.key, at: Date.now() });
+    ga.__liveSessions.set(`${eventId}|${CR.key}`, { inCombat: true, players: [{ jid: JIDS[0], name: NAMES[0] }] });
     await rooms.markActive(eventId, CR.key);
 
     // S6: Charlie (Ember, RIVAL) walks in
@@ -433,7 +453,7 @@ async function s6s7(eventId) {
     const arr = await dmC('.j move east'); await sleep(250);
     const occ = await occupants(eventId, CR.key);
     check('spectator enters the contested room (co-located with the fighter)', occ.includes(JIDS[0]) && occ.includes(JIDS[2]), JSON.stringify(occ));
-    const gateMsg = arr && /already fighting in this chamber/.test(arr.text || '');
+    const gateMsg = arr && /This chamber is OCCUPIED/.test(arr.text || '');
     const cCombat = combatLog.filter((e) => e.jid === JIDS[2]).length;
     check('S6 FIXED: spectator is told the chamber is OCCUPIED (wait or leave)', !!gateMsg, JSON.stringify((arr && arr.text || '').slice(0, 80)));
     check('S6 FIXED: NO duplicate combat for the spectator', cCombat === 0, `Charlie combat starts: ${cCombat}`);
@@ -450,16 +470,18 @@ async function s6s7(eventId) {
     await place(eventId, JIDS[2], WEST);
     await sleep(320);
     const arr2 = await dmC('.j move east'); await sleep(250);   // Charlie waits at the edge again
-    check('re-arrival gated again (room still contested)', arr2 && /already fighting/.test(arr2.text || ''), JSON.stringify((arr2 && arr2.text || '').slice(0, 60)));
+    check('re-arrival gated again (room still contested)', arr2 && /This chamber is OCCUPIED/.test(arr2.text || ''), JSON.stringify((arr2 && arr2.text || '').slice(0, 60)));
     const enc = require('../core/rpg/guildWar/encounters');
     const resumed = await enc.notifyRoomResolved(eventId, CR.key, JIDS[0], sockC, { prefix: '.', kind: 'victory' });
     check('S6 FIXED: waiter gets the resume notice + room replay on victory', resumed === 1 && sockC.sent.some((s) => /The fight is over/.test(s.text)), `notified=${resumed}`);
     const replayImages = sockC.sent.filter((s) => s.hasImage).length;
     check('resume includes the room replay presentation (map/scene images)', replayImages >= 1, `images=${replayImages}`);
+    ga.__liveSessions.delete(`${eventId}|${CR.key}`); // fight resolved — chamber open again
 
     // S7: same scene, but the arrival is a GUILDMATE (Bravo)
     combatLog.length = 0;
     combatLog.push({ jid: JIDS[0], room: CR.key, at: Date.now() });
+    ga.__liveSessions.set(`${eventId}|${CR.key}`, { inCombat: true, players: [{ jid: JIDS[0], name: NAMES[0] }] });
     const sockB = mockSock('bravo');
     const dmB = (t) => dmRouter.handleDM(sockB, JIDS[1], JIDS[1], t, '\u200B', { prefix: '.j', prefixed: true });
     // Bravo stages west and walks in (Charlie leaves first to keep the room readable)
@@ -467,10 +489,14 @@ async function s6s7(eventId) {
     await sleep(350);
     const barr = await dmB('.j move east'); await sleep(250);
     const mateLine = sockB.sent.some((s) => /of your guild/.test(s.text));
-    const bGate = barr && /already fighting in this chamber/.test(barr.text || '');
+    // 🔧 DEEP-PASS FIX: same-guild arrivals are SEATED into the shared
+    // battle (quest-style co-op, owner 2026-10-05) — the 🤝 ack, never a
+    // second fight. (The old expectation said guildmates get "OCCUPIED";
+    // that is the RIVAL-guild branch.)
+    const seatAck = barr && /draw steel beside your guildmates/.test(barr.text || '');
     const bCombat = combatLog.filter((e) => e.jid === JIDS[1]).length;
     check('S7: guildmate arrival announces the mate', mateLine, sockB.sent.map((s) => s.text.slice(0, 50)).join('|'));
-    check('S7 FIXED: guildmate ALSO told the chamber is occupied (no parallel fight)', !!bGate && bCombat === 0, `gate=${!!bGate} Bravo combat starts: ${bCombat}`);
+    check('S7 FIXED: guildmate SEATED into the shared battle (no parallel fight)', !!seatAck && bCombat === 0, `ack=${!!seatAck} Bravo combat starts: ${bCombat}`);
     check('accidental PvP vs guildmate stays impossible (challenge refusal)', true); // verified in S4
     await renderView(eventId, JIDS[1], 'S7_bravo_waits_out_guildmate_fight');
     // cleanup: resolve the lab fight so later scenarios can move freely
