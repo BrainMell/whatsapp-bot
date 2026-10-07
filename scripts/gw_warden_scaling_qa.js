@@ -128,9 +128,12 @@ console.log('\n— H: rank card truth —');
     const bossObj = mp.progress.find((o) => o.statKey === 'bossesDefeated');
     check('bosses objective reads stats (2/5)', bossObj && bossObj.current === 2);
     const pcSrc = fs.readFileSync(path.join(ROOT, 'core/commands/progressionCommands.js'), 'utf8');
-    check('rank command merges top-level pvpWins', /pvpWins: userDoc\?\.pvpWins/.test(pcSrc));
+    // 🔄 auto-claim era (26090dae): the merge is a MAX of both doc shapes
+    // (schema defaults made `??` fall-through impossible), and the trial line
+    // promises automatic advancement instead of the hidden claim verb.
+    check('rank command merges top-level pvpWins (max of both shapes)', /Math\.max\(userDoc\?\.stats\?\.pvpWins \|\| 0, userDoc\?\.pvpWins \|\| 0\)/.test(pcSrc));
     check('rank card caps image bars at 3 + caption overflow', /progress\.slice\(0, 3\)/.test(pcSrc) && /progress\.slice\(3\)/.test(pcSrc));
-    check('rank caption spells out the trial + claim verb', /rank mission claim/.test(pcSrc));
+    check('rank caption spells out the trial + auto-advance', /advances automatically|advances the moment you check it/.test(pcSrc));
 }
 
 // ── DB sections (gwtest) ──
