@@ -21,6 +21,13 @@
 //   R6 no downgrade / no re-promote on the next check.
 //   R7 claimRankMission after auto-claim is a graceful no-op (rank moved on).
 //   R8 blocked claim reply lists the missing objective progress.
+//   R10 `.j rank` END-TO-END (prod incident 2026-10-07 13:28Z — Mellow
+//      "Can't even check rank anymore", joker replied "❌ Failed to fetch
+//      rank data." to EVERY player): the card-truth edit read gateCaption
+//      outside its block, so every SUCCESSFUL Go render threw
+//      ReferenceError. The checks below stub the Go renderer and run the
+//      REAL handler — card path, overflow caption, trial line, and the
+//      renderer-down text fallback — closing the QA gap that let it ship.
 // Runs against a throwaway DB (gwqa_rank) — production data untouched.
 const fs = require('fs');
 const path = require('path');
@@ -60,6 +67,8 @@ function check(name, cond, extra) {
         split: '15551110006@s.whatsapp.net',  // R9 split shapes (stats 1 + top 3)
         free: '15551110004@s.whatsapp.net',   // R4 F→E
         legacy: '15551110005@s.whatsapp.net', // R5 missions pre-done
+        card: '15551110007@s.whatsapp.net',   // R10a/b card path (promotes)
+        cardShort: '15551110008@s.whatsapp.net', // R10c/d unmet trial + fallback
     };
     for (const jid of Object.values(J)) await User.deleteMany({ userId: jid });
     await User.create([
@@ -115,6 +124,51 @@ function check(name, cond, extra) {
     // ── R8: blocked claim reply lists missing objective progress ──
     const r8 = await economy.claimRankMission(J.short);
     check('R8 blocked claim lists PvP 2/3', r8 && r8.success === false && /2\/3/.test(r8.message || ''), r8 && r8.message);
+
+    // ── R10: `.j rank` end-to-end with the REAL handler ──
+    // The prod incident: successful card render → caption build hit the
+    // out-of-scope gateCaption → ReferenceError → outer catch → error text.
+    // Stub the Go renderer (mutate the cached module's method so the
+    // handler's lazy require sees it) and assert on captured sends.
+    const { handleRankCommand } = require('../core/commands/progressionCommands');
+    const goService = require('../core/utils/goImageService');
+    const origRender = goService.generatePortraitCard;
+    const fakeJpeg = Buffer.alloc(2048, 0x7f);
+    const mkSock = () => { const sends = []; return { sends, sendMessage: async (jid, content, opts) => { sends.push({ jid, content, opts }); } }; };
+    const mQ = {};
+    try {
+        // R10a: successful render + auto-promotion in the SAME call
+        await User.create(mk(J.card, { pvpWins: 3 }));
+        goService.generatePortraitCard = async () => fakeJpeg;
+        const s1 = mkSock();
+        await handleRankCommand(s1, 'chat-rank', J.card, mQ);
+        const img1 = s1.sends.find((x) => x.content && x.content.image);
+        check('R10a .j rank sends the CARD (not Failed-to-fetch)', !!img1, s1.sends.map((x) => Object.keys(x.content || {})));
+        check('R10a caption shows post-promotion C-Rank', !!(img1 && /C-Rank/.test(img1.content.caption || '')), img1 && img1.content.caption);
+        // R10b: 5 progress bars (level/quests/3 objectives) → 2 overflow to caption
+        check('R10b overflow objectives ride the caption', !!(img1 && /Also required:/.test(img1.content.caption || '')), img1 && (img1.content.caption || '').slice(-160));
+    } catch (e) { check('R10a/b handler ran clean', false, e && e.message); }
+
+    try {
+        // R10c: unmet trial — the trial line spells out the gate in the caption
+        await User.create(mk(J.cardShort, { pvpWins: 2 }));
+        const s2 = mkSock();
+        await handleRankCommand(s2, 'chat-rank', J.cardShort, mQ);
+        const img2 = s2.sends.find((x) => x.content && x.content.image);
+        check('R10c unmet-trial card still renders', !!img2, s2.sends.map((x) => Object.keys(x.content || {})));
+        check('R10c caption names Trial of Combat with 2/3', !!(img2 && /Trial of Combat/.test(img2.content.caption || '') && /2\/3/.test(img2.content.caption || '')), img2 && img2.content.caption);
+    } catch (e) { check('R10c handler ran clean', false, e && e.message); }
+
+    try {
+        // R10d: renderer down → legacy TEXT fallback, never the error toast
+        const s3 = mkSock();
+        goService.generatePortraitCard = async () => { throw new Error('renderer down'); };
+        await handleRankCommand(s3, 'chat-rank', J.cardShort, mQ);
+        const txt3 = s3.sends.find((x) => x.content && typeof x.content.text === 'string');
+        check('R10d renderer-down falls back to TEXT rank card', !!(txt3 && /YOUR RANK/.test(txt3.content.text)), txt3 && (txt3.content.text || '').slice(0, 80));
+        check('R10d no Failed-to-fetch toast anywhere', s3.sends.every((x) => !/Failed to fetch rank data/.test((x.content && x.content.text) || '')));
+    } catch (e) { check('R10d handler ran clean', false, e && e.message); }
+    finally { goService.generatePortraitCard = origRender; }
 
     console.log(`\n═══ RANK AUTO-CLAIM QA: ${PASS} passed, ${FAIL} failed ═══`);
     await mongoose.disconnect();
