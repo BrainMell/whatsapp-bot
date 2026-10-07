@@ -2369,10 +2369,33 @@ function makeRuinsSock(rawSock, sessionKey) {
     let first = null;
     for (const jid of jids) {
       if (!jid) continue;
+      // ⚔️ COMBAT UI GUARANTEE (owner live-test reports #5/#7/#8, 2026-10-07:
+      // "the image didn't show up" / "There's no prompt for me to attack"):
+      // one silent per-jid failure used to DROP that champion's battle image
+      // AND their turn prompt forever — the fight progressed without them.
+      // Every send now: 1 attempt → on failure a 900ms-backed retry → on
+      // second failure degrade to TEXT (the caption carries the HP/turn
+      // state) so no participant is ever left without a prompt.
       try {
         const r = await rawSock.sendMessage(jid, payload);
         if (!first) first = r;
-      } catch (e) { /* one silent DM must not break the fight */ }
+      } catch (e1) {
+        try {
+          await new Promise((res) => setTimeout(res, 900));
+          const r2 = await rawSock.sendMessage(jid, payload);
+          if (!first) first = r2;
+        } catch (e2) {
+          const hasMedia = payload && (payload.image || payload.video);
+          if (hasMedia && (payload.caption || payload.text)) {
+            try {
+              const r3 = await rawSock.sendMessage(jid, { text: payload.caption || payload.text });
+              if (!first) first = r3;
+            } catch (e3) { console.error('[RuinsSock] text degrade failed:', e3?.message); }
+          } else {
+            console.error('[RuinsSock] send failed twice:', e2?.message);
+          }
+        }
+      }
     }
     return first;
   };
@@ -6747,6 +6770,26 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
           try {
             await sock.sendMessage(state.chatId, { text: scene.caption });
           } catch {}
+        }
+      } else {
+        // ⚔️ PROMPT GUARANTEE (owner live-test reports #5/#7/#8, 2026-10-07:
+        // "some people's battle images with the hp and caption don't spawn" +
+        // "There's no prompt for me to attack"): a FAILED render used to send
+        // NOTHING AT ALL — no image, no text — while the fight carried on in
+        // the background. The battle state advanced, players sat staring at
+        // an old screen with no turn prompt. A failed TURN render now
+        // degrades to the TEXT caption (HP/turn state + the verb grammar),
+        // so the authoritative state and the player-facing prompt can never
+        // silently diverge again.
+        try {
+          const caption = (scene && scene.caption)
+            || (combatIntegration.generateTurnCaption
+              ? combatIntegration.generateTurnCaption(state.players, state.enemies, lastTurnInfo || {})
+              : null)
+            || `🎮 *TURN ${(lastTurnInfo && lastTurnInfo.turnNumber) || '?'}* — the battle moves on.`;
+          await sock.sendMessage(state.chatId, { text: caption });
+        } catch (e) {
+          console.error('nextTurn text fallback failed:', e.message);
         }
       }
     } catch (err) {

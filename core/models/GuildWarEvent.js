@@ -52,6 +52,10 @@ const PlayerSchema = new mongoose.Schema({
     protectedUntil: { type: Number, default: 0 },
     lastActionAt: { type: Number, default: 0 },
     lastMoveAt: { type: Number, default: 0 },   // §15 #4: move cooldown clock (was stripped by strict mode)
+    // ⚔️ CROSS-INSTANCE MILESTONE CLAIM (2026-10-07): highest discovery
+    // milestone already announced for this player (mongoose strict subdoc —
+    // the field MUST be declared or the $set in encounters.js is stripped).
+    milestoneClaimed: { type: Number, default: 0 },
     pvpMeta: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} }, // victim decay ledger
     joinedAt: Date,
 }, { _id: false });

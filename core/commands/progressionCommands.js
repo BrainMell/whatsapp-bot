@@ -387,6 +387,19 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
         });
       }
       // gate-mission objectives - each becomes its own bar
+      // ⚔️ RANK CARD TRUTH FIX (owner live-test report #12, 2026-10-07:
+      // thefirstloser "aren't moving from D rank even tho you've meet the
+      // requirements"): two lies stacked on this card.
+      //   1. pvpWins lives at the TOP LEVEL of the user doc (pvpSystem writes
+      //      user.pvpWins), but checkMissionProgress was handed user.stats —
+      //      so the "Win 3 PvP duels" objective read 0 FOREVER, even for a
+      //      player with wins. The snapshot now merges the top-level counter.
+      //   2. The Go RANK template draws only the FIRST THREE progress bars —
+      //      the mission's remaining objective bars (bosses/duels) were
+      //      computed, silently dropped from the IMAGE, and absent from the
+      //      caption too. The player saw LEVEL ✓ QUESTS ✓ WIN 20 QUESTS ✓ and
+      //      concluded the rank was broken. Overflow bars now ride the
+      //      caption, and an unfinished trial is spelled out there.
       const gateMission = (() => {
         try { return classSystem.getGateMissionForRank(curRank); } catch { return null; }
       })();
@@ -395,8 +408,12 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
         if (doneMissions.includes(gateMission.id)) {
           progress.push({ label: 'RANK MISSION', cur: 1, max: 1, done: true, valueText: 'DONE' });
         } else {
+          const missionStats = {
+            ...(userDoc?.stats || {}),
+            pvpWins: userDoc?.pvpWins ?? (userDoc?.stats?.pvpWins ?? 0),
+          };
           let mp = { progress: [] };
-          try { mp = classSystem.checkMissionProgress(gateMission.id, userDoc?.stats || {}); } catch {}
+          try { mp = classSystem.checkMissionProgress(gateMission.id, missionStats); } catch {}
           for (const o of mp.progress) {
             progress.push({
               label: String(o.label || o.id || 'OBJECTIVE').toUpperCase(),
@@ -410,13 +427,32 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
       }
     }
 
+    // ⚔️ RANK CARD TRUTH: the trial line spells out the gate mission in
+    // plain words (image bars + caption) — no player ever again reads an
+    // all-green card as "requirements met, rank still stuck".
+    const trialLine = (() => {
+      try {
+        if (!nextRankInfo) return '';
+        const gm = classSystem.getGateMissionForRank(curRank);
+        if (!gm) return '';
+        const doneMissions = userDoc?.completedRankMissions || [];
+        if (doneMissions.includes(gm.id)) return '';
+        const ms = { ...(userDoc?.stats || {}), pvpWins: userDoc?.pvpWins ?? (userDoc?.stats?.pvpWins ?? 0) };
+        const mp = classSystem.checkMissionProgress(gm.id, ms);
+        const parts = mp.progress.map((o) => `${o.done ? '✅' : '▫️'} ${o.label} ${Math.min(o.current || 0, o.target)}/${o.target}`).join(' · ');
+        const prefixHere = (() => { try { return require('../botConfig').getPrefix() || '.'; } catch { return '.'; } })();
+        return `⚔️ *${gm.icon || ''} ${gm.name}* — ${parts}\n▫️ Then claim the promotion: \`${prefixHere} rank mission claim\``;
+      } catch { return ''; }
+    })();
+
     let buffer = null;
     try {
       const goService = require('../utils/goImageService');
-      // The Go card shows the first 5 bars; anything beyond rides in the
+      // The Go RANK template draws the first THREE progress bars (verified
+      // against the live card 2026-10-07); anything beyond rides in the
       // caption so no requirement info is ever dropped.
-      const shownProgress = progress.slice(0, 5);
-      const overflow = progress.slice(5);
+      const shownProgress = progress.slice(0, 3);
+      const overflow = progress.slice(3);
       const gateCaption = overflow
         .map((p) => `${p.label} ${p.valueText}`)
         .join(' | ');
@@ -453,7 +489,9 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
         `👑 *Level ${stats.level || 1}* · ${rankLetter}-Rank\n` +
         (atMax
           ? `⚡ ${fmtCompact(xp.current || 0)} total XP - maximum level reached`
-          : `⚡ ${fmtCompact(xp.current || 0)} / ${fmtCompact(xp.required || 0)} XP - *${fmtCompact(xp.nextLevel)} left to progress*`);
+          : `⚡ ${fmtCompact(xp.current || 0)} / ${fmtCompact(xp.required || 0)} XP - *${fmtCompact(xp.nextLevel)} left to progress*`) +
+        (gateCaption ? `\n▫️ Also required: ${gateCaption}` : '') +
+        (trialLine ? `\n${trialLine}` : '');
       await sock.sendMessage(chatId, {
         image: buffer,
         caption,
@@ -496,6 +534,10 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
         message += `🎯 *${g.label}:* ${g.value}\n`;
       }
       message += `\n`;
+    }
+    // ⚔️ RANK CARD TRUTH: the gate mission spelled out in the text fallback
+    if (trialLine) {
+      message += `━━━━━━━━━━━━━━━\n\n${trialLine}\n\n`;
     }
 
     message += `💡 _Use ${getPrefix()} level for detailed progress_`;

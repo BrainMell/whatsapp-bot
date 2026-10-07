@@ -346,14 +346,19 @@ function roundRect(ctx, x, y, w, h, r) {
 }
 
 // ── child-process pool (canvas blocks the loop — keep it off the bot) ──
+// ⚔️ POOL PARALLELISM FIX (2026-10-07, mirrors roomScene.js): the pool
+// capped inflight at 2 but always dispatched to children[0] — one child
+// serialized every map render. Now spawns up to `max` children and routes
+// each task to the LEAST-LOADED child (true parallel canvas).
 const { fork } = require('child_process');
-const _renderPool = { children: [], queue: [], inflight: 0, max: 2 };
+const _renderPool = { children: [], queue: [], inflight: 0, max: 4 };
 let _renderSeq = 0;
 
 function _spawnChild() {
     // serialization 'advanced': structured-clone IPC (Buffers survive — JSON
     // IPC silently degrades them to plain objects)
     const child = fork(path.join(__dirname, 'renderWorker.js'), [], { stdio: 'ignore', serialization: 'advanced' });
+    child._gwBusy = 0;
     child.on('exit', () => {
         const i = _renderPool.children.indexOf(child);
         if (i !== -1) _renderPool.children.splice(i, 1);
@@ -362,11 +367,22 @@ function _spawnChild() {
     return child;
 }
 
+// least-loaded live child, spawning one while under the cap
+function _pickChild() {
+    let best = null;
+    for (const c of _renderPool.children) {
+        if (!best || (c._gwBusy || 0) < (best._gwBusy || 0)) best = c;
+    }
+    if (!best || ((best._gwBusy || 0) > 0 && _renderPool.children.length < _renderPool.max)) best = _spawnChild();
+    return best;
+}
+
 function _renderViaChild(doc, player, extras) {
     return new Promise((resolve, reject) => {
         const task = () => {
-            const child = _renderPool.children.length ? _renderPool.children[0] : _spawnChild();
+            const child = _pickChild();
             const id = ++_renderSeq;
+            child._gwBusy = (child._gwBusy || 0) + 1;
             const timeout = setTimeout(() => {
                 cleanup();
                 reject(new Error('render timeout (10s)'));
@@ -380,6 +396,7 @@ function _renderViaChild(doc, player, extras) {
             const cleanup = () => {
                 clearTimeout(timeout);
                 child.off('message', onMsg);
+                child._gwBusy = Math.max(0, (child._gwBusy || 1) - 1);
                 _renderPool.inflight--;
                 const next = _renderPool.queue.shift();
                 if (next) { _renderPool.inflight++; next(); }

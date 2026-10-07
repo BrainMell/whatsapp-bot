@@ -193,7 +193,7 @@ function fieldManualText(prefix) {
     const p = prefix || '.';
     return [
         '📖 *FIELD MANUAL — the Ruins of the dead world*',
-        '🎯 *The goal:* chart chambers, survive what guards them, and carry relics home. `handin` banks relics for GP and guild glory. First guild to breach the *World Core* earns lasting fame — and if the war clock runs out, FOUR wardens rise and only their fall ends the war.',
+        '🎯 *The goal:* chart chambers, survive what guards them, and carry relics home. `handin` banks relics for GP and guild glory. FOUR *wardens* hold the Ruins — their lairs burn red on your `map` — and the war ends ONLY when all four are slain. First guild to breach the *World Core* earns lasting fame.',
         '🚶 *Move:* `' + p + ' move forward` · `left` · `right` · `back` — bare `forward`/`left`… also works. Typos are forgiven.',
         '🔎 *Look:* every chamber answers `examine` — mechanisms, murals, vaults, hazards. It always tells you the verb that acts.',
         '⚔️ *Fights:* guarded chambers start on their own; guildmates in the room join automatically. `flee` retreats you (spoils forfeited).',
@@ -425,6 +425,17 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
     if (moveToken) {
         const topo = state.topologyOf(eventDoc);
         const dir = MOVE_WORDS[moveToken];
+        // ⚔️ PvE/PvP OVERLAP GUARD (owner live-test report #6: "I am literally
+        // fighting monsters while dueling"): an ACTIVE duel is the player's
+        // one authoritative encounter — no wandering off mid-duel. (The
+        // mirror guard lives in ruinsPvp: no challenge/accept while a PvE
+        // fight holds either blade.)
+        try {
+            const activeDuel = require('../pvpSystem').getRuinsDuelFor(senderJid);
+            if (activeDuel) {
+                return { text: '⚔️ *The duel demands your attention.* Finish it — `combat attack` / `combat ability <n>` / `combat flee` — before you move.' };
+            }
+        } catch (e) { /* pvpSystem unavailable → legacy behavior */ }
         // Ruins rule: cannot move while the room's encounter is unresolved
         const room = roomOf(eventDoc, player);
         if (room && room.state === 'ACTIVE' && ['combat', 'puzzle', 'coop', 'core', 'finale'].includes(room.type)) {
@@ -685,6 +696,15 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
                 } catch (e) { scene = null; }
                 await sock.sendMessage(target.jid, scene ? { text: BOT_MARKER + notifyText, image: scene } : { text: BOT_MARKER + notifyText });
             } catch (e) { /* notification is best-effort */ }
+            // 🖼️ ENCOUNTER CARD FOR THE ISSUER TOO (owner 2026-10-07: "instead
+            // of image cards of the active encounter with these messages as
+            // captions, text won't cut it"): the challenge confirmation rides
+            // the challenger's OWN POV scene — the duel hanging in the dust
+            // should be visible, not narrated.
+            try {
+                const myScene = await require('./roomScene').renderRoomScene(eventDoc, player, room, { prefix });
+                if (myScene) return { text: res.text, image: myScene };
+            } catch (e) { /* fall through to text */ }
         }
         return { text: res.text };
     }
@@ -889,13 +909,16 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
     if (/^(status|gw status|score)$/.test(norm)) {
         const byGuild = feed.computeScoreboard(eventDoc);
         const standings = byGuild.slice(0, 8).map((g, i) => `${['🥇', '🥈', '🥉'][i] || '▫️'} ${g.name}: ${g.points}`).join('\n');
-        // ⏳ finale: the clock line becomes the warden tally
+        // ⏳ warden hunt: the tally rides the clock line from war START —
+        // the four bosses are the war's victory condition now
         let clockLine;
         const fin = eventDoc.finale;
-        if (fin && fin.started) {
-            const bosses = Array.isArray(fin.bosses) ? fin.bosses : [];
-            const down = bosses.filter((b) => b.dead).length;
-            clockLine = `⏳ *FINALE* — wardens slain ${down}/${bosses.length || CFG.FINALE.BOSS_COUNT}. The war ends when all four fall.`;
+        const finBosses = (fin && Array.isArray(fin.bosses)) ? fin.bosses : [];
+        if (finBosses.length) {
+            const down = finBosses.filter((b) => b.dead).length;
+            const hourglass = fin.hourglass || (eventDoc.endsAt && Date.now() > eventDoc.endsAt);
+            clockLine = `☠️ *wardens slain ${down}/${finBosses.length || CFG.FINALE.BOSS_COUNT}* — the war ends when all four fall` +
+                (hourglass ? ' · ⏳ the clock has run out' : ` · clock ends <t:${Math.floor((eventDoc.endsAt || 0) / 1000)}:R>`);
         } else {
             clockLine = `ends <t:${Math.floor((eventDoc.endsAt || 0) / 1000)}:R>`;
         }

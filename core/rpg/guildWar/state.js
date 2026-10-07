@@ -243,6 +243,11 @@ async function startEvent(eventId, { deadWorld = null, worldIds = null } = {}) {
     }
 
     const now = Date.now();
+    // ⏳ THE FOUR WARDENS (owner 2026-10-07, Test Run 2 directive): the four
+    // bosses are ON THE MAP FROM WAR START — the finale ledger opens here and
+    // spawnFinaleBosses (below) fills it. The war timer no longer SPAWNS
+    // anything; passing endsAt only opens the hourglass grace.
+    const wardensFromStart = !!CFG.FINALE.FROM_START;
     const updated = await GuildWarEvent.findOneAndUpdate(
         { eventId, state: 'REGISTRATION' },
         {
@@ -251,6 +256,7 @@ async function startEvent(eventId, { deadWorld = null, worldIds = null } = {}) {
                 players: playerDocs, coreKey: map.coreKey, deadWorld: deadWorld || doc.deadWorld,
                 startedAt: now,
                 endsAt: now + (doc.type === 'alignment' ? CFG.ALIGNMENT_DURATION_MS : CFG.NORMAL_DURATION_MS),
+                ...(wardensFromStart ? { finale: { started: true, startedAt: now, hourglass: false, bosses: [], fromStart: true } } : {}),
             },
         },
         { new: true }
@@ -271,6 +277,26 @@ async function startEvent(eventId, { deadWorld = null, worldIds = null } = {}) {
     // was invisible inside their own spawn chamber.
     for (const p of updated.players) {
         await getRooms().enterRoom(updated.eventId, p.jid, null, p.roomId).catch(() => {});
+    }
+
+    // ⏳ WARDENS AT WAR START: scatter the four lairs, bake the ledger,
+    // reveal them on every champion's map. The ACTIVE flip above already ran
+    // atomically once — no other instance can double-run this block.
+    if (wardensFromStart) {
+        const spawned = await getRooms().spawnFinaleBosses(updated).catch((e) => {
+            console.error('[GW] warden spawn failed:', e?.message);
+            return { ok: false };
+        });
+        if (spawned.ok) {
+            const names = (spawned.bosses || []).map((b) => b.name).join(', ');
+            getFeed().queue(updated.eventId, 'major',
+                `☠️ *THE FOUR WARDENS HOLD THE RUINS:* *${names}*.
+` +
+                `Their lairs burn red on every champion's map — scattered deep in the dead world. The war ends ONLY when all four fall. Gather your guild, sharpen your blades.`);
+        } else {
+            // no candidate rooms (degenerate map) → hunt disabled; war ends on the clock as before
+            await GuildWarEvent.updateOne({ eventId: updated.eventId }, { $set: { finale: null } });
+        }
     }
     return { ok: true, event: updated, map };
 }
@@ -344,60 +370,88 @@ async function tick(sock, BOT_MARKER) {
             }
             continue;
         }
-        // ⏳ FINALE (owner 2026-10-05 23:09Z: "If a timer brings the Guild War
-        // to an end, place 4 bosses around the map. After all 4 bosses die,
-        // then the Guild War ends."): time-expiry no longer ENDS the war — it
-        // starts the WARDEN FINALE. The atomic {finale: null} flip means the
-        // lease holder that sees the expiry first spawns the bosses exactly
-        // once; every other instance's update misses and moves on.
+        // ⏳ THE FOUR WARDENS + THE HOURGLASS (owner 2026-10-05 23:09Z +
+        // 2026-10-07 Test Run 2 directive): the wardens rise AT WAR START and
+        // the war ends when all four fall. When the clock runs out with
+        // wardens still standing, the war does NOT end — it enters the
+        // hourglass grace (endsAt → endsAt + FINALE.TIMEOUT_MS) announced
+        // exactly once; the safety timeout still closes an abandoned hunt.
+        // Wars WITHOUT a warden ledger (fromStart disabled, or pre-dating the
+        // directive) keep the legacy timer-end spawn path below.
         if (ev.state === 'ACTIVE' && ev.endsAt && Date.now() > ev.endsAt) {
-            const alreadyFinale = ev.finale && ev.finale.started;
-            if (!alreadyFinale) {
-                const flipped = await GuildWarEvent.findOneAndUpdate(
-                    { eventId: ev.eventId, state: 'ACTIVE', $or: [{ finale: null }, { 'finale.started': { $ne: true } }] },
-                    { $set: { finale: { started: true, startedAt: Date.now(), bosses: [] } } },
-                    { new: true }
-                ).lean();
-                if (flipped) {
-                    const spawned = await getRooms().spawnFinaleBosses(flipped).catch((e) => {
-                        console.error('[GW] finale spawn failed:', e?.message);
-                        return { ok: false };
-                    });
-                    if (spawned.ok) {
-                        out.push({ eventId: ev.eventId, auto: 'finale-started' });
-                        const names = (spawned.bosses || []).map((b) => b.name).join(', ');
-                        getFeed().queue(ev.eventId, 'major',
-                            `⏳ *THE HOURGLASS IS EMPTY* — the war clock has run out, but the Ruins are NOT done with you. Four WARDENS rise around the dead world: *${names}*.\n` +
-                            `They are marked on every champion's map. The war ends ONLY when all four fall — slay them for the final glory.`);
-                        // DM every active champion: the game they were playing
-                        // just changed under their feet.
-                        try {
-                            for (const p of flipped.players || []) {
-                                if (p.status !== 'active') continue;
-                                await sock.sendMessage(p.jid, {
-                                    text: `${BOT_MARKER || ''}⏳ *THE WAR TIMER HAS RUN OUT, ${p.name}.*\nFour WARDENS now hold the Ruins — their chambers are marked on your map (\`map\`).\nThe war ends only when ALL FOUR are slain. Hunt them with your guild — champions who fight a warden together share the battle.`,
-                                }).catch(() => {});
-                                await new Promise((r) => setTimeout(r, 400));
-                            }
-                        } catch (e) { /* best-effort */ }
-                    } else {
-                        // spawn failed (no candidate rooms) → end the war the old way
-                        await endEvent(ev.eventId, 'Time expired.');
-                        out.push({ eventId: ev.eventId, auto: 'ended-time' });
+            const ledger = (ev.finale && Array.isArray(ev.finale.bosses)) ? ev.finale.bosses : [];
+            const hasLedger = ledger.length > 0;
+            if (!hasLedger) {
+                // ── legacy timer-end spawn (wardens rise when the clock dies) ──
+                const alreadyFinale = ev.finale && ev.finale.started;
+                if (!alreadyFinale) {
+                    const flipped = await GuildWarEvent.findOneAndUpdate(
+                        { eventId: ev.eventId, state: 'ACTIVE', $or: [{ finale: null }, { 'finale.started': { $ne: true } }] },
+                        { $set: { finale: { started: true, startedAt: Date.now(), bosses: [] } } },
+                        { new: true }
+                    ).lean();
+                    if (flipped) {
+                        const spawned = await getRooms().spawnFinaleBosses(flipped).catch((e) => {
+                            console.error('[GW] finale spawn failed:', e?.message);
+                            return { ok: false };
+                        });
+                        if (spawned.ok) {
+                            out.push({ eventId: ev.eventId, auto: 'finale-started' });
+                            const names = (spawned.bosses || []).map((b) => b.name).join(', ');
+                            getFeed().queue(ev.eventId, 'major',
+                                `⏳ *THE HOURGLASS IS EMPTY* — the war clock has run out, but the Ruins are NOT done with you. Four WARDENS rise around the dead world: *${names}*.\n` +
+                                `They are marked on every champion's map. The war ends ONLY when all four fall — slay them for the final glory.`);
+                            // DM every active champion: the game they were playing
+                            // just changed under their feet.
+                            try {
+                                for (const p of flipped.players || []) {
+                                    if (p.status !== 'active') continue;
+                                    await sock.sendMessage(p.jid, {
+                                        text: `${BOT_MARKER || ''}⏳ *THE WAR TIMER HAS RUN OUT, ${p.name}.*\nFour WARDENS now hold the Ruins — their chambers are marked on your map (\`map\`).\nThe war ends only when ALL FOUR are slain. Hunt them with your guild — champions who fight a warden together share the battle.`,
+                                    }).catch(() => {});
+                                    await new Promise((r) => setTimeout(r, 400));
+                                }
+                            } catch (e) { /* best-effort */ }
+                        } else {
+                            // spawn failed (no candidate rooms) → end the war the old way
+                            await endEvent(ev.eventId, 'Time expired.');
+                            out.push({ eventId: ev.eventId, auto: 'ended-time' });
+                        }
                     }
                 }
                 continue;
             }
-            // finale is running: the war closes when the ledger says all
-            // wardens are dead (belt — onEnd also ends it), or on the safety
-            // timeout so an empty ruins can never hold the war open forever.
-            const bosses = (ev.finale && Array.isArray(ev.finale.bosses)) ? ev.finale.bosses : [];
-            const allDead = bosses.length > 0 && bosses.every((b) => b.dead);
-            const timedOut = CFG.FINALE.TIMEOUT_MS > 0
-                && ev.finale.startedAt && Date.now() > ev.finale.startedAt + CFG.FINALE.TIMEOUT_MS;
+            // ── warden hunt in progress across the clock line ──
+            const allDead = ledger.every((b) => b.dead);
+            // grace is anchored to the CLOCK (endsAt), never to war start —
+            // the hunt gets the full duration plus the timeout, never less.
+            const timedOut = CFG.FINALE.TIMEOUT_MS > 0 && Date.now() > ev.endsAt + CFG.FINALE.TIMEOUT_MS;
             if (allDead || timedOut) {
-                await endEvent(ev.eventId, allDead ? 'All four wardens have fallen. The Ruins fall silent.' : 'The finale burned out with the wardens still standing.');
-                out.push({ eventId: ev.eventId, auto: allDead ? 'ended-finale-clear' : 'ended-finale-timeout' });
+                await endEvent(ev.eventId, allDead ? 'All four wardens have fallen. The Ruins fall silent.' : 'The hourglass burned out with the wardens still standing.');
+                out.push({ eventId: ev.eventId, auto: allDead ? 'ended-wardens-clear' : 'ended-wardens-timeout' });
+                continue;
+            }
+            // one-time HOURGLASS announcement (atomic flip — one instance wins)
+            if (!(ev.finale && ev.finale.hourglass)) {
+                const flipped = await GuildWarEvent.findOneAndUpdate(
+                    { eventId: ev.eventId, state: 'ACTIVE', 'finale.hourglass': { $ne: true } },
+                    { $set: { 'finale.hourglass': true, 'finale.hourglassAt': Date.now() } },
+                    { new: true }
+                ).lean();
+                if (flipped) {
+                    getFeed().queue(ev.eventId, 'major',
+                        `⏳ *THE HOURGLASS IS EMPTY* — the war clock has run out, but the FOUR WARDENS still hold the Ruins. The war ends ONLY when all four fall.`);
+                    try {
+                        for (const p of ev.players || []) {
+                            if (p.status !== 'active') continue;
+                            const down = ledger.filter((b) => b.dead).length;
+                            await sock.sendMessage(p.jid, {
+                                text: `${BOT_MARKER || ''}⏳ *The war timer has run out, ${p.name}* — but the hunt is not done: wardens slain ${down}/${ledger.length}.\nTheir lairs burn red on your \`map\`. The war ends only when ALL FOUR are slain.`,
+                            }).catch(() => {});
+                            await new Promise((r) => setTimeout(r, 400));
+                        }
+                    } catch (e) { /* best-effort */ }
+                }
             }
             continue;
         }

@@ -20,6 +20,32 @@ const relics = require('./relics');
 // The local Map below is kept ONLY as a legacy mirror for QA seams.
 const openChallenges = new Map();
 
+// ── overlap guards (owner live-test report #6: "I am literally fighting
+// monsters while dueling") ──
+// A player may hold exactly ONE authoritative encounter. A PvE fight seats
+// the champion in a ruins combat session (guildAdventure.isUserInAnyCombat
+// covers every combat shape); an active duel registers in pvpSystem.
+// Neither side of a NEW duel may hold a blade elsewhere — challenge AND
+// accept both refuse, so the duel can never silently run beside PvE combat.
+function _combatConflict(eventDoc, challenger, target) {
+    const guildAdventure = require('../guildAdventure');
+    for (const row of [challenger, target]) {
+        if (!row) continue;
+        if (guildAdventure.isUserInAnyCombat(row.jid)) {
+            const who = row.jid === challenger.jid ? 'You are' : `*${row.name}* is`;
+            return `⚔️ ${who} already mid-battle — the duel must wait until that fight is settled.`;
+        }
+        try {
+            const duel = require('../pvpSystem').getRuinsDuelFor(row.jid);
+            if (duel) {
+                const who = row.jid === challenger.jid ? 'You are' : `*${row.name}* is`;
+                return `⚔️ ${who} already bound to a duel — one contest at a time.`;
+            }
+        } catch (e) { /* pvpSystem unavailable → PvE guard alone */ }
+    }
+    return null;
+}
+
 // ── challenge flow ──
 async function challenge(eventDoc, challenger, targetJid) {
     if (challenger.guildId === (eventDoc.players.find((p) => p.jid === targetJid)?.guildId)) {
@@ -36,6 +62,9 @@ async function challenge(eventDoc, challenger, targetJid) {
     if ((target.protectedUntil || 0) > Date.now()) {
         return { ok: false, text: `🛡️ *${target.name}* is still under spawn protection (${Math.ceil((target.protectedUntil - Date.now()) / 1000)}s). The Ruins give no quarter to the wounded - wait it out.` };
     }
+    // ⚔️ ONE ENCOUNTER PER CHAMPION (owner live-test report #6)
+    const conflict = _combatConflict(eventDoc, challenger, target);
+    if (conflict) return { ok: false, text: conflict };
 
     const challengeKey = `${eventDoc.eventId}:${challenger.roomId}:${targetJid}`;
     // ⚔️ eventId MUST ride the record — resolveTimeout (the sweeper hook)
@@ -53,12 +82,24 @@ async function challenge(eventDoc, challenger, targetJid) {
         { $push: { pvpChallenges: { $each: [rec], $slice: -50 } } }
     );
 
-    // auto-expire: timeout = implicit flee by the challenged player
+    // auto-expire: timeout = implicit flee by the challenged player.
+    // ⚔️ EXACTLY-ONCE RESOLUTION (owner live-test report #9: "repeated duel
+    // outcome/withdrawal updates from the two bots"): this timer used to
+    // resolve the window DIRECTLY while the tick sweeper (pruneExpired) later
+    // pulled the still-present doc record and resolved it AGAIN — the group
+    // saw the concede line twice, often from two different bots. The timeout
+    // now CLAIMS the doc record first (atomic pull); a record already claimed
+    // by the sweeper (or an accept) resolves nobody.
     setTimeout(() => {
         const c = openChallenges.get(challengeKey);
         if (c && Date.now() >= c.expiresAt) {
             openChallenges.delete(challengeKey);
-            resolveTimeout(c).catch((e) => console.error('[RuinsPvP] timeout:', e.message));
+            claimExpiredRecord(c.eventId, c.key)
+                .then((claimed) => {
+                    if (!claimed) return; // sweeper or accept already resolved it
+                    return resolveTimeout(claimed).catch((e) => console.error('[RuinsPvP] timeout:', e.message));
+                })
+                .catch((e) => console.error('[RuinsPvP] timeout claim:', e.message));
         }
     }, CFG.PVP.CHALLENGE_WINDOW_MS + 1000);
 
@@ -92,7 +133,25 @@ async function accept(eventDoc, challenged) {
     if (challenger.roomId !== challenged.roomId) {
         return { ok: false, text: '❌ The challenger is no longer in this chamber — the challenge has dissolved.' };
     }
+    // ⚔️ ONE ENCOUNTER PER CHAMPION (owner live-test report #6): a blade
+    // already in PvE combat can never be seated at a duel on accept.
+    const conflict = _combatConflict(eventDoc, challenger, challenged);
+    if (conflict) return { ok: false, text: conflict };
     return { ok: true, challenger, text: null };
+}
+
+// atomic claim of ONE expired challenge record — the exactly-once gate
+// shared by the issuing instance's auto-expire timer and the tick sweeper
+// (pruneExpired). Returns the claimed record, or null when another path
+// (accept / sweeper / timer) already resolved it.
+async function claimExpiredRecord(eventId, key) {
+    const GuildWarEvent = require('../../models/GuildWarEvent');
+    const prev = await GuildWarEvent.findOneAndUpdate(
+        { eventId, pvpChallenges: { $elemMatch: { key, expiresAt: { $lte: Date.now() } } } },
+        { $pull: { pvpChallenges: { key } } },
+        { new: false, projection: { pvpChallenges: 1 } }
+    ).lean();
+    return (prev?.pvpChallenges || []).find((x) => x.key === key) || null;
 }
 
 // best-effort timeout concede (fires on the issuing instance; harmless if
@@ -132,6 +191,10 @@ async function openChallengeFor(eventDoc, challengedJid) {
 
 // sweeper hook: pull expired windows; each entry resolved exactly once by
 // whichever instance wins the pull (atomic $pull returns the previous set).
+// ⚔️ 2026-10-07: the per-record claim (claimExpiredRecord) makes this
+// EXACTLY-ONCE even against the issuing instance's auto-expire timer — the
+// double concede feed line ("repeated duel outcome updates from two bots")
+// is structurally gone.
 async function pruneExpired(eventDocOrId) {
     const eventId = typeof eventDocOrId === 'string' ? eventDocOrId : eventDocOrId.eventId;
     const GuildWarEvent = require('../../models/GuildWarEvent');
@@ -233,4 +296,4 @@ function roomLabel(roomKey) {
 
 // anti-farm: same-victim GP decay lives in points.recordPvpWin (pvpMeta ledger)
 
-module.exports = { challenge, accept, concede, settle, forfeitToRoom, pruneExpired, openChallengeFor, _openChallenges: openChallenges };
+module.exports = { challenge, accept, concede, settle, forfeitToRoom, pruneExpired, openChallengeFor, claimExpiredRecord, _openChallenges: openChallenges };

@@ -15,14 +15,22 @@ const CFG = {
     REJOIN_PROTECT_MS: 60 * 1000,
     MAX_CONCURRENT_EVENTS: 2,
 
-    // ── ⏳ FINALE (owner 2026-10-05 23:09Z) ──
-    // When the war timer runs out the war does NOT end: four WARDEN bosses
-    // rise around the map and the war continues until all four are slain.
+    // ── ⏳ FINALE / THE FOUR WARDENS ──
+    // owner 2026-10-05 23:09Z: "If a timer brings the Guild War to an end,
+    // place 4 bosses around the map. After all 4 bosses die, then the Guild
+    // War ends."
+    // owner 2026-10-07 (Test Run 2 directive): the four bosses are ON THE MAP
+    // FROM WAR START — randomly placed like the secret-room bosses — and the
+    // war ends when all four are defeated. The timer no longer SPAWNS them;
+    // when the clock runs out with wardens still standing the war enters the
+    // hourglass grace (endsAt → endsAt + TIMEOUT_MS) so the boss hunt can
+    // conclude, bounded by the safety timeout.
     FINALE: {
         BOSS_COUNT: 4,
+        FROM_START: true,                   // wardens rise at startEvent, not at timer end
         BOSS_LEVEL_MULT: 3.0,               // warden level = BASE_ENEMY_LEVEL × this
         WARDEN_NAMES: ['the Ashen Warden', 'the Hollow Warden', 'the Thorn Warden', 'the Ember Warden'],
-        TIMEOUT_MS: 60 * 60 * 1000,         // safety: if the wardens outlive every champion, the war still closes
+        TIMEOUT_MS: 60 * 60 * 1000,         // grace AFTER endsAt: if the wardens outlive every champion, the war still closes
     },
 
     // ── map ──
@@ -33,6 +41,24 @@ const CFG = {
         SIDE_MIN_ALIGNMENT: 24, SIDE_MAX_ALIGNMENT: 60,
         EXTRA_EDGE_RATIO: 0.12,             // extra edges over spanning tree
         REGIONS_ALIGNMENT: 3,               // world bands in alignment maps
+        // ── MAP SIZE RANGES (owner 2026-10-07, Test Run 2: "Maybe I should do
+        // a ranges thing, number of players increases the size of the map") ──
+        // Beta maps were too small: 7 champions on a K_NORMAL=8 map got an
+        // 8×8 grid and had charted it end-to-end inside an hour ("there's no
+        // more passageway"). Side length is now looked up from explicit
+        // PLAYER-COUNT RANGES instead of the old sqrt(players·K) curve —
+        // legible, testable, and monotonic. Alignment maps keep their own
+        // (larger) sqrt sizing below.
+        SIZE_RANGES: [
+            { maxPlayers: 3,  side: 10 },   //  100 rooms — duos/trios still get a world
+            { maxPlayers: 6,  side: 12 },   //  144
+            { maxPlayers: 9,  side: 14 },   //  196 — the Test Run 2 cohort lands here (was 8×8)
+            { maxPlayers: 14, side: 16 },   //  256
+            { maxPlayers: 21, side: 19 },   //  361
+            { maxPlayers: 30, side: 22 },   //  484
+            { maxPlayers: 45, side: 26 },   //  676
+            { maxPlayers: Infinity, side: 30 }, // 900 — SIDE_MAX still clamps extreme rosters
+        ],
         // room type weights (normal) — 'empty' is the remainder
         TYPES: {
             combat: 18, discovery: 10, reward: 8, puzzle: 8, hazard: 6,

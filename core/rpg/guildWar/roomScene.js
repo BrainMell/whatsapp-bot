@@ -1529,8 +1529,17 @@ async function _renderInProcess(eventDoc, player, room, opts = {}) {
 // ── parent entry: resolve the plan (economy/class reads stay OUT of the
 // worker), then render via the shared child pool (canvas work must never
 // stall the bot's event loop at war scale) ──
+// ⚔️ POOL PARALLELISM FIX (owner live-test report #2, 2026-10-07: "Mine is
+// bring message slow ASF" + text-only encounter cards): the old pool capped
+// inflight at 2 but sent EVERY task to children[0] — one child process
+// serialized ALL room renders (the second "worker" only queued inside that
+// same child). A 7-champion war's move burst then stacked 12s timeouts →
+// in-process fallback renders ON the bot loop → every later DM stalled past
+// the 20s serialization deadline and fell through to the generic pipeline
+// ("No active game in this chat"). The pool now spawns up to `max` children
+// and routes each task to the LEAST-LOADED child — true parallel canvas.
 const { fork } = require('child_process');
-const _pool = { children: [], queue: [], inflight: 0, max: 2 };
+const _pool = { children: [], queue: [], inflight: 0, max: 6 };
 let _seq = 0;
 
 function _spawnChild() {
@@ -1539,6 +1548,7 @@ function _spawnChild() {
     // silently failed, so LIVE players never saw the puzzle overlay. 'advanced'
     // (structured clone) preserves Buffers across the IPC boundary.
     const child = fork(path.join(__dirname, 'renderWorker.js'), [], { stdio: 'ignore', serialization: 'advanced' });
+    child._gwBusy = 0;
     child.on('exit', () => {
         const i = _pool.children.indexOf(child);
         if (i !== -1) _pool.children.splice(i, 1);
@@ -1547,11 +1557,22 @@ function _spawnChild() {
     return child;
 }
 
+// least-loaded live child, spawning one while under the cap
+function _pickChild() {
+    let best = null;
+    for (const c of _pool.children) {
+        if (!best || (c._gwBusy || 0) < (best._gwBusy || 0)) best = c;
+    }
+    if (!best || ((best._gwBusy || 0) > 0 && _pool.children.length < _pool.max)) best = _spawnChild();
+    return best;
+}
+
 function _renderViaChild(doc, player, room, opts) {
     return new Promise((resolve, reject) => {
         const task = () => {
-            const child = _pool.children.length ? _pool.children[0] : _spawnChild();
+            const child = _pickChild();
             const id = ++_seq;
+            child._gwBusy = (child._gwBusy || 0) + 1;
             const timeout = setTimeout(() => { cleanup(); reject(new Error('room render timeout (12s)')); }, 12000);
             const onMsg = (m) => {
                 if (!m || m.id !== id || m.kind !== 'room') return;
@@ -1562,6 +1583,7 @@ function _renderViaChild(doc, player, room, opts) {
             const cleanup = () => {
                 clearTimeout(timeout);
                 child.off('message', onMsg);
+                child._gwBusy = Math.max(0, (child._gwBusy || 1) - 1);
                 _pool.inflight--;
                 const next = _pool.queue.shift();
                 if (next) { _pool.inflight++; next(); }

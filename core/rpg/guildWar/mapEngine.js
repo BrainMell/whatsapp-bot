@@ -75,7 +75,24 @@ function generate(seed, playerCount, opts = {}) {
         types: CFG.MAP.TYPES,
         regions: 1,
     };
-    const side = Math.max(cfg.min, Math.min(cfg.max, Math.ceil(Math.sqrt(Math.max(1, playerCount) * cfg.k))));
+    // ── MAP SIZE (owner 2026-10-07 "a ranges thing: number of players
+    // increases the size of the map") ──
+    // Normal maps look the side up from CFG.MAP.SIZE_RANGES (explicit
+    // player-count bands — legible + testable). The legacy sqrt(players·K)
+    // curve stays as the fallback for deployments without the table, and as
+    // a FLOOR so a huge roster can never roll a small band by accident.
+    // Alignment maps keep their own (larger) sqrt sizing untouched.
+    let side;
+    if (!alignment && Array.isArray(CFG.MAP.SIZE_RANGES) && CFG.MAP.SIZE_RANGES.length) {
+        const band = CFG.MAP.SIZE_RANGES.find((r) => Math.max(1, playerCount) <= r.maxPlayers)
+            || CFG.MAP.SIZE_RANGES[CFG.MAP.SIZE_RANGES.length - 1];
+        // band decides; the legacy sqrt curve only ever RAISES the side (a
+        // huge roster must never roll a small band), then SIDE_MAX clamps.
+        const legacySide = Math.ceil(Math.sqrt(Math.max(1, playerCount) * cfg.k));
+        side = Math.max(cfg.min, Math.min(cfg.max, Math.max(band.side, Math.min(legacySide, cfg.max))));
+    } else {
+        side = Math.max(cfg.min, Math.min(cfg.max, Math.ceil(Math.sqrt(Math.max(1, playerCount) * cfg.k))));
+    }
     const rng = makeRng(seed);
 
     // region bands (vertical slices) — alignment themes each band by a world

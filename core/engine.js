@@ -9249,6 +9249,22 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                           }
                           return;
                         }
+                        // ⚔️ DEADLINE ACK (owner Test Run 2, 2026-10-07: ".j move
+                        // foward" answered by tictactoe's "No active game in this
+                        // chat" MID-WAR): handleDM returns null when the per-player
+                        // serialization deadline (20s render stall) gives up — the
+                        // underlying run keeps going and will deliver its output.
+                        // Falling through to the generic pipeline made the war look
+                        // DEAD. A war verb from a champion IN an active war now gets
+                        // a hold-note instead of the generic pipeline's error.
+                        const _gwActive = await require("./models/GuildWarEvent")
+                          .exists({ state: "ACTIVE", players: { $elemMatch: { jid: senderJid, status: { $ne: "quit" } } } });
+                        if (_gwActive) {
+                          await sock.sendMessage(chatId, {
+                            text: BOT_MARKER + "⏳ The Ruins are still turning — your command is in motion. Give me a moment.",
+                          });
+                          return;
+                        }
                       } catch (e) {
                         console.error("[GuildWar] prefixed DM router error:", e.message);
                       }

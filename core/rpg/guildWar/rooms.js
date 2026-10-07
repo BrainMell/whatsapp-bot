@@ -231,20 +231,24 @@ async function resetPuzzleAttempts(eventId, roomKey) {
     return setRoomPayload(eventId, roomKey, { 'puzzle.attemptsUsed': 0 });
 }
 
-// ── ⏳ FINALE (owner 2026-10-05 23:09Z): the war timer ran out — the war
-// does NOT end. FOUR WARDEN bosses rise "around the map" and the war only
-// concludes when all four fall. Room selection SCATTERS like the current
-// (secret-room) bosses do — random mid-map rooms, organically spread — but
-// never pinned to the border corners the way the old farthest-point sampler
-// did (owner 2026-10-06 01:07Z: "shouldn't be at the 4 edges, scattered
-// around like the current boss"). Eligibility is tiered, relaxing only when
-// a small map forces it, and a minimum pairwise separation keeps them
-// from clustering. Each warden room:
+// ── ⏳ THE FOUR WARDENS ──
+// owner 2026-10-05 23:09Z: "If a timer brings the Guild War to an end, place
+// 4 bosses around the map. After all 4 bosses die, then the Guild War ends."
+// owner 2026-10-07 (Test Run 2 directive): the four bosses are ON THE MAP
+// FROM WAR START — randomly placed — and the war only concludes when all
+// four fall. Room selection SCATTERS like the current (secret-room) bosses
+// do — random mid-map rooms, organically spread — but never pinned to the
+// border corners the way the old farthest-point sampler did (owner
+// 2026-10-06 01:07Z: "shouldn't be at the 4 edges, scattered around like
+// the current boss"). Eligibility is tiered, relaxing only when a small map
+// forces it, and a minimum pairwise separation keeps them from clustering.
+// Each warden room:
 //   • type 'finale' + payload {finaleBoss, wardenIndex, wardenName, enemies, boss, theme}
 //   • revealed on EVERY active champion's map (fog push) — hunting them is
 //     the whole point of the phase
-// All writes are atomic room updates; the caller (state.tick) already holds
-// the flow lease and the {finale: null} flip guards double-spawns.
+// All writes are atomic room updates; idempotent by the caller's ledger flip
+// (startEvent's ACTIVE flip at war start / the tick's {finale: null} flip on
+// the legacy timer path).
 async function spawnFinaleBosses(eventDoc) {
     const encounters = require('./encounters');
     const CFG = require('./config');
@@ -252,8 +256,8 @@ async function spawnFinaleBosses(eventDoc) {
     const theme = encounters.worldTheme(eventDoc.deadWorld);
     const spawnSet = new Set((eventDoc.players || []).map((p) => p.spawnRoomId).filter(Boolean));
 
-    // candidates: not the World Core, not a landing hall
-    const cands = eventDoc.rooms.filter((r) => r.type !== 'core' && !spawnSet.has(r.key));
+    // candidates: not the World Core, not a landing hall, not already a lair
+    const cands = eventDoc.rooms.filter((r) => r.type !== 'core' && r.type !== 'finale' && !spawnSet.has(r.key));
     if (!cands.length) return { ok: false, reason: 'no-candidate-rooms' };
 
     // scatter sampling (owner fix 01:07Z — see block comment above):

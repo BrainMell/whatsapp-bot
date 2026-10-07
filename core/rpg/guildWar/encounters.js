@@ -231,10 +231,11 @@ async function onRoomEnter(eventDoc, player, room) {
             lines.push(`🤝 A guardian pack blocks this hall. Allies in the room may fight it together (shared reward).`);
             break;
         case 'finale': {
-            // ⏳ WARDEN FINALE (owner 2026-10-05): the timer-end boss hunt
+            // ⏳ THE FOUR WARDENS (owner 2026-10-07): the lairs are on the map
+            // from war start — entering one is the boss hunt, not a surprise
             rooms.markActive(eventDoc.eventId, room.key);
             const wName = payloadGet(room.payload, 'wardenName') || 'the Warden';
-            lines.push(`⏳ *${wName.toUpperCase()}* rises from the floor of this ${flavor.toLowerCase()} hall — one of the four wardens holding the war open.`);
+            lines.push(`☠️ *${wName.toUpperCase()}* holds this ${flavor.toLowerCase()} hall — one of the FOUR WARDENS of the Ruins.`);
             lines.push(`*It attacks!* Allies in the room fight it together. The war ends when all four wardens fall.`);
             break;
         }
@@ -252,6 +253,23 @@ async function onRoomEnter(eventDoc, player, room) {
 async function maybeDiscoveryMilestone(eventDoc, player) {
     const n = (player.discovered || []).length;
     if (n > 0 && n % CFG.POINTS.DISCOVERY_EVERY === 0) {
+        // ⚔️ CROSS-INSTANCE MILESTONE CLAIM (owner live-test report #9: "Lapis's
+        // 40-chamber progress appearing from both Subaru and Joker"): the old
+        // check read the player's discovered count from THIS instance's (often
+        // stale) doc snapshot — two instances processing the same player's
+        // burst of moves both saw "25 charted" and both queued the milestone.
+        // The claim is now an atomic first-writer-wins update on the player row
+        // (milestoneClaimed < n): exactly one instance across the fleet wins
+        // each milestone value and only the winner awards GP + queues the feed.
+        const GuildWarEventM = require('../../models/GuildWarEvent');
+        const claim = await GuildWarEventM.updateOne(
+            {
+                eventId: eventDoc.eventId,
+                players: { $elemMatch: { jid: player.jid, $or: [{ milestoneClaimed: null }, { milestoneClaimed: { $lt: n } }] } },
+            },
+            { $set: { 'players.$.milestoneClaimed': n } }
+        ).catch(() => null);
+        if (!claim || !claim.modifiedCount) return; // another instance already announced this milestone
         const res = await points.award(eventDoc.eventId, player.jid, CFG.POINTS.DISCOVERY_GP, 'discovery');
         if (res.awarded > 0) {
             feed.queue(eventDoc.eventId, 'normal', `🗺️ *${player.name}* has charted ${n} chambers of the Ruins — the dead world keeps fewer secrets with every step.`);
@@ -1050,4 +1068,6 @@ module.exports = {
     puzzleExamineText, examineFlavor, EXAMINE_VERBS,
     // 🎚️ band ladder (owner spec 2026-10-06) — exported for QA probes
     getRosterBands, explorationProgress, bandWeights, pickBand, resolveEngagement,
+    // ⚔️ milestone (cross-instance claim) — exported for QA probes
+    maybeDiscoveryMilestone,
 };
