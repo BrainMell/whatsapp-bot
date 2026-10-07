@@ -342,7 +342,11 @@ async function s5(eventId) {
     const ruinsPvp = require('../core/rpg/guildWar/ruinsPvp');
     const mapEngine = require('../core/rpg/guildWar/mapEngine');
     const oldWin = CFG.PVP.CHALLENGE_WINDOW_MS;
-    CFG.PVP.CHALLENGE_WINDOW_MS = 1500; // fast window for the sim
+    // ⏱️ fast window for the sim — must outlast 2-3 PROD-DB round-trips:
+    // the 1500ms original expired mid-check on Box2/Atlas (~300-500ms per
+    // read), failing the "challenge open" probes on latency alone.
+    CFG.PVP.CHALLENGE_WINDOW_MS = 4000;
+    const FAST_WIN = CFG.PVP.CHALLENGE_WINDOW_MS;
 
     let doc = await eventOf(eventId);
     const topo = state.topologyOf(doc);
@@ -365,6 +369,7 @@ async function s5(eventId) {
 
     await sleep(350);
     await dmA('.j move east'); await sleep(250);  // Alpha walks INTO E2 through the west door
+    const tC1 = Date.now();
     await dmA('.j challenge @Charlie');
     const challengeOpen = (await eventOf(eventId)).pvpChallenges.some((c) => c.challengedJid === JIDS[2] && Date.now() < c.expiresAt);
     check('challenge open against Charlie', challengeOpen);
@@ -377,7 +382,7 @@ async function s5(eventId) {
     check('move OUT during the window is ALLOWED (not blocked)', afterMove.roomId === N2, `room=${afterMove.roomId} expect=${N2}`);
 
     // window expires → the sweeper resolves the challenge
-    await sleep(1400);
+    await sleep(Math.max(0, FAST_WIN - (Date.now() - tC1)) + 250);
     await ruinsPvp.pruneExpired(eventId);
     const after = playerOf(await eventOf(eventId), JIDS[2]);
     const yankedBack = after.roomId === E2.key;
@@ -406,10 +411,11 @@ async function s5(eventId) {
     await sleep(320);
     const amove = await dmA('.j move east');
     console.log(`  🔎 S5b Alpha move reply: ${JSON.stringify(amove || 'null').slice(0, 100)} | Alpha@${playerOf(await eventOf(eventId), JIDS[0]).roomId}`);
+    const tC2 = Date.now();
     const chal2 = await dmA('.j challenge @Charlie');
     const open2 = (await eventOf(eventId)).pvpChallenges.some((c) => c.challengedJid === JIDS[2] && Date.now() < c.expiresAt);
     check('S5b setup: second challenge open (protection cleared)', open2, JSON.stringify(chal2 || {}).slice(0, 80));
-    await sleep(1600);
+    await sleep(Math.max(0, FAST_WIN - (Date.now() - tC2)) + 250);
     await ruinsPvp.pruneExpired(eventId);
     const stayed = playerOf(await eventOf(eventId), JIDS[2]);
     const retreated = stayed.roomId === W2;
