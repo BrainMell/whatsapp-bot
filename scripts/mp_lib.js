@@ -11,8 +11,11 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const REPO = '/home/z/my-project/repo';
-const OUT = '/home/z/my-project/download/mp_playtest';
+// ⚙️ portability (follow-up to ca939f0f): resolve the repo relative to THIS
+// file and honor GW_QA_OUT — the hardcoded dev-container paths made
+// gw_full_sim EACCES on the boxes (nothing can mkdir /home/z/my-project there).
+const REPO = process.env.GW_QA_REPO || path.join(__dirname, '..');
+const OUT = process.env.GW_QA_OUT || path.join(REPO, 'render_out', 'mp_playtest');
 
 async function connectDB() {
     const envPath = path.join(REPO, '.env');
