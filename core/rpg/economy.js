@@ -1719,7 +1719,38 @@ async function updateAdventurerRank(userId) {
     // a rank mission to be completed. If it does and the player hasn't
     // completed it yet, DON'T promote - they need to finish the mission first.
     const completedMissions = user.completedRankMissions || [];
-    const eligibility = classSystem.checkRankPromotionEligibility(oldRank, completedMissions);
+    let eligibility = classSystem.checkRankPromotionEligibility(oldRank, completedMissions);
+
+    // 🎯 AUTO-CLAIM (owner live-test report #12, 2026-10-07: "you arent
+    // moving from D rank even tho you've meet the requirements"): the gate
+    // trial used to require the player to discover and run
+    // `rank mission claim` — a hidden manual step nothing advertised — so a
+    // champion who had ALREADY earned every objective (20 quest wins, 5
+    // bosses, 3 duel wins) stayed pinned at D forever with an all-green
+    // card. If every objective of the gate trial is met, complete the
+    // mission RIGHT HERE and let the promotion proceed in the same call.
+    // `rank mission claim` still works (idempotent) for the celebration.
+    // Stats read the MERGED view: rank-mission objectives live in
+    // user.stats, but pvpSystem writes duel wins to the TOP LEVEL
+    // (user.pvpWins) and quest wins also mirror to the top level.
+    if (!eligibility.canPromote && eligibility.mission) {
+      const missionStats = {
+        ...(user.stats || {}),
+        questsWon: user.stats?.questsWon ?? user.questsWon ?? 0,
+        pvpWins: user.pvpWins ?? user.stats?.pvpWins ?? 0,
+      };
+      const trial = classSystem.checkMissionProgress(eligibility.mission.id, missionStats);
+      if (trial.complete) {
+        if (!user.completedRankMissions) user.completedRankMissions = [];
+        if (!user.completedRankMissions.includes(eligibility.mission.id)) {
+          user.completedRankMissions.push(eligibility.mission.id);
+          // FIX #50 pattern: immediate write — a restart must never eat a
+          // claimed trial (same rationale as the promotion save below).
+          await saveUser(userId);
+        }
+        eligibility = { canPromote: true, blockedByMission: null, mission: eligibility.mission };
+      }
+    }
 
     if (!eligibility.canPromote) {
       // Player meets level/quest requirements but hasn't completed the

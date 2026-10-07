@@ -320,6 +320,14 @@ async function handleAchievementsCommand(sock, chatId, senderJid, args, m) {
  */
 async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
   try {
+    // 🎯 LIVE PROMOTION CHECK (owner live-test report #12): looking at your
+    // rank must APPLY anything you've already earned — the auto-claim inside
+    // updateAdventurerRank completes a fully-met gate trial and promotes in
+    // the same call. The card is then rendered from the post-promotion doc,
+    // so `.j rank` is both the check and the moment the rank moves.
+    try { await economy.updateAdventurerRank(senderJid); } catch (e) {
+      console.error('[rank] pre-card promotion check failed:', e.message);
+    }
     const stats = progression.getUserStats(senderJid);
     const rank = progression.getUserRank(senderJid);
     const sheet = progression.getCharacterSheet(senderJid);
@@ -410,19 +418,26 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
         } else {
           const missionStats = {
             ...(userDoc?.stats || {}),
+            questsWon: userDoc?.stats?.questsWon ?? userDoc?.questsWon ?? 0,
             pvpWins: userDoc?.pvpWins ?? (userDoc?.stats?.pvpWins ?? 0),
           };
           let mp = { progress: [] };
           try { mp = classSystem.checkMissionProgress(gateMission.id, missionStats); } catch {}
-          for (const o of mp.progress) {
-            progress.push({
-              label: String(o.label || o.id || 'OBJECTIVE').toUpperCase(),
-              cur: Math.min(o.current || 0, o.target || 0),
-              max: o.target || 0,
-              done: !!o.done,
-              valueText: `${o.current || 0}/${o.target || 0}`,
-            });
-          }
+          const bars = mp.progress.map((o) => ({
+            label: String(o.label || o.id || 'OBJECTIVE').toUpperCase(),
+            cur: Math.min(o.current || 0, o.target || 0),
+            max: o.target || 0,
+            done: !!o.done,
+            valueText: `${o.current || 0}/${o.target || 0}`,
+          }));
+          // ⚔️ IMAGE SLOTS TELL THE TRUTH (follow-up to the 1f54fa75 card
+          // fix): the Go RANK template draws only the FIRST THREE bars —
+          // with objectives in mission order an all-met pair of level/quest
+          // bars plus the first (met) objective filled every slot green and
+          // the UNMET objective hid in the caption yap. Unmet objectives now
+          // take the image slots first; met ones overflow to the caption.
+          bars.sort((a, b) => (a.done === b.done ? 0 : a.done ? 1 : -1));
+          progress.push(...bars);
         }
       }
     }
@@ -437,11 +452,17 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
         if (!gm) return '';
         const doneMissions = userDoc?.completedRankMissions || [];
         if (doneMissions.includes(gm.id)) return '';
-        const ms = { ...(userDoc?.stats || {}), pvpWins: userDoc?.pvpWins ?? (userDoc?.stats?.pvpWins ?? 0) };
+        const ms = {
+          ...(userDoc?.stats || {}),
+          questsWon: userDoc?.stats?.questsWon ?? userDoc?.questsWon ?? 0,
+          pvpWins: userDoc?.pvpWins ?? (userDoc?.stats?.pvpWins ?? 0),
+        };
         const mp = classSystem.checkMissionProgress(gm.id, ms);
         const parts = mp.progress.map((o) => `${o.done ? '✅' : '▫️'} ${o.label} ${Math.min(o.current || 0, o.target)}/${o.target}`).join(' · ');
-        const prefixHere = (() => { try { return require('../botConfig').getPrefix() || '.'; } catch { return '.'; } })();
-        return `⚔️ *${gm.icon || ''} ${gm.name}* — ${parts}\n▫️ Then claim the promotion: \`${prefixHere} rank mission claim\``;
+        const allDone = mp.progress.every((o) => o.done);
+        return allDone
+          ? `⚔️ *${gm.icon || ''} ${gm.name}* — ${parts}\n▫️ Every objective earned — your rank advances the moment you check it.`
+          : `⚔️ *${gm.icon || ''} ${gm.name}* — ${parts}\n▫️ Earn every objective and your rank advances automatically.`;
       } catch { return ''; }
     })();
 
