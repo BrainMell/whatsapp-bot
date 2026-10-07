@@ -1040,9 +1040,18 @@ async function getWeeklyLeaderboard(limit = 20) {
   try {
     const guildPerks = require('./guildPerks');
     const weekKey = guildPerks.getWeekKey(new Date());
-    return await AbyssLeaderboard.find({ weekKey })
+    // 💡 OWNER 2026-10-07: staff (owner/mods) excluded from the weekly board.
+    // Overfetch by a buffer so filtering staff out still leaves a full page.
+    const rows = await AbyssLeaderboard.find({ weekKey })
       .sort({ score: -1 })
-      .limit(limit);
+      .limit(limit + 25);
+    try {
+      const engine = require('../engine');
+      if (typeof engine.isStaff === 'function') {
+        return rows.filter((r) => !engine.isStaff(r.userId)).slice(0, limit);
+      }
+    } catch (e) {}
+    return rows.slice(0, limit);
   } catch (e) {
     return [];
   }

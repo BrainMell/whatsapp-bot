@@ -871,6 +871,44 @@ function isAbyssImmune(jid) {
   return false;
 }
 
+// 💡 LEADERBOARD STAFF FILTER (2026-10-07, owner request: "infected mods
+// shouldn't appear on the leaderboards, or .rich or anything player facing
+// that's competitive"): single predicate for "this JID is staff (owner or
+// any mod tier)". Player-facing COMPETITIVE surfaces (.rich money board,
+// .lb level/xp/pvp boards, abyss weekly board, wordle board) exclude staff
+// so mod/admin accounts never appear on rankings. Same candidate-bridging
+// as isAbyssImmune (LID <-> phone) so a JID-form mismatch can't leak a mod
+// onto a board. Includes cardsMods + quizMods on top of isAbyssImmune's
+// owner/global/rpg tiers.
+function isStaff(jid) {
+  if (!jid || typeof jid !== 'string') return false;
+  const candidates = new Set();
+  const push = (v) => { if (v && typeof v === 'string') candidates.add(v); };
+  const bare = jid.startsWith('sandbox_') ? jid.substring(8) : jid;
+  push(jid);
+  push(bare);
+  try {
+    const { jidNormalizedUser } = require('@whiskeysockets/baileys');
+    push(jidNormalizedUser(bare));
+  } catch (e) {}
+  try {
+    const lidResolver = require('./utils/lidResolver');
+    const { lid, phone } = lidResolver.getMapping(bare);
+    if (lid) push(`${lid}@lid`);
+    if (phone) push(`${phone}@s.whatsapp.net`);
+  } catch (e) {}
+  for (const c of candidates) {
+    if (isBotOwner(c)) return true;
+    if (isGlobalMod(c)) return true;
+    if (isRpgMod(c)) return true;
+    try {
+      const { jidNormalizedUser: norm } = require('@whiskeysockets/baileys');
+      if (cardsMods.has(norm(c)) || quizMods.has(norm(c))) return true;
+    } catch (e) {}
+  }
+  return false;
+}
+
 // Helper for dynamic ESM import of got-scraping
 async function getGot() {
   const { gotScraping } = await import("got-scraping");
@@ -31261,5 +31299,6 @@ isGameTester, loadGameTesters,
   loadBannedUsers,
   // 💡 Abyss immunity (Phase A 2026-10-04): real restriction removal for mods
   isAbyssImmune,
+  isStaff,
   getBotInstancesHealth: () => botInstancesHealth,
 };

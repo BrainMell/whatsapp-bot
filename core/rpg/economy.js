@@ -2029,9 +2029,20 @@ function hasItem(userId, itemId) {
 }
 
 //==================this part handles leaderboards and user profiles==================
+// 💡 OWNER 2026-10-07: staff (owner/mods) never appear on the money board.
+// Lazy require of engine is safe here: economy.js is loaded BY engine.js, but
+// this only runs at request time when engine is fully cached in require.cache.
+function _isStaffJid(userId) {
+  try {
+    const engine = require('../engine');
+    return typeof engine.isStaff === 'function' && engine.isStaff(userId);
+  } catch (e) {
+    return false;
+  }
+}
 function getMoneyLeaderboard(limit = 10) {
   return Array.from(economyData.entries())
-    .filter(([_, data]) => data.registered)
+    .filter(([userId, data]) => data.registered && !_isStaffJid(userId))
     .map(([userId, data]) => ({
       userId,
       nickname: data.nickname || getDisplayName(userId),

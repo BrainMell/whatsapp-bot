@@ -496,7 +496,18 @@ function resetStats(userId) {
 // ==========================================
 
 function getLeaderboard(type = 'level', limit = 10) {
-    const allUsers = Array.from(economy.economyData.values());
+    // 💡 OWNER 2026-10-07: staff (owner/mods) never appear on competitive
+    // boards. Lazy require avoids the progression<->engine load cycle - by
+    // request time engine is fully cached.
+    const _notStaff = (u) => {
+        try {
+            const engine = require('../engine');
+            return !(typeof engine.isStaff === 'function' && engine.isStaff(u.userId));
+        } catch (e) {
+            return true;
+        }
+    };
+    const allUsers = Array.from(economy.economyData.values()).filter(_notStaff);
     if (type === 'pvp') {
         const leaderboard = allUsers.map(u => ({
             userId: u.userId,

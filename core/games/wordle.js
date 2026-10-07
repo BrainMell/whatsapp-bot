@@ -223,10 +223,21 @@ function updateScoreboard(playerJid, playerName, won, attempts, difficulty = 'me
   system.set('wordle_scores', scores);
 }
 
+// 💡 OWNER 2026-10-07: staff (owner/mods) never appear on the competitive
+// wordle board. Lazy require of engine avoids the games<->engine load cycle.
+function _isStaffJid(jid) {
+  try {
+    const engine = require('../engine');
+    return typeof engine.isStaff === 'function' && engine.isStaff(jid);
+  } catch (e) {
+    return false;
+  }
+}
+
 function getLeaderboard() {
   const scores = system.get('wordle_scores', {});
   const sorted = Object.entries(scores)
-    .filter(([, data]) => data.wins > 0)
+    .filter(([jid, data]) => data.wins > 0 && !_isStaffJid(jid))
     .sort(([, a], [, b]) => {
       const aPoints = a.points || 0;
       const bPoints = b.points || 0;
