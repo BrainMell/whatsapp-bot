@@ -139,24 +139,33 @@ function check(name, cond, extra) {
     try {
         // R10a: successful render + auto-promotion in the SAME call
         await User.create(mk(J.card, { pvpWins: 3 }));
+        await User.create(mk(J.cardShort, { pvpWins: 2 }));
+        // 🔧 fixture fix: economy.getUser is CACHE-ONLY (economyData Map from
+        // loadEconomy) — users created via User.create after the initial load
+        // are invisible to the handler (default F-card). Production users
+        // always sit in the cache; reload so the fixtures do too.
+        await economy.loadEconomy();
         goService.generatePortraitCard = async () => fakeJpeg;
         const s1 = mkSock();
         await handleRankCommand(s1, 'chat-rank', J.card, mQ);
         const img1 = s1.sends.find((x) => x.content && x.content.image);
         check('R10a .j rank sends the CARD (not Failed-to-fetch)', !!img1, s1.sends.map((x) => Object.keys(x.content || {})));
         check('R10a caption shows post-promotion C-Rank', !!(img1 && /C-Rank/.test(img1.content.caption || '')), img1 && img1.content.caption);
-        // R10b: 5 progress bars (level/quests/3 objectives) → 2 overflow to caption
-        check('R10b overflow objectives ride the caption', !!(img1 && /Also required:/.test(img1.content.caption || '')), img1 && (img1.content.caption || '').slice(-160));
+        // (no overflow assertion here: C→B is a FREE gate — level+quests only,
+        // 2 bars, nothing overflows. The overflow case lives at R10c, where the
+        // unmet D→C trial puts 5 bars on the card.)
     } catch (e) { check('R10a/b handler ran clean', false, e && e.message); }
 
     try {
         // R10c: unmet trial — the trial line spells out the gate in the caption
-        await User.create(mk(J.cardShort, { pvpWins: 2 }));
         const s2 = mkSock();
         await handleRankCommand(s2, 'chat-rank', J.cardShort, mQ);
         const img2 = s2.sends.find((x) => x.content && x.content.image);
         check('R10c unmet-trial card still renders', !!img2, s2.sends.map((x) => Object.keys(x.content || {})));
         check('R10c caption names Trial of Combat with 2/3', !!(img2 && /Trial of Combat/.test(img2.content.caption || '') && /2\/3/.test(img2.content.caption || '')), img2 && img2.content.caption);
+        // R10b (moved): D→C unmet trial = LEVEL + QUESTS + 3 objective bars = 5
+        // bars on a 3-slot template → the met ones overflow to the caption.
+        check('R10b overflow bars ride the caption (Also required:)', !!(img2 && /Also required:/.test(img2.content.caption || '')), img2 && (img2.content.caption || '').slice(-160));
     } catch (e) { check('R10c handler ran clean', false, e && e.message); }
 
     try {
