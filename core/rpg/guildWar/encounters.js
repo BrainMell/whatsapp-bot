@@ -307,6 +307,13 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
     const norm = String(input || '').trim().toLowerCase();
     const P = room.payload || {};
 
+    // 🔎 UNIVERSAL EXAMINE (UX pass #8): `examine` answers in EVERY chamber
+    // type — never dead silence. Puzzle rooms keep their own gated flow
+    // (below): there the verb starts / re-reads the seal.
+    if (room.type !== 'puzzle' && EXAMINE_VERBS.includes(norm)) {
+        return { handled: true, text: examineFlavor(eventDoc, player, room) };
+    }
+
     // 🔄 IMMEDIATE OUTCOME SPRITE (owner ruins_fixes.txt #2/#4, 2026-10-05):
     // clearRoom flips the room in the DB only — the in-memory room stayed
     // ACTIVE, so the VERY NEXT render (the dig/take result image) still
@@ -349,6 +356,20 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             // every other puzzle kind share this same gated flow.
             const pzLive = payloadGet(P, 'puzzle');
             const pzStarted = !!(pzLive && (pzLive.started || (pzLive.attemptsUsed || 0) > 0));
+            // 🔁 FREE RE-EXAMINE (UX pass #9, owner brief 2026-10-07): once a
+            // seal is awake, ANY stray text used to be graded as an answer —
+            // a "wait", a "lol", a second `examine` all burned attempts. The
+            // examine verbs now RE-SEND the prompt + rules + copy-paste line
+            // without touching the attempt counter; only real answers claim.
+            if (pzStarted && ['examine', 'inspect', 'study', 'check', 'interact'].includes(norm)) {
+                return {
+                    handled: true,
+                    afterImage: await puzzleBoardScene(eventDoc, player, room),
+                    text: puzzleExamineText(pzLive, true),
+                    afterText: (pzLive && Array.isArray(pzLive.symbols) && pzLive.symbols.length)
+                        ? pzLive.symbols.join(' ') : undefined,
+                };
+            }
             if (!pzStarted) {
                 if (!['examine', 'inspect', 'study', 'check', 'interact'].includes(norm)) {
                     return { handled: true, text: '🧩 A sealed mechanism dominates the chamber. Type `examine` to study it.' };
@@ -364,7 +385,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
                 return {
                     handled: true,
                     afterImage: await puzzleBoardScene(eventDoc, player, room),
-                    text: `🧩 You study the mechanism - it hums awake under your fingers...\n\n${(pzLive && pzLive.prompt) || 'The mechanism awaits an answer.'}\n\n_Reply with your answer. ${(pzLive && pzLive.maxAttempts) || CFG.PUZZLE.ATTEMPTS} attempts. Wrong answers have a cost._`,
+                    text: puzzleExamineText(pzLive, false),
                     afterText: symLine || undefined,
                 };
             }
@@ -873,6 +894,8 @@ async function puzzleBoardOpts(eventDoc, room) {
     try {
         const board = await require('./puzzleCards').renderPuzzleCard({
             kind: pz.kind, prompt: pz.prompt,
+            // 📋 UX pass #5: the kind's rule card is printed on the board
+            rules: require('./puzzles').RULE_TEXT[pz.kind] || null,
             attemptsUsed: pz.attemptsUsed || 0,
             attemptsMax: pz.maxAttempts || CFG.PUZZLE.ATTEMPTS,
             world: worldTheme(payloadGet(P, 'theme') || eventDoc.deadWorld).name,
@@ -892,6 +915,68 @@ async function puzzleBoardScene(eventDoc, player, room) {
         return await roomScene.renderRoomScene(eventDoc, player, room, sceneOpts);
     } catch (e) {
         return null;
+    }
+}
+
+// ── 📋 puzzle examine text (UX pass #5/#9, owner brief 2026-10-07) ──
+// Pure assembly so the QA suite can assert every kind ships its rule card.
+// `again` = the FREE re-examine flavor (prompt re-read, no attempt burned).
+function puzzleExamineText(pz, again) {
+    const rule = puzzles.RULE_TEXT[pz && pz.kind] || '';
+    const attempts = (pz && pz.maxAttempts) || CFG.PUZZLE.ATTEMPTS;
+    const head = again
+        ? '🧩 You study the mechanism again — the same inscription glows under the dust:'
+        : '🧩 You study the mechanism - it hums awake under your fingers...';
+    const prompt = (pz && pz.prompt) || 'The mechanism awaits an answer.';
+    return [
+        head, '', prompt,
+        ...(rule ? [rule] : []),
+        `_Reply with your answer. ${attempts} attempts. Wrong answers have a cost._`,
+    ].join('\n');
+}
+
+// ── 🔎 UNIVERSAL EXAMINE flavor (UX pass #8, owner brief 2026-10-07) ──
+// `examine` used to be a puzzle-only verb: typed anywhere else it fell
+// through every handler into dead silence (the exact "typing look or e does
+// nothing" complaint, new costume). Every chamber type now answers the
+// examine verbs with what a closer look yields — plus the verb that acts.
+const EXAMINE_VERBS = ['examine', 'inspect', 'study', 'check', 'interact'];
+function examineFlavor(eventDoc, player, room) {
+    const P = room.payload || {};
+    const flavor = payloadGet(P, 'flavor') || worldTheme(eventDoc.deadWorld).flavor;
+    const cleared = room.state === 'CLEARED';
+    if (cleared) {
+        const residue = mapToObj(room.residue);
+        return `🔎 Nothing else stirs here — the chamber was already dealt with${room.clearedByGuild ? ` by *${room.clearedByGuild}*` : ''}.${residue?.note ? ` _${residue.note}_` : ''}`;
+    }
+    switch (room.type) {
+        case 'empty':
+            return `🔎 A closer look: ${flavor.toLowerCase()} dust, collapsed shelving, and claw-marks too large to name. Nothing of value — the way onward is what matters.`;
+        case 'combat':
+            return `🔎 Shapes shift between the pillars — more than one, moving low and quiet. \`fight\` meets them head-on; \`flee\` retreats the way you came.`;
+        case 'discovery':
+            return `🔎 ${payloadGet(P, 'text') || 'Something is hidden here.'} \`dig\` unearths it.`;
+        case 'reward':
+            return `🔎 An old-world vault, wards long dead but the seal intact. Whatever the dead world valued is inside. \`take\` claims it.`;
+        case 'hazard':
+            return `🔎 ${payloadGet(P, 'hazardText') || 'Danger lurks here.'} A careful read of the trigger points helps — \`cross\` to attempt passage.`;
+        case 'lore':
+            return `🔎 ${payloadGet(P, 'lore') || 'Old words cover these walls.'} \`read\` commits them to memory (+GP).`;
+        case 'secret':
+            if (payloadGet(P, 'boss')) return `🔎 The thing guarding this chamber is OLD — older than the war above. It watches you back. \`fight\` when you are ready.`;
+            return `🔎 A hidden cache, wrapped in shivering air. \`claim\` takes what it holds.`;
+        case 'anomaly':
+            return `🔎 The walls here bleed light from somewhere that is not anywhere. \`touch\` interacts — or move on and let it hum.`;
+        case 'landmark':
+            return `🔎 *${payloadGet(P, 'landmarkName') || 'A landmark'}* — ${payloadGet(P, 'lore') || 'a marker of the old world.'} \`record\` inscribes it for your guild.`;
+        case 'coop':
+            return `🔎 A guardian pack denser than the usual scavengers. Allies standing here can fight it beside you — shared spoils.`;
+        case 'finale':
+            return `🔎 *${payloadGet(P, 'wardenName') || 'The Warden'}* — one of the four holding the war open. The war ends when all four fall. \`fight\`.`;
+        case 'core':
+            return `🔎 The guardian of THE World Core itself. First guild to breach it earns lasting glory. \`fight\`.`;
+        default:
+            return `🔎 Dust, stone and silence — the ${flavor.toLowerCase()} ruins keep this chamber's secrets for now.`;
     }
 }
 
@@ -961,6 +1046,8 @@ module.exports = {
     buildRoomPayload, onRoomEnter, roomIntro, resolveInput, startRoomCombat,
     nearestRelicRoom, describeDirection, awardRoomRelic, variantOf, pickVariant,
     payloadGet, puzzleStarted, roomFlavor, notifyRoomResolved,
+    // 🔎 UX pass (#5/#8/#9): pure helpers for QA + the rule-card flow
+    puzzleExamineText, examineFlavor, EXAMINE_VERBS,
     // 🎚️ band ladder (owner spec 2026-10-06) — exported for QA probes
     getRosterBands, explorationProgress, bandWeights, pickBand, resolveEngagement,
 };

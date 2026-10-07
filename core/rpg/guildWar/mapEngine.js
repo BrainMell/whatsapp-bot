@@ -125,6 +125,55 @@ function generate(seed, playerCount, opts = {}) {
         adj.get(key(nx, ny))[DIR_OPS[d]] = true;
     }
 
+    // ── dead-end relief (UX pass #6, owner 2026-10-07: "kept, reduced") ──
+    // A DFS spanning tree over a 40×40 grid routinely dead-ends a third of
+    // the map — every one is a walk to a wall. Cul-de-sacs still EARN their
+    // keep (vaults/secrets tucked out of the through-lines), so we only cap
+    // the share: while more than DEADEND_MAX_SHARE of rooms have exactly one
+    // open edge, connect a dead-end to an ADJACENT not-yet-linked room (grid
+    // neighbors only — the door plates render real adjacency, so every relief
+    // edge is a drawable corridor). Same-region neighbors are preferred on
+    // alignment maps, mirroring the loop-edge rule. Seeded, deterministic.
+    // The budget SCALES with map size (a 24-edge cap that works for a 9×9
+    // beta map could never dent a 24×24 alignment map's ~170 dead ends).
+    const reliefCap = Math.max(8, Math.ceil(side * side * (CFG.MAP.DEADEND_RELIEF_SHARE ?? 0.25)));
+    const maxShare = CFG.MAP.DEADEND_MAX_SHARE ?? 0.08;
+    const openCount = (k) => Object.values(adj.get(k)).filter(Boolean).length;
+    let reliefUsed = 0;
+    while (reliefUsed < reliefCap) {
+        const roomsN = side * side;
+        let deadEnds = [];
+        for (const [k, edges] of adj) if (openCount(k) === 1) deadEnds.push(k);
+        if (deadEnds.length / roomsN <= maxShare || !deadEnds.length) break;
+        // fix the worst offenders first: shuffled so ties don't bias corners
+        deadEnds = rng.shuffle(deadEnds);
+        let remaining = deadEnds.length, fixed = 0;
+        for (const k of deadEnds) {
+            if (reliefUsed >= reliefCap) break;
+            if (remaining / roomsN <= maxShare) break; // stop AT the cap — cul-de-sacs are kept, not erased
+            if (openCount(k) !== 1) continue; // a prior relief edge adopted it
+            const [x, y] = k.split(',').map(Number);
+            const cands = [];
+            for (const [d, [dx, dy]] of Object.entries(DIRS)) {
+                const nx = x + dx, ny = y + dy;
+                if (nx < 0 || ny < 0 || nx >= side || ny >= side) continue;
+                if (adj.get(k)[d]) continue; // already linked this way
+                // prefer same-region links on alignment maps (70% skip, as loops)
+                if (cfg.regions > 1 && regionOf(x).index !== regionOf(nx).index && rng.next() < 0.7) continue;
+                cands.push([d, key(nx, ny)]);
+            }
+            if (!cands.length) continue;
+            const [d, nk] = rng.pick(cands);
+            const neighborWasDead = openCount(nk) === 1;
+            adj.get(k)[d] = true;
+            adj.get(nk)[DIR_OPS[d]] = true;
+            reliefUsed++;
+            fixed++;
+            remaining -= neighborWasDead ? 2 : 1; // the new edge can adopt a second dead-end
+        }
+        if (!fixed) break; // nothing connectable — walls everywhere we looked
+    }
+
     // ── room types (distance-from-center modulates danger/reward tier) ──
     const c = (side - 1) / 2;
     const maxDist = Math.hypot(c, c) || 1;

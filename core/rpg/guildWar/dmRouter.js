@@ -183,6 +183,28 @@ function roomsMapHas(eventDoc, key) {
     return (eventDoc.rooms || []).some((r) => r.key === key);
 }
 
+// ── 📖 FIELD MANUAL (UX pass #4/#7, owner brief 2026-10-07) ──
+// The beta's recurring onboarding gap: deployment drops champions into the
+// ruins knowing only that "my DMs are the game screen". The goal, the verb
+// grammar, the relic economy and the lives rule were all learned by dying.
+// The primer now rides the deployment DM once per war (dmWarStartCards) and
+// answers to `help` / `howto` any time mid-war.
+function fieldManualText(prefix) {
+    const p = prefix || '.';
+    return [
+        '📖 *FIELD MANUAL — the Ruins of the dead world*',
+        '🎯 *The goal:* chart chambers, survive what guards them, and carry relics home. `handin` banks relics for GP and guild glory. First guild to breach the *World Core* earns lasting fame — and if the war clock runs out, FOUR wardens rise and only their fall ends the war.',
+        '🚶 *Move:* `' + p + ' move forward` · `left` · `right` · `back` — bare `forward`/`left`… also works. Typos are forgiven.',
+        '🔎 *Look:* every chamber answers `examine` — mechanisms, murals, vaults, hazards. It always tells you the verb that acts.',
+        '⚔️ *Fights:* guarded chambers start on their own; guildmates in the room join automatically. `flee` retreats you (spoils forfeited).',
+        '🧩 *Seals:* `examine` starts a puzzle, then reply with your answer. `examine` again re-reads the rules FREE — only real answers burn attempts.',
+        '💎 *Relics:* `relics` lists your pack, `handin <name>` or `handin all` banks them. Carried Rare+ can be stolen by rivals.',
+        '🗺️ *Tools:* `map` · `paths` · `mark` + `teleport` · `talk <msg>` (chamber chat) · `challenge <name>` (rival in your chamber) · `status` · `quit`.',
+        '💀 *Lives:* you have 3. Fall a fourth time and your run ends. Going quiet 20 minutes drops your carried relics where you stand — `rejoin` picks the war back up.',
+    ].join('\n');
+}
+
+
 // ⚔️ PRESENCE SYMMETRY (owner live-test bug report #1, 2026-10-06: "Player A
 // sees Player B's sprite; Player B does not see Player A's"): the room scene
 // only rendered for whoever MOVED — the players ALREADY in the chamber were
@@ -377,6 +399,12 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
 
     // touch lastAction for any recognized command from here on
     const touch = () => state.updatePlayer(eventDoc.eventId, senderJid, {}, { lastActionAt: Date.now() });
+
+    // ── 📖 field manual on demand (UX pass #4/#7): the primer rides the
+    // deployment DM once; this is the always-available reference copy ──
+    if (/^(help|howto|how to play|primer|manual|field manual)$/.test(norm)) {
+        return { text: fieldManualText(prefix) };
+    }
 
     // ── movement ──
     let moveToken = null;
@@ -1009,4 +1037,4 @@ async function handleGroupWarVerb(sock, chatId, senderJid, senderName, norm, pre
     }
 }
 
-module.exports = { handleDM, getEventForPlayer, displayName, navCardFor, returnMapFor, computeExits, presentRoom, handleGroupWarVerb, mapCaption, fuzzyMoveToken, announceArrival };
+module.exports = { handleDM, getEventForPlayer, displayName, navCardFor, returnMapFor, computeExits, presentRoom, handleGroupWarVerb, mapCaption, fuzzyMoveToken, announceArrival, fieldManualText };

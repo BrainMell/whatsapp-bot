@@ -43,6 +43,15 @@ const CFG = {
             lore: 4, coop: 4, secret: 2.5, anomaly: 2, landmark: 0.75,
         },
         EMPTY_RATIO: 0.40,                  // approx share of empty rooms
+        // ── DEAD-END DENSITY (UX pass #6, owner brief 2026-10-07: "kept,
+        // reduced") — cul-de-sacs stay in the generator (they are where
+        // secrets and vaults feel earned), but the review flagged their
+        // density: after loop edges, roughly a tenth of rooms still end in
+        // a wall, and the worst seeds climb higher. A seeded relief pass
+        // connects surplus dead-ends to an adjacent room until the share
+        // sits at/below the cap — trimmed maps, never dead-end-free maps.
+        DEADEND_MAX_SHARE: 0.08,            // max share of rooms with 1 exit
+        DEADEND_RELIEF_SHARE: 0.25,         // relief edges ≤ 25% of room count per map
         RESIDUE_CHANCE: 0.25,               // cleared room leaves residue
         RESIDUE_LOOT_CHANCE: 0.5,           // residue carries small loot vs lore-only
         SPAWN_MIN_DIST_FRAC: 1 / 3,         // min pairwise spawn distance as fraction of side

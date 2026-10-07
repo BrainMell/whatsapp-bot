@@ -628,6 +628,16 @@ async function dmWarStartCards(sock, BOT_MARKER = '\u200B', event, prefix = '.')
         } catch (e) {
             console.error('[GW] start DM failed:', p.jid, e?.message);
         }
+        // 📖 ONBOARDING PRIMER (UX pass #4/#7, owner brief 2026-10-07): the
+        // field manual rides the deployment wave — one compact card covering
+        // goal, movement, examine, relics, lives — BEFORE the spawn room
+        // presents. Beta learned all of this by dying; now it ships with the
+        // war. Always available again via `help` / `howto` in the DMs.
+        try {
+            await sock.sendMessage(p.jid, { text: BOT_MARKER + dmRouter.fieldManualText(prefix) });
+        } catch (e) {
+            console.error('[GW] field-manual DM failed:', p.jid, e?.message);
+        }
         // auto-present the spawn room: MAP first (§2 order), then the scene
         // with the champion standing in it. deployOrder flag kept for any
         // caller that wants scene-first — default flow is map-first now.

@@ -192,14 +192,17 @@ async function renderPuzzleCard(opts = {}) {
 
         // body: split emphasis into plain lines + tile rows
         const parts = splitEmphasis(opts.prompt || '');
-        let y = 264;
+        // 📋 UX pass #5: the body starts a touch higher and packs tighter
+        // (36px prose leading, 64px tiles) so long prompts still leave the
+        // bottom band free for the rule card.
+        let y = 252;
         const maxW = W - 180;
         for (const part of parts) {
             if (part.tile) {
                 // tile row: big tokens (glyphs / letters / pairs like A=5)
                 const tokens = part.text.split(/\s+/).filter(Boolean).slice(0, 8);
-                const tileW = 84, tileH = 72;
-                const gap = 12;
+                const tileW = 84, tileH = 64;
+                const gap = 16;
                 const totalW = tokens.length * tileW + (tokens.length - 1) * gap;
                 let tx = (W - totalW) / 2;
                 for (const t of tokens) {
@@ -214,12 +217,12 @@ async function renderPuzzleCard(opts = {}) {
                     const label = t.length > 4 ? t.slice(0, 4) : t;
                     // GLYPH FIX: rune tiles get the runic font (Cinzel has no
                     // U+16A0 block — hexboxes on the boxes); sizes unchanged
-                    if (RUNIC_RE.test(label)) ctx.font = (label.length > 2 ? '28px' : '38px') + ' ' + RUNIC_FONT;
-                    else ctx.font = (label.length > 2 ? '28px' : '38px') + ' "Cinzel", serif';
+                    if (RUNIC_RE.test(label)) ctx.font = (label.length > 2 ? '26px' : '34px') + ' ' + RUNIC_FONT;
+                    else ctx.font = (label.length > 2 ? '26px' : '34px') + ' "Cinzel", serif';
                     ctx.fillText(label, tx + tileW / 2, y + tileH / 2 + 2);
                     tx += tileW + gap;
                 }
-                y += tileH + 20;
+                y += tileH + 16;
             } else {
                 // GLYPH FIX: prompts can embed runes OUTSIDE the emphasis
                 // tiles too (the "(e.g. `ᛏ ᚨ`)" example). One fillText with
@@ -236,11 +239,31 @@ async function renderPuzzleCard(opts = {}) {
                     else line = test;
                 }
                 if (line) lines.push(line);
-                for (const lineText of lines) { drawMixed(ctx, lineText, 90, y + 12); y += 40; }
+                for (const lineText of lines) { drawMixed(ctx, lineText, 90, y + 12); y += 36; }
                 ctx.textAlign = 'center';
-                y += 8;
+                y += 6;
             }
             if (y > H - 128) break;
+        }
+
+        // 📋 UX pass #5 (owner brief 2026-10-07): the per-puzzle RULE CARD
+        // rides the board — the answer format is printed on the parchment so
+        // "how do I answer this?" never needs a guess. Fit-aware: it sits
+        // below the body (or in the reserved bottom band) and drops lines
+        // that would collide with the footer; the `examine` DM text always
+        // carries the full rule regardless.
+        if (opts.rules) {
+            ctx.font = 'italic 19px "IM Fell", serif';
+            // canvas fonts have no emoji glyph — the 📜 becomes a tofu dot;
+            // strip it here (the DM text keeps it)
+            const ruleLines = _wrap(ctx, String(opts.rules).replace(/[*`_]/g, '').replace('📜', '').trim(), W - 160);
+            let ry = Math.max(y + 10, H - 118);
+            const fits = ruleLines.filter((_, i) => ry + i * 24 <= H - 72).length;
+            ctx.fillStyle = PAL.inkSoft;
+            for (const line of ruleLines.slice(0, Math.min(2, fits))) {
+                ctx.fillText(line, W / 2, ry);
+                ry += 24;
+            }
         }
 
         // footer

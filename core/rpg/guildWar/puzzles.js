@@ -196,6 +196,19 @@ function ordinal(n) {
     return words[n - 1] || `${n}th`;
 }
 
+// ── 📋 PER-PUZZLE RULE CARDS (UX pass #5, owner brief 2026-10-07) ──
+// Every puzzle kind answers ONE question the beta kept tripping on: "how do
+// I answer this?" — the rule rides the `examine` reply AND the board card,
+// so the answer format is never a guess. One line each, DM-friendly.
+const RULE_TEXT = {
+    sequence: '📜 *Rules — Rune Lock:* the inscription names the glyph carved FIRST. Reply with ALL the glyphs in their carved order, spaces optional (e.g. `ᚠ ᚢ ᚦ`).',
+    riddle: '📜 *Rules — Guardian Riddle:* just reply with the answer word or phrase — extra words like "a" or "it is a…" are forgiven.',
+    cipher: '📜 *Rules — Shifted Cipher:* shift each letter BACK through the alphabet by the named number of steps, then reply with the decoded word.',
+    memory: '📜 *Rules — Memory Mosaic:* the shapes flash ONCE. Reply with the exact pattern in the same order (copy the tile line below).',
+    levers: '📜 *Rules — Lever Mechanism:* reply with the LETTERS of the levers whose values add up to the target (e.g. `A C F`), nothing else.',
+    mapriddle: '📜 *Rules — Carved Verse:* speak the seek-word the verse asks for.',
+};
+
 // ── shared normalizers (must match the generators) ──
 const NORMALIZERS = {
     sequence: (s) => String(s).replace(GLYPH_STRIP_RE, ''),
@@ -245,4 +258,4 @@ function checkByKind(kind, puzzle, input, attempt) {
     return { solved: correct, attemptsLeft: Math.max(0, (puzzle.maxAttempts || 3) - attempt) };
 }
 
-module.exports = { generate, checkByKind, normalizeByKind, genSequence, genRiddle, genCipher, genMemory, genLevers, GLYPHS, SHAPES, RIDDLES, CIPHER_WORDS };
+module.exports = { generate, checkByKind, normalizeByKind, genSequence, genRiddle, genCipher, genMemory, genLevers, GLYPHS, SHAPES, RIDDLES, CIPHER_WORDS, RULE_TEXT };
