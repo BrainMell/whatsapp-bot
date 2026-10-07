@@ -2223,6 +2223,26 @@ const sameBot = (state) => !!state && state.botId === botScope();
 // is a slow memory leak. Now a sweeper runs every 5 min and removes any
 // state that hasn't been updated in 30 min (configurable below).
 const STALE_STATE_TIMEOUT_MS = 30 * 60 * 1000; // 30 min
+
+// 💡 END-OF-QUEST WATCHDOGS (2026-10-07 owner voice report via #general:
+// "played an entire quest and it doesn't get counted" + "the defeat combat
+// message doesn't spawn" — observed live on Box2 joker 2026-10-07 19:02:03
+// and Box1 jake 2026-10-05 08:08:54: 'Combat ended 7/7' → 'nextStage
+// triggered 7/7' → TOTAL SILENCE. No card, no error log, no counting, state
+// left wedged until the 30-min sweeper). Root suspicion: one of the awaited
+// end-of-flow calls (Groq narration / end-screen render+send) stalling
+// WITHOUT ever settling — a hung promise defeats every try/catch, so the
+// flow freezes silently. These helpers (a) race every stall-prone await so
+// the flow ALWAYS advances, and (b) breadcrumb every step so the next
+// occurrence pinpoints the exact call in the logs.
+const END_DEBUG = (m) => console.log(`[EndDebug] ${m}`);
+function raceWithTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`watchdog:${label} (${ms}ms)`)), ms);
+  });
+  return Promise.race([Promise.resolve(promise), timeout]).finally(() => clearTimeout(timer));
+}
 setInterval(() => {
     const now = Date.now();
     let swept = 0;
@@ -7210,6 +7230,7 @@ async function handleAbyssVictory(sock, sessionKey) {
 }
 
 async function endCombat(sock, victory, sessionKey) {
+  END_DEBUG(`endCombat ENTER key=${sessionKey} victory=${victory}`);
   const state = gameStates.get(sessionKey);
   if (!state || state.isEndingCombat) return;
   // ⚔️ RACE FIX 2026-10-04 (owner spec §18/§21 — "one evaluation per event"):
@@ -7445,18 +7466,29 @@ async function endCombat(sock, victory, sessionKey) {
   }
   try {
     if (!endScreenSent && combatIntegration && combatIntegration.renderCombatEnd) {
-      const endResult = await combatIntegration.renderCombatEnd(
-        state.players, state.enemies, victory, rewards,
-        { rank: state.dungeonRank, backgroundPath: state.backgroundPath }
+      END_DEBUG(`endCombat key=${sessionKey} victory=${victory} endScreen render+send start`);
+      const endResult = await raceWithTimeout(
+        combatIntegration.renderCombatEnd(
+          state.players, state.enemies, victory, rewards,
+          { rank: state.dungeonRank, backgroundPath: state.backgroundPath }
+        ),
+        20000, 'endScreen.render',
       );
       if (endResult.success && endResult.buffer && endResult.buffer.length > 100) {
-        await sock.sendMessage(state.chatId, {
-          image: endResult.buffer,
-          caption: caption,
-          mimetype: 'image/jpeg'
-        });
+        // 💡 WATCHDOG: a wedged Baileys send used to stall the whole
+        // end-of-combat flow forever (defeat card "never spawns"). Now the
+        // send is raced; on timeout the text caption below still goes out.
+        await raceWithTimeout(
+          sock.sendMessage(state.chatId, {
+            image: endResult.buffer,
+            caption: caption,
+            mimetype: 'image/jpeg'
+          }),
+          20000, 'endScreen.send',
+        );
         endScreenSent = true;
       }
+      END_DEBUG(`endCombat endScreen done sent=${endScreenSent}`);
     }
   } catch (endImgErr) {
     console.error('[EndScreen] Image render failed (non-fatal):', endImgErr.message);
@@ -7549,6 +7581,7 @@ async function endCombat(sock, victory, sessionKey) {
 
     setTimeout(
       () => {
+        END_DEBUG(`break timer FIRED key=${sessionKey} → nextStage`);
         state.isEndingCombat = false; // Reset guard BEFORE calling nextStage
 
         // 💡 ABYSS MODE: On victory, advance Abyss floor instead of nextStage
@@ -7567,6 +7600,7 @@ async function endCombat(sock, victory, sessionKey) {
     ); // Added 1s delay for solo
   } else {
     state.isEndingCombat = false;
+    END_DEBUG(`endCombat DEFEAT path key=${sessionKey} — bookkeeping + cleanup start`);
 
     // 💡 ABYSS MODE: On defeat, call Abyss processDeath instead of just
     // cleaning up. The Abyss has its own death handling (lose 90% loot,
@@ -7647,6 +7681,7 @@ async function endCombat(sock, victory, sessionKey) {
     state.active = false;
     state.phase = "IDLE";
     deleteGameState(sessionKey); // Full cleanup on defeat
+    END_DEBUG(`endCombat DEFEAT cleanup done key=${sessionKey}`);
   }
 }
 
@@ -8512,7 +8547,29 @@ async function nextStage(sock, groq, sessionKey) {
     // Check if dungeon is complete
     if (state.encounter > state.maxEncounters) {
       state.isProcessing = false;
-      return endAdventure(sock, sessionKey);
+      END_DEBUG(`FINAL STAGE reached enc=${state.encounter}/${state.maxEncounters} → endAdventure key=${sessionKey}`);
+      // 💡 FORCE-RELEASE WATCHDOG (2026-10-07): the live incident showed the
+      // wrap-up can stall with ZERO output (no card, no error, no counting)
+      // while the state stays wedged until the 30-min sweeper. If
+      // endAdventure is still pending after 120s, release the chat with a
+      // visible notice (no fake counting — mods can compensate manually) so
+      // players aren't locked out of new quests.
+      const __endT0 = Date.now();
+      const __endP = endAdventure(sock, sessionKey);
+      const __endWd = setTimeout(() => {
+        const __st = gameStates.get(sessionKey);
+        if (__st) {
+          console.error(`[EndDebug] WATCHDOG endAdventure pending >120s — force-releasing ${sessionKey}`);
+          try {
+            sock.sendMessage(__st.chatId, { text: "⚠️ *Quest wrap-up stalled* server-side after the final fight. The quest slot has been released - ping a mod if your completion rewards/count didn't land." }).catch(() => {});
+          } catch (_) {}
+          deleteGameState(sessionKey);
+        }
+      }, 120000);
+      return __endP.finally(() => {
+        clearTimeout(__endWd);
+        END_DEBUG(`endAdventure observed settled total=${Date.now() - __endT0}ms key=${sessionKey}`);
+      });
     }
 
     // 💡 BRANCHING PATHS SYSTEM
@@ -9264,7 +9321,9 @@ async function processVotes(sock, encounter, sessionKey) {
 
 async function endAdventure(sock, sessionKey, victory = true) {
   const state = gameStates.get(sessionKey);
-  if (!state) return;
+  if (!state) { END_DEBUG(`endAdventure ABORT: no state for ${sessionKey}`); return; }
+  const __endT0 = Date.now();
+  END_DEBUG(`endAdventure ENTER key=${sessionKey} victory=${victory} mode=${state.mode} rank=${state.dungeonRank} players=${state.players?.length} abyss=${!!state.isAbyss}`);
 
   const chatId = state.chatId;
   // AI Narration of the journey's end
@@ -9275,22 +9334,39 @@ async function endAdventure(sock, sessionKey, victory = true) {
     `;
 
   let narration = "";
+  const __narrT0 = Date.now();
   try {
     if (state.smartGroqCall) {
-      const completion = await state.smartGroqCall({
-        messages: [{ role: "system", content: prompt }],
-        model: "openai/gpt-oss-120b",
-      });
+      END_DEBUG(`endAdventure narration via smartGroqCall (20s watchdog)`);
+      // 💡 WATCHDOG 2026-10-07: the raw narration call can stall far longer
+      // than any user cares to wait (groq-sdk = 60s timeout x3 SDK retries,
+      // then engine retries x3 keys = up to 9 MINUTES of dead silence, and
+      // a fully hung socket defeats even that). Race it; on timeout use the
+      // standard fallback narration so the completion card still goes out.
+      const completion = await raceWithTimeout(
+        state.smartGroqCall({
+          messages: [{ role: "system", content: prompt }],
+          model: "openai/gpt-oss-120b",
+        }),
+        20000, 'endAdventure.narration',
+      );
       narration = completion.choices[0].message.content;
     } else if (state.groq) {
-      const completion = await state.groq.chat.completions.create({
-        messages: [{ role: "system", content: prompt }],
-        model: "openai/gpt-oss-120b",
-      });
+      END_DEBUG(`endAdventure narration via raw groq client (20s watchdog)`);
+      const completion = await raceWithTimeout(
+        state.groq.chat.completions.create({
+          messages: [{ role: "system", content: prompt }],
+          model: "openai/gpt-oss-120b",
+        }),
+        20000, 'endAdventure.narration',
+      );
       narration = completion.choices[0].message.content;
+    } else {
+      END_DEBUG(`endAdventure narration skipped (no groq on state)`);
     }
   } catch (e) {
     // 💡 FIX §3.2: multiple fallback variants instead of one repeated string.
+    END_DEBUG(`endAdventure narration did NOT settle cleanly after ${Date.now() - __narrT0}ms (${e.message}) — fallback`);
     const fallbacks = [
       "The heroes return from the depths of the void, their names etched in history forever.",
       "As dawn breaks, the party emerges victorious, their legend spreading across the realm like wildfire.",
@@ -9711,6 +9787,7 @@ async function endAdventure(sock, sessionKey, victory = true) {
   // 💡 NEW 2026-09-12: per-player rows for the PORTRAIT quest-complete card
   // (bg_QUEST family). Collected in the reward loop below; empty → text-only.
   const portraitPlayers = [];
+  END_DEBUG(`endAdventure reward loop start (${state.players.length} players)`);
   for (const player of state.players) {
    try {
     const finalXP = Math.floor(_baseCompletionXP * multiplier);
@@ -9900,6 +9977,7 @@ async function endAdventure(sock, sessionKey, victory = true) {
     msg += `${player.class?.icon || ''} *${player.name}*\n  ⚠️ _Reward calculation failed - contact an admin if this persists._\n\n`;
    }
   }
+  END_DEBUG(`endAdventure reward loop done in ${Date.now() - __endT0}ms`);
 
   if (state.mode === "PERMADEATH") {
     msg += `\n🏅 *PERMADEATH MODE CONQUERED!*\n`;
@@ -9911,6 +9989,7 @@ async function endAdventure(sock, sessionKey, victory = true) {
   let questCardSent = false;
   if (victory && !state.isAbyss && portraitPlayers.length > 0) {
     try {
+      END_DEBUG(`endAdventure portrait card render start`);
       const goService = require('../utils/goImageService');
       const fmt = (n) => Number(n || 0).toLocaleString();
       const ZS = economy.getZENI ? economy.getZENI() : 'Z';
@@ -9929,12 +10008,16 @@ async function endAdventure(sock, sessionKey, victory = true) {
         players: portraitPlayers.slice(0, 4),
       });
       if (buf) {
-        await sock.sendMessage(state.chatId, { image: buf, caption: msg, mimetype: 'image/jpeg' });
+        await raceWithTimeout(
+          sock.sendMessage(state.chatId, { image: buf, caption: msg, mimetype: 'image/jpeg' }),
+          20000, 'questCard.send',
+        );
         questCardSent = true;
       }
     } catch (cardErr) {
       console.error('[Quest] Portrait quest card failed (non-fatal):', cardErr.message);
     }
+    END_DEBUG(`endAdventure portrait card done sent=${questCardSent}`);
   }
 
   if (!questCardSent) {
@@ -9947,6 +10030,7 @@ async function endAdventure(sock, sessionKey, victory = true) {
 
   state.active = false;
   deleteGameState(sessionKey); // Full cleanup
+  END_DEBUG(`endAdventure COMPLETE total=${Date.now() - __endT0}ms key=${sessionKey}`);
 }
 
 // ==========================================
