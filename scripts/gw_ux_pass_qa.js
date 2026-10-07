@@ -218,7 +218,8 @@ console.log('\n═══ PART 3 — onboarding primer (#4/#7) + board card ═�
     check('help/howto verbs documented in source', /help\|howto/.test(fs.readFileSync(path.join(__dirname, '..', 'core', 'rpg', 'guildWar', 'dmRouter.js'), 'utf8')));
 
     // board card renders with the rule line (visual proof saved)
-    const outDir = '/home/z/my-project/download/gw_qa_ux_1007';
+    // 🖼️ portable output: GW_QA_OUT override, repo-relative default
+    const outDir = process.env.GW_QA_OUT || path.join(__dirname, '..', '..', 'download', 'gw_qa_ux_1007');
     fs.mkdirSync(outDir, { recursive: true });
     const buf = await require('../core/rpg/guildWar/puzzleCards').renderPuzzleCard({
         kind: 'levers',

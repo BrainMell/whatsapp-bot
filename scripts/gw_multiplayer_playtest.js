@@ -31,7 +31,9 @@ function check(name, cond, extra) {
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const OUT_DIR = '/home/z/my-project/download/gw_multi_playtest';
+// 🖼️ portable output (GW_QA_OUT override; repo-relative default works on
+// both boxes and locally — /home/z/my-project on the dev env)
+const OUT_DIR = process.env.GW_QA_OUT || path.join(__dirname, '..', '..', 'download', 'gw_multi_playtest');
 fs.mkdirSync(OUT_DIR, { recursive: true });
 let imgN = 0;
 function savePng(label, buf) {
