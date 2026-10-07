@@ -318,14 +318,16 @@ async function scenarioDuo() {
     rep('D', 'wardens keep a healthy distance apart (no clustering)', wxyD.length < 2 || minSepD >= 2, `min pairwise sep=${minSepD}`);
     const discovered = finDoc.players.filter((p) => bosses.every((b) => (p.discovered || []).includes(b.key))).length;
     rep('D', 'warden chambers revealed on champions\' maps', discovered >= 1, `${discovered}/2 champions see all 4 markers`);
-    // feed's mirror is async — the hourglass/warden messages can land a beat
-    // after the state flip (same flake fbdfe35e settled in warden_scaling_qa)
+    // 🔄 wardens-at-start design (1f54fa75): the clock-out hourglass line only
+    // fires when a hunt outlives endsAt — covered by gw_warden_scaling_qa §B.
+    // What the feed must show HERE is the four wardens rising AT WAR START.
+    // (feed mirror is async — bounded re-read, cf. fbdfe35e)
     let dFeed = feedTexts(doc.eventId).join(' | ');
-    for (let i = 0; i < 6 && !(/HOURGLASS IS EMPTY/i.test(dFeed) && /WARDEN/i.test(dFeed)); i++) {
+    for (let i = 0; i < 6 && !/WARDENS HOLD THE RUINS/i.test(dFeed); i++) {
         await sleep(500);
         dFeed = feedTexts(doc.eventId).join(' | ');
     }
-    rep('D', 'war feed announced the hourglass + wardens', /HOURGLASS IS EMPTY/i.test(dFeed) && /WARDEN/i.test(dFeed), `${dFeed.slice(0, 100)}`);
+    rep('D', 'war feed announced the four wardens rising (at war start)', /WARDENS HOLD THE RUINS/i.test(dFeed) && /WARDEN/i.test(dFeed), `${dFeed.slice(0, 100)}`);
 
     // ── hunt all four wardens: real fights opened by the real `fight` verb,
     // the duo seated TOGETHER (party-at-start co-op path) ──
