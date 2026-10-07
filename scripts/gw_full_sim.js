@@ -318,7 +318,13 @@ async function scenarioDuo() {
     rep('D', 'wardens keep a healthy distance apart (no clustering)', wxyD.length < 2 || minSepD >= 2, `min pairwise sep=${minSepD}`);
     const discovered = finDoc.players.filter((p) => bosses.every((b) => (p.discovered || []).includes(b.key))).length;
     rep('D', 'warden chambers revealed on champions\' maps', discovered >= 1, `${discovered}/2 champions see all 4 markers`);
-    const dFeed = feedTexts(doc.eventId).join(' | ');
+    // feed's mirror is async — the hourglass/warden messages can land a beat
+    // after the state flip (same flake fbdfe35e settled in warden_scaling_qa)
+    let dFeed = feedTexts(doc.eventId).join(' | ');
+    for (let i = 0; i < 6 && !(/HOURGLASS IS EMPTY/i.test(dFeed) && /WARDEN/i.test(dFeed)); i++) {
+        await sleep(500);
+        dFeed = feedTexts(doc.eventId).join(' | ');
+    }
     rep('D', 'war feed announced the hourglass + wardens', /HOURGLASS IS EMPTY/i.test(dFeed) && /WARDEN/i.test(dFeed), `${dFeed.slice(0, 100)}`);
 
     // ── hunt all four wardens: real fights opened by the real `fight` verb,
