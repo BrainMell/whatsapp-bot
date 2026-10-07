@@ -466,6 +466,14 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
       } catch { return ''; }
     })();
 
+    // 🔧 HOTFIX 2026-10-07 ("can't even check rank anymore"): gateCaption
+    // was declared INSIDE the card-render try block but the image caption
+    // below reads it — every SUCCESSFUL render threw ReferenceError and the
+    // outer catch turned the whole command into "Failed to fetch rank
+    // data." Hoisted to function scope; value unchanged.
+    const gateCaption = progress.slice(3)
+      .map((p) => `${p.label} ${p.valueText}`)
+      .join(' | ');
     let buffer = null;
     try {
       const goService = require('../utils/goImageService');
@@ -473,10 +481,6 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
       // against the live card 2026-10-07); anything beyond rides in the
       // caption so no requirement info is ever dropped.
       const shownProgress = progress.slice(0, 3);
-      const overflow = progress.slice(3);
-      const gateCaption = overflow
-        .map((p) => `${p.label} ${p.valueText}`)
-        .join(' | ');
       buffer = await goService.generatePortraitCard({
         kind: 'RANK',
         // 🧩 SPRITE CONSISTENCY 2026-09-17: themed styles draw the hero from
