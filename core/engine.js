@@ -8608,10 +8608,15 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     // Box 2 vision-worker, never blocks the command path.
                     // Fire-and-forget: deletes/warns/kicks when the verdict
                     // clears the group's threshold.
+                    // DISABLED (owner directive 2026-10-07): antinude removed
+                    // from the message pipeline and the Box 2 vision-worker
+                    // (its only classifier backend) was decommissioned. The
+                    // hook below stays dormant unless ANTINUDE_ENABLED=1 is
+                    // explicitly set in the environment.
                     try {
                       const _antinude = require('./utils/antinude');
                       const _anSettings = getGroupSettings(chatId);
-                      if (_anSettings.antinude) {
+                      if (_anSettings.antinude && process.env.ANTINUDE_ENABLED === "1") {
                         _antinude.handleAntinude(sock, m, _anSettings, addWarning, getWarningCount, {
                           chatId,
                           senderJid,
