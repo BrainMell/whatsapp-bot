@@ -94,6 +94,7 @@ const UserSchema = new mongoose.Schema({
     questsCompleted: { type: Number, default: 0 },
     questsWon: { type: Number, default: 0 },       // Rank mission tracking
     bossesDefeated: { type: Number, default: 0 },   // Rank mission tracking
+    pvpWins: { type: Number, default: 0 },          // Rank mission tracking (mirror; pvpSystem writes the TOP-LEVEL counter — promotion reads the max of both shapes)
     dragonsKilled: { type: Number, default: 0 },
     itemsCrafted: { type: Number, default: 0 },     // Rank mission tracking
     itemsEquipped: { type: Number, default: 0 },    // Rank mission tracking
