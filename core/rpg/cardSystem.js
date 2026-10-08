@@ -613,9 +613,11 @@ async function getUserName(jid) {
 }
 
 function buildCardDetailCaption(card, uc, stat, location = 'Collection', index = null, ownerName = 'Player') {
-  const tier   = String(card.tier);
-  const label  = TIER_LABEL[tier]  || `TIER ${tier}`;
-  const stars  = TIER_STARS[tier]  || '✦';
+  const tier  = String(card.tier);
+  // 🎴 UNIVERSAL CAPTION STYLE (owner spec 2026-10-08): every card caption in
+  // the system renders the same "CARD DETAIL" block — `emoji ⟢ *Label:* _value_`.
+  // Tier label single-spaced per spec ("TIER VI").
+  const label = String(TIER_LABEL[tier] || `TIER ${tier}`).replace(/\s+/g, ' ').trim();
 
   // 💡 FIX: Only show "Player's Coll" when there IS an owner (uc != null).
   // For database lookups (info command, no owner), use the location
@@ -632,8 +634,8 @@ function buildCardDetailCaption(card, uc, stat, location = 'Collection', index =
     locStr = `🗄️ *${location}*`;
   }
 
-  const copyInfo = uc ? `\n📋  *Copy:* #${uc.copyNumber} / ${stat?.maxCopies || '?'}` : '';
-  const ownerTag = uc ? `\n👤  *Owner:* @${economy.getDisplayName(uc.userId)}` : '';
+  const copyLine  = uc ? `\n📋 ⟢ *Copy:* _#${uc.copyNumber} / ${stat?.maxCopies || '?'}_` : '';
+  const ownerLine = uc ? `\n👤 ⟢ *Owner:* _@${economy.getDisplayName(uc.userId)}_` : '';
 
   // 💡 FIX: For event cards, show the actual anime series if available.
   // The animeName field currently stores the event name (e.g., "Chinese
@@ -649,37 +651,37 @@ function buildCardDetailCaption(card, uc, stat, location = 'Collection', index =
     // Event cards: show event name separately
     seriesDisplay = card.animeName || 'Unknown';
     if (card.eventName && card.eventName !== card.animeName) {
-      eventLine = `\n🎪  *Event:* ${card.eventName}`;
+      eventLine = `\n🎪 ⟢ *Event:* _${card.eventName}_`;
     } else {
-      eventLine = `\n🎪  *Event:* ${card.animeName}`;
+      eventLine = `\n🎪 ⟢ *Event:* _${card.animeName}_`;
     }
   }
 
   // 💡 FIX: Show the card's description if available (event cards have
   // a description like "Albedo from Chinese New Year"). This gives more
   // context about the card.
-  const descLine = card.description ? `\n📝  *Description:* ${card.description}` : '';
+  const descLine = card.description ? `\n📝 ⟢ *Description:* _${card.description}_` : '';
 
+  // owned/tagged/database contexts ALWAYS carry the location line —
+  // only the spawn caption omits it (owner rule)
   return (
-`╔═════════════════╗
-      🎴  *CARD DETAIL*
-╚═════════════════╝
+`🎴  *CARD DETAIL*
 
-🏷️  *Name:* ${card.cardName}
-📺  *Series:* ${seriesDisplay}
-${stars}  *Tier:* ${label}  ${stars}
-🎨  *Artist:* ${card.creator || 'Unknown'}${eventLine}${descLine}${copyInfo}${ownerTag}
+🏷️ ⟢ *Name:* _${card.cardName}_
+📺 ⟢ *Series:* _${seriesDisplay}_
+🏆 ❖ *Tier:* _${label}_
+🎨 ⟢ *Artist:* _${card.creator || 'Unknown'}_${eventLine}${descLine}${copyLine}${ownerLine}
 
-📍  *Location:* ${locStr}
-
-▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬`
+📍 ⟢ *Location:* ${locStr}`
   );
 }
 
 function buildSpawnCaption(card, copyNumber, maxCopies, price) {
-  const tier   = String(card.tier);
-  const label  = TIER_LABEL[tier]  || `TIER ${tier}`;
-  const stars  = TIER_STARS[tier]  || '✆';
+  const tier  = String(card.tier);
+  // 🎴 UNIVERSAL CAPTION STYLE (owner spec 2026-10-08) — the same "CARD
+  // DETAIL" block as buildCardDetailCaption. Spawning cards show NO
+  // location line; the claim footer keeps the spawn actionable.
+  const label = String(TIER_LABEL[tier]  || `TIER ${tier}`).replace(/\s+/g, ' ').trim();
 
   // Use same series display logic as buildCardDetailCaption
   let seriesDisplay = card.animeName || 'Unknown';
@@ -691,24 +693,24 @@ function buildSpawnCaption(card, copyNumber, maxCopies, price) {
     // Event cards: show event name separately
     seriesDisplay = card.animeName || 'Unknown';
     if (card.eventName && card.eventName !== card.animeName) {
-      eventLine = `\n🎪  *Event:* ${card.eventName}`;
+      eventLine = `\n🎪 ⟢ *Event:* _${card.eventName}_`;
     } else {
-      eventLine = `\n🎪  *Event:* ${card.animeName}`;
+      eventLine = `\n🎪 ⟢ *Event:* _${card.animeName}_`;
     }
   }
 
+  const descLine = card.description ? `\n📝 ⟢ *Description:* _${card.description}_` : '';
+
   return (
-`▬▬▬▬▬▬▬▬▬▬▬▬
-🎴  CARD APPEARED!
-▬▬▬▬▬▬▬▬▬▬▬▬
-🏷️  Name ›  ${card.cardName}
-📺  Series ›  ${seriesDisplay}
-${stars}  Tier ›  ${label}  ${stars}
-🎨  Art ›  ${card.creator || 'Unknown'}${eventLine ? '\n🎪  Event ›  ' + card.eventName : ''}
-▬▬▬▬▬▬▬▬▬▬▬▬
-🆔  ${card.id}
-⌨️  Type  ${P()} claim ${card.id}  
-▬▬▬▬▬▬▬▬▬▬▬▬`
+`🎴  *CARD DETAIL*
+
+🏷️ ⟢ *Name:* _${card.cardName}_
+📺 ⟢ *Series:* _${seriesDisplay}_
+🏆 ❖ *Tier:* _${label}_
+🎨 ⟢ *Artist:* _${card.creator || 'Unknown'}_${eventLine}${descLine}
+
+🆔 ⟢ _${card.id}_
+⌨️ ⟢ _Type ${P()} claim ${card.id}_`
   );
 }
 
