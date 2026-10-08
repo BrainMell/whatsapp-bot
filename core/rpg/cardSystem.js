@@ -190,6 +190,37 @@ function resolveMentionJid(jid) {
   return jid;
 }
 
+// 💡 FIX 2026-10-08 (owner report: "tagging is broken - you can @ but it's
+// also supposed to work when you mention/quote or reply to a message").
+// Target selection must accept BOTH tag shapes:
+//   * @mention            -> contextInfo.mentionedJid[0]
+//   * reply/quote         -> contextInfo.participant (the quoted msg's author,
+//                            often as a @lid - run through resolveMentionJid)
+// Mentions win when both are present. Replying to one of the BOT's own
+// messages must NOT target the bot - treated as "no tag" so the command
+// falls through to its usage error. Scans every common message shape, not
+// just extendedTextMessage (photo/sticker replies carry their own contextInfo).
+function getTaggedJid(m) {
+  const msg = m?.message || {};
+  const ctx = msg.extendedTextMessage?.contextInfo
+    || msg.imageMessage?.contextInfo
+    || msg.videoMessage?.contextInfo
+    || msg.documentMessage?.contextInfo
+    || msg.stickerMessage?.contextInfo
+    || null;
+  const mentioned = ctx?.mentionedJid || [];
+  if (mentioned.length > 0 && mentioned[0]) return mentioned[0];
+  const participant = ctx?.participant;
+  if (!participant) return null;
+  try {
+    const botUser = getInst()?.sock_ref?.user || {};
+    const norm = (j) => String(j || '').split('@')[0].split(':')[0];
+    const botIds = [botUser.id, botUser.lid].filter(Boolean).map(norm);
+    if (botIds.length && botIds.includes(norm(participant))) return null;
+  } catch (e) { /* bot identity unavailable - keep the participant */ }
+  return participant;
+}
+
 // 💡 Helper: get all event cards (by ID prefix, not tier)
 function getEventCards() {
   return ALL_CARDS().filter(c => isEventCard(c));
@@ -3063,7 +3094,8 @@ async function cmdRc(senderJid, reply, args = [], isCardMod = false, m = {}) {
   if (!isCardMod) return reply('❌ Rc (regulation card removal) is for moderators and above only.'), true;
 
   // Parse: @mention or reply → target user, then card name (+ optional tier)
-  const mentioned = m?.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+  // 💡 FIX 2026-10-08: reply/quote now works too (getTaggedJid).
+  const mentioned = getTaggedJid(m);
   if (!mentioned) return reply(`❌ Usage: \`${p} rc @user <card_name> [tier]\`\n\n_Tag the player whose card you want to delete._`), true;
   // 💡 FIX 2026-10-08: resolve the mention - raw mention JIDs miss cards that
   // live under the player's other identity format.
@@ -3135,7 +3167,7 @@ async function cmdErc(senderJid, reply, args = [], isCardMod = false, m = {}) {
   const p = P();
   if (!isCardMod) return reply('❌ Erc (event regulation card removal) is for moderators and above only.'), true;
 
-  const mentioned = m?.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+  const mentioned = getTaggedJid(m); // 💡 FIX 2026-10-08: reply/quote works too
   if (!mentioned) return reply(`❌ Usage: \`${p} erc @user <event_card_name_or_id>\``), true;
   // 💡 FIX 2026-10-08: resolve the mention (same as .rc).
   const targetJid = resolveMentionJid(mentioned);
@@ -3332,12 +3364,12 @@ async function cmdCG(senderJid, reply, args = [], m) {
   // 💡 2026-10-08 (owner request): source flag accepts -deck/-coll with or
   // without the dash, any case. Default source = collection ("gift from
   // your coll instead of deck").
-  const mentioned = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-  if (mentioned.length === 0) return sendUsage(reply, `${p} cg`, `${p} cg @user <index> [-deck | -coll]`, `${p} cg @user 5 -deck`);
+  const mentionedJid = getTaggedJid(m); // 💡 FIX 2026-10-08: @mention OR reply/quote
+  if (!mentionedJid) return sendUsage(reply, `${p} cg`, `${p} cg @user <index> [-deck | -coll]`, `${p} cg @user 5 -deck`);
 
   // 💡 FIX 2026-10-08: resolve the mention to the identity the economy DB
   // knows. Raw mentions created orphaned cards the recipient could never see.
-  const targetJid = resolveMentionJid(mentioned[0]);
+  const targetJid = resolveMentionJid(mentionedJid);
 
   const flagArgs = args.map(a => String(a).toLowerCase());
   const wantsDeck = flagArgs.some(a => a === '-deck' || a === 'deck' || a === '-d');
@@ -3704,7 +3736,7 @@ async function cmdCreateDeck(senderJid, reply, args = [], isMod = false, m = {})
   let targetJid = senderJid;
 
   // Mod can create a deck for someone else by tagging them
-  const mentioned = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+  const mentioned = getTaggedJid(m); // 💡 FIX 2026-10-08: reply/quote works too
   if (isMod && mentioned) {
       targetJid = resolveMentionJid(mentioned); // 💡 FIX 2026-10-08: LID-resolve
       name = args.filter(a => !a.includes('@')).join(' ').trim();
@@ -3870,7 +3902,7 @@ async function cmdDeleteDeck(senderJid, reply, args = [], isMod = false, m = {})
   let targetJid = senderJid;
 
   // Mod can delete someone else's deck by tagging them
-  const mentioned = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+  const mentioned = getTaggedJid(m); // 💡 FIX 2026-10-08: reply/quote works too
   if (isMod && mentioned) {
       targetJid = resolveMentionJid(mentioned); // 💡 FIX 2026-10-08: LID-resolve
       name = args.filter(a => !a.includes('@')).join(' ').trim();
@@ -4139,7 +4171,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       if (sub === 'add') {
         // 💡 FIX 2026-10-08: LID-resolve the mention so the roster key matches
         // the identity handleCommand checks against (resolved senderJid).
-        const target = resolveMentionJid(m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || (args[1]?.includes('@') ? args[1] : null));
+        const target = resolveMentionJid(getTaggedJid(m) || (args[1]?.includes('@') ? args[1] : null)); // 💡 FIX 2026-10-08: LID-resolve + reply/quote
         if (!target) return reply(`❌ Tag someone to add as card mod.`), true;
         inst.modJids.add(target);
         await saveRoles();
@@ -4154,7 +4186,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         return reply(`✅ @${economy.getDisplayName(target)} is now a Card Moderator.`, { mentions: [target] }), true;
       }
       if (sub === 'del' || sub === 'remove') {
-        const target = resolveMentionJid(m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || (args[1]?.includes('@') ? args[1] : null)); // 💡 FIX 2026-10-08: LID-resolve
+        const target = resolveMentionJid(getTaggedJid(m) || (args[1]?.includes('@') ? args[1] : null)); // 💡 FIX 2026-10-08: LID-resolve + reply/quote
         if (!target) return reply(`❌ Tag someone to remove.`), true;
         inst.modJids.delete(target);
         await saveRoles();
@@ -4984,10 +5016,11 @@ async function cmdT2EColl(senderJid, reply, args) {
 // Usage: .g trc @player <amount>
 async function cmdTrc(senderJid, reply, args, m) {
   const p = P();
-  if (!m?.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length) {
+  const mentioned = getTaggedJid(m); // 💡 FIX 2026-10-08: @mention OR reply/quote
+  if (!mentioned) {
     return reply(`❌ Usage: \`${p} trc @player <amount>\`\n💡 Mention the player and specify the token amount to remove.`);
   }
-  const targetJid = resolveMentionJid(m.message.extendedTextMessage.contextInfo.mentionedJid[0]); // 💡 FIX 2026-10-08: LID-resolve
+  const targetJid = resolveMentionJid(mentioned); // 💡 FIX 2026-10-08: LID-resolve
   const amount = parseInt(args.find(a => /^\d+$/.test(a)));
   if (isNaN(amount) || amount < 1) {
     return reply(`❌ Invalid amount. Usage: \`${p} trc @player <amount>\``);
@@ -5219,7 +5252,7 @@ async function cmdTokenReset(senderJid, reply, args = []) {
  */
 async function cmdSuperRc(senderJid, reply, args = [], m = {}) {
   const p = P();
-  const mentioned = m?.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+  const mentioned = resolveMentionJid(getTaggedJid(m)); // 💡 FIX 2026-10-08: @mention OR reply/quote + LID-resolve (destructive cmd must hit the DB identity)
   if (!mentioned) {
     return reply(`❌  *SUPER RC*\n\n⌨️ ⟢ *Usage:* _\`${p} src @user\` to preview_\n🧭 ⟢ _\`${p} src @user confirm\` to wipe their ENTIRE collection_`);
   }

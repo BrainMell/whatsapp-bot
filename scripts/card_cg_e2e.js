@@ -13,6 +13,9 @@
  *  6. auctioned coll card    -> occupies coll numbering, CARD IN AUCTION guard
  *  7. self gift              -> SELF GIFT
  *  8. no mention             -> usage box shows [-deck | -coll]
+ *  9. tagging via REPLY/QUOTE (owner report 2026-10-08):
+     participant-resolved target, image-message quotes, mention
+     precedence, reply-to-bot never targets the bot, rc via quote
  */
 let pass = 0, fail = 0;
 const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail++; console.log('  FAIL -', l); } };
@@ -33,7 +36,9 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
   const OWNER = '1000000000000@s.whatsapp.net';
 
   const sent = [];
+  const BOT_JID = '2099999999999@s.whatsapp.net'; // mock bot identity for the reply-to-bot guard
   const sock = {
+    user: { id: BOT_JID },
     sendMessage: async (chat, msg) => { sent.push(msg); return { key: { id: 'mock' } }; },
     groupMetadata: async () => ({ id: 'g', subject: 'e2e-cg', participants: [] }),
   };
@@ -140,6 +145,58 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
   t = textOf(msg);
   ok(/USAGE/.test(t), 'no mention -> usage box');
   ok(/\[-deck \| -coll\]/.test(t), 'usage shows [-deck | -coll]');
+
+  // ── round 9: tagging via reply/quote (owner report 2026-10-08) ──────────
+  console.log('\n== round 9: tag targets via quoted reply ==');
+  {
+    const runCGm = async (txt, m) => {
+      sent.length = 0;
+      await cardSystem.handleCommand({
+        lowerTxt: txt.toLowerCase(), txt,
+        senderJid: SENDER, chatId: CHAT_ID, m,
+        economy, isOwner: true, senderIsAdmin: false, isMod: false,
+      });
+      await new Promise(r => setTimeout(r, 1200));
+      return sent.find(s => s.text || s.caption);
+    };
+    const seedColl = async (copy) => {
+      await UserCard.create({ userId: SENDER, cardId: idA, copyNumber: copy, claimedAt: new Date() });
+      await UserCard.updateOne({ userId: SENDER, cardId: idA }, { $set: { createdAt: new Date(Date.now() - 5000) } });
+    };
+
+    // 9a. plain reply/quote, no @mention: participant = TARGET
+    await seedColl(5);
+    let msg = await runCGm('.j cg 1', { key: { remoteJid: 'x', fromMe: false }, message: { extendedTextMessage: { contextInfo: { participant: TARGET } } } });
+    let t = textOf(msg);
+    console.log('--- cg 1 via reply ---\n' + t);
+    ok(/GIFT SENT/.test(t) && new RegExp('ID:\\* `' + idA + '`').test(t), 'reply/quote (participant) gifts coll #1 to the quoted user');
+    ok(!(await UserCard.findOne({ userId: SENDER, cardId: idA }).lean()), 'sender no longer owns idA (quote gift moved it)');
+
+    // 9b. quoted IMAGE message shape also resolves
+    await seedColl(6);
+    msg = await runCGm('.j cg 1', { key: { remoteJid: 'x', fromMe: false }, message: { imageMessage: { contextInfo: { participant: TARGET } } } });
+    t = textOf(msg);
+    ok(/GIFT SENT/.test(t), 'reply/quote on an image message also resolves the target');
+
+    // 9c. mention wins over quoted participant (participant = sender would self-gift)
+    await seedColl(7);
+    msg = await runCGm('.j cg 1', { key: { remoteJid: 'x', fromMe: false }, message: { extendedTextMessage: { contextInfo: { mentionedJid: [TARGET], participant: SENDER } } } });
+    t = textOf(msg);
+    ok(/GIFT SENT/.test(t) && !/SELF GIFT/.test(t), 'mention takes precedence over quoted participant');
+
+    // 9d. replying to the BOT's own message = no target -> usage, never gift-to-bot
+    msg = await runCGm('.j cg 1', { key: { remoteJid: 'x', fromMe: false }, message: { extendedTextMessage: { contextInfo: { participant: BOT_JID } } } });
+    t = textOf(msg);
+    ok(/USAGE/.test(t) && !/GIFT SENT/.test(t), 'reply to bot message -> usage (bot never becomes the gift target)');
+
+    // 9e. rc (mod command) also accepts reply/quote targets
+    msg = await runCGm('.j rc totallymissingcard', { key: { remoteJid: 'x', fromMe: false }, message: { extendedTextMessage: { contextInfo: { participant: TARGET } } } });
+    t = textOf(msg);
+    ok(!/Tag the player whose card you want to delete/.test(t), 'rc got past target resolution via quote (no no-target usage error)');
+
+    // cleanup round 9 rows
+    await UserCard.deleteMany({ userId: { $in: [SENDER, TARGET] }, cardId: { $in: pickIds } });
+  }
 
   // cleanup synthetic rows
   await UserCard.deleteMany({ userId: { $in: [SENDER, TARGET] }, cardId: { $in: pickIds } });
