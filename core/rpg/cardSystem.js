@@ -161,6 +161,26 @@ function escapeRegex(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// 💡 FIX 2026-10-08 (vanishing cards / broken gifts): mentions were used RAW
+// as ownership identities. WhatsApp group mentions arrive as @lid JIDs while
+// some long-time players' economy accounts (and cards) live under
+// <phone>@s.whatsapp.net - and vice versa. A raw-mention transfer wrote the
+// card to the WRONG identity: the sender lost it, the recipient never saw it
+// (154 stranded cards found in the live DB audit). Every mention that is used
+// as an ownership/roster key MUST go through lidResolver.resolveJid(), which
+// picks the identity the economy DB actually knows (lid first, then phone,
+// with bidirectional mapping). Never blind-swap here - an unmapped swap would
+// mint a THIRD identity nothing knows about.
+function resolveMentionJid(jid) {
+  if (!jid) return jid;
+  try {
+    const lidResolver = require('../utils/lidResolver');
+    const resolved = lidResolver.resolveJid(jid);
+    if (resolved) return resolved;
+  } catch (e) { /* resolver unavailable - fall through */ }
+  return jid;
+}
+
 // 💡 Helper: get all event cards (by ID prefix, not tier)
 function getEventCards() {
   return ALL_CARDS().filter(c => isEventCard(c));
@@ -2041,7 +2061,10 @@ async function cmdBurn(senderJid, reply, chatId, args = []) {
   const index = parseInt(args[0]);
   if (isNaN(index)) return sendUsage(reply, `${P()} burn`, `${P()} burn <coll_index>`, `${P()} burn 12`);
 
-  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
+  // 💡 FIX 2026-10-08: exclude inAuction too - burning an auction-committed
+  // card let the auction later "sell" a card that no longer existed (winner
+  // paid for nothing).
+  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false }).sort({ createdAt: 1 });
   const uc = owned[index - 1];
   if (!uc) return reply('❌ Card not found in your collection.');
 
@@ -2072,6 +2095,17 @@ async function cmdAccept(senderJid, reply, chatId) {
   if (!pending) return false;
 
   try {
+    // 💡 FIX 2026-10-08 (vanishing cards): re-verify ownership at ACCEPT
+    // time. The card could have been sold / auctioned away / settled between
+    // the burn preview and the confirmation - the old code deleted by id
+    // blindly, destroying a card the user no longer owned (worst case: the
+    // buyer's freshly purchased card went up in smoke).
+    const stillMine = await UserCard.findOne({ _id: pending.ucId, userId: senderJid });
+    if (!stillMine) {
+      inst.pendingBurns.delete(key);
+      await reply('❌ That card is no longer in your collection - burn cancelled.');
+      return true;
+    }
     await UserCard.findByIdAndDelete(pending.ucId);
     inst.pendingBurns.delete(key);
     await reply(`🔥 *ASHES TO ASHES...*\n\n*${pending.cardName}* has been deleted from your collection forever.`);
@@ -2459,7 +2493,9 @@ async function cmdT2Deck(senderJid, reply, args = []) {
   const indices = [...new Set(args.map(a => parseInt(a)).filter(n => !isNaN(n) && n > 0))];
   if (!indices.length) return sendUsage(reply, `${p} t2deck`, `${p} t2deck <coll_index> [index2] [index3]...`, `${p} t2deck 10 21 3`);
 
-  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
+  // 💡 FIX 2026-10-08: exclude inAuction - moving an auction-committed card
+  // into the deck/custom-deck desyncs the auction settlement.
+  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false }).sort({ createdAt: 1 });
   const deck  = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
 
   const slotsAvailable = MAIN_DECK_SIZE - deck.length;
@@ -2510,7 +2546,8 @@ async function cmdT2CDeck(senderJid, reply, args = []) {
     return sendUsage(reply, `${p} t2cdeck`, `${p} t2cdeck <coll_index> [index2] [index3]... <deck_name>`, `${p} t2cdeck 1 Waifus\n${p} t2cdeck 5 10 21 Best Cards`);
   }
 
-  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
+  // 💡 FIX 2026-10-08: exclude inAuction here as well (same desync as t2deck).
+  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false }).sort({ createdAt: 1 });
   const decks = await CardDeck.find({ userId: senderJid });
   if (decks.length === 0) return reply('❌ You have no custom decks. Create one first!');
 
@@ -2882,6 +2919,9 @@ async function cmdRc(senderJid, reply, args = [], isCardMod = false, m = {}) {
   // Parse: @mention or reply → target user, then card name (+ optional tier)
   const mentioned = m?.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
   if (!mentioned) return reply(`❌ Usage: \`${p} rc @user <card_name> [tier]\`\n\n_Tag the player whose card you want to delete._`), true;
+  // 💡 FIX 2026-10-08: resolve the mention - raw mention JIDs miss cards that
+  // live under the player's other identity format.
+  const targetJid = resolveMentionJid(mentioned);
 
   // args after the mention
   const parts = args.filter(a => !a.includes('@') && !/^\d{10,}/.test(a));
@@ -2897,7 +2937,7 @@ async function cmdRc(senderJid, reply, args = [], isCardMod = false, m = {}) {
   if (!cardNameQuery) return reply(`❌ Usage: \`${p} rc @user <card_name> [tier]\``), true;
 
   // Search target's entire collection (main deck + custom decks + collection + market)
-  const allCards = await UserCard.find({ userId: mentioned }).sort({ createdAt: 1 });
+  const allCards = await UserCard.find({ userId: targetJid }).sort({ createdAt: 1 });
   let targetUc = null;
   for (const uc of allCards) {
     const card = CARD_INDEX()[uc.cardId];
@@ -2922,7 +2962,7 @@ async function cmdRc(senderJid, reply, args = [], isCardMod = false, m = {}) {
   }
 
   if (!targetUc) {
-    return reply(`❌ No card matching "${cardNameQuery}"${tierFilter ? ` (Tier ${tierFilter})` : ''} found for @${economy.getDisplayName(mentioned)}.`, { mentions: [mentioned] }), true;
+    return reply(`❌ No card matching "${cardNameQuery}"${tierFilter ? ` (Tier ${tierFilter})` : ''} found for @${economy.getDisplayName(targetJid)}.`, { mentions: [targetJid] }), true;
   }
 
   const card = CARD_INDEX()[targetUc.cardId];
@@ -2930,7 +2970,7 @@ async function cmdRc(senderJid, reply, args = [], isCardMod = false, m = {}) {
 
   // If in a custom deck, remove from the deck's cards array
   if (targetUc.inCustomDeck && targetUc.customDeckName) {
-    const deck = await CardDeck.findOne({ userId: mentioned, name: targetUc.customDeckName });
+    const deck = await CardDeck.findOne({ userId: targetJid, name: targetUc.customDeckName });
     if (deck) {
       deck.cards = deck.cards.filter(id => id.toString() !== targetUc._id.toString());
       await deck.save();
@@ -2939,7 +2979,7 @@ async function cmdRc(senderJid, reply, args = [], isCardMod = false, m = {}) {
 
   await UserCard.findByIdAndDelete(targetUc._id);
 
-  return reply(`🗑️ *REGULATION REMOVAL*\n\n👤 Target: @${economy.getDisplayName(mentioned)}\n🃏 Card: *${card.cardName}* (Tier ${card.tier})\n📍 Was in: ${location}\n\n_Card has been permanently deleted._`, { mentions: [mentioned] }), true;
+  return reply(`🗑️ *REGULATION REMOVAL*\n\n👤 Target: @${economy.getDisplayName(targetJid)}\n🃏 Card: *${card.cardName}* (Tier ${card.tier})\n📍 Was in: ${location}\n\n_Card has been permanently deleted._`, { mentions: [targetJid] }), true;
 }
 
 // 💡 FEATURE 9: Erc - same as Rc but for event cards. Searches by event
@@ -2951,12 +2991,14 @@ async function cmdErc(senderJid, reply, args = [], isCardMod = false, m = {}) {
 
   const mentioned = m?.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
   if (!mentioned) return reply(`❌ Usage: \`${p} erc @user <event_card_name_or_id>\``), true;
+  // 💡 FIX 2026-10-08: resolve the mention (same as .rc).
+  const targetJid = resolveMentionJid(mentioned);
 
   const parts = args.filter(a => !a.includes('@') && !/^\d{10,}/.test(a));
   if (parts.length === 0) return reply(`❌ Usage: \`${p} erc @user <event_card_name_or_id>\``), true;
 
   const query = parts.join(' ').toLowerCase().trim();
-  const allCards = await UserCard.find({ userId: mentioned }).sort({ createdAt: 1 });
+  const allCards = await UserCard.find({ userId: targetJid }).sort({ createdAt: 1 });
   let targetUc = null;
   for (const uc of allCards) {
     const card = CARD_INDEX()[uc.cardId];
@@ -2968,14 +3010,14 @@ async function cmdErc(senderJid, reply, args = [], isCardMod = false, m = {}) {
   }
 
   if (!targetUc) {
-    return reply(`❌ No event card matching "${query}" found for @${economy.getDisplayName(mentioned)}.`, { mentions: [mentioned] }), true;
+    return reply(`❌ No event card matching "${query}" found for @${economy.getDisplayName(targetJid)}.`, { mentions: [targetJid] }), true;
   }
 
   const card = CARD_INDEX()[targetUc.cardId];
 
   // Remove from custom deck if applicable
   if (targetUc.inCustomDeck && targetUc.customDeckName) {
-    const deck = await CardDeck.findOne({ userId: mentioned, name: targetUc.customDeckName });
+    const deck = await CardDeck.findOne({ userId: targetJid, name: targetUc.customDeckName });
     if (deck) {
       deck.cards = deck.cards.filter(id => id.toString() !== targetUc._id.toString());
       await deck.save();
@@ -2984,7 +3026,7 @@ async function cmdErc(senderJid, reply, args = [], isCardMod = false, m = {}) {
 
   await UserCard.findByIdAndDelete(targetUc._id);
 
-  return reply(`🗑️ *EVENT REGULATION REMOVAL*\n\n👤 Target: @${economy.getDisplayName(mentioned)}\n🃏 Event Card: *${card.cardName}* (${targetUc.cardId})\n\n_Event card has been permanently deleted._`, { mentions: [mentioned] }), true;
+  return reply(`🗑️ *EVENT REGULATION REMOVAL*\n\n👤 Target: @${economy.getDisplayName(targetJid)}\n🃏 Event Card: *${card.cardName}* (${targetUc.cardId})\n\n_Event card has been permanently deleted._`, { mentions: [targetJid] }), true;
 }
 
 // 💡 FEATURE 10: Tcoll - TRUE collection. Shows ALL cards the user owns,
@@ -3141,31 +3183,64 @@ async function cmdCG(senderJid, reply, args = [], m) {
   const mentioned = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
   if (mentioned.length === 0) return sendUsage(reply, `${p} cg`, `${p} cg @user <index> [Deck]`, `${p} cg @user 5`);
 
-  const targetJid = mentioned[0];
+  // 💡 FIX 2026-10-08: resolve the mention to the identity the economy DB
+  // knows. Raw mentions created orphaned cards the recipient could never see.
+  const targetJid = resolveMentionJid(mentioned[0]);
   const isFromDeck = args.some(a => a.toLowerCase() === 'deck');
   const indexStr = args.find(a => !isNaN(parseInt(a)));
   const index = parseInt(indexStr);
 
   if (isNaN(index)) return sendUsage(reply, `${p} cg`, `${p} cg @user <index> [Deck]`, `${p} cg @user 1`);
 
+  if (targetJid === senderJid) return reply('❌ You cannot gift a card to yourself.');
+
   let uc;
   if (isFromDeck) {
     uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: index });
   } else {
-    const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
+    // 💡 FIX 2026-10-08: also exclude inAuction - a committed card must never
+    // be gifted out from under its auction.
+    const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false }).sort({ createdAt: 1 });
     uc = owned[index - 1];
   }
 
   if (!uc) return reply(`❌ Card not found in your ${isFromDeck ? 'deck' : 'collection'}.`);
   if (uc.isLocked) return reply('❌ This card is locked!');
+  // 💡 FIX 2026-10-08 (gift-vs-market race): a deck card can simultaneously be
+  // listed for sale (.sc) or in an auction (.auction). Gifting it anyway let
+  // the later buyer/winner PAY and then yank the card away from the gift
+  // recipient - cards "randomly disappearing" right after arriving. Block
+  // committed cards like .sc/.auction already do.
+  if (uc.forSale) return reply('❌ This card is listed for sale! Unlist it first or pick another.');
+  if (uc.inAuction) return reply('❌ This card is in an active auction! Wait for it to end.');
 
+  // 💡 FIX 2026-10-08: full state reset on transfer. The old code only cleared
+  // inMainDeck/mainDeckSlot - if the card carried ANY other committed flag
+  // (data drift), the recipient inherited the sender's market/auction/deck
+  // state (ghost listings, phantom deck slots).
+  // Also pull the card out of any custom-deck array it still lingers in.
+  if (uc.inCustomDeck && uc.customDeckName) {
+    await CardDeck.updateMany({ userId: senderJid, name: uc.customDeckName }, { $pull: { cards: uc._id } }).catch(() => {});
+  }
   uc.userId = targetJid;
   uc.inMainDeck = false;
   uc.mainDeckSlot = null;
+  uc.inCustomDeck = false;
+  uc.customDeckName = null;
+  uc.customDeckSlot = null;
+  uc.forSale = false;
+  uc.salePrice = null;
+  uc.inAuction = false;
   await uc.save();
 
+  // 💡 FIX 2026-10-08: make sure the recipient actually HAS an economy
+  // account under the identity we just wrote - otherwise the gift sits in a
+  // userId with no user doc (43 such orphans in the audit) and is invisible
+  // until they happen to register under the exact same format.
+  try { economy.getOrCreateUser(targetJid); } catch (e) { /* non-fatal */ }
+
   const card = CARD_INDEX()[uc.cardId];
-  return reply(`🎁 *GIFT SENT!*\n\n@${economy.getDisplayName(senderJid)} gave *${card.cardName}* to @${economy.getDisplayName(targetJid)}!`, { mentions: [senderJid, targetJid] });
+  return reply(`🎁 *GIFT SENT!*\n\n@${economy.getDisplayName(senderJid)} gave *${card?.cardName || uc.cardId}* to @${economy.getDisplayName(targetJid)}!`, { mentions: [senderJid, targetJid] });
 }
 
 async function cmdCS(reply, args = [], perms = {}) {
@@ -3293,7 +3368,14 @@ async function cmdBuyCard(senderJid, reply, args = []) {
             // (inMainDeck:true), so the buyer inherited the seller's deck slot -
             // decks could exceed 12 cards with slot collisions. Clear deck state
             // like finalizeAuctions does.
-            const updated = await UserCard.findByIdAndUpdate(listing.userCardId, { userId: senderJid, forSale: false, salePrice: null, inAuction: false, inMainDeck: false, mainDeckSlot: null });
+            // 💡 FIX 2026-10-08 (vanishing cards): also free the card from the
+            // seller's custom-deck arrays and clear custom-deck/sale leftovers,
+            // so the buyer never inherits ghost deck state.
+            const prevCard = await UserCard.findById(listing.userCardId).select('userId inCustomDeck customDeckName').lean().catch(() => null);
+            if (prevCard?.inCustomDeck && prevCard.customDeckName) {
+              await CardDeck.updateMany({ userId: prevCard.userId, name: prevCard.customDeckName }, { $pull: { cards: listing.userCardId } }).catch(() => {});
+            }
+            const updated = await UserCard.findByIdAndUpdate(listing.userCardId, { userId: senderJid, forSale: false, salePrice: null, inAuction: false, inMainDeck: false, mainDeckSlot: null, inCustomDeck: false, customDeckName: null, customDeckSlot: null });
             if (!updated) {
               // Roll back the transaction - neither party should lose out.
               // 💡 FIX 2026-08-31: refund the seller the 90% they actually
@@ -3393,7 +3475,10 @@ async function cmdMerge(senderJid, reply, args = []) {
   const query = args.join('').trim();
   if (!query) return sendUsage(reply, `${p} merge`, `${p} merge <card_id>`, `${p} merge 3-04521`);
 
-  const owned = await UserCard.find({ userId: senderJid, cardId: query, inMainDeck: false, forSale: false, isLocked: false });
+  // 💡 FIX 2026-10-08 (vanishing cards): the filter missed inCustomDeck and
+  // inAuction, so "merging duplicates" silently DELETED custom-deck copies
+  // and cards committed to an auction. Both are now protected.
+  const owned = await UserCard.find({ userId: senderJid, cardId: query, inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false, isLocked: false });
   if (owned.length < 2) return reply(`❌ You need at least 2 unlocked copies of \`${query}\` in your collection to merge.`);
 
   try {
@@ -3408,7 +3493,9 @@ async function cmdMerge(senderJid, reply, args = []) {
 
 async function cmdMergeAll(senderJid, reply) {
   try {
-    const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, forSale: false, isLocked: false });
+    // 💡 FIX 2026-10-08 (vanishing cards): same missing guards as .merge -
+    // mass-merge used to eat custom-deck copies and auction-committed cards.
+    const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false, isLocked: false });
     const groups = {};
     owned.forEach(uc => {
       if (!groups[uc.cardId]) groups[uc.cardId] = [];
@@ -3457,7 +3544,7 @@ async function cmdCreateDeck(senderJid, reply, args = [], isMod = false, m = {})
   // Mod can create a deck for someone else by tagging them
   const mentioned = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
   if (isMod && mentioned) {
-      targetJid = mentioned;
+      targetJid = resolveMentionJid(mentioned); // 💡 FIX 2026-10-08: LID-resolve
       name = args.filter(a => !a.includes('@')).join(' ').trim();
   }
 
@@ -3623,7 +3710,7 @@ async function cmdDeleteDeck(senderJid, reply, args = [], isMod = false, m = {})
   // Mod can delete someone else's deck by tagging them
   const mentioned = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
   if (isMod && mentioned) {
-      targetJid = mentioned;
+      targetJid = resolveMentionJid(mentioned); // 💡 FIX 2026-10-08: LID-resolve
       name = args.filter(a => !a.includes('@')).join(' ').trim();
   }
 
@@ -3772,7 +3859,17 @@ async function settleAuction(a) {
     }
 
     // Transfer Card
-    await UserCard.findByIdAndUpdate(a.userCardId, { userId: a.highBidderId, inAuction: false, inMainDeck: false, mainDeckSlot: null });
+    // 💡 FIX 2026-10-08 (vanishing cards): the old transfer left inCustomDeck
+    // / forSale flags AND the card's _id inside the seller's custom-deck
+    // array. Result: ghost entries in the seller's deck pointing at a card
+    // they no longer own, and the buyer's card invisible inside stale deck
+    // state. Free the card from the seller's decks + clear ALL committed
+    // flags, exactly like buycard/gift do.
+    const prevCard = await UserCard.findById(a.userCardId).select('userId inCustomDeck customDeckName').lean().catch(() => null);
+    if (prevCard?.inCustomDeck && prevCard.customDeckName) {
+      await CardDeck.updateMany({ userId: prevCard.userId, name: prevCard.customDeckName }, { $pull: { cards: a.userCardId } }).catch(() => {});
+    }
+    await UserCard.findByIdAndUpdate(a.userCardId, { userId: a.highBidderId, inAuction: false, inMainDeck: false, mainDeckSlot: null, inCustomDeck: false, customDeckName: null, customDeckSlot: null, forSale: false, salePrice: null });
     a.status = 'sold';
   } else {
     // No bidders, return card
@@ -3863,7 +3960,9 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       if (!isOwner && !isMod) return reply('❌ Only the bot owner or a global mod can manage card moderators.'), true;
       const sub = args[0]?.toLowerCase();
       if (sub === 'add') {
-        const target = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || (args[1]?.includes('@') ? args[1] : null);
+        // 💡 FIX 2026-10-08: LID-resolve the mention so the roster key matches
+        // the identity handleCommand checks against (resolved senderJid).
+        const target = resolveMentionJid(m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || (args[1]?.includes('@') ? args[1] : null));
         if (!target) return reply(`❌ Tag someone to add as card mod.`), true;
         inst.modJids.add(target);
         await saveRoles();
@@ -3878,7 +3977,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         return reply(`✅ @${economy.getDisplayName(target)} is now a Card Moderator.`, { mentions: [target] }), true;
       }
       if (sub === 'del' || sub === 'remove') {
-        const target = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || (args[1]?.includes('@') ? args[1] : null);
+        const target = resolveMentionJid(m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || (args[1]?.includes('@') ? args[1] : null)); // 💡 FIX 2026-10-08: LID-resolve
         if (!target) return reply(`❌ Tag someone to remove.`), true;
         inst.modJids.delete(target);
         await saveRoles();
@@ -4690,7 +4789,7 @@ async function cmdTrc(senderJid, reply, args, m) {
   if (!m?.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length) {
     return reply(`❌ Usage: \`${p} trc @player <amount>\`\n💡 Mention the player and specify the token amount to remove.`);
   }
-  const targetJid = m.message.extendedTextMessage.contextInfo.mentionedJid[0];
+  const targetJid = resolveMentionJid(m.message.extendedTextMessage.contextInfo.mentionedJid[0]); // 💡 FIX 2026-10-08: LID-resolve
   const amount = parseInt(args.find(a => /^\d+$/.test(a)));
   if (isNaN(amount) || amount < 1) {
     return reply(`❌ Invalid amount. Usage: \`${p} trc @player <amount>\``);
