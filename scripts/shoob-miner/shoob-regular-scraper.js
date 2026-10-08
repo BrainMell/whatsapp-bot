@@ -137,13 +137,21 @@ async function fetchText(url) {
   throw new Error(`fetch failed after ${RETRIES} tries: ${url} (${lastErr.message})`);
 }
 
+const MEDIA_HEADERS = {
+  // api.shoob.gg/site/api/cardr 401s crawler UAs (browser UA + referer = 200);
+  // cdn.shoob.gg is UA-agnostic. Mimic the bot's own display fetch.
+  'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+  'Referer': 'https://shoob.gg/',
+  'Accept': 'image/*,video/*,*/*',
+};
+
 async function fetchBinary(url) {
   let lastErr;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const ac = new AbortController();
       const t = setTimeout(() => ac.abort(), 30000);
-      const res = await fetch(url, { headers: { 'User-Agent': OPTS.ua }, signal: ac.signal, redirect: 'follow' });
+      const res = await fetch(url, { headers: MEDIA_HEADERS, signal: ac.signal, redirect: 'follow' });
       clearTimeout(t);
       if (res.status === 429 || res.status === 503) { await sleep(1500 * attempt); continue; }
       if (res.status === 404 || res.status === 410) return null;
