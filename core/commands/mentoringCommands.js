@@ -8,7 +8,8 @@
 //
 //   .j mentoring               dashboard — miner health + what this box has
 //   .j mentoring new [n]       newest mined cards NOT yet live here (w/ previews)
-//   .j mentoring preview <q>   send one card's actual media (gif/webm/image)
+//   .j mentoring preview <q>   send one card's actual media (mp4/gif/image,
+//                              WhatsApp-safe ffmpeg pipeline)
 //   .j mentoring find <q>      search the mined event block (id/name/event/maker)
 //   .j mentoring media         media archive stats
 //   .j mentoring promote       OWNER ONLY — splice the mined event block into
@@ -23,7 +24,7 @@
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
-const { execSync } = require('child_process');
+const { execSync, execFile } = require('child_process');
 
 const System = require('../models/System');
 const cardSystem = require('../rpg/cardSystem');
@@ -86,23 +87,168 @@ function cardLine(c) {
   return `\`${c.id}\` *${c.cardName}* — T${c.tier} · ${c.eventName} · maker: ${c.creator || 'Anonymous'}`;
 }
 
-// same media path the spawn system uses (animated -> go service gif conversion)
-async function sendCardMedia(sock, chatId, card) {
-  const caption = `🃏 ${card.cardName} (${card.id})\n🎯 T${card.tier} · ${card.eventName}\n🎨 ${card.creator || 'Anonymous'}\n🔗 ${card.detailUrl || ''}`;
+// ── media pipeline (WhatsApp-safe) ──────────────────────────────────────────
+// Mellow bug report 2026-10-08: preview of a .webm event card (E-03004) came
+// through as a WHITE SCREEN. Root cause: the Go convert service (10s timeout)
+// fails on cold 1-3MB shoob videos, and the old fallback then sent the raw
+// WEBM bytes as an { image } message — WhatsApp can't render video bytes as
+// an image, hence the white box + "image not available". New pipeline:
+//   1. download once with browser headers, SNIFF magic bytes (never trust
+//      extensions — 35 mined cards have no extension and empty content-type)
+//   2. animated (webm/gif/mp4) -> local ffmpeg -> H.264 mp4 (yuv420p,
+//      faststart), cached per card id in /tmp/mentor-media
+//   3. webp -> Go convert (the proven regular-card path), fallback static
+//   4. png/jpg -> plain image message
+// It is now impossible to send video bytes as an image.
+const MEDIA_CACHE_DIR = '/tmp/mentor-media';
+const BROWSER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+  'Referer': 'https://shoob.gg/',
+  'Accept': 'image/*,video/*,*/*',
+};
+
+function sniffMime(buf) {
+  if (!buf || buf.length < 12) return null;
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e) return 'image/png';
+  if (buf[0] === 0xff && buf[1] === 0xd8) return 'image/jpeg';
+  const head = buf.slice(0, 16).toString('latin1');
+  if (head.startsWith('GIF87a') || head.startsWith('GIF89a')) return 'image/gif';
+  if (head.startsWith('RIFF') && head.slice(8, 12) === 'WEBP') return 'image/webp';
+  if (buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) return 'video/webm';
+  if (head.slice(4, 8) === 'ftyp') return 'video/mp4';
+  if (head[0] === '<') return 'text/html';
+  return null;
+}
+
+async function fetchMediaBuffer(url) {
+  const res = await axios.get(url, {
+    responseType: 'arraybuffer',
+    timeout: 25000,
+    maxRedirects: 5,
+    headers: BROWSER_HEADERS,
+  });
+  return Buffer.from(res.data);
+}
+
+function ffmpegToMp4(inPath, outPath) {
+  return new Promise((resolve, reject) => {
+    // -an: shoob cards carry no audio; libx264+yuv420p+faststart = plays everywhere
+    // -f mp4: ffmpeg infers the muxer from the file extension and our cache
+    // temp name ends in .tmp -> "Invalid argument" without the explicit format
+    execFile('ffmpeg',
+      ['-y', '-i', inPath, '-f', 'mp4', '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', outPath],
+      { timeout: 90000 },
+      (err) => {
+        if (err) return reject(err);
+        try {
+          if (!fs.statSync(outPath).size) return reject(new Error('ffmpeg produced an empty file'));
+          resolve();
+        } catch (e) { reject(e); }
+      });
+  });
+}
+
+function cachedMp4(card) {
   try {
-    if (card.imageUrl && ANIMATED_RE.test(card.imageUrl)) {
-      const gifBuffer = await goService.convertCardImage(card.imageUrl);
+    const p = path.join(MEDIA_CACHE_DIR, `${card.id}.mp4`);
+    if (fs.existsSync(p) && fs.statSync(p).size > 0) return fs.readFileSync(p);
+  } catch {}
+  return null;
+}
+
+async function animatedToMp4(card, buf) {
+  const hit = cachedMp4(card);
+  if (hit) return hit;
+  fs.mkdirSync(MEDIA_CACHE_DIR, { recursive: true });
+  const outPath = path.join(MEDIA_CACHE_DIR, `${card.id}.mp4`);
+  const inPath = path.join(MEDIA_CACHE_DIR, `${card.id}.src`);
+  const tmpOut = path.join(MEDIA_CACHE_DIR, `${card.id}.mp4.tmp`);
+  fs.writeFileSync(inPath, buf);
+  try {
+    await ffmpegToMp4(inPath, tmpOut);
+    fs.renameSync(tmpOut, outPath);
+  } finally {
+    try { fs.unlinkSync(inPath); } catch {}
+    try { fs.unlinkSync(tmpOut); } catch {}
+  }
+  return fs.readFileSync(outPath);
+}
+
+// caption mirrors cardSystem's buildCardDetailCaption (the "regular cards style")
+const TIER_STARS = { '1': '✦', '2': '✦✦', '3': '✦✦✦', '4': '✦✦✦✦', '5': '✦✦✦✦✦', '6': '❖❖❖❖❖❖', 'S': '👑', 'E': '🎁' };
+const TIER_LABEL = { '1': 'TIER  I', '2': 'TIER  II', '3': 'TIER  III', '4': 'TIER  IV', '5': 'TIER  V', '6': 'TIER  VI', 'S': 'TIER  S', 'E': 'EVENT' };
+
+function buildPreviewCaption(card) {
+  const tier = String(card.tier);
+  const stars = TIER_STARS[tier] || '✆';
+  const label = TIER_LABEL[tier] || `TIER ${tier}`;
+  // event-card convention (same as buildCardDetailCaption): animeName carries
+  // the event for shoob cards; show a separate Event line only when it differs
+  const series = card.animeName || 'Unknown';
+  const eventLine = (card.eventName && card.eventName !== card.animeName) ? `\n🎪  *Event:* ${card.eventName}` : '';
+  const desc = card.description ? `\n📝  *Description:* ${card.description}` : '';
+  const link = card.detailUrl ? `\n\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n🔗 ${card.detailUrl}` : '';
+  return (
+`╔═════════════════╗
+      🎴  *CARD DETAIL*
+╚═════════════════╝
+
+🏷️  *Name:* ${card.cardName} \`${card.id}\`
+📺  *Series:* ${series}
+${stars}  *Tier:* ${label}  ${stars}
+🎨  *Artist:* ${card.creator || 'Unknown'}${eventLine}${desc}
+
+📍  *Location:* 🗄️ Event Database${link}`
+  );
+}
+
+async function sendCardMedia(sock, chatId, card) {
+  const caption = buildPreviewCaption(card);
+  try {
+    if (!card.imageUrl) {
+      await sock.sendMessage(chatId, { text: `${caption}\n\n⚠️ no media url on file for this card.` });
+      return false;
+    }
+    // fast path: converted mp4 already cached for this card id — no network
+    const cached = cachedMp4(card);
+    if (cached) {
+      await sock.sendMessage(chatId, { video: cached, gifPlayback: true, mimetype: 'video/mp4', caption });
+      return true;
+    }
+    const buf = await fetchMediaBuffer(card.imageUrl);
+    const mime = sniffMime(buf);
+    if (!mime || mime === 'text/html') {
+      await sock.sendMessage(chatId, { text: `${caption}\n\n⚠️ shoob served non-media bytes (${mime || 'unknown'}${buf.length ? ', ' + buf.length + 'B' : ''}) — the CDN may be blocking.\n🔗 ${card.detailUrl || ''}` });
+      return false;
+    }
+    if (mime === 'video/webm' || mime === 'image/gif' || mime === 'video/mp4') {
+      const mp4 = await animatedToMp4(card, buf);
+      if (mp4.length <= 16 * 1024 * 1024) {
+        await sock.sendMessage(chatId, { video: mp4, gifPlayback: true, mimetype: 'video/mp4', caption });
+        return true;
+      }
+      if (mime === 'image/gif') { // too big for video -> static image still beats a white box
+        await sock.sendMessage(chatId, { image: buf, caption });
+        return true;
+      }
+      await sock.sendMessage(chatId, { text: `${caption}\n\n⚠️ media too large to send (${fmtBytes(mp4.length)}).\n🔗 ${card.detailUrl || ''}` });
+      return false;
+    }
+    if (mime === 'image/webp') {
+      const gifBuffer = await goService.convertCardImage(card.imageUrl); // proven regular-card path
       if (gifBuffer) {
         await sock.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
         return true;
       }
+      await sock.sendMessage(chatId, { image: buf, caption }); // static webp fallback — visible, never white
+      return true;
     }
-    if (!card.imageUrl) return false;
-    const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer', timeout: 20000, headers: { 'User-Agent': 'Mozilla/5.0' } });
-    await sock.sendMessage(chatId, { image: Buffer.from(res.data), caption });
+    await sock.sendMessage(chatId, { image: buf, caption }); // png / jpeg
     return true;
   } catch (e) {
-    await sock.sendMessage(chatId, { text: `${caption}\n\n⚠️ media fetch failed: ${e.message}` });
+    try {
+      await sock.sendMessage(chatId, { text: `${caption}\n\n⚠️ media fetch failed: ${e.message}\n🔗 ${card.detailUrl || ''}` });
+    } catch {}
     return false;
   }
 }
