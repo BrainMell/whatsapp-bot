@@ -16,6 +16,8 @@
  *  9. tagging via REPLY/QUOTE (owner report 2026-10-08):
      participant-resolved target, image-message quotes, mention
      precedence, reply-to-bot never targets the bot, rc via quote
+ * 10. received cards sort LAST in recipient's coll (fresh claim ts) +
+     already-owns hint line on duplicate gifts
  */
 let pass = 0, fail = 0;
 const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail++; console.log('  FAIL -', l); } };
@@ -195,6 +197,49 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
     ok(!/Tag the player whose card you want to delete/.test(t), 'rc got past target resolution via quote (no no-target usage error)');
 
     // cleanup round 9 rows
+    await UserCard.deleteMany({ userId: { $in: [SENDER, TARGET] }, cardId: { $in: pickIds } });
+  }
+
+  // ── round 10: received cards sort last + already-owns hint ─────────────
+  console.log('\n== round 10: gift arrival order + dup hint ==');
+  {
+    const runCGm2 = async (txt, m) => {
+      sent.length = 0;
+      await cardSystem.handleCommand({
+        lowerTxt: txt.toLowerCase(), txt,
+        senderJid: SENDER, chatId: CHAT_ID, m,
+        economy, isOwner: true, senderIsAdmin: false, isMod: false,
+      });
+      await new Promise(r => setTimeout(r, 1200));
+      return sent.find(s => s.text || s.caption);
+    };
+    const collOrder = async (uid) => {
+      const rows = await UserCard.find({ userId: uid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
+      return rows.filter(o => inst.CARD_INDEX[o.cardId]).map(o => o.cardId);
+    };
+
+    // TARGET keeps an OLD card (idB) so ordering is observable
+    await UserCard.create({ userId: TARGET, cardId: idB, copyNumber: 9, claimedAt: new Date() });
+    await UserCard.updateOne({ userId: TARGET, cardId: idB }, { $set: { createdAt: new Date(Date.now() - 60000) } });
+    // SENDER holds one fresh idA
+    await UserCard.create({ userId: SENDER, cardId: idA, copyNumber: 10, claimedAt: new Date() });
+
+    // 10a. first gift of idA: NO dup hint, and it lands LAST in TARGET's coll
+    let msg = await runCGm2('.j cg 1', { key: { remoteJid: 'x', fromMe: false }, message: { extendedTextMessage: { contextInfo: { participant: TARGET } } } });
+    let t = textOf(msg);
+    ok(/GIFT SENT/.test(t), 'gift delivered (round 10)');
+    ok(!/already owned/.test(t), 'no already-owns hint on first copy');
+    let order = await collOrder(TARGET);
+    ok(order[order.length - 1] === idA && order[0] === idB, `gifted card sorts LAST in recipient coll (got: ${order.join(',')})`);
+
+    // 10b. duplicate gift: hint line appears
+    await UserCard.create({ userId: SENDER, cardId: idA, copyNumber: 11, claimedAt: new Date() });
+    msg = await runCGm2('.j cg 1', { key: { remoteJid: 'x', fromMe: false }, message: { extendedTextMessage: { contextInfo: { participant: TARGET } } } });
+    t = textOf(msg);
+    console.log('--- dup gift ---\n' + t);
+    ok(/already owned this card/.test(t) && /copy #2/.test(t), 'duplicate gift shows already-owns hint (copy #2)');
+
+    // cleanup round 10 rows
     await UserCard.deleteMany({ userId: { $in: [SENDER, TARGET] }, cardId: { $in: pickIds } });
   }
 

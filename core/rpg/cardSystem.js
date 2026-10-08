@@ -2770,6 +2770,10 @@ async function cmdESummon(senderJid, reply) {
   }
 
   uc.userId = senderJid;
+  // 💡 FIX 2026-10-08: same as gifts - a freshly fetched card must sort LAST
+  // in the owner's collection, not mid-list under its old claim date.
+  uc.createdAt = new Date();
+  uc.claimedAt = new Date();
   uc.inCustomDeck = false;
   uc.customDeckName = null;
   uc.customDeckSlot = null;
@@ -2940,7 +2944,7 @@ async function cmdEShopDeckTrading(senderJid, reply, chatId, args = [], isMod = 
       if (deck) {
         deck.userId = senderJid;
         await deck.save();
-        await UserCard.updateMany({ _id: { $in: deck.cards } }, { userId: senderJid });
+        await UserCard.updateMany({ _id: { $in: deck.cards } }, { userId: senderJid, createdAt: new Date(), claimedAt: new Date() });
       }
 
       listing.status = 'sold';
@@ -3408,6 +3412,11 @@ async function cmdCG(senderJid, reply, args = [], m) {
   if (uc.forSale) return reply(`🛒  *CARD IS LISTED*\n\n📍 ⟢ _Unlist it first — or gift a different card_`);
   if (uc.inAuction) return reply(`🔨  *CARD IN AUCTION*\n\n📍 ⟢ _Wait for the auction to end before gifting_`);
 
+  // 💡 FIX 2026-10-08 (owner report): check if the recipient already owns this
+  // card BEFORE the transfer, so the confirmation can say so - gift order
+  // numbers gave no clue whether the card was new to them or a duplicate.
+  const recipientCopies = await UserCard.countDocuments({ userId: targetJid, cardId: uc.cardId });
+
   // 💡 FIX 2026-10-08: full state reset on transfer. The old code only cleared
   // inMainDeck/mainDeckSlot - if the card carried ANY other committed flag
   // (data drift), the recipient inherited the sender's market/auction/deck
@@ -3417,6 +3426,12 @@ async function cmdCG(senderJid, reply, args = [], m) {
     await CardDeck.updateMany({ userId: senderJid, name: uc.customDeckName }, { $pull: { cards: uc._id } }).catch(() => {});
   }
   uc.userId = targetJid;
+  // 💡 FIX 2026-10-08 (owner report): a received card kept its ORIGINAL claim
+  // date, so in the recipient's .coll it filed in mid-list by the SENDER's old
+  // claim order - impossible to tell what had just arrived. Refresh both
+  // timestamps so received cards sort last (newest) exactly like a fresh claim.
+  uc.createdAt = new Date();
+  uc.claimedAt = new Date();
   uc.inMainDeck = false;
   uc.mainDeckSlot = null;
   uc.inCustomDeck = false;
@@ -3434,7 +3449,8 @@ async function cmdCG(senderJid, reply, args = [], m) {
   try { economy.getOrCreateUser(targetJid); } catch (e) { /* non-fatal */ }
 
   const card = CARD_INDEX()[uc.cardId];
-  return reply(`🎁  *GIFT SENT!*\n\n👤 ⟢ *From:* _@${economy.getDisplayName(senderJid)}_\n🎯 ⟢ *To:* _@${economy.getDisplayName(targetJid)}_\n🃏 ⟢ *Card:* _${card?.cardName || uc.cardId}_\n🆔 ⟢ *ID:* \`${uc.cardId}\`\n📦 ⟢ *Source:* _${sourceLabel}_`, { mentions: [senderJid, targetJid] });
+  const dupLine = recipientCopies > 0 ? `\n💡 ⟢ _They already owned this card — this is copy #${recipientCopies + 1}_` : '';
+  return reply(`🎁  *GIFT SENT!*\n\n👤 ⟢ *From:* _@${economy.getDisplayName(senderJid)}_\n🎯 ⟢ *To:* _@${economy.getDisplayName(targetJid)}_\n🃏 ⟢ *Card:* _${card?.cardName || uc.cardId}_\n🆔 ⟢ *ID:* \`${uc.cardId}\`\n📦 ⟢ *Source:* _${sourceLabel}_${dupLine}`, { mentions: [senderJid, targetJid] });
 }
 
 async function cmdCS(reply, args = [], perms = {}) {
@@ -3569,7 +3585,7 @@ async function cmdBuyCard(senderJid, reply, args = []) {
             if (prevCard?.inCustomDeck && prevCard.customDeckName) {
               await CardDeck.updateMany({ userId: prevCard.userId, name: prevCard.customDeckName }, { $pull: { cards: listing.userCardId } }).catch(() => {});
             }
-            const updated = await UserCard.findByIdAndUpdate(listing.userCardId, { userId: senderJid, forSale: false, salePrice: null, inAuction: false, inMainDeck: false, mainDeckSlot: null, inCustomDeck: false, customDeckName: null, customDeckSlot: null });
+            const updated = await UserCard.findByIdAndUpdate(listing.userCardId, { userId: senderJid, forSale: false, salePrice: null, inAuction: false, inMainDeck: false, mainDeckSlot: null, inCustomDeck: false, customDeckName: null, customDeckSlot: null, createdAt: new Date(), claimedAt: new Date() });
             if (!updated) {
               // Roll back the transaction - neither party should lose out.
               // 💡 FIX 2026-08-31: refund the seller the 90% they actually
@@ -4063,7 +4079,7 @@ async function settleAuction(a) {
     if (prevCard?.inCustomDeck && prevCard.customDeckName) {
       await CardDeck.updateMany({ userId: prevCard.userId, name: prevCard.customDeckName }, { $pull: { cards: a.userCardId } }).catch(() => {});
     }
-    await UserCard.findByIdAndUpdate(a.userCardId, { userId: a.highBidderId, inAuction: false, inMainDeck: false, mainDeckSlot: null, inCustomDeck: false, customDeckName: null, customDeckSlot: null, forSale: false, salePrice: null });
+    await UserCard.findByIdAndUpdate(a.userCardId, { userId: a.highBidderId, inAuction: false, inMainDeck: false, mainDeckSlot: null, inCustomDeck: false, customDeckName: null, customDeckSlot: null, forSale: false, salePrice: null, createdAt: new Date(), claimedAt: new Date() });
     a.status = 'sold';
   } else {
     // No bidders, return card
