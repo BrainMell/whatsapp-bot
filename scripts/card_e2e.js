@@ -245,6 +245,40 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
     await CardSpawn.deleteMany({ botId: BOT_ID });
   }
 
+  // ── round 3: owner UI overhaul — themed status text (2026-10-08) ────────
+  console.log('\n== round 3: themed status text ==');
+  sent.length = 0;
+  await run('.j claim 2-00147');
+  await new Promise(r => setTimeout(r, 500));
+  {
+    const msg = findMsg(/CARD NOT FOUND/);
+    ok(!!msg, 'claim miss -> themed CARD NOT FOUND (owner spec)');
+    if (msg) {
+      const t = msg.text || msg.caption;
+      ok(/🆔⟢ \*ID:\* `2-00147`/.test(t), 'ID field in house style (verbatim owner spec)');
+      ok(/📍 ⟢ _No active card in this group_/.test(t), 'location line in house style');
+      console.log('--- claim miss ---\n' + t);
+    }
+  }
+  sent.length = 0;
+  await run('.j burn');
+  await new Promise(r => setTimeout(r, 500));
+  {
+    const msg = findMsg(/📖  \*USAGE\*/);
+    ok(!!msg, 'usage box rebuilt in house style (⌨️ ⟢ Command)');
+    if (msg) console.log('--- usage ---\n' + (msg.text || msg.caption));
+  }
+  sent.length = 0;
+  await run('.j coll');
+  await new Promise(r => setTimeout(r, 1200));
+  {
+    // OWNER may or may not own cards - both branches must be themed now
+    const empty = findMsg(/COLLECTION EMPTY/);
+    const list = findMsg(/\*Collection\*/);
+    ok(!!empty || !!list, 'coll reply present (themed empty state or list)');
+    if (empty) console.log('--- coll empty ---\n' + (empty.text || empty.caption));
+  }
+
   console.log(`\nE2E RESULT: ${pass} pass, ${fail} fail`);
   await mongoose.disconnect();
   process.exit(fail ? 1 : 0);

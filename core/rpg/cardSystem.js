@@ -1270,13 +1270,11 @@ function getDeckHash(cards) {
 }
 
 function sendUsage(reply, cmd, usage, example) {
-  let msg = `┏━━━━━━━━━━━━━━━┓\n`;
-  msg += `┃   📖 *USAGE*    ┃\n`;
-  msg += `┗━━━━━━━━━━━━━━━┛\n\n`;
-  msg += `*Command:* \`${cmd}\`\n`;
-  msg += `*Usage:* \`${usage}\`\n`;
-  msg += `*Example:* \`${example}\`\n\n`;
-  msg += `💡 _Make sure you are using the correct indices from your collection or deck._`;
+  let msg = `📖  *USAGE*\n\n`;
+  msg += `⌨️ ⟢ *Command:* \`${cmd}\`\n`;
+  msg += `🧭 ⟢ *Usage:* \`${usage}\`\n`;
+  msg += `📝 ⟢ *Example:* \`${example}\`\n\n`;
+  msg += `💡 ⟢ _Make sure you are using the correct indices from your collection or deck._`;
   return reply(msg);
 }
 
@@ -1299,7 +1297,7 @@ async function cmdClaim(args, senderJid, reply, chatId) {
 
   if (!spawn || Date.now() > spawn.expiresAt) {
     if (spawn) inst.activeSpawns.delete(`${chatId}_${spawn.card.id}`);
-    return reply(`❌ No active card with ID \`${cardIdInput}\` in this group.`);
+    return reply(`❌  *CARD NOT FOUND*\n\n🆔⟢ *ID:* \`${cardIdInput}\`\n📍 ⟢ _No active card in this group_`);
   }
 
   // 💡 FIX 2026-08-31 (claim race): remove the spawn from activeSpawns
@@ -1390,7 +1388,7 @@ async function cmdClaim(args, senderJid, reply, chatId) {
     if (!inst.activeSpawns.has(claimKey)) {
       inst.activeSpawns.set(claimKey, spawn);
     }
-    return reply('❌ Claim failed - the card is back up for grabs.');
+    return reply(`❌  *CLAIM FAILED*\n\n📍 ⟢ _The card slipped away — it is back up for grabs_`);
   }
 }
 
@@ -1470,7 +1468,7 @@ async function cmdCardsTier(senderJid, reply, chatId) {
   const inst = getInst();
   const p = P();
   const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
-  if (!owned.length) return reply('📭 Collection empty.');
+  if (!owned.length) return reply(`📭  *COLLECTION EMPTY*\n\n💡 ⟢ _Claim cards from group spawns to start collecting_`);
 
   // Group by Tier
   // 💡 FIX: Added 'E' (Event) tier. Previously event cards were silently
@@ -1700,7 +1698,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   console.log(`🃏 [cmdColl] UserCard.find returned ${owned.length} cards`);
   if (!owned.length) {
     console.log(`🃏 [cmdColl] collection empty, sending text reply`);
-    return reply('📭 Collection empty.');
+    return reply(`📭  *COLLECTION EMPTY*\n\n💡 ⟢ _Claim cards from group spawns to start collecting_`);
   }
 
   // 💡 FIX 2026-10-08: orphan-consistent listing. Rows whose cardId is no
@@ -1843,7 +1841,7 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
   }
 
   const deck = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
-  if (!deck.length) return reply('📭 Main Deck is empty.');
+  if (!deck.length) return reply(`📭  *MAIN DECK EMPTY*\n\n💡 ⟢ _Move cards in from your collection to build your deck_`);
 
   // Build requested template
   let msg = `🎴 *Main Deck* 🎴\n`;
@@ -1981,7 +1979,7 @@ async function cmdScc(senderJid, reply, chatId, args = []) {
     }
   });
 
-  if (!filtered.length) return reply(`📭 No cards found for anime: *${animeQuery}*`);
+  if (!filtered.length) return reply(`🔍  *NO RESULTS*\n\n🔎 ⟢ *Anime:* _${animeQuery}_\n📭 ⟢ _No cards found for this anime_`);
 
   // Sort by tier descending (S > 6 > 5 > 4 > 3 > 2 > 1 > E), then by coll number
   const tierOrder = { 'S': 100, '6': 90, '5': 80, '4': 70, '3': 60, '2': 50, '1': 40, 'E': 30 };
@@ -2035,7 +2033,7 @@ async function cmdMaker(senderJid, reply, chatId, args = []) {
     return card?.creator?.toLowerCase().includes(makerQuery);
   });
 
-  if (!filtered.length) return reply(`📭 No owned cards found by maker: *${makerQuery}*`);
+  if (!filtered.length) return reply(`🔍  *NO RESULTS*\n\n🔎 ⟢ *Maker:* _${makerQuery}_\n📭 ⟢ _No owned cards found for this maker_`);
 
   // 💡 FIX: Added 'E' (Event) tier. Previously this code CRASHED with
   // "TypeError: Cannot read property 'push' of undefined" if the user
@@ -2077,7 +2075,7 @@ async function cmdBurn(senderJid, reply, chatId, args = []) {
   // paid for nothing).
   const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false }).sort({ createdAt: 1 });
   const uc = owned[index - 1];
-  if (!uc) return reply('❌ Card not found in your collection.');
+  if (!uc) return reply(`❌  *CARD NOT FOUND*\n\n📍 ⟢ _Not in your collection_`);
 
   const card = CARD_INDEX()[uc.cardId];
   const p = P();
@@ -2114,15 +2112,15 @@ async function cmdAccept(senderJid, reply, chatId) {
     const stillMine = await UserCard.findOne({ _id: pending.ucId, userId: senderJid });
     if (!stillMine) {
       inst.pendingBurns.delete(key);
-      await reply('❌ That card is no longer in your collection - burn cancelled.');
+      await reply(`❌  *BURN CANCELLED*\n\n📍 ⟢ _That card is no longer in your collection_`);
       return true;
     }
     await UserCard.findByIdAndDelete(pending.ucId);
     inst.pendingBurns.delete(key);
-    await reply(`🔥 *ASHES TO ASHES...*\n\n*${pending.cardName}* has been deleted from your collection forever.`);
+    await reply(`🔥  *BURNED TO ASHES*\n\n🃏 ⟢ *Card:* _${pending.cardName}_\n📍 ⟢ _Deleted from your collection — forever_`);
     return true;
   } catch (err) {
-    await reply('❌ Failed to delete card.');
+    await reply(`❌  *BURN FAILED*\n\n📍 ⟢ _Could not delete the card — try again_`);
     return true;
   }
 }
@@ -2132,7 +2130,7 @@ async function cmdDecline(senderJid, reply, chatId) {
   const key = `${chatId}_${senderJid}`;
   if (inst.pendingBurns.has(key)) {
     inst.pendingBurns.delete(key);
-    await reply('✅ *Burn cancelled.* Your card is safe... for now.');
+    await reply(`✅  *BURN CANCELLED*\n\n🃏 ⟢ _Your card is safe... for now_`);
     return true;
   }
   return false;
@@ -2149,7 +2147,7 @@ async function cmdCltr(reply, chatId, args = []) {
     // 1. Find all cards in this series
     const seriesCards = ALL_CARDS().filter(c => c.animeName.toLowerCase().includes(query));
     if (seriesCards.length === 0) {
-      return reply(`🔍 No cards found for series: *"${query}"*`);
+      return reply(`🔍  *NO RESULTS*\n\n🔎 ⟢ *Series:* _"${query}"_\n📭 ⟢ _No cards found for this series_`);
     }
 
     const cardIds = seriesCards.map(c => c.id);
@@ -2163,7 +2161,7 @@ async function cmdCltr(reply, chatId, args = []) {
     ]);
 
     if (collectors.length === 0) {
-      return reply(`📭 No one owns any cards from *"${query}"* yet.`);
+      return reply(`📭  *NO COLLECTORS YET*\n\n🔎 ⟢ *Series:* _"${query}"_\n📍 ⟢ _No one owns cards from this series yet_`);
     }
 
     // 3. Format Message
@@ -2187,7 +2185,7 @@ async function cmdCltr(reply, chatId, args = []) {
     return reply(msg, { mentions });
   } catch (err) {
     console.error('[Cltr] Error:', err);
-    return reply('❌ Failed to fetch top collectors.');
+    return reply(`❌  *FETCH FAILED*\n\n📍 ⟢ _Could not load the top collectors — try again_`);
   }
 }
 
@@ -2204,7 +2202,7 @@ async function cmdEScc(reply, args = []) {
   if (!query) return sendUsage(reply, `${p} escc`, `${p} escc <series_name> [--page n]`, `${p} escc fullmetal`);
 
   const matches = ALL_CARDS().filter(c => c.animeName.toLowerCase().includes(query) && c.tier === 'S');
-  if (matches.length === 0) return reply(`🔍 No event (Tier S) cards found for series: *"${query}"*`);
+  if (matches.length === 0) return reply(`🔍  *NO RESULTS*\n\n🔎 ⟢ *Series:* _"${query}"_\n🎪 ⟢ _No event (Tier S) cards found_`);
 
   const pageSize = 15;
   const totalPages = Math.ceil(matches.length / pageSize);
@@ -2295,7 +2293,7 @@ async function cmdFc(senderJid, reply, args = []) {
   }
 
   if (matches.length === 0) {
-    return reply(`❌ Card *"${query}"* not found in your decks or collection.`);
+    return reply(`❌  *CARD NOT FOUND*\n\n🔎 ⟢ *Query:* _"${query}"_\n📍 ⟢ _Not in your decks or collection_`);
   }
 
   return reply(buildFcResultsMessage(query, matches));
@@ -2373,7 +2371,7 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
   // 💡 MOD-ONLY GATE: Event card search requires mod permissions.
   // Non-mods get a friendly message instead of the event search results.
   if (eventMode && !canViewEvents) {
-    return reply(`❌ Event card search is for moderators and above only.\n\nEvent cards are special cards that don't spawn naturally - they're managed by mods via the token event eShop.\n\nUse \`${p} eshop\` to buy event cards during active token events.`);
+    return reply(`❌  *MOD ONLY*\n\n🎪 ⟢ _Event cards don't spawn naturally — they're managed by mods via the token event eShop_\n\n💡 ⟢ _Use_ \`${p} eshop\` _to buy them during active token events_`);
   }
 
   // 💡 MOD-ONLY GATE: Looking up an E-tier card by exact ID also requires
@@ -2381,7 +2379,7 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
   if (query && !eventMode) {
     const exactCard = CARD_INDEX()[query];
     if (exactCard && isEventCard(exactCard) && !canViewEvents) {
-      return reply(`❌ Event card details are for moderators and above only.\n\nThis is an event-tier card. Use \`${p} eshop\` to buy event cards during active token events.`);
+      return reply(`❌  *MOD ONLY*\n\n🎪 ⟢ _This is an event-tier card — use_ \`${p} eshop\` _to buy event cards during active token events_`);
     }
   }
 
@@ -2418,7 +2416,7 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
 
     const results = await searchEventCards(query, animeFilter);
     if (results.length === 0) {
-      return reply(`❌ No event cards found${query ? ` matching "${query}"` : ''}${animeFilter ? ` in anime "${animeFilter}"` : ''}.\n\nEvent cards are special and don't spawn naturally. They're only available during token events via the eShop.`);
+      return reply(`🔍  *NO RESULTS*\n\n🎪 ⟢ _No event cards found${query ? ` matching _"${query}"_` : ''}${animeFilter ? ` in anime _"${animeFilter}"_` : ''}_\n\n💡 ⟢ _Event cards are special — they only drop via the eShop during token events_`);
     }
 
     let msg = `🎁 *EVENT CARD SEARCH* 🎁\n`;
@@ -2457,7 +2455,7 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
   // wasn't found in CARD_INDEX, explicitly flag it as missing from the DB
   // instead of falling through to a generic name search.
   if (/^\d+-\d+$/.test(query) || /^E-\d+$/i.test(query) || /^S-\d+$/i.test(query)) {
-    return reply(`⚠️ Card ID *"${query}"* is not in the database.\n\nThis card ID follows the standard format (tier-number) but no card with this ID exists in cards_data.json. It may have been removed or never existed.\n\n💡 Use \`${p} info <card name>\` to search by name instead.`);
+    return reply(`⚠️  *ID NOT IN DATABASE*\n\n🆔 ⟢ *ID:* _"${query}"_\n📍 ⟢ _Standard format, but no card with this ID exists_\n\n💡 ⟢ _Use_ \`${p} info <card name>\` _to search by name instead_`);
   }
 
   // Partial name search
@@ -2466,7 +2464,7 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
     (!animeFilter || c.animeName.toLowerCase().includes(animeFilter))
   );
 
-  if (matches.length === 0) return reply(`❌ Card not found: *"${query}"*${animeFilter ? ` in anime *"${animeFilter}"*` : ''}`);
+  if (matches.length === 0) return reply(`❌  *CARD NOT FOUND*\n\n🔎 ⟢ *Query:* _"${query}"_${animeFilter ? `\n📺 ⟢ *Anime:* _${animeFilter}_` : ''}`);
 
   if (matches.length === 1) {
     const card = matches[0];
@@ -2510,8 +2508,8 @@ async function cmdT2Deck(senderJid, reply, args = []) {
   const deck  = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
 
   const slotsAvailable = MAIN_DECK_SIZE - deck.length;
-  if (slotsAvailable <= 0) return reply(`❌ Your main deck is full (${MAIN_DECK_SIZE}/12)! Move a card to your collection first.`);
-  if (indices.length > slotsAvailable) return reply(`⚠️ Only *${slotsAvailable}* slot(s) left in your deck. You tried to add ${indices.length} cards - please reduce the number.`);
+  if (slotsAvailable <= 0) return reply(`❌  *DECK FULL*\n\n🔢 ⟢ _Your main deck is full (${MAIN_DECK_SIZE}/12)_\n📍 ⟢ _Move a card back to your collection first_`);
+  if (indices.length > slotsAvailable) return reply(`⚠️  *NOT ENOUGH SLOTS*\n\n🔢 ⟢ _Only ${slotsAvailable} slot(s) left — you tried to add ${indices.length}_\n\n💡 ⟢ _Reduce the number of cards and try again_`);
 
   // Find next available slots
   const usedSlots = new Set(deck.map(d => d.mainDeckSlot));
@@ -2560,11 +2558,11 @@ async function cmdT2CDeck(senderJid, reply, args = []) {
   // 💡 FIX 2026-10-08: exclude inAuction here as well (same desync as t2deck).
   const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false }).sort({ createdAt: 1 });
   const decks = await CardDeck.find({ userId: senderJid });
-  if (decks.length === 0) return reply('❌ You have no custom decks. Create one first!');
+  if (decks.length === 0) return reply(`❌  *NO CUSTOM DECKS*\n\n💡 ⟢ _Create one first with_ _.create deck <name>_`);
 
   let targetDeck = decks.find(d => d.name.toLowerCase() === deckNameQuery.toLowerCase());
   if (!targetDeck) targetDeck = decks.find(d => d.name.toLowerCase().includes(deckNameQuery.toLowerCase()));
-  if (!targetDeck) return reply(`❌ Custom deck *"${deckNameQuery}"* not found.`);
+  if (!targetDeck) return reply(`❌  *DECK NOT FOUND*\n\n🃏 ⟢ *Deck:* _"${deckNameQuery}"_`);
 
   const results = [];
   let nextSlot = targetDeck.cards.length;
@@ -2590,8 +2588,8 @@ async function cmdT2CDeck(senderJid, reply, args = []) {
 
 async function cmdESummon(senderJid, reply) {
   const eventDeck = await CardDeck.findOne({ name: { $regex: /^(event shop|event deck)$/i } });
-  if (!eventDeck) return reply('❌ The event shop is currently closed.');
-  if (eventDeck.cards.length === 0) return reply('❌ The event shop is currently empty! All cards have been claimed.');
+  if (!eventDeck) return reply(`🔒  *SHOP CLOSED*\n\n🎪 ⟢ _The event shop is currently closed_`);
+  if (eventDeck.cards.length === 0) return reply(`📭  *SHOP EMPTY*\n\n🎪 ⟢ _All event cards have been claimed!_`);
 
   const randomIndex = Math.floor(Math.random() * eventDeck.cards.length);
   const cardIdToPull = eventDeck.cards[randomIndex];
@@ -2600,7 +2598,7 @@ async function cmdESummon(senderJid, reply) {
   if (!uc) {
      eventDeck.cards.splice(randomIndex, 1);
      await eventDeck.save();
-     return reply('❌ Error fetching card. Please try again.');
+     return reply(`❌  *FETCH FAILED*\n\n📍 ⟢ _Could not fetch the card — please try again_`);
   }
 
   uc.userId = senderJid;
@@ -2647,7 +2645,7 @@ async function cmdEShop(senderJid, reply, chatId, args = [], isMod = false) {
   const filledSlots = inst.eshopDeck.filter(e => e !== null).length;
 
   if (filledSlots === 0) {
-    return reply(`📭 *EVENT SHOP*\n\nThe eShop is currently empty. The owner needs to add event cards first.\n\nOwner: Use \`${p} t2edeck add <slot> <cardId> <price>\` to add cards.`);
+    return reply(`📭  *EVENT SHOP EMPTY*\n\n🎪 ⟢ _The eShop has no cards right now_\n\n⌨️ ⟢ *Owner:* _add cards with_ _${p} t2edeck add <slot> <cardId> <price>_`);
   }
 
   // Generate and send the 4x4 grid image
@@ -2693,8 +2691,8 @@ async function cmdEShopDeckTrading(senderJid, reply, chatId, args = [], isMod = 
     }
 
     const deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${escapeRegex(deckName)}$`, 'i') } });
-    if (!deck) return reply(`❌ Custom deck *"${deckName}"* not found.`);
-    if (deck.cards.length === 0) return reply('❌ You cannot sell an empty deck!');
+    if (!deck) return reply(`❌  *DECK NOT FOUND*\n\n🃏 ⟢ *Deck:* _"${deckName}"_`);
+    if (deck.cards.length === 0) return reply(`❌  *EMPTY DECK*\n\n🃏 ⟢ _You cannot sell an empty deck!_`);
 
     try {
       await CardMarket.create({
@@ -2707,8 +2705,8 @@ async function cmdEShopDeckTrading(senderJid, reply, chatId, args = [], isMod = 
         status: 'pending_approval',
         approvalStatus: 'pending'
       });
-      return reply(`📦 *LISTING SUBMITTED!*\n\nYour deck *"${deck.name}"* has been submitted for approval.\n💰 Requested Price: ${ZENI()}${price.toLocaleString()}\n💡 A Card Moderator will review it soon.`);
-    } catch (err) { return reply('❌ Failed to submit listing.'); }
+      return reply(`📦  *LISTING SUBMITTED!*\n\n🃏 ⟢ *Deck:* _"${deck.name}"_\n💰 ⟢ *Price:* ${ZENI()}${price.toLocaleString()}\n⏳ ⟢ _A Card Moderator will review it soon_`);
+    } catch (err) { return reply(`❌  *LISTING FAILED*\n\n📍 ⟢ _Could not submit the listing — try again_`); }
   }
 
   if (sub === 'approve' || sub === 'reject') {
@@ -2718,26 +2716,26 @@ async function cmdEShopDeckTrading(senderJid, reply, chatId, args = [], isMod = 
 
     try {
       const listing = await CardMarket.findById(id);
-      if (!listing || !listing.isDeck) return reply('❌ Listing not found.');
+      if (!listing || !listing.isDeck) return reply(`❌  *LISTING NOT FOUND*\n\n🔢 ⟢ *Listing:* _#${id}_`);
 
       if (sub === 'approve') {
         listing.status = 'active';
         listing.approvalStatus = 'approved';
         await listing.save();
-        return reply(`✅ Approved deck listing *#${id}*. It is now live in the Deck Shop!`);
+        return reply(`✅  *LISTING APPROVED!*\n\n🔢 ⟢ *Listing:* _#${id}_\n🛒 ⟢ _Now live in the Deck Shop!_`);
       } else {
         listing.status = 'cancelled';
         listing.approvalStatus = 'rejected';
         await listing.save();
-        return reply(`❌ Rejected deck listing *#${id}*.`);
+        return reply(`❌  *LISTING REJECTED*\n\n🔢 ⟢ *Listing:* _#${id}_`);
       }
-    } catch (err) { return reply('❌ Operation failed.'); }
+    } catch (err) { return reply(`❌  *ACTION FAILED*\n\n📍 ⟢ _Something went wrong — try again_`); }
   }
 
   if (sub === 'pending') {
     if (!isMod) return reply('❌ Mod only.');
     const pending = await CardMarket.find({ status: 'pending_approval', isDeck: true });
-    if (pending.length === 0) return reply('📭 No pending deck approvals.');
+    if (pending.length === 0) return reply(`📭  *ALL CLEAR*\n\n🛒 ⟢ _No pending deck approvals_`);
 
     let msg = `📋 *PENDING DECK APPROVALS*\n\n`;
     pending.forEach(l => {
@@ -2757,12 +2755,12 @@ async function cmdEShopDeckTrading(senderJid, reply, chatId, args = [], isMod = 
 
     const active = await CardMarket.find({ status: 'active', isDeck: true }).sort({ listedAt: -1 });
     const listing = active[index - 1];
-    if (!listing) return reply('❌ Invalid listing number.');
+    if (!listing) return reply(`❌  *LISTING NOT FOUND*\n\n🔢 ⟢ *Pick:* _#${index}_`);
 
-    if (listing.sellerId === senderJid) return reply('❌ You cannot buy your own deck.');
+    if (listing.sellerId === senderJid) return reply(`❌  *NOT ALLOWED*\n\n🛒 ⟢ _You cannot buy your own deck_`);
 
     const balance = economy.getBalance(senderJid);
-    if (balance < listing.price) return reply(`❌ Insufficient funds! You need ${ZENI()}${listing.price.toLocaleString()}.`);
+    if (balance < listing.price) return reply(`❌  *INSUFFICIENT FUNDS*\n\n💰 ⟢ *Needed:* ${ZENI()}${listing.price.toLocaleString()}\n📉 ⟢ _Your balance is too low_`);
 
     try {
       // Transfer Funds
@@ -2781,13 +2779,13 @@ async function cmdEShopDeckTrading(senderJid, reply, chatId, args = [], isMod = 
       listing.completedAt = new Date();
       await listing.save();
 
-      return reply(`🎉 *CONGRATULATIONS!*\n\nYou bought the deck *"${listing.deckName}"* for ${ZENI()}${listing.price.toLocaleString()}!`);
-    } catch (err) { return reply('❌ Purchase failed.'); }
+      return reply(`🎉  *CONGRATULATIONS!*\n\n🃏 ⟢ *Deck:* _"${listing.deckName}"_\n💰 ⟢ *Paid:* ${ZENI()}${listing.price.toLocaleString()}\n\n📦 ⟢ _The deck is now yours!_`);
+    } catch (err) { return reply(`❌  *PURCHASE FAILED*\n\n📍 ⟢ _Could not complete the purchase — try again_`); }
   }
 
   // Default: List Deck Shop
   const active = await CardMarket.find({ status: 'active', isDeck: true }).sort({ listedAt: -1 });
-  if (active.length === 0) return reply('📭 The Deck Shop is currently empty. Sell your decks with `.eshop deck sell <name> <price>`.');
+  if (active.length === 0) return reply(`📭  *DECK SHOP EMPTY*\n\n🛒 ⟢ _No decks for sale right now_\n\n💡 ⟢ _Sell yours with_ _.eshop deck sell <name> <price>_`);
 
   let msg = `🏬 *CARD DECK SHOP* 🏬\n\n`;
   active.forEach((l, i) => {
@@ -2806,7 +2804,7 @@ async function cmdT2Coll(senderJid, reply, args = []) {
   // 💡 P3 (2026-08-16): "all" - empty entire main deck back to collection.
   if (args[0]?.toLowerCase() === 'all') {
     const allDecked = await UserCard.find({ userId: senderJid, inMainDeck: true });
-    if (!allDecked.length) return reply('❌ Your main deck is already empty.');
+    if (!allDecked.length) return reply(`❌  *DECK ALREADY EMPTY*\n\n📭 ⟢ _Your main deck has no cards to move_`);
     let count = 0;
     for (const uc of allDecked) {
       uc.inMainDeck = false;
@@ -2814,7 +2812,7 @@ async function cmdT2Coll(senderJid, reply, args = []) {
       await uc.save();
       count++;
     }
-    return reply(`📦 *${count}* card(s) moved from your main deck back to collection!\n\n💡 Your deck is now empty.`);
+    return reply(`📦  *CARDS RETURNED!*\n\n🔢 ⟢ *Moved:* _${count} card(s) back to collection_\n📭 ⟢ _Your main deck is now empty_`);
   }
 
   // Parse all slot numbers (skip non-numbers), deduplicate
@@ -2869,11 +2867,11 @@ async function cmdT2CColl(senderJid, reply, args = []) {
   }
 
   const decks = await CardDeck.find({ userId: senderJid });
-  if (decks.length === 0) return reply('❌ You have no custom decks.');
+  if (decks.length === 0) return reply(`❌  *NO CUSTOM DECKS*\n\n💡 ⟢ _Create one first with_ _.create deck <name>_`);
 
   let targetDeck = decks.find(d => d.name.toLowerCase() === deckNameQuery.toLowerCase());
   if (!targetDeck) targetDeck = decks.find(d => d.name.toLowerCase().includes(deckNameQuery.toLowerCase()));
-  if (!targetDeck) return reply(`❌ Custom deck *"${deckNameQuery}"* not found.`);
+  if (!targetDeck) return reply(`❌  *DECK NOT FOUND*\n\n🃏 ⟢ *Deck:* _"${deckNameQuery}"_`);
 
   // Sort indices descending so we splice from the end first - this keeps
   // the remaining slot numbers stable as we remove cards.
@@ -2973,7 +2971,7 @@ async function cmdRc(senderJid, reply, args = [], isCardMod = false, m = {}) {
   }
 
   if (!targetUc) {
-    return reply(`❌ No card matching "${cardNameQuery}"${tierFilter ? ` (Tier ${tierFilter})` : ''} found for @${economy.getDisplayName(targetJid)}.`, { mentions: [targetJid] }), true;
+    return reply(`❌  *CARD NOT FOUND*\n\n🔎 ⟢ *Query:* _"${cardNameQuery}"_${tierFilter ? `\n🏆 ⟢ *Tier:* _${tierFilter}_` : ''}\n👤 ⟢ *Owner:* _@${economy.getDisplayName(targetJid)}_`, { mentions: [targetJid] }), true;
   }
 
   const card = CARD_INDEX()[targetUc.cardId];
@@ -2990,7 +2988,7 @@ async function cmdRc(senderJid, reply, args = [], isCardMod = false, m = {}) {
 
   await UserCard.findByIdAndDelete(targetUc._id);
 
-  return reply(`🗑️ *REGULATION REMOVAL*\n\n👤 Target: @${economy.getDisplayName(targetJid)}\n🃏 Card: *${card.cardName}* (Tier ${card.tier})\n📍 Was in: ${location}\n\n_Card has been permanently deleted._`, { mentions: [targetJid] }), true;
+  return reply(`🗑️  *REGULATION REMOVAL*\n\n👤 ⟢ *Target:* _@${economy.getDisplayName(targetJid)}_\n🃏 ⟢ *Card:* _${card.cardName}_ (Tier ${card.tier})\n📍 ⟢ *Was in:* _${location}_\n\n⚠️ ⟢ _Card has been permanently deleted._`, { mentions: [targetJid] }), true;
 }
 
 // 💡 FEATURE 9: Erc - same as Rc but for event cards. Searches by event
@@ -3021,7 +3019,7 @@ async function cmdErc(senderJid, reply, args = [], isCardMod = false, m = {}) {
   }
 
   if (!targetUc) {
-    return reply(`❌ No event card matching "${query}" found for @${economy.getDisplayName(targetJid)}.`, { mentions: [targetJid] }), true;
+    return reply(`❌  *CARD NOT FOUND*\n\n🔎 ⟢ *Query:* _"${query}"_\n👤 ⟢ *Owner:* _@${economy.getDisplayName(targetJid)}_`, { mentions: [targetJid] }), true;
   }
 
   const card = CARD_INDEX()[targetUc.cardId];
@@ -3037,7 +3035,7 @@ async function cmdErc(senderJid, reply, args = [], isCardMod = false, m = {}) {
 
   await UserCard.findByIdAndDelete(targetUc._id);
 
-  return reply(`🗑️ *EVENT REGULATION REMOVAL*\n\n👤 Target: @${economy.getDisplayName(targetJid)}\n🃏 Event Card: *${card.cardName}* (${targetUc.cardId})\n\n_Event card has been permanently deleted._`, { mentions: [targetJid] }), true;
+  return reply(`🗑️  *EVENT REGULATION REMOVAL*\n\n👤 ⟢ *Target:* _@${economy.getDisplayName(targetJid)}_\n🃏 ⟢ *Card:* _${card.cardName}_ (${targetUc.cardId})\n\n⚠️ ⟢ _Event card has been permanently deleted._`, { mentions: [targetJid] }), true;
 }
 
 // 💡 FEATURE 10: Tcoll - TRUE collection. Shows ALL cards the user owns,
@@ -3051,7 +3049,7 @@ async function cmdTcoll(senderJid, reply, chatId, args = []) {
 
   // Fetch ALL cards regardless of deck/market status
   const allOwned = await UserCard.find({ userId: senderJid }).sort({ createdAt: 1 });
-  if (!allOwned.length) return reply('📭 True collection empty.');
+  if (!allOwned.length) return reply(`📭  *TRUE COLLECTION EMPTY*\n\n💡 ⟢ _Every card you own, across all decks_`);
 
   if (tierMode) {
     // Tier-grouped view
@@ -3125,7 +3123,7 @@ async function cmdEcoll(senderJid, reply, chatId, args = []) {
     }
   });
 
-  if (!eventCards.length) return reply('📭 No event cards in your collection.');
+  if (!eventCards.length) return reply(`📭  *NO EVENT CARDS*\n\n🎪 ⟢ _You don't own any event cards yet_`);
 
   // Group by tier
   const tiers = { 'S': [], '6': [], '5': [], '4': [], '3': [], '2': [], '1': [], 'E': [] };
@@ -3177,7 +3175,7 @@ async function cmdSwapCard(senderJid, reply, args = []) {
   const cardA = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: a });
   const cardB = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: b });
 
-  if (!cardA && !cardB) return reply('❌ Both slots are empty.');
+  if (!cardA && !cardB) return reply(`❌  *EMPTY SLOTS*\n\n🔢 ⟢ _Both deck slots are empty — nothing to swap_`);
 
   if (cardA) cardA.mainDeckSlot = b;
   if (cardB) cardB.mainDeckSlot = a;
@@ -3185,7 +3183,7 @@ async function cmdSwapCard(senderJid, reply, args = []) {
   if (cardA) await cardA.save();
   if (cardB) await cardB.save();
 
-  return reply(`✅ Swapped Slot #${a} and Slot #${b}.`);
+  return reply(`✅  *SLOTS SWAPPED!*\n\n🔢 ⟢ *Swapped:* _Slot #${a} ↔ Slot #${b}_`);
 }
 
 async function cmdCG(senderJid, reply, args = [], m) {
@@ -3203,7 +3201,7 @@ async function cmdCG(senderJid, reply, args = [], m) {
 
   if (isNaN(index)) return sendUsage(reply, `${p} cg`, `${p} cg @user <index> [Deck]`, `${p} cg @user 1`);
 
-  if (targetJid === senderJid) return reply('❌ You cannot gift a card to yourself.');
+  if (targetJid === senderJid) return reply(`❌  *SELF GIFT*\n\n📍 ⟢ _You cannot gift a card to yourself_`);
 
   let uc;
   if (isFromDeck) {
@@ -3215,15 +3213,15 @@ async function cmdCG(senderJid, reply, args = [], m) {
     uc = owned[index - 1];
   }
 
-  if (!uc) return reply(`❌ Card not found in your ${isFromDeck ? 'deck' : 'collection'}.`);
-  if (uc.isLocked) return reply('❌ This card is locked!');
+  if (!uc) return reply(`❌  *CARD NOT FOUND*\n\n📍 ⟢ _Not in your ${isFromDeck ? 'deck' : 'collection'}_`);
+  if (uc.isLocked) return reply(`🔒  *CARD LOCKED*\n\n📍 ⟢ _Unlock this card before gifting it_`);
   // 💡 FIX 2026-10-08 (gift-vs-market race): a deck card can simultaneously be
   // listed for sale (.sc) or in an auction (.auction). Gifting it anyway let
   // the later buyer/winner PAY and then yank the card away from the gift
   // recipient - cards "randomly disappearing" right after arriving. Block
   // committed cards like .sc/.auction already do.
-  if (uc.forSale) return reply('❌ This card is listed for sale! Unlist it first or pick another.');
-  if (uc.inAuction) return reply('❌ This card is in an active auction! Wait for it to end.');
+  if (uc.forSale) return reply(`🛒  *CARD IS LISTED*\n\n📍 ⟢ _Unlist it first — or gift a different card_`);
+  if (uc.inAuction) return reply(`🔨  *CARD IN AUCTION*\n\n📍 ⟢ _Wait for the auction to end before gifting_`);
 
   // 💡 FIX 2026-10-08: full state reset on transfer. The old code only cleared
   // inMainDeck/mainDeckSlot - if the card carried ANY other committed flag
@@ -3251,7 +3249,7 @@ async function cmdCG(senderJid, reply, args = [], m) {
   try { economy.getOrCreateUser(targetJid); } catch (e) { /* non-fatal */ }
 
   const card = CARD_INDEX()[uc.cardId];
-  return reply(`🎁 *GIFT SENT!*\n\n@${economy.getDisplayName(senderJid)} gave *${card?.cardName || uc.cardId}* to @${economy.getDisplayName(targetJid)}!`, { mentions: [senderJid, targetJid] });
+  return reply(`🎁  *GIFT SENT!*\n\n👤 ⟢ *From:* _@${economy.getDisplayName(senderJid)}_\n🎯 ⟢ *To:* _@${economy.getDisplayName(targetJid)}_\n🃏 ⟢ *Card:* _${card?.cardName || uc.cardId}_`, { mentions: [senderJid, targetJid] });
 }
 
 async function cmdCS(reply, args = [], perms = {}) {
@@ -3336,12 +3334,12 @@ async function cmdBuyCard(senderJid, reply, args = []) {
     if (!isNaN(index)) {
         const active = await CardMarket.find({ status: 'active', type: 'sale' }).sort({ listedAt: -1 });
         const listing = active[index - 1];
-        if (!listing) return reply('❌ Invalid listing number.');
+        if (!listing) return reply(`❌  *LISTING NOT FOUND*\n\n🔢 ⟢ *Pick:* _#${index}_`);
 
-        if (listing.sellerId === senderJid) return reply('❌ You cannot buy your own card.');
+        if (listing.sellerId === senderJid) return reply(`❌  *NOT ALLOWED*\n\n🛒 ⟢ _You cannot buy your own card_`);
 
         const balance = economy.getBalance(senderJid);
-        if (balance < listing.price) return reply(`❌ Insufficient funds! You need ${ZENI()}${listing.price.toLocaleString()}.`);
+        if (balance < listing.price) return reply(`❌  *INSUFFICIENT FUNDS*\n\n💰 ⟢ *Needed:* ${ZENI()}${listing.price.toLocaleString()}\n📉 ⟢ _Your balance is too low_`);
 
         try {
             // 💡 FIX 2026-08-31 (double-sell race): ATOMICALLY claim the listing
@@ -3354,7 +3352,7 @@ async function cmdBuyCard(senderJid, reply, args = []) {
               { new: true }
             );
             if (!claimed) {
-              return reply('❌ This listing was just bought by someone else.');
+              return reply(`❌  *SOLD OUT*\n\n🛒 ⟢ _This listing was just bought by someone else_`);
             }
 
             // 💡 P4 Item 6: 10% tax on card sales - buyer pays full price,
@@ -3364,14 +3362,14 @@ async function cmdBuyCard(senderJid, reply, args = []) {
             const paid = economy.removeMoney(senderJid, listing.price, `Bought card ${listing.cardId}`);
             if (!paid) {
               await CardMarket.updateOne({ _id: listing._id }, { $set: { status: 'active' } });
-              return reply('❌ Purchase failed: wallet balance changed during transaction.');
+              return reply(`❌  *PURCHASE FAILED*\n\n📍 ⟢ _Your wallet balance changed mid-transaction_`);
             }
             const credited = economy.addMoney(listing.sellerId, sellerGets, `Sold card ${listing.cardId} (after 10% tax)`);
             if (!credited) {
               // Roll back the buyer's payment
               economy.addMoney(senderJid, listing.price, `Card purchase rollback (seller credit failed)`);
               await CardMarket.updateOne({ _id: listing._id }, { $set: { status: 'active' } });
-              return reply('❌ Purchase failed: seller could not be credited. Try again later.');
+              return reply(`❌  *PURCHASE FAILED*\n\n📍 ⟢ _Seller could not be credited — try again later_`);
             }
 
             // Transfer card ownership
@@ -3394,25 +3392,25 @@ async function cmdBuyCard(senderJid, reply, args = []) {
               economy.addMoney(senderJid, listing.price, `Card purchase rollback (card not found)`);
               economy.removeMoney(listing.sellerId, sellerGets, `Card sale rollback (card not found)`);
               await CardMarket.updateOne({ _id: listing._id }, { $set: { status: 'active' } });
-              return reply('❌ Purchase failed: card listing was stale. Try the market listing again.');
+              return reply(`❌  *PURCHASE FAILED*\n\n📍 ⟢ _That listing just went stale — try the market listing again_`);
             }
 
             listing.status = 'sold';
             listing.completedAt = new Date();
             await listing.save();
             const card = CARD_INDEX()[listing.cardId];
-            return reply(`✅ *PURCHASE COMPLETE!*\n\nYou bought *${card?.cardName || listing.cardId}* for ${ZENI()}${listing.price.toLocaleString()}.`);
+            return reply(`✅  *PURCHASE COMPLETE!*\n\n🃏 ⟢ *Card:* _${card?.cardName || listing.cardId}_\n💰 ⟢ *Paid:* ${ZENI()}${listing.price.toLocaleString()}\n\n📦 ⟢ _Added to your collection_`);
         } catch (err) {
             console.error('[CardMarket] Purchase error:', err);
             // Best-effort un-claim so the listing isn't stuck in 'pending'
             try { await CardMarket.updateOne({ _id: listing._id, status: 'pending' }, { $set: { status: 'active' } }); } catch (_) {}
-            return reply('❌ Purchase failed: ' + (err.message || 'unknown error'));
+            return reply(`❌  *PURCHASE FAILED*\n\n📍 ⟢ _${err.message || 'unknown error'}_`);
         }
     }
   }
 
   const active = await CardMarket.find({ status: 'active', type: 'sale' }).sort({ listedAt: -1 }).limit(10);
-  if (active.length === 0) return reply('📭 No cards currently listed for sale.');
+  if (active.length === 0) return reply(`📭  *MARKET EMPTY*\n\n🛒 ⟢ _No cards currently listed for sale_`);
 
   let msg = `🛒 *CARD MARKET | SALE LISTINGS*\n\n`;
   active.forEach((l, i) => {
@@ -3434,13 +3432,13 @@ async function cmdSC(senderJid, reply, args = []) {
   if (isNaN(slot) || isNaN(price) || price < 1) return sendUsage(reply, `${p} sc`, `${p} sc <deck_slot> <price>`, `${p} sc 1 5000`);
 
   const uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: slot });
-  if (!uc) return reply(`❌ No card in deck slot #${slot}.`);
-  if (uc.isLocked) return reply('❌ This card is locked! Unlock it first.');
+  if (!uc) return reply(`❌  *EMPTY SLOT*\n\n🔢 ⟢ _No card in deck slot #${slot}_`);
+  if (uc.isLocked) return reply(`🔒  *CARD LOCKED*\n\n📍 ⟢ _Unlock it first_`);
   // 💡 FIX 2026-08-31 (double-commit): a card already listed for sale or in an
   // auction could be listed AGAIN - two buyers, one card, feeding the
   // double-sell race. Block listing a committed card.
-  if (uc.forSale) return reply('❌ This card is already listed for sale! Unlist it first.');
-  if (uc.inAuction) return reply('❌ This card is in an active auction! Wait for it to end.');
+  if (uc.forSale) return reply(`🛒  *ALREADY LISTED*\n\n📍 ⟢ _This card is up for sale — unlist it first_`);
+  if (uc.inAuction) return reply(`🔨  *CARD IN AUCTION*\n\n📍 ⟢ _Wait for the auction to end_`);
 
   try {
     uc.forSale = true;
@@ -3455,8 +3453,8 @@ async function cmdSC(senderJid, reply, args = []) {
         status: 'active'
     });
     const card = CARD_INDEX()[uc.cardId];
-    return reply(`🛒 *LISTED FOR SALE!*\n\n*${card.cardName}* has been listed for ${ZENI()}${price.toLocaleString()}.`);
-  } catch (err) { return reply('❌ Listing failed.'); }
+    return reply(`🛒  *LISTED FOR SALE!*\n\n🃏 ⟢ *Card:* _${card.cardName}_\n💰 ⟢ *Price:* ${ZENI()}${price.toLocaleString()}\n\n👁️ ⟢ _Waiting for a buyer_`);
+  } catch (err) { return reply(`❌  *LISTING FAILED*\n\n📍 ⟢ _Could not list the card — try again_`); }
 }
 
 async function cmdLock(senderJid, reply, args = []) {
@@ -3472,13 +3470,13 @@ async function cmdLock(senderJid, reply, args = []) {
     uc = await UserCard.findOne({ userId: senderJid, cardId: input });
   }
 
-  if (!uc) return reply('❌ Card not found.');
+  if (!uc) return reply(`❌  *CARD NOT FOUND*\n\n📍 ⟢ _Not found in your collection_`);
 
   uc.isLocked = !uc.isLocked;
   await uc.save();
 
   const card = CARD_INDEX()[uc.cardId];
-  return reply(`🔒 *${card.cardName}* is now ${uc.isLocked ? 'LOCKED' : 'UNLOCKED'}.`);
+  return reply(`${uc.isLocked ? '🔒' : '🔓'}  *CARD ${uc.isLocked ? 'LOCKED' : 'UNLOCKED'}*\n\n🃏 ⟢ *Card:* _${card.cardName}_\n${uc.isLocked ? '🛡️ ⟢ _Protected from trades, gifts & sales_' : '⚡ ⟢ _Free to trade, gift & sell_'}`);
 }
 
 async function cmdMerge(senderJid, reply, args = []) {
@@ -3490,7 +3488,7 @@ async function cmdMerge(senderJid, reply, args = []) {
   // inAuction, so "merging duplicates" silently DELETED custom-deck copies
   // and cards committed to an auction. Both are now protected.
   const owned = await UserCard.find({ userId: senderJid, cardId: query, inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false, isLocked: false });
-  if (owned.length < 2) return reply(`❌ You need at least 2 unlocked copies of \`${query}\` in your collection to merge.`);
+  if (owned.length < 2) return reply(`🧬  *NOT ENOUGH COPIES*\n\n🔢 ⟢ _You need at least 2 unlocked copies of_ _${query}_`);
 
   try {
     const toDelete = owned[0];
@@ -3498,8 +3496,8 @@ async function cmdMerge(senderJid, reply, args = []) {
     const reward = 500;
     economy.addMoney(senderJid, reward);
     const card = CARD_INDEX()[query];
-    return reply(`🧬 *MERGE SUCCESSFUL!*\n\nMerged 2 copies of *${card?.cardName || query}*.\n💰 Reward: ${ZENI()}${reward.toLocaleString()} Zeni`);
-  } catch (err) { return reply('❌ Merge failed.'); }
+    return reply(`🧬  *MERGE SUCCESSFUL!*\n\n🃏 ⟢ *Card:* _${card?.cardName || query}_\n🔢 ⟢ *Merged:* _2 copies → 1_\n\n💰 ⟢ *Reward:* ${ZENI()}${reward.toLocaleString()} Zeni`);
+  } catch (err) { return reply(`❌  *MERGE FAILED*\n\n📍 ⟢ _Could not merge the cards — try again_`); }
 }
 
 async function cmdMergeAll(senderJid, reply) {
@@ -3528,16 +3526,16 @@ async function cmdMergeAll(senderJid, reply) {
       }
     }
 
-    if (totalMerged === 0) return reply('✨ No duplicates found to merge.');
+    if (totalMerged === 0) return reply(`✨  *NOTHING TO MERGE*\n\n📭 ⟢ _No duplicates found in your collection_`);
 
     economy.addMoney(senderJid, totalReward);
-    return reply(`🧬 *MASS MERGE COMPLETE!*\n\nMerged ${totalMerged} duplicate cards.\n💰 Total Reward: ${ZENI()}${totalReward.toLocaleString()} Zeni`);
-  } catch (err) { return reply('❌ Mass merge failed.'); }
+    return reply(`🧬  *MASS MERGE COMPLETE!*\n\n🔢 ⟢ *Merged:* _${totalMerged} duplicate cards_\n\n💰 ⟢ *Total Reward:* ${ZENI()}${totalReward.toLocaleString()} Zeni`);
+  } catch (err) { return reply(`❌  *MASS MERGE FAILED*\n\n📍 ⟢ _Something broke mid-merge — check your collection_`); }
 }
 
 async function cmdListDecks(senderJid, reply) {
   const decks = await CardDeck.find({ userId: senderJid });
-  if (decks.length === 0) return reply('📭 You have no custom decks. Create one with `.create deck <name>`.');
+  if (decks.length === 0) return reply(`📭  *NO CUSTOM DECKS*\n\n💡 ⟢ _Create one with_ _.create deck <name>_`);
 
   let msg = `📂 *YOUR CUSTOM DECKS*\n\n`;
   decks.forEach((d, i) => {
@@ -3563,10 +3561,10 @@ async function cmdCreateDeck(senderJid, reply, args = [], isMod = false, m = {})
 
   try {
     await CardDeck.create({ userId: targetJid, name: name, cards: [] });
-    return reply(`✅ Created custom deck *"${name}"*${targetJid !== senderJid ? ` for @${economy.getDisplayName(targetJid)}` : ''}.`, { mentions: [targetJid] });
+    return reply(`✅  *DECK CREATED!*\n\n🃏 ⟢ *Name:* _"${name}"_${targetJid !== senderJid ? `\n👤 ⟢ *For:* _@${economy.getDisplayName(targetJid)}_` : ''}`, { mentions: [targetJid] });
   } catch (err) {
-    if (err.code === 11000) return reply(`❌ A deck with the name *"${name}"* already exists for this user.`);
-    return reply('❌ Failed to create deck.');
+    if (err.code === 11000) return reply(`❌  *NAME TAKEN*\n\n🃏 ⟢ *Deck:* _"${name}"_\n📍 ⟢ _Already exists for this user_`);
+    return reply(`❌  *CREATE FAILED*\n\n📍 ⟢ _Could not create the deck — try again_`);
   }
 }
 
@@ -3585,10 +3583,10 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
     if (!deckName || isNaN(slot)) return reply(`❌ Usage: \`${p} cdeck <name> remove <slot>\``);
     
     const deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${escapeRegex(deckName)}$`, 'i') } });
-    if (!deck) return reply(`❌ Custom deck *"${deckName}"* not found.`);
+    if (!deck) return reply(`❌  *DECK NOT FOUND*\n\n🃏 ⟢ *Deck:* _"${deckName}"_`);
     
     const ucId = deck.cards[slot - 1];
-    if (!ucId) return reply(`❌ No card in slot #${slot} of deck *"${deck.name}"*.`);
+    if (!ucId) return reply(`❌  *EMPTY SLOT*\n\n🃏 ⟢ *Deck:* _"${deck.name}"_\n🔢 ⟢ *Slot:* _#${slot}_`);
     
     const uc = await UserCard.findById(ucId);
     if (uc) {
@@ -3601,7 +3599,7 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
     deck.cards.splice(slot - 1, 1);
     await deck.save();
     
-    return reply(`✅ Removed card from slot #${slot} of deck *"${deck.name}"*. It has been returned to your collection.`);
+    return reply(`✅  *CARD REMOVED!*\n\n🃏 ⟢ *Deck:* _"${deck.name}"_\n🔢 ⟢ *Slot:* _#${slot}_\n\n📦 ⟢ _Returned to your collection_`);
   }
 
   // Try to parse slot if last arg is a number
@@ -3632,11 +3630,11 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
     deck = allDecks.find(d => d.name.toLowerCase() === name.toLowerCase())
        || allDecks.find(d => d.name.toLowerCase().includes(name.toLowerCase()));
   }
-  if (!deck) return reply(`❌ Custom deck *"${name}"* not found.`);
+  if (!deck) return reply(`❌  *DECK NOT FOUND*\n\n🃏 ⟢ *Deck:* _"${name}"_`);
 
   if (slot !== null) {
     const ucId = deck.cards[slot - 1];
-    if (!ucId) return reply(`❌ No card in slot #${slot} of deck *"${name}"*.`);
+    if (!ucId) return reply(`❌  *EMPTY SLOT*\n\n🃏 ⟢ *Deck:* _"${name}"_\n🔢 ⟢ *Slot:* _#${slot}_`);
     
     const uc = await UserCard.findById(ucId);
     if (uc) {
@@ -3657,7 +3655,7 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
     }
   }
 
-  if (deck.cards.length === 0) return reply(`📭 Custom deck *"${name}"* is empty.`);
+  if (deck.cards.length === 0) return reply(`📭  *DECK EMPTY*\n\n🃏 ⟢ *Deck:* _"${name}"_\n📍 ⟢ _No cards in this deck yet_`);
 
   let msg = `📂 *CUSTOM DECK | ${deck.name.toUpperCase()}*\n\n`;
   const ownedCards = [];
@@ -3702,14 +3700,14 @@ async function cmdRenameDeck(senderJid, reply, args = []) {
 
   try {
     const deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${escapeRegex(oldName)}$`, 'i') } });
-    if (!deck) return reply(`❌ Deck *"${oldName}"* not found.`);
+    if (!deck) return reply(`❌  *DECK NOT FOUND*\n\n🃏 ⟢ *Deck:* _"${oldName}"_`);
 
     deck.name = newName;
     await deck.save();
-    return reply(`✅ Deck renamed to *"${newName}"*.`);
+    return reply(`✅  *DECK RENAMED!*\n\n🃏 ⟢ *Was:* _"${oldName}"_\n🃏 ⟢ *Now:* _"${newName}"_`);
   } catch (err) {
-    if (err.code === 11000) return reply(`❌ A deck with the name *"${newName}"* already exists.`);
-    return reply('❌ Rename failed.');
+    if (err.code === 11000) return reply(`❌  *NAME TAKEN*\n\n🃏 ⟢ *Deck:* _"${newName}"_\n📍 ⟢ _A deck with this name already exists_`);
+    return reply(`❌  *RENAME FAILED*\n\n📍 ⟢ _Could not rename the deck — try again_`);
   }
 }
 
@@ -3728,13 +3726,13 @@ async function cmdDeleteDeck(senderJid, reply, args = [], isMod = false, m = {})
   if (!name) return sendUsage(reply, `${p} delete deck`, `${p} delete deck <name> [@user]`, `${p} delete deck MyDeck`);
 
   const deck = await CardDeck.findOne({ userId: targetJid, name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') } });
-  if (!deck) return reply(`❌ Deck *"${name}"* not found ${targetJid !== senderJid ? `for @${economy.getDisplayName(targetJid)}` : ''}.`, { mentions: [targetJid] });
+  if (!deck) return reply(`❌  *DECK NOT FOUND*\n\n🃏 ⟢ *Deck:* _"${name}"_${targetJid !== senderJid ? `\n👤 ⟢ *Owner:* _@${economy.getDisplayName(targetJid)}_` : ''}`, { mentions: [targetJid] });
 
   try {
     await UserCard.updateMany({ _id: { $in: deck.cards } }, { inCustomDeck: false, customDeckName: null, customDeckSlot: null });
     await CardDeck.findByIdAndDelete(deck._id);
-    return reply(`🗑️ *DECK DELETED!*\n\nCustom deck *"${name}"* ${targetJid !== senderJid ? `belonging to @${economy.getDisplayName(targetJid)}` : ''} has been removed. Cards returned to collection.`, { mentions: [targetJid] });
-  } catch (err) { return reply('❌ Deletion failed.'); }
+    return reply(`🗑️  *DECK DELETED!*\n\n🃏 ⟢ *Deck:* _"${name}"_${targetJid !== senderJid ? `\n👤 ⟢ *Owner:* _@${economy.getDisplayName(targetJid)}_` : ''}\n\n📦 ⟢ _Cards returned to collection_`, { mentions: [targetJid] });
+  } catch (err) { return reply(`❌  *DELETE FAILED*\n\n📍 ⟢ _Could not delete the deck — try again_`); }
 }
 
 function parseDuration(str) {
@@ -3766,12 +3764,12 @@ async function cmdAuction(senderJid, reply, args = []) {
   }
 
   const uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: slot });
-  if (!uc) return reply(`❌ No card in deck slot #${slot}.`);
-  if (uc.isLocked) return reply('❌ This card is locked!');
+  if (!uc) return reply(`❌  *EMPTY SLOT*\n\n🔢 ⟢ _No card in deck slot #${slot}_`);
+  if (uc.isLocked) return reply(`🔒  *CARD LOCKED*\n\n📍 ⟢ _Unlock it first_`);
   // 💡 FIX 2026-08-31 (double-commit): block auctioning a card that's already
   // listed for sale or in another auction - same class of bug as sc.
-  if (uc.forSale) return reply('❌ This card is listed for sale! Unlist it first.');
-  if (uc.inAuction) return reply('❌ This card is already in an active auction!');
+  if (uc.forSale) return reply(`🛒  *ALREADY LISTED*\n\n📍 ⟢ _Unlist it before auctioning_`);
+  if (uc.inAuction) return reply(`🔨  *ALREADY IN AUCTION*\n\n📍 ⟢ _This card is on the block right now!_`);
 
   try {
     uc.inAuction = true;
@@ -3788,14 +3786,14 @@ async function cmdAuction(senderJid, reply, args = []) {
       auctionEndsAt: endsAt
     });
     const card = CARD_INDEX()[uc.cardId];
-    return reply(`🔨 *AUCTION STARTED!*\n\n*${card?.cardName || uc.cardId}* is up for bidding!\n💰 Min Bid: ${ZENI()}${minBid.toLocaleString()}\n⏳ Ends at: ${endsAt.toLocaleString()}`);
-  } catch (err) { return reply('❌ Failed to start auction.'); }
+    return reply(`🔨  *AUCTION STARTED!*\n\n🃏 ⟢ *Card:* _${card?.cardName || uc.cardId}_\n💰 ⟢ *Min Bid:* ${ZENI()}${minBid.toLocaleString()}\n⏳ ⟢ *Ends at:* _${endsAt.toLocaleString()}_\n\n🎙️ ⟢ _Place your bids!_`);
+  } catch (err) { return reply(`❌  *AUCTION FAILED*\n\n📍 ⟢ _Could not start the auction — try again_`); }
 }
 
 async function cmdBid(senderJid, reply, args = []) {
   const p = P();
   const active = await CardMarket.find({ status: 'active', type: 'auction' }).sort({ auctionEndsAt: 1 });
-  if (active.length === 0) return reply('📭 No active auctions.');
+  if (active.length === 0) return reply(`📭  *NO ACTIVE AUCTIONS*\n\n🔨 ⟢ _Nothing on the block right now_`);
 
   if (args.length < 2) {
     let msg = `🔨 *LIVE CARD AUCTIONS*\n\n`;
@@ -3815,20 +3813,20 @@ async function cmdBid(senderJid, reply, args = []) {
   if (isNaN(index) || isNaN(amount)) return sendUsage(reply, `${p} bid`, `${p} bid <number> <amount>`, `${p} bid 1 5000`);
 
   const auction = active[index - 1];
-  if (!auction) return reply('❌ Invalid auction number.');
-  if (auction.sellerId === senderJid) return reply('❌ You cannot bid on your own auction.');
-  if (amount <= auction.currentBid) return reply(`❌ Bid must be higher than ${ZENI()}${auction.currentBid.toLocaleString()}.`);
+  if (!auction) return reply(`❌  *AUCTION NOT FOUND*\n\n🔢 ⟢ *Pick:* _#${index}_`);
+  if (auction.sellerId === senderJid) return reply(`❌  *NOT ALLOWED*\n\n🔨 ⟢ _You cannot bid on your own auction_`);
+  if (amount <= auction.currentBid) return reply(`❌  *BID TOO LOW*\n\n💰 ⟢ *Current Bid:* ${ZENI()}${auction.currentBid.toLocaleString()}\n📈 ⟢ _Go higher to take the lead_`);
 
   const balance = economy.getBalance(senderJid);
-  if (balance < amount) return reply(`❌ You don't have ${ZENI()}${amount.toLocaleString()}.`);
+  if (balance < amount) return reply(`❌  *INSUFFICIENT FUNDS*\n\n💰 ⟢ *Needed:* ${ZENI()}${amount.toLocaleString()}\n📉 ⟢ _Your wallet can't cover that bid_`);
 
   try {
     auction.currentBid = amount;
     auction.highBidderId = senderJid;
     auction.bids.push({ bidderId: senderJid, amount, placedAt: new Date() });
     await auction.save();
-    return reply(`✅ *BID PLACED!*\n\nYou are now the high bidder for *${CARD_INDEX()[auction.cardId]?.cardName}* at ${ZENI()}${amount.toLocaleString()}.`);
-  } catch (err) { return reply('❌ Failed to place bid.'); }
+    return reply(`✅  *BID PLACED!*\n\n🃏 ⟢ *Card:* _${CARD_INDEX()[auction.cardId]?.cardName}_\n💰 ⟢ *Your Bid:* ${ZENI()}${amount.toLocaleString()}\n\n👑 ⟢ _You are now the high bidder_`);
+  } catch (err) { return reply(`❌  *BID FAILED*\n\n📍 ⟢ _Could not place the bid — try again_`); }
 }
 
 // 💡 FIX 2026-08-31: shared auction settlement - moves money AND card, with
