@@ -144,6 +144,7 @@ async function dashboard(sock, chatId) {
   L.push(`   mined-but-not-live-here: *${pending.length}*`);
   L.push('');
   L.push(`   \`${p} mentoring new\` — preview fresh finds`);
+  L.push(`   \`${p} mentoring ids [event] [n]\` — newest card ids`);
   L.push(`   \`${p} mentoring find <q>\` — search the mine`);
   L.push(`   \`${p} mentoring promote\` — push mine → live (owner)`);
   L.push(`   \`${p} mentoring media\` — archive stats`);
@@ -225,6 +226,43 @@ async function mediaStats(sock, chatId) {
     `   purpose: survives shoob.gg seasonal rotation / CDN cleanup`,
     '',
     `   cards in mined block: *${status.lastResult ? status.lastResult.scraped : '?'}* live + *${status.lastResult ? status.lastResult.keptRemoved : '?'}* tombstoned`];
+  await sock.sendMessage(chatId, { text: L.join('\n') });
+}
+
+// ── subcommand: ids — browse the newest mined card ids ──────────────────────
+async function listIds(sock, chatId, q) {
+  const eventblock = await getSystemValue('shoob_miner_eventblock');
+  const pool = (eventblock && Array.isArray(eventblock.cards) && eventblock.cards.length) ? eventblock.cards : liveEventCards();
+  const byNewest = [...pool].sort((a, b) =>
+    (parseInt(String(b.id).slice(2), 10) || 0) - (parseInt(String(a.id).slice(2), 10) || 0));
+  const lo = byNewest.length ? byNewest[byNewest.length - 1].id : '?';
+  const hi = byNewest.length ? byNewest[0].id : '?';
+
+  // args: [words...|event] [count] — a bare number = how many, words = filter
+  const words = String(q || '').toLowerCase().split(/\s+/).filter(Boolean);
+  let n = 20;
+  const numTok = words.find(w => /^\d+$/.test(w));
+  if (numTok) { n = Math.min(parseInt(numTok, 10), 50); words.splice(words.indexOf(numTok), 1); }
+
+  const filtered = words.length
+    ? byNewest.filter(c => {
+        const hay = `${c.cardName || ''} ${c.eventName || ''} ${c.creator || ''} ${c.id || ''}`.toLowerCase();
+        return words.every(w => hay.includes(w));
+      })
+    : byNewest;
+  if (!filtered.length) {
+    await sock.sendMessage(chatId, { text: `🔍 No ids match *${q}* in ${pool.length} mined cards.\nTry \`${botConfig.getPrefix()}mentoring ids halloween\`, an event, a maker, or a bare count like \`${botConfig.getPrefix()}mentoring ids 50\`.` });
+    return;
+  }
+
+  const shown = filtered.slice(0, n);
+  const scope = words.length ? ` matching *${words.join(' ')}*` : '';
+  const L = [`🆔 *newest card ids*${scope} — ${filtered.length} match${filtered.length === 1 ? '' : 'es'} (newest first, showing ${shown.length})`,
+    `   mined block: ${pool.length} cards · id range \`${lo}\` → \`${hi}\``, ''];
+  L.push(...shown.map(cardLine));
+  if (filtered.length > shown.length) {
+    L.push('', `_…${filtered.length - shown.length} more — \`${botConfig.getPrefix()}mentoring ids ${words.join(' ')} ${Math.min(filtered.length, 50)}\` (max 50 per view)_`);
+  }
   await sock.sendMessage(chatId, { text: L.join('\n') });
 }
 
@@ -314,6 +352,7 @@ async function handleMentoring(sock, chatId, argStr, opts = {}) {
   try {
     if (!sub || sub === 'status' || sub === '-info') return await dashboard(sock, chatId);
     if (sub === 'new' || sub === 'fresh') return await showNew(sock, chatId, q);
+    if (sub === 'ids' || sub === 'list') return await listIds(sock, chatId, q);
     if (sub === 'find' || sub === 'search') return await find(sock, chatId, q);
     if (sub === 'preview' || sub === 'show') return await preview(sock, chatId, q);
     if (sub === 'media') return await mediaStats(sock, chatId);
@@ -324,7 +363,7 @@ async function handleMentoring(sock, chatId, argStr, opts = {}) {
       }
       return await promote(sock, chatId);
     }
-    await sock.sendMessage(chatId, { text: `🧑‍🏫 Unknown subcommand *${sub}*.\n\n\`${p} mentoring\` — dashboard\n\`${p} mentoring new [n]\` — fresh finds (w/ previews)\n\`${p} mentoring find <q>\` — search the mine\n\`${p} mentoring preview <q>\` — one card\u2019s media\n\`${p} mentoring media\` — archive stats\n\`${p} mentoring promote\` — mine → live (owner)` });
+    await sock.sendMessage(chatId, { text: `🧑‍🏫 Unknown subcommand *${sub}*.\n\n\`${p} mentoring\` — dashboard\n\`${p} mentoring new [n]\` — fresh finds (w/ previews)\n\`${p} mentoring ids [event|maker] [n]\` — newest card ids\n\`${p} mentoring find <q>\` — search the mine\n\`${p} mentoring preview <q>\` — one card\u2019s media\n\`${p} mentoring media\` — archive stats\n\`${p} mentoring promote\` — mine → live (owner)` });
   } catch (e) {
     console.error('[Mentoring] handler error:', e);
     await sock.sendMessage(chatId, { text: `❌ mentoring error: ${e.message}` });
