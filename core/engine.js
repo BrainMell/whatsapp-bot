@@ -1009,6 +1009,9 @@ const repairCommands = require('./commands/repairCommands');
 const skillCommands = require('./commands/skillCommands');
 const classCommands = require('./commands/classCommands');
 const opsCheckCommands = require('./commands/opsCheckCommands');
+// 🧑‍🏫 shoob mining dashboard (2026-10-08): window into the Box 1 card miner
+// via the shared Mongo System keys — read-only, promote is owner-only.
+const mentoringCommands = require('./commands/mentoringCommands');
 // 💡 Summoner System (Phase 4) - see download/SUMMONER_SYSTEM_DESIGN.md
 const summonCommands = require('./commands/summonCommands');
 const pvpSystem = require('./rpg/pvpSystem');
@@ -10065,6 +10068,18 @@ _💡 Reply with another number from your search list!_`.trim();
                       // `.j opscheck -info` can render command documentation
                       // (incl. the group's live quizmod values).
                       await opsCheckCommands.handleOpsCheck(sock, chatId, cmdArgs.slice(1).join(" "));
+                      return;
+                    }
+
+                    // 🧑‍🏫 .j mentoring — shoob.gg mining dashboard (2026-10-08)
+                    // Mods+ can watch the mine; only the owner can promote.
+                    if (primaryCmd === "mentoring" || primaryCmd === "mentor") {
+                      const isModUserMent = isOwner || isGlobalMod(senderJid) || isRpgMod(senderJid) || isCardsMod(senderJid) || overrideUsers.has(senderJid);
+                      if (!isModUserMent) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ This command is for moderators and above only.' });
+                        return;
+                      }
+                      await mentoringCommands.handleMentoring(sock, chatId, cmdArgs.slice(1).join(" "), { isOwner });
                       return;
                     }
 

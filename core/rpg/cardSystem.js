@@ -4758,4 +4758,7 @@ module.exports = {
   setSpawnInterval, getSpawnIntervalInfo, loadSpawnInterval, restartSpawnTimer,
   // 💡 Tier spawn configuration exports
   setTierConfig, loadTierConfig, resetTierConfig, formatTierConfig,
+  // 💡 mentoring promote (2026-10-08): hot-reload the DB after an atomic
+  // file swap — same function `.g reloadcards` uses, now callable from code.
+  loadCardsDB,
 };
