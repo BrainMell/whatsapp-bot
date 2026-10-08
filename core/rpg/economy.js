@@ -969,6 +969,26 @@ function removeTokens(userId, amount) {
   scheduleSave(userId);
   return true;
 }
+
+// 💡 2026-10-08 requirements doc §1/§11: GLOBAL event-token wipe.
+// economy users live in an in-memory Map with scheduled saves - a bare
+// User.updateMany would be silently resurrected by the next pending save
+// of any user holding tokens. This resets BOTH layers atomically:
+//   1) every in-memory cached user → eventTokens = 0
+//   2) every DB document → eventTokens = 0 (covers users not in cache)
+// Returns the number of in-memory users that actually held tokens.
+async function resetAllTokens() {
+  let memoryHolders = 0;
+  for (const user of economyData.values()) {
+    if (!user || typeof user !== 'object') continue;
+    if ((user.eventTokens || 0) !== 0) {
+      user.eventTokens = 0;
+      memoryHolders++;
+    }
+  }
+  await User.updateMany({ eventTokens: { $ne: 0 } }, { $set: { eventTokens: 0 } });
+  return memoryHolders;
+}
 //========================================
 
 //==================this part handles the inventory and items==================
@@ -2713,6 +2733,7 @@ module.exports = {
   getTokens,
   addTokens,
   removeTokens,
+  resetAllTokens,
 
   // Rank Mission System
   getRankMissionStatus,

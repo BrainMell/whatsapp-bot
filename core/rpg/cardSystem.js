@@ -97,8 +97,15 @@ function getInst() {
       // 💡 TOKEN EVENT STATE
       tokenEventActive: false,     // toggled via .g event start/stop
       tokenEventStart: 0,          // timestamp event started
-      // 💡 SPAWN COUNTER - every 3rd spawn grants a guaranteed event token
-      // (when the event is active). Replaces the old 50%-chance-per-claim RNG.
+      // 💡 TOKEN RATES (2026-10-08 requirements doc):
+      //   - Spawn-based: 1 token per 10 cards spawned, PER GROUP (independent
+      //     counters - activity in one group never affects another group's
+      //     progression). Replaces the old every-3rd-spawn + 25% RNG mechanic.
+      //   - Command-based (hidden): 1 token per 15 eligible player commands
+      //     (claim excluded). Per-user counter.
+      tokenSpawnCounters: new Map(),  // groupJid -> spawn count since last token
+      tokenCmdCounters:   new Map(),  // userJid  -> eligible command count since last token
+      // Legacy global counter (no longer used - kept so old snapshots don't crash)
       spawnCounter: 0,
       // 💡 TIER SPAWN CONFIG - per-bot configurable tier weights + chances.
       // Loaded from DB on init, overridden via .g spawnset tier.
@@ -113,9 +120,11 @@ function getInst() {
       // in [min, max] for each fire instead of a fixed interval.
       // Backward compat: spawnIntervalMs is still read in places that expect a single value;
       // it's kept at the max value for legacy code paths.
-      spawnIntervalMinMs: 20 * 60 * 1000,
-      spawnIntervalMaxMs: 20 * 60 * 1000,
-      spawnIntervalMs: 20 * 60 * 1000,  // legacy alias = max (for old code that reads this)
+      // 💡 2026-10-08: default 30 min = 2 cards/hour (beta spawn-rate reset,
+      // requirements doc §6). Persisted DB value overrides this on load.
+      spawnIntervalMinMs: 30 * 60 * 1000,
+      spawnIntervalMaxMs: 30 * 60 * 1000,
+      spawnIntervalMs: 30 * 60 * 1000,  // legacy alias = max (for old code that reads this)
       // 💡 ESHOP DECK STATE
       eshopDeck: new Array(16).fill(null), // 16 slots, each null or { cardId, cardName, imageUrl, tier, anime, price }
       // 💡 PERF 2026-07-27: per-user render mode cache (hybrid vs static).
@@ -269,14 +278,14 @@ function rebuildSpawnTimersForInstance(inst) {
     return;
   }
 
-  const minMs = inst.spawnIntervalMinMs || (20 * 60 * 1000);
+  const minMs = inst.spawnIntervalMinMs || (30 * 60 * 1000);
   const maxMs = inst.spawnIntervalMaxMs || minMs;
 
   // 💡 FIX 2026-08-31 (stale closure): read the interval LIVE from `inst` at
   // every fire instead of closing over minMs/maxMs - a running timer chain
   // now adopts new spawnset values on the next fire.
   const randomDelay = () => {
-    const lo = inst.spawnIntervalMinMs || (20 * 60 * 1000);
+    const lo = inst.spawnIntervalMinMs || (30 * 60 * 1000);
     const hi = inst.spawnIntervalMaxMs || lo;
     if (lo === hi) return lo;
     return Math.floor(Math.random() * (hi - lo + 1)) + lo;
@@ -427,15 +436,15 @@ async function setSpawnInterval(minutesOrRange, callerJid, isOwner, maxMinutes) 
   const intervalLabel = minMins === maxMins ? `${minMins} minutes` : `${minMins}-${maxMins} minutes (random)`;
   const avgMinutes = (minMins + maxMins) / 2;
   const spawnsPerHour = Math.round(60 / avgMinutes * 10) / 10;
-  const tokensPerHour = Math.round(spawnsPerHour / 3 * 10) / 10;
+  // 💡 2026-10-08: token rate is a flat 1 per 10 spawns (per group) - no RNG bonus layer.
+  const tokensPerHour = Math.round(spawnsPerHour / 10 * 10) / 10;
   return {
     success: true,
     message: `✅ Spawn interval set to *${intervalLabel}* for ${botConfig.getBotId()}.
 
 📊 Approximate rates (based on avg ${avgMinutes} min):
 • ${spawnsPerHour} spawns/hour
-• ${tokensPerHour} guaranteed event tokens/hour (during events)
-• +25% RNG token bonus on non-guaranteed spawns
+• ~${tokensPerHour} event tokens/hour per group (during events, 1 per 10 spawns)
 
 _Interval persists across bot restarts._`
   };
@@ -445,7 +454,7 @@ _Interval persists across bot restarts._`
 // 💡 PHASE 7 FIX 2026-08-30: getSpawnIntervalInfo returns min/max + isRandom
 function getSpawnIntervalInfo() {
   const inst = getInst();
-  const minMs = inst.spawnIntervalMinMs || (20 * 60 * 1000);
+  const minMs = inst.spawnIntervalMinMs || (30 * 60 * 1000);
   const maxMs = inst.spawnIntervalMaxMs || minMs;
   const ms = maxMs;  // legacy
   const minMinutes = Math.round(minMs / 60000);
@@ -454,7 +463,8 @@ function getSpawnIntervalInfo() {
   // Average rate based on midpoint of range
   const avgMinutes = (minMinutes + maxMinutes) / 2;
   const spawnsPerHour = Math.round(60 / avgMinutes * 10) / 10;
-  const tokensPerHour = Math.round(spawnsPerHour / 3 * 10) / 10;
+  // 💡 2026-10-08: 1 token per 10 spawns (per group), no RNG bonus layer.
+  const tokensPerHour = Math.round(spawnsPerHour / 10 * 10) / 10;
   return {
     minutes: maxMinutes,  // legacy field (kept for backward compat)
     minMinutes,
@@ -831,16 +841,29 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
     }
 
     const spawnKey = `${targetGroup}_${card.id}`;
-    // 💡 FIX: increment spawn counter. Every 3rd spawn becomes "token-bearing"
-    // - when claimed during an active token event, it grants a guaranteed
-    // token (replaces the old 50%-chance-per-claim RNG). Roughly 1 token per
-    // hour at 3 spawns/hour.
-    inst.spawnCounter = (inst.spawnCounter || 0) + 1;
-    const isTokenSpawn = (inst.spawnCounter % 3 === 0);
+    // 💡 TOKEN RATES (2026-10-08 requirements doc §2 + §14):
+    //   1 token per 10 cards spawned, with PER-GROUP counters - each group's
+    //   progression is fully independent (activity in one group never
+    //   advances another group's token clock). Counters only advance while
+    //   a token event is ACTIVE, so the 1-in-10 ratio maps exactly to
+    //   event-window spawns. Replaces the old global every-3rd-spawn +
+    //   25% RNG mechanic.
+    let isTokenSpawn = false;
+    const eventActiveNow = await isTokenEventActive();
+    if (eventActiveNow) {
+      const count = (inst.tokenSpawnCounters.get(targetGroup) || 0) + 1;
+      if (count >= TOKEN_SPAWNS_PER_TOKEN) {
+        inst.tokenSpawnCounters.set(targetGroup, 0);
+        isTokenSpawn = true;
+      } else {
+        inst.tokenSpawnCounters.set(targetGroup, count);
+      }
+      persistTokenSpawnCounters();
+    }
     inst.activeSpawns.set(spawnKey, {
       card, copyNumber: stat.totalSpawned, stat, price,
       groupJid: targetGroup, spawnedAt: Date.now(), expiresAt: Date.now() + CLAIM_WINDOW_MS,
-      hasToken: isTokenSpawn, // 💡 marked for guaranteed token drop on claim
+      hasToken: isTokenSpawn, // 💡 marked for token drop on claim
     });
     // 💡 RESTART-SAFE SPAWNS (2026-10-08): persist so a deploy/restart no
     // longer erases unclaimed cards (players read that as "cards randomly
@@ -910,7 +933,7 @@ async function startTokenEvent(ownerJid) {
   return {
     success: true,
     message: `🎉 *TOKEN EVENT STARTED!* 🎉\n\n` +
-      `Claim cards to earn Event Tokens (1 token per ~2 claims).\n` +
+      `Claim cards during the event to earn Event Tokens.\n` +
       `Spend tokens in the eShop: \`${P()} eshop\`\n\n` +
       `Check your balance: \`${P()} tokens\``
   };
@@ -969,6 +992,112 @@ async function loadTokenEventState() {
       inst.tokenEventStart = doc.value.startedAt || 0;
     }
   } catch (e) { /* silent - may not exist yet */ }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  TOKEN RATE ENGINE (2026-10-08 requirements doc §2, §3, §14)
+//  - Spawn-based: 1 token / 10 spawns, PER GROUP (isolated progression)
+//  - Command-based (HIDDEN): 1 token / 15 eligible player commands,
+//    claim excluded. Per-user counter.
+//  Counters persist to the System collection so restarts don't reset
+//  progression. Event activity in one group NEVER affects another group.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const TOKEN_SPAWNS_PER_TOKEN  = 10;  // §2: 1 token per 10 cards
+const TOKEN_CMDS_PER_TOKEN    = 15;  // §3: 1 token per 15 eligible commands
+const TOKEN_SPAWN_COUNTER_KEY = 'card_token_spawn_counters_v1';
+const TOKEN_CMD_COUNTER_KEY   = 'card_token_cmd_counters_v1';
+
+// Commands that NEVER count toward the hidden command-token mechanic:
+//  - claim (§3 explicitly excludes it - high-frequency)
+//  - all mod/owner management commands (prevents mod farming, keeps the
+//    mechanic a pure player-activity reward)
+const TOKEN_CMD_EXCLUDED = new Set([
+  'claim', 'cardmod', 'cards', 'event', 'setprice', 'spawn', 'espawn',
+  'reloadcards', 'einfo', 'spawnset', 'spawninfo', 'trc', 'ci', 'rc', 'erc',
+  'info', 'endauction', 'setauctiongc', 't2edeck', 'tokenreset', 'src', 'tokenlb', 'tlb',
+]);
+
+// MongoDB field names can't contain '.' or '$' on old versions - sanitize JIDs
+// used as counter map keys (WhatsApp JIDs look like 12345-67890@g.us).
+function safeCounterKey(jid) {
+  return String(jid || '').replace(/[.$]/g, '_');
+}
+
+async function persistTokenSpawnCounters() {
+  const inst = getInst();
+  try {
+    const obj = {};
+    for (const [g, c] of inst.tokenSpawnCounters) obj[safeCounterKey(g)] = c;
+    await System.findOneAndUpdate(
+      { key: TOKEN_SPAWN_COUNTER_KEY },
+      { $set: { value: obj } },
+      { upsert: true }
+    );
+  } catch (e) { console.error('[TokenRate] Failed to persist spawn counters:', e.message); }
+}
+
+async function persistTokenCmdCounters() {
+  const inst = getInst();
+  try {
+    const obj = {};
+    for (const [u, c] of inst.tokenCmdCounters) obj[safeCounterKey(u)] = c;
+    await System.findOneAndUpdate(
+      { key: TOKEN_CMD_COUNTER_KEY },
+      { $set: { value: obj } },
+      { upsert: true }
+    );
+  } catch (e) { console.error('[TokenRate] Failed to persist cmd counters:', e.message); }
+}
+
+async function loadTokenRateCounters() {
+  const inst = getInst();
+  try {
+    const spawnDoc = await System.findOne({ key: TOKEN_SPAWN_COUNTER_KEY }).lean();
+    if (spawnDoc?.value && typeof spawnDoc.value === 'object') {
+      for (const [g, c] of Object.entries(spawnDoc.value)) {
+        if (Number.isFinite(c)) inst.tokenSpawnCounters.set(g, c);
+      }
+    }
+    const cmdDoc = await System.findOne({ key: TOKEN_CMD_COUNTER_KEY }).lean();
+    if (cmdDoc?.value && typeof cmdDoc.value === 'object') {
+      for (const [u, c] of Object.entries(cmdDoc.value)) {
+        if (Number.isFinite(c)) inst.tokenCmdCounters.set(u, c);
+      }
+    }
+    console.log(`[CardSystem][${botConfig.getBotId()}] Token rate counters loaded: ${inst.tokenSpawnCounters.size} groups, ${inst.tokenCmdCounters.size} users`);
+  } catch (e) { /* silent - first run may have no docs */ }
+}
+
+/**
+ * Hidden command-based token mechanic (§3). Called fire-and-forget from
+ * handleCommand for every ELIGIBLE player command while a token event is
+ * active. Every 15th eligible command grants that user +1 Event Token.
+ * The rate/probability is never shown to players.
+ * Returns a short notify string when a token drops, else null.
+ */
+async function noteEligibleCommand(senderJid) {
+  const inst = getInst();
+  try {
+    if (!(await isTokenEventActive())) return null;
+    const count = (inst.tokenCmdCounters.get(senderJid) || 0) + 1;
+    if (count >= TOKEN_CMDS_PER_TOKEN) {
+      inst.tokenCmdCounters.set(senderJid, 0);
+      persistTokenCmdCounters(); // async fire-and-forget write, errors logged inside
+      economy.addTokens(senderJid, 1);
+      const balance = economy.getTokens(senderJid);
+      console.log(`[CardSystem][${botConfig.getBotId()}] 🎫 Hidden cmd-token granted to ${senderJid} (total ${balance})`);
+      // §4-compliant message: tells the player they got a token, reveals
+      // NOTHING about rates, probability or the mechanic.
+      return `🎫 ${economy.getDisplayName(senderJid)} found an *Event Token!* (Total: ${balance})`;
+    }
+    inst.tokenCmdCounters.set(senderJid, count);
+    // Persist lazily every 5 steps so restarts don't lose too much progress
+    if (count % 5 === 0) persistTokenCmdCounters();
+  } catch (e) {
+    console.error('[TokenRate] noteEligibleCommand failed:', e.message);
+  }
+  return null;
 }
 
 /**
@@ -1340,30 +1469,19 @@ async function cmdClaim(args, senderJid, reply, chatId) {
     // still works after a restart.
     await CardSpawn.deleteOne({ key: claimKey }).catch(() => {});
 
-    // 💡 TOKEN EVENT: two-layer drop mechanic.
-    //   1) GUARANTEED: every 3rd spawn is marked hasToken=true at spawn time.
-    //      On claim, if the event is active AND the spawn is token-bearing,
-    //      grant a guaranteed token (no RNG). ~1 guaranteed token per hour
-    //      at 3 spawns/hour.
-    //   2) RNG FALLBACK: non-token-bearing spawns (the other 2/3) still have
-    //      a chance to drop a token. This keeps the old RNG excitement
-    //      without the old inconsistency (the guaranteed layer ensures a
-    //      steady baseline). Net result: ~1.5 tokens/hour during events.
+    // 💡 TOKEN DROP (2026-10-08 requirements doc §2 + §4):
+    // Single deterministic layer - a spawn is marked hasToken at SPAWN time
+    // (1 in 10 spawns per group, see doSpawn). On claim, if the event is
+    // active AND the spawn is token-bearing, grant +1 token. No RNG layer.
+    // §4: the message simply tells the player they received an Event Token -
+    // it must NOT reveal the spawn rate, probability, or the mechanic.
     let tokenMsg = '';
     try {
       const eventActive = await isTokenEventActive();
-      if (eventActive) {
-        if (spawn.hasToken) {
-          // Guaranteed drop
-          economy.addTokens(senderJid, 1);
-          const balance = economy.getTokens(senderJid);
-          tokenMsg = `\n\n🎫 *GUARANTEED TOKEN DROP!* +1 Event Token (Total: ${balance})\n_This was a token-bearing spawn! Use \`${P()} eshop\` to spend them._`;
-        } else if (Math.random() < 0.25) {
-          // RNG fallback for non-token-bearing spawns (25% chance)
-          economy.addTokens(senderJid, 1);
-          const balance = economy.getTokens(senderJid);
-          tokenMsg = `\n\n🎫 *Token Drop!* +1 Event Token (Total: ${balance})\n_Use \`${P()} eshop\` to spend them!_`;
-        }
+      if (eventActive && spawn.hasToken) {
+        economy.addTokens(senderJid, 1);
+        const balance = economy.getTokens(senderJid);
+        tokenMsg = `\n\n🎫 +1 *Event Token!* (Total: ${balance})\n_Spend them with \`${P()} eshop\`._`;
       }
     } catch (tokenErr) {
       // Don't fail the claim if token drop fails
@@ -3944,6 +4062,21 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
 
   if (!cmd) return false;
 
+  // 💡 HIDDEN COMMAND-TOKEN MECHANIC (§3): every ELIGIBLE player command
+  // ticks a per-user counter - 1 token per 15 commands, claim excluded,
+  // mod/management commands excluded. Fire-and-forget: never blocks or
+  // fails the command, and grants are announced with a mechanic-free
+  // one-liner (§4 compliant - no rates, no probability, no hints).
+  if (!TOKEN_CMD_EXCLUDED.has(cmd)) {
+    noteEligibleCommand(senderJid)
+      .then((notify) => {
+        if (notify && inst.sock_ref) {
+          inst.sock_ref.sendMessage(chatId, { text: notify }).catch(() => {});
+        }
+      })
+      .catch(() => {});
+  }
+
   // 💡 DIAG: log what cmd we're about to handle
   console.log(`🃏 [cardSystem] dispatching cmd="${cmd}" | senderJid=${senderJid?.split('@')[0]} | chatId=${chatId?.split('@')[0]}`);
 
@@ -4060,9 +4193,10 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       return true;
 
     case 'info':
-      // 💡 Event card lookups are mod-only. Regular card lookups are
-      // available to everyone. The event mode is triggered by "event"
-      // keyword in the query OR by looking up an E-tier card by ID.
+      // 💡 2026-10-08 requirements doc §10: card-maintenance lookups
+      // (.j info / .j ci / .j rc) are CARD-MOD EXCLUSIVE. Regular users
+      // must not have access. (.j einfo was already mod-only.)
+      if (!isCardMod) return reply('❌ Card info lookup is for card moderators and above only.'), true;
       await cmdInfo(reply, chatId, args, { isOwner, isCardMod, p });
       return true;
 
@@ -4460,11 +4594,8 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       }
 
       if (sub === 'reset' || sub === 'default') {
-        // 💡 FIX 2026-08-31: permission mismatch - the router gate above accepts
-        // card mods (isCardMod) but setSpawnInterval() internally required
-        // isOwner, so card mods always got rejected AFTER passing the gate.
-        // Pass the same permission the gate checked.
-        const res = await setSpawnInterval(20, senderJid, isOwner || isMod || isCardMod);
+        // 💡 2026-10-08: default is now 30 min = 2 cards/hour (§6).
+        const res = await setSpawnInterval(30, senderJid, isOwner || isMod || isCardMod);
         return reply(res.message), true;
       }
       if (!sub) {
@@ -4473,11 +4604,11 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
           `Usage:\n` +
           `• \`${p} spawnset <minutes>\` - set fixed interval (1 to 1440 min)\n` +
           `• \`${p} spawnset <min>-<max>\` - random interval within range (e.g. \`15-30\`)\n` +
-          `• \`${p} spawnset reset\` - restore default (20 min)\n` +
+          `• \`${p} spawnset reset\` - restore default (30 min = 2 cards/hour)\n` +
           `• \`${p} spawnset tier <...>\` - tier spawn weights/chances (unchanged)\n` +
           `• \`${p} spawninfo\` - view current settings\n\n` +
           `Examples:\n` +
-          `• \`${p} spawnset 20\` → fixed 20 min (default, 3 spawns/hour)\n` +
+          `• \`${p} spawnset 30\` → fixed 30 min (default, 2 spawns/hour)\n` +
           `• \`${p} spawnset 15-30\` → random 15-30 min (avg ~4 spawns/hour)\n` +
           `• \`${p} spawnset 10-45\` → random 10-45 min (more varied)\n` +
           `• \`${p} spawnset 60\` → fixed 1 spawn/hour\n\n` +
@@ -4492,6 +4623,9 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
     }
 
     case 'spawninfo': {
+      // 💡 2026-10-08 §13: spawn configuration reveals internal rates -
+      // gate it to mods so players can't see spawn/token math (§3 hiding).
+      if (!isCardMod) return reply('❌ Only moderators and above can view spawn configuration.'), true;
       const info = getSpawnIntervalInfo();
       const inst = getInst();
       // 💡 PHASE 7 FIX 2026-08-30: spawninfo + spawnset help
@@ -4502,8 +4636,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         `📊 *Spawn Configuration - ${botConfig.getBotId()}*\n\n` +
         `⏱️ Interval: *${intervalLabel}*\n` +
         `📈 Rate (avg): *${info.spawnsPerHour} spawns/hour*\n` +
-        `🎫 Guaranteed tokens: *${info.tokensPerHour}/hour* (during events)\n` +
-        `🎲 RNG token bonus: *25%* on non-guaranteed spawns\n\n` +
+        `🎫 Tokens (during events): *1 per ${TOKEN_SPAWNS_PER_TOKEN} spawns, per group*\n\n` +
         `🏠 Active groups: *${info.activeGroups}*\n` +
         `⚙️ Timer: ${info.timerRunning ? '✅ Running' : '⏸️ Idle (no active groups)'}\n\n` +
         `📋 *Tier Spawn Config:*\n${formatTierConfig(inst)}\n\n` +
@@ -4562,6 +4695,26 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
     case 'clb':
       await cmdCardLB(senderJid, reply, args);
       return true;
+
+    // ── 2026-10-08 REQUIREMENTS DOC: token reset / super RC / token LB ──
+    // §1 + §11: global event-token wipe. Card-mod exclusive, two-step.
+    case 'tokenreset':
+      if (!isCardMod) return reply('❌ Only card moderators and above can reset event tokens.'), true;
+      await cmdTokenReset(senderJid, reply, args);
+      return true;
+
+    // §12: Super RC - wipe a user's entire collection. Card-mod exclusive,
+    // two-step (preview → confirm).
+    case 'src':
+      if (!isCardMod) return reply('❌ Only card moderators and above can run a Super RC.'), true;
+      await cmdSuperRc(senderJid, reply, args, m);
+      return true;
+
+    // §5: event-token leaderboard. Public.
+    case 'tokenlb':
+    case 'tlb':
+      await cmdTokenLB(senderJid, reply, args);
+      return true;
   }
 
   return false;
@@ -4610,6 +4763,7 @@ async function init(sock, admins = [], mods = [], owner = null) {
     loadActiveGroups(),
     loadRoles(),
     loadTokenEventState(),
+    loadTokenRateCounters(),
     loadEShopDeck(),
     loadTierConfig(),
   ]);
@@ -4970,6 +5124,137 @@ async function cmdCardLB(senderJid, reply, args) {
     msg += `${medal} ${name} - *${r.count} cards*\n`;
   }
   msg += `\n💡 Use \`${p} cardlb <tier 1-7>\` for per-tier leaderboards.`;
+  return reply(msg);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  SECTION 8 - MOD MAINTENANCE COMMANDS (2026-10-08 requirements doc
+//  §1/§11 global token reset, §12 super RC, §5 token leaderboard)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * cmdTokenReset - §1/§11: wipe ALL event tokens from ALL users at once.
+ * Card-mod exclusive. Two-step (preview → confirm) to prevent accidents:
+ *   .j tokenreset          → preview how many holders / tokens will be wiped
+ *   .j tokenreset confirm  → execute the global wipe
+ */
+async function cmdTokenReset(senderJid, reply, args = []) {
+  const p = P();
+  const confirm = args[0]?.toLowerCase() === 'confirm';
+  if (!confirm) {
+    const holders = await User.countDocuments({ eventTokens: { $gt: 0 } });
+    const agg = await User.aggregate([
+      { $match: { eventTokens: { $gt: 0 } } },
+      { $group: { _id: null, total: { $sum: '$eventTokens' } } },
+    ]);
+    const total = agg[0]?.total || 0;
+    return reply(
+      `⚠️  *GLOBAL TOKEN RESET*\n\n` +
+      `🆔 ⟢ *Scope:* _All players, all event tokens_\n` +
+      `👥 ⟢ *Holders:* _${holders}_\n` +
+      `🎫 ⟢ *In circulation:* _${total}_\n\n` +
+      `⚠️ ⟢ _This cannot be undone._\n` +
+      `➡️ ⟢ _Run \`${p} tokenreset confirm\` to execute._`
+    );
+  }
+  // 💡 economy keeps users cached in memory with scheduled saves - a bare
+  // User.updateMany would be resurrected by the next pending save. Use the
+  // economy-level reset that clears BOTH the cache and the DB layer.
+  const memoryHolders = await economy.resetAllTokens();
+  // Reset the hidden per-user command counters too so progression restarts clean.
+  getInst().tokenCmdCounters.clear();
+  getInst().tokenSpawnCounters.clear();
+  await persistTokenCmdCounters();
+  await persistTokenSpawnCounters();
+  console.log(`[CardSystem][${botConfig.getBotId()}] GLOBAL TOKEN RESET by ${senderJid}: ${memoryHolders} memory holders wiped`);
+  return reply(
+    `🧹  *GLOBAL TOKEN RESET DONE*\n\n` +
+    `👥 ⟢ *Users wiped:* _${memoryHolders}_\n` +
+    `🎫 ⟢ _All event tokens set to 0_\n` +
+    `🔄 ⟢ _Token progression counters reset_`
+  );
+}
+
+/**
+ * cmdSuperRc - §12: "Super RC" - wipe a user's ENTIRE card collection.
+ * Card-mod exclusive. Two-step (preview → confirm) to prevent accidents:
+ *   .j src @user          → preview what will be deleted
+ *   .j src @user confirm  → execute the wipe
+ * Cleans up: UserCards, custom decks, active market listings/auctions.
+ */
+async function cmdSuperRc(senderJid, reply, args = [], m = {}) {
+  const p = P();
+  const mentioned = m?.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+  if (!mentioned) {
+    return reply(`❌  *SUPER RC*\n\n⌨️ ⟢ *Usage:* _\`${p} src @user\` to preview_\n🧭 ⟢ _\`${p} src @user confirm\` to wipe their ENTIRE collection_`);
+  }
+  const confirm = args.map(a => a.toLowerCase()).includes('confirm');
+
+  const totalCards = await UserCard.countDocuments({ userId: mentioned });
+  const deckCount = await CardDeck.countDocuments({ userId: mentioned });
+  const activeListings = await CardMarket.countDocuments({ sellerId: mentioned, status: 'active' });
+
+  if (totalCards === 0 && deckCount === 0 && activeListings === 0) {
+    return reply(`📭  *NOTHING TO WIPE*\n\n👤 ⟢ _@${economy.getDisplayName(mentioned)} has no cards, decks, or market listings_`, { mentions: [mentioned] });
+  }
+
+  if (!confirm) {
+    return reply(
+      `⚠️  *SUPER RC - COLLECTION WIPE*\n\n` +
+      `👤 ⟢ *Target:* _@${economy.getDisplayName(mentioned)}_\n` +
+      `🃏 ⟢ *Cards to delete:* _${totalCards}_\n` +
+      `📚 ⟢ *Decks to delete:* _${deckCount}_\n` +
+      `🏪 ⟢ *Listings to cancel:* _${activeListings}_\n\n` +
+      `⚠️ ⟢ _Permanent. This cannot be undone._\n` +
+      `➡️ ⟢ _Run \`${p} src @user confirm\` to execute._`,
+      { mentions: [mentioned] }
+    );
+  }
+
+  // Cancel the user's active market listings/auctions first so nothing
+  // sells a card that is about to be deleted.
+  await CardMarket.updateMany(
+    { sellerId: mentioned, status: 'active' },
+    { $set: { status: 'cancelled', completedAt: new Date() } }
+  );
+  // Delete all decks, then all cards.
+  await CardDeck.deleteMany({ userId: mentioned });
+  const deleted = await UserCard.deleteMany({ userId: mentioned });
+
+  console.log(`[CardSystem][${botConfig.getBotId()}] SUPER RC by ${senderJid}: wiped ${deleted.deletedCount} cards from ${mentioned}`);
+  return reply(
+    `🧹  *SUPER RC EXECUTED*\n\n` +
+    `👤 ⟢ *Target:* _@${economy.getDisplayName(mentioned)}_\n` +
+    `🗑️ ⟢ *Cards deleted:* _${deleted.deletedCount}_\n` +
+    `📚 ⟢ *Decks deleted:* _${deckCount}_\n` +
+    `🏪 ⟢ *Listings cancelled:* _${activeListings}_\n\n` +
+    `📦 ⟢ _The user's collection has been completely wiped._`,
+    { mentions: [mentioned] }
+  );
+}
+
+/**
+ * cmdTokenLB - §5: event-token leaderboard. Top 10 players by current
+ * event-token balance. Public command (monitoring is for everyone).
+ */
+async function cmdTokenLB(senderJid, reply, args = []) {
+  const p = P();
+  const top = await User.find({ eventTokens: { $gt: 0 } })
+    .sort({ eventTokens: -1 })
+    .limit(10)
+    .select('userId eventTokens')
+    .lean();
+  if (!top.length) {
+    return reply(`📭  *TOKEN LEADERBOARD*\n\n🪙 ⟢ _No one holds any Event Tokens yet - claim cards during the event!_`);
+  }
+  let msg = `🎫  *EVENT TOKEN LEADERBOARD*\n\n`;
+  for (let i = 0; i < top.length; i++) {
+    const u = top[i];
+    const name = economy.getDisplayName(u.userId) || String(u.userId).split('@')[0];
+    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+    msg += `${medal} ⟢ _${name}_ — *${u.eventTokens} token${u.eventTokens === 1 ? '' : 's'}*\n`;
+  }
+  msg += `\n💡 ⟢ _Check your own balance:_ \`${p} tokens\``;
   return reply(msg);
 }
 
