@@ -50,7 +50,7 @@ CURRENT_HEAD=$(git rev-parse HEAD 2>/dev/null || echo "")
 if [ -n "$TARGET_HEAD" ] && [ "$TARGET_HEAD" = "$CURRENT_HEAD" ] && [ ! -f "$HOLD_FILE" ]; then
   # 3-tenant -> cross-box split (2026-10-03): gate = Box 1's apps online
   # (wa-jake + wa-subaru; wa-joker lives on Box 2 now).
-  PSTATE=$(pm2 jlist 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const p=JSON.parse(s);const want=['wa-jake','wa-subaru'];const ok=want.every(n=>(p||[]).some(x=>x&&x.name===n&&x.pm2_env&&x.pm2_env.status==='online'));console.log(ok?'online':'no')}catch(e){console.log('no')}})" 2>/dev/null || echo no)
+  PSTATE=$(pm2 jlist 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const p=JSON.parse(s);const box2=(p||[]).some(x=>x&&x.name==='wa-joker');const want=box2?['wa-joker']:['wa-jake','wa-subaru'];const ok=want.every(n=>(p||[]).some(x=>x&&x.name===n&&x.pm2_env&&x.pm2_env.status==='online'));console.log(ok?'online':'no')}catch(e){console.log('no')}})" 2>/dev/null || echo no)
   if [ "$PSTATE" = "online" ]; then
     echo "=== deploy done: skip $(git rev-parse --short HEAD) already deployed, pm2 online $(date -u +%FT%TZ) ==="
     exit 0
@@ -138,15 +138,26 @@ fi
 SKIP_RESTART="${SKIP_RESTART:-0}"
 if [ -f "$HOLD_FILE" ]; then SKIP_RESTART=1; fi
 if [ "$SKIP_RESTART" != "1" ]; then
-  for APP in wa-jake wa-subaru; do
-    if pm2 describe "$APP" >/dev/null 2>&1; then
-      pm2 restart "$APP" --update-env >/dev/null 2>&1 || true
-    fi
-    sleep 15
-  done
-  pm2 start ecosystem.config.js 2>/dev/null || pm2 start index.js --name whatsapp-bot
-  pm2 save 2>/dev/null | tail -1
-  sleep 6
+  # Box topology guard (incident 2026-10-08 ~10:02Z, deploy b59d5c17):
+  # wa-joker present in pm2 == Box 2. Box 2 hosts wa-joker ONLY —
+  # never start/restart wa-jake/wa-subaru/wa-miner there (their auth
+  # lives on Box 1; starting them here boots UNPAIRED impostors).
+  ON_BOX2=$(pm2 jlist 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const p=JSON.parse(s);console.log((p||[]).some(x=>x&&x.name==='wa-joker')?'1':'0')}catch(e){console.log('0')}})" 2>/dev/null || echo 0)
+  if [ "$ON_BOX2" = "1" ]; then
+    echo "Box2 topology: managing wa-joker only (never jake/subaru/miner)"
+    pm2 restart wa-joker --update-env >/dev/null 2>&1 || true
+    pm2 save 2>/dev/null | tail -1
+  else
+    for APP in wa-jake wa-subaru; do
+      if pm2 describe "$APP" >/dev/null 2>&1; then
+        pm2 restart "$APP" --update-env >/dev/null 2>&1 || true
+      fi
+      sleep 15
+    done
+    pm2 start ecosystem.config.js 2>/dev/null || pm2 start index.js --name whatsapp-bot
+    pm2 save 2>/dev/null | tail -1
+    sleep 6
+  fi
 else
   echo "SKIP_RESTART=1 -> leaving pm2 processes untouched (wa-miner keeps mining; parked bots stay parked)"
 fi
