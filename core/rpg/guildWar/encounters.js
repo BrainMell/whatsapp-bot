@@ -199,8 +199,17 @@ async function onRoomEnter(eventDoc, player, room) {
             // 🔄 owner ruins_fixes.txt #8: the encounter does NOT start on
             // entry — the player must interact first (spawn → interact →
             // encounter begins). The prompt itself rides the `examine`.
-            lines.push(`🧩 A sealed mechanism blocks the far door. Ancient grooves wait under a skin of dust.`);
-            lines.push(`_Type \`examine\` to study it. Wrong answers have a cost._`);
+            // 🔁 owner 2026-10-08 (ruins puzzle fixes #1): a STARTED seal must
+            // never re-print "type examine" — that read as a restart after a
+            // wrong answer. Mid-question the entry text points at the ANSWER,
+            // not the gate verb.
+            if (room.state !== 'CLEARED' && puzzleStarted(room)) {
+                lines.push(`🧩 The mechanism hums — mid-puzzle. The inscription still waits for your answer.`);
+                lines.push(`_Reply with your answer, or \`examine\` to re-read the inscription._`);
+            } else {
+                lines.push(`🧩 A sealed mechanism blocks the far door. Ancient grooves wait under a skin of dust.`);
+                lines.push(`_Type \`examine\` to study it. Wrong answers have a cost._`);
+            }
             break;
         case 'discovery':
             lines.push(`🔍 ${payloadGet(room.payload, 'text') || 'Something is hidden here.'}`);
@@ -213,7 +222,12 @@ async function onRoomEnter(eventDoc, player, room) {
             lines.push(`☠️ ${payloadGet(room.payload, 'hazardText') || 'Danger lurks here.'} Type \`cross\` to attempt passage.`);
             break;
         case 'lore':
+            // 🔄 owner 2026-10-08 (ruins puzzle fixes #3): the objective must
+            // be OBVIOUS from the entry caption alone — the stele halls used
+            // to ship pure flavor with zero action hint (the examine only
+            // revealed `read` afterwards).
             lines.push(`📖 ${payloadGet(room.payload, 'lore') || 'Old words cover these walls.'}`);
+            lines.push(`Type \`read\` to commit them to memory (+GP). \`examine\` takes a closer look.`);
             break;
         case 'secret':
             lines.push(`✨ A hidden chamber! The air shivers with concentrated power.`);
@@ -224,7 +238,10 @@ async function onRoomEnter(eventDoc, player, room) {
             lines.push(`🌀 Reality thins here - the walls between worlds bleed through. Type \`touch\` to interact... or move on.`);
             break;
         case 'landmark':
+            // 🔄 owner 2026-10-08 (ruins puzzle fixes #3): same rule — the
+            // record action used to be discoverable only by guessing.
             lines.push(`🗿 *${payloadGet(room.payload, 'landmarkName') || 'A landmark'}* - ${payloadGet(room.payload, 'lore') || 'a marker of the old world.'}`);
+            lines.push(`Type \`record\` to inscribe it for your guild (+GP). \`examine\` takes a closer look.`);
             break;
         case 'coop':
             rooms.markActive(eventDoc.eventId, room.key);
@@ -429,15 +446,48 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
                 const dmg = Math.round(maxHp * CFG.PUZZLE.FAIL_HAZARD_DAMAGE);
                 await applyWarDamage(player.jid, dmg, maxHp);
                 await rooms.resetPuzzleAttempts(eventDoc.eventId, room.key);
-                await state.updatePlayer(eventDoc.eventId, player.jid, {}, { lastActionAt: Date.now() });
+                // 🔁 owner 2026-10-08 (ruins puzzle fixes #2): after the last
+                // failed attempt the mechanism EJECTS the player to the
+                // PREVIOUS chamber — the old in-place "seal resets, try
+                // again" loop read as a reload-spam treadmill. Flee-style
+                // retreat: shock lands, seal resets fresh for a return visit,
+                // and the player is moved back the way they came. Rooms with
+                // no previous chamber (spawn) keep the in-place reset.
+                const prevKey = player.prevRoomId || null;
+                let ejected = false;
+                if (prevKey && prevKey !== player.roomId) {
+                    try {
+                        await rooms.leaveRoom(eventDoc.eventId, player.jid, room.key);
+                        await state.updatePlayer(eventDoc.eventId, player.jid, {}, { roomId: prevKey, lastActionAt: Date.now() });
+                        ejected = true;
+                    } catch (e) {
+                        console.error('[Ruins] puzzle eject failed (non-fatal, staying put):', e?.message);
+                    }
+                } else {
+                    await state.updatePlayer(eventDoc.eventId, player.jid, {}, { lastActionAt: Date.now() });
+                }
                 feed.queue(eventDoc.eventId, 'minor', `🧩 ${player.name} gambled on a seal and the mechanism drew blood.`);
                 // 🔁 owner 2026-10-07 (Carved Verse rage-quit): a fail must
                 // never strand the player on a bare text line — the verdict
                 // rides AFTER a full re-presentation (map card + encounter
                 // card) so they always know where they stand.
-                return { handled: true, represent: true, text: `💥 The mechanism rejects you with a shock (-${dmg} HP — that was real). The seal resets - the first inscription glows anew. ${maxAttempts} fresh attempts.` };
+                const failText = ejected
+                    ? `💥 The mechanism rejects you with a shock (-${dmg} HP — that was real) and flings you back to the previous chamber. The seal resets — ${maxAttempts} fresh attempts if you dare walk back.`
+                    : `💥 The mechanism rejects you with a shock (-${dmg} HP — that was real). The seal resets - the first inscription glows anew. ${maxAttempts} fresh attempts.`;
+                return { handled: true, eject: ejected, represent: !ejected, text: failText };
             }
-            return { handled: true, represent: true, text: `❌ Wrong. ${result.attemptsLeft} attempt${result.attemptsLeft === 1 ? '' : 's'} left.` };
+            // 🔁 owner 2026-10-08 (ruins puzzle fixes #1): a wrong answer while
+            // the question stage is LIVE re-sends the QUESTION CARD (the
+            // board) — not the map + navigation + "type examine" stack, which
+            // read exactly like the puzzle had restarted. The board + verdict
+            // (+ the copy-paste symbol line for rune/mosaic kinds) keep the
+            // player oriented on the puzzle itself.
+            return {
+                handled: true,
+                afterImage: await puzzleBoardScene(eventDoc, player, room),
+                text: `❌ Wrong. ${result.attemptsLeft} attempt${result.attemptsLeft === 1 ? '' : 's'} left.`,
+                afterText: (pz && Array.isArray(pz.symbols) && pz.symbols.length) ? pz.symbols.join(' ') : undefined,
+            };
         }
 
         // ── discovery / reward / secret claim ──

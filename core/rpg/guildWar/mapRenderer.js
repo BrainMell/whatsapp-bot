@@ -34,10 +34,14 @@ const PAL = {
 };
 
 // room glyphs — ONLY the DejaVu-verified whitelist (docs/CARD-SYSTEM.md §6)
+// 🔁 owner 2026-10-08 (ruins puzzle fixes #4): deconflicted the chart —
+//   • warden lairs used ☠ (identical to trapped halls — the hunt target was
+//     indistinguishable from a hazard) → ❖, unused on the map
+//   • landmark used ▲ (the legend's "▲ you" marker) → ▼, a pin at the spot
 const TYPE_GLYPH = {
     empty: '', combat: '⚔', puzzle: '✥', discovery: '⚑', reward: '◈',
     hazard: '☠', lore: '✺', coop: '✚', secret: '✦', anomaly: '✷',
-    landmark: '▲', core: '⨀', finale: '☠',
+    landmark: '▼', core: '⨀', finale: '❖',
 };
 const TYPE_LABEL = {
     empty: 'Empty hall', combat: 'Guarded', puzzle: 'Sealed', discovery: 'Buried find',
@@ -45,6 +49,12 @@ const TYPE_LABEL = {
     secret: 'Hidden', anomaly: 'Anomaly', landmark: 'Landmark', core: 'World Core',
     finale: 'Warden',
 };
+
+// ── compact legend (owner 2026-10-08 ruins puzzle fixes #4): the chart's
+// bottom-corner key must cover EVERY room-type symbol the map can draw — the
+// old line silently omitted ✺ inscribed halls, landmarks and warden lairs
+// entirely. One line, same visual language (no plate — the map is the UI).
+const LEGEND = '▲ you · ◯ guildmate · dashed = enemy ping · ⚔ guarded · ✥ sealed · ⚑ find · ◈ vault · ☠ trapped · ✺ inscribed · ✚ co-op · ✦ hidden · ✷ anomaly · ▼ landmark · ⨀ World Core · ❖ warden';
 
 // ─── font registration (same kit as the parchment cards) ─────────────────
 let _fontsReady = false;
@@ -321,8 +331,7 @@ function _renderInProcess(eventDoc, player, extras = {}) {
     ctx.textAlign = 'left';
     ctx.font = '13px "DejaVu Sans"';
     ctx.fillStyle = PAL.inkSoft;
-    const legend = '▲ you · ◯ guildmate · dashed = enemy ping · ⚔ guarded · ✥ sealed · ⚑ find · ◈ vault · ☠ trapped · ✚ co-op · ✦ hidden · ✷ anomaly · ⨀ World Core';
-    ctx.fillText(legend, 44, H - 40);
+    ctx.fillText(LEGEND, 44, H - 40);
     ctx.font = 'italic 13px "IM Fell Italic"';
     ctx.fillStyle = PAL.inkDim;
     const carried = (player.relics || []).length ? (player.relics || []).map((r) => r.name).join(', ') : 'no relics carried';
@@ -426,4 +435,4 @@ async function renderRuinsMap(eventDoc, player, extras = {}) {
     }
 }
 
-module.exports = { renderRuinsMap, _renderInProcess, TYPE_GLYPH, TYPE_LABEL, PAL };
+module.exports = { renderRuinsMap, _renderInProcess, TYPE_GLYPH, TYPE_LABEL, PAL, LEGEND };

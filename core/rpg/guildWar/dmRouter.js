@@ -867,6 +867,26 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
                 } catch (e) { /* re-presentation is best-effort; the verdict still lands */ }
                 return { text: res.text };
             }
+            // 🔁 owner 2026-10-08 (ruins puzzle fixes #2): an exhausted seal
+            // EJECTS the player to the previous chamber. Same contract as
+            // `flee`: the verdict text lands first, then the fallback room
+            // re-presents itself (map → scene) from a FRESH read — the stale
+            // in-memory player row still points at the puzzle room.
+            if (res.eject) {
+                try { await sock.sendMessage(chatId, { text: BOT_MARKER + res.text }); } catch (e) { /* best-effort */ }
+                try {
+                    const freshAll = await state.getEvent(eventDoc.eventId, { fresh: true });
+                    const meFresh = playerOf(freshAll, senderJid) || player;
+                    const destRoom = roomOf(freshAll, meFresh);
+                    if (destRoom) {
+                        const ctxDoc = await state.getMoveContext(eventDoc.eventId, meFresh.roomId);
+                        if (ctxDoc && ctxDoc.room) await presentRoom(sock, chatId, BOT_MARKER, ctxDoc, meFresh, destRoom, { prefix });
+                    }
+                } catch (e) {
+                    console.error('[RuinsNav] post-eject presentation failed (non-fatal):', e?.message);
+                }
+                return {};
+            }
             // ⚔️ changed room: the cleared-state scene rides the result text...
             if (res.afterImage) {
                 try {
