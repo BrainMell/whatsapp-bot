@@ -3325,32 +3325,48 @@ async function cmdSwapCard(senderJid, reply, args = []) {
 
 async function cmdCG(senderJid, reply, args = [], m) {
   const p = P();
-  // Usage: .cg @user <index> [Deck]
+  // Usage: .cg @user <index> [-deck | -coll]
+  //   .cg @user 5        -> gifts collection card #5 (instant, same numbering as .coll)
+  //   .cg @user 5 -coll  -> same thing, explicit
+  //   .cg @user 5 -deck  -> gifts main-deck slot #5
+  // 💡 2026-10-08 (owner request): source flag accepts -deck/-coll with or
+  // without the dash, any case. Default source = collection ("gift from
+  // your coll instead of deck").
   const mentioned = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-  if (mentioned.length === 0) return sendUsage(reply, `${p} cg`, `${p} cg @user <index> [Deck]`, `${p} cg @user 5`);
+  if (mentioned.length === 0) return sendUsage(reply, `${p} cg`, `${p} cg @user <index> [-deck | -coll]`, `${p} cg @user 5 -deck`);
 
   // 💡 FIX 2026-10-08: resolve the mention to the identity the economy DB
   // knows. Raw mentions created orphaned cards the recipient could never see.
   const targetJid = resolveMentionJid(mentioned[0]);
-  const isFromDeck = args.some(a => a.toLowerCase() === 'deck');
+
+  const flagArgs = args.map(a => String(a).toLowerCase());
+  const wantsDeck = flagArgs.some(a => a === '-deck' || a === 'deck' || a === '-d');
+  const wantsColl = flagArgs.some(a => a === '-coll' || a === 'coll' || a === '-collection');
   const indexStr = args.find(a => !isNaN(parseInt(a)));
   const index = parseInt(indexStr);
 
-  if (isNaN(index)) return sendUsage(reply, `${p} cg`, `${p} cg @user <index> [Deck]`, `${p} cg @user 1`);
+  if (isNaN(index)) return sendUsage(reply, `${p} cg`, `${p} cg @user <index> [-deck | -coll]`, `${p} cg @user 1`);
+  if (wantsDeck && wantsColl) return reply(`❌  *PICK ONE SOURCE*\n\n🧭 ⟢ _Use \`-deck\` or \`-coll\` — not both_`);
 
   if (targetJid === senderJid) return reply(`❌  *SELF GIFT*\n\n📍 ⟢ _You cannot gift a card to yourself_`);
 
   let uc;
-  if (isFromDeck) {
+  let sourceLabel;
+  if (wantsDeck) {
     uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: index });
+    sourceLabel = `Main Deck (Slot #${index})`;
   } else {
-    // 💡 FIX 2026-10-08: also exclude inAuction - a committed card must never
-    // be gifted out from under its auction.
-    const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false }).sort({ createdAt: 1 });
-    uc = owned[index - 1];
+    // Numbering matches `.coll` EXACTLY: non-deck, non-custom, non-sale,
+    // orphans dropped - the identical filter chain the collection prints.
+    // In-auction cards STAY in the numbering (they show in .coll too), so
+    // indexes never shift; the inAuction guard below catches those with a
+    // friendly error instead of silently skipping and shifting numbers.
+    const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
+    uc = owned.filter(o => CARD_INDEX()[o.cardId])[index - 1];
+    sourceLabel = `Collection #${index}`;
   }
 
-  if (!uc) return reply(`❌  *CARD NOT FOUND*\n\n📍 ⟢ _Not in your ${isFromDeck ? 'deck' : 'collection'}_`);
+  if (!uc) return reply(`❌  *CARD NOT FOUND*\n\n🃏 ⟢ _No card #${index} in your ${wantsDeck ? 'deck' : 'collection'}_`);
   if (uc.isLocked) return reply(`🔒  *CARD LOCKED*\n\n📍 ⟢ _Unlock this card before gifting it_`);
   // 💡 FIX 2026-10-08 (gift-vs-market race): a deck card can simultaneously be
   // listed for sale (.sc) or in an auction (.auction). Gifting it anyway let
@@ -3386,7 +3402,7 @@ async function cmdCG(senderJid, reply, args = [], m) {
   try { economy.getOrCreateUser(targetJid); } catch (e) { /* non-fatal */ }
 
   const card = CARD_INDEX()[uc.cardId];
-  return reply(`🎁  *GIFT SENT!*\n\n👤 ⟢ *From:* _@${economy.getDisplayName(senderJid)}_\n🎯 ⟢ *To:* _@${economy.getDisplayName(targetJid)}_\n🃏 ⟢ *Card:* _${card?.cardName || uc.cardId}_`, { mentions: [senderJid, targetJid] });
+  return reply(`🎁  *GIFT SENT!*\n\n👤 ⟢ *From:* _@${economy.getDisplayName(senderJid)}_\n🎯 ⟢ *To:* _@${economy.getDisplayName(targetJid)}_\n🃏 ⟢ *Card:* _${card?.cardName || uc.cardId}_\n🆔 ⟢ *ID:* \`${uc.cardId}\`\n📦 ⟢ *Source:* _${sourceLabel}_`, { mentions: [senderJid, targetJid] });
 }
 
 async function cmdCS(reply, args = [], perms = {}) {
