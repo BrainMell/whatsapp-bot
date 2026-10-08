@@ -2198,13 +2198,18 @@ async function cmdBurn(senderJid, reply, chatId, args = []) {
   const card = CARD_INDEX()[uc.cardId];
   const p = P();
 
-  // Show burning preview
-  const gifBuffer = await goService.generateBurnGif(card.imageUrl);
-  const caption = `🔥 *BURN CONFIRMATION* 🔥\n\n` +
-    `🃏 *Card:* ${card.cardName} (${card.tier})\n` +
-    `🆔 *ID:* \`${uc.cardId}\`\n\n` +
-    `⚠️ *WARNING:* This will delete the card forever!\n` +
-    `Are you sure? Type \`${p} accept\` to confirm or \`${p} decline\` to cancel.`;
+  // 🔥 FIX 2026-10-08 (owner: "the card burn animation lol it never worked"):
+  // the Go service now renders a real fire-over-card animation (bundled fire
+  // overlay + additive screen blend — the old fire URLs were 404 so this was
+  // ALWAYS text-only). Caption also moved onto the universal ⟢ theme.
+  const tierLabel = TIER_LABEL[String(card.tier)] || `TIER ${card.tier}`;
+  const gifBuffer = card.imageUrl ? await goService.generateBurnGif(card.imageUrl) : null;
+  const caption = `🔥  *BURN CONFIRMATION*\n\n` +
+    `🃏 ⟢ *Card:* _${card.cardName}_\n` +
+    `🏆 ⟢ *Tier:* _${tierLabel}_\n` +
+    `🆔 ⟢ *ID:* \`${uc.cardId}\`\n\n` +
+    `⚠️ ⟢ _This will delete the card_ **_forever_**\n` +
+    `→ ⟢ _Type_ \`${p} accept\` _to confirm or_ \`${p} decline\` _to cancel_`;
 
   if (gifBuffer) {
     await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
@@ -2212,7 +2217,8 @@ async function cmdBurn(senderJid, reply, chatId, args = []) {
     await reply(caption);
   }
 
-  inst.pendingBurns.set(`${chatId}_${senderJid}`, { ucId: uc._id, cardName: card.cardName });
+  // keep the card's imageUrl so the ACCEPT step can replay the burn animation
+  inst.pendingBurns.set(`${chatId}_${senderJid}`, { ucId: uc._id, cardName: card.cardName, imageUrl: card.imageUrl || null });
 }
 
 async function cmdAccept(senderJid, reply, chatId) {
@@ -2235,7 +2241,20 @@ async function cmdAccept(senderJid, reply, chatId) {
     }
     await UserCard.findByIdAndDelete(pending.ucId);
     inst.pendingBurns.delete(key);
-    await reply(`🔥  *BURNED TO ASHES*\n\n🃏 ⟢ *Card:* _${pending.cardName}_\n📍 ⟢ _Deleted from your collection — forever_`);
+    // 🔥 2026-10-08: replay the burn animation as the card actually goes up in
+    // flames (the Go service caches the render per card URL, so this is
+    // instant right after the preview). Falls back to text if rendering fails.
+    const burnCaption = `🔥  *BURNED TO ASHES*\n\n🃏 ⟢ *Card:* _${pending.cardName}_\n📍 ⟢ _Deleted from your collection — forever_`;
+    try {
+      const ashBuffer = pending.imageUrl ? await goService.generateBurnGif(pending.imageUrl) : null;
+      if (ashBuffer) {
+        await inst.sock_ref.sendMessage(chatId, { video: ashBuffer, gifPlayback: true, caption: burnCaption });
+      } else {
+        await reply(burnCaption);
+      }
+    } catch (animErr) {
+      await reply(burnCaption);
+    }
     return true;
   } catch (err) {
     await reply(`❌  *BURN FAILED*\n\n📍 ⟢ _Could not delete the card — try again_`);

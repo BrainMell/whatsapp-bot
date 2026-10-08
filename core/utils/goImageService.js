@@ -696,7 +696,11 @@ class GoImageService {
           },
           {
             responseType: "arraybuffer",
-            timeout: 10000, // 💡 FIX 2026-08-05: was missing - inherited 120s default
+            // 💡 FIX 2026-10-08 (owner: "the card burn animation never worked"):
+            // the Go pipeline now actually renders (card download + screen-blend
+            // + x264 on Box2's throttled CPU) — a fresh render takes ~7-15s.
+            // The old 10s timeout aborted mid-render on ANY slow fetch.
+            timeout: 60000,
           },
         );
         return Buffer.from(response.data);
