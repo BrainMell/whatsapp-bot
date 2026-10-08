@@ -723,7 +723,7 @@ function buildSpawnCaption(card, copyNumber, maxCopies, price) {
 function cardLine(index, card, uc, stat) {
   const tier   = String(card.tier);
   const rarity = getRarityLabel(uc.copyNumber, stat?.maxCopies || BASE_MAX[tier] || 200);
-  return `  #${index} ➳ ${TIER_STARS[tier]} ${card.cardName} _(${card.animeName})_ ${rarity.emoji}`;
+  return `  #${index} ⟢ ${TIER_STARS[tier]} ${card.cardName} _(${card.animeName})_ ${rarity.emoji}`;
 }
 
 async function getOrInitStat(cardId, tier) {
@@ -1375,7 +1375,13 @@ async function cmdClaim(args, senderJid, reply, chatId) {
     const rarity = getRarityLabel(spawn.copyNumber, spawn.stat.maxCopies);
     const _claimTier = String(spawn.card.tier);
       const _claimLabel = TIER_LABEL[_claimTier] || `TIER ${_claimTier}`;
-      return reply(`${rarity.emoji}  *CLAIMED!*\n\n*${spawn.card.cardName}* - _${spawn.card.animeName}_\n${TIER_STARS[_claimTier] || '✆'} ${_claimLabel} | Copy *#${spawn.copyNumber}* (${rarity.label})\n\n_Added to your collection!_${tokenMsg}`);
+      // 💡 STYLE 2026-10-08 (owner spec): universal claim card — same field
+      // emojis + ⟢ arrow as CARD DETAIL. rarity.emoji leads the header
+      // (💠 for a solo copy, matching the owner's sample). Tier label is
+      // single-spaced like the owner's "TIER III" sample (TIER_LABEL table
+      // carries double spaces - normalize).
+      const _claimTierLabel = String(_claimLabel).replace(/\s+/g, ' ').trim();
+      return reply(`${rarity.emoji}  *CLAIMED*\n\n🏷️⟢ _${spawn.card.cardName}_\n📺 ⟢ _${spawn.card.animeName}_\n\n🏆 _${_claimTierLabel}_  ⟢  🔢 _#${spawn.copyNumber}_\n        \`${rarity.label}\`\n\n📦 _Added to collection_${tokenMsg}`);
   } catch (err) {
     console.error('[Claim Error]', err);
     // 💡 FIX 2026-08-31 (rollback): restore the spawn so a transient DB
@@ -1488,7 +1494,7 @@ async function cmdCardsTier(senderJid, reply, chatId) {
       const label = TIER_LABEL[t] || `TIER ${t}`;
       finalMsg += `${tierEmoji[t]} *${label}*\n`;
       tiers[t].forEach((item) => {
-        finalMsg += `*#${item.index} ➳ ${item.name}*\n`;
+        finalMsg += `*#${item.index} ⟢ ${item.name}*\n`;
       });
       finalMsg += `\n`;
     }
@@ -1710,14 +1716,14 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   }
 
   // Build flat list with simple style
-  let msg = `🃏 *Collection*\n`;
+  let msg = `🎴 *Collection*\n`;
   msg += `━━━━━━━━━━━━━━━\n`;
   msg += `📦 *Total:* ${listed.length}\n\n`;
 
   const lines = [];
   for (let i = 0; i < listed.length; i++) {
     const card = CARD_INDEX()[listed[i].cardId];
-    lines.push(`*#${i + 1} ➳ ${card.cardName}*`);
+    lines.push(`*#${i + 1}* ⟢ 🏷️ _${card.cardName}_`);
   }
 
   // GIF generation for collection (Top 15 Highlights)
@@ -1848,7 +1854,12 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
     const card = CARD_INDEX()[uc.cardId];
     const name = card ? card.cardName : 'Unknown';
     const tier = card ? String(card.tier) : '?';
-    return `🔹 *#${uc.mainDeckSlot}*\n   🃏 *Name:* ${name}\n   ✨ *Tier:* ${tier}\n━━━━━━━━━━━━━━━`;
+    // 💡 STYLE 2026-10-08 (owner spec): deck rows use the SAME field emojis
+    // as CARD DETAIL / claim — 🏷️ name, 📺 series, 🏆 tier, 🔢 slot — with
+    // the house ⟢ arrow. Was: 🃏 Name / ✨ Tier.
+    const tierLabel = String(TIER_LABEL[tier] || `TIER ${tier}`).replace(/\s+/g, ' ').trim();
+    const series = card ? (card.animeName || 'Unknown') : 'Unknown';
+    return `🔢 ⟢ _#${uc.mainDeckSlot}_\n   🏷️⟢ _${name}_\n   📺 ⟢ _${series}_\n   🏆 ⟢ _${tierLabel}_\n━━━━━━━━━━━━━━━`;
   });
   
   msg += lines.join('\n');
@@ -2047,7 +2058,7 @@ async function cmdMaker(senderJid, reply, chatId, args = []) {
       const label = TIER_LABEL[t] || `TIER ${t}`;
       msg += `${tierEmoji[t]} *${label}*\n`;
       tiers[t].forEach((name, i) => {
-        msg += `🔹 *#${i + 1} ➳ ${name}*\n`;
+        msg += `🔹 *#${i + 1} ⟢ ${name}*\n`;
       });
       msg += `\n`;
     }
@@ -2606,8 +2617,8 @@ async function cmdESummon(senderJid, reply) {
   const rarity = getRarityLabel(uc.copyNumber, stat?.maxCopies || BASE_MAX[String(card.tier)] || 200);
 
   const _summonTier = String(card.tier);
-    const _summonLabel = TIER_LABEL[_summonTier] || `TIER ${_summonTier}`;
-    return reply(`🎉 *EVENT SUMMON!* 🎉\n\nYou pulled *${card.cardName}* - _${card.animeName}_\n${TIER_STARS[_summonTier] || '✆'} ${_summonLabel} | Copy *#${uc.copyNumber}* (${rarity.label})\n\n_Added to your collection!_`);
+    const _summonLabel = String(TIER_LABEL[_summonTier] || `TIER ${_summonTier}`).replace(/\s+/g, ' ').trim();
+    return reply(`🎉 *EVENT SUMMON!* 🎉\n\n🏷️⟢ _${card.cardName}_\n📺 ⟢ _${card.animeName}_\n\n🏆 _${_summonLabel}_  ⟢  🔢 _#${uc.copyNumber}_\n        \`${rarity.label}\`\n\n📦 _Added to collection_`);
 }
 
 async function cmdEShop(senderJid, reply, chatId, args = [], isMod = false) {
@@ -3068,7 +3079,7 @@ async function cmdTcoll(senderJid, reply, chatId, args = []) {
         const label = TIER_LABEL[t] || `TIER ${t}`;
         msg += `${tierEmoji[t]} *${label}* (${tiers[t].length})\n`;
         tiers[t].forEach((item) => {
-          msg += `  ${item.loc} #${item.index} ➳ ${item.name}\n`;
+          msg += `  ${item.loc} #${item.index} ⟢ ${item.name}\n`;
         });
         msg += `\n`;
       }
@@ -3089,7 +3100,7 @@ async function cmdTcoll(senderJid, reply, chatId, args = []) {
       if (allOwned[i].inMainDeck) loc = '🎴';
       else if (allOwned[i].inCustomDeck) loc = '📁';
       else if (allOwned[i].forSale) loc = '🏷️';
-      msg += `${loc} *#${i + 1} ➳ ${card.cardName}* (${card.tier})\n`;
+      msg += `${loc} *#${i + 1} ⟢ ${card.cardName}* (${card.tier})\n`;
     }
   }
   msg += `\n_📂 = custom deck, 🎴 = main deck, 🏷️ = market, 📜 = collection_\n`;

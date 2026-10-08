@@ -209,8 +209,19 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
     await run('.j claim E-03201');
     await new Promise(r => setTimeout(r, 4000));
     {
-      const msg = findMsg(/CLAIMED!/);
+      const msg = findMsg(/CLAIMED/);
       ok(!!msg, 'claim of a RESTORED spawn succeeds (lazy stat resolution works)');
+      // 💡 STYLE 2026-10-08 (owner spec): universal claim card layout
+      if (msg) {
+        const t = msg.text || msg.caption || '';
+        const firstLine = (t.trim().split('\n')[0] || '');
+        ok(/^\S+\s+\*CLAIMED\*$/.test(firstLine), 'claim header = <rarity-emoji> *CLAIMED* (no bang)');
+        ok(t.includes('🏷️⟢ _Bulma_'), 'claim shows 🏷️⟢ italic name');
+        ok(/📺 ⟢ _.+/.test(t), 'claim shows 📺 ⟢ italic series');
+        ok(/🏆 _[^_]+_  ⟢  🔢 _#\d+_/.test(t), 'claim shows 🏆 tier ⟢ 🔢 copy line');
+        ok(/`[A-Z0-9 ]+`/.test(t), 'rarity label line in backticks');
+        ok(t.includes('📦 _Added to collection_'), 'claim footer = 📦 Added to collection');
+      }
       const uc = await cardSystem.UserCard.findOne({ userId: OWNER, cardId: 'E-03201' }).lean();
       ok(!!uc, 'UserCard created for the claimer');
       const doc = await CardSpawn.findOne({ key: KEY }).lean();
