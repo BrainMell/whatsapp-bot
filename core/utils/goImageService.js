@@ -708,30 +708,180 @@ class GoImageService {
   }
 
   /*
-   * Convert Card Image
+   * Convert Card Image (animated card URL -> 800x800 MP4 for WhatsApp)
+   *
+   * 💡 FIX 2026-10-08 (owner: "some cards wouldn't show their gifs, especially
+   * the higher grade cards" + "coll and deck: some animated cards don't
+   * animate"):
+   *   Measured on prod: a 19MB T6 .gif takes ~9.4s end-to-end (3.5s download
+   *   + 5.9s ffmpeg) and a 5.4MB .webm ~7.3s - the old 10s client timeout
+   *   failed on ANY bigger/slower asset, so the caller fell back to a STATIC
+   *   image (or a raw .webm sent as image/jpeg, which WhatsApp can't render).
+   *   Fixes, in order of impact:
+   *   1. timeout 10s -> 90s (covers the observed 40MB shoob GIF ceiling).
+   *   2. DISK CACHE keyed by sha1(url) under tmp/cardconvert/ - cards repeat
+   *      constantly (spawns, coll views, deck views), so the expensive
+   *      conversion happens once per URL EVER, not once per view. Survives
+   *      restarts. Capped at ~400MB (oldest evicted).
+   *   3. IN-FLIGHT DEDUP - concurrent coll/deck/spawn views of the same card
+   *      share one conversion promise instead of stampeding the Go service.
+   *   4. LOCAL FFMPEG FALLBACK - if the Go service itself fails (down/500),
+   *      run the exact same download+ffmpeg pipeline locally (ffmpeg is
+   *      installed on this box for the Go service anyway) instead of giving
+   *      up and letting callers send raw .webm bytes as image/jpeg.
    */
   async convertCardImage(imageUrl) {
-    return this._enqueue(async () => {
+    const crypto = require("crypto");
+    const fs = require("fs");
+    const path = require("path");
+    const os = require("os");
+
+    // ── helpers (module-level cache of closures to avoid re-creating) ──
+    if (!global._cardConvCache) {
+      global._cardConvCache = {
+        dir: path.resolve(process.cwd(), "tmp", "cardconvert"),
+        inflight: new Map(), // url -> Promise<Buffer>
+        // keep the directory under ~400MB by evicting oldest files first
+        evictOld(dirPath) {
+          try {
+            const files = fs
+              .readdirSync(dirPath)
+              .filter((f) => f.endsWith(".mp4"))
+              .map((f) => {
+                const p = path.join(dirPath, f);
+                const st = fs.statSync(p);
+                return { p, size: st.size, mtime: st.mtimeMs };
+              });
+            let total = files.reduce((s, f) => s + f.size, 0);
+            const CAP = 400 * 1024 * 1024;
+            if (total <= CAP) return;
+            files.sort((a, b) => a.mtime - b.mtime);
+            for (const f of files) {
+              if (total <= CAP) break;
+              try {
+                fs.unlinkSync(f.p);
+                total -= f.size;
+              } catch {}
+            }
+          } catch {}
+        },
+      };
+      try {
+        fs.mkdirSync(global._cardConvCache.dir, { recursive: true });
+      } catch {}
+    }
+    const cacheState = global._cardConvCache;
+
+    const cachePath = path.join(
+      cacheState.dir,
+      crypto.createHash("sha1").update(String(imageUrl)).digest("hex") + ".mp4",
+    );
+
+    // 1) disk cache hit -> instant
+    try {
+      const st = fs.statSync(cachePath);
+      if (st.size > 1024) {
+        const buf = fs.readFileSync(cachePath);
+        if (buf.length > 1024) return buf;
+      }
+    } catch {}
+
+    // 2) in-flight dedup -> concurrent views share one conversion
+    if (cacheState.inflight.has(imageUrl)) {
+      return cacheState.inflight.get(imageUrl);
+    }
+
+    const job = this._enqueue(async () => {
+      // 3) Go service convert (90s covers 40MB assets end-to-end)
       try {
         const response = await this.client.post(
           "/api/cards/convert",
-          {
-            imageUrl: imageUrl,
-          },
+          { imageUrl: imageUrl },
           {
             responseType: "arraybuffer",
-            timeout: 10000, // 💡 FIX 2026-08-05: CRITICAL - was missing (120s default).
-            // This is called by background doSpawn timer. When Go service is down,
-            // each call held a queue slot for 120s, clogging _enqueue and causing
-            // ALL other image commands to timeout with "queue timeout (8s)".
+            timeout: 90000,
           },
         );
-        return Buffer.from(response.data);
+        const buf = Buffer.from(response.data);
+        if (buf.length > 1024) {
+          try {
+            fs.writeFileSync(cachePath, buf);
+            cacheState.evictOld(cacheState.dir);
+          } catch {}
+          return buf;
+        }
+        throw new Error(`suspiciously small convert output (${buf.length}B)`);
       } catch (error) {
-        console.error("GoService Card Convert Error:", error.message);
-        return null;
+        console.error(
+          "GoService Card Convert Error:",
+          error.message,
+          "- trying local ffmpeg fallback",
+        );
       }
+
+      // 4) local ffmpeg fallback: same pipeline as pkg/cards/convert.go
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cardconv_"));
+      try {
+        const inputPath = path.join(tmpDir, "input");
+        const dl = await axios.get(String(imageUrl), {
+          responseType: "arraybuffer",
+          timeout: 30000,
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+          },
+          maxContentLength: Infinity,
+        });
+        fs.writeFileSync(inputPath, Buffer.from(dl.data));
+
+        const outputPath = path.join(tmpDir, "output.mp4");
+        await new Promise((resolve, reject) => {
+          require("child_process").execFile(
+            "ffmpeg",
+            [
+              "-i", inputPath,
+              "-vf",
+              "scale=800:800:force_original_aspect_ratio=decrease,pad=800:800:(ow-iw)/2:(oh-ih)/2:color=black",
+              "-c:v", "libx264",
+              "-pix_fmt", "yuv420p",
+              "-preset", "ultrafast",
+              "-crf", "23",
+              "-movflags", "+faststart",
+              "-y", outputPath,
+            ],
+            { timeout: 75000 },
+            (err, _stdout, stderr) => {
+              if (err) reject(new Error(`local ffmpeg failed: ${String(stderr).slice(-300)}`));
+              else resolve();
+            },
+          );
+        });
+        const buf = fs.readFileSync(outputPath);
+        if (buf.length > 1024) {
+          try {
+            fs.writeFileSync(cachePath, buf);
+            cacheState.evictOld(cacheState.dir);
+          } catch {}
+          console.log(
+            `[GoService] local ffmpeg fallback OK: ${buf.length}B cached for ${String(imageUrl).slice(-40)}`,
+          );
+          return buf;
+        }
+        return null;
+      } catch (localErr) {
+        console.error("[GoService] local ffmpeg fallback failed:", localErr.message);
+        return null;
+      } finally {
+        try {
+          fs.rmSync(tmpDir, { recursive: true, force: true });
+        } catch {}
+      }
+    }).finally(() => {
+      cacheState.inflight.delete(imageUrl);
     });
+
+    cacheState.inflight.set(imageUrl, job);
+    return job;
   }
 
   /*

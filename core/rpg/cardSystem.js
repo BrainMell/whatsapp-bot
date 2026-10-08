@@ -18,6 +18,9 @@ const CardStat   = require('../models/CardStat');
 const UserCard   = require('../models/UserCard');
 const CardMarket = require('../models/CardMarket');
 const CardDeck   = require('../models/CardDeck');
+// 💡 RESTART-SAFE SPAWNS (2026-10-08): persist unclaimed spawns so a bot
+// restart/deploy no longer erases them ("cards randomly disappearing").
+const CardSpawn  = require('../models/CardSpawn');
 const User       = require('../models/User');
 const System     = require('../models/System');
 const economy    = require('./economy');
@@ -682,8 +685,10 @@ function buildSpawnCaption(card, copyNumber, maxCopies, price) {
 
   const descLine = card.description ? `\n📝 ⟢ *Description:* _${card.description}_` : '';
 
+  // 💡 2026-10-08 (owner): a card that spawns in the group says
+  // "CARD APPEARED" - "CARD DETAIL" stays for owned/database views.
   return (
-`🎴  *CARD DETAIL*
+`🎴  *CARD APPEARED*
 
 🏷️ ⟢ *Name:* _${card.cardName}_
 📺 ⟢ *Series:* _${seriesDisplay}_
@@ -794,9 +799,11 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
       if (gifBuffer) {
         await inst.sock_ref.sendMessage(targetGroup, { video: gifBuffer, gifPlayback: true, caption });
       } else {
-        // Fallback to static image if conversion fails
+        // 💡 FIX 2026-10-08: sniff the buffer - a raw .webm/.gif sent as
+        // image/jpeg is unrenderable (blank card + "Mime type video/webm
+        // does not support decoding" in the logs).
         const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer', timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0' } });
-        await inst.sock_ref.sendMessage(targetGroup, { image: Buffer.from(res.data), caption, mimetype: 'image/jpeg' });
+        await sendCardMedia(inst.sock_ref, targetGroup, Buffer.from(res.data), caption);
       }
     } else {
       const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer', timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0' } });
@@ -815,6 +822,20 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
       groupJid: targetGroup, spawnedAt: Date.now(), expiresAt: Date.now() + CLAIM_WINDOW_MS,
       hasToken: isTokenSpawn, // 💡 marked for guaranteed token drop on claim
     });
+    // 💡 RESTART-SAFE SPAWNS (2026-10-08): persist so a deploy/restart no
+    // longer erases unclaimed cards (players read that as "cards randomly
+    // disappearing"). The claim path and the expiry sweeper keep this doc
+    // in sync; loadActiveSpawns() restores unexpired docs on boot.
+    CardSpawn.findOneAndUpdate(
+      { key: spawnKey },
+      {
+        key: spawnKey, botId: botConfig.getBotId(), groupJid: targetGroup,
+        cardId: card.id, copyNumber: stat.totalSpawned, maxCopies: stat.maxCopies,
+        price, hasToken: isTokenSpawn,
+        spawnedAt: new Date(), expiresAt: new Date(Date.now() + CLAIM_WINDOW_MS),
+      },
+      { upsert: true, setDefaultsOnInsert: true },
+    ).catch(() => {});
     console.log(`[CardSystem][${botConfig.getBotId()}] Spawned: ${card.cardName} (T${card.tier}) #${stat.totalSpawned}/${stat.maxCopies} in ${targetGroup}${isTokenSpawn ? ' [TOKEN BEARING]' : ''}`);
     return { card, copyNumber: stat.totalSpawned, stat, price };
   } catch (err) {
@@ -1195,6 +1216,17 @@ setInterval(() => {
                 if (!spawn || Date.now() > (spawn.expiresAt || 0)) {
                     inst.activeSpawns.delete(key);
                     spawnsSwept++;
+                    // 💡 FIX 2026-10-08 ("cards randomly disappearing"): say
+                    // WHY the card is gone instead of silently deleting it,
+                    // and drop the persisted doc so it can't resurrect.
+                    if (spawn && inst.sock_ref && spawn.groupJid) {
+                        CardSpawn.deleteOne({ key }).catch(() => {});
+                        Promise.resolve(
+                            inst.sock_ref.sendMessage(spawn.groupJid, {
+                                text: `⌛ *${spawn.card?.cardName || 'A card'}* went unclaimed and slipped away.\n_Next spawn could be yours - keep an eye out!_`,
+                            })
+                        ).catch(() => {});
+                    }
                 }
             }
         }
@@ -1259,6 +1291,14 @@ async function cmdClaim(args, senderJid, reply, chatId) {
   const claimKey = `${chatId}_${spawn.card.id}`;
   inst.activeSpawns.delete(claimKey);
 
+  // 💡 RESTART-SAFE SPAWNS (2026-10-08): spawns restored from the CardSpawn
+  // collection after a restart carry no Mongoose stat doc - resolve it here
+  // so the atomic $inc below (and the rarity label) still work.
+  if (!spawn.stat) {
+    spawn.stat = await CardStat.findOne({ cardId: spawn.card.id })
+      || await getOrInitStat(spawn.card.id, spawn.card.tier);
+  }
+
   try {
     // Check if the user already owns at least one copy of this card.
     const alreadyOwned = await UserCard.findOne({ userId: senderJid, cardId: spawn.card.id }).lean();
@@ -1277,6 +1317,10 @@ async function cmdClaim(args, senderJid, reply, chatId) {
         },
       }
     );
+    // 💡 RESTART-SAFE SPAWNS (2026-10-08): claim fully succeeded - drop the
+    // persisted doc. On rollback below the doc stays, so a retried claim
+    // still works after a restart.
+    await CardSpawn.deleteOne({ key: claimKey }).catch(() => {});
 
     // 💡 TOKEN EVENT: two-layer drop mechanic.
     //   1) GUARANTEED: every 3rd spawn is marked hasToken=true at spawn time.
@@ -1359,26 +1403,40 @@ function getTopImageUrls(topCards) {
 }
 
 /**
- * Detects whether the Go server returned:
- *   - MP4 (Cloudinary slideshow) → send as video/gif
- *   - PNG (old grid fallback) → send as image
- *   - JPEG (new optimized grid) → send as image
+ * Universal card-media sender - sniffs the buffer's magic bytes and picks
+ * the WhatsApp message shape that actually renders/animates.
+ *
+ * 💡 FIX 2026-10-08 (owner: "some cards wouldn't show their gifs" +
+ * "coll and deck: some animated cards don't animate"): every fallback path
+ * used to send raw bytes as { image, mimetype: 'image/jpeg' }. For .webm
+ * sources that produced a BLANK card plus the log line "buildThumbnail
+ * failed (Mime type video/webm does not support decoding)"; for .gif
+ * sources WhatsApp treated it as a broken static image. Now:
+ *   - PNG/JPEG            → { image }
+ *   - GIF (GIF8 magic)    → { image, gifPlayback: true }   (animates)
+ *   - WebM/MP4 (EBML/ftyp)→ { video, gifPlayback: true }   (animates)
+ * This is the single sender for every card fallback path so the render
+ * behavior can never drift between spawn / coll / deck / info again.
  */
 async function sendCardMedia(sock, chatId, buffer, caption, mentions) {
-  const isPng = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
+  const m = mentions ? { mentions } : {};
+  const isPng  = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
   const isJpeg = buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF;
   if (isPng || isJpeg) {
-    return await sock.sendMessage(chatId, {
-      image: buffer,
-      caption,
-      ...(mentions ? { mentions } : {})
-    });
+    return await sock.sendMessage(chatId, { image: buffer, caption, ...m });
   }
+  const isGif  = buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x38; // 'GIF8'
+  if (isGif) {
+    return await sock.sendMessage(chatId, { image: buffer, gifPlayback: true, caption, ...m });
+  }
+  const isWebm = buffer[0] === 0x1A && buffer[1] === 0x45 && buffer[2] === 0xDF && buffer[3] === 0xA3; // EBML
+  const isMp4  = buffer[4] === 0x66 && buffer[5] === 0x74 && buffer[6] === 0x79 && buffer[7] === 0x70; // 'ftyp'
   return await sock.sendMessage(chatId, {
     video: buffer,
     gifPlayback: true,
+    ...(isWebm ? { mimetype: 'video/webm' } : {}),
     caption,
-    ...(mentions ? { mentions } : {})
+    ...m,
   });
 }
 
@@ -1578,9 +1636,17 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
       const idx = parseInt(input);
       if (!isNaN(idx)) {
         const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
-        uc = owned[idx - 1];
+        // 💡 FIX 2026-10-08: index against the SAME list the collection
+        // prints (orphans excluded in both places) so `.j coll <n>` always
+        // opens the card shown as #n.
+        uc = owned.filter(o => CARD_INDEX()[o.cardId])[idx - 1];
         collIndex = idx;
       }
+    }
+    if (uc && !CARD_INDEX()[uc.cardId]) {
+      // 💡 Orphaned card: its id vanished from the source catalog (e.g. the
+      // site deleted it). Keep it stored, but say so instead of crashing.
+      return reply(`⚠️ *${uc.cardId}* is no longer in the card database (the source catalog removed it).\nYour copy is still safely stored in your collection data.`);
     }
     if (uc) {
       const card = CARD_INDEX()[uc.cardId];
@@ -1594,8 +1660,10 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
             return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption, mentions: [uc.userId] });
           }
         }
-        const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
-        return await inst.sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption, mentions: [uc.userId] });
+        // 💡 FIX 2026-10-08: magic-byte sniffed sender (GIF/WebM fallbacks
+        // used to go out as image/jpeg = blank card).
+        const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer', timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+        return await sendCardMedia(inst.sock_ref, chatId, Buffer.from(res.data), caption, [uc.userId]);
       } catch (e) { return reply(caption); }
     }
     return sendUsage(reply, `${p} coll`, `${p} coll [index or card_id]\n• Tier View: \`${p} coll --tier\`\n• Animated grid: \`${p} coll --anim\``, `${p} coll 5`);
@@ -1609,21 +1677,31 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
     return reply('📭 Collection empty.');
   }
 
+  // 💡 FIX 2026-10-08: orphan-consistent listing. Rows whose cardId is no
+  // longer in CARD_INDEX were silently skipped in the list while Total
+  // counted them - players compared the two and read the difference as
+  // "my cards are randomly disappearing". Filter once; Total, the printed
+  // rows and `.j coll <index>` now all agree. (getTopCards tolerates the
+  // filtered shape - it looks cards up by cardId the same way.)
+  const listed = owned.filter(o => CARD_INDEX()[o.cardId]);
+  const orphanCount = owned.length - listed.length;
+  if (orphanCount > 0) {
+    console.log(`🃏 [cmdColl] ${orphanCount} orphaned card(s) hidden from listing (cardId not in catalog)`);
+  }
+
   // Build flat list with simple style
   let msg = `🃏 *Collection*\n`;
   msg += `━━━━━━━━━━━━━━━\n`;
-  msg += `📦 *Total:* ${owned.length}\n\n`;
+  msg += `📦 *Total:* ${listed.length}\n\n`;
 
   const lines = [];
-  for (let i = 0; i < owned.length; i++) {
-    const card = CARD_INDEX()[owned[i].cardId];
-    if (card) {
-      lines.push(`*#${i + 1} ➳ ${card.cardName}*`);
-    }
+  for (let i = 0; i < listed.length; i++) {
+    const card = CARD_INDEX()[listed[i].cardId];
+    lines.push(`*#${i + 1} ➳ ${card.cardName}*`);
   }
 
   // GIF generation for collection (Top 15 Highlights)
-  const topCards = getTopCards(owned);
+  const topCards = getTopCards(listed);
   const imageUrls = getTopImageUrls(topCards);
   if (imageUrls.length > 0) {
     const currentHash = getDeckHash(topCards);
@@ -1728,8 +1806,10 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
                         return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption, mentions: [uc.userId] });
                     }
                 }
-                const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer' });
-                return await inst.sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption, mentions: [uc.userId] });
+                // 💡 FIX 2026-10-08: magic-byte sniffed sender (GIF/WebM
+                // fallbacks used to go out as image/jpeg = blank card).
+                const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer', timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+                return await sendCardMedia(inst.sock_ref, chatId, Buffer.from(res.data), caption, [uc.userId]);
             } catch (e) { return reply(caption); }
         }
     }
@@ -2281,8 +2361,10 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
               return await getInst().sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
             }
           }
+          // 💡 FIX 2026-10-08: sniffed sender (GIF/WebM fallbacks used to be
+          // sent as image/jpeg = blank card).
           const res = await axios.get(exactEventCard.imageUrl, { responseType: 'arraybuffer', timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0' } });
-          return await getInst().sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption });
+          return await sendCardMedia(getInst().sock_ref, chatId, Buffer.from(res.data), caption);
         } catch (e) {
           return reply(caption);
         }
@@ -2319,8 +2401,10 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
           return await getInst().sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
         }
       }
-      const res = await axios.get(exact.imageUrl, { responseType: 'arraybuffer' });
-      return await getInst().sock_ref.sendMessage(chatId, { image: Buffer.from(res.data), caption });
+      // 💡 FIX 2026-10-08: sniffed sender (GIF/WebM fallbacks used to be
+      // sent as image/jpeg = blank card).
+      const res = await axios.get(exact.imageUrl, { responseType: 'arraybuffer', timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+      return await sendCardMedia(getInst().sock_ref, chatId, Buffer.from(res.data), caption);
     } catch (e) { return reply(caption); }
   }
 
@@ -4421,7 +4505,44 @@ async function init(sock, admins = [], mods = [], owner = null) {
     loadEShopDeck(),
     loadTierConfig(),
   ]);
+  // 💡 RESTART-SAFE SPAWNS (2026-10-08): restore unclaimed spawns after a
+  // restart so mid-window cards survive deploys.
+  await loadActiveSpawns();
   console.log(`[CardSystem][${botConfig.getBotId()}] Initialized.`);
+}
+
+// 💡 RESTART-SAFE SPAWNS (2026-10-08): rebuild in-memory activeSpawns from
+// MongoDB after a restart. Previously activeSpawns lived only in RAM, so
+// every deploy/restart silently erased every unclaimed card in every group.
+// Expired docs are cleaned up quietly here (the "slipped away" notice only
+// fires live, from the sweeper) - no boot-time spam.
+async function loadActiveSpawns() {
+  const inst = getInst();
+  try {
+    const now = new Date();
+    await CardSpawn.deleteMany({ expiresAt: { $lte: now } });
+    const docs = await CardSpawn.find({ botId: botConfig.getBotId(), expiresAt: { $gt: now } }).lean();
+    let restored = 0;
+    for (const doc of docs) {
+      if (inst.activeSpawns.has(doc.key)) continue;
+      const card = CARD_INDEX()[doc.cardId];
+      if (!card) { CardSpawn.deleteOne({ key: doc.key }).catch(() => {}); continue; }
+      inst.activeSpawns.set(doc.key, {
+        card,
+        copyNumber: doc.copyNumber || 1,
+        stat: null, // resolved lazily at claim time
+        price: doc.price || 0,
+        groupJid: doc.groupJid,
+        spawnedAt: doc.spawnedAt ? new Date(doc.spawnedAt).getTime() : Date.now(),
+        expiresAt: doc.expiresAt ? new Date(doc.expiresAt).getTime() : 0,
+        hasToken: !!doc.hasToken,
+      });
+      restored++;
+    }
+    if (restored > 0) console.log(`[CardSystem][${botConfig.getBotId()}] Restored ${restored} unclaimed spawn(s) from DB after restart.`);
+  } catch (e) {
+    console.error('[CardSystem] loadActiveSpawns failed (spawns stay in-memory only):', e.message);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
