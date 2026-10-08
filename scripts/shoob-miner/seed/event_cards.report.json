@@ -1,0 +1,357 @@
+{
+  "generatedAt": "2026-10-07T22:40:59.226Z",
+  "events": [
+    {
+      "slug": "chinese-new-year",
+      "name": "Chinese New Year"
+    },
+    {
+      "slug": "valentines-day",
+      "name": "Valentines Day"
+    },
+    {
+      "slug": "halloween",
+      "name": "Halloween"
+    },
+    {
+      "slug": "christmas",
+      "name": "Christmas"
+    },
+    {
+      "slug": "easter",
+      "name": "Easter"
+    },
+    {
+      "slug": "my-hero-academia-ccg",
+      "name": "My Hero Academia CCG"
+    },
+    {
+      "slug": "maid-day",
+      "name": "Maid Day"
+    },
+    {
+      "slug": "summer",
+      "name": "Summer"
+    },
+    {
+      "slug": "gala",
+      "name": "Gala"
+    },
+    {
+      "slug": "sworn",
+      "name": "SWORN"
+    },
+    {
+      "slug": "olympics",
+      "name": "Olympics"
+    }
+  ],
+  "counts": {
+    "scraped": 1973,
+    "preservedIds": 798,
+    "newIds": 1175,
+    "keptRemoved": 1323
+  },
+  "newCardsWithRealSeries": [
+    {
+      "id": "E-00003",
+      "cardName": "Alisa Mikhailovna Kujou",
+      "eventName": "Chinese New Year",
+      "realSeries": "Roshidere"
+    },
+    {
+      "id": "E-00005",
+      "cardName": "Asia Argento",
+      "eventName": "Chinese New Year",
+      "realSeries": "High School DxD"
+    },
+    {
+      "id": "E-00008",
+      "cardName": "Atsushi Nakajima",
+      "eventName": "Chinese New Year",
+      "realSeries": "Bungou Stray Dogs"
+    },
+    {
+      "id": "E-00070",
+      "cardName": "Miku Izayoi",
+      "eventName": "Chinese New Year",
+      "realSeries": "Date A Live"
+    },
+    {
+      "id": "E-00101",
+      "cardName": "Rei Ayanami",
+      "eventName": "Chinese New Year",
+      "realSeries": "Neon Genesis Evangelion"
+    },
+    {
+      "id": "E-00139",
+      "cardName": "Tangyuan",
+      "eventName": "Chinese New Year",
+      "realSeries": "Food Fantasy"
+    },
+    {
+      "id": "E-00143",
+      "cardName": "Tohka Yatogami",
+      "eventName": "Chinese New Year",
+      "realSeries": "Date A Live"
+    },
+    {
+      "id": "E-00146",
+      "cardName": "Tsukasa Tenma",
+      "eventName": "Chinese New Year",
+      "realSeries": "Project Sekai"
+    },
+    {
+      "id": "E-01849",
+      "cardName": "Kouko Kaga",
+      "eventName": "Chinese New Year",
+      "realSeries": "Golden Time"
+    },
+    {
+      "id": "E-00491",
+      "cardName": "Frieren",
+      "eventName": "Chinese New Year",
+      "realSeries": "Sousou no Frieren"
+    },
+    {
+      "id": "E-00497",
+      "cardName": "Hatsune Miku",
+      "eventName": "Chinese New Year",
+      "realSeries": "Vocaloid"
+    },
+    {
+      "id": "E-00526",
+      "cardName": "Lelouch Lamperouge",
+      "eventName": "Chinese New Year",
+      "realSeries": "Code Geass"
+    },
+    {
+      "id": "E-00528",
+      "cardName": "Lisbeth",
+      "eventName": "Chinese New Year",
+      "realSeries": "Sword Art Online"
+    },
+    {
+      "id": "E-00530",
+      "cardName": "Lucy Maud Montgomery",
+      "eventName": "Chinese New Year",
+      "realSeries": "Bungou Stray Dogs"
+    },
+    {
+      "id": "E-00540",
+      "cardName": "Mirajane Strauss",
+      "eventName": "Chinese New Year",
+      "realSeries": "Fairy Tail"
+    },
+    {
+      "id": "E-00556",
+      "cardName": "Rem",
+      "eventName": "Chinese New Year",
+      "realSeries": "Re:Zero"
+    },
+    {
+      "id": "E-00559",
+      "cardName": "Rias Gremory",
+      "eventName": "Chinese New Year",
+      "realSeries": "High School DxD"
+    },
+    {
+      "id": "E-00565",
+      "cardName": "Ryuunosuke Akutagawa",
+      "eventName": "Chinese New Year",
+      "realSeries": "Bungou Stray Dogs"
+    },
+    {
+      "id": "E-00574",
+      "cardName": "Shirley Fenette",
+      "eventName": "Chinese New Year",
+      "realSeries": "Code Geass"
+    },
+    {
+      "id": "E-00905",
+      "cardName": "Alpha",
+      "eventName": "Chinese New Year",
+      "realSeries": "The Eminence in Shadow"
+    },
+    {
+      "id": "E-00917",
+      "cardName": "Diana",
+      "eventName": "Chinese New Year",
+      "realSeries": "League of Legends"
+    },
+    {
+      "id": "E-00920",
+      "cardName": "Epsilon and Zeta",
+      "eventName": "Chinese New Year",
+      "realSeries": "The Eminence in Shadow"
+    },
+    {
+      "id": "E-00926",
+      "cardName": "Hatsune Miku",
+      "eventName": "Chinese New Year",
+      "realSeries": "Vocaloid"
+    },
+    {
+      "id": "E-00934",
+      "cardName": "Kagami, Konata, Tsukasa and Miyuki",
+      "eventName": "Chinese New Year",
+      "realSeries": "Lucky Star"
+    },
+    {
+      "id": "E-00936",
+      "cardName": "Kaho Hinoshita",
+      "eventName": "Chinese New Year",
+      "realSeries": "Love Live!"
+    },
+    {
+      "id": "E-00947",
+      "cardName": "Luka Megurine",
+      "eventName": "Chinese New Year",
+      "realSeries": "Vocaloid"
+    },
+    {
+      "id": "E-00960",
+      "cardName": "Mini Yaemori",
+      "eventName": "Chinese New Year",
+      "realSeries": "Kanojo Okarishimasu"
+    },
+    {
+      "id": "E-00963",
+      "cardName": "Moca Aoba",
+      "eventName": "Chinese New Year",
+      "realSeries": "BanG Dream!"
+    },
+    {
+      "id": "E-00980",
+      "cardName": "Ram",
+      "eventName": "Chinese New Year",
+      "realSeries": "Re:Zero"
+    },
+    {
+      "id": "E-01006",
+      "cardName": "Vladilena Milizé",
+      "eventName": "Chinese New Year",
+      "realSeries": "Eighty Six"
+    },
+    {
+      "id": "E-01249",
+      "cardName": "Bronya Zaychik",
+      "eventName": "Chinese New Year",
+      "realSeries": "Honkai Impact 3"
+    },
+    {
+      "id": "E-01271",
+      "cardName": "Holo",
+      "eventName": "Chinese New Year",
+      "realSeries": "Spice and Wolf"
+    },
+    {
+      "id": "E-01283",
+      "cardName": "Kiana Kaslana",
+      "eventName": "Chinese New Year",
+      "realSeries": "Honkai Impact 3"
+    },
+    {
+      "id": "E-01288",
+      "cardName": "Kurisu Makise",
+      "eventName": "Chinese New Year",
+      "realSeries": "Steins;Gate"
+    },
+    {
+      "id": "E-01304",
+      "cardName": "Minami Fuyuki",
+      "eventName": "Chinese New Year",
+      "realSeries": "Hokkaido Gals Are Super Adorable!"
+    },
+    {
+      "id": "E-01305",
+      "cardName": "Mukuro Hoshimiya",
+      "eventName": "Chinese New Year",
+      "realSeries": "Date A Live"
+    },
+    {
+      "id": "E-01312",
+      "cardName": "Raiden Mei",
+      "eventName": "Chinese New Year",
+      "realSeries": "Honkai Impact 3"
+    },
+    {
+      "id": "E-01330",
+      "cardName": "Sayaka Murano",
+      "eventName": "Chinese New Year",
+      "realSeries": "Love Live!"
+    },
+    {
+      "id": "E-01332",
+      "cardName": "Shampoo",
+      "eventName": "Chinese New Year",
+      "realSeries": "Ranma 12"
+    },
+    {
+      "id": "E-01346",
+      "cardName": "Yue",
+      "eventName": "Chinese New Year",
+      "realSeries": "Arifureta"
+    },
+    {
+      "id": "E-01616",
+      "cardName": "Yui Kotegawa",
+      "eventName": "Chinese New Year",
+      "realSeries": "To Love Ru"
+    },
+    {
+      "id": "E-00161",
+      "cardName": "Akashi",
+      "eventName": "Christmas",
+      "realSeries": "KanColle"
+    },
+    {
+      "id": "E-00164",
+      "cardName": "Ayane Hojo",
+      "eventName": "Christmas",
+      "realSeries": "Princess Connect! Re:Dive"
+    },
+    {
+      "id": "E-00165",
+      "cardName": "Bishamon",
+      "eventName": "Christmas",
+      "realSeries": "Noragami"
+    },
+    {
+      "id": "E-00167",
+      "cardName": "C.C",
+      "eventName": "Christmas",
+      "realSeries": "Code Geass"
+    },
+    {
+      "id": "E-00168",
+      "cardName": "Chifuyu Matsuno",
+      "eventName": "Christmas",
+      "realSeries": "Tokyo Revengers"
+    },
+    {
+      "id": "E-00169",
+      "cardName": "Chihaya and Gil",
+      "eventName": "Christmas",
+      "realSeries": "Rewrite"
+    },
+    {
+      "id": "E-00172",
+      "cardName": "Chiyo Shimada",
+      "eventName": "Christmas",
+      "realSeries": "Girls und Panzer"
+    },
+    {
+      "id": "E-00175",
+      "cardName": "Cinderella",
+      "eventName": "Christmas",
+      "realSeries": "Grimms Notes The Animation"
+    },
+    {
+      "id": "E-00178",
+      "cardName": "Dia Kurosawa",
+      "eventName": "Christmas",
+      "realSeries": "Love Live!"
+    }
+  ]
+}
