@@ -309,7 +309,7 @@ async function dashboard(sock, chatId) {
   L.push(`   mined-but-not-live-here: event *${pending.length}* · regular *${regPending.length}*`);
   L.push('');
   L.push(`   \`${p} mentoring new\` — preview fresh finds`);
-  L.push(`   \`${p} mentoring ids [reg] [filter] [n]\` — newest card ids`);
+  L.push(`   \`${p} mentoring newids [reg] [filter] [n]\` — newest card ids (alias: ids)`);
   L.push(`   \`${p} mentoring find <q>\` — search the mine`);
   L.push(`   \`${p} mentoring promote\` — push mine → live (owner)`);
   L.push(`   \`${p} mentoring media\` — archive stats`);
@@ -573,7 +573,7 @@ async function handleMentoring(sock, chatId, argStr, opts = {}) {
   try {
     if (!sub || sub === 'status' || sub === 'dashboard' || sub === '-info') return await dashboard(sock, chatId);
     if (sub === 'new' || sub === 'fresh') return await showNew(sock, chatId, q);
-    if (sub === 'ids' || sub === 'list') return await listIds(sock, chatId, q);
+    if (sub === 'ids' || sub === 'list' || sub === 'newids' || sub === 'newid') return await listIds(sock, chatId, q); // 💡 2026-10-08: owner asked for "newids" — alias the ids browser
     if (sub === 'find' || sub === 'search') return await find(sock, chatId, q);
     if (sub === 'preview' || sub === 'show') return await preview(sock, chatId, q);
     if (sub === 'media') return await mediaStats(sock, chatId);
