@@ -192,7 +192,10 @@ function buildPreviewCaption(card) {
   const tier = String(card.tier);
   const label = String(TIER_LABEL[tier] || `TIER ${tier}`).replace(/\s+/g, ' ').trim();
   const series = card.animeName || 'Unknown';
-  const eventLine = (card.eventName && card.eventName !== card.animeName) ? `\n🎪 ⟢ *Event:* _${card.eventName}_` : '';
+  // 💡 DATA MODEL (2026-10-08): event cards always carry an Event line —
+  // eventName if present (real events), falling back to animeName for the
+  // rare cards whose event IS their series (MHA CCG / SWORN).
+  const eventLine = (card.eventName || String(card.id).startsWith('E-')) ? `\n🎪 ⟢ *Event:* _${card.eventName || card.animeName}_` : '';
   const desc = card.description ? `\n📝 ⟢ *Description:* _${card.description}_` : '';
   const link = card.detailUrl ? `\n🔗 _${card.detailUrl}_` : '';
   return (

@@ -625,41 +625,30 @@ function buildCardDetailCaption(card, uc, stat, location = 'Collection', index =
   let locStr;
   if (uc) {
     // Player owns this card - show their collection/deck info
-    locStr = `📦 *${ownerName}'s Coll*`;
+    locStr = `${ownerName}'s Coll`;
     if (index !== null) locStr += ` (#${index})`;
-    if (uc.inMainDeck) locStr = `🎴 *${ownerName}'s Main Deck* (Slot #${uc.mainDeckSlot})`;
-    else if (uc.inCustomDeck) locStr = `📁 *Deck: ${uc.customDeckName}* (Slot #${uc.customDeckSlot})`;
+    if (uc.inMainDeck) locStr = `${ownerName}'s Main Deck (Slot #${uc.mainDeckSlot})`;
+    else if (uc.inCustomDeck) locStr = `Deck: ${uc.customDeckName} (Slot #${uc.customDeckSlot})`;
   } else {
     // No owner - this is a database lookup, not a player's card
-    locStr = `🗄️ *${location}*`;
+    locStr = location;
   }
 
   const copyLine  = uc ? `\n📋 ⟢ *Copy:* _#${uc.copyNumber} / ${stat?.maxCopies || '?'}_` : '';
   const ownerLine = uc ? `\n👤 ⟢ *Owner:* _@${economy.getDisplayName(uc.userId)}_` : '';
 
-  // 💡 FIX: For event cards, show the actual anime series if available.
-  // The animeName field currently stores the event name (e.g., "Chinese
-  // New Year") for event cards. If the card has a 'series' field, use
-  // that instead. Otherwise, for event cards, show "Event: <eventName>"
-  // so it's clear this is an event card, not a regular anime card.
-  let seriesDisplay = card.animeName || 'Unknown';
+  // 💡 DATA MODEL (2026-10-08): animeName = the card's REAL anime/series,
+  // eventName = the event the card belongs to. Two separate concepts, two
+  // separate lines (owner rule: "the event should be separate from the
+  // series"). Series line = animeName; Event line = eventName.
+  const seriesDisplay = card.animeName || 'Unknown';
   let eventLine = '';
-  if (card.series) {
-    seriesDisplay = card.series;
-  }
   if (isEventCard(card)) {
-    // Event cards: show event name separately
-    seriesDisplay = card.animeName || 'Unknown';
-    if (card.eventName && card.eventName !== card.animeName) {
-      eventLine = `\n🎪 ⟢ *Event:* _${card.eventName}_`;
-    } else {
-      eventLine = `\n🎪 ⟢ *Event:* _${card.animeName}_`;
-    }
+    eventLine = `\n🎪 ⟢ *Event:* _${card.eventName || card.animeName}_`;
   }
 
-  // 💡 FIX: Show the card's description if available (event cards have
-  // a description like "Albedo from Chinese New Year"). This gives more
-  // context about the card.
+  // 💡 Description follows the house format "<Name> from <Series>" (data
+  // regenerated 2026-10-08 for every event card).
   const descLine = card.description ? `\n📝 ⟢ *Description:* _${card.description}_` : '';
 
   // owned/tagged/database contexts ALWAYS carry the location line —
@@ -672,7 +661,7 @@ function buildCardDetailCaption(card, uc, stat, location = 'Collection', index =
 🏆 ❖ *Tier:* _${label}_
 🎨 ⟢ *Artist:* _${card.creator || 'Unknown'}_${eventLine}${descLine}${copyLine}${ownerLine}
 
-📍 ⟢ *Location:* ${locStr}`
+📍 ⟢ *Location:* _${locStr}_`
   );
 }
 
@@ -683,20 +672,12 @@ function buildSpawnCaption(card, copyNumber, maxCopies, price) {
   // location line; the claim footer keeps the spawn actionable.
   const label = String(TIER_LABEL[tier]  || `TIER ${tier}`).replace(/\s+/g, ' ').trim();
 
-  // Use same series display logic as buildCardDetailCaption
-  let seriesDisplay = card.animeName || 'Unknown';
+  // Same data model as buildCardDetailCaption (see 2026-10-08 note there):
+  // Series = animeName (real series), Event = eventName (separate line).
+  const seriesDisplay = card.animeName || 'Unknown';
   let eventLine = '';
-  if (card.series) {
-    seriesDisplay = card.series;
-  }
   if (isEventCard(card)) {
-    // Event cards: show event name separately
-    seriesDisplay = card.animeName || 'Unknown';
-    if (card.eventName && card.eventName !== card.animeName) {
-      eventLine = `\n🎪 ⟢ *Event:* _${card.eventName}_`;
-    } else {
-      eventLine = `\n🎪 ⟢ *Event:* _${card.animeName}_`;
-    }
+    eventLine = `\n🎪 ⟢ *Event:* _${card.eventName || card.animeName}_`;
   }
 
   const descLine = card.description ? `\n📝 ⟢ *Description:* _${card.description}_` : '';
@@ -1138,14 +1119,23 @@ async function searchEventCards(nameQuery, animeQuery) {
 
   let results = eventCards;
 
+  // 💡 FIX (2026-10-08): a name query now matches the card name, the EVENT
+  // name, AND the anime/series name. Before, only cardName was searched, so
+  // `einfo summer` found nothing (the Summer cards are named after their
+  // characters, not the event) — the owner saw event search as "all gone".
   if (nameQuery) {
     const nq = nameQuery.toLowerCase();
-    results = results.filter(c => c.cardName.toLowerCase().includes(nq));
+    results = results.filter(c =>
+      c.cardName.toLowerCase().includes(nq) ||
+      (c.eventName || '').toLowerCase().includes(nq) ||
+      (c.animeName || '').toLowerCase().includes(nq));
   }
 
   if (animeQuery) {
     const aq = animeQuery.toLowerCase();
-    results = results.filter(c => (c.animeName || '').toLowerCase().includes(aq));
+    results = results.filter(c =>
+      (c.animeName || '').toLowerCase().includes(aq) ||
+      (c.eventName || '').toLowerCase().includes(aq));
   }
 
   return results;
@@ -2304,7 +2294,10 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
     let msg = `🎁 *EVENT CARD SEARCH* 🎁\n`;
     msg += `📦 Found ${results.length} event card${results.length === 1 ? '' : 's'}:\n\n`;
     results.forEach(c => {
-      msg += `▫️ *${c.cardName}* (T${c.tier})\n   ➥ ID: \`${c.id}\` | Event: _${c.animeName}_\n`;
+      // 💡 FIX (2026-10-08): this line printed animeName as the Event. That
+      // was only "correct" while the data bug held (animeName holding the
+      // event name); with real series data it must read eventName.
+      msg += `▫️ *${c.cardName}* (T${c.tier})\n   ➥ ID: \`${c.id}\` | Event: _${c.eventName || c.animeName}_\n`;
     });
     msg += `\n💡 Use \`${p} info <id>\` to see full details.`;
     return reply(msg);
