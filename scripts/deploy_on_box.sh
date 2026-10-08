@@ -8,6 +8,13 @@
 #   with 3 tenants). This script must therefore NEVER pm2-start wa-joker
 #   on Box 1, and the idempotency gate only requires Box 1's two apps.
 #
+# MINING HOLD (task45, 2026-10-08): Box 1 is on mining duty (wa-miner
+#   scrapes shoob.gg event cards; jake/subaru are parked at the owner's
+#   request and WILL be turned back on later). While ~/MINING_HOLD exists
+#   this deploy syncs CODE + AUTH ONLY and never touches pm2 — no restarts,
+#   no starts, no resurrects. Owner deletes the hold file when the bots
+#   return ("we will turn the bots back on").
+#
 # Auth precedence rule (fixes historic "old auth over new" disasters):
 #   - per instance (Jake/Joker/Subaru): compare git auth commit timestamp
 #     vs disk creds.json mtime.
@@ -19,6 +26,12 @@ BRANCH="${1:-audit/fix-pass-1}"
 REPO_DIR="$HOME/whatsapp-bot"
 BACKUP_ROOT="$HOME/auth-backups"
 cd "$REPO_DIR" || exit 1
+
+# ── mining hold gate (task45): code-only mode when the hold file exists ──
+HOLD_FILE="$HOME/MINING_HOLD"
+if [ -f "$HOLD_FILE" ]; then
+  echo "MINING HOLD active ($HOLD_FILE) — code+auth sync only, pm2 will NOT be touched"
+fi
 
 echo "=== smart deploy: branch=$BRANCH  $(date -u +%FT%TZ) ==="
 git fetch origin || exit 1
@@ -34,7 +47,7 @@ TARGET="$BRANCH"
 # relay consumes its head and stays quiet).
 TARGET_HEAD=$(git rev-parse "origin/$TARGET" 2>/dev/null || echo "")
 CURRENT_HEAD=$(git rev-parse HEAD 2>/dev/null || echo "")
-if [ -n "$TARGET_HEAD" ] && [ "$TARGET_HEAD" = "$CURRENT_HEAD" ]; then
+if [ -n "$TARGET_HEAD" ] && [ "$TARGET_HEAD" = "$CURRENT_HEAD" ] && [ ! -f "$HOLD_FILE" ]; then
   # 3-tenant -> cross-box split (2026-10-03): gate = Box 1's apps online
   # (wa-jake + wa-subaru; wa-joker lives on Box 2 now).
   PSTATE=$(pm2 jlist 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const p=JSON.parse(s);const want=['wa-jake','wa-subaru'];const ok=want.every(n=>(p||[]).some(x=>x&&x.name===n&&x.pm2_env&&x.pm2_env.status==='online'));console.log(ok?'online':'no')}catch(e){console.log('no')}})" 2>/dev/null || echo no)
@@ -121,7 +134,9 @@ fi
 
 # Staggered restart: keep WhatsApp same-IP reconnection gentle.
 # SKIP_RESTART=1 (used for config-only landings) skips all pm2 churn.
+# MINING HOLD (task45): force-skip while ~/MINING_HOLD exists.
 SKIP_RESTART="${SKIP_RESTART:-0}"
+if [ -f "$HOLD_FILE" ]; then SKIP_RESTART=1; fi
 if [ "$SKIP_RESTART" != "1" ]; then
   for APP in wa-jake wa-subaru; do
     if pm2 describe "$APP" >/dev/null 2>&1; then
@@ -133,7 +148,7 @@ if [ "$SKIP_RESTART" != "1" ]; then
   pm2 save 2>/dev/null | tail -1
   sleep 6
 else
-  echo "SKIP_RESTART=1 -> leaving pm2 processes untouched"
+  echo "SKIP_RESTART=1 -> leaving pm2 processes untouched (wa-miner keeps mining; parked bots stay parked)"
 fi
 echo "=== pm2 ==="
 pm2 list
