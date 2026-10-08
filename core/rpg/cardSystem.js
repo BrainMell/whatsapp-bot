@@ -2266,7 +2266,10 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
   if (eventMode) {
     // 💡 FIX: Check if query is an exact E-XXXXX ID first
     if (query) {
-      const exactEventCard = CARD_INDEX()[query];
+      // 💡 FIX (2026-10-08): CARD_INDEX is keyed by the verbatim id ("E-03201")
+      // but cmdInfo lowercases its query — exact-id lookups for event cards
+      // always missed ("Card not found" even though the id exists).
+      const exactEventCard = CARD_INDEX()[query] || CARD_INDEX()[query.toUpperCase()];
       if (exactEventCard && isEventCard(exactEventCard)) {
         // Found by exact ID - show details directly
         const stat = await CardStat.findOne({ cardId: exactEventCard.id });
@@ -2304,7 +2307,8 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
   }
 
   // Exact ID check first
-  const exact = CARD_INDEX()[query];
+  // 💡 FIX (2026-10-08): case-insensitive id lookup (see eventMode note above)
+  const exact = CARD_INDEX()[query] || CARD_INDEX()[query.toUpperCase()];
   if (exact) {
     const stat = await CardStat.findOne({ cardId: exact.id });
     const caption = buildCardDetailCaption(exact, null, stat, 'Global Database');
@@ -2323,7 +2327,7 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
   // 💡 P3 (2026-08-16): If query looks like a card ID (N-NNNNN format) but
   // wasn't found in CARD_INDEX, explicitly flag it as missing from the DB
   // instead of falling through to a generic name search.
-  if (/^\d+-\d+$/.test(query) || /^E-\d+$/.test(query) || /^S-\d+$/.test(query)) {
+  if (/^\d+-\d+$/.test(query) || /^E-\d+$/i.test(query) || /^S-\d+$/i.test(query)) {
     return reply(`⚠️ Card ID *"${query}"* is not in the database.\n\nThis card ID follows the standard format (tier-number) but no card with this ID exists in cards_data.json. It may have been removed or never existed.\n\n💡 Use \`${p} info <card name>\` to search by name instead.`);
   }
 
