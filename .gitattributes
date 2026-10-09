@@ -22,3 +22,7 @@ core/rpgasset/environment/abyss/*.png -filter -diff -merge -text
 # real pixels (the boxes fetch from digi-api at runtime; every reset used to
 # re-stub these as LFS pointers and the sprites silently broke until refetch)
 core/rpgasset/summons/digimon/*.png -filter -diff -merge -text
+# the game's OWN summon sprites (sparklinlabs idle exports, one PNG per
+# registry species) must be real pixels everywhere — same deploy rule as the
+# digimon cache above
+core/rpgasset/summons/sparklinlabs/*.png -filter -diff -merge -text

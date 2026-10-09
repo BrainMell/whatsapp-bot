@@ -62,6 +62,12 @@ const unknown = abyssScene.resolveEnemyArt({ name: 'MYSTERY BEAST', spriteIndex:
 check('out-of-range index never crashes (null or sheet)', unknown === null || !!unknown.file);
 check('override dir is the NEW subdir (C-locale index of enemies/ untouched)',
     rat && rat.dir.endsWith(path.join('enemies', 'abyss')));
+// (2026-10-09, owner: abyss monsters = the FORWARD-FACING pool singles like the
+// reference img) — the old bat strip had no front frame; the pool renders the
+// winged front-facing single instead:
+const enemyVariants = require(path.join(REPO, 'core/rpg/enemyVariants'));
+check('CAVE_BAT renders a forward-facing pool single (not the side-view strip)',
+    enemyVariants.ABYSS_SPRITE_MAP.CAVE_BAT === 42 && enemyVariants.abyssSpriteIndex('CAVE_BAT') === 42);
 const abyssFiles = require('fs').readdirSync(path.join(REPO, 'core/rpgasset/enemies/abyss')).filter((f) => f.endsWith('.png'));
 check(`enemies/abyss holds only the two by-name sprites (8 AI files deleted): ${abyssFiles.join(',')}`,
     abyssFiles.length === 2 && abyssFiles.includes('abyss_rat.png') && abyssFiles.includes('abyss_slime.png'));
@@ -161,28 +167,35 @@ section('§6 — frozen layout + render contract');
     const fcBroken = await abyssScene.renderAbyssFloorCard(null);
     check('floor card with null payload never throws', fcBroken === null || Buffer.isBuffer(fcBroken));
 
-    // ═══ 7. summons are DIGIMON again (owner 2026-10-09) ═══
-    section('§7b — species→Digimon sprite mapping');
+    // ═══ 7. summons render the game's OWN sprites (owner 2026-10-09: NO DIGIMON) ═══
+    section('§7b — own sparklinlabs summon sprites (Digimon mapping removed)');
     const summonSprites = require(path.join(REPO, 'core/rpg/summonSprites'));
     const reg = require(path.join(REPO, 'core/rpg/summonRegistry'));
     const speciesIds = reg.getAllSpecies ? reg.getAllSpecies() : Object.keys(reg.SPECIES || reg);
-    const unmapped = speciesIds.filter((id) => !summonSprites.getSpeciesDigimon(id));
-    const legacyOk = unmapped.every((id) => /^(skeleton|skeleton_knight|lich_minion|imp|void_walker|flame_elemental|frost_elemental|storm_elemental|wolf|bear|turret_mk1|cannon_turret|wyrmling|juvenile_dragon)$/.test(id));
-    check(`every non-legacy registry species maps to a Digimon (${speciesIds.length} species, unmapped: ${unmapped.join(',') || 'none'})`, legacyOk);
-    check('dragon → Megadramon', summonSprites.getSpeciesDigimon('dragon') === 'Megadramon');
-    check('slime → Koromon', summonSprites.getSpeciesDigimon('slime') === 'Koromon');
+    check('species→Digimon map is GONE (getSpeciesDigimon undefined)', summonSprites.getSpeciesDigimon === undefined);
+    const notOwn = speciesIds.filter((id) => {
+        const p = summonSprites.getSpritePath(id);
+        return !(p && p.includes(path.join('summons', 'sparklinlabs')));
+    });
+    check(`every registry species resolves its OWN sparklinlabs PNG (${speciesIds.length} species, missing: ${notOwn.join(',') || 'none'})`, notOwn.length === 0);
+    const dragonPath = summonSprites.getSpritePath('dragon');
+    const dragonBytes = dragonPath ? require('fs').readFileSync(dragonPath) : Buffer.alloc(0);
+    check('own sprites are real PNG bytes (deploy-safe, not LFS stubs)',
+        dragonBytes[0] === 0x89 && dragonBytes.length > 500);
+    check('own sprite dir holds 26 files (one per species)',
+        require('fs').readdirSync(path.join(REPO, 'core/rpgasset/summons/sparklinlabs')).filter((f) => f.endsWith('.png')).length === 26);
     const dragonArt = await summonSprites.getOrFetchSprite('dragon');
-    check('mapped sprite resolves locally (cache/real bytes)', !!dragonArt);
+    check('getOrFetchSprite returns the LOCAL own sprite (no API fetch)', !!dragonArt && dragonArt.includes(path.join('summons', 'sparklinlabs')));
     const pwild = await abyssScene.planCombatLayout(mkState({
         kind: 'wild',
         abyssRun: { currentEncounterType: 'wild_summon', currentEncounterData: { species: 'dragon', rarity: 'RARE' } },
         enemies: [{ name: 'Wild Pyraxis', isWildSummon: true, currentHP: 400, stats: { hp: 400, maxHp: 600 } }],
         summons: [{ species: 'bat', name: 'Nocturne' }],
     }));
-    check('wild summon art resolves to the mapped Digimon file',
-        pwild.enemy && pwild.enemy.art && pwild.enemy.art.file === 'megadramon.png');
-    check('ally art resolves through the same map (bat → pico_devimon.png)',
-        pwild.allies.length === 1 && pwild.allies[0].art && pwild.allies[0].art.file === 'pico_devimon.png');
+    check('wild summon art = the game\'s own dragon sprite (dragon.png)',
+        pwild.enemy && pwild.enemy.art && pwild.enemy.art.file === 'dragon.png');
+    check('ally art = the game\'s own bat sprite (bat.png)',
+        pwild.allies.length === 1 && pwild.allies[0].art && pwild.allies[0].art.file === 'bat.png');
     check('ally pack grounds ABOVE the HUD panel (panel top ~656)',
         pwild.allies.every((a) => a.gy < 650));
 

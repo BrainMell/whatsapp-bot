@@ -143,38 +143,20 @@ function resolveEnemyArt(enemy) {
     return null;
 }
 
-// ── wild-summon art (§7) — DIGIMON, again (owner 2026-10-09: "the summons
-// aren't Digimon anymore. I thought we was over that??") ───────────────────
-// summonSprites.getOrFetchSprite consults the species→Digimon map, so wild
-// summons and deployed allies render real Digimon sprites; misses fetch from
-// digi-api once and cache to disk. A short race + one-attempt set keeps the
-// render path instant even when the API is slow (warmupCache covers boot).
-const _summonFetchTried = new Set();
+// ── wild-summon art (§7) — the game's OWN sprites (owner 2026-10-09: "NO
+// DIGIMON — WE LITERALLY HAVE OUR OWN SUMMON SPRITES") ─────────────────────
+// Every registry species ships a dedicated sparklinlabs PNG (26/26, committed
+// as real bytes). summonSprites.getSpritePath checks that folder FIRST (then
+// retromon/SD/digimon-cache for legacy ids), so a pure local lookup is enough
+// — no digi-api fetch anywhere on the render path. An unmatched id returns
+// null and the caller keeps the text layer (same failure contract as before).
 async function resolveSummonArt(species) {
     try {
         const summonSprites = require('./summonSprites');
-        const key = String(species || '').toLowerCase();
-        if (key && !_summonFetchTried.has(key)) {
-            _summonFetchTried.add(key);
-            const p = await Promise.race([
-                summonSprites.getOrFetchSprite(species),
-                new Promise((r) => setTimeout(() => r(null), 2500)),
-            ]);
-            if (p && fs.existsSync(p)) {
-                const img = await loadImage(p).catch(() => null);
-                if (img) return { img, file: path.basename(p) };
-            }
-        } else {
-            // already attempted this process: resolve LOCALLY — through the
-            // species→Digimon map (the fetch caches under the DIGIMON name,
-            // e.g. dragon → megadramon.png), then the raw species id
-            const mapped = summonSprites.getSpeciesDigimon(species);
-            const p0 = summonSprites.getSpritePath(mapped || species)
-                || summonSprites.getSpritePath(species);
-            if (p0 && fs.existsSync(p0)) {
-                const img0 = await loadImage(p0).catch(() => null);
-                if (img0) return { img: img0, file: path.basename(p0) };
-            }
+        const p = summonSprites.getSpritePath(species);
+        if (p && fs.existsSync(p)) {
+            const img = await loadImage(p).catch(() => null);
+            if (img) return { img, file: path.basename(p) };
         }
     } catch (e) { /* fall through */ }
     return null;
@@ -306,8 +288,8 @@ async function planCombatLayout(state, opts = {}) {
                 || (enemy && enemy.name), 20)
             : null,
     };
-    // §7: wild-summon art comes from the summon sprite system (digimon/
-    // retromon caches) — resolve ONCE here so TURN renders reuse the plan
+    // §7: wild-summon art = the game's OWN sparklinlabs sprites (one PNG per
+    // registry species) — resolve ONCE here so TURN renders reuse the plan
     if (isWildSummon && plan.enemy) {
         const art = await resolveSummonArt(plan.wildSpecies);
         if (art) plan.enemy.art = art;

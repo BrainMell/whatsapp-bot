@@ -67,7 +67,11 @@ const VARIANT_SHEET_CYCLE = ['kobold', 'gnoll', 'goblin', 'sahuagin', 'werewolf'
 const ABYSS_SPRITE_MAP = {
     // F-tier creatures
     RABID_RAT: 86,        // wolf_0001_brown.png (closest small vermin pack body)
-    CAVE_BAT: 0,          // Bat_0000_dark.png
+    // (2026-10-09, owner: abyss monsters must be the FORWARD-FACING pool
+    // singles like the reference) — the old bat sheet is a 9x6 side-view
+    // walk strip with no front frame; CAVE_BAT renders the winged imp
+    // single instead (fire (6).png — same pack, front-facing, unmapped)
+    CAVE_BAT: 42,         // fire (6).png (winged, front-facing)
     EMBER_SPAWN: 40,      // fire (11).png
     FROST_WISP: 61,       // ice (1).png
     SLIME: 81,            // slime waterB sheet.png

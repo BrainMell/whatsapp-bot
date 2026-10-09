@@ -18,10 +18,11 @@ Attribution for third-party art shipped with the bot / image services.
 
 - **Abyss background pool** (`core/rpgasset/environment/abyss/*.png`):
   [sparklinlabs/superpowers-asset-packs](https://github.com/sparklinlabs/superpowers-asset-packs),
-  `rpg-battle-system/backgrounds` (the same CC0 pack the repo's
-  `backgrounds/background1-3.png` come from). Dark/indoor halls cropped to the
-  scene ratio, palette-graded per biome band (pure pixel math — hue/val/tint,
-  NEAREST-resampled). **License:** CC0 1.0.
+  `backgrounds/backgrounds` (the same CC0 pack the repo's
+  `backgrounds/background1-3.png` come from; art by Pixel-boy). Rebuilt the
+  same day (owner: the abyss is a dungeon — daylight lawns removed): the pool
+  is now DARK halls/caves/storm/void scenes only, palette-graded per depth
+  band (pure pixel math — hue/val/tint, integer 7x NEAREST bake). **License:** CC0 1.0.
 - **Abyss rat** (`core/rpgasset/enemies/abyss/abyss_rat.png`): front-facing
   frame cut from the [Evil Dungeon Asset Pack](https://opengameart.org/content/evil-dungeon-asset-pack)
   rat charset by Rodrigo Henrique (Rawdanitsu), via OpenGameArt.org.
@@ -29,15 +30,19 @@ Attribution for third-party art shipped with the bot / image services.
 - **Abyss slime** (`core/rpgasset/enemies/abyss/abyss_slime.png`): front frame
   from ["Slime Monster 24x24"](https://opengameart.org/content/slime-monster-24x24)
   by Bonsaiheldin, via OpenGameArt.org. **License:** CC-BY 4.0.
-- **Wild/ally summon sprites**: official Digimon artwork fetched at runtime
-  from digi-api.com and cached under `core/rpgasset/summons/digimon/`
-  (registry species map to Digimon via `DIGIMON_FOR_SPECIES` in
-  `core/rpg/summonSprites.js`). Digimon is a Bandai/Namco trademark — sprites
-  are used as recognizable fan-facing game art, same as the pre-existing
-  cache.
-- All other abyss enemies render the repo's existing curated single-sprite
-  pixel pool (`enemies/*.png` — sparklinlabs superpowers-asset-packs bundles,
-  CC0 — see "Prior art" below).
+- **Wild/ally summon sprites** (`core/rpgasset/summons/sparklinlabs/*.png`):
+  the game's OWN summon art — one PNG per registry species (26/26), exported
+  from the same sparklinlabs idle set the Go image service has always used
+  for roster/detail cards (17 pack PNGs + 9 first-frame GIF→PNG conversions
+  for the batch-6/7 species). Owner 2026-10-09: "NO DIGIMON — we literally
+  have our own summon sprites" — the brief species→Digimon map was removed;
+  digi-api fetches now apply to legacy DB rows only (Digimon is a Bandai/Namco
+  trademark; the pre-existing legacy cache is unchanged).
+- All other abyss enemies render the repo's existing curated forward-facing
+  single-sprite pixel pool (`enemies/*.png` — sparklinlabs superpowers-asset-packs
+  bundles, CC0 — see "Prior art" below). CAVE_BAT maps to the winged
+  front-facing single (`fire (6).png`); the old bat sheet is a side-view walk
+  strip with no front frame.
 
 ## Prior art already in the game (referenced, unchanged)
 

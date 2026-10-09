@@ -9,11 +9,17 @@
 //   Creature Data → getSpritePath()/getOrFetchSprite() → UI Component → Displayed Sprite
 //
 // Lookup priority:
-//   1. Local Digimon cache (rpgasset/summons/digimon/)
-//   2. Local Retromon (rpgasset/summons/retromon/) - case-insensitive
-//   3. Local SD summons (rpgasset/summons/) - case-insensitive
-//   4. Numeric species → retromon rotation
-//   5. On-demand fetch from digi-api.com (getOrFetchSprite only)
+//   1. The game's OWN summon sprites (rpgasset/summons/sparklinlabs/) — one
+//      PNG per registry species (idle-export). Owner 2026-10-09: "WE
+//      LITERALLY HAVE OUR OWN SUMMON SPRITES" — these always win.
+//   2. Local Digimon cache (rpgasset/summons/digimon/) — legacy DB rows whose
+//      species id IS a Digimon name only
+//   3. Local Retromon (rpgasset/summons/retromon/) - case-insensitive
+//   4. Local SD summons (rpgasset/summons/) - case-insensitive
+//   5. Numeric species → retromon rotation
+//   6. On-demand fetch from digi-api.com (getOrFetchSprite only — and never
+//      for registry species: the 2026-10-09 species→Digimon map was REMOVED,
+//      summons render their own art again)
 //
 // Case-insensitive matching means "Agumon.png", "agumon.png", "AGUMON.png"
 // all resolve correctly - fixes the retromon case-mismatch bug.
@@ -31,6 +37,8 @@ async function getJimp() {
 const CACHE_DIR = path.join(__dirname, '..', 'rpgasset', 'summons', 'digimon');
 const FALLBACK_DIR = path.join(__dirname, '..', 'rpgasset', 'summons');
 const RETROMON_DIR = path.join(__dirname, '..', 'rpgasset', 'summons', 'retromon');
+// the game's own summon art (one PNG per registry species — see lookup note)
+const SPARKLINLABS_DIR = path.join(__dirname, '..', 'rpgasset', 'summons', 'sparklinlabs');
 const IMG_BASE = 'https://digi-api.com/images/digimon/w';
 
 // Ensure cache directory exists
@@ -150,52 +158,16 @@ const DIGIMON_API_NAME_OVERRIDES = {
 };
 
 // ─────────────────────────────────────────────
-// Species → Digimon art mapping (owner 2026-10-09: "the summons aren't Digimon
-// anymore. I thought we was over that??")
+// (2026-10-09, owner: "NO DIGIMON — WE LITERALLY HAVE OUR OWN SUMMON
+// SPRITES") The species→Digimon art map that briefly forced Digimon faces
+// onto every registry species is REMOVED. Registry species resolve their own
+// sparklinlabs PNG (priority 0 below); the digi-api fetch stays only for
+// legacy DB rows whose species id is itself a Digimon name.
 // ─────────────────────────────────────────────
-// The summon REGISTRY uses custom archetype species (bat, dragon, slime...), so
-// sprite lookups missed the Digimon cache and renders fell back to emoji/AI
-// filler. This map gives every registry species a REAL Digimon face — element /
-// body-plan matched — while names and mechanics stay untouched. Verified
-// against the digi-api (or already present in the local cache) 2026-10-09.
-const DIGIMON_FOR_SPECIES = {
-  bat: 'Pico Devimon',           // shadow stalker → bat-winged imp
-  boar: 'Boarmon',               // earth brute → armored boar
-  chest: 'Tankmon',              // construct tank → war engine
-  dino: 'Tyranomon',             // beast brute → tyrannosaur
-  dragon: 'Megadramon',          // fire brute → dark dragon
-  ghost: 'Bakemon',              // undead → the classic ghost
-  giant: 'Golemon',              // earth colossus → rock giant
-  mimic: 'Impmon',               // trickster construct → prankster imp
-  mushroom: 'Sunflowmon',        // nature mage → bloom plant
-  octopus: 'Dagomon',            // kraken → deep-one octopus
-  reptile: 'Betamon',            // poison stalker → amphibian
-  slime: 'Koromon',              // blob tank → the classic blob
-  snake: 'Seadramon',            // poison serpent → sea serpent
-  yeti: 'Icemon',                // ice brute → yeti digimon
-  ship_cruiser: 'Mechanorimon',  // construct brute → war machine
-  ship_fighter: 'Raptordramon',  // construct stalker → machine raptor
-  ship_squid: 'Thetismon',       // sea mage → sea-nymph digimon
-  plaguefang: 'Archnemon',       // plague stalker → poison spider
-  lumenmoth: 'Morphomon',        // light mage → luminous moth
-  emberwick: 'Meramon',          // fire tank → living flame
-  skitterswarm: 'Funbeemon',     // plague swarm → insect hive
-  tidalmaw: 'Whamon',            // tide maw → the giant whale
-  fireguard: 'Fladramon',        // fire tank → flame-armored guardian
-  boglurk: 'Pinochimon',         // nature lurker → evil pine
-  frostpeep: 'Frozomon',         // ice mage → frost machine
-  starnail: 'Starmon',           // crystal brute → star-headed
-};
 
 function getApiName(species) {
   const safeName = normalizeSpeciesName(species);
   return DIGIMON_API_NAME_OVERRIDES[safeName] || null;
-}
-
-/** The Digimon face for a registry species id (or null → fetch species as-is). */
-function getSpeciesDigimon(species) {
-  const safeName = normalizeSpeciesName(species);
-  return DIGIMON_FOR_SPECIES[safeName] || null;
 }
 
 function normalizeSpeciesName(species) {
@@ -219,8 +191,12 @@ function getSpritePath(species) {
   if (!species) return null;
   const safeName = normalizeSpeciesName(species);
 
-  // 1. Check Digimon cache (case-insensitive)
-  let resolved = findCaseInsensitive(CACHE_DIR, `${safeName}.png`);
+  // 0. The game's OWN summon sprites — always win (owner directive)
+  let resolved = findCaseInsensitive(SPARKLINLABS_DIR, `${safeName}.png`);
+  if (resolved) return resolved;
+
+  // 1. Check Digimon cache (legacy species ids only — case-insensitive)
+  resolved = findCaseInsensitive(CACHE_DIR, `${safeName}.png`);
   if (resolved) return resolved;
 
   // 2. Check Retromon folder (case-insensitive)
@@ -387,11 +363,10 @@ async function getOrFetchSprite(species, digimonName) {
     } catch (e) {}
   }
 
-  // Determine fetch name: explicit override > species→Digimon map > API name
-  // map > species name. The species map is what makes summons Digimon again
-  // for EVERY renderer (roster, codex, profile, abyss) with zero call-site
-  // changes.
-  const fetchName = digimonName || getSpeciesDigimon(species) || getApiName(species) || (species || '').replace(/_/g, ' ');
+  // Determine fetch name: explicit override > API-name map > species name.
+  // NO species→Digimon mapping (removed 2026-10-09 — registry species render
+  // their own sparklinlabs art and never reach this fetch).
+  const fetchName = digimonName || getApiName(species) || (species || '').replace(/_/g, ' ');
   if (fetchName) {
     const fetched = await fetchAndCache(fetchName);
     if (fetched) return fetched;
@@ -485,8 +460,8 @@ const KNOWN_MISSING = new Set([
   'blossom_sylph',
   'world_tree_spirit',
   // (2026-10-09) boglurk/emberwick/fireguard/frostpeep/lumenmoth/plaguefang/
-  // skitterswarm/starnail/tidalmaw REMOVED from this set — they now resolve
-  // through DIGIMON_FOR_SPECIES below and warm up like any other species.
+  // skitterswarm/starnail/tidalmaw REMOVED from this set — they ship as local
+  // sparklinlabs PNGs now and warm up from disk like any other species.
 ]);
 
 async function warmupCache(registryModule) {
@@ -539,9 +514,9 @@ module.exports = {
   getOrFetchSprite,
   batchFetch,
   warmupCache,
-  getSpeciesDigimon,
   CACHE_DIR,
+  SPARKLINLABS_DIR,
   imageCache,
   // Exposed for testing / debugging
-  _internal: { normalizeSpeciesName, findCaseInsensitive, refreshDirIndex, SPECIES_ALIASES, DIGIMON_FOR_SPECIES }
+  _internal: { normalizeSpeciesName, findCaseInsensitive, refreshDirIndex, SPECIES_ALIASES }
 };
