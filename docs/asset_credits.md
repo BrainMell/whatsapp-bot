@@ -23,12 +23,15 @@ Attribution for third-party art shipped with the bot / image services.
   same day (owner: the abyss is a dungeon — daylight lawns removed): the pool
   is now DARK halls/caves/storm/void scenes only, palette-graded per depth
   band (pure pixel math — hue/val/tint, integer 7x NEAREST bake). **License:** CC0 1.0.
-- **Abyss rat** (`core/rpgasset/enemies/abyss/abyss_rat.png`): front-facing
-  frame cut from the [Evil Dungeon Asset Pack](https://opengameart.org/content/evil-dungeon-asset-pack)
-  rat charset by Rodrigo Henrique (Rawdanitsu), via OpenGameArt.org.
-  **License:** CC-BY 3.0.
-- **Abyss slime** (`core/rpgasset/enemies/abyss/abyss_slime.png`): front frame
-  from ["Slime Monster 24x24"](https://opengameart.org/content/slime-monster-24x24)
+- ~~**Abyss rat** (`core/rpgasset/enemies/abyss/abyss_rat.png`)~~ **REMOVED
+  2026-10-09** (owner 08:43Z: only the front-facing amalgamation creatures
+  belong in the abyss — the rat is a plain animal, not one of them).
+  Was a front-facing frame cut from the [Evil Dungeon Asset Pack](https://opengameart.org/content/evil-dungeon-asset-pack)
+  rat charset by Rodrigo Henrique (Rawdanitsu), via OpenGameArt.org. **License:** CC-BY 3.0.
+- ~~**Abyss slime** (`core/rpgasset/enemies/abyss/abyss_slime.png`)~~ **REMOVED
+  2026-10-09** (owner 08:43Z: "the slime is too low quality and big... let's
+  get rid of the slime in the abyss").
+  Was a front frame from ["Slime Monster 24x24"](https://opengameart.org/content/slime-monster-24x24)
   by Bonsaiheldin, via OpenGameArt.org. **License:** CC-BY 4.0.
 - **Wild/ally summon sprites** (`core/rpgasset/summons/sparklinlabs/*.png`):
   the game's OWN summon art — one PNG per registry species (26/26), exported

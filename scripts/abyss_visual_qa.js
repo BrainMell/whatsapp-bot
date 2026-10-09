@@ -44,36 +44,60 @@ check('floors rotate the pool', abyssScene.bgFileForFloor(1) !== abyssScene.bgFi
 check('combat selection stays inside combat pool', combat.includes(abyssScene.bgFileForFloor(9, true)));
 
 // ═══ 2. enemy art resolution (§5) ═══
-section('FIX §5 — enemy art resolution');
-check('enemyIdOf plain pool id', abyssScene.enemyIdOf({ name: 'RABID RAT' }) === 'RABID_RAT');
-check('enemyIdOf boss name with icon', abyssScene.enemyIdOf({ name: '⚡ INFERNO LORD' }) === 'INFERNO_LORD');
+section('FIX §5 — enemy art resolution (amalgamation family only)');
+check('enemyIdOf plain pool id', abyssScene.enemyIdOf({ name: 'MUTATED HOUND' }) === 'MUTATED_HOUND');
+check('enemyIdOf boss name with icon', abyssScene.enemyIdOf({ name: '⚡ INFECTED COLOSSUS' }) === 'INFECTED_COLOSSUS');
 check('enemyIdOf bossId precedence', abyssScene.enemyIdOf({ name: 'whatever', bossId: 'VOID_TITAN' }) === 'VOID_TITAN');
 check('enemyIdOf ignores run ids', abyssScene.enemyIdOf({ name: 'SLIME', id: 'abyss_F_1_123' }) === 'SLIME');
-const rat = abyssScene.resolveEnemyArt({ name: 'RABID RAT', spriteIndex: 86 });
-check('RABID_RAT override → abyss_rat.png (was a side-view strip)', rat && rat.file === 'abyss_rat.png');
-const slime = abyssScene.resolveEnemyArt({ name: 'SLIME', spriteIndex: 81 });
-check('SLIME override → abyss_slime.png (was a side-view strip)', slime && slime.file === 'abyss_slime.png');
+// (2026-10-09 08:43Z, owner: "get rid of the slime — only those weird front
+// facing amalgamation creatures") — by-name rat/slime overrides are GONE and
+// every spawn-pool id renders a front-facing amalgamation single:
+check('rat/slime by-name overrides are gone (no enemies/abyss art resolves)',
+    !(abyssScene.resolveEnemyArt({ name: 'RABID RAT', spriteIndex: 86 }) || {}).dir?.endsWith('abyss')
+    && !(abyssScene.resolveEnemyArt({ name: 'SLIME', spriteIndex: 81 }) || {}).dir?.endsWith('abyss'));
+const abyssFiles = require('fs').existsSync(path.join(REPO, 'core/rpgasset/enemies/abyss'))
+    ? require('fs').readdirSync(path.join(REPO, 'core/rpgasset/enemies/abyss')).filter((f) => f.endsWith('.png'))
+    : [];
+check(`enemies/abyss holds no by-name sprites (rat/slime gone): ${abyssFiles.join(',') || '(empty)'}`,
+    abyssFiles.length === 0);
+const enemyVariants = require(path.join(REPO, 'core/rpg/enemyVariants'));
+let abyssSystem;
+try { abyssSystem = require(path.join(REPO, 'core/rpg/abyssSystem')); } catch (e) { abyssSystem = null; }
+const sheetFiles = (() => { // C-locale mirror of enemySheetList()
+    const fs = require('fs');
+    return fs.readdirSync(path.join(REPO, 'core/rpgasset/enemies'))
+        .filter((f) => f.toLowerCase().endsWith('.png')).sort();
+})();
+const FAMILY = /mutated|calamaties|midlevelbosses|highlevelbosses|hybrides/i;
+let poolIds = new Set();
+if (abyssSystem && abyssSystem.ABYSS_ENEMY_POOLS) {
+    poolIds = new Set([
+        ...Object.values(abyssSystem.ABYSS_ENEMY_POOLS).flat(),
+        ...Object.values(abyssSystem.ABYSS_BOSS_POOL).flat(),
+    ]);
+} else {
+    // fallback if the models unavailable in sandbox: scan the source
+    const src = require('fs').readFileSync(path.join(REPO, 'core/rpg/abyssSystem.js'), 'utf8');
+    for (const m of src.matchAll(/\[\s*'([A-Z_]+)'(?:\s*,\s*'([A-Z_]+)')*\s*\]/g)) {
+        for (const g of m.slice(1)) if (g) poolIds.add(g);
+    }
+}
+const offFamily = [...poolIds].filter((id) => {
+    const idx = enemyVariants.abyssSpriteIndex(id);
+    const f = sheetFiles[idx];
+    return !(f && FAMILY.test(f));
+});
+check(`every spawn-pool id renders a FRONT-FACING amalgamation single (${poolIds.size} ids)`,
+    offFamily.length === 0);
+if (offFamily.length) console.log(`    offenders: ${offFamily.join(', ')}`);
+const BANNED = /RABID_RAT|^SLIME$|CAVE_BAT|EMBER_SPAWN|FROST_WISP|STONE_HULK|CRYSTAL_GOLEM|INFERNO_KNIGHT|TIDAL_FURY|BOULDER_TITAN|GLACIAL_WRAITH|STORM_CALLER|ANCIENT_GUARDIAN|INFERNO_LORD/;
+check('no rat/slime/bat/elemental ids remain in any pool',
+    ![...poolIds].some((id) => BANNED.test(id)));
 const knight = abyssScene.resolveEnemyArt({ name: 'INFERNO KNIGHT', spriteIndex: 41 });
-check('INFERNO_KNIGHT falls to curated pixel pool (fire (5).png — AI art removed)',
+check('legacy id (in-flight run) still falls to curated pixel pool',
     knight && knight.dir.endsWith('rpgasset/enemies') && knight.file === 'fire (5).png');
-const golem = abyssScene.resolveEnemyArt({ name: 'CRYSTAL GOLEM', spriteIndex: 36 });
-check('CRYSTAL_GOLEM falls through to legacy sheet index', golem && golem.dir.endsWith('rpgasset/enemies') && !golem.dir.endsWith('abyss'));
 const unknown = abyssScene.resolveEnemyArt({ name: 'MYSTERY BEAST', spriteIndex: 999 });
 check('out-of-range index never crashes (null or sheet)', unknown === null || !!unknown.file);
-check('override dir is the NEW subdir (C-locale index of enemies/ untouched)',
-    rat && rat.dir.endsWith(path.join('enemies', 'abyss')));
-// (2026-10-09, owner: abyss monsters = the FORWARD-FACING pool singles like the
-// reference img) — the old bat strip had no front frame; the pool renders the
-// winged front-facing single instead:
-const enemyVariants = require(path.join(REPO, 'core/rpg/enemyVariants'));
-check('CAVE_BAT renders a forward-facing pool single (not the side-view strip)',
-    enemyVariants.ABYSS_SPRITE_MAP.CAVE_BAT === 42 && enemyVariants.abyssSpriteIndex('CAVE_BAT') === 42);
-const abyssFiles = require('fs').readdirSync(path.join(REPO, 'core/rpgasset/enemies/abyss')).filter((f) => f.endsWith('.png'));
-check(`enemies/abyss holds only the two by-name sprites (8 AI files deleted): ${abyssFiles.join(',')}`,
-    abyssFiles.length === 2 && abyssFiles.includes('abyss_rat.png') && abyssFiles.includes('abyss_slime.png'));
-const ratBytes = require('fs').readFileSync(path.join(REPO, 'core/rpgasset/enemies/abyss/abyss_rat.png'));
-check('abyss_rat.png is real pixels (PNG magic), not AI/painterly leftovers',
-    ratBytes[0] === 0x89 && ratBytes.length > 300);
 
 // ═══ 3. boss-floor mirror vs the real abyssSystem rule ═══
 section('MECHANICS PRESERVATION — boss-floor mirror');

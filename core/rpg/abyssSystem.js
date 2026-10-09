@@ -145,12 +145,19 @@ function getFloorRewardMultiplier(floor) {
 // small slimes). STONE_HULK moved to C-tier where it belongs.
 // Also: lore mentions natural monsters that existed before the infection,
 // so some pools now include natural creatures alongside infected ones.
+// 🕳️ 2026-10-09 (owner, 08:43Z): "let's get rid of the slime in the abyss,
+// only those weird front facing creatures in my assets collection, they
+// look like amalgamation, those ones" — every pool id now renders one of the
+// front-facing amalgamation singles (mutated/calamaties/midlevelbosses/
+// highlevelbosses/hybrides lines — the family of the owner's reference
+// image). Rats/bats/slimes/elementals/knights are OUT of the spawn pools
+// (their ABYSS_SPRITE_MAP entries stay so in-flight runs still render).
 const ABYSS_ENEMY_POOLS = {
-  F: ['RABID_RAT', 'CAVE_BAT', 'EMBER_SPAWN', 'FROST_WISP', 'SLIME'],
-  C: ['STONE_HULK', 'MUTATED_HOUND', 'CRYSTAL_GOLEM', 'SHADOW_STALKER', 'VENOM_SPIDER'],
-  B: ['INFERNO_KNIGHT', 'TIDAL_FURY', 'BOULDER_TITAN', 'GLACIAL_WRAITH'],
-  A: ['STORM_CALLER', 'VOID_HARBINGER', 'BLOOD_REAVER', 'ANCIENT_GUARDIAN'],
-  S: ['ELDER_CHAOS', 'PRIMORDIAL_CHAOS', 'VOID_CORRUPTED'],
+  F: ['MUTATED_HOUND', 'SHADOW_STALKER', 'VENOM_SPIDER'],
+  C: ['VOID_CORRUPTED', 'BLOOD_REAVER', 'SHADOW_STALKER', 'VENOM_SPIDER'],
+  B: ['VOID_HARBINGER', 'MUTATION_PRIME', 'INFECTED_COLOSSUS', 'BLOOD_REAVER'],
+  A: ['CORRUPTED_GUARDIAN', 'MUTATED_OVERSEER', 'VOID_HARBINGER', 'MUTATION_PRIME'],
+  S: ['ELDER_CHAOS', 'PRIMORDIAL_CHAOS', 'ELEMENTAL_ARCHON'],
   SS: ['VOID_TITAN', 'MUTATION_PRIME', 'ELEMENTAL_ARCHON'],
   SSS: ['ABYSSAL_GOD', 'ELDER_CHAOS', 'VOID_TITAN'],
   ABYSSAL_GOD: ['ABYSSAL_GOD'],
@@ -161,11 +168,14 @@ const ABYSS_ENEMY_POOLS = {
 // player doesn't face the same boss every time. Previously each tier had
 // exactly one boss (e.g. F-tier always = INFECTED_COLOSSUS). Now each tier
 // has 2-3 bosses and generateFloorEnemy picks one randomly.
+// 🕳️ 2026-10-09: boss pools pruned to the amalgamation family too
+// (STONE_HULK / BOULDER_TITAN / INFERNO_LORD / STORM_CALLER render element
+// golems & knights, not the owner's front-facing amalgamations).
 const ABYSS_BOSS_POOL = {
   F: ['INFECTED_COLOSSUS', 'CORRUPTED_GUARDIAN', 'MUTATED_OVERSEER'],
-  C: ['CORRUPTED_GUARDIAN', 'MUTATION_PRIME', 'STONE_HULK'],
-  B: ['MUTATION_PRIME', 'BOULDER_TITAN', 'INFERNO_LORD'],
-  A: ['ELEMENTAL_ARCHON', 'STORM_CALLER', 'VOID_HARBINGER'],
+  C: ['CORRUPTED_GUARDIAN', 'MUTATION_PRIME', 'MUTATED_OVERSEER'],
+  B: ['MUTATION_PRIME', 'ELDER_CHAOS', 'CORRUPTED_GUARDIAN'],
+  A: ['ELEMENTAL_ARCHON', 'VOID_HARBINGER', 'PRIMORDIAL_CHAOS'],
   S: ['ELDER_CHAOS', 'PRIMORDIAL_CHAOS', 'VOID_CORRUPTED'],
   SS: ['VOID_TITAN', 'MUTATION_PRIME', 'ELEMENTAL_ARCHON'],
   SSS: ['ABYSSAL_GOD', 'ELDER_CHAOS', 'VOID_TITAN'],
@@ -1100,6 +1110,10 @@ module.exports = {
   adminSetFloor,
   adminPurgeAllRuns,
   adminGetRunById,
+  // pools exported for the visual QA suite (abyss_visual_qa.js asserts every
+  // pool id renders a front-facing amalgamation single)
+  ABYSS_ENEMY_POOLS,
+  ABYSS_BOSS_POOL,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════

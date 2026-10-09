@@ -102,18 +102,18 @@ async function loadBg(file) {
 // enemyId recovery: generateFloorEnemy names enemies from their pool id
 // ("RABID RAT", "⚡ INFECTED COLOSSUS") — normalize back to map keys.
 // 🕳️ 2026-10-09 (owner: "these new enemies look trash — find assets online"):
-// the 8 AI-painted sprites are GONE. RABID_RAT and SLIME keep by-name files
-// (front frames cut from CC0/CC-BY packs: Evil Dungeon rat charset +
-// Bonsaiheldin slime — credits in docs/asset_credits.md); every other pool id
-// renders the same curated pixel-art singles the Ruins uses (ABYSS_SPRITE_MAP
-// element matching — knight/fire/ice/mutated/hybrides read perfectly in
-// torch-lit stone rooms).
+// the 8 AI-painted sprites are GONE; every pool id renders the curated
+// pixel-art singles the Ruins uses (ABYSS_SPRITE_MAP element matching).
+// 🕳️ 2026-10-09 08:43Z (owner: "let's get rid of the slime in the abyss, only
+// those weird front facing creatures in my assets collection — they look
+// like amalgamation"): the by-name rat/slime files are GONE too (the rat is
+// a plain animal and the slime read low-quality + huge — neither is in the
+// amalgamation family). The spawn pools now only contain ids whose sprites
+// are the front-facing amalgamation singles. Overrides map is EMPTY but kept
+// as a hook (enemy art resolution order unchanged).
 // NOTE: enemies/abyss/ files never shift the enemies/ C-locale index that
 // backs ABYSS_SPRITE_MAP + the Go service.
-const ABYSS_ART_OVERRIDES = {
-    RABID_RAT: 'abyss_rat.png',       // front-facing rat (was a side-view strip)
-    SLIME: 'abyss_slime.png',         // front-facing slime (was a side-view strip)
-};
+const ABYSS_ART_OVERRIDES = {};
 function enemyIdOf(enemy) {
     const raw = String((enemy && (enemy.bossId || enemy.id)) || '');
     if (raw && !raw.startsWith('abyss_')) return raw.toUpperCase().replace(/\s+/g, '_');
@@ -180,6 +180,43 @@ function roundRectPath(ctx, x, y, w, h, r) {
 function pillLocal(ctx, cx, cy, text, font, padX, bg, border, textColor) {
     // dedupe (code judge): the roomScene HUD kit is exported — use it
     return roomScene.pill(ctx, cx, cy, text, font, padX, bg, border, textColor);
+}
+
+// ── abyss floor banner (§5b, owner 2026-10-09 08:43Z: "the battle encounter
+// sprite, the floor number? Yh use a banner, not the same banner as the
+// regular dungeon, but something close") — banner_abyss.png IS the regular
+// dungeon's ribbon (ui/banner.png) regraded into the abyss palette
+// (obsidian-violet body, cold-gold folds, same silhouette). Drawn top-left
+// with the floor number on the flat body — the regular dungeon's Go arena
+// draws ui/banner.png for the same slot.
+let _bannerAbyss = null;
+async function drawFloorBanner(ctx, cx, cy, text) {
+    try {
+        if (!_bannerAbyss) {
+            _bannerAbyss = await loadImage(path.join(UI_DIR, 'banner_abyss.png')).catch(() => null);
+        }
+        const BW = 236, BH = Math.round(BW * 118 / 573);   // 236x49, ribbon aspect
+        const bx = cx, by = cy;                            // top-left anchor
+        if (_bannerAbyss) {
+            ctx.drawImage(_bannerAbyss, bx, by, BW, BH);
+        } else {
+            // asset missing → ribbon-shaped fallback plate (same footprint)
+            ctx.fillStyle = 'rgba(30,23,46,0.95)';
+            roundRectPath(ctx, bx, by + 4, BW, BH - 8, 6); ctx.fill();
+            ctx.strokeStyle = 'rgba(196,158,74,0.8)'; ctx.lineWidth = 2;
+            roundRectPath(ctx, bx, by + 4, BW, BH - 8, 6); ctx.stroke();
+        }
+        // the flat body spans ~x+36..x+BW-36 (fold ends excluded) — center the
+        // number there so it never sits on a fold
+        ctx.font = 'bold 19px "Cinzel", serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const tx = bx + BW / 2, ty = by + BH / 2 + 1;
+        ctx.fillStyle = 'rgba(10,7,18,0.85)';
+        ctx.fillText(text, tx + 1, ty + 2);
+        ctx.fillStyle = '#e8d8a8';
+        ctx.fillText(text, tx, ty);
+        ctx.textBaseline = 'alphabetic';
+    } catch (e) { /* banner is cosmetic — never block the card */ }
 }
 function segBarLocal(ctx, cx, cy, w, h, pct, fillFrom, fillTo) {
     return roomScene.segBar(ctx, cx, cy, w, h, pct, fillFrom, fillTo);
@@ -468,10 +505,9 @@ async function drawCombatScene(ctx, plan, live, opts = {}) {
         }
     }
 
-    // ── floor badge (top-left) + turn pill (top-center; the reference shows
-    // the TURN badge from the first turn — owner ref IMG-20261005) ──
-    pillLocal(ctx, 108, 34, `FLOOR ${plan.floor}`, 'bold 15px sans-serif', 12,
-        'rgba(20,14,30,0.92)', 'rgba(139,97,195,0.9)', '#D9C8F5');
+    // ── floor banner (top-left; owner 08:43Z: floor number rides a banner —
+    // close to the regular dungeon's, but the abyss variant) + turn pill ──
+    await drawFloorBanner(ctx, 26, 16, `FLOOR ${plan.floor}`);
     if (turnNum > 0) {
         pillLocal(ctx, W / 2, 34, `TURN ${turnNum}`, 'bold 13px sans-serif', 10,
             'rgba(139,26,43,0.94)', 'rgba(245,240,225,0.85)', '#F5F0E1');
