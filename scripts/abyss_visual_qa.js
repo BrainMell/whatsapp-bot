@@ -235,7 +235,7 @@ check('pack fight: queued members join the stage', pack.pack.length === 2);
     check('full party (3 enemies + 3 allies + player): zero fused bodies', fused === 0);
     const allyByFile = (f) => full.allies.find((a) => a.art && a.art.file === f);
     check('round-8 facing: boar natively RIGHT → ally boar mirrored to face LEFT (was facing away)', allyByFile('boar.png') && allyByFile('boar.png').flip === true);
-    check('round-8 facing: snake natively LEFT → ally snake unflipped toward the enemies (was mirrored away)', allyByFile('snake.png') && allyByFile('snake.png').flip === false);
+    check('round-8 facing: snake natively RIGHT (2nd-pass correction: 3x scene crops) → ally snake mirrored to face LEFT', allyByFile('snake.png') && allyByFile('snake.png').flip === true);
     check('round-8 facing: dragon natively RIGHT → ally dragon mirrored to face LEFT', allyByFile('dragon.png') && allyByFile('dragon.png').flip === true);
     const pw = await abyssScene.planCombatLayout(mkState({
         kind: 'wild',

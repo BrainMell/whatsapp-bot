@@ -360,14 +360,14 @@ const HIT_GLOW = 'rgba(255,64,32,0.88)';
 const ENEMY_FACES_LEFT = new Set(['SHADOW_STALKER']);              // hybrides (1) wolf leans left
 // 2026-10-10 round-8 FIX (owner: "some summos facing the wrong direction"):
 // every species below was re-verified on a 2× labeled zoom sheet with a
-// center bisector (render_out/round8/facing_zoom.png) — boar's tusks point
-// RIGHT, snake's hood/tongue and reptile's snout+axe point LEFT, giant's
-// mace and yeti's club lead LEFT, skitterswarm scuttles LEFT. The round-4
-// eyeballed table had boar/snake/reptile backwards — on the party side they
-// mirrored AWAY from the enemies, on the wild side they faced away from the
-// player. Only real directional bias is tabled; frontal sprites stay put.
-const SUMMON_FACES_LEFT = new Set(['BAT', 'SNAKE', 'REPTILE', 'GIANT', 'YETI', 'SKITTERSWARM']);
-const SUMMON_FACES_RIGHT = new Set(['DRAGON', 'PLAGUEFANG', 'DINO', 'BOAR']);
+// center bisector — boar's tusks point RIGHT, giant's mace and yeti's club
+// lead LEFT, skitterswarm scuttles LEFT. ⚠️ SECOND-PASS CORRECTION (hyper
+// critic + 3× scene crops): SNAKE is natively RIGHT-facing — the zoom-sheet
+// eyeball had it backwards, mirroring ally snakes away from the enemies and
+// flipping wild snakes away from the player. Only real directional bias is
+// tabled; frontal sprites stay put.
+const SUMMON_FACES_LEFT = new Set(['BAT', 'REPTILE', 'GIANT', 'YETI', 'SKITTERSWARM']);
+const SUMMON_FACES_RIGHT = new Set(['DRAGON', 'PLAGUEFANG', 'DINO', 'BOAR', 'SNAKE']);
 const summonFaceKey = (file) => String(file || '').replace(/\.png$/i, '').toUpperCase();
 // best-effort species key for a wild summon BEFORE its art resolves
 function planWildSpeciesKey(state, enemy) {
@@ -562,8 +562,8 @@ async function planCombatLayout(state, opts = {}) {
     // the pack fully inside the enemy corridor, the ally row never meets it.
     const FORMATIONS = {
         1: [{ fx: 0.395, fy: 0.705, mul: 1.00 }],
-        2: [{ fx: 0.400, fy: 0.712, mul: 1.00 }, { fx: 0.288, fy: 0.658, mul: 0.85 }],
-        3: [{ fx: 0.400, fy: 0.712, mul: 1.00 }, { fx: 0.300, fy: 0.652, mul: 0.85 }, { fx: 0.190, fy: 0.638, mul: 0.78 }],
+        2: [{ fx: 0.400, fy: 0.712, mul: 1.00 }, { fx: 0.258, fy: 0.658, mul: 0.85 }],
+        3: [{ fx: 0.400, fy: 0.712, mul: 1.00 }, { fx: 0.292, fy: 0.652, mul: 0.85 }, { fx: 0.182, fy: 0.638, mul: 0.78 }],
     };
     // ally row beside/behind the player (audit: "never on top of the
     // player's body"); a third ally is supported for the test matrix.
@@ -587,7 +587,7 @@ async function planCombatLayout(state, opts = {}) {
     const ALLY_ARC = {
         1: [{ fx: 0.612, fy: 0.760, mul: 0.62 }],
         2: [{ fx: 0.612, fy: 0.760, mul: 0.62 }, { fx: 0.868, fy: 0.806, mul: 0.60 }],
-        3: [{ fx: 0.545, fy: 0.716, mul: 0.60 }, { fx: 0.630, fy: 0.752, mul: 0.62 }, { fx: 0.868, fy: 0.806, mul: 0.60 }],
+        3: [{ fx: 0.545, fy: 0.735, mul: 0.60 }, { fx: 0.630, fy: 0.758, mul: 0.62 }, { fx: 0.868, fy: 0.806, mul: 0.60 }],
     };
     const ALLY_LANE_MAXW = 170;   // px of horizontal lane per summon (content)
     const PLAYER_SLOT = { fx: 0.748, fy: 0.818 };
