@@ -18,3 +18,7 @@ core/rpgasset/enemies/abyss/*.png -filter -diff -merge -text
 # everywhere (reset --hard deploys on the boxes would otherwise serve an LFS
 # pointer to the renderer — same rule as enemies/abyss above)
 core/rpgasset/environment/abyss/*.png -filter -diff -merge -text
+# runtime-fetched Digimon cache must survive `git reset --hard` deploys as
+# real pixels (the boxes fetch from digi-api at runtime; every reset used to
+# re-stub these as LFS pointers and the sprites silently broke until refetch)
+core/rpgasset/summons/digimon/*.png -filter -diff -merge -text
