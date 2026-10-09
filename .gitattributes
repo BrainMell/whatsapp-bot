@@ -34,3 +34,7 @@ core/rpgasset/ui/banner_abyss.png -filter -diff -merge -text
 # everywhere (⚠️ the abyss/*.png rule above does NOT cross into the regular/
 # subdir — without this, git reset --hard deploys re-stub them as LFS pointers)
 core/rpgasset/environment/abyss/regular/*.png -filter -diff -merge -text
+# 2026-10-09 rounds 5-7: abyss-exclusive summon sprites must be real pixels
+# everywhere (reset --hard deploys would otherwise serve LFS pointers — same
+# rule as summons/sparklinlabs above)
+core/rpgasset/summons/sparklinlabs_abyss/*.png -filter -diff -merge -text

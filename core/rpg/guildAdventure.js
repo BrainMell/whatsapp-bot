@@ -7666,34 +7666,24 @@ async function endCombat(sock, victory, sessionKey) {
         // Build a death message from the combat state
         const deathMsg = `💀 Defeated on Abyss floor ${state.abyssFloor || 1}!`;
         const __dr = await abyssSystem.processDeath(state.players[0]?.jid, state.abyssRun, deathMsg);
-        // 2026-09-15: ABYSS_RESULT (FALLEN) card - text fallback keeps the flow
+        // 2026-10-09 14:07Z (owner: "the abyss retreat still used the old
+        // image card style"): FALLEN joins the abyss-scene result card family
+        // (same painter as EXTRACTED + the descent card). Text fallback kept.
         try {
           if (__dr && __dr.card && state.players[0] && state.players[0].jid) {
             const __c = __dr.card;
             const __eco = require('./economy');
-            const __go = require('../utils/goImageService');
-            const __fallBuf = await __go.generatePortraitCard({
-              kind: 'ABYSS_RESULT',
-              // 🧩 SPRITE CONSISTENCY 2026-09-17: hero sprite fields.
-              playerClass: String((state.players[0].class && state.players[0].class.id) || state.players[0].class || '').toUpperCase(),
-              playerIndex: Math.max(0, Math.floor(Number(state.players[0].spriteIndex) || 0)),
-              nickname: __eco.getDisplayName(state.players[0].jid),
-              partyText: 'FALLEN',
-              cur: __c.floor,
-              pointsBig: `FLOOR ${__c.floor}`,
-              pill: `FALLEN · SCORE ${Number(__c.score || 0).toLocaleString()}`,
-              spentNow: 'PENALTY -90% LOOT',
-              spentLeft: `KEPT ${Number(__c.keptXp || 0).toLocaleString()} XP`,
-              sealText: String(Math.min(__c.score || 0, 999)),
-              caption: 'the abyss claims another',
-              rows: [
-                { label: 'XP KEPT', value: `+${Number(__c.keptXp || 0).toLocaleString()}` },
-                { label: 'ZENI KEPT', value: `+${Number(__c.keptGold || 0).toLocaleString()}` },
-                { label: 'RUNES', value: String(__c.runes || 0) },
-                { label: 'MONSTERS', value: String(__c.monstersKilled || 0) },
-                { label: 'BOSSES', value: String(__c.bossesKilled || 0) },
-                { label: 'DEPTH', value: `FLOOR ${__c.floor} / 200` },
-              ],
+            const __fallBuf = await require('./abyssScene').renderAbyssResultCard({
+              outcome: 'FALLEN',
+              floor: __c.floor,
+              score: Number(__c.score || 0),
+              keptXp: Number(__c.keptXp || 0),
+              keptGold: Number(__c.keptGold || 0),
+              runes: Number(__c.runes || 0),
+              monstersKilled: Number(__c.monstersKilled || 0),
+              bossesKilled: Number(__c.bossesKilled || 0),
+              playerClassId: String((state.players[0].class && state.players[0].class.id) || state.players[0].class || 'FIGHTER').toUpperCase(),
+              playerSpriteIndex: Math.max(0, Math.floor(Number(state.players[0].spriteIndex) || 0)),
             });
             if (__fallBuf && __fallBuf.length > 100) {
               await sock.sendMessage(state.chatId, { image: __fallBuf, caption: __dr.message });

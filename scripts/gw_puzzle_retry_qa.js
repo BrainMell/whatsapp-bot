@@ -26,7 +26,7 @@ function check(name, cond, extra) {
     else { FAIL++; FAILURES.push(name + (extra !== undefined ? ` — ${extra}` : '')); console.log(`  ❌ ${name}${extra !== undefined ? ` — ${extra}` : ''}`); }
 }
 
-const GW = '/home/z/my-project/whatsapp-bot/core/rpg/guildWar';
+const GW = require('path').join(__dirname, '..', 'core', 'rpg', 'guildWar');
 const encounters = require(`${GW}/encounters`);
 const rooms = require(`${GW}/rooms`);
 const state = require(`${GW}/state`);

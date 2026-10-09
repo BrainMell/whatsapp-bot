@@ -1,0 +1,236 @@
+{
+ "BAT": {
+  "name": "bat.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 471,
+  "outSize": "110x55",
+  "bytes": 807
+ },
+ "BOAR": {
+  "name": "boar.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 1085,
+  "outSize": "148x113",
+  "bytes": 1868
+ },
+ "BOGLURK": {
+  "name": "boglurk.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 174,
+  "outSize": "248x186",
+  "bytes": 4219
+ },
+ "CHEST": {
+  "name": "chest.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 1254,
+  "outSize": "104x100",
+  "bytes": 1328
+ },
+ "DINO": {
+  "name": "dino.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 191,
+  "outSize": "109x49",
+  "bytes": 613
+ },
+ "DRAGON": {
+  "name": "dragon.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 1912,
+  "outSize": "176x145",
+  "bytes": 2401
+ },
+ "EMBERWICK": {
+  "name": "emberwick.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 751,
+  "outSize": "169x181",
+  "bytes": 3556
+ },
+ "FIREGUARD": {
+  "name": "fireguard.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 1888,
+  "outSize": "222x148",
+  "bytes": 8029
+ },
+ "FROSTPEEP": {
+  "name": "frostpeep.png",
+  "grid": 1,
+  "changed": false,
+  "flags": [],
+  "recolored": 0,
+  "outSize": "216x179",
+  "bytes": 1110
+ },
+ "GHOST": {
+  "name": "ghost.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 383,
+  "outSize": "78x82",
+  "bytes": 722
+ },
+ "GIANT": {
+  "name": "giant.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 1905,
+  "outSize": "260x143",
+  "bytes": 3766
+ },
+ "LUMENMOTH": {
+  "name": "lumenmoth.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 2326,
+  "outSize": "248x240",
+  "bytes": 7976
+ },
+ "MIMIC": {
+  "name": "mimic.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 1262,
+  "outSize": "104x103",
+  "bytes": 1351
+ },
+ "MUSHROOM": {
+  "name": "mushroom.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 246,
+  "outSize": "100x86",
+  "bytes": 1072
+ },
+ "OCTOPUS": {
+  "name": "octopus.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 1021,
+  "outSize": "126x122",
+  "bytes": 1543
+ },
+ "PLAGUEFANG": {
+  "name": "plaguefang.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 650,
+  "outSize": "206x174",
+  "bytes": 6205
+ },
+ "REPTILE": {
+  "name": "reptile.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 1046,
+  "outSize": "151x109",
+  "bytes": 2019
+ },
+ "SHIP_CRUISER": {
+  "name": "ship_cruiser.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 343,
+  "outSize": "63x51",
+  "bytes": 914
+ },
+ "SHIP_FIGHTER": {
+  "name": "ship_fighter.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 387,
+  "outSize": "90x74",
+  "bytes": 1247
+ },
+ "SHIP_SQUID": {
+  "name": "ship_squid.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 265,
+  "outSize": "56x51",
+  "bytes": 730
+ },
+ "SKITTERSWARM": {
+  "name": "skitterswarm.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 143,
+  "outSize": "219x166",
+  "bytes": 4380
+ },
+ "SLIME": {
+  "name": "slime.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 276,
+  "outSize": "72x55",
+  "bytes": 504
+ },
+ "SNAKE": {
+  "name": "snake.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 136,
+  "outSize": "76x59",
+  "bytes": 590
+ },
+ "STARNAIL": {
+  "name": "starnail.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 370,
+  "outSize": "140x121",
+  "bytes": 3700
+ },
+ "TIDALMAW": {
+  "name": "tidalmaw.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 2873,
+  "outSize": "219x211",
+  "bytes": 6051
+ },
+ "YETI": {
+  "name": "yeti.png",
+  "grid": 1,
+  "changed": true,
+  "flags": [],
+  "recolored": 901,
+  "outSize": "135x102",
+  "bytes": 1772
+ }
+}

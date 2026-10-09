@@ -183,7 +183,10 @@ section('§6 — frozen layout + render contract');
     //   facing right, player bottom-right facing left)
     //   boss rooms = the approved centered tower, now grounded on the floor
     const pc = await abyssScene.planCombatLayout(mkState());
-    check('side layout: enemy cluster middle-left (circle A)', pc.enemy.cx < abyssScene.W * 0.35 && pc.enemy.cx > abyssScene.W * 0.1);
+    // 2026-10-10 reconciliation: the audit §3 rebuild anchors the active enemy
+    // at ~0.40W — the far-left band is blocked by the HUD panel (x −26..505),
+    // so "middle-left" now means left-of-center ON the floor plane.
+    check('side layout: enemy cluster left-of-center on the floor plane (circle A)', pc.enemy.cx < abyssScene.W * 0.45 && pc.enemy.cx > abyssScene.W * 0.25 && pc.enemy.gy > 600 && pc.enemy.gy < 700);
     check('side layout: player bottom-right (circle B)', pc.player.cx > abyssScene.W * 0.68);
     check('side layout: player faces LEFT (flip)', pc.player.flip === true);
     check('side layout: enemy faces RIGHT', pc.enemy.flip === false);
@@ -203,7 +206,37 @@ section('§6 — frozen layout + render contract');
         ] },
     }));
 check('pack fight: queued members join the stage', pack.pack.length === 2);
-    check('pack fight: members stand behind/left of the active enemy', pack.pack.every((m) => m.cx < pc.enemy.cx + 40 && m.gy <= pc.enemy.gy + 5));
+    // 2026-10-10 reconciliation (updated round-8): packs are a back row
+    // LEFT+deeper of the active enemy only (the old both-sides stagger
+    // collided with the ally corridor), depth-capped, and — the owner's
+    // round-8 complaint — must never box-overlap the active enemy.
+    check('pack fight: members form a staggered back row, deeper + depth-capped', pack.pack.every((m) => m.gy <= pc.enemy.gy + 5 && m.h <= pc.enemy.h * 0.9));
+    check('pack fight: no member box overlaps the active enemy (real measured halfW, owner: "enemies overlaying")', pack.pack.every((m) => Math.abs(m.cx - pc.enemy.cx) >= (m.halfW + pc.enemy.halfW) - 24));
+    // round-8: FULL PARTY — 3 enemies + 3 allies + player, nobody fused, and
+    // the corrected facing table verified through BEHAVIOR (flip outcomes)
+    const full = await abyssScene.planCombatLayout(mkState({ sessionKey: 'qa_full', abyssRun: { currentEncounterType: 'combat', packQueue: [
+        { name: 'SHADOW STALKER', isEnemy: true, spriteIndex: 54, currentHP: 300, stats: { hp: 300, maxHp: 550 } },
+        { name: 'VENOM SPIDER', isEnemy: true, spriteIndex: 73, currentHP: 300, stats: { hp: 300, maxHp: 550 } },
+    ] }, summons: [
+        { species: 'boar', name: 'Tusker' },
+        { species: 'snake', name: 'Serpentine' },
+        { species: 'dragon', name: 'Vyrn' },
+    ] }));
+    const fboxes = [full.enemy].concat(full.pack, full.allies, [full.player]).filter(Boolean).map((a) => ({
+        l: a.cx - (a.halfW || a.h * 0.42), r: a.cx + (a.halfW || a.h * 0.42), t: a.gy - a.h, b: a.gy,
+    }));
+    let fused = 0;
+    for (let i = 0; i < fboxes.length; i++) for (let j = i + 1; j < fboxes.length; j++) {
+        const A = fboxes[i], B = fboxes[j];
+        const ox = Math.min(A.r, B.r) - Math.max(A.l, B.l);
+        const oy = Math.min(A.b, B.b) - Math.max(A.t, B.t);
+        if (ox > 36 && oy > 36) fused++;   // >36px two-axis = truly fused; less reads as depth-kiss
+    }
+    check('full party (3 enemies + 3 allies + player): zero fused bodies', fused === 0);
+    const allyByFile = (f) => full.allies.find((a) => a.art && a.art.file === f);
+    check('round-8 facing: boar natively RIGHT → ally boar mirrored to face LEFT (was facing away)', allyByFile('boar.png') && allyByFile('boar.png').flip === true);
+    check('round-8 facing: snake natively LEFT → ally snake unflipped toward the enemies (was mirrored away)', allyByFile('snake.png') && allyByFile('snake.png').flip === false);
+    check('round-8 facing: dragon natively RIGHT → ally dragon mirrored to face LEFT', allyByFile('dragon.png') && allyByFile('dragon.png').flip === true);
     const pw = await abyssScene.planCombatLayout(mkState({
         kind: 'wild',
         abyssRun: { currentEncounterType: 'wild_summon', currentEncounterData: { species: 'agumon', rarity: 'RARE' } },
@@ -261,8 +294,12 @@ check('pack fight: queued members join the stage', pack.pack.length === 2);
         pwild.enemy && pwild.enemy.art && pwild.enemy.art.file === 'dragon.png');
     check('ally art = the game\'s own bat sprite (bat.png)',
         pwild.allies.length === 1 && pwild.allies[0].art && pwild.allies[0].art.file === 'bat.png');
-    check('dragon natively faces left → wild summon (enemy side) flips to face right',
-        pwild.enemy.flip === true);
+    // 2026-10-10 zoom-sheet verification: dragon.png faces RIGHT natively
+    // (head/snout right of center) — the round-4 eyeball was wrong. A wild
+    // dragon on the ENEMY side therefore stays unflipped (already right-facing
+    // toward the player).
+    check('dragon natively faces RIGHT (verified zoom sheet) → wild summon stays right-facing on the enemy side',
+        pwild.enemy.flip === false);
     check('allies stand on the party side, clear of the HUD panel (panel x < ~470)',
         pwild.allies.every((a) => a.cx > 520));
 

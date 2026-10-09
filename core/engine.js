@@ -22094,33 +22094,26 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                       if (abyssSub === 'retreat' || abyssSub === 'extract' || abyssSub === 'flee' || abyssSub === 'leave' || abyssSub === 'exit') {
                         try {
                           const result = await abyssSystem.retreat(senderJid);
-                          // 2026-09-15: ABYSS_RESULT (EXTRACTED) card, text fallback
+                          // 2026-10-09 14:07Z (owner: "the abyss retreat still used
+                          // the old image card style"): EXTRACTED now renders the
+                          // abyss-scene result card (same family as the descent
+                          // card), text fallback unchanged.
                           try {
                             if (result.card) {
                               const __c = result.card;
                               const __eco = require('./rpg/economy');
-                              const __exBuf = await (require('./utils/goImageService')).generatePortraitCard({
-                                kind: 'ABYSS_RESULT',
-                                // 🧩 SPRITE CONSISTENCY 2026-09-17: hero sprite fields.
-                                playerClass: String((__eco.getUser(senderJid) || {}).class || '').toUpperCase(),
-                                playerIndex: Math.max(0, Math.floor(Number((__eco.getUser(senderJid) || {}).spriteIndex) || 0)),
-                                nickname: __eco.getDisplayName(senderJid),
-                                partyText: 'EXTRACTED',
-                                cur: __c.floor,
-                                pointsBig: `FLOOR ${__c.floor}`,
-                                pill: `EXTRACTED · SCORE ${Number(__c.score || 0).toLocaleString()}`,
-                                spentNow: __c.runes > 0 ? `${__c.runes} RUNES RECOVERED` : 'FULL LOOT RECOVERED',
-                                spentLeft: '100% KEPT',
-                                sealText: String(Math.min(__c.score || 0, 999)),
-                                caption: 'a wise extraction',
-                                rows: [
-                                  { label: 'XP', value: `+${Number(__c.keptXp || 0).toLocaleString()}` },
-                                  { label: 'ZENI', value: `+${Number(__c.keptGold || 0).toLocaleString()}` },
-                                  { label: 'RUNES', value: String(__c.runes || 0) },
-                                  { label: 'MONSTERS', value: String(__c.monstersKilled || 0) },
-                                  { label: 'BOSSES', value: String(__c.bossesKilled || 0) },
-                                  { label: 'DEPTH', value: `FLOOR ${__c.floor} / 200` },
-                                ],
+                              const __u = __eco.getUser(senderJid) || {};
+                              const __exBuf = await (require('./rpg/abyssScene')).renderAbyssResultCard({
+                                outcome: 'EXTRACTED',
+                                floor: __c.floor,
+                                score: Number(__c.score || 0),
+                                keptXp: Number(__c.keptXp || 0),
+                                keptGold: Number(__c.keptGold || 0),
+                                runes: Number(__c.runes || 0),
+                                monstersKilled: Number(__c.monstersKilled || 0),
+                                bossesKilled: Number(__c.bossesKilled || 0),
+                                playerClassId: String(__u.class || 'FIGHTER').toUpperCase(),
+                                playerSpriteIndex: Math.max(0, Math.floor(Number(__u.spriteIndex) || 0)),
                               });
                               if (__exBuf && __exBuf.length > 100) {
                                 return sock.sendMessage(chatId, { image: __exBuf, caption: BOT_MARKER + result.message });
