@@ -2269,6 +2269,119 @@ function robUser(thiefId, victimId) {
   }
 }
 
+// ============================================
+// ☠️ POISON PILL ATTACK (2026-10-09, owner spec: `.j bug @victim`)
+// ============================================
+// Second player-vs-player attack, sitting next to robUser with the same
+// guardrails (both registered, jail/prison bans, cooldown, relationship
+// damage) - but the payload is BIOLOGICAL. The victim takes an instant HP
+// drain plus a 30-minute toxin that SUPPRESSES out-of-combat HP regen
+// (enforced inside getPersistentHP). The only cure is the hospital:
+// healToFull purges the toxin when it fires. The attack itself is
+// deterministic - the pill always goes down - the price is the 500 cost,
+// the 15-minute attacker cooldown, and the victim knowing exactly who did it.
+const POISON_PILL = {
+  COST: 500,                      // shadow-broker price per pill (ZENI)
+  COOLDOWN_MS: 15 * 60 * 1000,    // attacker cooldown, activeEffects 'bug_cd'
+  DURATION_MS: 30 * 60 * 1000,    // toxin lifetime on the victim
+  DRAIN_RATIO: 0.4,               // instant drain: 40% of max HP (min 10)
+  SOCIAL_HIT: -10,                // rob uses -15; poison is sneakier
+};
+
+function poisonPillAttack(attackerId, victimId) {
+  const attacker = getUser(attackerId);
+  const victim = getUser(victimId);
+  const z = getZENI();
+
+  if (!attacker || !victim) {
+    return { success: false, message: `❌ Both users must be registered!` };
+  }
+
+  const now = Date.now();
+  if (attacker.prisonUntil && attacker.prisonUntil > now) {
+    const mins = Math.ceil((attacker.prisonUntil - now) / 60000);
+    return { success: false, message: `⛓️ *PRISON BAN*\n\nYou are banned from bot commands for ${mins} minute(s).` };
+  }
+  if (attacker.jailUntil && attacker.jailUntil > now) {
+    const mins = Math.ceil((attacker.jailUntil - now) / 60000);
+    return { success: false, message: `🚔 *JAIL BAN*\n\nYou are banned from bot commands for ${mins} minute(s).` };
+  }
+
+  // Attacker cooldown lives in activeEffects (no schema change needed) -
+  // getActiveEffect prunes expired entries on read, so it never grows.
+  const cdLeft = getActiveEffect(attackerId, 'bug_cd');
+  if (cdLeft > now) {
+    const mins = Math.ceil((cdLeft - now) / 60000);
+    return { success: false, message: `🧪 *HANDS STILL WET*\n\nThe shadow broker needs ${mins} more minute(s) before selling you another pill.` };
+  }
+
+  if ((attacker.wallet || 0) < POISON_PILL.COST) {
+    return { success: false, message: `❌ A poison pill costs ${z}${POISON_PILL.COST.toLocaleString()} - you can't afford it. Come back wealthier.` };
+  }
+
+  // Max HP of the VICTIM (drain scales to their pool): same derivation the
+  // hospital command uses, with a lazy progression require so this module
+  // never drags progression into economy's load order (see jidLookupVariants).
+  let maxHP = (victim.stats && (victim.stats.maxHp || victim.stats.hp)) || 100;
+  try {
+    const progression = require('./progression');
+    const classId = victim.class?.id || victim.class?.name?.toUpperCase() || 'FIGHTER';
+    maxHP = progression.getBaseStats(victimId, classId)?.hp || maxHP;
+  } catch (e) { /* keep the stats fallback */ }
+  maxHP = Math.max(1, Math.floor(maxHP));
+
+  // ── the strike: instant drain, then the lingering toxin ──
+  const before = getPersistentHP(victimId, maxHP);
+  const drain = Math.max(10, Math.floor(maxHP * POISON_PILL.DRAIN_RATIO));
+  const after = Math.max(1, before - drain); // floor at 1: the pill maims, combat delivers the kill
+  if (after < before) setPersistentHP(victimId, after, maxHP);
+  const toxinExpiresAt = grantEffect(victimId, 'poison_pill', POISON_PILL.DURATION_MS);
+
+  // ── the bill: payment + attacker cooldown ──
+  attacker.wallet = Math.max(0, attacker.wallet - POISON_PILL.COST);
+  logTransaction(attackerId, `Poison pill → @${getDisplayName(victimId)}`, -POISON_PILL.COST, attacker.wallet);
+  scheduleSave(attackerId);
+  grantEffect(attackerId, 'bug_cd', POISON_PILL.COOLDOWN_MS);
+
+  // Poisoning someone is hostile: same relationship channel rob uses.
+  try { require('./socialSystem').incrementRelationship(attackerId, victimId, POISON_PILL.SOCIAL_HIT); } catch (e) {}
+
+  const mins = Math.max(1, Math.round((toxinExpiresAt - now) / 60000));
+  const drained = before - after;
+  const victimName = getDisplayName(victimId);
+  const attackerName = getDisplayName(attackerId);
+  const prefix = botConfig.getPrefix();
+
+  const message =
+    `☠️ *POISON PILL — DELIVERED*\n\n` +
+    `You paid ${z}${POISON_PILL.COST.toLocaleString()} to the shadow broker and slipped the pill into @${victimName}'s drink.\n\n` +
+    `🩸 *Drain:* -${drained} HP (@${victimName} is at ${after}/${maxHP})\n` +
+    `⏳ *Toxin:* regeneration suppressed for ${mins} minute(s)\n` +
+    `🏥 *Cure:* \`${prefix} hospital\` - if its cooldown lets them in`;
+
+  const dmText =
+    `☠️ *POISON PILL STRIKE*\n\n` +
+    `Something bitter dissolves on your tongue. The drink was laced.\n\n` +
+    `@${attackerName} just hit you with a *poison pill*:\n` +
+    `🩸 *HP sapped:* -${drained} (now ${after}/${maxHP})\n` +
+    `🚫 *Out-of-combat regeneration suppressed* for ${mins} minute(s)\n` +
+    `🏥 *The only cure:* \`${prefix} hospital\` - pray its 12h cooldown is up\n\n` +
+    `_The toxin runs its course in ${mins} minutes. If it lets you._`;
+
+  return {
+    success: true,
+    drained,
+    hpNow: after,
+    hpMax: maxHP,
+    toxinMins: mins,
+    cost: POISON_PILL.COST,
+    victimJid: victimId,
+    attackerJid: attackerId,
+    dmText,
+    message,
+  };
+}
+
 function getPunishmentStatus(userId) {
   const user = getUser(userId);
   if (!user) return { blocked: false };
@@ -2684,6 +2797,7 @@ module.exports = {
   removeMoney,
   transferMoney,
   robUser,
+  poisonPillAttack, // ☠️ 2026-10-09: .j bug @victim
   getPunishmentStatus,
   getGold,
   addGold,
@@ -2812,6 +2926,18 @@ function getPersistentHP(userId, maxHP) {
     hp = max;
     user.stats.hpTs = now;
   } else if (elapsed > 0) {
+    // ☠️ POISON PILL (2026-10-09): the toxin suppresses out-of-combat regen
+    // for its whole duration. The regen clock re-anchors on every read while
+    // poisoned, so no progress banks up for a post-cure burst - the victim
+    // heals again only after the cure (or after the toxin burns out).
+    const toxinUntil = user.activeEffects && typeof user.activeEffects === 'object' && !Array.isArray(user.activeEffects)
+      ? (Number(user.activeEffects.poison_pill) || 0) : 0;
+    if (toxinUntil > now) {
+      user.stats.hpTs = now;
+      user.stats.currentHP = hp;
+      scheduleSave(userId);
+      return hp;
+    }
     const regen = Math.floor((elapsed / HP_REGEN_FULL_MS) * max);
     if (regen > 0) {
       hp = Math.min(max, hp + regen);
@@ -2993,6 +3119,14 @@ function healToFull(userId, maxHP) {
   user.stats.currentHP = maxHP;
   user.stats.hpTs = Date.now(); // full heal re-anchors the regen clock
   user.lastHospitalUse = new Date();
+  // ☠️ POISON PILL (2026-10-09): the hospital drip purges the toxin. The
+  // pill's teeth are the 12h hospital cooldown - if it hasn't elapsed, the
+  // patient is turned away above and the poison keeps biting.
+  try {
+    if (user.activeEffects && typeof user.activeEffects === 'object' && !Array.isArray(user.activeEffects) && user.activeEffects.poison_pill) {
+      delete user.activeEffects.poison_pill;
+    }
+  } catch (e) {}
   scheduleSave(userId);
   return { healed, onCooldown: false };
 }

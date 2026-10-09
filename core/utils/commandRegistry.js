@@ -263,6 +263,7 @@ const COMMAND_REGISTRY = {
     // 💡 REMOVED 2026-09-12 (audit): 'loan accept'/'loan decline' - never dispatched; use `.accept`/`.decline`
     { cmd: 'rob', desc: 'Attempt to rob another user\'s wallet.', usage: 'rob @user' },
     { cmd: 'steal', desc: 'Alias for rob. Rob another user.', usage: 'steal @user' },
+    { cmd: 'bug', desc: 'Poison pill attack: DMs the victim, drains HP, suppresses regen 30 min. Cure: hospital.', usage: 'bug @user' },
     { cmd: 'rich', desc: 'Wealth Leaderboard - See the richest players.', usage: 'rich' },
     { cmd: 'richest', desc: 'Alias for rich.', usage: 'richest' },
     { cmd: 'gamblers', desc: 'Gamble Leaderboard - See the top winners.', usage: 'gamblers' },

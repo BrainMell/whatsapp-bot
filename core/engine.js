@@ -9612,7 +9612,7 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                       const words = lowerTxt.split(' ');
                       const prefixPart = botConfig.getPrefix().toLowerCase();
                       const firstWord = words[0].startsWith(prefixPart) ? words[0].slice(prefixPart.length) : (words[0].startsWith('.') ? words[0].slice(1) : words[0]);
-                      const RPG_CMDS = new Set(['char', 'character', 'stats', 'kills', 'killcount', 'profile', 'me', 'whois', 'cardstyle', 'setdefaultcard', 'status', 'inventory', 'bag', 'inv', 'dismantle', 'equip', 'unequip', 'use', 'enhance', 'blacksmith', 'repair', 'inspect', 'shop', 'buy', 'recipes', 'craft', 'brew', 'forge', 'cook', 'source', 'mine', 'skill', 'skills', 'skilltree', 'st', 'abilities', 'allocate', 'classes', 'evolve', 'trial', 'quest', 'solo', 'adventure', 'join', 'stop', 'vote', 'raid', 'abyss', 'world', 'bounty', 'duel', 'challenge', 'pvp', 'combat', 'summon', 'summons', 'dragonlord', 'dglord', 'dragongod', 'rune', 'clinic', 'heal', 'health', 'hospital', 'rank', 'adventurer', 'monster', 'handbook', 'guide', 'lore', 'leaderboard', 'lb', 'upgrade', 'claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 't2edeck', 't2ecoll', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'cdeck', 'tokens', 'event', 'setprice', 'esummon', 'fc', 'spawn', 'listitem', 'unlistitem', 'buyitem', 'itemmarket', 'balance', 'bal', 'daily', 'register', 'deposit', 'withdraw', 'transfer', 'rob', 'rich', 'lottery', 'invest', 'investment', 'gamble', 'slots', 'dice', 'coinflip', 'blackjack', 'roulette', 'plinko', 'wheel', 'crash', 'cups', 'scratch', 'rps', 'horse', 'hl', 'mines', 'penalty', 'guess', 'guild', 'reset', 'handbook', 'tutorial']);
+                      const RPG_CMDS = new Set(['char', 'character', 'stats', 'kills', 'killcount', 'profile', 'me', 'whois', 'cardstyle', 'setdefaultcard', 'status', 'inventory', 'bag', 'inv', 'dismantle', 'equip', 'unequip', 'use', 'enhance', 'blacksmith', 'repair', 'inspect', 'shop', 'buy', 'recipes', 'craft', 'brew', 'forge', 'cook', 'source', 'mine', 'skill', 'skills', 'skilltree', 'st', 'abilities', 'allocate', 'classes', 'evolve', 'trial', 'quest', 'solo', 'adventure', 'join', 'stop', 'vote', 'raid', 'abyss', 'world', 'bounty', 'duel', 'challenge', 'pvp', 'combat', 'summon', 'summons', 'dragonlord', 'dglord', 'dragongod', 'rune', 'clinic', 'heal', 'health', 'hospital', 'rank', 'adventurer', 'monster', 'handbook', 'guide', 'lore', 'leaderboard', 'lb', 'upgrade', 'claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 't2edeck', 't2ecoll', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'cdeck', 'tokens', 'event', 'setprice', 'esummon', 'fc', 'spawn', 'listitem', 'unlistitem', 'buyitem', 'itemmarket', 'balance', 'bal', 'daily', 'register', 'deposit', 'withdraw', 'transfer', 'rob', 'bug', 'rich', 'lottery', 'invest', 'investment', 'gamble', 'slots', 'dice', 'coinflip', 'blackjack', 'roulette', 'plinko', 'wheel', 'crash', 'cups', 'scratch', 'rps', 'horse', 'hl', 'mines', 'penalty', 'guess', 'guild', 'reset', 'handbook', 'tutorial']);
                       const isRpg = RPG_CMDS.has(firstWord.toLowerCase());
                       if (isRpg) {
                         const bypass = await testerSystem.canBypassRpgLock(senderJid, chatId);
@@ -27378,6 +27378,86 @@ ${senderName} said y'all should know:
                       text: BOT_MARKER + result.message,
                       contextInfo: { mentionedJid: [victim, senderJid] },
                     });
+                    await awardProgression(senderJid, chatId);
+                    return;
+                  }
+
+                  // ☠️ POISON PILL — .j bug @victim (owner spec 2026-10-09):
+                  // sends a poison pill attack to the victim's DMs. Instant HP
+                  // drain + 30-min regen suppression; only cure is the hospital.
+                  // Lives next to rob (same guardrails, same dispatch shape) and
+                  // does its work via economy.poisonPillAttack().
+                  if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} bug`) {
+                    return await sendUsage(
+                      sock,
+                      chatId,
+                      BOT_MARKER,
+                      "☠️ POISON PILL",
+                      "bug @user",
+                      "bug @target",
+                      "Slip a poison pill into another player's drink. Instant HP drain + regeneration suppressed for 30 minutes. The only cure is the hospital. Costs 500.",
+                    );
+                  }
+                  if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} bug `)) {
+                    if (!economy.isRegistered(senderJid)) {
+                      await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          `❌ You need to register first!\n\nType: \`${botConfig.getPrefix()} register <nickname>\``,
+                      });
+                      return;
+                    }
+
+                    const bugVictim = getMentionOrReply(m);
+                    if (!bugVictim) {
+                      await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          `❌ Usage: \`${botConfig.getPrefix()} bug @user\` or reply to their message.`,
+                      });
+                      return;
+                    }
+                    if (bugVictim === senderJid) {
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ Poisoning your own drink? The shadow broker doesn't sell refunds.`,
+                      });
+                      return;
+                    }
+
+                    // Bot-target guard - same net as rob (ANY bot instance).
+                    const _bugBotJid = sock.user.id.split(":")[0] + "@s.whatsapp.net";
+                    const _bugBotLid = sock.authState.creds?.me?.lid;
+                    const _bugBotJids = [
+                      _bugBotJid, _bugBotLid,
+                      ...Object.values(botInstancesHealth).map(h => h?.jid).filter(Boolean),
+                    ].filter(Boolean);
+                    const _bugIsBotTarget = _bugBotJids.some(jid => {
+                      if (!jid) return false;
+                      const norm = jidNormalizedUser(jid);
+                      const victimNorm = jidNormalizedUser(bugVictim);
+                      return norm === victimNorm || economy.getDisplayName(jid) === bugVictim.split('@')[0];
+                    });
+                    if (_bugIsBotTarget) {
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + `❌ You can't poison a bot. Our livers are purely decorative anyway.`,
+                      });
+                      return;
+                    }
+
+                    const bugResult = economy.poisonPillAttack(senderJid, bugVictim);
+                    await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + bugResult.message,
+                      contextInfo: { mentionedJid: [bugVictim, senderJid] },
+                    });
+                    if (bugResult.success) {
+                      // 📬 the strike lands in the victim's DMs - that IS the
+                      // attack (owner spec: "sends a poison pill attack to
+                      // that number's dm").
+                      await sock.sendMessage(bugVictim, {
+                        text: BOT_MARKER + bugResult.dmText,
+                        contextInfo: { mentionedJid: [senderJid] },
+                      }).catch(() => {});
+                    }
                     await awardProgression(senderJid, chatId);
                     return;
                   }
