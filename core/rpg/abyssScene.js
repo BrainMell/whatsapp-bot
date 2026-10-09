@@ -1494,25 +1494,38 @@ function ringOffsetForPhase(p) {
     return -RING_AMP * Math.cos(2 * Math.PI * p);
 }
 
+// the SIMPLE descent-shaft backdrop shared by §3 floor-descent card and §4
+// result card (owner 20:48Z: combat-family art is FORBIDDEN on these cards —
+// "use something simple"). No image asset, no fallback, no combat pool: a
+// quiet vertical gradient + one soft center glow + a vignette. Regression to
+// combat art is structurally impossible — combat art is not referenced here.
+// `sink` (0..1) darkens the whole shaft for result moments.
+function paintSimpleShaft(ctx, sink = 0) {
+    const gShaft = ctx.createLinearGradient(0, 0, 0, FH);
+    gShaft.addColorStop(0, '#0a0812');
+    gShaft.addColorStop(0.55, '#120d1c');
+    gShaft.addColorStop(1, '#060409');
+    ctx.fillStyle = gShaft; ctx.fillRect(0, 0, FW, FH);
+    const gGlow = ctx.createRadialGradient(FW / 2, 700, 60, FW / 2, 700, 620);
+    gGlow.addColorStop(0, 'rgba(96,66,158,0.14)');
+    gGlow.addColorStop(1, 'rgba(96,66,158,0)');
+    ctx.fillStyle = gGlow; ctx.fillRect(0, 0, FW, FH);
+    const gVig = ctx.createRadialGradient(FW / 2, FH / 2, FH * 0.30, FW / 2, FH / 2, FH * 0.80);
+    gVig.addColorStop(0, 'rgba(0,0,0,0)');
+    gVig.addColorStop(1, 'rgba(0,0,0,0.42)');
+    ctx.fillStyle = gVig; ctx.fillRect(0, 0, FW, FH);
+    if (sink > 0) {
+        ctx.fillStyle = `rgba(4,3,8,${Math.min(0.6, sink).toFixed(3)})`;
+        ctx.fillRect(0, 0, FW, FH);
+    }
+}
+
 async function paintFloorCard(ctx, payload = {}, off = 0) {
     const floor = Math.max(1, Number(payload.floor) || 1);
     const tier = safeName(payload.tier || 'F', 12);
     const mult = Number(payload.mult) || 1;
 
-    // ── backdrop: the DESCENT SHAFT — dedicated backdrop (owner 14:07Z:
-    // "the new abyss descending image cards... why are they using the same
-    // backgrounds as the combat???? just use an appropriate background") —
-    // a vertical chasm read that belongs to the world-map language, never
-    // reused by combat. Falls back to the pool art if the asset is missing.
-    const DESCENT_BG = 'abyss_descent.png';
-    if (fs.existsSync(path.join(ENV_ABYSS_DIR, DESCENT_BG))) {
-        await drawBackdrop(ctx, DESCENT_BG, ENV_ABYSS_DIR);
-        ctx.fillStyle = 'rgba(4,3,10,0.38)'; ctx.fillRect(0, 0, FW, FH);
-    } else {
-        const bgStyle = isBossFloorMirror(floor) ? 'boss' : 'regular';
-        await drawBackdrop(ctx, bgFileForFloor(floor, bgStyle), bgDirFor(bgStyle));
-        ctx.fillStyle = 'rgba(5,4,12,0.28)'; ctx.fillRect(0, 0, FW, FH);
-    }
+    paintSimpleShaft(ctx);
 
     // ── header: THE ABYSS ──
     ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
@@ -1715,13 +1728,9 @@ async function renderAbyssResultCard(payload = {}) {
         const c = createCanvas(FW, FH);
         const ctx = c.getContext('2d');
 
-        // backdrop: the shaft, sunk deeper for a result moment
-        const DESCENT_BG = 'abyss_descent.png';
-        if (fs.existsSync(path.join(ENV_ABYSS_DIR, DESCENT_BG))) {
-            await drawBackdrop(ctx, DESCENT_BG, ENV_ABYSS_DIR);
-        }
-        ctx.fillStyle = fallen ? 'rgba(6,3,8,0.66)' : 'rgba(4,3,10,0.54)';
-        ctx.fillRect(0, 0, FW, FH);
+        // backdrop: the simple shaft, sunk deeper for a result moment
+        // (owner 20:48Z — combat-family art is forbidden on these cards)
+        paintSimpleShaft(ctx, fallen ? 0.34 : 0.20);
 
         // header — same family as the descent card
         ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
