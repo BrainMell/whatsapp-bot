@@ -113,15 +113,15 @@ const DASH_RE = /[\u2010\u2011\u2012\u2013\u2014\u2015\u2E3A\u2E3B-]/;
     for (let i = 0; i < 8; i++) picks.add(sequences.pickSequence('qa_rot_chat'));
     check(picks.size > 1, 'pickSequence rotates variations for a chat');
 
-    // ═══ 2. trigger logic: 5% + forced + once per run ═══
+    // ═══ 2. trigger logic: 0.5% + forced + once per run ═══
     console.log('\n[2] trigger logic');
-    check(deadWorld.CHANCE === 0.05, 'CHANCE is exactly 0.05');
+    check(deadWorld.CHANCE === 0.005, 'CHANCE is exactly 0.005 (owner 2026-10-09: 10x rarer)');
     const st = { deadWorldForced: false };
     const realRandom = Math.random;
-    Math.random = () => 0.049;
-    check(deadWorld.shouldTrigger(st) === true, 'roll below 0.05 triggers');
-    Math.random = () => 0.051;
-    check(deadWorld.shouldTrigger(st) === false, 'roll above 0.05 does not trigger');
+    Math.random = () => 0.0049;
+    check(deadWorld.shouldTrigger(st) === true, 'roll below 0.005 triggers');
+    Math.random = () => 0.0051;
+    check(deadWorld.shouldTrigger(st) === false, 'roll above 0.005 does not trigger');
     st.deadWorldForced = true;
     check(deadWorld.shouldTrigger(st) === true, 'forced flag triggers regardless of the roll');
     st.deadWorldDone = true;

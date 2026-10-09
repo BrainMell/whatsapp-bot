@@ -44,7 +44,9 @@ const renderer = require('./deadWorldRenderer');
 const sequences = require('./deadWorldSequences');
 
 // The owner-specified chance for a regular encounter to become a Dead World.
-const CHANCE = 0.05;
+// 💡 OWNER RULING (2026-10-09): 0.05 → 0.005 — dead worlds were spawning far
+// too often ("make them 10 times more rare"); 0.5% per regular encounter.
+const CHANCE = 0.005;
 
 // Spacing between the ten thought boxes. Tunable for QA (mock flows pass a
 // tiny delay); production default keeps each thought a beat apart.

@@ -10818,7 +10818,8 @@ _💡 Reply with another number from your search list!_`.trim();
                       // 💡 DEAD WORLD (2026-09-21 owner ticket): ".j solo f -d"
                       // forces the Dead World encounter on the first regular
                       // combat encounter of a SOLO run, for testing the full
-                      // sequence without waiting on the 5% roll. The normal
+                      // sequence without waiting on the 0.5% roll (owner
+                      // 2026-10-09: dead worlds 10x rarer). The normal
                       // ".j solo f" behavior is untouched.
                       const forceDeadWorld = isSolo && cmdArgs.slice(1).includes("-d");
                       const ranks = [
