@@ -4563,9 +4563,17 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   // map panel, no sprite swap). The image is the SAME roomScene render the
   // player was just shown, with the live combat pools layered on top.
   const isRuinsFight = state.mode === 'RUINS' && state.ruinsMeta;
+  // 🕳️ ABYSS OVERHAUL (owner brief abyss_overhaul_agent_brief.md 2026-10-09):
+  // abyss fights render through the node-canvas abyssScene (Ruins toolkit:
+  // content-measured sprites, contact shadows, frozen per-fight layout, the
+  // default HUD panel) — new forward-facing composition per the reference,
+  // not the Go arena render. Same return shape, same timeout + fallbacks.
+  const isAbyssFight = state.isAbyss === true;
   const scenePromise = isRuinsFight
     ? require('./guildWar/battleScene').renderBattleImage(state, { phase: 'START', turnOrderStr })
-    : combatIntegration.generateCombatScene(
+    : isAbyssFight
+      ? require('./abyssScene').renderAbyssCombat(state, { phase: 'START', turnOrderStr })
+      : combatIntegration.generateCombatScene(
     state.players,
     state.enemies,
     "START",
@@ -6736,7 +6744,12 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
       // 2026-10-05 23:39Z) — the fight never leaves the room image.
       const scenePromise = (state.mode === 'RUINS' && state.ruinsMeta)
         ? require('./guildWar/battleScene').renderBattleImage(state, { phase: 'TURN', turnInfo: lastTurnInfo })
-        : combatIntegration.generateCombatScene(
+        : (state.isAbyss === true)
+          // 🕳️ ABYSS OVERHAUL (2026-10-09): TURN renders reuse the frozen
+          // START layout — only HP/energy/turn badge change (pixel-stable,
+          // battleScene pattern)
+          ? require('./abyssScene').renderAbyssCombat(state, { phase: 'TURN', turnInfo: lastTurnInfo })
+          : combatIntegration.generateCombatScene(
         state.players,
         state.enemies,
         "TURN",
@@ -6995,6 +7008,9 @@ async function startAbyssCombat(sock, chatId, senderJid, enemy, abyssRun, floor)
   };
 
   state.botId = botScope(); // 💡 CROSS-BOT LEAK FIX: stamp the owning bot
+  // 🕳️ ABYSS OVERHAUL: the scene renderer keys its frozen layout on this
+  // (same contract as the ruins battleScene)
+  state.sessionKey = sessionKey;
   gameStates.set(sessionKey, state);
 
   await startCombat(sock, null, { enemies: [combatEnemy], type: 'COMBAT' }, sessionKey);
@@ -7217,14 +7233,51 @@ async function handleAbyssVictory(sock, sessionKey) {
     msg += `${encounter.treasure.icon} *Floor ${newFloor}* - ${encounter.treasure.name}\n`;
     msg += `_${encounter.treasure.desc}_\n\n`;
     msg += `_Collect with \`${botConfig.getPrefix()} abyss collect\` | Skip with \`${botConfig.getPrefix()} abyss skip\`_`;
-    try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e) {}
+    // 🕳️ ABYSS OVERHAUL (2026-10-09): the descent gets a VISUAL — floor
+    // card with the ring stack highlighting the new floor (was plain text)
+    try {
+      const __eco = require('../economy');
+      const __u = __eco.getUser(senderJid) || {};
+      const __fc = await require('./abyssScene').renderAbyssFloorCard({
+        floor: newFloor,
+        tier: abyssSystem.getFloorTier(newFloor),
+        mult: abyssSystem.getFloorMultiplier(newFloor),
+        encounterType: 'treasure',
+        playerName: __eco.getDisplayName(senderJid),
+        playerClassId: __u.class || 'FIGHTER',
+        playerSpriteIndex: Number(__u.spriteIndex) || 0,
+      });
+      if (__fc && __fc.length > 100) {
+        await sock.sendMessage(state.chatId, { image: __fc, caption: msg });
+      } else {
+        await sock.sendMessage(state.chatId, { text: msg });
+      }
+    } catch (e) { try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e2) {} }
     await loreDrops.sendOwn(sock, state.chatId, __victoryDrop || __openerDrop);
   } else if (encounter.type === 'event') {
     msg += `${encounter.event.icon} *Floor ${newFloor}* - ${encounter.event.name}\n`;
     msg += `_${encounter.event.desc}_\n\n`;
     encounter.event.choices.forEach(c => { msg += `\`${c.id}\` - ${c.text}\n`; });
     msg += `\n_Choose with \`${botConfig.getPrefix()} abyss choose <1/2>\`_`;
-    try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e) {}
+    // 🕳️ ABYSS OVERHAUL (2026-10-09): event floors get the floor card too
+    try {
+      const __eco = require('../economy');
+      const __u = __eco.getUser(senderJid) || {};
+      const __fc = await require('./abyssScene').renderAbyssFloorCard({
+        floor: newFloor,
+        tier: abyssSystem.getFloorTier(newFloor),
+        mult: abyssSystem.getFloorMultiplier(newFloor),
+        encounterType: 'event',
+        playerName: __eco.getDisplayName(senderJid),
+        playerClassId: __u.class || 'FIGHTER',
+        playerSpriteIndex: Number(__u.spriteIndex) || 0,
+      });
+      if (__fc && __fc.length > 100) {
+        await sock.sendMessage(state.chatId, { image: __fc, caption: msg });
+      } else {
+        await sock.sendMessage(state.chatId, { text: msg });
+      }
+    } catch (e) { try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e2) {} }
     await loreDrops.sendOwn(sock, state.chatId, __victoryDrop || __openerDrop);
   }
 }
@@ -7244,6 +7297,8 @@ async function endCombat(sock, victory, sessionKey) {
   state.isEndingCombat = true; // claim FIRST — no re-entry during the async hook
   // ⚔️ RUINS: free the frozen battle-scene layout for this session
   try { require('./guildWar/battleScene').clearLayout(sessionKey); } catch (e) {}
+  // 🕳️ ABYSS: free the frozen abyss-scene layout for this session
+  try { require('./abyssScene').clearLayout(sessionKey); } catch (e) {}
   // 🤝 TEAM CO-OP: the room session is over — drop every participant's
   // resolver entry so later fights seat them fresh.
   cleanupCoopIndexForSession(sessionKey);

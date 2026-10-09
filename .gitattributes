@@ -11,3 +11,6 @@ core/rpgasset/ui/crystal.png -filter -diff -merge -text
 # the boxes would otherwise serve an LFS pointer; the renderer's isRealFont
 # check would skip it and rune tiles hexbox again)
 core/rpgasset/fonts/NotoSansRunic-Regular.ttf -filter -diff -merge -text
+# new abyss-native monster sprites must be real pixels everywhere (reset
+# --hard deploys on the boxes would otherwise serve an LFS pointer)
+core/rpgasset/enemies/abyss/*.png -filter -diff -merge -text

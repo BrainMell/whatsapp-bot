@@ -21934,24 +21934,26 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                             return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           }
                           const run = result.run;
-                          // 2026-09-15: ABYSS_ENTRY card - descent brief with the
+                          // 2026-09-15: ABYSS_ENTRY card — descent brief with the
                           // run announcement as caption (text fallback on failure)
+                          // 🕳️ ABYSS OVERHAUL (owner brief 2026-10-09): the entry
+                          // card is now the DESCENT CARD — descending ring stack,
+                          // current floor highlighted, the player standing on it
+                          // (node-canvas abyssScene, replaces the Go portrait)
                           try {
                             const abyssTier = abyssSystem.getFloorTier(run.currentFloor || 1);
                             const abyssMult = Number(abyssSystem.getFloorMultiplier(run.currentFloor || 1).toFixed(1));
-                            const __entryBuf = await (require('./utils/goImageService')).generatePortraitCard({
-                              kind: 'ABYSS_ENTRY',
-                              // 🧩 SPRITE CONSISTENCY 2026-09-17: hero sprite fields.
-                              playerClass: String((economy.getUser(senderJid) || {}).class || '').toUpperCase(),
-                              playerIndex: Math.max(0, Math.floor(Number((economy.getUser(senderJid) || {}).spriteIndex) || 0)),
-                              nickname: economy.getDisplayName(senderJid),
-                              cur: run.currentFloor || 1,
-                              pointsBig: `FLOOR ${run.currentFloor || 1}`,
-                              pill: `TIER ${abyssTier} · DANGER x${abyssMult}`,
-                              spentNow: 'BOSS EVERY 5TH FLOOR',
-                              spentLeft: '12H COOLDOWN',
-                              sealText: String(run.currentFloor || 1),
-                              caption: 'the abyss hungers',
+                            const __entryUser = economy.getUser(senderJid) || {};
+                            const __entryBuf = await (require('./rpg/abyssScene')).renderAbyssFloorCard({
+                              floor: run.currentFloor || 1,
+                              tier: abyssTier,
+                              mult: abyssMult,
+                              encounterType: run.currentEncounterType || 'combat',
+                              enemyName: (run.currentEnemy && run.currentEnemy.name) || '',
+                              isBoss: !!(run.currentEnemy && run.currentEnemy.isBoss),
+                              playerName: economy.getDisplayName(senderJid),
+                              playerClassId: __entryUser.class || classIdForAbyss || 'FIGHTER',
+                              playerSpriteIndex: Number(__entryUser.spriteIndex) || 0,
                               rows: [
                                 { label: 'BOSS FLOORS', value: 'EVERY 5TH' },
                                 { label: 'FIGHT', value: '.combat attack' },
@@ -22137,7 +22139,32 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                       if (abyssSub === 'collect' || abyssSub === 'take' || abyssSub === 'loot') {
                         try {
                           const result = await abyssSystem.processTreasure(senderJid);
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          // 🕳️ ABYSS OVERHAUL (2026-10-09): non-combat next floors
+                          // (treasure/event) get the DESCENT CARD — the old plain
+                          // text lost the whole "you went deeper" beat. Combat
+                          // floors keep the text + the combat START scene carries
+                          // the floor badge (no double image spam).
+                          const __nextIsFight = result.run && ((result.run.currentEncounterType === 'combat' || result.run.currentEncounterType === 'wild_summon') && result.run.currentEnemy);
+                          let __floorCardSent = false;
+                          if (result.run && !__nextIsFight) {
+                            try {
+                              const __u = economy.getUser(senderJid) || {};
+                              const __fc = await (require('./rpg/abyssScene')).renderAbyssFloorCard({
+                                floor: result.run.currentFloor,
+                                tier: abyssSystem.getFloorTier(result.run.currentFloor),
+                                mult: abyssSystem.getFloorMultiplier(result.run.currentFloor),
+                                encounterType: result.run.currentEncounterType,
+                                playerName: economy.getDisplayName(senderJid),
+                                playerClassId: __u.class || 'FIGHTER',
+                                playerSpriteIndex: Number(__u.spriteIndex) || 0,
+                              });
+                              if (__fc && __fc.length > 100) {
+                                await sock.sendMessage(chatId, { image: __fc, caption: BOT_MARKER + result.message });
+                                __floorCardSent = true;
+                              }
+                            } catch (e) { console.error('[Abyss] floor card failed:', e.message); }
+                          }
+                          if (!__floorCardSent) await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           // 💡 2026-09-20: lore drop arrives as its own message box
                           try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
                           // 💡 FIX 2026-08-15: Start combat if next floor is combat.
@@ -22158,7 +22185,29 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                         try {
                           const choiceId = abyssArgs[1] || '1';
                           const result = await abyssSystem.processEventChoice(senderJid, choiceId);
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          // 🕳️ ABYSS OVERHAUL (2026-10-09): non-combat next floors
+                          // get the DESCENT CARD (same rule as collect)
+                          const __nextIsFight = result.run && ((result.run.currentEncounterType === 'combat' || result.run.currentEncounterType === 'wild_summon') && result.run.currentEnemy);
+                          let __floorCardSent = false;
+                          if (result.run && !__nextIsFight) {
+                            try {
+                              const __u = economy.getUser(senderJid) || {};
+                              const __fc = await (require('./rpg/abyssScene')).renderAbyssFloorCard({
+                                floor: result.run.currentFloor,
+                                tier: abyssSystem.getFloorTier(result.run.currentFloor),
+                                mult: abyssSystem.getFloorMultiplier(result.run.currentFloor),
+                                encounterType: result.run.currentEncounterType,
+                                playerName: economy.getDisplayName(senderJid),
+                                playerClassId: __u.class || 'FIGHTER',
+                                playerSpriteIndex: Number(__u.spriteIndex) || 0,
+                              });
+                              if (__fc && __fc.length > 100) {
+                                await sock.sendMessage(chatId, { image: __fc, caption: BOT_MARKER + result.message });
+                                __floorCardSent = true;
+                              }
+                            } catch (e) { console.error('[Abyss] floor card failed:', e.message); }
+                          }
+                          if (!__floorCardSent) await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           // 💡 2026-09-20: lore drop arrives as its own message box
                           try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
                           // 💡 FIX 2026-08-15: If the next floor is combat, start it!
@@ -22179,7 +22228,29 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                       if (abyssSub === 'skip' || abyssSub === 'next') {
                         try {
                           const result = await abyssSystem.processSkip(senderJid);
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          // 🕳️ ABYSS OVERHAUL (2026-10-09): non-combat next floors
+                          // get the DESCENT CARD (same rule as collect)
+                          const __nextIsFight = result.run && ((result.run.currentEncounterType === 'combat' || result.run.currentEncounterType === 'wild_summon') && result.run.currentEnemy);
+                          let __floorCardSent = false;
+                          if (result.run && !__nextIsFight) {
+                            try {
+                              const __u = economy.getUser(senderJid) || {};
+                              const __fc = await (require('./rpg/abyssScene')).renderAbyssFloorCard({
+                                floor: result.run.currentFloor,
+                                tier: abyssSystem.getFloorTier(result.run.currentFloor),
+                                mult: abyssSystem.getFloorMultiplier(result.run.currentFloor),
+                                encounterType: result.run.currentEncounterType,
+                                playerName: economy.getDisplayName(senderJid),
+                                playerClassId: __u.class || 'FIGHTER',
+                                playerSpriteIndex: Number(__u.spriteIndex) || 0,
+                              });
+                              if (__fc && __fc.length > 100) {
+                                await sock.sendMessage(chatId, { image: __fc, caption: BOT_MARKER + result.message });
+                                __floorCardSent = true;
+                              }
+                            } catch (e) { console.error('[Abyss] floor card failed:', e.message); }
+                          }
+                          if (!__floorCardSent) await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           // 💡 2026-09-20: lore drop arrives as its own message box
                           try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
                           // 💡 FIX 2026-08-15: Same fix as choose - start combat if next floor is combat.

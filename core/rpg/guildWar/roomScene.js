@@ -1630,4 +1630,8 @@ module.exports = {
     // test surface: sprite-shadow isolation probes (owner item-shadow fix)
     drawGroundedSprite, drawContactShadow, contentBox,
     roomVariants,
+    // 🕳️ abyss overhaul (2026-10-09): the abyss scene renderer reuses the
+    // SAME HUD toolkit so both modes speak one visual language — additive
+    // exports only, zero behavior change
+    pill, segBar, drawTurnCrystal, drawHudPanel,
 };
