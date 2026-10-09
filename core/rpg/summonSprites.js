@@ -149,9 +149,53 @@ const DIGIMON_API_NAME_OVERRIDES = {
   dukemon: 'Dukemon',
 };
 
+// ─────────────────────────────────────────────
+// Species → Digimon art mapping (owner 2026-10-09: "the summons aren't Digimon
+// anymore. I thought we was over that??")
+// ─────────────────────────────────────────────
+// The summon REGISTRY uses custom archetype species (bat, dragon, slime...), so
+// sprite lookups missed the Digimon cache and renders fell back to emoji/AI
+// filler. This map gives every registry species a REAL Digimon face — element /
+// body-plan matched — while names and mechanics stay untouched. Verified
+// against the digi-api (or already present in the local cache) 2026-10-09.
+const DIGIMON_FOR_SPECIES = {
+  bat: 'Pico Devimon',           // shadow stalker → bat-winged imp
+  boar: 'Boarmon',               // earth brute → armored boar
+  chest: 'Tankmon',              // construct tank → war engine
+  dino: 'Tyranomon',             // beast brute → tyrannosaur
+  dragon: 'Megadramon',          // fire brute → dark dragon
+  ghost: 'Bakemon',              // undead → the classic ghost
+  giant: 'Golemon',              // earth colossus → rock giant
+  mimic: 'Impmon',               // trickster construct → prankster imp
+  mushroom: 'Sunflowmon',        // nature mage → bloom plant
+  octopus: 'Dagomon',            // kraken → deep-one octopus
+  reptile: 'Betamon',            // poison stalker → amphibian
+  slime: 'Koromon',              // blob tank → the classic blob
+  snake: 'Seadramon',            // poison serpent → sea serpent
+  yeti: 'Icemon',                // ice brute → yeti digimon
+  ship_cruiser: 'Mechanorimon',  // construct brute → war machine
+  ship_fighter: 'Raptordramon',  // construct stalker → machine raptor
+  ship_squid: 'Thetismon',       // sea mage → sea-nymph digimon
+  plaguefang: 'Archnemon',       // plague stalker → poison spider
+  lumenmoth: 'Morphomon',        // light mage → luminous moth
+  emberwick: 'Meramon',          // fire tank → living flame
+  skitterswarm: 'Funbeemon',     // plague swarm → insect hive
+  tidalmaw: 'Whamon',            // tide maw → the giant whale
+  fireguard: 'Fladramon',        // fire tank → flame-armored guardian
+  boglurk: 'Pinochimon',         // nature lurker → evil pine
+  frostpeep: 'Frozomon',         // ice mage → frost machine
+  starnail: 'Starmon',           // crystal brute → star-headed
+};
+
 function getApiName(species) {
   const safeName = normalizeSpeciesName(species);
   return DIGIMON_API_NAME_OVERRIDES[safeName] || null;
+}
+
+/** The Digimon face for a registry species id (or null → fetch species as-is). */
+function getSpeciesDigimon(species) {
+  const safeName = normalizeSpeciesName(species);
+  return DIGIMON_FOR_SPECIES[safeName] || null;
 }
 
 function normalizeSpeciesName(species) {
@@ -211,9 +255,19 @@ async function fetchAndCache(digimonName) {
   const safeName = normalizeSpeciesName(digimonName);
   const outPath = path.join(CACHE_DIR, `${safeName}.png`);
 
-  // Already cached (case-insensitive check)
+  // Already cached (case-insensitive check) — and actually a PNG (an LFS
+  // pointer stub from a fresh clone decodes as text; treat as a miss so the
+  // fetch below heals it)
   const existing = findCaseInsensitive(CACHE_DIR, `${safeName}.png`);
-  if (existing) return existing;
+  if (existing) {
+    try {
+      const fd = fs.openSync(existing, 'r');
+      const head = Buffer.alloc(4);
+      fs.readSync(fd, head, 0, 4, 0);
+      fs.closeSync(fd);
+      if (head[0] === 0x89 && head[1] === 0x50) return existing;
+    } catch (e) {}
+  }
 
   // Try several name variants - the Digimon API image URLs follow these rules:
   //   1. Spaces in names become UNDERSCORES: "Metal Greymon" → "Metal_Greymon.png"
@@ -268,20 +322,40 @@ async function removeWhiteBackground(imageBuffer) {
   const image = await Jimp.read(imageBuffer);
   const { width, height } = image.bitmap;
 
-  // Direct pixel manipulation on the bitmap data (Jimp v1 compatible)
-  const data = image.bitmap.data; // Uint8ClampedArray [R,G,B,A, R,G,B,A, ...]
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i];
-    const g = data[i + 1];
-    const b = data[i + 2];
-    if (r > 240 && g > 240 && b > 240) {
-      // Near-white → fully transparent
-      data[i + 3] = 0;
-    } else if (r > 220 && g > 220 && b > 220) {
-      // Edge anti-aliasing → partial transparency
-      const alpha = Math.floor(((255 - r) + (255 - g) + (255 - b)) / 3 * 2.55);
-      data[i + 3] = alpha;
+  // Border flood-fill white removal (2026-10-09 upgrade): the old whole-image
+  // threshold nuked near-white pixels EVERYWHERE (claws, teeth, eye whites got
+  // holes) yet still left a 1px halo where anti-aliased edges met the old
+  // background. Now: near-white pixels CONNECTED to the image border become
+  // transparent (full for very white, partial for edge anti-aliasing), and
+  // interior whites are preserved.
+  const data = image.bitmap.data; // Uint8ClampedArray [R,G,B,A, ...]
+  const isNearWhite = (i) => data[i + 3] === 0 || (data[i] > 228 && data[i + 1] > 228 && data[i + 2] > 228);
+  const visited = new Uint8Array(width * height);
+  const queue = [];
+  const pushIf = (x, y) => {
+    if (x < 0 || y < 0 || x >= width || y >= height) return;
+    const p = y * width + x;
+    if (visited[p]) return;
+    if (!isNearWhite(p * 4)) return;
+    visited[p] = 1;
+    queue.push(p);
+  };
+  for (let x = 0; x < width; x++) { pushIf(x, 0); pushIf(x, height - 1); }
+  for (let y = 0; y < height; y++) { pushIf(0, y); pushIf(width - 1, y); }
+  while (queue.length) {
+    const p = queue.pop();
+    const i = p * 4;
+    if (data[i + 3] !== 0) {
+      if (data[i] > 240 && data[i + 1] > 240 && data[i + 2] > 240) {
+        data[i + 3] = 0;                                    // very white → gone
+      } else {
+        // edge anti-aliasing → partial transparency
+        const alpha = Math.floor(((255 - data[i]) + (255 - data[i + 1]) + (255 - data[i + 2])) / 3 * 2.55);
+        data[i + 3] = Math.min(data[i + 3], alpha);
+      }
     }
+    const x = p % width, y = (p / width) | 0;
+    pushIf(x + 1, y); pushIf(x - 1, y); pushIf(x, y + 1); pushIf(x, y - 1);
   }
 
   // Jimp v1: getBuffer with MIME string
@@ -301,10 +375,23 @@ async function removeWhiteBackground(imageBuffer) {
 async function getOrFetchSprite(species, digimonName) {
   // Check local first
   const local = getSpritePath(species);
-  if (local) return local;
+  if (local) {
+    // LFS-pointer guard: a tracked stub (repo-only condition) decodes as text,
+    // not pixels — treat it as a miss so the mapped fetch below heals it.
+    try {
+      const fd = fs.openSync(local, 'r');
+      const head = Buffer.alloc(4);
+      fs.readSync(fd, head, 0, 4, 0);
+      fs.closeSync(fd);
+      if (head[0] === 0x89 && head[1] === 0x50) return local;   // PNG magic
+    } catch (e) {}
+  }
 
-  // Determine fetch name: explicit override > API name map > species name
-  const fetchName = digimonName || getApiName(species) || (species || '').replace(/_/g, ' ');
+  // Determine fetch name: explicit override > species→Digimon map > API name
+  // map > species name. The species map is what makes summons Digimon again
+  // for EVERY renderer (roster, codex, profile, abyss) with zero call-site
+  // changes.
+  const fetchName = digimonName || getSpeciesDigimon(species) || getApiName(species) || (species || '').replace(/_/g, ' ');
   if (fetchName) {
     const fetched = await fetchAndCache(fetchName);
     if (fetched) return fetched;
@@ -397,17 +484,9 @@ const KNOWN_MISSING = new Set([
   'abyssal_phantom',
   'blossom_sylph',
   'world_tree_spirit',
-  // Sparklinlabs custom species - sprites exist as _idle.gif on the Go service
-  // (Box 2) but not as PNG in this repo. JS renderers use emoji fallback.
-  'boglurk',
-  'emberwick',
-  'fireguard',
-  'frostpeep',
-  'lumenmoth',
-  'plaguefang',
-  'skitterswarm',
-  'starnail',
-  'tidalmaw',
+  // (2026-10-09) boglurk/emberwick/fireguard/frostpeep/lumenmoth/plaguefang/
+  // skitterswarm/starnail/tidalmaw REMOVED from this set — they now resolve
+  // through DIGIMON_FOR_SPECIES below and warm up like any other species.
 ]);
 
 async function warmupCache(registryModule) {
@@ -460,8 +539,9 @@ module.exports = {
   getOrFetchSprite,
   batchFetch,
   warmupCache,
+  getSpeciesDigimon,
   CACHE_DIR,
   imageCache,
   // Exposed for testing / debugging
-  _internal: { normalizeSpeciesName, findCaseInsensitive, refreshDirIndex, SPECIES_ALIASES }
+  _internal: { normalizeSpeciesName, findCaseInsensitive, refreshDirIndex, SPECIES_ALIASES, DIGIMON_FOR_SPECIES }
 };

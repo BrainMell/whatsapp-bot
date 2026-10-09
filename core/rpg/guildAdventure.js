@@ -7248,7 +7248,7 @@ async function handleAbyssVictory(sock, sessionKey) {
         playerSpriteIndex: Number(__u.spriteIndex) || 0,
       });
       if (__fc && __fc.length > 100) {
-        await sock.sendMessage(state.chatId, { image: __fc, caption: msg });
+        await sock.sendMessage(state.chatId, { image: __fc, gifPlayback: require('./abyssScene').isAnimatedCard(__fc), caption: msg });
       } else {
         await sock.sendMessage(state.chatId, { text: msg });
       }
@@ -7273,7 +7273,7 @@ async function handleAbyssVictory(sock, sessionKey) {
         playerSpriteIndex: Number(__u.spriteIndex) || 0,
       });
       if (__fc && __fc.length > 100) {
-        await sock.sendMessage(state.chatId, { image: __fc, caption: msg });
+        await sock.sendMessage(state.chatId, { image: __fc, gifPlayback: require('./abyssScene').isAnimatedCard(__fc), caption: msg });
       } else {
         await sock.sendMessage(state.chatId, { text: msg });
       }

@@ -21963,7 +21963,7 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                               ],
                             });
                             if (__entryBuf && __entryBuf.length > 100) {
-                              await sock.sendMessage(chatId, { image: __entryBuf, caption: BOT_MARKER + result.message });
+                              await sock.sendMessage(chatId, { image: __entryBuf, gifPlayback: (require('./rpg/abyssScene')).isAnimatedCard(__entryBuf), caption: BOT_MARKER + result.message });
                             } else {
                               await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                             }
@@ -22159,7 +22159,7 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                                 playerSpriteIndex: Number(__u.spriteIndex) || 0,
                               });
                               if (__fc && __fc.length > 100) {
-                                await sock.sendMessage(chatId, { image: __fc, caption: BOT_MARKER + result.message });
+                                await sock.sendMessage(chatId, { image: __fc, gifPlayback: (require('./rpg/abyssScene')).isAnimatedCard(__fc), caption: BOT_MARKER + result.message });
                                 __floorCardSent = true;
                               }
                             } catch (e) { console.error('[Abyss] floor card failed:', e.message); }
@@ -22202,7 +22202,7 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                                 playerSpriteIndex: Number(__u.spriteIndex) || 0,
                               });
                               if (__fc && __fc.length > 100) {
-                                await sock.sendMessage(chatId, { image: __fc, caption: BOT_MARKER + result.message });
+                                await sock.sendMessage(chatId, { image: __fc, gifPlayback: (require('./rpg/abyssScene')).isAnimatedCard(__fc), caption: BOT_MARKER + result.message });
                                 __floorCardSent = true;
                               }
                             } catch (e) { console.error('[Abyss] floor card failed:', e.message); }
@@ -22245,7 +22245,7 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                                 playerSpriteIndex: Number(__u.spriteIndex) || 0,
                               });
                               if (__fc && __fc.length > 100) {
-                                await sock.sendMessage(chatId, { image: __fc, caption: BOT_MARKER + result.message });
+                                await sock.sendMessage(chatId, { image: __fc, gifPlayback: (require('./rpg/abyssScene')).isAnimatedCard(__fc), caption: BOT_MARKER + result.message });
                                 __floorCardSent = true;
                               }
                             } catch (e) { console.error('[Abyss] floor card failed:', e.message); }

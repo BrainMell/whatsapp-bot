@@ -35,9 +35,10 @@ const abyssScene = require(path.join(REPO, 'core/rpg/abyssScene'));
 // ═══ 1. background pools (§4) ═══
 section('FIX §4 — background pools');
 const all = abyssScene.bgList(), combat = abyssScene.combatBgList();
-check(`pool >= 10 backgrounds (${all.length})`, all.length >= 10);
-check(`combat sub-pool excludes busy-center halls (${combat.length})`, combat.length >= 8 && combat.length < all.length);
-check('combat pool excludes crystal_chasm', !combat.some((f) => /crystal_chasm/i.test(f)));
+check(`pool >= 10 REAL pixel-art backgrounds (${all.length})`, all.length >= 10);
+check('pool is PNG pixel art (AI jpg pool removed)', all.every((f) => f.toLowerCase().endsWith('.png')));
+check(`combat sub-pool = full pool — every hall is stage-safe (${combat.length})`, combat.length === all.length);
+check('AI halls are gone', !all.some((f) => /crystal_chasm|ember_forge|spore_bloom|void_rift/i.test(f)));
 check('deterministic per floor', abyssScene.bgFileForFloor(5) === abyssScene.bgFileForFloor(5));
 check('floors rotate the pool', abyssScene.bgFileForFloor(1) !== abyssScene.bgFileForFloor(2));
 check('combat selection stays inside combat pool', combat.includes(abyssScene.bgFileForFloor(9, true)));
@@ -53,13 +54,20 @@ check('RABID_RAT override → abyss_rat.png (was a side-view strip)', rat && rat
 const slime = abyssScene.resolveEnemyArt({ name: 'SLIME', spriteIndex: 81 });
 check('SLIME override → abyss_slime.png (was a side-view strip)', slime && slime.file === 'abyss_slime.png');
 const knight = abyssScene.resolveEnemyArt({ name: 'INFERNO KNIGHT', spriteIndex: 41 });
-check('INFERNO_KNIGHT override → ember_knight.png', knight && knight.file === 'ember_knight.png');
+check('INFERNO_KNIGHT falls to curated pixel pool (fire (5).png — AI art removed)',
+    knight && knight.dir.endsWith('rpgasset/enemies') && knight.file === 'fire (5).png');
 const golem = abyssScene.resolveEnemyArt({ name: 'CRYSTAL GOLEM', spriteIndex: 36 });
 check('CRYSTAL_GOLEM falls through to legacy sheet index', golem && golem.dir.endsWith('rpgasset/enemies') && !golem.dir.endsWith('abyss'));
 const unknown = abyssScene.resolveEnemyArt({ name: 'MYSTERY BEAST', spriteIndex: 999 });
 check('out-of-range index never crashes (null or sheet)', unknown === null || !!unknown.file);
 check('override dir is the NEW subdir (C-locale index of enemies/ untouched)',
     rat && rat.dir.endsWith(path.join('enemies', 'abyss')));
+const abyssFiles = require('fs').readdirSync(path.join(REPO, 'core/rpgasset/enemies/abyss')).filter((f) => f.endsWith('.png'));
+check(`enemies/abyss holds only the two by-name sprites (8 AI files deleted): ${abyssFiles.join(',')}`,
+    abyssFiles.length === 2 && abyssFiles.includes('abyss_rat.png') && abyssFiles.includes('abyss_slime.png'));
+const ratBytes = require('fs').readFileSync(path.join(REPO, 'core/rpgasset/enemies/abyss/abyss_rat.png'));
+check('abyss_rat.png is real pixels (PNG magic), not AI/painterly leftovers',
+    ratBytes[0] === 0x89 && ratBytes.length > 300);
 
 // ═══ 3. boss-floor mirror vs the real abyssSystem rule ═══
 section('MECHANICS PRESERVATION — boss-floor mirror');
@@ -141,9 +149,42 @@ section('§6 — frozen layout + render contract');
         floor: 7, tier: 'A', mult: 1.9, encounterType: 'treasure',
         playerName: 'Mellow-San', playerClassId: 'ROGUE', playerSpriteIndex: 1,
     });
-    check('floor card renders (mock canvas buffer)', fc && fc.length > 0);
+    check('floor card renders', fc && fc.length > 0);
+    check('floor card is an animated GIF (owner: rings descend then start back up)',
+        abyssScene.isAnimatedCard(fc));
+    check('floor card gif sane size (< 3MB)', fc && fc.length < 3 * 1024 * 1024);
+    const fcPng = await abyssScene.renderAbyssFloorCardPng({
+        floor: 7, tier: 'A', mult: 1.9, encounterType: 'treasure',
+        playerName: 'Mellow-San', playerClassId: 'ROGUE', playerSpriteIndex: 1,
+    });
+    check('static PNG fallback still renders', Buffer.isBuffer(fcPng) && !abyssScene.isAnimatedCard(fcPng));
     const fcBroken = await abyssScene.renderAbyssFloorCard(null);
     check('floor card with null payload never throws', fcBroken === null || Buffer.isBuffer(fcBroken));
+
+    // ═══ 7. summons are DIGIMON again (owner 2026-10-09) ═══
+    section('§7b — species→Digimon sprite mapping');
+    const summonSprites = require(path.join(REPO, 'core/rpg/summonSprites'));
+    const reg = require(path.join(REPO, 'core/rpg/summonRegistry'));
+    const speciesIds = reg.getAllSpecies ? reg.getAllSpecies() : Object.keys(reg.SPECIES || reg);
+    const unmapped = speciesIds.filter((id) => !summonSprites.getSpeciesDigimon(id));
+    const legacyOk = unmapped.every((id) => /^(skeleton|skeleton_knight|lich_minion|imp|void_walker|flame_elemental|frost_elemental|storm_elemental|wolf|bear|turret_mk1|cannon_turret|wyrmling|juvenile_dragon)$/.test(id));
+    check(`every non-legacy registry species maps to a Digimon (${speciesIds.length} species, unmapped: ${unmapped.join(',') || 'none'})`, legacyOk);
+    check('dragon → Megadramon', summonSprites.getSpeciesDigimon('dragon') === 'Megadramon');
+    check('slime → Koromon', summonSprites.getSpeciesDigimon('slime') === 'Koromon');
+    const dragonArt = await summonSprites.getOrFetchSprite('dragon');
+    check('mapped sprite resolves locally (cache/real bytes)', !!dragonArt);
+    const pwild = await abyssScene.planCombatLayout(mkState({
+        kind: 'wild',
+        abyssRun: { currentEncounterType: 'wild_summon', currentEncounterData: { species: 'dragon', rarity: 'RARE' } },
+        enemies: [{ name: 'Wild Pyraxis', isWildSummon: true, currentHP: 400, stats: { hp: 400, maxHp: 600 } }],
+        summons: [{ species: 'bat', name: 'Nocturne' }],
+    }));
+    check('wild summon art resolves to the mapped Digimon file',
+        pwild.enemy && pwild.enemy.art && pwild.enemy.art.file === 'megadramon.png');
+    check('ally art resolves through the same map (bat → pico_devimon.png)',
+        pwild.allies.length === 1 && pwild.allies[0].art && pwild.allies[0].art.file === 'pico_devimon.png');
+    check('ally pack grounds ABOVE the HUD panel (panel top ~656)',
+        pwild.allies.every((a) => a.gy < 650));
 
     console.log(`\n════════════════════════════════════════`);
     console.log(`RESULT: ${PASS} passed, ${FAIL} failed`);

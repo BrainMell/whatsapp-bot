@@ -70,11 +70,12 @@ function bgList() {
 }
 // deterministic per floor — different floors rotate through the pool, the
 // same floor always renders the same hall (recon value: the Abyss is a PLACE)
-// combat scenes stage a towering CENTER actor — halls whose art converges on
-// the middle (crystal fields, magma rivers, spore columns, floating shards)
-// fight the silhouette no matter how the scene grades. Those stay in the
-// rotation for floor cards (heavily dimmed) and out of the combat pool.
-const COMBAT_BG_EXCLUDE = /(crystal_chasm|ember_forge|spore_bloom|void_rift)/i;
+// 2026-10-09: the pool is REAL pixel art (sparklinlabs battle backgrounds, the
+// same pack as the repo's backgrounds/*.png — owner: "atp just find assets
+// online"; the 12 AI halls are gone). Every hall is stage-safe: dark, open
+// floor plane, nothing converging on the center — so the combat sub-pool is
+// the full pool (kept as an API for the QA suite).
+const COMBAT_BG_EXCLUDE = /$^/;
 function combatBgList() {
     return bgList().filter((f) => !COMBAT_BG_EXCLUDE.test(f));
 }
@@ -94,26 +95,24 @@ async function loadBg(file) {
 }
 
 // ── enemy art resolution (§5) ─────────────────────────────────────────────
-// Priority: 1) new abyss-native sprite by enemy id in enemies/abyss/, 2) the
-// documented C-locale sheet index (Go parity), 3) null → caller falls back.
+// Priority: 1) hand-built abyss-native sprites in enemies/abyss/ (BY NAME —
+// enemies/ C-locale index never shifts), 2) the documented C-locale sheet
+// index (element-matched single sprites from the curated pool — REAL pixel
+// art: knight/fire/ice/mutant/hybrid lines), 3) null → caller falls back.
 // enemyId recovery: generateFloorEnemy names enemies from their pool id
-// ("RABID RAT", "⚡ INFECTED COLOSSUS") — normalize back to ABYSS_SPRITE_MAP keys.
-// 🕳️ abyss-native pool (2026-10-09): fills the gaps the 87 legacy sheets
-// can't — RABID_RAT and SLIME currently map to SIDE-VIEW walk strips
-// (wolf/slime "sheet.png") which are unusable in the new forward-facing
-// composition — and upgrades key encounters with on-model forward sprites.
-// NOTE: new files live in enemies/abyss/ — the enemies/ C-locale index backs
-// ABYSS_SPRITE_MAP + the Go service and must NEVER shift.
+// ("RABID RAT", "⚡ INFECTED COLOSSUS") — normalize back to map keys.
+// 🕳️ 2026-10-09 (owner: "these new enemies look trash — find assets online"):
+// the 8 AI-painted sprites are GONE. RABID_RAT and SLIME keep by-name files
+// (front frames cut from CC0/CC-BY packs: Evil Dungeon rat charset +
+// Bonsaiheldin slime — credits in docs/asset_credits.md); every other pool id
+// renders the same curated pixel-art singles the Ruins uses (ABYSS_SPRITE_MAP
+// element matching — knight/fire/ice/mutated/hybrides read perfectly in
+// torch-lit stone rooms).
+// NOTE: enemies/abyss/ files never shift the enemies/ C-locale index that
+// backs ABYSS_SPRITE_MAP + the Go service.
 const ABYSS_ART_OVERRIDES = {
-    RABID_RAT: 'abyss_rat.png',
-    SLIME: 'abyss_slime.png',
-    EMBER_SPAWN: 'ash_revenant.png',
-    MUTATED_HOUND: 'chasm_beast.png',
-    INFERNO_KNIGHT: 'ember_knight.png',
-    GLACIAL_WRAITH: 'frost_knight.png',
-    VOID_HARBINGER: 'void_horror.png',
-    VOID_CORRUPTED: 'void_horror.png',
-    INFERNO_LORD: 'ember_hound.png',      // boss
+    RABID_RAT: 'abyss_rat.png',       // front-facing rat (was a side-view strip)
+    SLIME: 'abyss_slime.png',         // front-facing slime (was a side-view strip)
 };
 function enemyIdOf(enemy) {
     const raw = String((enemy && (enemy.bossId || enemy.id)) || '');
@@ -144,14 +143,38 @@ function resolveEnemyArt(enemy) {
     return null;
 }
 
-// ── wild-summon art (§7) ──────────────────────────────────────────────────
+// ── wild-summon art (§7) — DIGIMON, again (owner 2026-10-09: "the summons
+// aren't Digimon anymore. I thought we was over that??") ───────────────────
+// summonSprites.getOrFetchSprite consults the species→Digimon map, so wild
+// summons and deployed allies render real Digimon sprites; misses fetch from
+// digi-api once and cache to disk. A short race + one-attempt set keeps the
+// render path instant even when the API is slow (warmupCache covers boot).
+const _summonFetchTried = new Set();
 async function resolveSummonArt(species) {
     try {
         const summonSprites = require('./summonSprites');
-        const p = summonSprites.getSpritePath(species);
-        if (p && fs.existsSync(p)) {
-            const img = await loadImage(p).catch(() => null);
-            if (img) return { img, file: path.basename(p) };
+        const key = String(species || '').toLowerCase();
+        if (key && !_summonFetchTried.has(key)) {
+            _summonFetchTried.add(key);
+            const p = await Promise.race([
+                summonSprites.getOrFetchSprite(species),
+                new Promise((r) => setTimeout(() => r(null), 2500)),
+            ]);
+            if (p && fs.existsSync(p)) {
+                const img = await loadImage(p).catch(() => null);
+                if (img) return { img, file: path.basename(p) };
+            }
+        } else {
+            // already attempted this process: resolve LOCALLY — through the
+            // species→Digimon map (the fetch caches under the DIGIMON name,
+            // e.g. dragon → megadramon.png), then the raw species id
+            const mapped = summonSprites.getSpeciesDigimon(species);
+            const p0 = summonSprites.getSpritePath(mapped || species)
+                || summonSprites.getSpritePath(species);
+            if (p0 && fs.existsSync(p0)) {
+                const img0 = await loadImage(p0).catch(() => null);
+                if (img0) return { img: img0, file: path.basename(p0) };
+            }
         }
     } catch (e) { /* fall through */ }
     return null;
@@ -193,10 +216,13 @@ async function drawBackdrop(ctx, file) {
     ctx.fillStyle = g0; ctx.fillRect(0, 0, CW, CH);
     const img = file ? await loadBg(file) : null;
     if (img) {
-        // cover-fit crop (backgrounds are generated ~scene ratio; never squash)
+        // cover-fit crop (backgrounds are ~scene ratio; never squash) — and
+        // NEAREST sampling: the pool is real pixel art now, keep it crisp
+        ctx.imageSmoothingEnabled = false;
         const s = Math.max(CW / img.width, CH / img.height);
         const dw = img.width * s, dh = img.height * s;
         ctx.drawImage(img, (CW - dw) / 2, (CH - dh) / 2, dw, dh);
+        ctx.imageSmoothingEnabled = true;
     }
     // abyssal grade: cool the top, sink the bottom into darkness — the
     // "descending forever" read + a calmer stage floor for the HUD panel
@@ -294,9 +320,14 @@ async function planCombatLayout(state, opts = {}) {
             const art = await resolveSummonArt(s.species || s.name);
             plan.allies.push({
                 art: art ? { img: art.img, file: art.file } : null,
-                cx: W * (isWildSummon ? 0.14 : 0.27) - i * 90,
-                gy: PLAYER_GY - 6 + i * 4,
-                h: Math.round(perspH(PLAYER_GY) * 0.58),
+                // (2026-10-09): the old row sat at PLAYER_GY on the far left —
+                // the HUD panel (bottom-left, drawn last) covered it and only
+                // a wingtip poked out above the frame. The pack now grounds on
+                // the MID-depth floor line, ABOVE the panel's top edge, where
+                // every ally stays fully visible.
+                cx: 470 - i * 112,
+                gy: 606 + i * 8,
+                h: Math.round(perspH(606) * 0.62),
                 name: safeName(s.name, 16),
             });
         }
@@ -543,164 +574,206 @@ function drawSwordCross(ctx, cx, cy, s, color) {
     ctx.restore();
 }
 
-async function renderAbyssFloorCard(payload = {}) {
+// ══════════════════════════════════════════════════════════════════════════
+// §3 FLOOR DESCENT CARD — the descent is the Abyss's identity, so the card
+// IS the world-map language: a stack of descending rings (shallower floors
+// higher and smaller, deeper floors lower and larger), the CURRENT floor
+// highlighted bold amber with the player standing on it, the unseen below
+// fading into darkness. Preserves the useful info the old Go card carried
+// (tier/danger pill, the ledger of commands).
+//
+// 🕳️ 2026-10-09 (owner): the rings must NOT sit still in the middle — the
+// stack slowly descends and, when it reaches the lower side, starts back up
+// again. The card is now a short looping GIF (ring stack drifts down and
+// back on a sine phase — 16 frames @ 140ms ≈ 2.2s) sent with gifPlayback;
+// any failure falls back to the static PNG (off = 0, the original layout).
+// Encoder: core/utils/gif89a.js (pure JS, palette-true on pixel art).
+// ══════════════════════════════════════════════════════════════════════════
+// mirror of abyssSystem.isBossFloor (kept pure here — no mongoose pull)
+function isBossFloorMirror(floor) {
+    const f = Number(floor) || 1;
+    if (f >= 11 && f <= 20) return f % 3 === 0;
+    return f % 5 === 0;
+}
+// tiny vector marker (no font dependency — canvas glyph coverage is unsafe)
+function drawSwordCross(ctx, cx, cy, s, color) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.strokeStyle = color; ctx.lineWidth = Math.max(2, s * 0.16); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-s, -s); ctx.lineTo(s, s); ctx.moveTo(s, -s); ctx.lineTo(-s, s); ctx.stroke();
+    ctx.restore();
+}
+
+// ring-stack motion: phase p ∈ [0,1) maps to a vertical offset in LOGICAL px.
+// p=0 → -AMP (stack at its highest), p=0.5 → +AMP (lowest), smooth sine both
+// ways — the stack "slowly descends, then starts back up again".
+const RING_AMP = 120;
+function ringOffsetForPhase(p) {
+    return -RING_AMP * Math.cos(2 * Math.PI * p);
+}
+
+async function paintFloorCard(ctx, payload = {}, off = 0) {
+    const floor = Math.max(1, Number(payload.floor) || 1);
+    const tier = safeName(payload.tier || 'F', 12);
+    const mult = Number(payload.mult) || 1;
+
+    // ── backdrop: pool art, heavily sunken ──
+    await drawBackdrop(ctx, bgFileForFloor(floor));
+    ctx.fillStyle = 'rgba(5,4,12,0.28)'; ctx.fillRect(0, 0, FW, FH);
+
+    // ── header: THE ABYSS ──
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.font = '58px "Cinzel Deco", serif';
+    ctx.fillStyle = 'rgba(212,175,96,0.16)';
+    ctx.fillText('THE ABYSS', FW / 2 + 3, 106 + 3);
+    ctx.fillStyle = '#d8b45a';
+    ctx.fillText('THE ABYSS', FW / 2, 106);
+    ctx.strokeStyle = 'rgba(216,180,90,0.55)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(FW / 2 - 320, 136); ctx.lineTo(FW / 2 + 320, 136); ctx.stroke();
+    ctx.fillStyle = 'rgba(216,180,90,0.9)';
+    ctx.beginPath(); ctx.arc(FW / 2, 136, 4, 0, Math.PI * 2); ctx.fill();
+
+    // ── player nameplate (left, reference-style box) ──
+    const playerName = safeName(payload.playerName || 'DESCENDER', 18);
+    ctx.font = '26px "Cinzel", serif';
+    const pw = Math.max(240, ctx.measureText(playerName).width + 56);
+    ctx.fillStyle = 'rgba(12,9,20,0.92)';
+    roundRectPath(ctx, 44, 168, pw, 52, 8); ctx.fill();
+    ctx.strokeStyle = 'rgba(216,180,90,0.75)'; ctx.lineWidth = 2;
+    roundRectPath(ctx, 44, 168, pw, 52, 8); ctx.stroke();
+    ctx.fillStyle = '#e8dcc0'; ctx.textAlign = 'left';
+    ctx.fillText(playerName, 68, 203);
+    ctx.textAlign = 'center';
+
+    // ── tier / danger pill ──
+    pillLocal(ctx, FW / 2, 252, `TIER ${tier}   DANGER x${mult.toFixed(1)}`, 'bold 22px "Cinzel", serif', 18,
+        'rgba(24,16,40,0.94)', 'rgba(139,97,195,0.85)', '#cdbdf0');
+
+    // ── the descending ring stack (drifts by `off` — the descent loop) ──
+    const CX = FW / 2;
+    const CENTER_Y = 720 + off;         // current floor rides the stack
+    const RING_GAP = 96;
+    const FIRST_Y = 340 + off;          // shallowest drawn ring
+    const range = [];
+    for (let d = -4; d <= 3; d++) {
+        const f = floor + d;
+        if (f < 1) continue;   // (user-side judge): no F-3..F0 above F1
+        const y = CENTER_Y + d * RING_GAP;
+        if (y < FIRST_Y - 60 || y > 1100) continue;
+        range.push({ floor: f, d, y });
+    }
+    for (const r of range) {
+        const isCur = r.d === 0;
+        const isPast = r.d < 0;
+        // deeper = closer = larger (brief §3 perspective)
+        const rx = 205 + r.d * 22;
+        const ry = Math.max(14, rx * 0.20);
+        const a = isCur ? 1 : isPast ? Math.max(0.22, 0.42 + r.d * 0.05) : Math.max(0.14, 0.38 - r.d * 0.07);
+        // glow for the current ring
+        if (isCur) {
+            ctx.save();
+            ctx.shadowColor = 'rgba(240,182,74,0.85)';
+            ctx.shadowBlur = 34;
+            ctx.strokeStyle = 'rgba(240,182,74,0.95)';
+            ctx.lineWidth = 5;
+            ctx.beginPath(); ctx.ellipse(CX, r.y, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
+            ctx.restore();
+            ctx.fillStyle = 'rgba(240,182,74,0.10)';
+            ctx.beginPath(); ctx.ellipse(CX, r.y, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+        } else {
+            ctx.strokeStyle = isBossFloorMirror(r.floor)
+                ? `rgba(214,88,60,${(a * 0.95).toFixed(3)})`
+                : `rgba(150,140,190,${a.toFixed(3)})`;
+            ctx.lineWidth = isBossFloorMirror(r.floor) ? 3 : 1.6;
+            ctx.beginPath(); ctx.ellipse(CX, r.y, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
+            ctx.fillStyle = `rgba(16,12,30,${(0.42 * a).toFixed(3)})`;
+            ctx.beginPath(); ctx.ellipse(CX, r.y, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+            if (isBossFloorMirror(r.floor)) {
+                drawSwordCross(ctx, CX + rx - 24, r.y - ry - 11, 7, `rgba(230,120,90,${a.toFixed(3)})`);
+                // (user-side judge): an unexplained X reads as a bug — label it
+                ctx.font = '11px "Cinzel", serif';
+                ctx.fillStyle = `rgba(230,120,90,${Math.min(0.9, a * 1.4).toFixed(3)})`;
+                ctx.textAlign = 'left';
+                ctx.fillText('BOSS', CX + rx + 14, r.y + 4);
+                ctx.textAlign = 'center';
+            }
+        }
+        // left label
+        ctx.font = `${isCur ? 19 : 14}px "Cinzel", serif`;
+        ctx.fillStyle = isCur ? '#f0b64a' : `rgba(190,180,215,${Math.min(0.85, a * 1.6).toFixed(3)})`;
+        ctx.textAlign = 'right';
+        ctx.fillText(`F${r.floor}`, CX - rx - 14, r.y + 5);
+        ctx.textAlign = 'center';
+    }
+
+    // ── the player, standing ON the current ring's near edge (§2) ──
+    const curRx = 205;
+    const curRy = Math.max(14, curRx * 0.20);
+    const spriteFile = playerSpriteFileFor({
+        class: { id: payload.playerClassId || 'FIGHTER' },
+        spriteIndex: Number(payload.playerSpriteIndex) || 0,
+    });
+    if (spriteFile) {
+        await drawGroundedSprite(ctx,
+            [path.join(RPGASSET, 'characters', 'clean'), path.join(RPGASSET, 'characters')],
+            spriteFile, CX - 92, CENTER_Y + curRy * 0.55, 118);
+    }
+
+    // ── current-floor title block (right of the ring, clear zone) ──
+    ctx.textAlign = 'right';
+    ctx.font = '46px "Cinzel Deco", serif';
+    ctx.fillStyle = '#f0b64a';
+    ctx.fillText(`FLOOR ${floor}`, FW - 56, CENTER_Y - 26);
+    ctx.font = '17px "Cinzel", serif';
+    ctx.fillStyle = 'rgba(220,205,240,0.85)';
+    const enc = payload.encounterType || 'combat';
+    const flavor = enc === 'treasure' ? 'something glitters below'
+        : enc === 'event' ? 'the dark whispers -'
+        : enc === 'wild_summon' ? `a wild ${safeName(payload.enemyName, 14)} stirs`
+        : payload.isBoss ? 'a boss bars the way'
+        : `${safeName(payload.enemyName, 16)} waits below`;
+    ctx.fillText(flavor, FW - 56, CENTER_Y + 2);
+    ctx.textAlign = 'center';
+
+    // ── the ledger (bottom panel — preserved from the old card) ──
+    const rows = Array.isArray(payload.rows) && payload.rows.length ? payload.rows : [
+        { label: 'BOSS FLOORS', value: 'EVERY 5TH' },
+        { label: 'FIGHT', value: '.combat attack' },
+        { label: 'TREASURE', value: '.abyss collect' },
+        { label: 'EVENTS', value: '.abyss choose 1|2' },
+        { label: 'EXTRACT', value: '.abyss retreat' },
+    ];
+    const LX = 60, LY = 1156, LW = FW - 120, LH = 268;
+    ctx.fillStyle = 'rgba(10,8,18,0.94)';
+    roundRectPath(ctx, LX, LY, LW, LH, 10); ctx.fill();
+    ctx.strokeStyle = 'rgba(216,180,90,0.6)'; ctx.lineWidth = 2;
+    roundRectPath(ctx, LX, LY, LW, LH, 10); ctx.stroke();
+    ctx.font = '22px "Cinzel", serif';
+    ctx.fillStyle = '#d8b45a'; ctx.textAlign = 'center';
+    ctx.fillText('T H E   L E D G E R', FW / 2, LY + 38);
+    ctx.font = '20px "Cinzel", serif';
+    rows.slice(0, 6).forEach((row, i) => {
+        const y = LY + 74 + i * 30;
+        ctx.fillStyle = 'rgba(205,189,240,0.75)';
+        ctx.textAlign = 'left';
+        ctx.fillText(String(row.label || '').slice(0, 18), LX + 28, y);
+        ctx.fillStyle = '#efe6d0';
+        ctx.textAlign = 'right';
+        ctx.fillText(String(row.value || '').slice(0, 26), LX + LW - 28, y);
+    });
+    ctx.textAlign = 'center';
+    ctx.font = 'italic 19px "IM Fell", serif';
+    ctx.fillStyle = 'rgba(180,170,205,0.6)';
+    ctx.fillText('the abyss hungers', FW / 2, LY + LH + 34);
+}
+
+// static PNG (original single-frame contract — also the animation fallback)
+async function renderAbyssFloorCardPng(payload = {}) {
     try {
-        const floor = Math.max(1, Number(payload.floor) || 1);
-        const tier = safeName(payload.tier || 'F', 12);
-        const mult = Number(payload.mult) || 1;
         ensureFonts();
         const c = createCanvas(FW, FH);
         const ctx = c.getContext('2d');
-
-        // ── backdrop: pool art, heavily sunken ──
-        await drawBackdrop(ctx, bgFileForFloor(floor));
-        ctx.fillStyle = 'rgba(5,4,12,0.28)'; ctx.fillRect(0, 0, FW, FH);
-
-        // ── header: THE ABYSS ──
-        ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-        ctx.font = '58px "Cinzel Deco", serif';
-        ctx.fillStyle = 'rgba(212,175,96,0.16)';
-        ctx.fillText('THE ABYSS', FW / 2 + 3, 106 + 3);
-        ctx.fillStyle = '#d8b45a';
-        ctx.fillText('THE ABYSS', FW / 2, 106);
-        ctx.strokeStyle = 'rgba(216,180,90,0.55)'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(FW / 2 - 320, 136); ctx.lineTo(FW / 2 + 320, 136); ctx.stroke();
-        ctx.fillStyle = 'rgba(216,180,90,0.9)';
-        ctx.beginPath(); ctx.arc(FW / 2, 136, 4, 0, Math.PI * 2); ctx.fill();
-
-        // ── player nameplate (left, reference-style box) ──
-        const playerName = safeName(payload.playerName || 'DESCENDER', 18);
-        ctx.font = '26px "Cinzel", serif';
-        const pw = Math.max(240, ctx.measureText(playerName).width + 56);
-        ctx.fillStyle = 'rgba(12,9,20,0.92)';
-        roundRectPath(ctx, 44, 168, pw, 52, 8); ctx.fill();
-        ctx.strokeStyle = 'rgba(216,180,90,0.75)'; ctx.lineWidth = 2;
-        roundRectPath(ctx, 44, 168, pw, 52, 8); ctx.stroke();
-        ctx.fillStyle = '#e8dcc0'; ctx.textAlign = 'left';
-        ctx.fillText(playerName, 68, 203);
-        ctx.textAlign = 'center';
-
-        // ── tier / danger pill ──
-        pillLocal(ctx, FW / 2, 252, `TIER ${tier}   DANGER x${mult.toFixed(1)}`, 'bold 22px "Cinzel", serif', 18,
-            'rgba(24,16,40,0.94)', 'rgba(139,97,195,0.85)', '#cdbdf0');
-
-        // ── the descending ring stack ──
-        const CX = FW / 2;
-        const CENTER_Y = 720;               // current floor rides the lower-middle
-        const RING_GAP = 96;
-        const FIRST_Y = 340;                // shallowest drawn ring
-        const range = [];
-        for (let d = -4; d <= 3; d++) {
-            const f = floor + d;
-            if (f < 1) continue;   // (user-side judge): no F-3..F0 above F1
-            const y = CENTER_Y + d * RING_GAP;
-            if (y < FIRST_Y - 60 || y > 1100) continue;
-            range.push({ floor: f, d, y });
-        }
-        for (const r of range) {
-            const isCur = r.d === 0;
-            const isPast = r.d < 0;
-            // deeper = closer = larger (brief §3 perspective)
-            const rx = 205 + r.d * 22;
-            const ry = Math.max(14, rx * 0.20);
-            const a = isCur ? 1 : isPast ? Math.max(0.22, 0.42 + r.d * 0.05) : Math.max(0.14, 0.38 - r.d * 0.07);
-            // glow for the current ring
-            if (isCur) {
-                ctx.save();
-                ctx.shadowColor = 'rgba(240,182,74,0.85)';
-                ctx.shadowBlur = 34;
-                ctx.strokeStyle = 'rgba(240,182,74,0.95)';
-                ctx.lineWidth = 5;
-                ctx.beginPath(); ctx.ellipse(CX, r.y, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
-                ctx.restore();
-                ctx.fillStyle = 'rgba(240,182,74,0.10)';
-                ctx.beginPath(); ctx.ellipse(CX, r.y, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
-            } else {
-                ctx.strokeStyle = isBossFloorMirror(r.floor)
-                    ? `rgba(214,88,60,${(a * 0.95).toFixed(3)})`
-                    : `rgba(150,140,190,${a.toFixed(3)})`;
-                ctx.lineWidth = isBossFloorMirror(r.floor) ? 3 : 1.6;
-                ctx.beginPath(); ctx.ellipse(CX, r.y, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
-                ctx.fillStyle = `rgba(16,12,30,${(0.42 * a).toFixed(3)})`;
-                ctx.beginPath(); ctx.ellipse(CX, r.y, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
-                if (isBossFloorMirror(r.floor)) {
-                    drawSwordCross(ctx, CX + rx - 24, r.y - ry - 11, 7, `rgba(230,120,90,${a.toFixed(3)})`);
-                    // (user-side judge): an unexplained X reads as a bug — label it
-                    ctx.font = '11px "Cinzel", serif';
-                    ctx.fillStyle = `rgba(230,120,90,${Math.min(0.9, a * 1.4).toFixed(3)})`;
-                    ctx.textAlign = 'left';
-                    ctx.fillText('BOSS', CX + rx + 14, r.y + 4);
-                    ctx.textAlign = 'center';
-                }
-            }
-            // left label
-            ctx.font = `${isCur ? 19 : 14}px "Cinzel", serif`;
-            ctx.fillStyle = isCur ? '#f0b64a' : `rgba(190,180,215,${Math.min(0.85, a * 1.6).toFixed(3)})`;
-            ctx.textAlign = 'right';
-            ctx.fillText(`F${r.floor}`, CX - rx - 14, r.y + 5);
-            ctx.textAlign = 'center';
-        }
-
-        // ── the player, standing ON the current ring's near edge (§2) ──
-        const curRx = 205;
-        const curRy = Math.max(14, curRx * 0.20);
-        const spriteFile = playerSpriteFileFor({
-            class: { id: payload.playerClassId || 'FIGHTER' },
-            spriteIndex: Number(payload.playerSpriteIndex) || 0,
-        });
-        if (spriteFile) {
-            await drawGroundedSprite(ctx,
-                [path.join(RPGASSET, 'characters', 'clean'), path.join(RPGASSET, 'characters')],
-                spriteFile, CX - 92, CENTER_Y + curRy * 0.55, 118);
-        }
-
-        // ── current-floor title block (right of the ring, clear zone) ──
-        ctx.textAlign = 'right';
-        ctx.font = '46px "Cinzel Deco", serif';
-        ctx.fillStyle = '#f0b64a';
-        ctx.fillText(`FLOOR ${floor}`, FW - 56, CENTER_Y - 26);
-        ctx.font = '17px "Cinzel", serif';
-        ctx.fillStyle = 'rgba(220,205,240,0.85)';
-        const enc = payload.encounterType || 'combat';
-        const flavor = enc === 'treasure' ? 'something glitters below'
-            : enc === 'event' ? 'the dark whispers -'
-            : enc === 'wild_summon' ? `a wild ${safeName(payload.enemyName, 14)} stirs`
-            : payload.isBoss ? 'a boss bars the way'
-            : `${safeName(payload.enemyName, 16)} waits below`;
-        ctx.fillText(flavor, FW - 56, CENTER_Y + 2);
-        ctx.textAlign = 'center';
-
-        // ── the ledger (bottom panel — preserved from the old card) ──
-        const rows = Array.isArray(payload.rows) && payload.rows.length ? payload.rows : [
-            { label: 'BOSS FLOORS', value: 'EVERY 5TH' },
-            { label: 'FIGHT', value: '.combat attack' },
-            { label: 'TREASURE', value: '.abyss collect' },
-            { label: 'EVENTS', value: '.abyss choose 1|2' },
-            { label: 'EXTRACT', value: '.abyss retreat' },
-        ];
-        const LX = 60, LY = 1156, LW = FW - 120, LH = 268;
-        ctx.fillStyle = 'rgba(10,8,18,0.94)';
-        roundRectPath(ctx, LX, LY, LW, LH, 10); ctx.fill();
-        ctx.strokeStyle = 'rgba(216,180,90,0.6)'; ctx.lineWidth = 2;
-        roundRectPath(ctx, LX, LY, LW, LH, 10); ctx.stroke();
-        ctx.font = '22px "Cinzel", serif';
-        ctx.fillStyle = '#d8b45a'; ctx.textAlign = 'center';
-        ctx.fillText('T H E   L E D G E R', FW / 2, LY + 38);
-        ctx.font = '20px "Cinzel", serif';
-        rows.slice(0, 6).forEach((row, i) => {
-            const y = LY + 74 + i * 30;
-            ctx.fillStyle = 'rgba(205,189,240,0.75)';
-            ctx.textAlign = 'left';
-            ctx.fillText(String(row.label || '').slice(0, 18), LX + 28, y);
-            ctx.fillStyle = '#efe6d0';
-            ctx.textAlign = 'right';
-            ctx.fillText(String(row.value || '').slice(0, 26), LX + LW - 28, y);
-        });
-        ctx.textAlign = 'center';
-        ctx.font = 'italic 19px "IM Fell", serif';
-        ctx.fillStyle = 'rgba(180,170,205,0.6)';
-        ctx.fillText('the abyss hungers', FW / 2, LY + LH + 34);
-
+        await paintFloorCard(ctx, payload, 0);
         return c.toBuffer('image/png');
     } catch (e) {
         console.error('[AbyssScene] floor card failed:', e?.message);
@@ -708,10 +781,41 @@ async function renderAbyssFloorCard(payload = {}) {
     }
 }
 
+// animated: the ring stack slowly descends and starts back up at the lower
+// side (owner brief). Returns a looping GIF buffer; falls back to the static
+// PNG when the encoder or any frame fails. Buffer contract unchanged for
+// callers — they probe isAnimatedCard() to set gifPlayback.
+const FLOOR_GIF = { scale: 0.6, frames: 16, delayMs: 140 };
+async function renderAbyssFloorCard(payload = {}) {
+    try {
+        const { encodeGif } = require('../utils/gif89a');
+        if (!encodeGif) throw new Error('gif89a unavailable');
+        const S = FLOOR_GIF.scale;
+        const GW = Math.round(FW * S), GH = Math.round(FH * S);
+        ensureFonts();
+        const frames = [];
+        for (let i = 0; i < FLOOR_GIF.frames; i++) {
+            const c = createCanvas(GW, GH);
+            const ctx = c.getContext('2d');
+            ctx.setTransform(S, 0, 0, S, 0, 0);
+            await paintFloorCard(ctx, payload, ringOffsetForPhase(i / FLOOR_GIF.frames));
+            const data = ctx.getImageData(0, 0, GW, GH).data;
+            frames.push(Buffer.from(data.buffer, data.byteOffset, data.byteLength));
+        }
+        const gif = encodeGif({ width: GW, height: GH, frames, delayMs: FLOOR_GIF.delayMs, loop: 0 });
+        if (gif && gif.length > 100) return gif;
+        throw new Error('gif encode empty');
+    } catch (e) {
+        console.error('[AbyssScene] animated floor card fell back to PNG:', e?.message);
+        return renderAbyssFloorCardPng(payload);
+    }
+}
+
 module.exports = {
-    renderAbyssCombat, renderAbyssFloorCard, clearLayout,
+    renderAbyssCombat, renderAbyssFloorCard, renderAbyssFloorCardPng, clearLayout,
     planCombatLayout, bgFileForFloor, bgList, combatBgList, enemyIdOf, resolveEnemyArt,
     isBossFloorMirror,
+    isAnimatedCard: (b) => { try { return require('../utils/gif89a').isGifBuffer(b); } catch (e) { return false; } },
     W, H, FW, FH,
 };
 

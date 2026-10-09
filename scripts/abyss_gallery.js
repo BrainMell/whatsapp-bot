@@ -23,7 +23,7 @@ function mkState(opts) {
     return {
         chatId: 'gallery', isAbyss: true, abyssFloor: o.floor, dungeonRank: 0,
         sessionKey: `gallery_${o.floor}_${o.kind}_${o.turn}`,
-        abyssRun: { currentEncounterType: o.kind === 'wild' ? 'wild_summon' : 'combat', currentEncounterData: { species: 'agumon', rarity: 'RARE' } },
+        abyssRun: o.abyssRun || { currentEncounterType: o.kind === 'wild' ? 'wild_summon' : 'combat', currentEncounterData: { species: 'agumon', rarity: 'RARE' } },
         players: [{ jid: 'gallery@s', name: 'Mellow-San', class: { id: 'ROGUE' }, spriteIndex: 1, currentHP: o.hp, stats: { hp: o.hp, maxHp: o.maxHp }, mana: o.en, maxMana: o.maxEn }],
         enemies: [Object.assign({
             id: `abyss_x_${o.floor}`, name: o.enemyName, icon: '👾',
@@ -62,19 +62,28 @@ function mkState(opts) {
         phase: 'TURN', turnInfo: { turnNumber: 3, actor: { isEnemy: false } },
     })]);
     // ── wild summon encounter (player left, summon right) ──
-    jobs.push(['summon_f4_wild.png', abyssScene.renderAbyssCombat(mkState({
+    jobs.push(['summon_f4_wild_agumon.png', abyssScene.renderAbyssCombat(mkState({
         floor: 4, kind: 'wild', enemyName: 'Agumon', spriteIndex: 0,
     }), { phase: 'START' })]);
+    jobs.push(['summon_f9_wild_dragon.png', abyssScene.renderAbyssCombat(mkState({
+        floor: 9, kind: 'wild', enemyName: 'Wild Pyraxis', spriteIndex: 0,
+        abyssRun: { currentEncounterType: 'wild_summon', currentEncounterData: { species: 'dragon', rarity: 'RARE' } },
+    }), { phase: 'START' })]);
+    jobs.push(['summon_f2_wild_allies.png', abyssScene.renderAbyssCombat(mkState({
+        floor: 2, kind: 'wild', enemyName: 'Wild Gelatrix', spriteIndex: 0,
+        abyssRun: { currentEncounterType: 'wild_summon', currentEncounterData: { species: 'slime', rarity: 'COMMON' } },
+        allies: [{ species: 'dragon', name: 'Pyraxis' }, { species: 'bat', name: 'Nocturne' }],
+    }), { phase: 'START' })]);
     // ── floor descent cards ──
-    jobs.push(['floorcard_f1.png', abyssScene.renderAbyssFloorCard({
+    jobs.push(['floorcard_f1.gif', abyssScene.renderAbyssFloorCard({
         floor: 1, tier: 'F', mult: 1.0, encounterType: 'combat', enemyName: 'RABID RAT',
         playerName: 'Mellow-San', playerClassId: 'ROGUE', playerSpriteIndex: 1,
     })]);
-    jobs.push(['floorcard_f7.png', abyssScene.renderAbyssFloorCard({
+    jobs.push(['floorcard_f7.gif', abyssScene.renderAbyssFloorCard({
         floor: 7, tier: 'A', mult: 1.9, encounterType: 'treasure',
         playerName: 'Mellow-San', playerClassId: 'ROGUE', playerSpriteIndex: 1,
     })]);
-    jobs.push(['floorcard_f23.png', abyssScene.renderAbyssFloorCard({
+    jobs.push(['floorcard_f23.gif', abyssScene.renderAbyssFloorCard({
         floor: 23, tier: 'SS', mult: 4.3, encounterType: 'event', isBoss: false,
         playerName: 'Mellow-San', playerClassId: 'ROGUE', playerSpriteIndex: 1,
     })]);
