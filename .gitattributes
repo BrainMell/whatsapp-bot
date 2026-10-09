@@ -30,3 +30,7 @@ core/rpgasset/summons/sparklinlabs/*.png -filter -diff -merge -text
 # deploys would otherwise serve an LFS pointer to the renderer — same rule as
 # ui/crystal.png above)
 core/rpgasset/ui/banner_abyss.png -filter -diff -merge -text
+# 2026-10-09 round 4: the regular-encounter side stages must be real pixels
+# everywhere (⚠️ the abyss/*.png rule above does NOT cross into the regular/
+# subdir — without this, git reset --hard deploys re-stub them as LFS pointers)
+core/rpgasset/environment/abyss/regular/*.png -filter -diff -merge -text

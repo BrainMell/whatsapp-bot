@@ -36,7 +36,8 @@ const { drawGroundedSprite, drawContactShadow, contentBox, perspH,
 const RPGASSET = path.join(__dirname, '..', 'rpgasset');   // core/rpg/ → core/rpgasset/
 const ENEMY_DIR = path.join(RPGASSET, 'enemies');
 const ENEMY_ABYSS_DIR = path.join(ENEMY_DIR, 'abyss');          // new sprites, by NAME
-const ENV_ABYSS_DIR = path.join(RPGASSET, 'environment', 'abyss'); // background pool
+const ENV_ABYSS_DIR = path.join(RPGASSET, 'environment', 'abyss'); // boss-room hall pool
+const ENV_ABYSS_REG_DIR = path.join(ENV_ABYSS_DIR, 'regular');     // regular-encounter side-stage pool
 const UI_DIR = path.join(RPGASSET, 'ui');
 
 const W = 1200, H = 900;      // encounter scene canvas (matches roomScene — HUD transplant)
@@ -55,8 +56,16 @@ function enemySheetList() {
     return _enemyList;
 }
 
-// ── background pool (§4) ──────────────────────────────────────────────────
-let _bgList = null;
+// ── background pools (§4) ──────────────────────────────────────────────
+// TWO pools since owner 2026-10-09 10:19Z ("keep the current backgrounds and
+// enemies exclusively for Abyss boss rooms ... create new backgrounds
+// inspired by the ones I've circled, but make them more Abyss-themed"):
+//   boss pool    environment/abyss/*.png         — the 15 halls, BOSS ROOMS ONLY
+//   regular pool environment/abyss/regular/*.png — abyss-themed side stages
+//               edited from the owner's four CIRCLED foundations (dark_hall /
+//               drowned_vault / mist_hollow / violet_sanctum) through the
+//               owner-authorized style-prompt iteration loop
+let _bgList = null, _bgListReg = null;
 function bgList() {
     if (_bgList) return _bgList;
     try {
@@ -68,29 +77,44 @@ function bgList() {
     } catch (e) { _bgList = []; }
     return _bgList;
 }
-// deterministic per floor — different floors rotate through the pool, the
-// same floor always renders the same hall (recon value: the Abyss is a PLACE)
-// 2026-10-09: the pool is REAL pixel art (sparklinlabs battle backgrounds, the
-// same pack as the repo's backgrounds/*.png — owner: "atp just find assets
-// online"; the 12 AI halls are gone). Every hall is stage-safe: dark, open
-// floor plane, nothing converging on the center — so the combat sub-pool is
-// the full pool (kept as an API for the QA suite).
+function bgListRegular() {
+    if (_bgListReg) return _bgListReg;
+    try {
+        _bgListReg = fs.existsSync(ENV_ABYSS_REG_DIR)
+            ? fs.readdirSync(ENV_ABYSS_REG_DIR)
+                .filter((f) => /\.(jpg|jpeg|png)$/i.test(f) && !f.startsWith('.'))
+                .sort(cSort)
+            : [];
+    } catch (e) { _bgListReg = []; }
+    return _bgListReg;
+}
+// deterministic per floor — the same floor always renders the same stage
+// (recon value: the Abyss is a PLACE). style: 'boss' → hall pool;
+// 'regular' → side-stage pool (falls back to the hall pool until the
+// regular assets land, so a floor never renders bare).
+function bgFileForFloor(floor, style = 'boss') {
+    const f = Number(floor) || 1;
+    const reg = bgListRegular();
+    if (style === 'regular' && reg.length) return reg[f % reg.length];
+    const list = bgList();
+    if (!list.length) return null;
+    return list[f % list.length];
+}
+function bgDirFor(style) {
+    return (style === 'regular' && bgListRegular().length) ? ENV_ABYSS_REG_DIR : ENV_ABYSS_DIR;
+}
+// (kept as an API for the QA suite — every hall is stage-safe)
 const COMBAT_BG_EXCLUDE = /$^/;
 function combatBgList() {
     return bgList().filter((f) => !COMBAT_BG_EXCLUDE.test(f));
 }
-function bgFileForFloor(floor, forCombat = false) {
-    const list = forCombat ? combatBgList() : bgList();
-    if (!list.length) return null;
-    return list[(Number(floor) || 1) % list.length];
-}
-let _bgCache = new Map(); // file → Image|null
-async function loadBg(file) {
-    if (_bgCache.has(file)) return _bgCache.get(file);
-    const p = path.join(ENV_ABYSS_DIR, file);
-    const img = await loadImage(p).catch(() => null);
+let _bgCache = new Map(); // dir|file → Image|null
+async function loadBg(file, dir = ENV_ABYSS_DIR) {
+    const key = `${dir}|${file}`;
+    if (_bgCache.has(key)) return _bgCache.get(key);
+    const img = await loadImage(path.join(dir, file)).catch(() => null);
     if (_bgCache.size > 48) _bgCache.clear();
-    _bgCache.set(file, img);
+    _bgCache.set(key, img);
     return img;
 }
 
@@ -225,7 +249,7 @@ function segBarLocal(ctx, cx, cy, w, h, pct, fillFrom, fillTo) {
 // ── scene backdrop: pool image cover-drawn + abyssal grade + vignette ────
 // (canvas-relative dims — the same painter serves 1200x900 scenes AND the
 // 900x1500 floor card)
-async function drawBackdrop(ctx, file) {
+async function drawBackdrop(ctx, file, dir = ENV_ABYSS_DIR) {
     const CW = ctx.canvas.width, CH = ctx.canvas.height;
     // base wash (also the fallback when no pool art exists)
     const g0 = ctx.createLinearGradient(0, 0, 0, CH);
@@ -233,7 +257,7 @@ async function drawBackdrop(ctx, file) {
     g0.addColorStop(0.55, '#161020');
     g0.addColorStop(1, '#0d0a14');
     ctx.fillStyle = g0; ctx.fillRect(0, 0, CW, CH);
-    const img = file ? await loadBg(file) : null;
+    const img = file ? await loadBg(file, dir) : null;
     if (img) {
         // cover-fit crop (backgrounds are ~scene ratio; never squash) — and
         // NEAREST sampling: the pool is real pixel art now, keep it crisp
@@ -276,14 +300,42 @@ function clearLayout(sessionKey) {
     if (sessionKey) _layoutCache.delete(sessionKey);
 }
 
-// depth anchors (scene geometry): the stage floor spans y 500→830, enemy
-// stands mid-depth, player front. Heights follow roomScene's perspH curve
-// (160 + 113·t actors) with the enemy scaled UP — it towers (reference img).
-const PLAYER_GY = 806;
-const ENEMY_GY = 566;
-const SUMMON_GY = 700;   // wild summons stand near the player's floor line
-                         // (user-side judge r2: 648 still read as hovering on
-                         // halls whose floor plane sits low)
+// depth anchors (scene geometry) — owner 2026-10-09 10:19Z round:
+// the OLD ENEMY_GY 566 sat ABOVE the halls' visible floor band (~600-760),
+// which is exactly why "a lot of the enemies appear to be floating". Every
+// actor now grounds on the floor plane the stages actually paint.
+const PLAYER_GY = 806;       // front of stage (unchanged — approved framing)
+const BOSS_GY = 655;         // boss tower feet — ON the floor plane, still depth-staggered vs the player
+// Pokémon-style SIDE layout (regular encounters, owner-circled spots:
+// circle A ≈ 235,510 → enemy cluster middle-left; circle B ≈ 900,780 →
+// player bottom-right). Enemies face RIGHT, player + summons face LEFT.
+const SIDE_ENEMY_X = 290;
+const SIDE_ENEMY_GY = 645;
+const SIDE_SUMMON_X = 300;
+const SIDE_SUMMON_GY = 648;
+const SIDE_PLAYER_X = 890;
+// owner: "when I attack an enemy, its sprite should get a dark purple tint"
+// — v2: the amalgamation family is ALREADY purple, so the fill is darker +
+// more opaque and the silhouette gets a violet halo (see drawActorGrounded)
+// so the hit state reads unmistakably on every body color.
+const HIT_TINT = 'rgba(30,8,58,0.68)';
+const HIT_GLOW = 'rgba(158,66,245,0.85)';
+
+// ── native facing of the pool art (eyeballed contact sheets, 2026-10-09) ──
+// which way the pixels actually look — used to honor the owner's facing rule
+// ("the player sprite should face left, while the enemy sprite faces right;
+// the same applies to summons") WITHOUT mirroring front-facing sprites for
+// nothing. Only art with a real directional bias gets flipped.
+const ENEMY_FACES_LEFT = new Set(['SHADOW_STALKER']);              // hybrides (1) wolf leans left
+const SUMMON_FACES_LEFT = new Set(['DRAGON', 'PLAGUEFANG']);       // natively look left
+const SUMMON_FACES_RIGHT = new Set(['BOAR', 'DINO', 'SNAKE']);     // natively look right
+const summonFaceKey = (file) => String(file || '').replace(/\.png$/i, '').toUpperCase();
+// best-effort species key for a wild summon BEFORE its art resolves
+function planWildSpeciesKey(state, enemy) {
+    const sp = state && state.abyssRun && state.abyssRun.currentEncounterData
+        && state.abyssRun.currentEncounterData.species;
+    return summonFaceKey(String(sp || (enemy && enemy.name) || ''));
+}
 
 async function planCombatLayout(state, opts = {}) {
     const enemies = (state && state.enemies) || [];
@@ -293,60 +345,110 @@ async function planCombatLayout(state, opts = {}) {
         || (state.abyssRun && state.abyssRun.currentEncounterType === 'wild_summon')));
     const enemy = enemies[0] || null;
     const isBoss = !!(enemy && (enemy.isBoss || enemy.bossId));
+    // owner 2026-10-09 10:19Z: the centered tower style (current backgrounds +
+    // big front-facing amalgamations) is EXCLUSIVE to boss rooms. Everything
+    // else — plain mobs, pack fights, wild-summon duels — renders the
+    // Pokémon-style SIDE layout on the new abyss-themed side stages.
+    const style = isBoss ? 'boss' : 'side';
 
     const plan = {
         kind: isWildSummon ? 'summon' : 'combat',
-        bg: bgFileForFloor(state && state.abyssFloor, true),
+        style,
+        // bgFileForFloor speaks 'boss' | 'regular' — the layout style 'side'
+        // maps to the regular side-stage pool (⚠️ passing 'side' verbatim
+        // silently falls back to the BOSS hall pool — caught on-box)
+        bg: bgFileForFloor(state && state.abyssFloor, style === 'boss' ? 'boss' : 'regular'),
+        bgDir: bgDirFor(style === 'boss' ? 'boss' : 'regular'),
         floor: (state && state.abyssFloor) || 1,
-        // enemy: mid-stage, tower-scaled (bosses/gods read HUGE like the ref)
-        // 🕳️ §7 summon layout: player shifts LEFT, the wild summon takes the
-        // RIGHT — Pokémon-duel framing (owner brief)
+        // BOSS: mid-stage tower (composition the owner approved), feet now on
+        // the visible floor plane. SIDE: enemy cluster middle-left facing
+        // right (circle A), wild summons take the same slot.
         enemy: enemy ? {
             art: resolveEnemyArt(enemy),
-            cx: W * (isWildSummon ? 0.62 : 0.5),
-            gy: isWildSummon ? SUMMON_GY : ENEMY_GY,
-            // (user-side judge: summon read 1.5-2x the player — cap at ~1.2x)
-            h: Math.round((isWildSummon ? perspH(SUMMON_GY) : perspH(ENEMY_GY))
-                * (isBoss ? 2.05 : isWildSummon ? 1.18 : 1.55)),
+            cx: isBoss ? W * 0.5 : (isWildSummon ? SIDE_SUMMON_X : SIDE_ENEMY_X),
+            gy: isBoss ? BOSS_GY : (isWildSummon ? SIDE_SUMMON_GY : SIDE_ENEMY_GY),
+            h: isBoss
+                ? Math.round(perspH(BOSS_GY) * 2.05)
+                : Math.round(perspH(isWildSummon ? SIDE_SUMMON_GY : SIDE_ENEMY_GY)
+                    * (isWildSummon ? 1.18 : 1.12)),
+            // facing rule (owner: "the player sprite should face left, while
+            // the enemy sprite faces right"): flip only the art that natively
+            // looks the other way — front-facing singles stay front-facing.
+            // (wild-summon flip is finalized after its art resolves below)
+            flip: isBoss ? false
+                : isWildSummon
+                    ? SUMMON_FACES_LEFT.has(String(planWildSpeciesKey(state, enemy)))
+                    : ENEMY_FACES_LEFT.has(enemyIdOf(enemy)),
             name: safeName(enemy && enemy.name, 22),
             isBoss,
         } : null,
-        // player: front-bottom, true actor height — preserved sprite
-        // (summon duels: clear of the bottom-left HUD panel)
+        // player: BOSS keeps the front-bottom center; SIDE parks bottom-RIGHT
+        // (circle B) facing LEFT toward the enemy cluster
         player: {
-            cx: isWildSummon ? W * 0.45 : W * 0.5,
+            cx: isBoss ? W * 0.5 : SIDE_PLAYER_X,
             gy: PLAYER_GY,
             h: Math.round(perspH(PLAYER_GY) * 0.96),
+            flip: !isBoss,   // side layout: the player faces left
         },
-        // ally summons (deployed) hover behind-left of the player, subdued
+        // ally summons (deployed) — subdued, near their summoner on the
+        // party side (boss keeps the left-flank slots clear of the tower)
         allies: [],
         wildSpecies: isWildSummon
             ? safeName((state.abyssRun && state.abyssRun.currentEncounterData && state.abyssRun.currentEncounterData.species)
                 || (enemy && enemy.name), 20)
             : null,
+        pack: [],
     };
     // §7: wild-summon art = the game's OWN sparklinlabs sprites (one PNG per
     // registry species) — resolve ONCE here so TURN renders reuse the plan
     if (isWildSummon && plan.enemy) {
         const art = await resolveSummonArt(plan.wildSpecies);
-        if (art) plan.enemy.art = art;
+        if (art) {
+            plan.enemy.art = art;
+            plan.enemy.flip = SUMMON_FACES_LEFT.has(summonFaceKey(art.file));
+        }
     }
-    // deployed ally summons render behind the player, subdued
+    // pack fights (side style): the queued members stand with the active
+    // enemy — the owner called out that regular encounters need MULTIPLE
+    // enemies on stage. Bodies only (plates/HP stay on the active enemy).
+    if (style === 'side' && !isWildSummon && enemy) {
+        const queue = (state.abyssRun && Array.isArray(state.abyssRun.packQueue)) ? state.abyssRun.packQueue : [];
+        const slots = [
+            { cx: 152, gy: 614, mul: 0.88, alpha: 0.96 },
+            { cx: 232, gy: 572, mul: 0.74, alpha: 0.90 },   // peeks over the primary's left shoulder
+        ];
+        for (let i = 0; i < Math.min(queue.length, slots.length); i++) {
+            const m = queue[i];
+            if (!m || m.isDead) continue;
+            const art = resolveEnemyArt(m);
+            if (!art) continue;
+            plan.pack.push({
+                art,
+                cx: slots[i].cx, gy: slots[i].gy,
+                h: Math.round(perspH(slots[i].gy) * slots[i].mul),
+                alpha: slots[i].alpha,
+                flip: ENEMY_FACES_LEFT.has(enemyIdOf(m)),
+            });
+        }
+    }
+    // deployed ally summons render on the party side, subdued
     try {
         const allies = (state.summons || []).filter((s) => s && !s.isDead).slice(0, 2);
+        const sideSlots = [{ cx: 755, gy: 748 }, { cx: 668, gy: 716 }];
         for (let i = 0; i < allies.length; i++) {
             const s = allies[i];
             const art = await resolveSummonArt(s.species || s.name);
+            // BOSS: left-flank slots clear of the tower (feet above the HUD
+            // panel's top edge). SIDE: party diagonal behind the summoner.
+            const slot = (style === 'boss')
+                ? { cx: 400 - i * 118, gy: 640 + i * 8 }
+                : sideSlots[i];
             plan.allies.push({
                 art: art ? { img: art.img, file: art.file } : null,
-                // (2026-10-09): the old row sat at PLAYER_GY on the far left —
-                // the HUD panel (bottom-left, drawn last) covered it and only
-                // a wingtip poked out above the frame. The pack now grounds on
-                // the MID-depth floor line, ABOVE the panel's top edge, where
-                // every ally stays fully visible.
-                cx: 470 - i * 112,
-                gy: 606 + i * 8,
-                h: Math.round(perspH(606) * 0.62),
+                cx: slot.cx, gy: slot.gy,
+                h: Math.round(perspH(slot.gy) * (i === 0 ? 0.62 : 0.56)),
+                // party side faces LEFT — mirror only the natively-right art
+                flip: art ? SUMMON_FACES_RIGHT.has(summonFaceKey(art.file)) : false,
                 name: safeName(s.name, 16),
             });
         }
@@ -361,9 +463,16 @@ function playerSpriteFileFor(player) {
     } catch (e) { return null; }
 }
 
-// ── local grounded draw for Image objects (wild-summon sprites arrive as
-// resolved Images, not repo files — same math as roomScene.drawGroundedSprite,
-// with a content-measured bbox and the shared depth-aware contact shadow) ──
+// ── local grounded draw for combat actors (enemies, wild + ally summons) ──
+// Handles Image objects AND repo files, with the owner round-4 additions:
+//   • flip        — the Pokémon-style facing rule (player side LEFT, enemy
+//                   side RIGHT) without mirroring front-facing art
+//   • tint        — "when I attack an enemy, its sprite should get a dark
+//                   purple tint": per-pixel source-atop flood on an isolated
+//                   content layer, so the silhouette stays crisp
+//   • foot-band shadows — measureImageBox now returns feetX/feetW/massY
+// Same grounding math as roomScene.drawGroundedSprite (content bottom ON the
+// ground line, shared depth-aware contact shadow).
 const _imgBoxCache = new Map(); // file → box
 async function measureImageBox(img, key) {
     if (key && _imgBoxCache.has(key)) return _imgBoxCache.get(key);
@@ -385,7 +494,33 @@ async function measureImageBox(img, key) {
             }
         }
         box = (maxX < 0) ? { x: 0, y: 0, w: img.width, h: img.height }
-            : { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+            : (() => {
+                // foot band (bottom ~12% of the content) + mass bottom — same
+                // contract roomScene.contentBox returns, so contact shadows
+                // hug the FEET instead of the full sprite width
+                const footTop = Math.max(minY, maxY - Math.max(2, Math.round((maxY - minY) * 0.12)));
+                let fMinX = img.width, fMaxX = -1, massY = maxY;
+                const minRowW = Math.max(2, Math.round((maxX - minX) * 0.04));
+                for (let y = maxY; y >= minY; y--) {
+                    let rowW = 0, rMin = img.width, rMax = -1;
+                    for (let x = minX; x <= maxX; x++) {
+                        if (data[(y * img.width + x) * 4 + 3] > 16) {
+                            rowW++; if (x < rMin) rMin = x; if (x > rMax) rMax = x;
+                        }
+                    }
+                    if (rMax >= 0 && y >= footTop) {
+                        if (rMin < fMinX) fMinX = rMin;
+                        if (rMax > fMaxX) fMaxX = rMax;
+                    }
+                    if (massY === maxY && rowW >= minRowW) massY = y;
+                }
+                return {
+                    x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1,
+                    feetX: fMaxX < 0 ? minX : fMinX,
+                    feetW: fMaxX < 0 ? (maxX - minX + 1) : (fMaxX - fMinX + 1),
+                    massY,
+                };
+            })();
     } catch (e) {
         box = { x: 0, y: 0, w: img.width, h: img.height };
     }
@@ -393,33 +528,60 @@ async function measureImageBox(img, key) {
     if (key) _imgBoxCache.set(key, box);
     return box;
 }
-async function drawArtGrounded(ctx, art, cx, groundY, ch, opts = {}) {
+async function drawActorGrounded(ctx, art, cx, groundY, ch, opts = {}) {
     if (!art) return null;
+    let img = null;
     if (art.dir && art.file) {
-        return drawGroundedSprite(ctx, [art.dir], art.file, cx, groundY, ch, opts);
+        img = await loadImage(path.join(art.dir, art.file)).catch(() => null);
+    } else if (art.img) {
+        img = art.img;
     }
-    if (art.img) {
-        const img = art.img;
-        const box = await measureImageBox(img, art.file);
-        const scale = ch / box.h;
-        const dw = img.width * scale, dh = img.height * scale;
-        const drawX = cx - (box.x + box.w / 2) * scale;
-        const drawY = groundY - (box.y + box.h) * scale;
-        if (opts.shadow !== false) {
-            const feetW = box.w; // no foot-band data for foreign sprites — full width
-            const footW = Math.max(feetW * 0.5, box.w * 0.5) * scale;
-            // (user-side judge): foreign sprites floated — stronger contact
-            drawContactShadow(ctx, cx, groundY, footW, ch, opts.alpha != null ? opts.alpha : 1,
-                { boost: opts.shadowBoost || 1.35, ryMin: opts.shadowRyMin || 12 });
-        }
-        ctx.save();
-        if (opts.alpha != null && opts.alpha < 1) ctx.globalAlpha = opts.alpha;
-        ctx.imageSmoothingEnabled = false;   // pixel-art summons stay crisp
-        ctx.drawImage(img, drawX, drawY, dw, dh);
-        ctx.restore();
-        return { w: box.w * scale, h: box.h * scale };
+    if (!img) return null;
+    const box = await measureImageBox(img, art.file || null);
+    const flip = !!opts.flip;
+    let src = img, sx = box.x, sy = box.y, sw = box.w, sh = box.h;
+    if (opts.tint) {
+        // isolate the content crop on a transparent layer, flood it dark
+        // purple 'source-atop' (clips to the sprite's own alpha), composite
+        const off = createCanvas(box.w, box.h);
+        const octx = off.getContext('2d');
+        octx.drawImage(img, box.x, box.y, box.w, box.h, 0, 0, box.w, box.h);
+        octx.globalCompositeOperation = 'source-atop';
+        octx.fillStyle = opts.tint;
+        octx.fillRect(0, 0, box.w, box.h);
+        octx.globalCompositeOperation = 'source-over';
+        src = off; sx = 0; sy = 0;
     }
-    return null;
+    const scale = ch / box.h;
+    const dw = box.w * scale, dh = box.h * scale;
+    const drawX = cx - dw / 2;
+    const drawY = groundY - dh;
+    if (opts.shadow !== false) {
+        const feetW = box.feetW ?? box.w;
+        const feetCx = (box.feetX ?? box.x) + feetW / 2;
+        const footW = Math.max(feetW, box.w * 0.5) * scale;
+        const footOff = (feetCx - (box.x + box.w / 2)) * scale;
+        drawContactShadow(ctx, flip ? cx - footOff : cx + footOff, groundY, footW, ch,
+            opts.alpha != null ? opts.alpha : 1,
+            { boost: opts.shadowBoost || 1.35, ryMin: opts.shadowRyMin || 12 });
+    }
+    ctx.save();
+    if (opts.alpha != null && opts.alpha < 1) ctx.globalAlpha = opts.alpha;
+    ctx.imageSmoothingEnabled = false;   // pixel art stays crisp
+    if (opts.tint) {
+        // violet halo — the hit state must read even on purple-bodied amalgams
+        ctx.shadowColor = HIT_GLOW;
+        ctx.shadowBlur = 22;
+    }
+    if (flip) {
+        ctx.translate(cx, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(src, sx, sy, sw, sh, -dw / 2, drawY, dw, dh);
+    } else {
+        ctx.drawImage(src, sx, sy, sw, sh, drawX, drawY, dw, dh);
+    }
+    ctx.restore();
+    return { w: box.w * scale, h: box.h * scale };
 }
 
 // ── live combat pools (battleScene mapping — battle-tested field names) ───
@@ -440,11 +602,10 @@ function livePools(state, enemies) {
 // ── THE ENCOUNTER SCENE (§6) ──────────────────────────────────────────────
 async function drawCombatScene(ctx, plan, live, opts = {}) {
     const turnNum = opts.turnNumber || 0;
-    await drawBackdrop(ctx, plan.bg);
+    await drawBackdrop(ctx, plan.bg, plan.bgDir);
 
-    // ── stage wash: a soft dark pool behind the enemy zone — busy halls
-    // (crystal fields, bone walls) used to swallow dark-bodied monsters;
-    // this lifts the silhouette the way the reference's back wall does
+    // ── stage wash: a soft dark pool behind the enemy zone — busy stages
+    // used to swallow dark-bodied monsters; this lifts the silhouette ──
     if (plan.enemy) {
         const wx = plan.enemy.cx, wy = plan.enemy.gy - plan.enemy.h * 0.34;
         const wr = plan.enemy.h * 0.92;
@@ -456,11 +617,28 @@ async function drawCombatScene(ctx, plan, live, opts = {}) {
         ctx.fillRect(wx - wr, wy - wr, wr * 2, wr * 2);
     }
 
-    // ── enemy / wild summon (center, towering, forward-facing) ──
+    // draw order = depth order. BOSS: flank allies stand BEHIND the tower.
+    if (plan.style === 'boss') {
+        for (const a of plan.allies || []) {
+            await drawActorGrounded(ctx, a.art || null, a.cx, a.gy, a.h, { alpha: 0.92, flip: a.flip });
+        }
+    }
+
+    // ── pack members (side style) — the owner called out that regular
+    // encounters need MULTIPLE enemies on stage; queued pack fighters stand
+    // behind the active one, bodies only (plates/HP ride the active enemy) ──
+    for (const p of plan.pack || []) {
+        await drawActorGrounded(ctx, p.art, p.cx, p.gy, p.h,
+            { flip: p.flip, alpha: p.alpha, shadowBoost: 1.35, shadowRyMin: 12 });
+    }
+
+    // ── enemy / wild summon (boss: center tower · side: left cluster) ──
     if (plan.enemy && plan.enemy.art) {
-        // (user-side judge: enemies floated — heavier contact shadows)
-        const drawn = await drawArtGrounded(ctx, plan.enemy.art, plan.enemy.cx, plan.enemy.gy, plan.enemy.h,
-            { shadowBoost: plan.kind === 'summon' ? 1.5 : 1.45, shadowRyMin: 14 });
+        // owner 2026-10-09: a player hit tints the target dark purple for
+        // that turn render (opts.hitEnemy — per-turn, never frozen)
+        const drawn = await drawActorGrounded(ctx, plan.enemy.art, plan.enemy.cx, plan.enemy.gy, plan.enemy.h,
+            { flip: plan.enemy.flip, tint: opts.hitEnemy ? HIT_TINT : null,
+              shadowBoost: plan.kind === 'summon' ? 1.5 : 1.45, shadowRyMin: 14 });
         const headTop = plan.enemy.gy - (drawn ? drawn.h : plan.enemy.h);
         if (plan.kind === 'summon') {
             // §7: the summon is a PARTICIPANT — wild tag + species pill
@@ -480,17 +658,19 @@ async function drawCombatScene(ctx, plan, live, opts = {}) {
         }
     }
 
-    // ── ally summons (deployed) — subdued, behind the player ──
-    for (const a of plan.allies || []) {
-        await drawArtGrounded(ctx, a.art || null, a.cx, a.gy, a.h, { alpha: 0.92 });
+    // ── ally summons (side style) — party side, IN FRONT of the enemy cluster ──
+    if (plan.style !== 'boss') {
+        for (const a of plan.allies || []) {
+            await drawActorGrounded(ctx, a.art || null, a.cx, a.gy, a.h, { alpha: 0.95, flip: a.flip });
+        }
     }
 
-    // ── player (front-bottom, preserved sprite, grounded) ──
+    // ── player (BOSS: front-bottom center · SIDE: bottom-right, facing left) ──
     if (plan.player && plan.player.file) {
         const drawn = await drawGroundedSprite(ctx, [path.join(RPGASSET, 'characters', 'clean'),
                                                     path.join(RPGASSET, 'characters')],
             plan.player.file, plan.player.cx, plan.player.gy, plan.player.h,
-            { shadowBoost: 1.25, shadowRyMin: 10 });
+            { flip: !!plan.player.flip, shadowBoost: 1.25, shadowRyMin: 10 });
         const headTop = plan.player.gy - (drawn ? drawn.h : plan.player.h);
         // reference layout: the player's plate rides UNDER the sprite
         pillLocal(ctx, plan.player.cx, plan.player.gy + 22, safeName(opts.playerName || 'You', 16),
@@ -541,6 +721,17 @@ async function renderAbyssCombat(state, { phase = 'START', turnInfo = null, turn
         const actor = turnInfo && turnInfo.actor;
         let activeActor = null;
         if (phase === 'TURN' && actor) activeActor = actor.isEnemy ? 'enemy' : 'player';
+        // owner 2026-10-09 10:19Z: "when I attack an enemy, its sprite should
+        // get a dark purple tint" — a PLAYER turn that dealt damage (or
+        // explicitly targeted the active enemy) tints the enemy for THIS
+        // render. Passed per-render — never frozen into the cached plan.
+        let hitEnemy = false;
+        if (phase === 'TURN' && activeActor === 'player' && enemies.length) {
+            const e0 = enemies[0];
+            const t = turnInfo.target;
+            hitEnemy = Number(turnInfo.damage) > 0
+                || !!(t && (t === e0 || (t.id && e0.id && t.id === e0.id)));
+        }
 
         ensureFonts();
         const c = createCanvas(W, H);
@@ -549,6 +740,7 @@ async function renderAbyssCombat(state, { phase = 'START', turnInfo = null, turn
         await drawCombatScene(ctx, plan, live, {
             turnNumber: (turnInfo && turnInfo.turnNumber) || 1,
             activeActor,
+            hitEnemy,
             playerName: (state.players && state.players[0] && state.players[0].name) || 'You',
             hudState: phase === 'START' ? 'ABYSS' : `TURN ${(turnInfo && turnInfo.turnNumber) || ''}`.trim(),
         });
@@ -635,8 +827,10 @@ async function paintFloorCard(ctx, payload = {}, off = 0) {
     const tier = safeName(payload.tier || 'F', 12);
     const mult = Number(payload.mult) || 1;
 
-    // ── backdrop: pool art, heavily sunken ──
-    await drawBackdrop(ctx, bgFileForFloor(floor));
+    // ── backdrop: pool art, heavily sunken (boss floors → boss halls,
+    // regular floors → the abyss-themed side stages) ──
+    const bgStyle = isBossFloorMirror(floor) ? 'boss' : 'regular';
+    await drawBackdrop(ctx, bgFileForFloor(floor, bgStyle), bgDirFor(bgStyle));
     ctx.fillStyle = 'rgba(5,4,12,0.28)'; ctx.fillRect(0, 0, FW, FH);
 
     // ── header: THE ABYSS ──
@@ -831,8 +1025,10 @@ async function renderAbyssFloorCard(payload = {}) {
 
 module.exports = {
     renderAbyssCombat, renderAbyssFloorCard, renderAbyssFloorCardPng, clearLayout,
-    planCombatLayout, bgFileForFloor, bgList, combatBgList, enemyIdOf, resolveEnemyArt,
+    planCombatLayout, bgFileForFloor, bgList, bgListRegular, bgDirFor, combatBgList,
+    enemyIdOf, resolveEnemyArt,
     isBossFloorMirror,
+    HIT_TINT, HIT_GLOW,
     isAnimatedCard: (b) => { try { return require('../utils/gif89a').isGifBuffer(b); } catch (e) { return false; } },
     W, H, FW, FH,
 };

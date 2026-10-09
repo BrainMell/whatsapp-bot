@@ -23,6 +23,20 @@ Attribution for third-party art shipped with the bot / image services.
   same day (owner: the abyss is a dungeon — daylight lawns removed): the pool
   is now DARK halls/caves/storm/void scenes only, palette-graded per depth
   band (pure pixel math — hue/val/tint, integer 7x NEAREST bake). **License:** CC0 1.0.
+  - 2026-10-09 10:19Z (owner): this hall pool is now **BOSS ROOMS ONLY**
+    ("keep the current backgrounds and enemies exclusively for Abyss boss rooms").
+- **Abyss regular-encounter side stages** (`core/rpgasset/environment/abyss/regular/*.png`):
+  owner-authorized AI style-prompt iterations ("using the correct ones as
+  foundations, explore alternative styles, make a style prompt ... try over
+  and over again till you get something passable") built FROM the four
+  backgrounds the owner CIRCLED in the 2026-10-09 gallery review
+  (dark_hall / drowned_vault / mist_hollow / violet_sanctum — the CC0
+  sparklinlabs foundations above) via image-to-image editing, then flattened
+  to a 112-color palette for the flat-shaded pixel look. Base art © sparklinlabs
+  (CC0); the abyss re-theme generations are in-repo as deploy-safe bytes.
+  File lineage: `dark_hall_abyss.png` ← dark_hall (gen v2),
+  `drowned_vault_abyss.png` ← drowned_vault (v1), `mist_hollow_abyss.png` ←
+  mist_hollow (v1), `violet_sanctum_abyss.png` ← violet_sanctum (v2).
 - ~~**Abyss rat** (`core/rpgasset/enemies/abyss/abyss_rat.png`)~~ **REMOVED
   2026-10-09** (owner 08:43Z: only the front-facing amalgamation creatures
   belong in the abyss — the rat is a plain animal, not one of them).
