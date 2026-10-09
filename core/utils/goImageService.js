@@ -28,6 +28,26 @@ if (!_explicitGoUrl && !global._goUrlWarned) {
 // image-gen call from wasting 10s on axios timeouts.
 const _healthCache = { value: null, expiresAt: 0 };
 
+// 💡 FIX 2026-10-09 (owner: "long gif animations show just one frame, e.g. the
+// S-tier Broly vs Gogeta"): the cards DB stores cardr API URLs with ?size=400
+// (a few ?size=100). Shoob serves a STATIC 1-frame preview for size <= 400
+// (measured: 400 -> 144KB / 1 frame; 500 -> 32MB / 349 frames / ~14s full
+// animation). Upgrading to size=500 (smallest full-animation size) fixes every
+// animated card conversion. CDN direct files (*.webm / *.gif) pass through.
+const _CARDR_PATH_RE = /api\.shoob\.gg\/site\/api\/cardr\//;
+const _CARDR_SIZE_RE = /\?size=\d+/;
+function _normalizeShoobCardrURL(raw) {
+  const url = String(raw || "");
+  if (!_CARDR_PATH_RE.test(url)) return url;
+  const m = url.match(_CARDR_SIZE_RE);
+  if (m) {
+    const n = parseInt(m[0].slice("?size=".length), 10);
+    if (n >= 500) return url; // already a full-animation size
+    return url.replace(_CARDR_SIZE_RE, "?size=500");
+  }
+  return `${url}?size=500`;
+}
+
 class GoImageService {
   constructor(overrideUrl = null) {
     this.baseUrl = overrideUrl || _explicitGoUrl || _DEFAULT_GO_URL;
@@ -740,6 +760,16 @@ class GoImageService {
     const path = require("path");
     const os = require("os");
 
+    // 💡 FIX 2026-10-09 (owner: "long gif animations show just one frame, e.g.
+    // the S-tier Broly vs Gogeta"): the cards DB stores cardr API URLs with
+    // ?size=400. Shoob serves a STATIC 1-frame preview for size <= 400
+    // (measured: 400 -> 144KB/1 frame; 500 -> 32MB/349 frames/~14s), so every
+    // conversion from those URLs produced a static MP4. Upgrade to size=500
+    // BEFORE the cache-key hash so fresh keys are used and the stale
+    // static-preview cache entries can never be hit again. Mirrors the same
+    // normalization added to the Go service (/api/cards/convert).
+    imageUrl = _normalizeShoobCardrURL(imageUrl);
+
     // ── helpers (module-level cache of closures to avoid re-creating) ──
     if (!global._cardConvCache) {
       global._cardConvCache = {
@@ -845,11 +875,13 @@ class GoImageService {
             [
               "-i", inputPath,
               "-vf",
-              "scale=800:800:force_original_aspect_ratio=decrease,pad=800:800:(ow-iw)/2:(oh-ih)/2:color=black",
+              // fps=12 first: fewer frames to scale/encode, duration preserved,
+              // output stays well under WhatsApp's 16MB video ceiling.
+              "fps=12,scale=800:800:force_original_aspect_ratio=decrease,pad=800:800:(ow-iw)/2:(oh-ih)/2:color=black",
               "-c:v", "libx264",
               "-pix_fmt", "yuv420p",
               "-preset", "ultrafast",
-              "-crf", "23",
+              "-crf", "24",
               "-movflags", "+faststart",
               "-y", outputPath,
             ],
@@ -1283,6 +1315,7 @@ const _sharedInstance = new GoImageService();
 module.exports = _sharedInstance;
 module.exports.GoImageService = GoImageService;
 module.exports.getShared = () => _sharedInstance;
+module.exports._normalizeShoobCardrURL = _normalizeShoobCardrURL; // QA hook
 
 // 💡 Manual reload support (`<prefix> reloadservers`): drop the 60s isHealthy()
 // memo so the next image command re-probes the Go service immediately after a
