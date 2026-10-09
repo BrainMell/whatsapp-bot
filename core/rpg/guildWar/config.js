@@ -15,6 +15,20 @@ const CFG = {
     REJOIN_PROTECT_MS: 60 * 1000,
     MAX_CONCURRENT_EVENTS: 2,
 
+    // ── 🌍 NATURAL (4-DAY) AUTO-SPAWN — DISABLED ──
+    // owner 2026-10-09 (Guild War overhaul): "Disable the 4-day timer for the
+    // Ruins Guild War only." The triune alignment clock (cosmology.js,
+    // ~96h cadence) used to ORGANICALLY open a full alignment-scale war on
+    // its own — claiming the window in shared KV and DM-ing a 500-player
+    // notice wave. Wars are now MOD-INITIATED ONLY:
+    //   `.j war start -test`  → small war (normal scale, this GC = feed HQ)
+    //   `.j war start`        → full-scale event (~4x the test map, announced
+    //                           in every RPG-friendly GC)
+    // Other cosmology clocks (abyss gate, FW link, afterlife circuit) are
+    // NOT touched — this flag only silences the war launcher.
+    // Set GW_ALIGNMENT_AUTOSPAWN=1 in the env to restore organic spawns.
+    ALIGNMENT_AUTOSPAWN: process.env.GW_ALIGNMENT_AUTOSPAWN === '1',
+
     // ── ⏳ FINALE / THE FOUR WARDENS ──
     // owner 2026-10-05 23:09Z: "If a timer brings the Guild War to an end,
     // place 4 bosses around the map. After all 4 bosses die, then the Guild
@@ -38,7 +52,13 @@ const CFG = {
         K_NORMAL: 8,                        // rooms per player (side = ceil(sqrt(players*K)))
         K_ALIGNMENT: 12,
         SIDE_MIN: 8, SIDE_MAX: 40,
-        SIDE_MIN_ALIGNMENT: 24, SIDE_MAX_ALIGNMENT: 60,
+        // owner 2026-10-09: the full-scale war should be "roughly 4x larger
+        // than the test version". A 9-champion test war lands on side 14
+        // (196 rooms, SIZE_RANGES above); alignment side = sqrt(players·12)
+        // clamped to [min,max] → min 24 gave 576 rooms ≈ 2.9x. min 28 →
+        // 784 rooms = 4.0x of the 9-player test map. Rosters past ~65
+        // players still grow past 28 toward SIDE_MAX_ALIGNMENT.
+        SIDE_MIN_ALIGNMENT: 28, SIDE_MAX_ALIGNMENT: 60,
         EXTRA_EDGE_RATIO: 0.12,             // extra edges over spanning tree
         REGIONS_ALIGNMENT: 3,               // world bands in alignment maps
         // ── MAP SIZE RANGES (owner 2026-10-07, Test Run 2: "Maybe I should do

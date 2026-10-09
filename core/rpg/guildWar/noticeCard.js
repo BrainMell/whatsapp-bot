@@ -172,7 +172,9 @@ async function renderAlignmentCard(opts = {}) {
     ctx.textAlign = 'center';
     ctx.fillStyle = '#B9A44C';
     ctx.font = '15px "Cinzel"';
-    ctx.fillText('ON THEIR OWN ACCORD · NO HAND RAISED', W / 2, 52);
+    // ⚔️ 2026-10-09: kicker overridable — mod-called full-scale wars render
+    // 'CALLED BY HAND · FULL SCALE'; the organic look keeps its own line.
+    ctx.fillText(opts.kicker || 'ON THEIR OWN ACCORD · NO HAND RAISED', W / 2, 52);
     ctx.fillStyle = '#F3ECD9';
     ctx.font = '36px "Cinzel Deco"';
     if ('letterSpacing' in ctx) {

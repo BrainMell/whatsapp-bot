@@ -160,7 +160,11 @@ async function destinationsFor(ev) {
     if (Array.isArray(ev.feedDestinations) && ev.feedDestinations.length) return ev.feedDestinations.slice(0, 4);
     let mine = [];
     try {
-        const botId = require('../../../botConfig').getBotId() || 'global';
+        // ⚔️ 2026-10-09: process-level identity (BOT_INSTANCE) — the flush
+        // runs from the 60s sweeper with NO ALS store, so the ALS-backed
+        // proxy resolved every instance to 'global' here and never saw the
+        // per-bot `gw rpg on` lists. Same key on both sides now.
+        const botId = require('../../utils/botInstance').resolveBotId();
         const list = require('../../../core/utils/system').get(`gw_rpg_gcs_${botId}`, []) || [];
         mine = list.slice(0, 4); // pace: at most 4 groups per flush wave
     } catch (e) { mine = []; }

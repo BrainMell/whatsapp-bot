@@ -77,7 +77,7 @@ async function waitFor(fn, ms = 3000) {
 
     // ═══ S1: cross-instance mirror handoff — the double-send kill ═══
     console.log('\n══ S1. mirror handoff: claim by B ⇒ A cannot resend ══');
-    botConfig.getBotId = () => 'bota';
+    process.env.BOT_INSTANCE = 'bota'; // product identity now resolves via BOT_INSTANCE (botInstance.js)
     const ev1 = await mkEvent({ hostGroupId: '120363feed1@g.us' });
     feed.queue(ev1, 'normal', 'S1 dup probe — must send exactly once');
     const mirrored = await waitFor(async () => {
@@ -123,7 +123,7 @@ async function waitFor(fn, ms = 3000) {
 
     // ═══ S4: hostless destination pin ═══
     console.log('\n══ S4. hostless events pin ONE destination set on the doc ══');
-    botConfig.getBotId = () => 'bota';
+    process.env.BOT_INSTANCE = 'bota'; // product identity now resolves via BOT_INSTANCE (botInstance.js)
     system.get = systemStub({ gw_rpg_gcs_bota: ['120363a1@g.us', '120363a2@g.us'], gw_rpg_gcs_botb: ['120363b1@g.us'] });
     const ev4 = await mkEvent({ hostGroupId: null, feedDestinations: null });
     const sentA4 = [];
@@ -134,7 +134,7 @@ async function waitFor(fn, ms = 3000) {
     check('S4: first flusher pinned ITS list on the doc', JSON.stringify(d4.feedDestinations) === JSON.stringify(['120363a1@g.us', '120363a2@g.us']), JSON.stringify(d4.feedDestinations));
     check('S4: bot A delivered to the pinned chats', sentA4.length >= 1 && sentA4.every((s) => s.jid === '120363a1@g.us' || s.jid === '120363a2@g.us'), JSON.stringify(sentA4.map((s) => s.jid)));
     // a DIFFERENT bot flushes next: same pinned destinations, never its own
-    botConfig.getBotId = () => 'botb';
+    process.env.BOT_INSTANCE = 'botb';
     const sentB4 = [];
     await feed.queue(ev4, 'normal', 'S4 pinned wave 2 (from bot B)');
     await waitFor(async () => feed.st(ev4).queue.length === 0);
@@ -169,7 +169,7 @@ async function waitFor(fn, ms = 3000) {
     check('S6: destination pin is atomic first-writer-wins', feedSrc.includes('feedDestinations: null }, { feedDestinations: { $size: 0 }'));
 
     // ═══ cleanup ═══
-    botConfig.getBotId = realGetBotId;
+    delete process.env.BOT_INSTANCE;
     feed.dispose(ev1); feed.dispose(ev2); feed.dispose(ev3); feed.dispose(ev4); feed.dispose(ev5);
     await cleanup([ev1, ev2, ev3, ev4, ev5]);
     await mongoose.disconnect();

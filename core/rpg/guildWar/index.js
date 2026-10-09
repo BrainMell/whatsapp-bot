@@ -364,7 +364,20 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
             if (chatId && !chatId.endsWith('@g.us')) {
                 return sock.sendMessage(chatId, { text: '❌ Start the war from the group that will host the live feed.' });
             }
-            const type = (args[1] || '').toLowerCase() === 'alignment' ? 'alignment' : 'normal';
+            // ⚔️ 2026-10-09 OWNER SPEC (Guild War overhaul):
+            //   `.j war start`       → FULL-SCALE event (alignment scale, ~4x the
+            //                           test map), announced in every RPG GC
+            //   `.j war start -test` → the smaller mod-initiated war (normal scale)
+            // Legacy forms keep working: explicit `alignment`/`full` → full-scale,
+            // explicit `normal` → test scale. The natural 4-day spawn is gone
+            // (CFG.ALIGNMENT_AUTOSPAWN = false) — wars start only from here.
+            const rest = args.slice(1).map((a) => String(a || '').toLowerCase());
+            const wantsTest = rest.some((a) => a === '-test' || a === 'test' || a === 'normal');
+            const wantsFull = rest.some((a) => a === 'alignment' || a === 'full');
+            const type = wantsTest ? 'normal' : 'alignment';
+            if (wantsFull && wantsTest) {
+                return sock.sendMessage(chatId, { text: `❌ Pick one scale: \`${prefix} war start\` (full-scale) or \`${prefix} war start -test\` (test skirmish).` });
+            }
             if (type === 'alignment' && !canStart) return sock.sendMessage(chatId, { text: '❌ Alignment wars require mod authorization.' });
 
             // participating guilds: every registered player's guild as they join
@@ -381,12 +394,32 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
             });
             await sock.sendMessage(chatId, {
                 image: buf,
-                caption: `⚔️ *GUILD WAR ${type === 'alignment' ? '- WORLD ALIGNMENT' : 'CALLED'}*\n\n` +
+                caption: `⚔️ *GUILD WAR ${type === 'alignment' ? '- FULL SCALE' : 'CALLED (TEST)'}*\n\n` +
                     `Registration open: \`${prefix} gw join\` (or DM me \`join\`).\n` +
                     `Registration closes in ${regMin} minutes · deployment automatic.\n` +
                     `Players act through bot DMs - this group receives the live feed.\n` +
+                    (type === 'alignment'
+                        ? `🌐 *Full-scale call:* every RPG group chat is being notified.\n`
+                        : `🧪 *Test skirmish:* this GC only - no wide announcement. (Full-scale: \`${prefix} war start\`)\n`) +
                     `_Initiated by ${senderName}._`,
             });
+
+            // ⚔️ 2026-10-09: full-scale wars announce in EVERY RPG group chat.
+            // Fire-and-forget AFTER the call card (never block the GC reply):
+            // the host bot announces now; sibling bots follow via their 60s
+            // worldAlignment tick (same event-id stamp guard, no doubles).
+            if (type === 'alignment') {
+                try {
+                    const worldAlignment = require('../worldAlignment');
+                    worldAlignment.announceAlignmentWar(sock, '\u200B', {
+                        eventId: res.event.eventId,
+                        initiatedBy: senderJid,
+                        registrationEndsAt: res.event.registrationEndsAt,
+                    }).catch((e) => console.error('[GW] full-scale announce:', e?.message));
+                } catch (e) {
+                    console.error('[GW] full-scale announce setup:', e?.message);
+                }
+            }
             return;
         }
 
@@ -446,7 +479,7 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
             const active = await state.getActiveEvents();
             if (!active.length) {
                 return sock.sendMessage(chatId, {
-                    text: `🕊️ *No war is running right now.*\nThe Ruins stand quiet. Mods raise the call: \`${prefix} gw start\`\nOrganic alignment wars announce themselves in RPG-friendly GCs (\`${prefix} gw rpg on\`).`,
+                    text: `🕊️ *No war is running right now.*\nThe Ruins stand quiet. Mods raise the call: \`${prefix} war start\` (full-scale) or \`${prefix} war start -test\` (skirmish)\nFull-scale calls announce in every RPG-friendly GC (\`${prefix} gw rpg on\`).`,
                 });
             }
             for (const ev of active) {
@@ -534,8 +567,11 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
                 return sock.sendMessage(chatId, { text: '❌ Mark whole groups - run this inside the GC you want to mark.' });
             }
             const system = require('../../utils/system');
+            // ⚔️ 2026-10-09: process-level identity (BOT_INSTANCE) — the tick
+            // broadcast reads gw_rpg_gcs_<resolveBotId()> with NO ALS context,
+            // so the registry key must be context-independent on both sides.
             let botId = 'global';
-            try { botId = require('../../../botConfig').getBotId() || 'global'; } catch (e) {}
+            try { botId = require('../../utils/botInstance').resolveBotId(); } catch (e) {}
             const GCS_KEY = `gw_rpg_gcs_${botId}`;
             const list = system.get(GCS_KEY, []) || [];
             const normJ = (j) => String(j || '').split('@')[0].split(':')[0];
@@ -553,13 +589,13 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
                     return sock.sendMessage(chatId, { text: '❌ Only group admins or bot mods can mark a GC as RPG-friendly.' });
                 }
                 if (list.includes(chatId)) {
-                    return sock.sendMessage(chatId, { text: '🌍 This group is already marked RPG-friendly. Organic alignment war calls will land here.' });
+                    return sock.sendMessage(chatId, { text: '🌍 This group is already marked RPG-friendly. Full-scale war calls will land here.' });
                 }
                 list.push(chatId);
                 system.set(GCS_KEY, list);
                 console.log(`[GuildWar] RPG-friendly GC marked (${botId}): ${chatId} (${list.length} total)`);
                 return sock.sendMessage(chatId, {
-                    text: `🌍 *This group is now RPG-friendly.*\nWhen the worlds align on their own, the Guild Association's call to war will be announced here - one card per alignment window, paced, no spam.\nUnmark anytime: \`${prefix} gw rpg off\` · marked GCs on this bot: *${list.length}*`,
+                    text: `🌍 *This group is now RPG-friendly.*\nFull-scale Guild War calls (\`${prefix} war start\`) will be announced here - one card per war, paced, no spam.\nUnmark anytime: \`${prefix} gw rpg off\` · marked GCs on this bot: *${list.length}*`,
                 });
             }
             if (action === 'off' || action === 'remove' || action === 'unmark') {
@@ -579,21 +615,21 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
             // status: is THIS group marked?
             return sock.sendMessage(chatId, {
                 text: list.includes(chatId)
-                    ? `🌍 This group *is* marked RPG-friendly - organic alignment war calls land here. Remove: \`${prefix} gw rpg off\``
+                    ? `🌍 This group *is* marked RPG-friendly - full-scale war calls land here. Remove: \`${prefix} gw rpg off\``
                     : `🕯️ This group is not marked. Mark it: \`${prefix} gw rpg on\` (group admins or bot mods)`,
             });
         }
 
         case 'help': default: {
             const caption = `⚔️ *GUILD WAR: THE RUINS*\n` +
-                `\`${prefix} gw start\` mods: open registration (this GC = feed HQ)\n` +
-                `\`${prefix} gw start alignment\` mods: alignment-scale war\n` +
-                `\`${prefix} gw join\` enter the registering war\n` +
-                `\`${prefix} gw forcestart\` mods: deploy now\n` +
-                `\`${prefix} gw status\` live standings\n` +
-                `\`${prefix} gw end\` mods: conclude and pay rewards\n` +
-                `\`${prefix} gw abort\` mods: shut it down, no rewards\n` +
-                `\`${prefix} gw rpg on|off\` admins: mark this GC for alignment calls\n\n` +
+                `\`${prefix} war start\` mods: FULL-SCALE war (~4x map, 3 worlds, announced in every RPG GC)\n` +
+                `\`${prefix} war start -test\` mods: small test skirmish (this GC only)\n` +
+                `\`${prefix} war join\` enter the registering war\n` +
+                `\`${prefix} war forcestart\` mods: deploy now\n` +
+                `\`${prefix} war status\` live standings\n` +
+                `\`${prefix} war end\` mods: conclude and pay rewards\n` +
+                `\`${prefix} war abort\` mods: shut it down, no rewards\n` +
+                `\`${prefix} war rpg on|off\` admins: mark this GC for full-scale calls\n\n` +
                 `In my DMs once deployed: \`map\`, \`move forward/left/back/right\`, \`paths\`, \`relics\`, \`handin\`, \`challenge @name\`, \`share map @mate\`, \`status\`, \`quit\`.`;
             try {
                 const buf = await notice.renderWarHelpCard({ prefix });
