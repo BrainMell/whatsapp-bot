@@ -141,8 +141,19 @@ const ENV_CARD_ART = {
     'env1.png': 'cards/fire.jpg',            // Fire Cave
     'env2.png': 'cards/ice.jpg',             // Ice Cave
     'env3.png': 'cards/toxic.jpg',           // Toxic Cave
-    'spark_3.png': 'cards/desert.jpg',       // Desert
-    'spark_1.png': 'cards/forest.jpg',       // Simple Forest
+    // 💡 OWNER RULING 2026-10-09: legacy spark_* flats purged from the dungeon
+    // pool — dead-world card art mirrors the new painted halls (abyss/ subdir)
+    'ember_depths.png': 'abyss/ember_depths.png',       // Dragon's Lair
+    'void_sanctum.png': 'abyss/void_sanctum.png',       // Void Dimension
+    'crystal_vault.png': 'abyss/crystal_vault.png',     // Sci Fi City
+    'obsidian_throne.png': 'abyss/obsidian_throne.png', // Demon Castle
+    'ossuary_hall.png': 'abyss/ossuary_hall.png',       // Desert
+    'blood_chapel.png': 'abyss/blood_chapel.png',       // Infected Afterlife
+    'frost_reliquary.png': 'abyss/frost_reliquary.png', // Pre Infected Afterlife
+    'fungal_grotto.png': 'abyss/fungal_grotto.png',     // Simple Forest
+    // legacy keys kept as fallbacks for in-flight runs started before the swap
+    'spark_3.png': 'cards/desert.jpg',       // Desert (legacy)
+    'spark_1.png': 'cards/forest.jpg',       // Simple Forest (legacy)
     'spark_2.png': 'spark_10.png',           // Demon Castle (dark stone)
     'spark_2-night.png': 'spark_10.png',     // Void Dimension (dark stone, deeper tint)
     'spark_10.png': 'spark_10.png',          // Sci Fi City / stone interior
@@ -159,8 +170,11 @@ async function _loadEnvArt(backgroundPath, environmentKey) {
     if (base) candidates.push(base);              // the run's own asset, if committed here
     candidates.push('spark_10.png', 'cards/forest.jpg');
     for (const rel of candidates) {
-        const dir = rel.startsWith('cards/') ? CARD_DIR : ENV_DIR;
-        const img = await _loadImg(dir, path.basename(rel));
+        // rel may carry a subdirectory (abyss/…) — resolve it under ENV_DIR;
+        // cards/ keeps its dedicated dir
+        const img = rel.startsWith('cards/')
+            ? await _loadImg(CARD_DIR, path.basename(rel))
+            : await _loadImg(ENV_DIR, rel);
         if (img) return { img, rel };
     }
     return { img: null, rel: null };

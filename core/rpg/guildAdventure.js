@@ -190,7 +190,7 @@ const DUNGEON_ENVIRONMENTS = {
   DRAGON_LAIR: {
     id: "DRAGON_LAIR",
     name: "Dragon’s Lair",
-    asset: "spark_8.png",  // 💡 AUDIT FIX 2026-08-01: was env10.png (doesn't exist) → Go service fell back to random bg each render
+    asset: "ember_depths.png",  // 💡 OWNER RULING 2026-10-09: legacy spark_8 (flat moon field) PURGED — new-style painted halls replace all legacy env flats (lava-cavern style, see FIRE_CAVE)
     mobs: ["DRAKE_SCOUT", "FIRE_BREATHER"],
     bosses: ["ANCIENT_DRAGON_BOSS"],
     modifier: {
@@ -243,7 +243,7 @@ const DUNGEON_ENVIRONMENTS = {
   VOID_DIMENSION: {
     id: "VOID_DIMENSION",
     name: "Void Dimension",
-    asset: "spark_2-night.png",  // 💡 ART-FIX 2026-09-11: was spark_7.png (SUNNY SNOW PEAKS!) - night crimson mist reads void
+    asset: "void_sanctum.png",  // 💡 OWNER RULING 2026-10-09: legacy spark_2-night (flat night field) PURGED
     mobs: ["VOID_CORRUPTED", "ABYSSAL_HORROR"],
     bosses: ["VOID_TITAN", "PRIMORDIAL_CHAOS"],
     modifier: { type: "TIME_DILATION", desc: "Random turn order manipulation" },
@@ -252,7 +252,7 @@ const DUNGEON_ENVIRONMENTS = {
   SCI_FI_CITY: {
     id: "SCI_FI_CITY",
     name: "Sci-Fi City",
-    asset: "spark_10.png",  // 💡 ART-FIX 2026-09-11: kept (dark stone backdrop - only urban-dark bg available)
+    asset: "crystal_vault.png",  // 💡 OWNER RULING 2026-10-09: legacy spark_10 (flat brick wall) PURGED
     mobs: ["VOID_SEEKER", "ABYSSAL_HORROR"],  // 💡 was TSUNAMI_WALKER (water mob in a city)
     bosses: ["KRAKEN_SPAWN"],
     modifier: { type: "COVER_SYSTEM", desc: "Defense bonus from structures" },
@@ -261,7 +261,7 @@ const DUNGEON_ENVIRONMENTS = {
   DEMON_CASTLE: {
     id: "DEMON_CASTLE",
     name: "Demon Castle",
-    asset: "spark_2.png",  // 💡 ART-FIX 2026-09-11: was spark_3.png (sunny desert dunes!) - crimson demon mountains
+    asset: "obsidian_throne.png",  // 💡 OWNER RULING 2026-10-09: legacy spark_2 (flat purple badlands) PURGED — Mutation Prime now earns a literal throne room
     mobs: ["HELLFIRE_DEMON", "STAR_EATER"],
     bosses: [
       "MUTATION_PRIME",
@@ -279,7 +279,7 @@ const DUNGEON_ENVIRONMENTS = {
   DESERT: {
     id: "DESERT",
     name: "Desert",
-    asset: "spark_3.png",  // 💡 ART-FIX 2026-09-11: was spark_4.png (murky swamp field!) - spark_3 IS golden dunes
+    asset: "ossuary_hall.png",  // 💡 OWNER RULING 2026-10-09: legacy spark_3 (flat dunes) PURGED — bleached bone-hall reads dry/dead
     mobs: ["STONE_HULK", "CRYSTAL_CORRUPTED", "EARTH_WARDEN"],
     bosses: ["GOLEM_KING", "MOUNTAIN_COLOSSUS"],
     modifier: {
@@ -292,7 +292,7 @@ const DUNGEON_ENVIRONMENTS = {
   INFECTED_AFTERLIFE: {
     id: "INFECTED_AFTERLIFE",
     name: "Infected Afterlife",
-    asset: "spark_1-night.png",  // 💡 ART-FIX 2026-09-11: was spark_1.png (daytime meadow) - corrupted night plains
+    asset: "blood_chapel.png",  // 💡 OWNER RULING 2026-10-09: legacy spark_1-night (flat night plains) PURGED
     mobs: ["FLESH_ABOMINATION", "CHIMERA_BEAST"],
     bosses: ["PERFECT_MUTATION"],
     modifier: { type: "CORRUPTION", desc: "Damage increases over time" },
@@ -301,7 +301,7 @@ const DUNGEON_ENVIRONMENTS = {
   PRE_INFECTED_AFTERLIFE: {
     id: "PRE_INFECTED_AFTERLIFE",
     name: "Pre-Infected Afterlife",
-    asset: "spark_7.png",  // 💡 ART-FIX 2026-09-11: was spark_1.png (meadow) - pure snowy peaks = PURITY_AURA holy ground
+    asset: "frost_reliquary.png",  // 💡 OWNER RULING 2026-10-09: legacy spark_7 (flat snowy peaks) PURGED — gothic reliquary reads holy ground
     mobs: ["FROST_FLAME_WARDEN", "STORM_EARTH_TITAN"],
     bosses: ["ELEMENTAL_SOVEREIGN"],
     modifier: { type: "PURITY_AURA", desc: "Cleanses debuffs randomly" },
@@ -310,7 +310,7 @@ const DUNGEON_ENVIRONMENTS = {
   SIMPLE_FOREST: {
     id: "SIMPLE_FOREST",
     name: "Simple Forest",
-    asset: "spark_1.png",  // 💡 AUDIT FIX 2026-08-01: was env10.png (doesn't exist) - forest.png is thematic
+    asset: "fungal_grotto.png",  // 💡 OWNER RULING 2026-10-09: legacy spark_1 (flat meadow) PURGED — overgrown grotto reads dense foliage
     mobs: ["OBSIDIAN_JUGGERNAUT", "DIAMOND_SENTINEL"],
     bosses: ["MOUNTAIN_COLOSSUS"],
     modifier: { type: "DENSE_FOLIAGE", desc: "Line-of-sight blocked" },
@@ -2158,7 +2158,7 @@ async function startRuinsCombat(sock, chatId, senderJid, spec) {
     name: spec.name || 'Ruins Encounter',
     enemies,
     theme: 'ruins',
-    background: spec.background || 'spark_1.png',
+    background: spec.background || 'env1.png',  // 💡 OWNER RULING 2026-10-09: spark_1 flat purged — new-style lava cavern default
     intro: spec.greeting || '',
     // ⚔️ square map fragment - drawn in the battle scene's bottom-right panel
     ruinsMap: spec.mapFragment || null,
@@ -2183,7 +2183,7 @@ async function startTutorialQuest(sock, chatId, senderJid, spec = {}) {
   return startRuinsCombat(sock, chatId, senderJid, {
     enemies: [{ type: spec.enemy || 'GARDEN_SLIME', level: 1 }],
     rank: 'F',
-    background: spec.background || 'spark_1.png',
+    background: spec.background || 'env1.png',  // 💡 OWNER RULING 2026-10-09: spark_1 flat purged
     name: spec.name,
     greeting: spec.greeting,
     groq: spec.groq,
@@ -2198,7 +2198,7 @@ async function startTutorialGroupQuest(sock, chatId, senderJid, spec = {}) {
   return startRuinsCombat(sock, chatId, senderJid, {
     enemies: [{ type: spec.enemy || 'GARDEN_SLIME', level: 1 }],
     rank: 'F',
-    background: spec.background || 'spark_2.png',
+    background: spec.background || 'env2.png',  // 💡 OWNER RULING 2026-10-09: spark_2 flat purged
     name: spec.name,
     greeting: spec.greeting,
     groq: spec.groq,
