@@ -14,6 +14,10 @@ core/rpgasset/fonts/NotoSansRunic-Regular.ttf -filter -diff -merge -text
 # new abyss-native monster sprites must be real pixels everywhere (reset
 # --hard deploys on the boxes would otherwise serve an LFS pointer)
 core/rpgasset/enemies/abyss/*.png -filter -diff -merge -text
+# 2026-10-09 round-8: the CORE bestiary pool (hybrides/mutated/calamaties/
+# elemental bosses etc.) is the abyss encounter art — same stub hazard as
+# enemies/abyss above, real bytes as plain git blobs
+core/rpgasset/enemies/*.png -filter -diff -merge -text
 # 2026-10-09 abyss real-asset pass: the background pool must be real pixels
 # everywhere (reset --hard deploys on the boxes would otherwise serve an LFS
 # pointer to the renderer — same rule as enemies/abyss above)
