@@ -361,13 +361,16 @@ const ENEMY_FACES_LEFT = new Set(['SHADOW_STALKER']);              // hybrides (
 // 2026-10-10 round-8 FIX (owner: "some summos facing the wrong direction"):
 // every species below was re-verified on a 2× labeled zoom sheet with a
 // center bisector — boar's tusks point RIGHT, giant's mace and yeti's club
-// lead LEFT, skitterswarm scuttles LEFT. ⚠️ SECOND-PASS CORRECTION (hyper
-// critic + 3× scene crops): SNAKE is natively RIGHT-facing — the zoom-sheet
-// eyeball had it backwards, mirroring ally snakes away from the enemies and
-// flipping wild snakes away from the player. Only real directional bias is
-// tabled; frontal sprites stay put.
-const SUMMON_FACES_LEFT = new Set(['BAT', 'REPTILE', 'GIANT', 'YETI', 'SKITTERSWARM']);
-const SUMMON_FACES_RIGHT = new Set(['DRAGON', 'PLAGUEFANG', 'DINO', 'BOAR', 'SNAKE']);
+// lead LEFT. ⚠️ SECOND-PASS CORRECTION (hyper critic + 3× scene crops):
+// SNAKE is natively RIGHT-facing — the zoom-sheet eyeball had it backwards,
+// mirroring ally snakes away from the enemies and flipping wild snakes away
+// from the player. ⚠️ THIRD-PASS CORRECTION (6× bisector zoom): REPTILE is
+// natively RIGHT-facing too — the raised axe is the cocked back-swing arm,
+// the snout/jaw/horn all extend RIGHT of the eye. SKITTERSWARM demoted to
+// neutral: at 6× the swarm's heads point in mixed directions (no real
+// single-direction bias → never flip, per the rule below).
+const SUMMON_FACES_LEFT = new Set(['BAT', 'GIANT', 'YETI']);
+const SUMMON_FACES_RIGHT = new Set(['DRAGON', 'PLAGUEFANG', 'DINO', 'BOAR', 'SNAKE', 'REPTILE']);
 const summonFaceKey = (file) => String(file || '').replace(/\.png$/i, '').toUpperCase();
 // best-effort species key for a wild summon BEFORE its art resolves
 function planWildSpeciesKey(state, enemy) {
