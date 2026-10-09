@@ -168,8 +168,13 @@ async function announceAlignmentWar(sock, BOT_MARKER, ev) {
         const stampKey = `gw_align_announced_${botId}`;
         if (get(stampKey, null) === ev.eventId) return { skipped: 'already' };
         const gcs = get(`gw_rpg_gcs_${botId}`, []) || [];
+        // 💡 judge fix: only stamp once we actually HAVE targets — a bot with
+        // zero marked GCs stays un-stamped so GCs marked later in the 10-min
+        // registration window still receive the call (cheap 60s re-check).
+        // (The host GC is excluded below — it already carries the call card.)
+        const targets = gcs.filter((gc) => gc && gc !== ev.hostGroupId);
+        if (!targets.length) return { skipped: 'no-rpg-gcs', eventId: ev.eventId };
         set(stampKey, ev.eventId);
-        if (!gcs.length) return { skipped: 'no-rpg-gcs', eventId: ev.eventId };
 
         const calledByHand = !!(ev.initiatedBy && ev.initiatedBy !== 'guild-association');
         const notice = require('./guildWar/noticeCard');
@@ -178,6 +183,9 @@ async function announceAlignmentWar(sock, BOT_MARKER, ev) {
             buf = await notice.renderAlignmentCard({
                 title: calledByHand ? 'A FULL-SCALE WAR RISES' : 'THE WORLDS ALIGN',
                 kicker: calledByHand ? 'CALLED BY HAND · FULL SCALE' : null,
+                text: calledByHand
+                    ? 'A full-scale war has been called BY HAND. The Ruins of a dead world open wider than ever - roughly four times the test grounds, three joined worlds deep, sealed vaults, rival banners and the World Core itself. Registration is open now.'
+                    : undefined,
                 regMinutes: ev.registrationEndsAt ? Math.max(0, Math.round((ev.registrationEndsAt - Date.now()) / 60000)) : null,
                 prefix: _botPrefix(),
             });
@@ -195,7 +203,7 @@ An alignment-scale Guild War is forming on its own. \`${prefix} gw join\` enters
 _Mark/unmark this GC: \`${prefix} gw rpg off\`_`;
 
         let sent = 0;
-        for (const gc of gcs) {
+        for (const gc of targets) {
             try {
                 if (buf) {
                     await sock.sendMessage(gc, { image: buf, caption });
@@ -210,8 +218,8 @@ _Mark/unmark this GC: \`${prefix} gw rpg off\`_`;
             } catch (e) { /* dead group — skip */ }
             await new Promise((r) => setTimeout(r, GC_PACE_MS));
         }
-        console.log(`[WorldAlignment] full-scale call broadcast: ${sent}/${gcs.length} RPG-friendly GCs on ${botId} (event ${ev.eventId}${calledByHand ? ', called by hand' : ', organic'})`);
-        return { sent, total: gcs.length, eventId: ev.eventId };
+        console.log(`[WorldAlignment] full-scale call broadcast: ${sent}/${targets.length} RPG-friendly GCs on ${botId} (event ${ev.eventId}${calledByHand ? ', called by hand' : ', organic'})`);
+        return { sent, total: targets.length, eventId: ev.eventId };
     } catch (e) {
         console.error('[WorldAlignment] broadcast failed:', e.message);
         return { skipped: 'error', error: e.message };

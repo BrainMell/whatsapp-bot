@@ -370,6 +370,18 @@ async function tick(sock, BOT_MARKER) {
             } else {
                 await abortEvent(ev.eventId, 'Not enough players registered.');
                 out.push({ eventId: ev.eventId, auto: 'aborted-low-attendance' });
+                // 💬 UX (user-side judge 2026-10-09): the withdrawal used to be
+                // SILENT — a mod waiting for deployment (or a lone champion who
+                // answered the call) saw nothing. Tell the host GC the call died.
+                try {
+                    let prefix = '.';
+                    try { prefix = require('../../botConfig').getPrefix() || '.'; } catch (e) {}
+                    if (ev.hostGroupId && sock) {
+                        await sock.sendMessage(ev.hostGroupId, {
+                            text: `🕯️ *The call is withdrawn* — not enough champions answered the war (${ev.players.length} registered, 2 needed) before the 10 minutes ran out.\nMods raise it again anytime: \`${prefix} war start\` (full-scale) or \`${prefix} war start -test\` (skirmish).`,
+                        });
+                    }
+                } catch (e) { console.error('[GW] abort notice:', e?.message); }
             }
             continue;
         }

@@ -138,7 +138,7 @@ async function main() {
     const hostSends = hostSock.to(HOST_GC);
     check('S2 call card posted to host GC', hostSends.length === 1 && hostSends[0].hasImage, JSON.stringify(hostSends.map(s => s.text.slice(0, 40))));
     check('S2 caption says FULL SCALE', /FULL SCALE/.test(hostSends[0] && hostSends[0].text || ''), hostSends[0] && hostSends[0].text.slice(0, 80));
-    check('S2 caption teaches wide announcement', /every RPG group chat/i.test(hostSends[0] && hostSends[0].text || ''));
+    check('S2 caption teaches wide announcement', /every RPG-friendly group chat/i.test(hostSends[0] && hostSends[0].text || ''));
     // announce wave (fire-and-forget → poll)
     let wave = [];
     for (let i = 0; i < 100 && wave.length < 2; i++) { await wait(60); wave = hostSock.sent.filter((s) => s.chatId === QA_GC1 || s.chatId === QA_GC2); }
@@ -226,6 +226,32 @@ async function main() {
     check('S8 confirm copy shown', /now RPG-friendly/.test(rpgSock.texts().join(' ')), rpgSock.texts().join('|').slice(0, 100));
     await gwIndex.handleGroupCommand(rpgSock, QA_GC3, MOD, 'QA Mod', ['rpg', 'off'], { prefix: PREFIX });
     check('S8 rpg off removes it', !system.get('gw_rpg_gcs_QA', []).includes(QA_GC3));
+
+    // ═══════════ S9: judge-fix regressions ═══════════
+    section('S9: auto-abort notice, zero-target stamp, host-GC skip');
+    // 9a. registration expiry with <2 players → host GC gets the withdrawal
+    const evAb = await state.createEvent({ type: 'normal', hostGroupId: HOST_GC, initiatedBy: MOD });
+    await GuildWarEvent.updateOne({ eventId: evAb.event.eventId }, { $set: { registrationEndsAt: Date.now() - 1000 } });
+    const s9sock = makeSock('s9');
+    await state.tick(s9sock, '\u200B');
+    const evAbAfter = await GuildWarEvent.findOne({ eventId: evAb.event.eventId }).lean();
+    check('S9a low-attendance war auto-aborted', evAbAfter.state === 'ABORTED', evAbAfter.state);
+    check('S9a host GC told the call is withdrawn', s9sock.to(HOST_GC).some((s) => /call is withdrawn/.test(s.text)), s9sock.texts().join('|').slice(0, 80));
+    // 9b. zero usable targets (only the host GC marked) → announce does NOT stamp
+    system.set('gw_rpg_gcs_QA', [HOST_GC]);
+    await gwIndex.handleGroupCommand(makeSock('nb'), HOST_GC, MOD, 'QA Mod', ['start'], { prefix: PREFIX });
+    const evNb = await GuildWarEvent.findOne({ hostGroupId: HOST_GC, type: 'alignment' }).sort({ createdAt: -1 }).lean();
+    await wait(350);
+    check('S9b no-target announce leaves stamp free', system.get('gw_align_announced_QA') !== (evNb && evNb.eventId), String(system.get('gw_align_announced_QA')));
+    // 9c. host GC is excluded from its own war's broadcast wave
+    system.set('gw_rpg_gcs_QA', [HOST_GC, QA_GC1, QA_GC2]);
+    system.set('gw_align_announced_QA', 's9-reset');
+    const w9sock = makeSock('w9');
+    await gwIndex.handleGroupCommand(w9sock, HOST_GC, MOD, 'QA Mod', ['start'], { prefix: PREFIX });
+    let wave9 = [];
+    for (let i = 0; i < 100 && wave9.length < 2; i++) { await wait(60); wave9 = w9sock.sent.filter((s) => s.chatId === QA_GC1 || s.chatId === QA_GC2); }
+    check('S9c wave still reaches the marked GCs', wave9.length === 2, String(wave9.length));
+    check('S9c host GC NOT double-posted (call card only)', w9sock.to(HOST_GC).length === 1, String(w9sock.to(HOST_GC).length));
 
     // ═══════════ done ═══════════
     tally();

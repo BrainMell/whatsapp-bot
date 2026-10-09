@@ -356,14 +356,17 @@ async function renderWarHelpCard(opts = {}) {
     ctx.fillText(`open with  ${P} gw  ·  ${P} wr  ·  ${P} war`, W / 2, 168);
 
     // command rows: command (Cinzel, ink) + description (IM Fell, soft)
+    // ⚔️ 2026-10-09 (code judge): rows must match the new command semantics —
+    // bare start IS the full-scale war; the organic 4-day alignment spawn is
+    // retired; rpg-marking is for full-scale calls.
     const rows = [
-        [`${P} gw start`, 'Mods open registration. This GC becomes the feed HQ.'],
-        [`${P} gw start alignment`, 'Alignment-scale war (mods).'],
-        [`${P} gw join`, 'Enter the registering war with your guild.'],
-        [`${P} gw forcestart`, 'Mods deploy the war now.'],
-        [`${P} gw status`, 'Live standings from the Ruins.'],
-        [`${P} gw end  |  abort`, 'Mods conclude the war (end pays rewards).'],
-        [`${P} gw rpg on | off`, 'Admins mark this GC for organic alignment calls.'],
+        [`${P} war start`, 'Mods: FULL-SCALE war (~4x map), announced in every RPG-friendly GC.'],
+        [`${P} war start -test`, 'Mods: small test skirmish — this GC only.'],
+        [`${P} war join`, 'Enter the registering war with your guild.'],
+        [`${P} war forcestart`, 'Mods deploy the war now.'],
+        [`${P} war status`, 'Live standings from the Ruins.'],
+        [`${P} war end  |  abort`, 'Mods conclude the war (end pays rewards).'],
+        [`${P} war rpg on | off`, 'Admins mark this GC for full-scale war calls.'],
     ];
     ctx.textAlign = 'left';
     let ry = 244;

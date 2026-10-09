@@ -399,7 +399,7 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
                     `Registration closes in ${regMin} minutes · deployment automatic.\n` +
                     `Players act through bot DMs - this group receives the live feed.\n` +
                     (type === 'alignment'
-                        ? `🌐 *Full-scale call:* every RPG group chat is being notified.\n`
+                        ? `🌐 *Full-scale call:* every RPG-friendly group chat is being notified. (Small skirmish instead: \`${prefix} war start -test\` · call it off: \`${prefix} war abort\`)\n`
                         : `🧪 *Test skirmish:* this GC only - no wide announcement. (Full-scale: \`${prefix} war start\`)\n`) +
                     `_Initiated by ${senderName}._`,
             });
@@ -413,6 +413,7 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
                     const worldAlignment = require('../worldAlignment');
                     worldAlignment.announceAlignmentWar(sock, '\u200B', {
                         eventId: res.event.eventId,
+                        hostGroupId: res.event.hostGroupId,
                         initiatedBy: senderJid,
                         registrationEndsAt: res.event.registrationEndsAt,
                     }).catch((e) => console.error('[GW] full-scale announce:', e?.message));
@@ -435,12 +436,19 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
             if (!res) return sock.sendMessage(chatId, { text: '✅ You are already registered.' });
             // count from the UPDATED doc — registerPlayer returns findOneAndUpdate({new:true}),
             // the `pending` snapshot was fetched BEFORE this join, so the first joiner showed "(0 registered)"
-            return sock.sendMessage(chatId, { text: `✅ ${senderName} of *${g?.name || ug}* joins the war! (${res.players.length} registered)\nWait for deployment, then act in my DMs.` });
+            // 💡 UX (user-side judge 2026-10-09): name the SCALE — with a full-scale
+            // and a skirmish both open, players must know which war they joined.
+            return sock.sendMessage(chatId, { text: `✅ ${senderName} of *${g?.name || ug}* joins the ${pending.type === 'alignment' ? '*FULL-SCALE* war' : 'test skirmish'}! (${res.players.length} registered)\nWait for deployment, then act in my DMs.` });
         }
 
         case 'forcestart': {
             if (!canStart) return sock.sendMessage(chatId, { text: '❌ Mod only.' });
-            const pending = await require('../../models/GuildWarEvent').findOne({ state: 'REGISTRATION' }).sort({ createdAt: -1 });
+            // 💡 UX (user-side judge 2026-10-09): with two wars registering at
+            // once (full-scale + skirmish fit MAX_CONCURRENT_EVENTS), "newest
+            // wins" could deploy the WRONG war. Prefer THIS group's war first.
+            const GWE = require('../../models/GuildWarEvent');
+            const pending = (await GWE.findOne({ state: 'REGISTRATION', hostGroupId: chatId }).sort({ createdAt: -1 }))
+                || (await GWE.findOne({ state: 'REGISTRATION' }).sort({ createdAt: -1 }));
             if (!pending) return sock.sendMessage(chatId, { text: '❌ Nothing to start.' });
             const res = await state.startEvent(pending.eventId, { deadWorld: args[1] || null });
             if (!res.ok) return sock.sendMessage(chatId, { text: `❌ ${res.reason}` });
