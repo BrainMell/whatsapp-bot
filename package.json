@@ -29,5 +29,13 @@
   },
   "devDependencies": {
     "mongodb-memory-server": "^11.3.0"
+  },
+  "overrides": {
+    "wa-sticker-formatter": {
+      "sharp": "$sharp"
+    }
+  },
+  "scripts": {
+    "postinstall": "node scripts/prune-nested-sharp.js"
   }
 }
