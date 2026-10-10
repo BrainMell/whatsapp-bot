@@ -20,6 +20,7 @@ const imageGate = require("../core/utils/imageGate");
 const UA = { headers: { "User-Agent": "ZenithQuizBot/2.0 (WhatsApp trivia bot; contact: ops@zenithbot.dev) axios" } };
 const DATA = (f) => path.join(__dirname, "..", "data", f);
 const STATE_PATH = DATA("logoTopup.state.json");
+const FRESH_PATH = DATA("logoTopup.fresh.jsonl");
 
 const WORDMARK_RE = /(wordmark|word mark|word-mark|logotype|logogram|lettering|typography|spelled|\btext\b)/i;
 const OUTDATED_RE = /(old|former|previous|historic|historical|defunct|obsolete|disused|archived)/i;
@@ -132,7 +133,8 @@ process.on("unhandledRejection", (r) => console.log(`orphan-rejection: ${String(
   const seenQid = new Set(existing.map((b) => b.qid).filter(Boolean));
   console.log(`topup: dataset has ${existing.length}; next fame band 4600..5100`);
 
-  const state = fs.existsSync(STATE_PATH) ? JSON.parse(fs.readFileSync(STATE_PATH, "utf8")) : { offset: 0, verified: [] };
+  const state = fs.existsSync(STATE_PATH) ? JSON.parse(fs.readFileSync(STATE_PATH, "utf8")) : { offset: 0 };
+  state.verified = []; // 💡 streamed to FRESH_PATH instead — array growth OOM-ed the 320MB heap at ~2200
   console.log(`FULL-BUILD mode: windows 0..5400, resuming at offset=${state.offset}`);
   console.log(`resume state: offset=${state.offset}, verified so far=${state.verified.length}`);
 
@@ -201,7 +203,7 @@ process.on("unhandledRejection", (r) => console.log(`orphan-rejection: ${String(
         }
       });
       await Promise.all(lanes);
-      state.verified.push(...results);
+      if (results.length) fs.appendFileSync(FRESH_PATH, results.map((r) => JSON.stringify(r)).join("\n") + "\n");
       fresh += results.length;
       console.log(`offset ${offset}: +${results.length}/${batchCand.length} verified (total fresh ${state.verified.length})`);
     } catch (e) {
@@ -212,11 +214,15 @@ process.on("unhandledRejection", (r) => console.log(`orphan-rejection: ${String(
     if (global.gc && fresh % 100 === 0 && fresh > 0) try { global.gc(); } catch {}
   }
 
-  // merge: existing verbatim first, then fresh (file+name dedup)
+  // merge: existing verbatim first, then fresh streamed from the JSONL (file+name dedup)
+  const freshEntries = fs.existsSync(FRESH_PATH)
+    ? fs.readFileSync(FRESH_PATH, "utf8").split("\n").filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean)
+    : [];
+  console.log(`fresh entries on disk: ${freshEntries.length}`);
   const byFile = new Set(existing.map((b) => norm(b.file)));
   const byName2 = new Set(existing.map((b) => norm(b.name)));
   const merged = [...existing];
-  for (const v of state.verified) {
+  for (const v of freshEntries) {
     const fk = norm(v.file), nk = norm(v.name);
     if (byFile.has(fk) || byName2.has(nk)) continue;
     byFile.add(fk); byName2.add(nk);
