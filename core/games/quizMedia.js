@@ -287,6 +287,19 @@ async function buildLogosQuestion(brand, others, difficulty) {
       }
     }
   }
+  // 💡 2026-10-10 (owner: "1000+ modern logos JSON"): dataset entries sourced
+  // from iTunes official artwork / favicons have NO Commons file - they carry
+  // a direct, bake-time-verified URL instead. Try it when the file-host path
+  // above is not applicable or failed.
+  if (dsEntry && !dsEntry.file && dsEntry.url) {
+    const dl2 = await quizLore.downloadMedia(dsEntry.url, "image").catch(() => null);
+    if (dl2 && dl2.buf && dl2.buf.length >= 1500) {
+      const norm2 = await quizImagePipeline.normalize(dl2.buf, { url: dsEntry.url, minW: 64, minH: 40, label: `logo:${brand.name}` }).catch(() => ({ ok: false, reason: "norm-crash" }));
+      if (norm2.ok) return assembleLogoQuestion(brand, others, difficulty, dsEntry.url, norm2.buf, norm2.mime, `logo-dataset:${dsEntry.source || "baked"}`);
+      const gate2 = await imageGate.inspectImageBuffer(dl2.buf, { minW: 64, minH: 40, label: `logo:${brand.name}`.slice(0, 50) }).catch(() => ({ ok: false, reason: "gate-crash" }));
+      if (gate2.ok) return assembleLogoQuestion(brand, others, difficulty, dsEntry.url, dl2.buf, dl2.mime || dsEntry.mime || "image/png", `logo-dataset:${dsEntry.source || "baked"}`);
+    }
+  }
   // FALLBACK: live per-brand Wikipedia file search (quizLore heuristic)
   const img = await quizLore.wikipediaLogoImage(brand.wiki, 640, brand.name).catch(() => null);
   if (!img || !img.url) return null;
