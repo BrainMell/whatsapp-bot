@@ -554,7 +554,11 @@ async function buildThemeSongQuestionEntry(entry, others, difficulty, goService,
   const searchWords = searchN.split(" ").filter((w) => w.length > 3);
   const overlapWords = searchWords.filter((w) => metaTitle.includes(w)).length;
   const overlap = metaTitle.includes(showN) || (searchWords.length && overlapWords >= Math.min(2, searchWords.length));
-  if (!overlap) { audioCache.markFail(cacheKey); return null; }
+  // 2026-10-10 preplanned pack: mustTitleAny already verified the canonical
+  // title (Deezer anchors carry SHORT titles like "Dragonborn" that can never
+  // satisfy the search-phrase overlap designed for YouTube video titles) -
+  // mustTitleAny supersedes the overlap gate; pool entries unchanged.
+  if (!overlap && !Array.isArray(entry.mustTitleAny)) { audioCache.markFail(cacheKey); return null; }
   const fullOk = !Number.isFinite(info.fullBytes) || info.fullBytes >= 50 * 1024;
   let clip = null;
   if (info.clipped) {
