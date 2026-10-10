@@ -38,6 +38,12 @@ const ENEMY_DIR = path.join(RPGASSET, 'enemies');
 const ENEMY_ABYSS_DIR = path.join(ENEMY_DIR, 'abyss');          // new sprites, by NAME
 const ENV_ABYSS_DIR = path.join(RPGASSET, 'environment', 'abyss'); // boss-room hall pool
 const ENV_ABYSS_REG_DIR = path.join(ENV_ABYSS_DIR, 'regular');     // regular-encounter side-stage pool
+// 🕳️ round-13 (owner 02:56Z image brief): the NEW abyss bestiary — 20
+// image-3-family sprites (violet/crimson pixel demons). Lives in its own
+// subdir so resolveEnemyArt's by-name check at the enemies/abyss/ ROOT can
+// never see it (the mob and boss pools share 10 ids — a root-level
+// `<id>.png` would leak into the FROZEN boss composition).
+const ENEMY_BESTIARY_DIR = path.join(ENEMY_ABYSS_DIR, 'regular_bestiary');
 const UI_DIR = path.join(RPGASSET, 'ui');
 
 const W = 1200, H = 900;      // encounter scene canvas (matches roomScene — HUD transplant)
@@ -140,6 +146,47 @@ async function loadBg(file, dir = ENV_ABYSS_DIR) {
 // NOTE: enemies/abyss/ files never shift the enemies/ C-locale index that
 // backs ABYSS_SPRITE_MAP + the Go service.
 const ABYSS_ART_OVERRIDES = {};
+
+// ── 🕳️ round-13 REGULAR-ONLY art map (owner 02:56Z: "the enemies in the 3rd
+// image? Make or find about 20 of those ... this is for regular encounters").
+// Read ONLY by the side path (planCombatLayout style 'side'); the boss path
+// keeps calling resolveEnemyArt, so boss rooms render the approved
+// amalgamation art even for the 10 shared ids. Files live in
+// enemies/abyss/regular_bestiary/ and are audited sprites (transparent,
+// abyss-graded, per-sprite facing recorded in ENEMY_FACING).
+const ABYSS_REGULAR_ART = {
+    MUTATED_HOUND: 'mutated_hound.png',
+    SHADOW_STALKER: 'shadow_stalker.png',
+    VENOM_SPIDER: 'venom_spider.png',
+    VOID_CORRUPTED: 'void_corrupted.png',
+    BLOOD_REAVER: 'blood_reaver.png',
+    VOID_HARBINGER: 'void_harbinger.png',
+    MUTATED_OVERSEER: 'mutated_overseer.png',
+    INFECTED_COLOSSUS: 'infected_colossus.png',
+    CORRUPTED_GUARDIAN: 'corrupted_guardian.png',
+    ELDER_CHAOS: 'elder_chaos.png',
+    PRIMORDIAL_CHAOS: 'primordial_chaos.png',
+    ELEMENTAL_ARCHON: 'elemental_archon.png',
+    VOID_TITAN: 'void_titan.png',
+    ABYSSAL_GOD: 'abyssal_god.png',
+    // round-13 new ids (image-3 homages: Gloom Brute / Crawler / Void Wraith)
+    GLOOM_BRUTE: 'gloom_brute.png',
+    DUSK_CRAWLER: 'dusk_crawler.png',
+    NIGHT_WRAITH: 'night_wraith.png',
+    CRIMSON_DEVOURER: 'crimson_devourer.png',
+    HOLLOW_SERAPH: 'hollow_seraph.png',
+    ABYSS_WEAVER: 'abyss_weaver.png',
+};
+function resolveEnemyArtRegular(enemy) {
+    const id = enemyIdOf(enemy);
+    if (id && ABYSS_REGULAR_ART[id]) {
+        const f = ABYSS_REGULAR_ART[id];
+        if (fs.existsSync(path.join(ENEMY_BESTIARY_DIR, f))) {
+            return { dir: ENEMY_BESTIARY_DIR, file: f };
+        }
+    }
+    return resolveEnemyArt(enemy);   // fallback chain unchanged (variants etc.)
+}
 function enemyIdOf(enemy) {
     const raw = String((enemy && (enemy.bossId || enemy.id)) || '');
     if (raw && !raw.startsWith('abyss_')) return raw.toUpperCase().replace(/\s+/g, '_');
@@ -366,6 +413,33 @@ const HIT_GLOW = 'rgba(255,64,32,0.88)';
 // audit at 6x of all 14 live-pool ids: everything else is front-facing or
 // right-biased (MUTATED_HOUND mirror-diff 0.686 → symmetric front face).
 const ENEMY_FACES_LEFT = new Set(['SHADOW_STALKER', 'ELDER_CHAOS']);  // hybrides (1) wolf leans left · calamaties (1) crest/eyes lean left
+
+// ── per-enemy facing registry (owner round-13, 02:56Z: "it's clear not all
+// of them will be facing the same direction so don't make a universal rule,
+// or do that but leave head room to tweak individuals") — THIS is the
+// headroom: one row per bestiary sprite, audited at 6× head-crop zoom after
+// generation. 'L' = art natively faces LEFT · 'R' = faces RIGHT ·
+// 'F' = front-facing (never flipped). The flip decision reads THIS table
+// first; ENEMY_FACES_LEFT above stays as the legacy-art fallback.
+// Flip rule on the mirrored stage (enemy wing RIGHT, facing LEFT):
+//   flip = nativeFacing === 'R'. Tweak one row → one sprite turns.
+const ENEMY_FACING = {
+    // audited 'L' (side-profile heads, 3x head-crop pass 2026-10-10):
+    MUTATED_HOUND: 'L', SHADOW_STALKER: 'L', VENOM_SPIDER: 'L',
+    ABYSSAL_GOD: 'L', DUSK_CRAWLER: 'L', CRIMSON_DEVOURER: 'L',
+    // audited 'F' (front-facing — never flipped):
+    VOID_CORRUPTED: 'F', BLOOD_REAVER: 'F', VOID_HARBINGER: 'F',
+    MUTATED_OVERSEER: 'F', INFECTED_COLOSSUS: 'F', CORRUPTED_GUARDIAN: 'F',
+    ELDER_CHAOS: 'F', PRIMORDIAL_CHAOS: 'F', ELEMENTAL_ARCHON: 'F',
+    VOID_TITAN: 'F', GLOOM_BRUTE: 'F', NIGHT_WRAITH: 'F',
+    HOLLOW_SERAPH: 'F', ABYSS_WEAVER: 'F',
+};
+function enemyNativeFacing(id) {
+    const key = String(id || '').toUpperCase();
+    if (ENEMY_FACING[key]) return ENEMY_FACING[key];
+    if (ENEMY_FACES_LEFT.has(key)) return 'L';
+    return 'F';   // legacy default: front-facing amalgamations never flip
+}
 // 2026-10-10 round-8 FIX (owner: "some summos facing the wrong direction"):
 // every species below was re-verified on a 2× labeled zoom sheet with a
 // center bisector — boar's tusks point RIGHT, giant's mace and yeti's club
@@ -403,6 +477,15 @@ const BG_META = {
     // (mist_hollow_abyss removed from the pool by owner ruling 2026-10-10 —
     //  file deleted; entry kept out so a stray copy can never be staged)
     'violet_sanctum_abyss.png': { floorTop: 0.50, floorBottom: 0.985, vp: [0.50, 0.47], tags: ['plaza', 'sanctum'], suit: ['ethereal', 'arcane', 'flying', 'brute', 'undead'] },
+    // 🕳️ round-13 (owner 02:56Z image-2 brief: dusk-wasteland inspiration,
+    // "different and unique maps", keep the existing three): five NEW
+    // crimson-dusk stages generated from the owner's reference, floor bands
+    // measured on the 1920x1440 renders (zoom pass 2026-10-10)
+    'crimson_dunes_abyss.png':      { floorTop: 0.42, floorBottom: 0.985, vp: [0.50, 0.30], tags: ['dunes', 'open'],     suit: ['beast', 'brute', 'undead', 'flying'] },
+    'ruined_causeway_abyss.png':    { floorTop: 0.44, floorBottom: 0.985, vp: [0.50, 0.38], tags: ['causeway', 'gate'],  suit: ['brute', 'undead', 'arcane', 'beast'] },
+    'bone_fields_abyss.png':        { floorTop: 0.44, floorBottom: 0.985, vp: [0.44, 0.38], tags: ['basin', 'bones'],    suit: ['undead', 'beast', 'ethereal'] },
+    'obsidian_ridge_abyss.png':     { floorTop: 0.40, floorBottom: 0.985, vp: [0.50, 0.28], tags: ['volcanic', 'ridge'], suit: ['brute', 'beast', 'arcane'] },
+    'sunken_amphitheater_abyss.png': { floorTop: 0.50, floorBottom: 0.90, vp: [0.50, 0.42], tags: ['arena', 'tiered'],   suit: ['brute', 'undead', 'ethereal', 'arcane', 'flying', 'beast', 'aquatic'] },
 };
 // creature → habitat (drives stage compatibility; audit §5 "choose
 // backgrounds by tag compatibility with the enemy/summon set")
@@ -413,6 +496,9 @@ const ENEMY_HABITAT = {
     STORM_CALLER: 'ethereal', VOID_HARBINGER: 'ethereal', BLOOD_REAVER: 'undead', ANCIENT_GUARDIAN: 'arcane',
     ELDER_CHAOS: 'ethereal', PRIMORDIAL_CHAOS: 'ethereal', VOID_CORRUPTED: 'undead',
     RABID_RAT: 'beast', SLIME: 'aquatic',
+    // round-13 bestiary ids
+    GLOOM_BRUTE: 'brute', DUSK_CRAWLER: 'beast', NIGHT_WRAITH: 'flying',
+    CRIMSON_DEVOURER: 'beast', HOLLOW_SERAPH: 'ethereal', ABYSS_WEAVER: 'beast',
 };
 const SUMMON_HABITAT = {
     BAT: 'flying', DINO: 'beast', DRAGON: 'flying', GHOST: 'ethereal', SNAKE: 'beast',
@@ -427,10 +513,14 @@ const SUMMON_HABITAT = {
 // at the same mass as the hound. Default 1.0 for unmapped ids.
 const ENEMY_SIZE = {
     CAVE_BAT: 0.78, EMBER_SPAWN: 0.85, FROST_WISP: 0.86, STONE_HULK: 1.08,
-    MUTATED_HOUND: 1.06, CRYSTAL_GOLEM: 1.10, SHADOW_STALKER: 1.02, VENOM_SPIDER: 0.80,
+    MUTATED_HOUND: 0.90, CRYSTAL_GOLEM: 1.10, SHADOW_STALKER: 0.90, VENOM_SPIDER: 0.74,
     INFERNO_KNIGHT: 1.06, TIDAL_FURY: 0.95, BOULDER_TITAN: 1.12, GLACIAL_WRAITH: 0.92,
     STORM_CALLER: 0.95, VOID_HARBINGER: 0.98, BLOOD_REAVER: 1.00, ANCIENT_GUARDIAN: 1.10,
     ELDER_CHAOS: 1.15, PRIMORDIAL_CHAOS: 1.15, VOID_CORRUPTED: 1.05,
+    // round-13 bestiary ids — wide quadrupeds carry lower mass muls so their
+    // content width stays inside the right-wing corridor (hound w/h ~1.4)
+    GLOOM_BRUTE: 1.10, DUSK_CRAWLER: 0.85, NIGHT_WRAITH: 0.80,
+    CRIMSON_DEVOURER: 0.90, HOLLOW_SERAPH: 0.95, ABYSS_WEAVER: 0.88,
 };
 const SUMMON_SIZE = {
     DRAGON: 1.18, GIANT: 1.10, FIREGUARD: 1.05, YETI: 1.05, TIDALMAW: 1.00, OCTOPUS: 1.00,
@@ -550,9 +640,14 @@ async function planCombatLayout(state, opts = {}) {
         return plan;
     }
 
-    // ══ SIDE PATH (regular encounters) — rebuilt per the owner's visual
-    // audit: slot system on the painted floor plane, depth-scaled formation
-    // for 1/2/3 enemies, normalized facing, per-entity plates, HUD no-go. ══
+    // ══ SIDE PATH (regular encounters) — 🕳️ round-13 REBUILD (owner 02:56Z
+    // image brief: "ignore the hubs and hp and bars in the first image, only
+    // the position and style ... something like this as the default abyss
+    // encounter"): the owner's Battle-Example composition — PLAYER FRONT-LEFT
+    // (bottom-left of the open stage, above the frozen HUD panel), enemy wing
+    // STAGGERED DOWN THE RIGHT SIDE (back-top → front-bottom), party arc
+    // falling in behind the hero. Mirrors the round-4 side layout; every
+    // depth/size math is preserved, only the aisles are flipped. ══
     // Stage pick: tag-compatible with what actually stands on it (§5).
     const wildKey = planWildSpeciesKey(state, enemy);
     const habitat = isWildSummon ? summonHabitatOf(wildKey) : enemyHabitatOf(enemyIdOf(enemy));
@@ -572,10 +667,14 @@ async function planCombatLayout(state, opts = {}) {
     // sits at fx 0.494 — the two rows were designed into the same corridor
     // and the resolver oscillated (2-pass cap) instead of converging. With
     // the pack fully inside the enemy corridor, the ally row never meets it.
+    // formation slots — MIRRORED round-13: the enemy wing marches down the
+    // RIGHT half (active front-low, pack deeper-right + higher), same depth
+    // ladder as the approved layout. The active slot clears the player's box
+    // (player halfW ~70-90 @ fx 0.500) and stays off the frame edge.
     const FORMATIONS = {
-        1: [{ fx: 0.395, fy: 0.705, mul: 1.00 }],
-        2: [{ fx: 0.400, fy: 0.712, mul: 1.00 }, { fx: 0.258, fy: 0.658, mul: 0.85 }],
-        3: [{ fx: 0.400, fy: 0.712, mul: 1.00 }, { fx: 0.292, fy: 0.652, mul: 0.85 }, { fx: 0.182, fy: 0.638, mul: 0.78 }],
+        1: [{ fx: 0.705, fy: 0.700, mul: 0.97 }],
+        2: [{ fx: 0.690, fy: 0.708, mul: 0.97 }, { fx: 0.830, fy: 0.655, mul: 0.82 }],
+        3: [{ fx: 0.675, fy: 0.712, mul: 0.97 }, { fx: 0.795, fy: 0.660, mul: 0.83 }, { fx: 0.892, fy: 0.620, mul: 0.72 }],
     };
     // ally row beside/behind the player (audit: "never on top of the
     // player's body"); a third ally is supported for the test matrix.
@@ -596,16 +695,24 @@ async function planCombatLayout(state, opts = {}) {
     // mid lane keeps the approved single-ally position, and the 3rd summon
     // flanks FRONT-RIGHT of the player in the empty foreground. Wide species
     // get a content-width lane cap so a boar can't outgrow its lane.
+    // ally arc — MIRRORED round-13: the party falls in BEHIND the hero,
+    // arcing up-LEFT across the band ABOVE the HUD panel (feet ≤ 0.71H so
+    // nobody sinks into the panel; the HUD no-go lift below stays as a
+    // belt-and-braces guard for odd art aspect ratios).
     const ALLY_ARC = {
-        1: [{ fx: 0.612, fy: 0.760, mul: 0.62 }],
-        2: [{ fx: 0.612, fy: 0.760, mul: 0.62 }, { fx: 0.868, fy: 0.806, mul: 0.60 }],
-        3: [{ fx: 0.545, fy: 0.735, mul: 0.60 }, { fx: 0.630, fy: 0.758, mul: 0.62 }, { fx: 0.868, fy: 0.806, mul: 0.60 }],
+        1: [{ fx: 0.400, fy: 0.700, mul: 0.62 }],
+        2: [{ fx: 0.415, fy: 0.702, mul: 0.62 }, { fx: 0.300, fy: 0.660, mul: 0.58 }],
+        3: [{ fx: 0.425, fy: 0.706, mul: 0.60 }, { fx: 0.322, fy: 0.664, mul: 0.57 }, { fx: 0.230, fy: 0.622, mul: 0.54 }],
     };
     const ALLY_LANE_MAXW = 170;   // px of horizontal lane per summon (content)
-    const PLAYER_SLOT = { fx: 0.748, fy: 0.818 };
+    // the hero: front-LEFT of the open stage (Battle-Example position), feet
+    // clear of the HUD panel's right edge even for cloak-wide class sprites
+    // (measured ROGUE halfW ≈ 101 → 612 − 101 = 511 > 505).
+    const PLAYER_SLOT = { fx: 0.510, fy: 0.818 };
 
     const queue = (state.abyssRun && Array.isArray(state.abyssRun.packQueue) && !isWildSummon)
         ? state.abyssRun.packQueue.filter(Boolean) : [];
+
     const formation = FORMATIONS[Math.min(3, 1 + queue.length)] || FORMATIONS[1];
 
     // ── resolve every actor's art + size FIRST (bboxes feed collision) ──
@@ -615,7 +722,7 @@ async function planCombatLayout(state, opts = {}) {
     for (const m of members) {
         if (!m.e || !m.slot) continue;
         if (m.kind === 'pack' && m.e.isDead) continue;
-        const art = m.kind === 'wild' ? null : resolveEnemyArt(m.e);
+        const art = m.kind === 'wild' ? null : resolveEnemyArtRegular(m.e);
         const speciesKey = m.kind === 'wild' ? summonFaceKey(plan.wildSpecies) : null;
         const sizeMul = m.kind === 'wild' ? summonSizeOf(speciesKey) : enemySizeOf(enemyIdOf(m.e));
         const cx = SX(m.slot.fx), gy = SY(m.slot.fy);
@@ -632,12 +739,14 @@ async function planCombatLayout(state, opts = {}) {
             art,
             speciesKey,
             cx, gy, h,
-            // facing rule (owner): enemies face RIGHT toward the player —
-            // flip only art that natively looks left; wild flips finalize
+            // facing rule (owner, round-13 mirrored stage): the enemy wing
+            // stands RIGHT and faces LEFT toward the hero — flip only art
+            // that natively looks RIGHT (per-enemy registry, see
+            // ENEMY_FACING: 'F' front art never flips); wild flips finalize
             // after its own sprite resolves below
             flip: m.kind === 'wild'
-                ? SUMMON_FACES_LEFT.has(speciesKey)
-                : ENEMY_FACES_LEFT.has(enemyIdOf(m.e)),
+                ? SUMMON_FACES_RIGHT.has(speciesKey)
+                : enemyNativeFacing(enemyIdOf(m.e)) === 'R',
             name: safeName(String((m.e && m.e.name) || '')
                 .replace(/\s*\(pack\s*\d+\/\d+\)\s*$/i, ''), 22),
             alpha: m.kind === 'pack' ? 0.94 : 1,
@@ -649,7 +758,9 @@ async function planCombatLayout(state, opts = {}) {
         const art = await resolveSummonArt(plan.wildSpecies);
         if (art) {
             wildActor.art = { img: art.img, file: art.file };
-            wildActor.flip = SUMMON_FACES_LEFT.has(summonFaceKey(art.file));
+            // wild takes the ENEMY side (right wing) → faces LEFT → mirror
+            // only natively-right summon art
+            wildActor.flip = SUMMON_FACES_RIGHT.has(summonFaceKey(art.file));
         }
     }
     // deployed ally summons — the party arc (see ALLY_ARC above)
@@ -666,20 +777,22 @@ async function planCombatLayout(state, opts = {}) {
                 role: 'ally', ref: s, art: art ? { img: art.img, file: art.file } : null,
                 cx, gy,
                 h: Math.round(perspH(gy) * slot.mul * 0.96),
-                // party side faces LEFT — mirror only the natively-right art
-                flip: art ? SUMMON_FACES_RIGHT.has(summonFaceKey(art.file)) : false,
+                // party side faces RIGHT (toward the enemy wing) — mirror
+                // only the natively-left art
+                flip: art ? SUMMON_FACES_LEFT.has(summonFaceKey(art.file)) : false,
                 name: safeName(s.name, 16),
                 speciesKey,
                 alpha: 0.96,
             });
         }
     } catch (e) { /* ally art is cosmetic — never fail the scene for it */ }
-    // player — front-right lower slot, facing LEFT toward the enemy cluster
+    // player — front-left slot (Battle-Example position), native art faces
+    // RIGHT toward the enemy wing (the old side layout mirrored it left)
     actors.push({
         role: 'player', ref: me,
         cx: SX(PLAYER_SLOT.fx), gy: SY(PLAYER_SLOT.fy),
         h: Math.round(perspH(SY(PLAYER_SLOT.fy)) * 0.94),
-        flip: true, name: safeName((me && me.name) || 'You', 16),
+        flip: false, name: safeName((me && me.name) || 'You', 16),
         file: playerSpriteFileFor(me),
     });
 
@@ -718,6 +831,16 @@ async function planCombatLayout(state, opts = {}) {
         measured.push({ a, halfW, top: a.gy - a.h, bottom: a.gy, left: a.cx - halfW, right: a.cx + halfW });
         a.halfW = halfW;   // actors carry it too — the scatter below reads it
     }
+    // NaN HARDENING (round-13): a broken/unreadable asset must never poison
+    // the collision resolver (NaN halfW turns every clamp into NaN and the
+    // next pass moves actors to NaN). Fall back to the depth estimate.
+    for (const m of measured) {
+        if (!Number.isFinite(m.halfW) || m.halfW <= 0) {
+            m.halfW = Math.max(12, Math.round(m.a.h * 0.42));
+            m.a.halfW = m.halfW;
+            m.left = m.a.cx - m.halfW; m.right = m.a.cx + m.halfW;
+        }
+    }
     // HUD no-go zone (roomScene _hubGeom: panel spans x −26..505, y 644..900)
     const HUD = { left: -26, right: 505, top: 644, bottom: H };
     for (const m of measured) {
@@ -750,19 +873,21 @@ async function planCombatLayout(state, opts = {}) {
     for (const m of measured) {
         if (m.a.role === 'player' || m.a.role === 'active') { m.lo = m.a.cx; m.hi = m.a.cx; continue; }
         if (m.a.role === 'ally') {
-            // allies live between the enemy corridor's right edge and the
-            // player's box — the active enemy is an anchor, so the ally row
-            // retreats right, never into the enemy front
-            m.lo = enemyBox0 ? Math.round(enemyBox0.right + 14) : Math.round(W * 0.40);
-            m.hi = playerBox0 ? Math.round(playerBox0.left - m.halfW - 16) : Math.round(W * 0.80);
+            // mirrored stage: the party arcs BEHIND-LEFT of the hero, above
+            // the HUD panel — retreat LEFT, never into the enemy wing
+            m.lo = Math.round(W * 0.20);
+            m.hi = playerBox0 ? Math.round(playerBox0.left - m.halfW - 16) : Math.round(W * 0.45);
             if (m.hi < m.lo) m.hi = m.lo;
-        } else {                    // pack / wild — the enemy corridor
-            m.lo = Math.round(W * 0.07);
-            m.hi = Math.round(W * 0.60);
+        } else {                    // pack / wild — the enemy corridor (right wing)
+            m.lo = Math.round(W * 0.40);
+            // RIGHT-EDGE GUARD: a wide back-row body must never render past
+            // the frame (12px margin) — clamp the corridor to its own width
+            m.hi = Math.min(Math.round(W * 0.92), Math.round(1188 - m.halfW));
+            if (m.hi < m.lo) m.hi = m.lo;
         }
     }
     const rebox = (m) => { m.left = m.a.cx - m.halfW; m.right = m.a.cx + m.halfW; m.top = m.a.gy - m.a.h; m.bottom = m.a.gy; };
-    const sideOf = (m) => (m.a.role === 'ally' || m.a.role === 'player') ? 1 : -1;   // +1 party, −1 enemy corridor
+    const sideOf = (m) => (m.a.role === 'ally' || m.a.role === 'player') ? -1 : 1;   // −1 party (left), +1 enemy wing (right)
     for (let pass = 0; pass < 6; pass++) {
         let moved = false;
         for (let i = 0; i < byDepth.length; i++) {
@@ -1948,7 +2073,8 @@ module.exports = {
     renderAbyssCombat, renderAbyssFloorCard, renderAbyssFloorCardPng, renderAbyssResultCard, clearLayout,
     planCombatLayout, bgFileForFloor, bgList, bgListRegular, bgDirFor, combatBgList,
     bgForEncounter, liveEntities, BG_META, coverTransform,
-    enemyIdOf, resolveEnemyArt, resolveSummonArt,
+    enemyIdOf, resolveEnemyArt, resolveEnemyArtRegular, resolveSummonArt,
+    enemyNativeFacing, ABYSS_REGULAR_ART, ENEMY_FACING, ABYSS_ART_OVERRIDES,
     isBossFloorMirror,
     HIT_TINT, HIT_GLOW,
     isAnimatedCard: (b) => { try { return require('../utils/gif89a').isGifBuffer(b); } catch (e) { return false; } },

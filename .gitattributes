@@ -42,3 +42,7 @@ core/rpgasset/environment/abyss/regular/*.png -filter -diff -merge -text
 # everywhere (reset --hard deploys would otherwise serve LFS pointers — same
 # rule as summons/sparklinlabs above)
 core/rpgasset/summons/sparklinlabs_abyss/*.png -filter -diff -merge -text
+# 2026-10-10 round-13: the new abyss bestiary (side-path-only sprites) must
+# be real pixels everywhere — reset --hard deploys would otherwise re-stub
+# them as LFS pointers (same hazard as enemies/abyss above)
+core/rpgasset/enemies/abyss/regular_bestiary/*.png -filter -diff -merge -text
