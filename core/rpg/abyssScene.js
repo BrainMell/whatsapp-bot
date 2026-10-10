@@ -736,8 +736,8 @@ async function planCombatLayout(state, opts = {}) {
     // half stays the enemy wing; the open center aisle stays open.
     const FORMATIONS = {
         1: [{ fx: 0.735, fy: 0.706, mul: 1.00 }],
-        2: [{ fx: 0.745, fy: 0.710, mul: 1.00 }, { fx: 0.620, fy: 0.645, mul: 0.82 }],
-        3: [{ fx: 0.750, fy: 0.712, mul: 1.00 }, { fx: 0.635, fy: 0.650, mul: 0.82 }, { fx: 0.552, fy: 0.592, mul: 0.70 }],
+        2: [{ fx: 0.745, fy: 0.710, mul: 1.00 }, { fx: 0.650, fy: 0.640, mul: 0.82 }],
+        3: [{ fx: 0.750, fy: 0.712, mul: 1.00 }, { fx: 0.665, fy: 0.642, mul: 0.82 }, { fx: 0.605, fy: 0.578, mul: 0.70 }],
     };
     // ally row beside/behind the player (audit: "never on top of the
     // player's body"); a third ally is supported for the test matrix.
@@ -945,16 +945,16 @@ async function planCombatLayout(state, opts = {}) {
             // round-14: the party stands BETWEEN the hero and the enemy wing
             // (frozen player-left / summon-right) — retreat LEFT toward the
             // hero when squeezed, never into the enemy corridor.
-            // round-15: hi drops to 0.505W — the enemy back rows now step
-            // toward the vanishing point (down to 0.552W), so the ally arc
-            // must stop short of them and keep the center aisle open.
+            // round-15: hi 0.55W — the enemy back rows climb toward the
+            // vanishing point (up-biased ladder, deepest slot 0.605W), so
+            // the ally arc stops short of them and the center aisle opens.
             m.lo = playerBox0 ? Math.max(Math.round(W * 0.155), playerBox0.right + 14) : Math.round(W * 0.155);
-            m.hi = Math.round(W * 0.505);
+            m.hi = Math.round(W * 0.55);
             if (m.hi < m.lo) m.hi = m.lo;
         } else {                    // pack / wild — the enemy corridor (right wing)
-            // round-15: lo drops to 0.535W — back-row slots retreat toward
+            // round-15: lo drops to 0.55W — back-row slots retreat toward
             // the vanishing point instead of the frame edge
-            m.lo = Math.round(W * 0.535);
+            m.lo = Math.round(W * 0.55);
             // RIGHT-EDGE GUARD: a wide back-row body must never render past
             // the frame (12px margin) — clamp the corridor to its own width
             m.hi = Math.min(Math.round(W * 0.92), Math.round(1188 - m.halfW));

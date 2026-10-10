@@ -114,9 +114,13 @@ check('bestiary sprite bytes are real PNGs (deploy-safe, not LFS stubs)',
         const b = require('fs').readFileSync(path.join(BEST_DIR, 'gloom_brute.png'));
         return b[0] === 0x89 && b[1] === 0x50 && b.length > 20000;
     })());
-check('facing registry: audited L set', ['MUTATED_HOUND', 'SHADOW_STALKER', 'VENOM_SPIDER', 'ABYSSAL_GOD', 'DUSK_CRAWLER', 'CRIMSON_DEVOURER']
+// round-15 bisector audit: L set (regenerated art delivered left-facing),
+// R set (misfiled 'F' rows now flip to face the hero), F set (true frontals)
+check('facing registry: audited L set', ['MUTATED_HOUND', 'SHADOW_STALKER', 'ABYSSAL_GOD', 'DUSK_CRAWLER', 'CRIMSON_DEVOURER', 'ABYSS_WEAVER', 'VOID_HARBINGER', 'CORRUPTED_GUARDIAN']
     .every((id) => abyssScene.enemyNativeFacing(id) === 'L'));
-check('facing registry: audited F set (front-facing never flips)', ['GLOOM_BRUTE', 'PRIMORDIAL_CHAOS', 'HOLLOW_SERAPH', 'ELDER_CHAOS']
+check('facing registry: audited R set (natively right-facing → flip to face the hero)', ['ELEMENTAL_ARCHON', 'GLOOM_BRUTE', 'MUTATED_OVERSEER']
+    .every((id) => abyssScene.enemyNativeFacing(id) === 'R'));
+check('facing registry: audited F set (front-facing never flips)', ['VENOM_SPIDER', 'PRIMORDIAL_CHAOS', 'HOLLOW_SERAPH', 'ELDER_CHAOS', 'NIGHT_WRAITH', 'VOID_CORRUPTED']
     .every((id) => abyssScene.enemyNativeFacing(id) === 'F'));
 check('boss path still resolves the OLD art for shared ids (bestiary isolation)',
     (() => { const a = abyssScene.resolveEnemyArt({ name: 'ELDER CHAOS', bossId: 'ELDER_CHAOS', spriteIndex: 24 });
@@ -341,11 +345,11 @@ check('pack fight: queued members join the stage', pack.pack.length === 2);
         pwild.enemy && pwild.enemy.art && pwild.enemy.art.file === 'dragon.png');
     check('ally art = the game\'s own bat sprite (bat.png)',
         pwild.allies.length === 1 && pwild.allies[0].art && pwild.allies[0].art.file === 'bat.png');
-    // 2026-10-10 zoom-sheet verification: dragon.png faces RIGHT natively.
-    // round-13 mirror: a wild dragon on the RIGHT enemy wing must face LEFT
-    // toward the hero — natively-right art therefore FLIPS now.
-    check('dragon natively faces RIGHT (verified zoom sheet) → wild dragon flips to face LEFT on the right wing',
-        pwild.enemy.flip === true);
+    // round-15 render-proof (r14_A3): dragon.png faces LEFT natively — the
+    // ally Drake stared at the player's back. A wild dragon on the RIGHT
+    // enemy wing therefore faces the hero with NO flip.
+    check('dragon natively faces LEFT (r15 render-proof) → wild dragon faces the hero on the right wing unflipped',
+        pwild.enemy.flip === false);
     check('allies stand in the arc ABOVE the HUD panel (feet clear of panel top 644)',
         pwild.allies.every((a) => a.gy < 646));
 
