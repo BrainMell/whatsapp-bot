@@ -1034,6 +1034,14 @@ async function planCombatLayout(state, opts = {}) {
     // AWAY — allies retreat toward the hero (they have the whole arc to
     // lo), pack retreats toward the wing edge. Anchors never move.
     const prio = (m) => (m.a.role === 'player' ? 0 : m.a.role === 'active' ? 1 : m.a.role === 'pack' ? 2 : 3);
+    // (tryMove above is scoped to the pass loop — the sweep carries its own mover)
+    const sweepMove = (m, dir, ox) => {
+        if (m.lo === m.hi) return false;
+        const room = dir < 0 ? m.a.cx - m.lo : m.hi - m.a.cx;
+        if (room <= 4) return false;
+        m.a.cx = Math.max(m.lo, Math.min(m.hi, m.a.cx + dir * (ox - TOL + 10)));
+        rebox(m); return true;
+    };
     for (let sweep = 0; sweep < 5; sweep++) {
         let any = false;
         for (let i = 0; i < byDepth.length; i++) {
@@ -1046,13 +1054,13 @@ async function planCombatLayout(state, opts = {}) {
                 const other = mover === A ? B : A;
                 if (mover.a.role === 'player' || mover.a.role === 'active') continue;
                 const dir = mover.a.cx <= other.a.cx ? -1 : 1;
-                if (tryMove(mover, dir)) { any = true; continue; }
+                if (sweepMove(mover, dir, ox)) { any = true; continue; }
                 // pinned in that direction: allow a bounded overshoot past the
                 // corridor edge (24px) before giving up — the stress case parks
                 // the snake exactly at hi while the spider needs the lane
                 const savedLo = mover.lo, savedHi = mover.hi;
                 if (dir < 0) mover.lo = Math.max(8, mover.lo - 24); else mover.hi = mover.hi + 24;
-                const movedNow = tryMove(mover, dir);
+                const movedNow = sweepMove(mover, dir, ox);
                 mover.lo = savedLo; mover.hi = savedHi;
                 if (movedNow) { any = true; continue; }
                 const m = mover;
