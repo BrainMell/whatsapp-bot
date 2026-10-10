@@ -64,7 +64,9 @@ function enemySheetList() {
 //   regular pool environment/abyss/regular/*.png — abyss-themed side stages
 //               edited from the owner's four CIRCLED foundations (dark_hall /
 //               drowned_vault / mist_hollow / violet_sanctum) through the
-//               owner-authorized style-prompt iteration loop
+//               owner-authorized style-prompt iteration loop. 🕳️ 2026-10-10
+//               owner (01:56Z): mist_hollow OUT of the pool ("REMOVE IT FROM
+//               THE FUCKING POOL") — file deleted, refs gone, pool = 3.
 let _bgList = null, _bgListReg = null;
 function bgList() {
     if (_bgList) return _bgList;
@@ -357,7 +359,13 @@ const HIT_GLOW = 'rgba(255,64,32,0.88)';
 // gets flipped. ⚠️ Round-4 bug this table fixes: DRAGON was eyeballed as
 // left-facing, so the wild-summon flip turned it AWAY from the player
 // (owner audit defect C). The processed sheet shows it faces RIGHT.
-const ENEMY_FACES_LEFT = new Set(['SHADOW_STALKER']);              // hybrides (1) wolf leans left
+// 🕳️ 2026-10-10 round-12 FIX (owner, 01:56Z: "some enemies face the wrong
+// direction"): ELDER_CHAOS (calamaties (1)) is a LEFT-leaning profile — the
+// red crest sweeps left and the eye cluster sits left-of-center, so it was
+// rendering AWAY from the player (proof: owner's F19 screenshot). Head-crop
+// audit at 6x of all 14 live-pool ids: everything else is front-facing or
+// right-biased (MUTATED_HOUND mirror-diff 0.686 → symmetric front face).
+const ENEMY_FACES_LEFT = new Set(['SHADOW_STALKER', 'ELDER_CHAOS']);  // hybrides (1) wolf leans left · calamaties (1) crest/eyes lean left
 // 2026-10-10 round-8 FIX (owner: "some summos facing the wrong direction"):
 // every species below was re-verified on a 2× labeled zoom sheet with a
 // center bisector — boar's tusks point RIGHT, giant's mace and yeti's club
@@ -392,7 +400,8 @@ function planWildSpeciesKey(state, enemy) {
 const BG_META = {
     'dark_hall_abyss.png':      { floorTop: 0.50, floorBottom: 0.985, vp: [0.50, 0.47], tags: ['plaza', 'wide'],    suit: ['beast', 'brute', 'undead'] },
     'drowned_vault_abyss.png':  { floorTop: 0.50, floorBottom: 0.985, vp: [0.50, 0.48], tags: ['plaza', 'pit'],    suit: ['aquatic', 'undead', 'brute'] },
-    'mist_hollow_abyss.png':    { floorTop: 0.47, floorBottom: 0.985, vp: [0.50, 0.42], tags: ['corridor', 'arch'], suit: ['flying', 'ethereal', 'aquatic', 'beast'] },
+    // (mist_hollow_abyss removed from the pool by owner ruling 2026-10-10 —
+    //  file deleted; entry kept out so a stray copy can never be staged)
     'violet_sanctum_abyss.png': { floorTop: 0.50, floorBottom: 0.985, vp: [0.50, 0.47], tags: ['plaza', 'sanctum'], suit: ['ethereal', 'arcane', 'flying', 'brute', 'undead'] },
 };
 // creature → habitat (drives stage compatibility; audit §5 "choose
@@ -1722,8 +1731,13 @@ async function renderAbyssFloorCardPng(payload = {}) {
 async function renderAbyssResultCard(payload = {}) {
     try {
         ensureFonts();
-        const outcome = String(payload.outcome || 'EXTRACTED').toUpperCase() === 'FALLEN' ? 'FALLEN' : 'EXTRACTED';
+        // 🕳️ 2026-10-10 round-12: third outcome CLEARED — the per-floor
+        // victory moment (owner: "the old victory and defeat cards are being
+        // used for the abyss"). Same family, gold beam, floor-reward ledger.
+        const oc = String(payload.outcome || 'EXTRACTED').toUpperCase();
+        const outcome = oc === 'FALLEN' ? 'FALLEN' : (oc === 'CLEARED' ? 'CLEARED' : 'EXTRACTED');
         const fallen = outcome === 'FALLEN';
+        const cleared = outcome === 'CLEARED';
         const floor = Math.max(1, Number(payload.floor) || 1);
         const c = createCanvas(FW, FH);
         const ctx = c.getContext('2d');
@@ -1751,16 +1765,20 @@ async function renderAbyssResultCard(payload = {}) {
 
         // score pill
         const score = Math.max(0, Number(payload.score) || 0);
-        pillLocal(ctx, FW / 2, 330,
-            fallen ? `SCORE ${score.toLocaleString()} · -90% LOOT LOST` : `SCORE ${score.toLocaleString()} · 100% LOOT KEPT`,
-            'bold 22px "Cinzel", serif', 18,
+        const pillText = fallen
+            ? `SCORE ${score.toLocaleString()} · -90% LOOT LOST`
+            : cleared
+                ? `SCORE ${score.toLocaleString()} · FLOOR ${floor} CLEARED`
+                : `SCORE ${score.toLocaleString()} · 100% LOOT KEPT`;
+        pillLocal(ctx, FW / 2, 330, pillText, 'bold 22px "Cinzel", serif', 18,
             fallen ? 'rgba(30,10,12,0.94)' : 'rgba(24,16,40,0.94)',
             fallen ? 'rgba(212,80,60,0.85)' : 'rgba(139,97,195,0.85)',
             fallen ? '#f0c0b0' : '#cdbdf0');
 
-        // ascent light shaft (extracted) / red sink (fallen) behind the rings
-        // — tapered soft-edged beam + a light pool on the current ring, never
-        // a hard-edged rectangle (reviewer defect on the first render)
+        // ascent light shaft (extracted / cleared) / red sink (fallen) behind
+        // the rings — tapered soft-edged beam + a light pool on the current
+        // ring, never a hard-edged rectangle (reviewer defect on the first
+        // render). cleared beams gold like extracted: a victory moment.
         const CX = FW / 2;
         const CENTER_Y = 800;
         if (!fallen) {
@@ -1843,7 +1861,16 @@ async function renderAbyssResultCard(payload = {}) {
         }
 
         // ledger box (bottom, reference-style trim)
-        const ledgerRows = [
+        const ledgerRows = cleared
+            ? [
+                { label: 'XP EARNED', value: `+${Math.max(0, Number(payload.keptXp) || 0).toLocaleString()}` },
+                { label: 'ZENI EARNED', value: `+${Math.max(0, Number(payload.keptGold) || 0).toLocaleString()}` },
+                { label: 'RUNES', value: String(Math.max(0, Number(payload.runes) || 0)) },
+                { label: 'MONSTERS', value: String(Math.max(0, Number(payload.monstersKilled) || 0)) },
+                { label: 'BOSSES', value: String(Math.max(0, Number(payload.bossesKilled) || 0)) },
+                { label: 'DEPTH', value: `FLOOR ${floor} / 200` },
+            ]
+            : [
             { label: 'XP KEPT', value: `+${Math.max(0, Number(payload.keptXp) || 0).toLocaleString()}` },
             { label: 'ZENI KEPT', value: `+${Math.max(0, Number(payload.keptGold) || 0).toLocaleString()}` },
             { label: 'RUNES', value: String(Math.max(0, Number(payload.runes) || 0)) },
@@ -1876,7 +1903,9 @@ async function renderAbyssResultCard(payload = {}) {
         // flavor line (the old cards carried one — kept as game copy)
         ctx.font = 'italic 18px "Cinzel", serif';
         ctx.fillStyle = fallen ? 'rgba(220,150,130,0.6)' : 'rgba(180,170,205,0.6)';
-        ctx.fillText(fallen ? 'the abyss claims another' : 'a wise extraction', FW / 2, BY + BH + 44);
+        ctx.fillText(fallen ? 'the abyss claims another'
+            : cleared ? 'deeper it waits'
+            : 'a wise extraction', FW / 2, BY + BH + 44);
 
         return c.toBuffer('image/png');
     } catch (e) {

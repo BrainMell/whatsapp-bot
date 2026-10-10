@@ -7547,7 +7547,48 @@ async function endCombat(sock, victory, sessionKey) {
     }
   }
   try {
-    if (!endScreenSent && combatIntegration && combatIntegration.renderCombatEnd) {
+    // 🕳️ 2026-10-10 round-12 (owner, 01:56Z: "the old victory and defeat
+    // cards are being used for the abyss"): abyss battles end on the
+    // abyss-scene result card family, NEVER the Go VICTORY/DEFEAT portrait.
+    //   victory → CLEARED result card (floor reward ledger, same painter as
+    //             EXTRACTED/FALLEN — gold beam, ring stack, descender)
+    //   defeat  → the FALLEN card already renders in the abyss death path
+    //             below; the old DEFEATED portrait is skipped entirely.
+    if (state.isAbyss) {
+      try {
+        if (victory && state.abyssRun) {
+          const __run = state.abyssRun;
+          const __rewards = require('./abyssSystem').getFloorRewards(
+            state.abyssFloor, state.enemies[0]?.isBoss);
+          const __eco = require('./economy');
+          const __u = __eco.getUser(state.players[0]?.jid) || {};
+          const __clrBuf = await require('./abyssScene').renderAbyssResultCard({
+            outcome: 'CLEARED',
+            floor: state.abyssFloor || 1,
+            // same formula the leaderboard uses (floor*100 + kills*5), +1 for
+            // the kill that just landed (handleAbyssVictory increments later)
+            score: (state.abyssFloor || 1) * 100 + ((__run.monstersKilled || 0) + 1) * 5,
+            keptXp: Number(__rewards.xp) || 0,
+            keptGold: Number(__rewards.gold) || 0,
+            runes: Array.isArray(__run.lootAccumulator?.runes) ? __run.lootAccumulator.runes.length : 0,
+            monstersKilled: (__run.monstersKilled || 0) + 1,
+            bossesKilled: (__run.bossesKilled || 0) + (state.enemies[0]?.isBoss ? 1 : 0),
+            playerClassId: String((state.players[0].class && state.players[0].class.id) || state.players[0].class || 'FIGHTER').toUpperCase(),
+            playerSpriteIndex: Math.max(0, Math.floor(Number(state.players[0].spriteIndex) || 0)),
+          });
+          if (__clrBuf && __clrBuf.length > 100) {
+            await raceWithTimeout(
+              sock.sendMessage(state.chatId, { image: __clrBuf, caption }),
+              20000, 'abyssCleared.send',
+            );
+            endScreenSent = true;
+          }
+        }
+        // abyss defeat: no image here — FALLEN card comes from the death path
+      } catch (abyssCardErr) {
+        console.error('[Abyss] cleared card failed (non-fatal):', abyssCardErr.message);
+      }
+    } else if (!endScreenSent && combatIntegration && combatIntegration.renderCombatEnd) {
       END_DEBUG(`endCombat key=${sessionKey} victory=${victory} endScreen render+send start`);
       const endResult = await raceWithTimeout(
         combatIntegration.renderCombatEnd(

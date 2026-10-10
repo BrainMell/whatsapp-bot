@@ -56,8 +56,11 @@ check('deterministic per floor', abyssScene.bgFileForFloor(5) === abyssScene.bgF
 check('floors rotate the pool', abyssScene.bgFileForFloor(1) !== abyssScene.bgFileForFloor(2));
 check('combat selection stays inside combat pool', combat.includes(abyssScene.bgFileForFloor(9, true)));
 // round 4 (owner 10:19Z): boss rooms keep the hall pool EXCLUSIVELY; regular
-// encounters render the new abyss-themed side-stage pool (circled foundations)
-check('regular pool present (circled-foundation side stages)', regPool.length >= 4);
+// encounters render the abyss-themed side-stage pool (circled foundations).
+// 🕳️ round-12 (owner 2026-10-10 01:56Z): mist_hollow OUT — pool is 3.
+check('regular pool present (circled-foundation side stages)', regPool.length >= 3);
+check('mist_hollow is gone from the regular pool (owner ruling 2026-10-10)',
+    !regPool.some((f) => /mist_hollow/i.test(f)));
 check('regular pool is disjoint from the boss hall pool', regPool.every((f) => !all.includes(f)));
 check('boss style picks the hall pool', all.includes(abyssScene.bgFileForFloor(3, 'boss')));
 check('regular style picks the side-stage pool', regPool.includes(abyssScene.bgFileForFloor(3, 'regular')));

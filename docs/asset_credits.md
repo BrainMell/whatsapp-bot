@@ -35,8 +35,12 @@ Attribution for third-party art shipped with the bot / image services.
   to a 112-color palette for the flat-shaded pixel look. Base art © sparklinlabs
   (CC0); the abyss re-theme generations are in-repo as deploy-safe bytes.
   File lineage: `dark_hall_abyss.png` ← dark_hall (gen v2),
-  `drowned_vault_abyss.png` ← drowned_vault (v1), `mist_hollow_abyss.png` ←
-  mist_hollow (v1), `violet_sanctum_abyss.png` ← violet_sanctum (v2).
+  `drowned_vault_abyss.png` ← drowned_vault (v1), `violet_sanctum_abyss.png` ←
+  violet_sanctum (v2).
+- ~~**Mist hollow side stage** (`core/rpgasset/environment/abyss/regular/mist_hollow_abyss.png`)~~
+  **REMOVED 2026-10-10** (owner 01:56Z: "REMOVE IT FROM THE FUCKING POOL" —
+  the purple archway stage is out of the regular-encounter rotation; the file
+  is deleted and the stage map keeps no entry for it).
 - ~~**Abyss rat** (`core/rpgasset/enemies/abyss/abyss_rat.png`)~~ **REMOVED
   2026-10-09** (owner 08:43Z: only the front-facing amalgamation creatures
   belong in the abyss — the rat is a plain animal, not one of them).
