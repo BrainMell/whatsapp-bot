@@ -117,9 +117,21 @@ async function sparqlCandidates(limit = 2800, minSitelinks = 8) {
     ?item wikibase:sitelinks ?sl .
     FILTER(?sl >= ${minSitelinks})
   } ORDER BY DESC(?sl) LIMIT ${limit}`;
-  const r = await get(`https://query.wikidata.org/sparql?query=${encodeURIComponent(q)}&format=json`);
-  const rows = r.data?.results?.bindings || [];
-  return rows.map((b) => b.item.value.split("/").pop()).filter((id) => /^Q\d+$/.test(id));
+  // 💡 the big LIMIT query runs 60-90s server-side; the shared get() is 30s.
+  // 120s + 3 tries with backoff (wikidata also throttles heavy clients).
+  let lastErr = null;
+  for (let t = 0; t < 3; t++) {
+    try {
+      const r = await axios.get(`https://query.wikidata.org/sparql?query=${encodeURIComponent(q)}&format=json`, { ...UA, timeout: 120000 });
+      const rows = r.data?.results?.bindings || [];
+      return rows.map((b) => b.item.value.split("/").pop()).filter((id) => /^Q\d+$/.test(id));
+    } catch (e) {
+      lastErr = e;
+      console.log(`sparql try ${t + 1}/3 failed: ${String(e.message).slice(0, 70)}`);
+      await new Promise((r2) => setTimeout(r2, 8000 * (t + 1)));
+    }
+  }
+  throw lastErr;
 }
 
 // P31 QID -> pool category (CONFIDENT classes only; generic "business" stays
@@ -324,6 +336,11 @@ async function auditOne(brand, idx = 0) {
 }
 
 async function runPool(items, worker, n = 4, label = "") {
+  // 💡 FIX 2026-10-10: Box2 has 952MB total RAM shared with wa-joker + the
+  // scraper - the 4-lane build got OOM-killed mid-audit (silent SIGKILL at
+  // audit 1450/3507). Concurrency is now env-tunable: LOGO_BUILD_LANES=2 on
+  // small boxes (halves peak sharp/axios buffers).
+  n = Math.max(1, parseInt(process.env.LOGO_BUILD_LANES, 10) || n);
   const results = new Array(items.length);
   let i = 0;
   const lanes = Array.from({ length: n }, async () => {
