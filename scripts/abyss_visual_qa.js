@@ -299,6 +299,28 @@ check('pack fight: queued members join the stage', pack.pack.length === 2);
     check('§7 round-13: player holds the party side (front-LEFT, facing right)', pw.player.cx <= abyssScene.W * 0.35 && pw.player.flip === false);
     check('§7 summon: grounded on the floor plane (not the old floating 566 line)', pw.enemy.gy > 580 && pw.enemy.gy < 700);
     check('§7 summon: wild species carried for the pill', pw.wildSpecies === 'agumon');
+    // round-16 bisector audit: the four re-listed natively-RIGHT species must
+    // flip as wilds on the enemy wing so they face the hero
+    for (const sp of ['boglurk', 'fireguard', 'frostpeep', 'lumenmoth']) {
+        const pwx = await abyssScene.planCombatLayout(mkState({
+            kind: 'wild',
+            abyssRun: { currentEncounterType: 'wild_summon', currentEncounterData: { species: sp, rarity: 'RARE' } },
+            enemies: [{ name: sp, isWildSummon: true, spriteIndex: 0, currentHP: 400, stats: { hp: 400, maxHp: 600 } }],
+        }));
+        check(`§7 round-16: wild ${sp} (natively RIGHT) flips to face the hero`, pwx.enemy && pwx.enemy.flip === true);
+    }
+    // round-16: boss-path allies stand LEFT of the boss and face RIGHT toward
+    // it — natively-left art flips, natively-right art does not
+    const pboss = await abyssScene.planCombatLayout(mkState({
+        abyssFloor: 12,
+        enemies: [Object.assign({ name: 'ABYSSAL GOD', isEnemy: true, spriteIndex: 0, currentHP: 9000, stats: { hp: 9000, maxHp: 12000 } }, { isBoss: true, bossId: 'ABYSSAL_GOD' })],
+        summons: [
+            { species: 'boar', name: 'Tusker' },
+            { species: 'dragon', name: 'Vyrn' },
+        ],
+    }));
+    check('§boss round-16: ally boar (natively RIGHT) faces the boss unflipped', pboss.allies.length === 2 && pboss.allies.find((a) => a.art && a.art.file === 'boar.png').flip === false);
+    check('§boss round-16: ally dragon (natively LEFT) flips to face the boss', pboss.allies.find((a) => a.art && a.art.file === 'dragon.png').flip === true);
 
     // ═══ 6. floor card ═══
     section('§3 — floor descent card');

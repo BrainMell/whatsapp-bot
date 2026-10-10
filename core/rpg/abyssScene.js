@@ -465,8 +465,14 @@ function enemyNativeFacing(id) {
 // on the round-14 proof sheet. Moved to FACES_LEFT so allies mirror it to
 // face RIGHT toward the enemy wing and wild dragons on the right wing keep
 // facing LEFT toward the hero with NO flip.
+// ⚠️ round-16 bisector audit (owner 10:17Z: "some summons also facing the
+// wrong direction"): all 26 species re-cropped at 2× with a center bisector.
+// Four natively-RIGHT species were UNLISTED (boglurk's eye, fireguard's
+// visor, frostpeep's beak and lumenmoth's face all sit right-of-center) —
+// fine as unflipped allies, but as WILD summons on the enemy wing they
+// faced AWAY from the hero. Listed now:
 const SUMMON_FACES_LEFT = new Set(['BAT', 'GIANT', 'YETI', 'DRAGON']);
-const SUMMON_FACES_RIGHT = new Set(['PLAGUEFANG', 'DINO', 'BOAR', 'SNAKE', 'REPTILE']);
+const SUMMON_FACES_RIGHT = new Set(['PLAGUEFANG', 'DINO', 'BOAR', 'SNAKE', 'REPTILE', 'BOGLURK', 'FIREGUARD', 'FROSTPEEP', 'LUMENMOTH']);
 const summonFaceKey = (file) => String(file || '').replace(/\.png$/i, '').toUpperCase();
 // best-effort species key for a wild summon BEFORE its art resolves
 function planWildSpeciesKey(state, enemy) {
@@ -662,7 +668,12 @@ async function planCombatLayout(state, opts = {}) {
                     art: art ? { img: art.img, file: art.file } : null,
                     cx: slot.cx, gy: slot.gy,
                     h: Math.round(perspH(slot.gy) * (i === 0 ? 0.62 : 0.56)),
-                    flip: art ? SUMMON_FACES_RIGHT.has(summonFaceKey(art.file)) : false,
+                    // round-16 FIX: boss allies stand LEFT of the boss and face
+                    // RIGHT toward it — mirror the natively-LEFT art (same
+                    // rule as the side-path ally arc). The old FACES_RIGHT
+                    // test inverted this: boar/snake/dino/plaguefang/reptile
+                    // were mirrored to face AWAY from the boss.
+                    flip: art ? SUMMON_FACES_LEFT.has(summonFaceKey(art.file)) : false,
                     name: safeName(s.name, 16),
                 });
             }
