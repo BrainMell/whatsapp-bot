@@ -513,7 +513,7 @@ const SUMMON_HABITAT = {
 // at the same mass as the hound. Default 1.0 for unmapped ids.
 const ENEMY_SIZE = {
     CAVE_BAT: 0.78, EMBER_SPAWN: 0.85, FROST_WISP: 0.86, STONE_HULK: 1.08,
-    MUTATED_HOUND: 0.90, CRYSTAL_GOLEM: 1.10, SHADOW_STALKER: 0.90, VENOM_SPIDER: 0.74,
+    MUTATED_HOUND: 0.88, CRYSTAL_GOLEM: 1.10, SHADOW_STALKER: 0.84, VENOM_SPIDER: 0.72,
     INFERNO_KNIGHT: 1.06, TIDAL_FURY: 0.95, BOULDER_TITAN: 1.12, GLACIAL_WRAITH: 0.92,
     STORM_CALLER: 0.95, VOID_HARBINGER: 0.98, BLOOD_REAVER: 1.00, ANCIENT_GUARDIAN: 1.10,
     ELDER_CHAOS: 1.15, PRIMORDIAL_CHAOS: 1.15, VOID_CORRUPTED: 1.05,
@@ -671,10 +671,14 @@ async function planCombatLayout(state, opts = {}) {
     // RIGHT half (active front-low, pack deeper-right + higher), same depth
     // ladder as the approved layout. The active slot clears the player's box
     // (player halfW ~70-90 @ fx 0.500) and stays off the frame edge.
+    // round-13b spacing audit (on-box measured halfW): the new bestiary art is
+    // WIDER than the old amalgamations — the 2/3-body ladders were re-spread
+    // (fx gaps +, back rows climb higher) so wide bodies separate WITHOUT the
+    // shrink pass flattening them (owner: "enemies overlaying" ban).
     const FORMATIONS = {
         1: [{ fx: 0.705, fy: 0.700, mul: 0.97 }],
-        2: [{ fx: 0.690, fy: 0.708, mul: 0.97 }, { fx: 0.830, fy: 0.655, mul: 0.82 }],
-        3: [{ fx: 0.675, fy: 0.712, mul: 0.97 }, { fx: 0.795, fy: 0.660, mul: 0.83 }, { fx: 0.892, fy: 0.620, mul: 0.72 }],
+        2: [{ fx: 0.660, fy: 0.712, mul: 0.94 }, { fx: 0.852, fy: 0.630, mul: 0.78 }],
+        3: [{ fx: 0.655, fy: 0.716, mul: 0.94 }, { fx: 0.800, fy: 0.638, mul: 0.76 }, { fx: 0.908, fy: 0.566, mul: 0.64 }],
     };
     // ally row beside/behind the player (audit: "never on top of the
     // player's body"); a third ally is supported for the test matrix.
@@ -701,8 +705,8 @@ async function planCombatLayout(state, opts = {}) {
     // belt-and-braces guard for odd art aspect ratios).
     const ALLY_ARC = {
         1: [{ fx: 0.400, fy: 0.700, mul: 0.62 }],
-        2: [{ fx: 0.415, fy: 0.702, mul: 0.62 }, { fx: 0.300, fy: 0.660, mul: 0.58 }],
-        3: [{ fx: 0.425, fy: 0.706, mul: 0.60 }, { fx: 0.322, fy: 0.664, mul: 0.57 }, { fx: 0.230, fy: 0.622, mul: 0.54 }],
+        2: [{ fx: 0.435, fy: 0.702, mul: 0.62 }, { fx: 0.282, fy: 0.660, mul: 0.58 }],
+        3: [{ fx: 0.452, fy: 0.706, mul: 0.60 }, { fx: 0.328, fy: 0.664, mul: 0.57 }, { fx: 0.212, fy: 0.620, mul: 0.54 }],
     };
     const ALLY_LANE_MAXW = 170;   // px of horizontal lane per summon (content)
     // the hero: front-LEFT of the open stage (Battle-Example position), feet
@@ -875,7 +879,7 @@ async function planCombatLayout(state, opts = {}) {
         if (m.a.role === 'ally') {
             // mirrored stage: the party arcs BEHIND-LEFT of the hero, above
             // the HUD panel — retreat LEFT, never into the enemy wing
-            m.lo = Math.round(W * 0.20);
+            m.lo = Math.round(W * 0.15);
             m.hi = playerBox0 ? Math.round(playerBox0.left - m.halfW - 16) : Math.round(W * 0.45);
             if (m.hi < m.lo) m.hi = m.lo;
         } else {                    // pack / wild — the enemy corridor (right wing)
@@ -888,7 +892,7 @@ async function planCombatLayout(state, opts = {}) {
     }
     const rebox = (m) => { m.left = m.a.cx - m.halfW; m.right = m.a.cx + m.halfW; m.top = m.a.gy - m.a.h; m.bottom = m.a.gy; };
     const sideOf = (m) => (m.a.role === 'ally' || m.a.role === 'player') ? -1 : 1;   // −1 party (left), +1 enemy wing (right)
-    for (let pass = 0; pass < 6; pass++) {
+    for (let pass = 0; pass < 9; pass++) {
         let moved = false;
         for (let i = 0; i < byDepth.length; i++) {
             for (let j = i + 1; j < byDepth.length; j++) {
@@ -904,19 +908,20 @@ async function planCombatLayout(state, opts = {}) {
                     m.a.cx = Math.max(m.lo, Math.min(m.hi, m.a.cx + dir * (ox - TOL + 10)));
                     rebox(m); moved = true; return true;
                 };
-                // passes 0-3: resolve by moving (shrink only if fully pinned);
-                // passes 4-5: force-shrink the still-fused bodies FIRST, then
+                // passes 0-4: resolve by moving (shrink only if fully pinned);
+                // passes 5+: force-shrink the still-fused bodies FIRST, then
                 // let the smaller boxes settle with the same move rules —
                 // sizes only decrease, so the moves now CONVERGE instead of
-                // trading places
-                if (pass >= 4) {
+                // trading places (round-13b: budget 4, factor 0.91 — the wider
+                // bestiary bodies need one more shrink round than the old art)
+                if (pass >= 5) {
                     for (const m of [A, B]) {
                         if (m.a.role === 'player' || m.a.role === 'active') continue;
                         m.shrinks = m.shrinks || 0;
-                        if (m.shrinks < 3) {
+                        if (m.shrinks < 4) {
                             m.shrinks++;
-                            m.a.h = Math.max(48, Math.round(m.a.h * 0.93));
-                            m.halfW = Math.max(12, Math.round(m.halfW * 0.93));
+                            m.a.h = Math.max(48, Math.round(m.a.h * 0.91));
+                            m.halfW = Math.max(12, Math.round(m.halfW * 0.91));
                             m.a.halfW = m.halfW;
                             rebox(m); moved = true;
                         }
@@ -1113,9 +1118,21 @@ async function drawActorGrounded(ctx, art, cx, groundY, ch, opts = {}) {
     // as approved.
     let drawScale = scale;
     if (opts.pixelSnap) {
-        const whole = Math.max(1, Math.round(scale));
-        drawScale = (Math.abs(scale - whole) / scale <= 0.10) ? whole
-            : Math.max(0.5, Math.round(scale * 2) / 2);
+        // round-13b FIX: the snap must NEVER inflate the planned height. The
+        // old `Math.max(0.5, …)` floor was calibrated for the ~300px
+        // amalgamation canvases; the round-13 bestiary art carries ~900px
+        // content boxes → target scale lands at 0.15-0.35 and the floor drew
+        // those sprites ~2-3× too big (back row clipped off-frame, owner A3
+        // proof). Snap rules now: scale ≥ 1 → whole-step within 10%;
+        // 0.5 ≤ scale < 1 → half-step within 10%; below 0.5 the half-step
+        // grid is coarser than the target itself → draw at the exact scale.
+        if (scale >= 1) {
+            const whole = Math.round(scale);
+            if (Math.abs(scale - whole) / scale <= 0.10) drawScale = whole;
+        } else if (scale >= 0.5) {
+            const half = Math.round(scale * 2) / 2;
+            if (half >= 0.5 && Math.abs(scale - half) / scale <= 0.10) drawScale = half;
+        }
     }
     const dw = Math.round(box.w * drawScale);
     const dh = Math.round(box.h * drawScale);
