@@ -1,7 +1,7 @@
-quizDataset v3 — 2026-10-10T09:08:51.749Z
-3137KB
+quizDataset v5 — 2026-10-10T09:31:26.872Z
+3564KB, built in 328s
 games: text=926 images=24
-comics: text=249 images=204
-movies: text=366 images=0
+comics: text=819 images=1104
+movies: text=435 images=70
 series: text=1631 images=7529
-sources: opentdb, the-trivia-api, steamspy, tvmaze, anilist, wikidata(p18), enwiki lists+infobox scrape, enwiki pageimages
+sources: opentdb, the-trivia-api, steamspy, tvmaze, anilist(+manga ext), kitsu, wikidata(p18+p154 games), enwiki lists+infobox scrape, enwiki pageimages
