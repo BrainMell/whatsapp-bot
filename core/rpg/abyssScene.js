@@ -1027,6 +1027,48 @@ async function planCombatLayout(state, opts = {}) {
         if (!moved) break;
     }
 
+    // ── round-15 FINAL DISASSEMBLY ── the move/shrink passes can still leave
+    // a fused pair in the 7-body stress case (cross-side bodies parked at
+    // nearly the same cx after the cascade). Strict-priority sweeps: each
+    // still-fused pair separates by moving the LOWER-priority body strictly
+    // AWAY — allies retreat toward the hero (they have the whole arc to
+    // lo), pack retreats toward the wing edge. Anchors never move.
+    const prio = (m) => (m.a.role === 'player' ? 0 : m.a.role === 'active' ? 1 : m.a.role === 'pack' ? 2 : 3);
+    for (let sweep = 0; sweep < 5; sweep++) {
+        let any = false;
+        for (let i = 0; i < byDepth.length; i++) {
+            for (let j = i + 1; j < byDepth.length; j++) {
+                const A = byDepth[i], B = byDepth[j];
+                const ox = Math.min(A.right, B.right) - Math.max(A.left, B.left);
+                const oy = Math.min(A.bottom, B.bottom) - Math.max(A.top, B.top);
+                if (ox <= TOL || oy <= TOL) continue;
+                const mover = prio(A) >= prio(B) ? A : B;
+                const other = mover === A ? B : A;
+                if (mover.a.role === 'player' || mover.a.role === 'active') continue;
+                const dir = mover.a.cx <= other.a.cx ? -1 : 1;
+                if (tryMove(mover, dir)) { any = true; continue; }
+                // pinned in that direction: allow a bounded overshoot past the
+                // corridor edge (24px) before giving up — the stress case parks
+                // the snake exactly at hi while the spider needs the lane
+                const savedLo = mover.lo, savedHi = mover.hi;
+                if (dir < 0) mover.lo = Math.max(8, mover.lo - 24); else mover.hi = mover.hi + 24;
+                const movedNow = tryMove(mover, dir);
+                mover.lo = savedLo; mover.hi = savedHi;
+                if (movedNow) { any = true; continue; }
+                const m = mover;
+                m.shrinks = m.shrinks || 0;
+                if (m.shrinks < 6) {
+                    m.shrinks++;
+                    m.a.h = Math.max(48, Math.round(m.a.h * 0.91));
+                    m.halfW = Math.max(12, Math.round(m.halfW * 0.91));
+                    m.a.halfW = m.halfW;
+                    rebox(m); any = true;
+                }
+            }
+        }
+        if (!any) break;
+    }
+
     // scatter the resolved actors back into the plan (halfW = measured real
     // content half-width — lets QA assert the anti-overlap contract in REAL
     // pixels instead of frame-height estimates)
