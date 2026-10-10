@@ -135,7 +135,7 @@ process.on("unhandledRejection", (r) => console.log(`orphan-rejection: ${String(
 
   const state = fs.existsSync(STATE_PATH) ? JSON.parse(fs.readFileSync(STATE_PATH, "utf8")) : { offset: 0 };
   state.verified = []; // 💡 streamed to FRESH_PATH instead — array growth OOM-ed the 320MB heap at ~2200
-  console.log(`FULL-BUILD mode: windows 0..6400, resuming at offset=${state.offset}`);
+  console.log(`FULL-BUILD mode: windows 0..7400, resuming at offset=${state.offset}`);
   console.log(`resume state: offset=${state.offset}, verified so far=${state.verified.length}`);
 
   // fame band: SPARQL with an OFFSET window (cheap, deterministic)
@@ -148,7 +148,7 @@ process.on("unhandledRejection", (r) => console.log(`orphan-rejection: ${String(
   let fresh = 0;
   const BATCH = 50, WINDOW = 500;
   const AUDIT_LANES = 4;
-  for (let w = 0; state.offset < 6400 && w < 11000; w += BATCH) {
+  for (let w = 0; state.offset < 7400 && w < 11000; w += BATCH) {
     const offset = state.offset;
     let qids = [];
     try { qids = await sparql(offset, BATCH); } catch (e) { console.log(`sparql ${offset}: ${String(e.message).slice(0, 50)}`); continue; }
