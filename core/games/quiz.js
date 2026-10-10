@@ -1891,11 +1891,11 @@ async function generateSectionQuestions(session, section, sock, chatId) {
     if (Array.isArray(section.pinnedBrands)) {
       for (const brand of section.pinnedBrands) {
         if (questions.length >= sectionCount) break;
-        if (usedKeys.has(`pllogo:${_norm(brand.name)}`)) continue;
+        if (usedKeys.has(`pllogo:${_normText(brand.name)}`)) continue;
         const others = section.pinnedBrands.filter((b) => b.name !== brand.name).slice(0, 3);
         const q = await quizMediaMod.buildLogosQuestion(brand, others, cfg.difficulty).catch(() => null);
         if (!q) { console.log(`[Quiz] preplanned: logo build failed for ${brand.name} - skipping`); continue; }
-        usedKeys.add(`pllogo:${_norm(brand.name)}`);
+        usedKeys.add(`pllogo:${_normText(brand.name)}`);
         q.timeLimit = quizPreplannedMod.LOGO_TIME_S; // owner timer spec: 30s
         questions.push(q);
       }

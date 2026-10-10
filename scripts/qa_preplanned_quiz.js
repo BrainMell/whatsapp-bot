@@ -125,6 +125,14 @@ assert(matches(T["gow-mimir"], "mimir"), "Mimir");
 assert(!matches(T["gow-kratos"], "Deimos"), "wrong GoW answer rejected");
 
 // ── 7. logos: build ONE pinned logo question through the real pipeline ──
+// regression pin (2026-10-10 22:18Z live incident): quiz.js's pinned-brand
+// builder called quizMedia's module-private _norm() bare -> ReferenceError
+// crashed preplanned sections 1-3 (all 30 logos) at generation while QA was
+// green - this static pin makes the class un-shippable. _normText(/_sha( are
+// the in-scope equivalents; "_normText(" does NOT match the bare pattern.
+const quizSrc = fs.readFileSync(__dirname + "/../core/games/quiz.js", "utf8");
+const bareHelpers = (quizSrc.match(/(?<![A-Za-z0-9_])(_norm|_sha)\s*\(/g) || []).length;
+assert(bareHelpers === 0, `no bare quizMedia-private helpers in quiz.js (found ${bareHelpers})`);
 (async () => {
   const brand = pack.PACK.brands[0]; // YouTube
   const others = pack.PACK.brands.slice(1, 4);
