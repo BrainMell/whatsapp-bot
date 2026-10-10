@@ -156,7 +156,7 @@ const TRIVIA = [
   },
   {
     id: "gow-blades", franchise: "God of War", fmt: "typed", difficulty: "medium", topic: "God of War",
-    q: "What are the chained blades forged for Kratos by the God of War Ares called?",
+    q: "What are the names of the iconic chained blades that the God of War Ares bound to Kratos' arms?",
     answer: "Blades of Chaos", alts: ["Chaos Blades", "Blade of Chaos"],
   },
   {
@@ -179,46 +179,49 @@ const TRIVIA = [
 // standard mode clips 25s).
 const THEMES = [
   // ---- games (5) ----
+  // mustTitle: words that MUST appear in the returned metadata title - keeps
+  // the canonical upload ("God of War Main Theme") from being satisfied by
+  // any random track off the same OST.
   {
-    show: "Devil May Cry", search: "Devil Trigger Casey Edwards Devil May Cry 5 Nero theme song", type: "game",
-    alts: ["Devil May Cry 5", "DMC", "DMC5", "Devil Trigger"], cacheKey: "preplan:devilmaycry",
+    show: "Devil May Cry", search: "Devil Trigger", type: "game",
+    alts: ["Devil May Cry 5", "DMC", "DMC5", "Devil Trigger"], cacheKey: "preplan:devilmaycry", mustTitle: ["devil trigger"],
   },
   {
-    show: "God of War", search: "God of War main theme Bear McCreary soundtrack", type: "game",
-    alts: ["God of War 2018", "God of War 4", "GoW", "God of War Ragnarok"], cacheKey: "preplan:godofwar",
+    show: "God of War", search: "God of War Bear McCreary", type: "game",
+    alts: ["God of War 2018", "God of War 4", "GoW", "God of War Ragnarok"], cacheKey: "preplan:godofwar", mustTitle: ["god of war"],
   },
   {
-    show: "Elden Ring", search: "Elden Ring main theme soundtrack OST", type: "game",
-    alts: ["Elden Ring"], cacheKey: "preplan:eldenring",
+    show: "Skyrim", search: "Dragonborn Jeremy Soule Skyrim", type: "game",
+    alts: ["The Elder Scrolls V Skyrim", "Elder Scrolls", "Skyrim"], cacheKey: "preplan:skyrim", mustTitle: ["dragonborn"],
   },
   {
-    show: "DOOM", search: "BFG Division Mick Gordon DOOM 2016 soundtrack", type: "game",
-    alts: ["Doom", "Doom 2016", "Doom Eternal"], cacheKey: "preplan:doom",
+    show: "DOOM", search: "BFG Division Mick Gordon", type: "game",
+    alts: ["Doom", "Doom 2016", "Doom Eternal"], cacheKey: "preplan:doom", mustTitle: ["bfg division"],
   },
   {
-    show: "Minecraft", search: "Sweden C418 Minecraft soundtrack", type: "game",
-    alts: ["Minecraft"], cacheKey: "preplan:minecraft",
+    show: "Minecraft", search: "Sweden C418 Minecraft", type: "game",
+    alts: ["Minecraft"], cacheKey: "preplan:minecraft", mustTitle: ["sweden"],
   },
   // ---- anime (5) ----
   {
-    show: "Solo Leveling", search: "LEveL SawanoHiroyuki nZk mizuki Solo Leveling opening theme", type: "anime",
-    alts: ["Na Honjaman Level Up", "Only I Level Up", "Solo Leveling"], cacheKey: "preplan:soleoleveling",
+    show: "Solo Leveling", search: "LEveL SawanoHiroyuki", type: "anime",
+    alts: ["Na Honjaman Level Up", "Only I Level Up", "Solo Leveling"], cacheKey: "preplan:soleoleveling", mustTitle: ["level"],
   },
   {
-    show: "Dragon Ball Z", search: "Cha-La Head-Cha-La Kageyama Dragon Ball Z opening theme", type: "anime",
-    alts: ["DBZ", "Dragon Ball"], cacheKey: "preplan:dragonballz",
+    show: "Dragon Ball Z", search: "Cha-La Head-Cha-La 2005 Version", type: "anime",
+    alts: ["DBZ", "Dragon Ball"], cacheKey: "preplan:dragonballz", mustTitle: ["cha la head"],
   },
   {
-    show: "Attack on Titan", search: "Guren no Yumiya Linked Horizon Attack on Titan opening theme", type: "anime",
-    alts: ["Shingeki no Kyojin", "AoT"], cacheKey: "preplan:attackontitan",
+    show: "Attack on Titan", search: "Guren no Yumiya Linked Horizon", type: "anime",
+    alts: ["Shingeki no Kyojin", "AoT"], cacheKey: "preplan:attackontitan", mustTitle: ["guren no yumiya"],
   },
   {
-    show: "Demon Slayer", search: "Gurenge LiSA Demon Slayer opening theme", type: "anime",
-    alts: ["Kimetsu no Yaiba"], cacheKey: "preplan:demonslayer",
+    show: "Demon Slayer", search: "Gurenge LiSA", type: "anime",
+    alts: ["Kimetsu no Yaiba"], cacheKey: "preplan:demonslayer", mustTitle: ["gurenge"],
   },
   {
-    show: "One Piece", search: "We Are! Hiroshi Kitadani One Piece opening theme", type: "anime",
-    alts: ["One Piece"], cacheKey: "preplan:onepiece",
+    show: "One Piece", search: "We Are! Hiroshi Kitadani One Piece", type: "anime",
+    alts: ["One Piece"], cacheKey: "preplan:onepiece", mustTitle: ["we are"],
   },
 ];
 

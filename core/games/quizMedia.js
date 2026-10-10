@@ -530,6 +530,14 @@ async function buildThemeSongQuestionEntry(entry, others, difficulty, goService,
   const info = await goService.getAudioInfo(entry.search, { clipSeconds, clipBitrate: "96k", timeoutMs: 120000, noRetry: true }).catch(() => null);
   if (!info || info.error || !info.audioURL || !info.metadata) { audioCache.markFail(cacheKey); return null; }
   const metaTitle = _norm(info.metadata.title);
+  // 💡 2026-10-10 preplanned pack: mustTitle words MUST all appear in the
+  // returned title - pins the canonical track (e.g. the actual "Main Theme",
+  // not any random track from the same OST). Pack-only field; the regular
+  // pool has no mustTitle and behaves exactly as before.
+  if (Array.isArray(entry.mustTitle) && entry.mustTitle.length) {
+    const mustOk = entry.mustTitle.every((w) => metaTitle.includes(_norm(w)));
+    if (!mustOk) { audioCache.markFail(cacheKey); console.log(`[Quiz] preplan theme ${entry.show}: title "${info.metadata.title}" missed mustTitle [${entry.mustTitle.join(",")}]`); return null; }
+  }
   const showN = _norm(entry.show);
   const searchN = _norm(entry.search);
   if (_SONG_VARIANT_RE.test(metaTitle)) { audioCache.markFail(cacheKey); return null; }

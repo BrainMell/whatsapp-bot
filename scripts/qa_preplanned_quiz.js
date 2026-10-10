@@ -2,7 +2,7 @@
 // Preplanned pack QA (run on-box where the real deps + Go service live).
 // Verifies: pack integrity, parse routing, plan shape, timers, answer
 // matching (typed + alts + typos + MC letters), theme question assembly.
-process.chdir(__dirname); // stable cwd (v8 QA lesson: ENOENT on relative loads)
+process.chdir(__dirname + "/.."); // quiz.js loads data/ via cwd (v8 QA lesson)
 
 const assert = (cond, label) => { if (!cond) { console.error("FAIL:", label); process.exitCode = 1; } else console.log("ok:", label); };
 
@@ -28,6 +28,7 @@ for (const t of pack.PACK.trivia) {
 }
 assert(JSON.stringify(fr) === JSON.stringify({ "Dragon Ball": 5, "Solo Leveling": 5, "Devil May Cry": 5, "God of War": 5 }), `franchise split 5/5/5/5 (${JSON.stringify(fr)})`);
 assert(pack.PACK.themes.length === 10, "10 themes");
+for (const t of pack.PACK.themes) assert(Array.isArray(t.mustTitle) && t.mustTitle.length, `mustTitle pinned ${t.show}`);
 assert(pack.PACK.themes.filter((t) => t.type === "game").length === 5, "5 game themes");
 assert(pack.PACK.themes.filter((t) => t.type === "anime").length === 5, "5 anime themes");
 assert(new Set(pack.PACK.themes.map((t) => t.show)).size === 10, "theme shows unique");
