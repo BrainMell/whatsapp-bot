@@ -167,6 +167,18 @@ function visuallySimilarDecoys(brand, k = 3) {
 // literal. Junk/variant entries (product lines, regional duplicates) are
 // excluded by curation; dedupe by display name guarantees a distractor can
 // never be the correct answer's twin.
+//
+// 💡 V2 EXPANSION (2026-10-10 owner brief: "build a json with over a thousand
+// logos, every single one NEW/modern"): the baked dataset
+// (data/logoDataset.json, built by scripts/build_logo_dataset_v2.js) now
+// carries 1800+ VERIFIED MODERN logos (Wikidata P154 current-logo statements
+// + dated enwiki search hits, every one render-gated). Its brands join the
+// question pool below (deduped vs curated), so the quiz draws from the full
+// modern set instead of asking the same 627 brands forever. Dataset load is
+// hoisted ABOVE this IIFE because the expansion reads it.
+let logoDataset = null;
+try { logoDataset = require("../../data/logoDataset.json"); } catch { logoDataset = null; }
+
 const LOGOS_POOL = (() => {
   const all = [
     ...logoPoolsV2.TECH, ...logoPoolsV2.APPS, ...logoPoolsV2.FOOD, ...logoPoolsV2.CARS,
@@ -174,6 +186,11 @@ const LOGOS_POOL = (() => {
     ...logoPoolsV2.TRAVEL, ...logoPoolsV2.MEDIA, ...logoPoolsV2.FINTECH, ...logoPoolsV2.HEALTH,
     ...logoPoolsV2.INDUSTRY, ...logoPoolsV2.TELECOM,
   ];
+  // dataset-sourced additions: only entries that carry a verified modern logo
+  for (const b of ((logoDataset && logoDataset.brands) || [])) {
+    if (!b || !b.name || !b.file || !b.modern) continue;
+    all.push({ name: b.name, wiki: b.wiki || b.name, cat: b.cat || "Brands" });
+  }
   const seen = new Set();
   return all.filter((b) => {
     const k = _norm(b.name);
@@ -196,8 +213,6 @@ const LOGO_JPEG_FALLBACK_OK = true; // jpeg logos allowed only if nothing better
 // The dataset is the PRIMARY source; the live per-brand Wikipedia search
 // (wikipediaLogoImage) remains the fallback for brands without a verified
 // entry or when a baked URL dies.
-let logoDataset = null;
-try { logoDataset = require("../../data/logoDataset.json"); } catch { logoDataset = null; }
 const DATASET_BY_NAME = new Map(((logoDataset && logoDataset.brands) || []).map((b) => [_norm(b.name), b]));
 
 function logoDatasetInfo() {
