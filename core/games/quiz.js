@@ -39,6 +39,7 @@ const quizLore = require("./quizLore");
 const quizConfigMod = require("./quizConfig"); // P16 central config + quizmod
 const quizBank = require("./quizBank");        // P15 stable-identity bank
 const quizMediaMod = require("./quizMedia");   // 2026-09-27 logos + spot-the-song modes
+const quizPreplannedMod = require("./quizPreplanned"); // 2026-10-10 owner: .j quiz -preplanned fixed pack
 const quizDatasetMod = require("./quizDataset"); // 2026-10-10 dataset categories (games/comics/movies/series)
 const mediaWorker = require("../utils/mediaWorker"); // 2026-09-27 shared media job runner
 const imageGate = require("../utils/imageGate");         // 2026-09-27 pixel-level gates
@@ -1828,6 +1829,8 @@ function mediaKeyFor(session) {
   // song questions reuse across sessions like lore questions do.
   if (session.mode === "logos") return "mode:logos";
   if (session.mode === "song") return "mode:songs";
+  // 2026-10-10: preplanned pack never banks (fixed questions, pinned media)
+  if (session.mode === "preplanned") return "mode:preplanned";
   // 2026-10-10: random-ds mixes dataset rounds + one Logo Round - the only
   // banked domain in the mix is logos, so share that bank bucket.
   if (session.mode === "random-ds") return "mode:logos";
@@ -1866,10 +1869,40 @@ async function generateSectionQuestions(session, section, sock, chatId) {
     section.questions = questions.slice(0, sectionCount);
     return section.questions;
   }
+  // ── 2026-10-10 OWNER: preplanned pinned trivia (fixed pack, zero LLM) ──
+  if (section.domain === "preplanned" && Array.isArray(section.pinnedTrivia)) {
+    for (const t of section.pinnedTrivia) {
+      if (questions.length >= sectionCount) break;
+      const q = quizPreplannedMod.toQuizQuestion(t);
+      usedKeys.add(`pltrivia:${t.id || q.q.slice(0, 40)}`);
+      questions.push(q);
+    }
+    section.state = SECTION_STATES.READY;
+    section.questions = questions.slice(0, sectionCount);
+    return section.questions;
+  }
   // ── 2026-09-27: standalone media modes (logos / song) ──
   // LLM-free deterministic generation with real verified assets. Everything
   // downstream (READY state, banking, postQuestion) is shared with lore.
   if (section.domain === "logos") {
+    // 💡 2026-10-10 OWNER: pinned brands for the preplanned pack - build each
+    // pinned brand deterministically (dataset-primary path, no fairness draw,
+    // no bank writes). Same verified pipeline, just curated inputs.
+    if (Array.isArray(section.pinnedBrands)) {
+      for (const brand of section.pinnedBrands) {
+        if (questions.length >= sectionCount) break;
+        if (usedKeys.has(`pllogo:${_norm(brand.name)}`)) continue;
+        const others = section.pinnedBrands.filter((b) => b.name !== brand.name).slice(0, 3);
+        const q = await quizMediaMod.buildLogosQuestion(brand, others, cfg.difficulty).catch(() => null);
+        if (!q) { console.log(`[Quiz] preplanned: logo build failed for ${brand.name} - skipping`); continue; }
+        usedKeys.add(`pllogo:${_norm(brand.name)}`);
+        q.timeLimit = quizPreplannedMod.LOGO_TIME_S; // owner timer spec: 30s
+        questions.push(q);
+      }
+      section.state = SECTION_STATES.READY;
+      section.questions = questions.slice(0, sectionCount);
+      return section.questions;
+    }
     const banked = quizBank.bankLookup(mk, loadSeen(mk).map((h) => h), sectionCount, { type: "image" });
     for (const b of banked) questions.push(b);
     if (questions.length < sectionCount) {
@@ -1889,6 +1922,38 @@ async function generateSectionQuestions(session, section, sock, chatId) {
     return section.questions;
   }
   if (section.domain === "song" || section.domain === "audio") {
+    // 💡 2026-10-10 OWNER: pinned theme entries for the preplanned pack -
+    // fixed 10 songs (5 games / 5 anime), SPECIFIC song-name searches, first
+    // 30 SECONDS clips, 45s answer timer (owner timer spec).
+    if (Array.isArray(section.pinnedThemes)) {
+      const clipSecs = section.clipSeconds || 25;
+      const built = await mediaWorker.run(
+        async () => {
+          const out = [];
+          for (const entry of section.pinnedThemes) {
+            if (out.length >= sectionCount) break;
+            const others = section.pinnedThemes.filter((t) => t.show !== entry.show).slice(0, 3);
+            const q = await quizMediaMod.buildThemeSongQuestionEntry(
+              entry, others, cfg.difficulty, deps.goService,
+              (buf, secs) => _clipAudioBuffer(buf, deps.ffmpegPath, secs || clipSecs),
+              clipSecs,
+            ).catch(() => null);
+            if (q) out.push(q);
+            else console.log(`[Quiz] preplanned: theme build failed for ${entry.show} - skipping`);
+          }
+          return out;
+        },
+        { label: "preplanned:themes", timeoutMs: 600000 },
+      ).catch((e) => { console.log("[Quiz] preplanned themes build failed:", e?.message); return []; });
+      for (const q of built) {
+        usedKeys.add(q.assetKey || `theme:${q.song}`);
+        q.timeLimit = quizPreplannedMod.MUSIC_TIME_S; // owner timer spec: 45s
+        questions.push(q);
+      }
+      section.state = SECTION_STATES.READY;
+      section.questions = questions.slice(0, sectionCount);
+      return section.questions;
+    }
     const isTheme = section.domain === "audio";
     // 💡 OWNER SPEC §3 (2026-09-28): the audio build gets an 8-minute media
     // budget (was 5min - the direct cause of the "~5 audio questions then
@@ -2134,7 +2199,7 @@ function plannedTotal(session) {
 
 function formatQuestionCard(session, idx, q) {
   const prefix = botConfig.getPrefix();
-  const secs = session.cfg.timePerQuestion;
+  const secs = q.timeLimit || session.cfg.timePerQuestion; // per-question override (preplanned 30s/45s)
   const total = plannedTotal(session);
   const section = session.sections[session.activeSection];
   const sectionLabel = session.sections.length > 1 && section && section.name ? `${section.name} • ` : "";
@@ -2325,7 +2390,8 @@ async function postQuestion(sock, chatId, session) {
 
   // the question opens NOW - card is out (or every channel failed)
   session.answeredBy = new Map(); // P1: fresh attempt map per question
-  session.qOpenUntil = Date.now() + session.cfg.timePerQuestion * 1000;
+  const qSecs = (q && q.timeLimit) || session.cfg.timePerQuestion; // per-question override (preplanned 30s/45s)
+  session.qOpenUntil = Date.now() + qSecs * 1000;
   session.qEpoch = (session.qEpoch || 0) + 1;
   const myEpoch = session.qEpoch;
   // P2: deadline timer driven by config; invalidated by session.token AND
@@ -2338,7 +2404,7 @@ async function postQuestion(sock, chatId, session) {
       if (cur.qEpoch !== myEpoch || cur.revealLock) return;
       await revealAndAdvance(sock, chatId, session, null, true);
     } catch (e) { console.log("[Quiz] deadline tick failed:", e?.message); }
-  }, session.cfg.timePerQuestion * 1000);
+  }, qSecs * 1000);
 }
 
 function formatStandings(session) {
@@ -2704,9 +2770,17 @@ function parseQuizArgs(raw) {
   //   quiz random 20 -images 5 -audio 3
   //   quiz logos 15            (2026-09-27: standalone media modes)
   //   quiz song 10             ("spot the song" alias)
-  const out = { title: "", count: 10, difficulty: "medium", section: null, images: null, audio: null, randomMode: false, mode: null, notes: [] };
+  const out = { title: "", count: 10, difficulty: "medium", section: null, images: null, audio: null, randomMode: false, mode: null, preplanned: false, notes: [] };
   let rest = String(raw || "").trim();
   if (!rest) return out;
+  // 💡 2026-10-10 OWNER: ".j quiz -preplanned" - the fixed 60-round mega pack
+  // (30 brand logos + 20 anime/games trivia + 10 theme songs, 30s/45s timers).
+  // Bare word or flag both work: ".j quiz -preplanned" / ".j quiz preplanned".
+  if (/^(preplanned|preplan|megapack)\b/i.test(rest) || /^-+preplanned\b/i.test(rest)) {
+    out.mode = "preplanned";
+    out.title = "__preplanned__";
+    rest = rest.replace(/^(preplanned|preplan|megapack|-+preplanned)\b/i, "").trim();
+  }
   // standalone media modes (before random/quoted handling; "spot the song" is multi-word)
   const MODE_ALIASES = { logos: "logos", logo: "logos", brands: "logos", brand: "logos", company: "logos", companies: "logos" };
   // 💡 2026-10-10 OWNER OVERHAUL: dataset-backed categories (pre-built data,
@@ -2904,6 +2978,7 @@ Special rounds (unchanged):
 \`${prefix} quiz song 10\` - 🎵 spot the song from a real audio clip
 \`${prefix} quiz audio 10\` - 📺 theme songs from shows/movies/games
 \`${prefix} quiz random 20\` - 🎲 mixed playlist across all categories
+\`${prefix} quiz -preplanned\` - 🏆 MEGA PACK: 30 logos + 20 anime/games trivia + 10 theme songs (30s/45s timers)
 
 During the quiz, answer by typing the answer in chat (or \`${prefix} <letter>\` when options are shown). One answer per player per question!
 Leaderboard: \`${prefix} quizboard\` • Cancel: \`${prefix} quiz end\` • Mods: \`${prefix} quizmod\``,
@@ -3195,6 +3270,12 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     // front with the same "QUIZ PLANNING" card tagged at the initiator, and
     // parks behind the same `.j quiz go` ready-gate once prepared. Media
     // quizzes list their media mix; lore quizzes name the franchise.
+    // 💡 2026-10-10 OWNER: -preplanned is a FIXED 60-round pack - it ignores
+    // the count argument and the 50-question ceiling (owner directive).
+    if (parsed.mode === "preplanned") {
+      cfg.questionCount = 60;
+      cfg.maxQuestions = Math.max(cfg.maxQuestions, 60);
+    }
     const mixedRandom = parsed.randomMode && cfg.questionCount >= 9;
     {
       const bits = [];
@@ -3210,6 +3291,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
         else if (parsed.mode === "logos") bits.push(`🏢 brand logos`);
         else if (parsed.mode === "song") bits.push(`🎵 song clips`);
         else if (parsed.mode === "audio") bits.push(`📺 theme songs`);
+        else if (parsed.mode === "preplanned") bits.push(`🏢 30 brand logos`, `🧠 20 anime & games trivia`, `🎵 10 theme songs`);
         else if (parsed.randomMode) bits.push(`🎲 mixed dataset rounds + logos`);
         else if (parsed.retiredTitle) bits.push(`ℹ️ title search retired`);
       }
@@ -3294,6 +3376,106 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       head += `Let's go! 🚀`;
 
       // 2026-09-27 planning mode: media modes ALWAYS park for the go command
+      await parkReadySession(sock, chatId, session, { head, introImage: null, botMarker, m, senderJid, prefix });
+      ownsSlot = false; // OWNER SPEC §4: the slot now rides with the parked session
+      return;
+    }
+
+    // ── 2026-10-10 OWNER: -preplanned fixed mega pack ──
+    // 9 sections / 60 rounds: 3×10 brand logos (verified 2026 Wikipedia
+    // dataset) → 4×5 franchise trivia (Dragon Ball / Solo Leveling / Devil
+    // May Cry / God of War, hand-verified answers) → 2×5 theme songs (5 games
+    // + 5 anime, first 30 seconds via the Go audio pipeline). Owner timers:
+    // 30s per logo/trivia question, 45s per music question. Everything rides
+    // the regular live-session machinery (answers, scoring, sections,
+    // ready-gate, cancel) - it must look, feel and act like a regular quiz.
+    if (parsed.mode === "preplanned") {
+      const PACK = quizPreplannedMod.PACK;
+      const byFranchise = (f) => PACK.trivia.filter((t) => t.franchise === f);
+      const themesBy = (ty) => PACK.themes.filter((t) => t.type === ty);
+      const domainPlan = [
+        { name: "Logo Round 1/3", domain: "logos", perSection: 10, pinnedBrands: PACK.brands.slice(0, 10) },
+        { name: "Logo Round 2/3", domain: "logos", perSection: 10, pinnedBrands: PACK.brands.slice(10, 20) },
+        { name: "Logo Round 3/3", domain: "logos", perSection: 10, pinnedBrands: PACK.brands.slice(20, 30) },
+        { name: "Dragon Ball", domain: "preplanned", perSection: 5, pinnedTrivia: byFranchise("Dragon Ball") },
+        { name: "Solo Leveling", domain: "preplanned", perSection: 5, pinnedTrivia: byFranchise("Solo Leveling") },
+        { name: "Devil May Cry", domain: "preplanned", perSection: 5, pinnedTrivia: byFranchise("Devil May Cry") },
+        { name: "God of War", domain: "preplanned", perSection: 5, pinnedTrivia: byFranchise("God of War") },
+        { name: "Theme Songs: Games", domain: "audio", perSection: 5, pinnedThemes: themesBy("game"), clipSeconds: 30 },
+        { name: "Theme Songs: Anime", domain: "audio", perSection: 5, pinnedThemes: themesBy("anime"), clipSeconds: 30 },
+      ];
+      const modeTitle = "Preplanned Mega Quiz";
+      const session = {
+        cfg,
+        title: modeTitle,
+        wiki: null,
+        anime: null,
+        franchise: null,
+        mediaType: "preplanned",
+        difficulty: cfg.difficulty,
+        section: null,
+        mode: "preplanned",
+        sections: domainPlan.map((p) => ({
+          name: p.name, domain: p.domain, perSection: p.perSection,
+          state: SECTION_STATES.GENERATING, questions: [],
+          pinnedBrands: p.pinnedBrands, pinnedTrivia: p.pinnedTrivia,
+          pinnedThemes: p.pinnedThemes, clipSeconds: p.clipSeconds,
+          canCarryAudio: p.domain === "audio",
+        })),
+        sectionJobs: {},
+        activeSection: 0,
+        idx: 0,
+        questionNo: 0,
+        scores: new Map(),
+        revealed: [],
+        answeredBy: new Map(),
+        usedKeys: new Set(),
+        askedBy: senderJid,
+        askedByName: senderName,
+        startedAt: Date.now(),
+        token: 0,
+        cancelled: false,
+        timerId: null,
+        nextTimerId: null,
+        reassureTimerId: null,
+        qStartedAt: Date.now(),
+        qOpenUntil: 0,
+        qEpoch: 0,
+        revealLock: false,
+        callLLM: null,
+        animeCharacters: [],
+        charIndex: null,
+        otherTitles: [],
+      };
+      prep.session = session;
+      if (prep.cancelled) { session.cancelled = true; abortPrep(); return; }
+      // build every section up front (logos fetch verified images; themes pull
+      // 30s clips through the Go audio service) so the ready card is real.
+      for (let i = 0; i < session.sections.length; i++) {
+        await ensureSectionGenerating(session, i, sock, chatId);
+        if (prep.cancelled || session.cancelled) { abortPrep(); return; }
+      }
+      stopPrepTimers(prep);
+      const built = session.sections.reduce((a, s) => a + s.questions.length, 0);
+      if (built < 45) { // pack must land >= 45/60 (logo/audio fetches can drop a few)
+        pendingPrep.delete(chatId);
+        releaseLifecycle(chatId);
+        await sock.sendMessage(chatId, {
+          text: botMarker + `❌ Could not build the *${modeTitle}* right now (media builds fell short: ${built}/60). Try again in a minute.`,
+        }, { quoted: m }).catch(() => {});
+        return;
+      }
+      const totalQs = plannedTotal(session);
+      let head = botMarker + `🎯 *QUIZ STARTED - ${modeTitle.toUpperCase()}* 🎯\n\n`;
+      head += `🗺 3 acts • ${totalQs} rounds:\n`;
+      head += `  🏢 30 brand logos (current 2026 logos)\n`;
+      head += `  🧠 20 trivia - Dragon Ball / Solo Leveling / Devil May Cry / God of War\n`;
+      head += `  🎵 10 theme songs - 5 games + 5 anime, first 30 seconds\n\n`;
+      head += `📚 ${POINTS[cfg.difficulty]} Zeni per correct (+20 speed bonus) • sections keep their own leaderboards\n`;
+      head += `✍️ Answer: just type the answer in chat - or \`${prefix} <letter>\` where options are shown. One answer per player per question\n`;
+      head += `⏱ 30s per logo/trivia question • 45s per music question\n`;
+      head += `🛑 Cancel: \`${prefix} quiz end\`\n\n`;
+      head += `Let's go! 🚀`;
       await parkReadySession(sock, chatId, session, { head, introImage: null, botMarker, m, senderJid, prefix });
       ownsSlot = false; // OWNER SPEC §4: the slot now rides with the parked session
       return;

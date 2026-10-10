@@ -518,14 +518,16 @@ async function buildSpotSongQuestions({ count, usedKeys, difficulty, goService, 
 // ════════════════════════════════════════════
 const THEMES_POOL = themesPool.THEMES;
 
-async function buildThemeSongQuestionEntry(entry, others, difficulty, goService, trimFn = null) {
+async function buildThemeSongQuestionEntry(entry, others, difficulty, goService, trimFn = null, clipSeconds = 25) {
   // 💡 OWNER SPEC §3: disk cache + failure marks (same pattern as Spot the Song)
-  const cacheKey = `theme:${_norm(entry.show)}`;
+  // 💡 2026-10-10 preplanned pack: entries may carry their own cacheKey (the
+  // pack clips 30s while the regular mode clips 25s - they must not collide).
+  const cacheKey = entry.cacheKey || `theme:${_norm(entry.show)}`;
   const cachedClip = audioCache.get(cacheKey);
   if (cachedClip) return _finishThemeSong(entry, others, difficulty, cachedClip);
   if (audioCache.isFreshFail(cacheKey)) return null;
   if (!goService || typeof goService.getAudioInfo !== "function") return null;
-  const info = await goService.getAudioInfo(entry.search, { clipSeconds: 25, clipBitrate: "96k", timeoutMs: 120000, noRetry: true }).catch(() => null);
+  const info = await goService.getAudioInfo(entry.search, { clipSeconds, clipBitrate: "96k", timeoutMs: 120000, noRetry: true }).catch(() => null);
   if (!info || info.error || !info.audioURL || !info.metadata) { audioCache.markFail(cacheKey); return null; }
   const metaTitle = _norm(info.metadata.title);
   const showN = _norm(entry.show);
@@ -544,7 +546,7 @@ async function buildThemeSongQuestionEntry(entry, others, difficulty, goService,
   }
   if (!clip && trimFn) {
     const dl = await axiosGetBuffer(info.audioURL, 60000).catch(() => null);
-    if (dl && dl.length >= 50 * 1024) clip = await trimFn(dl, 25).catch(() => null);
+    if (dl && dl.length >= 50 * 1024) clip = await trimFn(dl, clipSeconds).catch(() => null);
   }
   if (!clip) { audioCache.markFail(cacheKey); return null; }
   audioCache.put(cacheKey, clip);
@@ -556,8 +558,19 @@ async function buildThemeSongQuestionEntry(entry, others, difficulty, goService,
 function _finishThemeSong(entry, others, difficulty, clip) {
   const optionsPool = [entry.show, ...others.map((o) => o.show)];
   const optOrder = _shuffle(optionsPool.map((_, i) => i));
+  // 💡 2026-10-10 OWNER preplanned pack: game themes ask "which video game",
+  // anime themes ask "which anime or show"; regular pool entries keep the
+  // original text. entry.alts (pack-only) adds accepted typed answers via the
+  // v8 matcher (q.typed + q.alts) - exact-match behavior is unchanged for
+  // pool entries (no alts field).
+  const kindLabel = entry.type === "game" ? "video game"
+    : entry.type === "anime" ? "anime or show"
+    : "show or movie";
+  const extras = Array.isArray(entry.alts) && entry.alts.length
+    ? { alts: entry.alts.slice(0, 6), typed: true }
+    : {};
   return {
-    q: `🎵 Which show or movie is this theme song from?`,
+    q: `🎵 Which ${kindLabel} is this theme song from?`,
     options: optOrder.map((i) => optionsPool[i]),
     correct: optOrder.indexOf(0),
     hideOptions: true, // OWNER SPEC §2: audio questions show no options
@@ -565,10 +578,11 @@ function _finishThemeSong(entry, others, difficulty, clip) {
     topic: "Theme Song",
     domain: "audio",
     type: "theme",
-    assetKey: `theme:${_norm(entry.show)}`,
+    assetKey: entry.cacheKey || `theme:${_norm(entry.show)}`,
     asset: { kind: "audio", buf: clip, mime: "audio/mpeg", subject: entry.show, source: "go-audio-theme" },
     song: entry.show,
     loreRef: { wiki: null, page: entry.show, section: "theme-song" },
+    ...extras,
   };
 }
 
