@@ -460,19 +460,22 @@ function enemyNativeFacing(id) {
 // the snout/jaw/horn all extend RIGHT of the eye. SKITTERSWARM demoted to
 // neutral: at 6× the swarm's heads point in mixed directions (no real
 // single-direction bias → never flip, per the rule below).
-// ⚠️ round-15 (owner 09:15Z proof: the ally Drake stared at the player's
-// back in r14_A3): the dragon art is NATIVELY LEFT-facing — render-verified
-// on the round-14 proof sheet. Moved to FACES_LEFT so allies mirror it to
-// face RIGHT toward the enemy wing and wild dragons on the right wing keep
-// facing LEFT toward the hero with NO flip.
-// ⚠️ round-16 bisector audit (owner 10:17Z: "some summons also facing the
-// wrong direction"): all 26 species re-cropped at 2× with a center bisector.
-// Four natively-RIGHT species were UNLISTED (boglurk's eye, fireguard's
-// visor, frostpeep's beak and lumenmoth's face all sit right-of-center) —
-// fine as unflipped allies, but as WILD summons on the enemy wing they
-// faced AWAY from the hero. Listed now:
-const SUMMON_FACES_LEFT = new Set(['BAT', 'GIANT', 'YETI', 'DRAGON']);
-const SUMMON_FACES_RIGHT = new Set(['PLAGUEFANG', 'DINO', 'BOAR', 'SNAKE', 'REPTILE', 'BOGLURK', 'FIREGUARD', 'FROSTPEEP', 'LUMENMOTH']);
+// ⚠️ round-17 FOURTH-PASS CORRECTION (owner 10:30Z: "the summons as
+// companions are not [facing correctly]"): the r15 "dragon natively LEFT"
+// verdict was WRONG and poisoned the companion arc — the ally mirror
+// (FACES_LEFT) flipped natively-RIGHT art to face the PLAYER's back on
+// every side card and away from the boss in boss rooms. Eyes-on 2× audit of
+// all 26 natives (r17_audit/native_zoom_1-3.jpg, per-sprite bisector):
+//   · DRAGON — eye, snout and wing sail all sit RIGHT of the bisector → R
+//   · GIANT — visor + shield arm RIGHT, flail trailing LEFT → R
+//   · YETI — face/belly RIGHT, white mane sweeps back-LEFT → R
+//   · STARNAIL — face cave + claws lower-RIGHT → R (wild-facing fix)
+//   · BAT — symmetric wings, centered face → FRONTAL, never flip
+// 13 natively-RIGHT, 13 frontal, ZERO natively-left species exist.
+// FACES_LEFT stays as the per-enemy headroom hook (owner round-12: "don't
+// make a universal rule … leave head room to tweak individuals").
+const SUMMON_FACES_LEFT = new Set([]);
+const SUMMON_FACES_RIGHT = new Set(['PLAGUEFANG', 'DINO', 'BOAR', 'SNAKE', 'REPTILE', 'BOGLURK', 'FIREGUARD', 'FROSTPEEP', 'LUMENMOTH', 'DRAGON', 'GIANT', 'YETI', 'STARNAIL']);
 const summonFaceKey = (file) => String(file || '').replace(/\.png$/i, '').toUpperCase();
 // best-effort species key for a wild summon BEFORE its art resolves
 function planWildSpeciesKey(state, enemy) {
@@ -521,7 +524,11 @@ const BG_META = {
     // APPROVED dusk family (bone_fields / obsidian_ridge anchors), floor
     // bands grid-measured on the 1200x900 cover-fits. Flat walkable floors
     // only — no tiered seating, no dune slopes.
-    'ashen_basilica_abyss.png':     { floorTop: 0.66, floorBottom: 0.95, vp: [0.50, 0.44], tags: ['basilica', 'nave'],     suit: ['undead', 'ethereal', 'arcane', 'brute', 'flying'] },
+    // round-17 (owner 10:30Z: "the background gloom brute DOESN'T WORK"):
+    // 'brute' dropped from the suit — the dim red nave swallowed big
+    // dark-magenta hulks (zero silhouette separation); brutes now stage on
+    // the bright plaza / causeway / ridge floors where they pop.
+    'ashen_basilica_abyss.png':     { floorTop: 0.66, floorBottom: 0.95, vp: [0.50, 0.44], tags: ['basilica', 'nave'],     suit: ['undead', 'ethereal', 'arcane', 'flying'] },
     'withered_grove_abyss.png':     { floorTop: 0.47, floorBottom: 0.95, vp: [0.50, 0.30], tags: ['grove', 'wasteland'],   suit: ['beast', 'undead', 'ethereal', 'flying'] },
 };
 // creature → habitat (drives stage compatibility; audit §5 "choose
@@ -711,6 +718,21 @@ async function planCombatLayout(state, opts = {}) {
         const bot = SY(_meta.floorBottom) - 6;
         return Math.min(Math.max(gy, top), bot);
     };
+    // 🕳️ round-17 (owner 10:30Z: "the background gloom brute DOESN'T WORK"):
+    // the 0.705 front slot was calibrated on stages whose wall base sits high
+    // (floorTop 0.40-0.53). On ashen_basilica (floorTop 0.66) the whole cast
+    // landed ~35px below the wall base — feet ON the seam, the entire
+    // foreground empty, the enemy reading as a backdrop mural instead of an
+    // actor on the stage. Sink the ENTIRE cast by one shared delta so the
+    // front feet line lands ~40% into the stage's floor band: formation
+    // geometry, aisles and the frozen player-left / summon-right structure
+    // are untouched; every stage whose band already covers 0.705 shifts by
+    // exactly 0 (dark_hall family 0.698 < 0.705), and the boss path returns
+    // above this line so it is never affected.
+    const castSink = _meta
+        ? Math.max(0, Math.min(0.80, _meta.floorTop + 0.40 * (_meta.floorBottom - _meta.floorTop)) - 0.705)
+        : 0;
+    const FY = (fy) => fy + castSink;
 
     // formation slots (audit §3): enemies back-left upper ON the floor plane,
     // never at the screen edge; front slot = the ACTIVE enemy, queued pack
@@ -809,7 +831,7 @@ async function planCombatLayout(state, opts = {}) {
         const art = m.kind === 'wild' ? null : resolveEnemyArtRegular(m.e);
         const speciesKey = m.kind === 'wild' ? summonFaceKey(plan.wildSpecies) : null;
         const sizeMul = m.kind === 'wild' ? summonSizeOf(speciesKey) : enemySizeOf(enemyIdOf(m.e));
-        const cx = SX(m.slot.fx), gy = floorClamp(SY(m.slot.fy));
+        const cx = SX(m.slot.fx), gy = floorClamp(SY(FY(m.slot.fy)));
         let h = Math.round(perspH(gy) * m.slot.mul * sizeMul
             * (m.kind === 'wild' ? 1.18 : 1.12));
         // DEPTH CAP (VLM critic, bg4_2e zoom-verified): a big-bodied back-row
@@ -863,7 +885,7 @@ async function planCombatLayout(state, opts = {}) {
         // estimated pack halfWs on the INNER ladder (h*0.42 estimate, the
         // measured box replaces it in the measure pass below)
         const estHalf = (s) => {
-            const gy = floorClamp(SY(s.fy));
+            const gy = floorClamp(SY(FY(s.fy)));
             const est = packQueueLive[0] ? Math.round(perspH(gy) * s.mul * enemySizeOf(enemyIdOf(packQueueLive[0])) * 1.12 * 0.42) : 60;
             return Math.min(est, Math.round((actors[0].h || 200) * 0.92 * 0.42));
         };
@@ -908,7 +930,7 @@ async function planCombatLayout(state, opts = {}) {
             const art = await resolveSummonArt(s.species || s.name);
             const slot = arc[i] || arc[arc.length - 1];
             const speciesKey = summonFaceKey(art ? art.file : (s.species || s.name));
-            const cx = SX(slot.fx), gy = floorClamp(SY(slot.fy));
+            const cx = SX(slot.fx), gy = floorClamp(SY(FY(slot.fy)));
             actors.push({
                 role: 'ally', ref: s, art: art ? { img: art.img, file: art.file } : null,
                 cx, gy,
@@ -924,7 +946,7 @@ async function planCombatLayout(state, opts = {}) {
     } catch (e) { /* ally art is cosmetic — never fail the scene for it */ }
     // player — front-left slot (Battle-Example position), native art faces
     // RIGHT toward the enemy wing (the old side layout mirrored it left)
-    const pgy = floorClamp(SY(PLAYER_SLOT.fy));
+    const pgy = floorClamp(SY(FY(PLAYER_SLOT.fy)));
     actors.push({
         role: 'player', ref: me,
         cx: SX(PLAYER_SLOT.fx), gy: pgy,

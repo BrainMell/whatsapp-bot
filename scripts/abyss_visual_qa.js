@@ -285,11 +285,22 @@ check('pack fight: queued members join the stage', pack.pack.length === 2);
     check('full party (3 enemies + 3 allies + player): zero fused bodies', fused === 0);
     const allyByFile = (f) => full.allies.find((a) => a.art && a.art.file === f);
     // round-13 mirror: the party stands LEFT and faces RIGHT — natively-right
-    // art (boar/snake) renders UNFLIPPED; natively-left art (dragon — r15
-    // render-proof: the Drake stared at the player's back) flips to face right.
+    // art renders UNFLIPPED. round-17 FOURTH-PASS correction: ALL 26 natives
+    // re-audited at 2× with a bisector — dragon/giant/yeti are natively RIGHT
+    // (the r15 'dragon LEFT' verdict was wrong and mirrored the companion arc
+    // at the player's back), BAT is frontal, zero natively-left species exist.
     check('round-13 facing: boar natively RIGHT → ally boar faces RIGHT unflipped (party side is left now)', allyByFile('boar.png') && allyByFile('boar.png').flip === false);
     check('round-13 facing: snake natively RIGHT → ally snake faces RIGHT unflipped', allyByFile('snake.png') && allyByFile('snake.png').flip === false);
-    check('round-15 facing: dragon natively LEFT → ally dragon FLIPS to face RIGHT (r14 proof: it stared at the hero)', allyByFile('dragon.png') && allyByFile('dragon.png').flip === true);
+    check('round-17 facing: dragon natively RIGHT (2× bisector audit) → ally dragon faces RIGHT unflipped (owner 10:30Z: companions faced wrong)', allyByFile('dragon.png') && allyByFile('dragon.png').flip === false);
+    const comp = await abyssScene.planCombatLayout(mkState({ sessionKey: 'qa_comp', abyssRun: { currentEncounterType: 'combat' }, summons: [
+        { species: 'giant', name: 'Walls' },
+        { species: 'yeti', name: 'Frost' },
+        { species: 'bat', name: 'Nocturne' },
+    ] }));
+    const compByFile = (f) => comp.allies.find((a) => a.art && a.art.file === f);
+    check('round-17 facing: giant natively RIGHT → ally giant unflipped', compByFile('giant.png') && compByFile('giant.png').flip === false);
+    check('round-17 facing: yeti natively RIGHT → ally yeti unflipped', compByFile('yeti.png') && compByFile('yeti.png').flip === false);
+    check('round-17 facing: bat FRONTAL (symmetric wings) → ally bat never flips', compByFile('bat.png') && compByFile('bat.png').flip === false);
     const pw = await abyssScene.planCombatLayout(mkState({
         kind: 'wild',
         abyssRun: { currentEncounterType: 'wild_summon', currentEncounterData: { species: 'agumon', rarity: 'RARE' } },
@@ -319,8 +330,10 @@ check('pack fight: queued members join the stage', pack.pack.length === 2);
             { species: 'dragon', name: 'Vyrn' },
         ],
     }));
+    // round-16 + r17: boss-path allies stand LEFT of the boss and face RIGHT
+    // toward it — natively-right art (all of it, per the r17 audit) unflipped
     check('§boss round-16: ally boar (natively RIGHT) faces the boss unflipped', pboss.allies.length === 2 && pboss.allies.find((a) => a.art && a.art.file === 'boar.png').flip === false);
-    check('§boss round-16: ally dragon (natively LEFT) flips to face the boss', pboss.allies.find((a) => a.art && a.art.file === 'dragon.png').flip === true);
+    check('§boss round-17: ally dragon (natively RIGHT, r17 audit) faces the boss unflipped', pboss.allies.find((a) => a.art && a.art.file === 'dragon.png').flip === false);
 
     // ═══ 6. floor card ═══
     section('§3 — floor descent card');
@@ -369,11 +382,42 @@ check('pack fight: queued members join the stage', pack.pack.length === 2);
         pwild.enemy && pwild.enemy.art && pwild.enemy.art.file === 'dragon.png');
     check('ally art = the game\'s own bat sprite (bat.png)',
         pwild.allies.length === 1 && pwild.allies[0].art && pwild.allies[0].art.file === 'bat.png');
-    // round-15 render-proof (r14_A3): dragon.png faces LEFT natively — the
-    // ally Drake stared at the player's back. A wild dragon on the RIGHT
-    // enemy wing therefore faces the hero with NO flip.
-    check('dragon natively faces LEFT (r15 render-proof) → wild dragon faces the hero on the right wing unflipped',
-        pwild.enemy.flip === false);
+    // round-17 render-proof: dragon.png faces RIGHT natively (2× bisector
+    // audit) — a wild dragon on the RIGHT enemy wing therefore FLIPS to face
+    // the hero. (The r15 'wild dragon unflipped' row was built on the wrong
+    // native verdict and is inverted here.)
+    check('dragon natively faces RIGHT (r17 audit) → wild dragon FLIPS to face the hero on the right wing',
+        pwild.enemy.flip === true);
+    // round-17: starnail newly classified natively RIGHT (face cave + claws
+    // lower-right) — as a wild it must flip toward the hero
+    const pst = await abyssScene.planCombatLayout(mkState({
+        kind: 'wild',
+        abyssRun: { currentEncounterType: 'wild_summon', currentEncounterData: { species: 'starnail', rarity: 'RARE' } },
+        enemies: [{ name: 'starnail', isWildSummon: true, spriteIndex: 0, currentHP: 400, stats: { hp: 400, maxHp: 600 } }],
+    }));
+    check('round-17: starnail natively RIGHT → wild starnail flips to face the hero', pst.enemy && pst.enemy.flip === true);
+    // round-17: ashen_basilica no longer suits 'brute' — the dim red nave
+    // swallowed dark-magenta hulks (owner: "the background gloom brute
+    // DOESN'T WORK"); brutes stage on bright floors where they pop
+    const bgBrute = abyssScene.bgForEncounter(18, 'brute', {});
+    check('round-17: basilica never stages brute-habitat enemies', bgBrute !== 'ashen_basilica_abyss.png');
+    // round-17 cast sink: on deep-band stages (basilica floorTop 0.66) the
+    // whole cast sinks so the front feet line lands ~40% into the floor band
+    // instead of hugging the wall seam; shallow-band stages shift by exactly 0
+    const pbasilica = await abyssScene.planCombatLayout(mkState({
+        abyssFloor: 18,
+        abyssRun: { currentEncounterType: 'combat' },
+        enemies: [{ name: 'HOLLOW SERAPH', isEnemy: true, spriteIndex: 74, currentHP: 900, stats: { hp: 900, maxHp: 1200 } }],
+    }), { forceBg: 'ashen_basilica_abyss.png' });
+    const phall = await abyssScene.planCombatLayout(mkState({
+        abyssFloor: 18,
+        abyssRun: { currentEncounterType: 'combat' },
+        enemies: [{ name: 'GLOOM BRUTE', isEnemy: true, spriteIndex: 72, currentHP: 900, stats: { hp: 900, maxHp: 1200 } }],
+    }), { forceBg: 'dark_hall_abyss.png' });
+    check('round-17 cast sink: basilica feet land IN the floor band (≥ 96px below the wall base, not on the seam)',
+        pbasilica.player.gy >= 690 && pbasilica.enemy.gy >= pbasilica.player.gy - 8);
+    check('round-17 cast sink: shallow-band stages unchanged (dark_hall feet at the frozen 0.700 line)',
+        Math.abs(phall.player.gy - 630) <= 2);
     check('allies stand in the arc ABOVE the HUD panel (feet clear of panel top 644)',
         pwild.allies.every((a) => a.gy < 646));
 
