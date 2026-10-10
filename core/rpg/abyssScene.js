@@ -771,7 +771,7 @@ async function planCombatLayout(state, opts = {}) {
         2: [{ fx: 0.360, fy: 0.672, mul: 0.62 }, { fx: 0.442, fy: 0.634, mul: 0.58 }],
         3: [{ fx: 0.356, fy: 0.676, mul: 0.60 }, { fx: 0.436, fy: 0.638, mul: 0.57 }, { fx: 0.498, fy: 0.602, mul: 0.54 }],
     };
-    const ALLY_LANE_MAXW = 170;   // px of horizontal lane per summon (content)
+    const ALLY_LANE_MAXW = 140;   // px of horizontal lane per summon (content) — r15: the 7-body stress case needs the arc to actually separate; 170 let a wide boar hog half the party band
     // the hero: FRONT-LEFT — the actual Battle-Example position (owner 08:09Z:
     // "the player is in the center why?"). fx 0.260 mirrors the approved
     // round-4 player slot (cx 890 → 310 on the mirrored stage); feet at
