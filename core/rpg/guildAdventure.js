@@ -4426,6 +4426,13 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   const chatId = state.chatId;
   if (!groq) groq = state.groq;
   state.inCombat = true;
+  // 💡 ROUND-19: generation stamp + guard re-arm. Every fight gets a fresh
+  // combatGen; stale resolutions carrying the previous gen are refused in
+  // checkCombatEnd/endCombat (the ghost-victory quest-skip fix). A fresh
+  // fight must also never inherit the previous fight's claimed end-guard.
+  state.combatGen = (state.combatGen || 0) + 1;
+  state.isEndingCombat = false;
+  state.combatProcessing = false;
 
   // 💡 FIX 2026-08-31: re-apply combat-start class passives. endCombat resets
   // p.passivesApplied=false + p.passiveMagBonus=1 intending re-application at
@@ -4702,11 +4709,26 @@ async function startCombat(sock, groq, encounter, sessionKey) {
 }
 
 async function checkCombatEnd(sock, state, sessionKey) {
-  // 💡 Phase 2 fix: exclude summons from the defeat check.
-  // A party wipe with summons alive still counts as defeat - summons
-  // are allies, not party members. But summons alone can't win either.
+  // 💡 ROUND-19 FIX (owner 2026-10-10 14:06Z quest-skip report): a stale
+  // resolution landing BETWEEN fights saw the previous roster (all dead) or
+  // an empty `state.enemies` and `.every()` returned TRUE on the vacuous
+  // roster — declaring an instant victory for a boss that was never fought.
+  // Screenshot proof: Mutation Prime splash → stale VICTORY card (+7000/
+  // +25892, the PREVIOUS fight's numbers) → BATTLE COMMENCES → tally with
+  // BOSSES DEFEATED: 0 → "🎉 QUEST COMPLETE!" the boss never earned, and
+  // questsCompleted never moved (no boss-kill progress → "didn't get counted
+  // as a quest"). Two hard gates now:
+  //   1. combat must be LIVE — between-fight windows are dead to resolutions;
+  //   2. victory requires a NON-EMPTY enemy roster — `.every()` on `[]`
+  //      is vacuously true and must never read as "all enemies dead".
+  if (!state || !state.inCombat) return false;
+  // 💡 ROUND-19: generation stamp — a resolution from a superseded fight
+  // (stale timer / stale turn-loop iteration that kept running after
+  // endCombat and re-armed on the NEXT fight's state) must not resolve
+  // this one. Every startCombat bumps combatGen.
+  const combatGen = state.combatGen || 0;
   const playersDead = state.players.every((p) => p.isDead || p.stats.hp <= 0);
-  const enemiesDead = state.enemies.every((e) => e.stats.hp <= 0);
+  const enemiesDead = state.enemies.length > 0 && state.enemies.every((e) => e.stats.hp <= 0);
 
   if (playersDead || enemiesDead) {
     // Clear any pending turn timers to prevent infinite loops
@@ -4720,7 +4742,7 @@ async function checkCombatEnd(sock, state, sessionKey) {
     // defeat regardless of enemy state. Only count as victory if the
     // party has at least one survivor.
     const victory = enemiesDead && !playersDead;
-    await endCombat(sock, victory, sessionKey);
+    await endCombat(sock, victory, sessionKey, combatGen);
     return true;
   }
   return false;
@@ -4730,12 +4752,26 @@ async function processCombatTurn(sock, sessionKey) {
   const state = gameStates.get(sessionKey);
   if (!state || !state.inCombat) return;
 
+  // 💡 ROUND-19: capture this fight's generation. If a NEWER fight starts
+  // while this loop is still draining (awaited sends can outlive endCombat
+  // by seconds), the loop must die instead of re-arming on the next
+  // fight's state — that stale-armed loop calling checkCombatEnd was the
+  // trigger path of the ghost-victory boss skip.
+  const combatGenAtLoopStart = state.combatGen || 0;
+
   // Prevent overlapping turn processing
   if (state.combatProcessing) return;
   state.combatProcessing = true;
 
   try {
     while (state.inCombat) {
+      // 💡 ROUND-19: a newer fight owns this state — stop immediately.
+      if ((state.combatGen || 0) !== combatGenAtLoopStart) {
+        console.warn(
+          `[Quest] turn loop aborted: combat gen moved (${combatGenAtLoopStart} → ${state.combatGen || 0}) for ${sessionKey}`,
+        );
+        return;
+      }
       // Reset justDied flags
       state.players.forEach((p) => (p.justDied = false));
       state.enemies.forEach((e) => (e.justDied = false));
@@ -7309,10 +7345,22 @@ async function handleAbyssVictory(sock, sessionKey) {
   }
 }
 
-async function endCombat(sock, victory, sessionKey) {
+async function endCombat(sock, victory, sessionKey, expectedGen) {
   END_DEBUG(`endCombat ENTER key=${sessionKey} victory=${victory}`);
   const state = gameStates.get(sessionKey);
   if (!state || state.isEndingCombat) return;
+  // 💡 ROUND-19 (ghost-victory quest-skip fix): refuse resolutions that
+  // belong to a superseded fight. A stale turn-loop iteration or enemy-turn
+  // promise from encounter N can land on encounter N+1's freshly-built
+  // state (the boss fight) and — before any real action — end it as a
+  // "victory" with recycled rewards. Callers that captured a combatGen
+  // (checkCombatEnd) get verified here; mismatched gens are dropped.
+  if (expectedGen !== undefined && (state.combatGen || 0) !== expectedGen) {
+    console.warn(
+      `[Quest] endCombat REFUSED stale resolution (expected gen ${expectedGen}, live gen ${state.combatGen || 0}) for ${sessionKey}`,
+    );
+    return;
+  }
   // ⚔️ RACE FIX 2026-10-04 (owner spec §18/§21 — "one evaluation per event"):
   // the guard used to be claimed AFTER the awaited onEnd hook below, so a
   // second combat action landing inside that async window re-entered
@@ -7322,6 +7370,7 @@ async function endCombat(sock, victory, sessionKey) {
   // death). Claim the flag SYNCHRONOUSLY before any await; the existing
   // resets (victory nextStage timer / defeat cleanup) are unchanged.
   state.isEndingCombat = true; // claim FIRST — no re-entry during the async hook
+  const combatGenAtEnd = state.combatGen || 0;
   // ⚔️ RUINS: free the frozen battle-scene layout for this session
   try { require('./guildWar/battleScene').clearLayout(sessionKey); } catch (e) {}
   // 🕳️ ABYSS: free the frozen abyss-scene layout for this session
@@ -7705,6 +7754,16 @@ async function endCombat(sock, victory, sessionKey) {
     setTimeout(
       () => {
         END_DEBUG(`break timer FIRED key=${sessionKey} → nextStage`);
+        // 💡 ROUND-19 (ghost-victory quest-skip fix): if a NEWER fight owns
+        // the state by now, this victory's flow must NOT advance the
+        // dungeon — that is exactly the boss-skip race (stale break timer
+        // marching the quest past a boss that is still alive).
+        if ((state.combatGen || 0) !== combatGenAtEnd) {
+          console.warn(
+            `[Quest] break timer aborted: combat gen moved (${combatGenAtEnd} → ${state.combatGen || 0}) for ${sessionKey}`,
+          );
+          return; // the newer fight's own endCombat will schedule progression
+        }
         state.isEndingCombat = false; // Reset guard BEFORE calling nextStage
 
         // 💡 ABYSS MODE: On victory, advance Abyss floor instead of nextStage
@@ -8641,6 +8700,16 @@ async function nextStage(sock, groq, sessionKey) {
     `[Quest] nextStage triggered for ${sessionKey}. isProcessing: ${state.isProcessing}, Encounter: ${state.encounter}/${state.maxEncounters}`,
   );
 
+  // 💡 ROUND-19 (ghost-victory quest-skip fix): the dungeon flow must NEVER
+  // advance while a fight is live. A stale endCombat/break-timer firing
+  // nextStage mid-boss-fight is the exact mechanism that skipped the boss,
+  // printed an unearned QUEST COMPLETE, and left a dangling
+  // "Awaiting first action..." battle behind.
+  if (state.inCombat) {
+    console.warn(`[Quest] nextStage BLOCKED: combat is live for ${sessionKey}`);
+    return;
+  }
+
   if (state.isProcessing) {
     console.warn(`[Quest] nextStage blocked: already processing for ${chatId}`);
     // Safety: if stuck for more than 30s, force clear
@@ -8955,76 +9024,82 @@ async function executeEncounter(sock, groq, encounterType, sessionKey) {
 
           // Resolve sprite filename - mirror the Go BossNameSprites map
           // so the splash shows the same image the combat scene will use.
-          // 💡 FIX (Item #9): expanded to mirror the Go-side BossNameSprites
-          // map so splash + combat render the same distinct sprite per boss.
+          // 💡 ROUND-19 (owner 2026-10-10 14:06Z: "These robot enemies keep
+          // being used as the only boss Sprites ... Where's the diverse boss
+          // sprite tree??"): the old map pointed nearly every boss at the
+          // boss_N mecha-spider family — Mutation Prime (C) and Primordial
+          // Chaos (A) rendered as near-twin robot spiders. The map now draws
+          // from the round-13 dusk bestiary (20 creatures, owner-approved
+          // style) with THEMATIC assignments: namesakes stay namesakes
+          // (ELDER CHAOS → elder_chaos, VOID TITAN → void_titan, SHADOW
+          // STALKER → shadow_stalker …), fire bosses burn red, wraiths haunt
+          // frost, seraphs take the heavens — and ONLY the genuinely
+          // mechanical bosses (CLOCKWORK TITAN, MECH GOD) keep robot art.
+          // Values mirror pkg/combat/sprites.go BossNameSprites 1:1 (combat
+          // scene is the source of truth) — one audit, both pipelines.
           const BOSS_SPLASH_SPRITES = {
-            // 💡 2026-09-15 (owner: "boss card was different from the actual
-            // boss"): this map DIVERGED from the Go BossNameSprites map when
-            // the Go side moved mid/high bosses to the new boss_N sprites -
-            // splash showed the old midlevel art while the fight rendered
-            // boss_N. Values below mirror sprites.go BossNameSprites 1:1
-            // (combat scene is the source of truth).
-            // S/SS/SSS-rank dungeon bosses
-            "PRIMORDIAL CHAOS": "boss_0_N.png",
-            "ELDER CHAOS": "boss_1_N.png",
-            "VOID TITAN": "boss_2_N.png",
-            "ABYSSAL GOD": "boss_3_N.png",
-            "MUTATION PRIME": "boss_4_N.png",
-            "ELEMENTAL ARCHON": "boss_5_N.png",
-            // Mid-level bosses
-            "THE INFECTED COLOSSUS": "boss_6_N.png",
-            "INFECTED COLOSSUS": "boss_6_N.png",
-            "MUTATED OVERSEER": "midlevelbosses (4).png",
-            "CORRUPTED GUARDIAN": "boss_7_N.png",
-            "STONE HULK": "boss_9_N.png",
-            "CRYSTAL CORRUPTED": "boss_10_N.png",
-            "EARTH WARDEN": "boss_11_N.png",
-            "FROST GHOUL": "boss_12_N.png",
-            "GLACIAL BEAST": "boss_13_N.png",
-            // High-level bosses
-            "MAGMA BRUTE": "boss_0_S.png",
-            "HELLFIRE DEMON": "boss_1_S.png",
-            "ABYSSAL HORROR": "boss_2_S.png",
-            "TSUNAMI WALKER": "boss_3_S.png",
-            "BLIZZARD WRAITH": "boss_4_S.png",
-            "GRAVEYARD LORD": "boss_5_S.png",
-            "SHADOW LORD": "boss_6_S.png",
-            // Dragon bosses
-            "IGNEEL THE FIRE KING": "boss_7_S.png",
-            "ANCIENT DRAGON": "boss_7_S.png",
-            "ETERNAL DRAGON": "boss_9_S.png",
-            "ELDER FLAME": "boss_10_S.png",
-            // Trial bosses
-            "ARCANE SENTINEL": "boss_11_S.png",
-            "LICH KING": "boss_12_S.png",
-            "SHADOW STALKER": "boss_13_S.png",
-            "VOID ASSASSIN": "highlevelbosses (9).png",
-            "IRON BODY GRANDMASTER": "midlevelbosses (3).png",
-            "ANCIENT WURM": "boss_7_S.png",
-            "SOUL EATER": "mutated (3).png",
-            "ABYSSAL WHISPER": "boss_3_S.png",
-            "ELEMENTAL PRIMORDIAL": "boss_5_N.png",
-            "PRIME ELEMENT": "boss_5_N.png",
-            "VOID NECROMANCER": "mutated (5).png",
-            "CHRONOS WARDEN": "boss_4_S.png",
-            "TIME EATER": "mutated (7).png",
-            "HEAVENLY GUARDIAN": "boss_3_N.png",
-            "SERAPHIM PRIME": "boss_0_S.png",
-            "FOREST ANCESTOR": "midlevelbosses (5).png",
-            "GAIA SENTINEL": "midlevelbosses (5).png",
-            "GOLDEN GOLEM": "midlevelbosses (3).png",
-            "TREASURE HOARDER": "boss_7_S.png",
-            "SOUND REAPER": "mutated (4).png",
-            "MAESTRO OF VOID": "boss_2_N.png",
+            // ═══ S/SS/SSS-rank dungeon bosses ═══
+            "PRIMORDIAL CHAOS": "primordial_chaos.png",
+            "ELDER CHAOS": "elder_chaos.png",
+            "VOID TITAN": "void_titan.png",
+            "ABYSSAL GOD": "abyssal_god.png",
+            "MUTATION PRIME": "venom_spider.png",
+            "ELEMENTAL ARCHON": "elemental_archon.png",
+            // ═══ Mid-level bosses ═══
+            "THE INFECTED COLOSSUS": "infected_colossus.png",
+            "INFECTED COLOSSUS": "infected_colossus.png",
+            "MUTATED OVERSEER": "mutated_overseer.png",
+            "CORRUPTED GUARDIAN": "corrupted_guardian.png",
+            "STONE HULK": "gloom_brute.png",
+            "CRYSTAL CORRUPTED": "void_corrupted.png",
+            "EARTH WARDEN": "abyss_weaver.png",
+            "FROST GHOUL": "night_wraith.png",
+            "GLACIAL BEAST": "mutated_hound.png",
+            // ═══ High-level bosses ═══
+            "MAGMA BRUTE": "crimson_devourer.png",
+            "HELLFIRE DEMON": "void_harbinger.png",
+            "ABYSSAL HORROR": "shadow_stalker.png",
+            "TSUNAMI WALKER": "dusk_crawler.png",
+            "BLIZZARD WRAITH": "night_wraith.png",
+            "GRAVEYARD LORD": "void_harbinger.png",
+            "SHADOW LORD": "shadow_stalker.png",
+            // ═══ Dragon bosses ═══
+            "IGNEEL THE FIRE KING": "crimson_devourer.png",
+            "ANCIENT DRAGON": "crimson_devourer.png",
+            "ETERNAL DRAGON": "void_harbinger.png",
+            "ELDER FLAME": "elemental_archon.png",
+            // ═══ Trial bosses ═══
+            "ARCANE SENTINEL": "corrupted_guardian.png",
+            "LICH KING": "night_wraith.png",
+            "SHADOW STALKER": "shadow_stalker.png",
+            "VOID ASSASSIN": "void_harbinger.png",
+            "IRON BODY GRANDMASTER": "blood_reaver.png",
+            "ANCIENT WURM": "dusk_crawler.png",
+            "SOUL EATER": "hollow_seraph.png",
+            "ABYSSAL WHISPER": "abyss_weaver.png",
+            "ELEMENTAL PRIMORDIAL": "elemental_archon.png",
+            "PRIME ELEMENT": "elemental_archon.png",
+            "VOID NECROMANCER": "void_corrupted.png",
+            "CHRONOS WARDEN": "corrupted_guardian.png",
+            "TIME EATER": "crimson_devourer.png",
+            "HEAVENLY GUARDIAN": "hollow_seraph.png",
+            "SERAPHIM PRIME": "hollow_seraph.png",
+            "FOREST ANCESTOR": "abyss_weaver.png",
+            "GAIA SENTINEL": "infected_colossus.png",
+            "GOLDEN GOLEM": "gloom_brute.png",
+            "TREASURE HOARDER": "abyss_weaver.png",
+            "SOUND REAPER": "void_harbinger.png",
+            "MAESTRO OF VOID": "void_corrupted.png",
+            // genuinely mechanical bosses keep the mecha family
             "CLOCKWORK TITAN": "boss_0_S.png",
             "MECH GOD": "boss_3_S.png",
-            "DEMON LORD": "boss_4_S.png",
-            "PRIMORDIAL EVIL": "boss_0_N.png",
-            "LEVIATHAN": "boss_3_N.png",
-            "LEVIATHAN SPAWN ALPHA": "boss_3_N.png",
-            "INFERNAL OVERLORD": "boss_1_S.png",
-            "PRIMORDIAL FLAME": "boss_7_S.png",
-            "PERMAFROST TITAN": "boss_4_S.png",
+            "DEMON LORD": "void_harbinger.png",
+            "PRIMORDIAL EVIL": "primordial_chaos.png",
+            "LEVIATHAN": "crimson_devourer.png",
+            "LEVIATHAN SPAWN ALPHA": "dusk_crawler.png",
+            "INFERNAL OVERLORD": "crimson_devourer.png",
+            "PRIMORDIAL FLAME": "elemental_archon.png",
+            "PERMAFROST TITAN": "void_titan.png",
           };
           const splashSprite = BOSS_SPLASH_SPRITES[bossNameUpper] || "calamaties (1).png";
 
@@ -12235,4 +12310,7 @@ module.exports = {
   combatTargetIcon,
   _soloHunterXpMult,
   _isSoloFighter,
+  // 💡 ROUND-19 QA hooks (ghost-victory boss-skip regression): deterministic
+  // access to the guarded resolution paths. Test-only — no gameplay caller.
+  _qa: { checkCombatEnd, endCombat, gameStates, scopedKey },
 };
