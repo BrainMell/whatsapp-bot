@@ -203,17 +203,28 @@ const LOGOS_POOL = (() => {
     ...logoPoolsV2.TRAVEL, ...logoPoolsV2.MEDIA, ...logoPoolsV2.FINTECH, ...logoPoolsV2.HEALTH,
     ...logoPoolsV2.INDUSTRY, ...logoPoolsV2.TELECOM,
   ];
+  // 💡 2026-10-10 owner: "Group the logos into the easy medium and hard, with
+  // which is more likely to be known" - dataset entries carry their baked
+  // recognizability tier (difficulty) + raw signals (pv90 pageviews, sl
+  // sitelinks) from scripts/logo_tier_classify.js.
   // dataset-sourced additions: only entries that carry a verified modern logo
   for (const b of ((logoDataset && logoDataset.brands) || [])) {
     if (!b || !b.name || !b.modern || (!b.file && !b.url)) continue;
-    all.push({ name: b.name, wiki: b.wiki || b.name, cat: b.cat || "Brands" });
+    all.push({ name: b.name, wiki: b.wiki || b.name, cat: b.cat || "Brands", difficulty: b.difficulty || null, pv90: b.pv90 || 0, sl: b.sl || 0 });
   }
+  const tierByName = new Map(((logoDataset && logoDataset.brands) || []).filter((b) => b && b.difficulty).map((b) => [_norm(b.name), b.difficulty]));
   const seen = new Set();
   return all.filter((b) => {
     const k = _norm(b.name);
     if (!k || seen.has(k)) return false;
     seen.add(k);
     return true;
+  }).map((b) => {
+    // curated-pool entries tier via dataset name match; anything with no
+    // signal behind it stays "medium" (honest middle) so an unknown brand
+    // can never flood the easy bucket
+    if (!b.difficulty) b.difficulty = tierByName.get(_norm(b.name)) || "medium";
+    return b;
   });
 })();
 
@@ -234,6 +245,14 @@ const DATASET_BY_NAME = new Map(((logoDataset && logoDataset.brands) || []).map(
 
 function logoDatasetInfo() {
   return { available: !!logoDataset, count: DATASET_BY_NAME.size, generatedAt: logoDataset?.generatedAt || null, refinedAt: logoDataset?.refinedAt || null };
+}
+
+// 💡 2026-10-10 owner tiering: recognizability buckets for the logo pool
+// (easy / medium / hard = how likely an average person knows the brand).
+function logoTierInfo() {
+  const c = { easy: 0, medium: 0, hard: 0 };
+  for (const b of LOGOS_POOL) c[b.difficulty || "medium"]++;
+  return { ...c, tieredAt: (logoDataset && logoDataset.tieredAt) || null, method: (logoDataset && logoDataset.tiers && logoDataset.tiers.method) || null };
 }
 
 // shared question assembler (dataset path + live-search path)
@@ -318,39 +337,72 @@ async function buildLogosQuestion(brand, others, difficulty) {
 // build `count` verified logo questions. Tries many brands (each candidate
 // costs one API call + one download); stops at count or pool exhaustion.
 // usedKeys: session-level Set (dedup across sections/retries).
+//
+// 💡 2026-10-10 owner tiering ("Group the logos into the easy medium and
+// hard, with which is more likely to be known"): the SESSION difficulty now
+// biases the mix of brand-recognizability tiers (easy = mostly household
+// names, hard = mostly niche brands), every question carries its brand's
+// tier as q.difficulty, and the finished round always ramps easy -> medium
+// -> hard so a session gets harder as it goes.
+const LOGO_TIER_WEIGHTS = {
+  easy: { easy: 0.6, medium: 0.3, hard: 0.1 },
+  medium: { easy: 0.25, medium: 0.5, hard: 0.25 },
+  hard: { easy: 0.1, medium: 0.3, hard: 0.6 },
+};
+
 async function buildLogosQuestions({ count, usedKeys, difficulty, bytesCapWarn = null }) {
   const n = Math.max(1, Math.min(parseInt(count, 10) || 10, LOGOS_POOL.length - 4));
-  const out = [];
+  const w = LOGO_TIER_WEIGHTS[difficulty] || { easy: 0.45, medium: 0.35, hard: 0.2 }; // unspecified sessions: recognizable-weighted default
+  const quota = { easy: Math.round(n * w.easy), hard: Math.round(n * w.hard), medium: 0 };
+  quota.medium = Math.max(0, n - quota.easy - quota.hard);
   const claimed = new Set();
   const usage = loadUsage("logos");
-  const order = weightedOrder(LOGOS_POOL, usage, "logos");
-  for (const brand of order) {
-    if (out.length >= n) break;
-    const key = `logo:${_norm(brand.name)}`;
-    if (usedKeys.has(key) || claimed.has(key)) continue;
-    // 💡 decoys (owner brief §8): visually-similar logos when embeddings are
-    // available (challenging, plausible options), else same-category brands.
-    let others = visuallySimilarDecoys(brand, 3);
-    if (others.length < 3) {
-      others = _shuffle(LOGOS_POOL.filter((b) => b.cat === brand.cat && b.name !== brand.name)).slice(0, 3);
-    }
-    if (others.length < 3) {
-      for (const b of _shuffle(LOGOS_POOL)) {
-        if (others.length >= 3) break;
-        if (b.name !== brand.name && !others.some((o) => o.name === b.name)) others.push(b);
+  const order = weightedOrder(LOGOS_POOL, usage, "logos"); // fairness weighting applies within every tier
+  const out = [];
+  const tryTier = async (tier, want) => {
+    let got = 0;
+    for (const brand of order) {
+      if (got >= want) break;
+      if ((brand.difficulty || "medium") !== tier) continue;
+      const key = `logo:${_norm(brand.name)}`;
+      if (usedKeys.has(key) || claimed.has(key)) continue;
+      // 💡 decoys (owner brief §8): visually-similar logos when embeddings are
+      // available (challenging, plausible options), else same-category brands.
+      let others = visuallySimilarDecoys(brand, 3);
+      if (others.length < 3) {
+        others = _shuffle(LOGOS_POOL.filter((b) => b.cat === brand.cat && b.name !== brand.name)).slice(0, 3);
       }
+      if (others.length < 3) {
+        for (const b of _shuffle(LOGOS_POOL)) {
+          if (others.length >= 3) break;
+          if (b.name !== brand.name && !others.some((o) => o.name === b.name)) others.push(b);
+        }
+      }
+      if (others.length < 3) continue;
+      const q = await buildLogosQuestion(brand, others, tier).catch(() => null); // per-question difficulty = the BRAND's tier
+      if (!q) continue;
+      claimed.add(key);
+      if (usedKeys) usedKeys.add(key);
+      bumpUsage(usage, "logos", brand); // selection counts toward fairness
+      out.push(q);
+      got++;
     }
-    if (others.length < 3) continue;
-    const q = await buildLogosQuestion(brand, others, difficulty).catch(() => null);
-    if (!q) continue;
-    claimed.add(key);
-    if (usedKeys) usedKeys.add(key);
-    bumpUsage(usage, "logos", brand); // selection counts toward fairness
-    out.push(q);
+    return got;
+  };
+  for (const tier of ["easy", "medium", "hard"]) await tryTier(tier, quota[tier]);
+  // a bucket can exhaust (session dedup, dead assets) - refill the count
+  // from whichever tiers still have candidates
+  for (const tier of ["easy", "medium", "hard"]) {
+    if (out.length >= n) break;
+    await tryTier(tier, n - out.length);
   }
   if (out.length) saveUsage("logos", usage);
-  if (bytesCapWarn) bytesCapWarn(out.length);
-  return out;
+  // output ramp: easy -> medium -> hard (tier groups keep their build order)
+  const byTier = { easy: [], medium: [], hard: [] };
+  for (const q of out) byTier[q.difficulty || "medium"].push(q);
+  const ordered = [...byTier.easy, ...byTier.medium, ...byTier.hard];
+  if (bytesCapWarn) bytesCapWarn(ordered.length);
+  return ordered;
 }
 
 // ════════════════════════════════════════════
@@ -672,6 +724,7 @@ module.exports = {
   LOGOS_POOL,
   SONGS_POOL,
   logoDatasetInfo,
+  logoTierInfo,
   buildLogosQuestions,
   buildLogosQuestion,
   buildSpotSongQuestions,
