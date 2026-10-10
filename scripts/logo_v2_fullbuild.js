@@ -198,7 +198,7 @@ process.on("unhandledRejection", (r) => console.log(`orphan-rejection: ${String(
         while (ai < batchCand.length) {
           const mine = batchCand[ai++];
           const res = await audit(mine).catch((e) => ({ ok: false, reason: `lane:${e.message}` }));
-          if (res.ok) results.push(res);
+          if (res.ok) { const { _claims, ...clean } = res; results.push(clean); }
           await new Promise((r2) => setTimeout(r2, 60));
         }
       });
@@ -215,9 +215,15 @@ process.on("unhandledRejection", (r) => console.log(`orphan-rejection: ${String(
   }
 
   // merge: existing verbatim first, then fresh streamed from the JSONL (file+name dedup)
-  const freshEntries = fs.existsSync(FRESH_PATH)
-    ? fs.readFileSync(FRESH_PATH, "utf8").split("\n").filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean)
-    : [];
+  // stream-parse line by line and STRIP _claims (early runs appended the full
+  // wikidata claims object per entry — 74MB of JSONL, OOM-ed the merge)
+  const freshEntries = [];
+  if (fs.existsSync(FRESH_PATH)) {
+    for (const l of fs.readFileSync(FRESH_PATH, "utf8").split("\n")) {
+      if (!l) continue;
+      try { const v = JSON.parse(l); delete v._claims; if (v.name && v.file) freshEntries.push(v); } catch {}
+    }
+  }
   console.log(`fresh entries on disk: ${freshEntries.length}`);
   const byFile = new Set(existing.map((b) => norm(b.file)));
   const byName2 = new Set(existing.map((b) => norm(b.name)));
