@@ -233,7 +233,12 @@ section('§6 — frozen layout + render contract');
     // holds the TRUE front-left corner slot (fx 0.260) with feet ABOVE the
     // HUD panel, not center-right of it
     check('side layout: player FRONT-LEFT (Battle-Example corner slot)', pc.player.cx >= abyssScene.W * 0.20 && pc.player.cx <= abyssScene.W * 0.35);
-    check('side layout: player faces RIGHT toward the enemy wing (no flip)', pc.player.flip === false);
+    // round-18 (owner 13:24Z: "Some player Sprites like ninja facing the wrong
+    // way"): the hero now MIRRORS natively-LEFT class art so it faces RIGHT —
+    // the old flip===false assertion encoded the exact bug the owner reported.
+    // Contract: flip must equal the audited registry verdict for the resolved
+    // file, and this QA's ROGUE idx1 art (Rogue (1).png) is LEFT-native.
+    check('side layout: player faces RIGHT toward the enemy wing (LEFT-native art mirrored)', pc.player.flip === abyssScene.playerArtFlipFor(pc.player.file) && pc.player.flip === true);
     check('side layout: player feet clear the HUD panel TOP (y 644)', pc.player.gy < 644);
     check('grounding: enemy feet on the visible floor plane', pc.enemy.gy > 540 && pc.enemy.gy < 700);
     check('grounding: player depth still in front', pc.enemy.gy < pc.player.gy + 30);
@@ -307,7 +312,7 @@ check('pack fight: queued members join the stage', pack.pack.length === 2);
         enemies: [{ name: 'Agumon', isWildSummon: true, spriteIndex: 0, currentHP: 400, stats: { hp: 400, maxHp: 600 } }],
     }));
     check('§7 round-13: wild summon takes the ENEMY side (RIGHT wing, facing left)', pw.enemy.cx > abyssScene.W * 0.55);
-    check('§7 round-13: player holds the party side (front-LEFT, facing right)', pw.player.cx <= abyssScene.W * 0.35 && pw.player.flip === false);
+    check('§7 round-13: player holds the party side (front-LEFT, facing right via LEFT-mirror)', pw.player.cx <= abyssScene.W * 0.35 && pw.player.flip === abyssScene.playerArtFlipFor(pw.player.file) && pw.player.flip === true);
     check('§7 summon: grounded on the floor plane (not the old floating 566 line)', pw.enemy.gy > 580 && pw.enemy.gy < 700);
     check('§7 summon: wild species carried for the pill', pw.wildSpecies === 'agumon');
     // round-16 bisector audit: the four re-listed natively-RIGHT species must
