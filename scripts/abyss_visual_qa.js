@@ -251,13 +251,15 @@ section('§6 — frozen layout + render contract');
         ] },
     }));
 check('pack fight: queued members join the stage', pack.pack.length === 2);
-    // round-15 rebuild: pack members are the deeper rows of the RIGHT-wing
-    // ladder — they step back toward the VANISHING POINT (deeper = higher on
-    // the floor plane, LEFTWARD of the active enemy), depth-capped at 0.92,
-    // never box-overlapping the active enemy (owner round-8 rule). halfW
-    // falls back to the depth estimate when the sandbox mock can't measure.
+    // round-15 rebuild: pack members are depth-disciplined rows of the
+    // RIGHT-wing wing — the inner vanishing-point ladder when the anchor's
+    // measured box leaves room, otherwise the wide-anchor ROSE (full-sized
+    // flanking bodies at the shoulder/near corner instead of the r14
+    // edge-crush). Either way: feet deeper than the anchor, height capped at
+    // 0.93 of the anchor, nothing past the frame guard. halfW falls back to
+    // the depth estimate when the sandbox mock can't measure.
     const hw = (a) => a.halfW || Math.round(a.h * 0.42);
-    check('pack fight: members staggered deeper toward the vanishing point, depth-capped', pack.pack.every((m) => m.gy <= pack.enemy.gy + 5 && m.h <= pack.enemy.h * 0.93 && m.cx <= pack.enemy.cx));
+    check('pack fight: members depth-disciplined (deeper feet, capped height, inside frame guard)', pack.pack.every((m) => m.gy <= pack.enemy.gy + 5 && m.h <= pack.enemy.h * 0.93 && m.cx + hw(m) <= 1196));
     check('pack fight: no member box overlaps the active enemy (real measured halfW, owner: "enemies overlaying")', pack.pack.every((m) => Math.abs(m.cx - pack.enemy.cx) >= (hw(m) + hw(pack.enemy)) - 24));
     check('round-13 right-edge guard: no enemy-wing body renders past the frame', [pc.enemy].concat(pack.pack).every((m) => m.cx + hw(m) <= 1196));
     // round-8: FULL PARTY — 3 enemies + 3 allies + player, nobody fused, and

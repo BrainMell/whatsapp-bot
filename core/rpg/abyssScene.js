@@ -784,12 +784,17 @@ async function planCombatLayout(state, opts = {}) {
     const formation = FORMATIONS[Math.min(3, 1 + queue.length)] || FORMATIONS[1];
 
     // ── resolve every actor's art + size FIRST (bboxes feed collision) ──
+    // round-15: the ACTIVE enemy is resolved first so its MEASURED content
+    // box can choose the pack's slots — the inner vanishing-point ladder when
+    // it clears the anchor, otherwise a clean two-flank ROSE around the
+    // anchor's right shoulder (a wide hulk like the gloom brute leaves no
+    // inner lane; the old answer — crushing the pack against the frame edge
+    // at 0.86-0.91W with tiny muls — is exactly the arrangement the owner
+    // called trash; the rose keeps full-sized flanking bodies instead).
     const actors = [];
-    const members = [{ e: enemy, slot: formation[0], kind: isWildSummon ? 'wild' : 'active' }]
-        .concat(queue.slice(0, 2).map((m, i) => ({ e: m, slot: formation[i + 1], kind: 'pack', qIndex: i })));
-    for (const m of members) {
-        if (!m.e || !m.slot) continue;
-        if (m.kind === 'pack' && m.e.isDead) continue;
+    const buildEnemyActor = async (m) => {
+        if (!m.e || !m.slot) return null;
+        if (m.kind === 'pack' && m.e.isDead) return null;
         const art = m.kind === 'wild' ? null : resolveEnemyArtRegular(m.e);
         const speciesKey = m.kind === 'wild' ? summonFaceKey(plan.wildSpecies) : null;
         const sizeMul = m.kind === 'wild' ? summonSizeOf(speciesKey) : enemySizeOf(enemyIdOf(m.e));
@@ -802,7 +807,7 @@ async function planCombatLayout(state, opts = {}) {
         if (m.kind === 'pack' && actors.length && actors[0].h) {
             h = Math.min(h, Math.round(actors[0].h * 0.92));
         }
-        actors.push({
+        const actor = {
             role: m.kind, ref: m.e, qIndex: m.qIndex,
             art,
             speciesKey,
@@ -818,7 +823,59 @@ async function planCombatLayout(state, opts = {}) {
             name: safeName(String((m.e && m.e.name) || '')
                 .replace(/\s*\(pack\s*\d+\/\d+\)\s*$/i, ''), 22),
             alpha: m.kind === 'pack' ? 0.94 : 1,
-        });
+        };
+        actors.push(actor);
+        return actor;
+    };
+    // 1) the anchor
+    await buildEnemyActor({ e: enemy, slot: formation[0], kind: isWildSummon ? 'wild' : 'active' });
+    // 1b) measure the anchor's REAL content halfW now (early — it steers the pack slots)
+    let anchorHalfW = (actors[0] && actors[0].h) ? Math.round(actors[0].h * 0.42) : 0;
+    try {
+        const a0 = actors[0];
+        if (a0 && a0.art && a0.art.dir && a0.art.file) {
+            const img = await loadBg(a0.art.file, a0.art.dir);
+            if (img) {
+                const box = await measureImageBox(img, a0.art.file);
+                if (box && box.w > 0) anchorHalfW = Math.round(box.w * (a0.h / box.h) / 2);
+            }
+        } else if (a0 && a0.art && a0.art.img) {
+            const box = await measureImageBox(a0.art.img, a0.art.file || null);
+            if (box && box.w > 0) anchorHalfW = Math.round(box.w * (a0.h / box.h) / 2);
+        }
+    } catch (e) { /* estimate stands */ }
+    // 2) choose the pack slots around the measured anchor
+    const packQueueLive = queue.slice(0, 2).filter((m) => m && !m.isDead);
+    let packSlots = formation.slice(1, 1 + packQueueLive.length).map((s) => ({ ...s }));
+    if (actors[0] && packSlots.length && !isWildSummon) {
+        const anchorRight = actors[0].cx + anchorHalfW;
+        // estimated pack halfWs on the INNER ladder (h*0.42 estimate, the
+        // measured box replaces it in the measure pass below)
+        const estHalf = (s) => {
+            const gy = floorClamp(SY(s.fy));
+            const est = packQueueLive[0] ? Math.round(perspH(gy) * s.mul * enemySizeOf(enemyIdOf(packQueueLive[0])) * 1.12 * 0.42) : 60;
+            return Math.min(est, Math.round((actors[0].h || 200) * 0.92 * 0.42));
+        };
+        let cursor = anchorRight;
+        let fits = true;
+        for (const s of packSlots) {
+            const need = cursor + 40 + estHalf(s);
+            if (need > 1188 - estHalf(s)) { fits = false; break; }
+            cursor = need;
+        }
+        if (!fits) {
+            // WIDE-ANCHOR ROSE: deeper flank at the shoulder, closer flank at
+            // the near-right corner — full-sized bodies, no edge-crush
+            const ROSE = {
+                1: [{ fx: 0.870, fy: 0.660, mul: 0.80 }],
+                2: [{ fx: 0.860, fy: 0.640, mul: 0.80 }, { fx: 0.922, fy: 0.672, mul: 0.72 }],
+            };
+            packSlots = (ROSE[packSlots.length] || packSlots).map((s) => ({ ...s }));
+        }
+    }
+    // 3) the pack on the chosen slots
+    for (let i = 0; i < packQueueLive.length; i++) {
+        await buildEnemyActor({ e: packQueueLive[i], slot: packSlots[i] || packSlots[packSlots.length - 1], kind: 'pack', qIndex: i });
     }
     // wild-summon art = the game's OWN sprites (processed set first)
     const wildActor = actors.find((a) => a.role === 'wild');
