@@ -59,13 +59,19 @@ check('combat selection stays inside combat pool', combat.includes(abyssScene.bg
 // encounters render the abyss-themed side-stage pool (circled foundations).
 // 🕳️ round-12 (owner 2026-10-10 01:56Z): mist_hollow OUT — pool is 3.
 // 🕳️ round-13 (owner 02:56Z image-2 brief): five NEW crimson-dusk stages join
-// the pool (crimson_dunes / ruined_causeway / bone_fields / obsidian_ridge /
-// sunken_amphitheater) — pool = 8, the original three all stay.
-const ROUND13_BGS = ['crimson_dunes_abyss.png', 'ruined_causeway_abyss.png', 'bone_fields_abyss.png', 'obsidian_ridge_abyss.png', 'sunken_amphitheater_abyss.png'];
+// the pool — pool = 8, the original three all stay.
+// 🕳️ round-15 (owner 09:15Z: "the arena and sand dune looking ones literally
+// don't fit"): sunken_amphitheater + crimson_dunes OUT; two unique dusk-family
+// maps IN (ashen_basilica / withered_grove) — pool stays 8.
+const ROUND13_BGS = ['ruined_causeway_abyss.png', 'bone_fields_abyss.png', 'obsidian_ridge_abyss.png'];
+const ROUND15_BGS = ['ashen_basilica_abyss.png', 'withered_grove_abyss.png'];
 check(`regular pool present, round-13 expanded (${regPool.length})`, regPool.length >= 8);
 check('the original circled-foundation stages all remain',
     ['dark_hall_abyss.png', 'drowned_vault_abyss.png', 'violet_sanctum_abyss.png'].every((f) => regPool.includes(f)));
 check('round-13 dusk-wasteland stages all present (owner image-2 brief)', ROUND13_BGS.every((f) => regPool.includes(f)));
+check('round-15 replacement stages present, rejected arena/dunes GONE (owner ruling 09:15Z)',
+    ROUND15_BGS.every((f) => regPool.includes(f))
+    && !regPool.some((f) => /amphitheater|dunes/i.test(f)));
 check('every regular bg carries BG_META (floor band + suit tags)',
     regPool.every((f) => abyssScene.BG_META[f] && abyssScene.BG_META[f].suit && abyssScene.BG_META[f].suit.length >= 2));
 check('mist_hollow is gone from the regular pool (owner ruling 2026-10-10)',
@@ -241,12 +247,13 @@ section('§6 — frozen layout + render contract');
         ] },
     }));
 check('pack fight: queued members join the stage', pack.pack.length === 2);
-    // round-13 mirror: pack members are the deeper-RIGHT back row (staggered
-    // up the right wing), depth-capped, never box-overlapping the active
-    // enemy (owner round-8 rule carried through the mirror). halfW falls
-    // back to the depth estimate when the sandbox mock can't measure.
+    // round-15 rebuild: pack members are the deeper rows of the RIGHT-wing
+    // ladder — they step back toward the VANISHING POINT (deeper = higher on
+    // the floor plane, LEFTWARD of the active enemy), depth-capped at 0.92,
+    // never box-overlapping the active enemy (owner round-8 rule). halfW
+    // falls back to the depth estimate when the sandbox mock can't measure.
     const hw = (a) => a.halfW || Math.round(a.h * 0.42);
-    check('pack fight: members staggered deeper-right, depth-capped', pack.pack.every((m) => m.gy <= pack.enemy.gy + 5 && m.h <= pack.enemy.h * 0.9 && m.cx >= pack.enemy.cx));
+    check('pack fight: members staggered deeper toward the vanishing point, depth-capped', pack.pack.every((m) => m.gy <= pack.enemy.gy + 5 && m.h <= pack.enemy.h * 0.93 && m.cx <= pack.enemy.cx));
     check('pack fight: no member box overlaps the active enemy (real measured halfW, owner: "enemies overlaying")', pack.pack.every((m) => Math.abs(m.cx - pack.enemy.cx) >= (hw(m) + hw(pack.enemy)) - 24));
     check('round-13 right-edge guard: no enemy-wing body renders past the frame', [pc.enemy].concat(pack.pack).every((m) => m.cx + hw(m) <= 1196));
     // round-8: FULL PARTY — 3 enemies + 3 allies + player, nobody fused, and
@@ -272,10 +279,11 @@ check('pack fight: queued members join the stage', pack.pack.length === 2);
     check('full party (3 enemies + 3 allies + player): zero fused bodies', fused === 0);
     const allyByFile = (f) => full.allies.find((a) => a.art && a.art.file === f);
     // round-13 mirror: the party stands LEFT and faces RIGHT — natively-right
-    // art (boar/snake/dragon) now renders UNFLIPPED; natively-left art flips.
+    // art (boar/snake) renders UNFLIPPED; natively-left art (dragon — r15
+    // render-proof: the Drake stared at the player's back) flips to face right.
     check('round-13 facing: boar natively RIGHT → ally boar faces RIGHT unflipped (party side is left now)', allyByFile('boar.png') && allyByFile('boar.png').flip === false);
     check('round-13 facing: snake natively RIGHT → ally snake faces RIGHT unflipped', allyByFile('snake.png') && allyByFile('snake.png').flip === false);
-    check('round-13 facing: dragon natively RIGHT → ally dragon faces RIGHT unflipped', allyByFile('dragon.png') && allyByFile('dragon.png').flip === false);
+    check('round-15 facing: dragon natively LEFT → ally dragon FLIPS to face RIGHT (r14 proof: it stared at the hero)', allyByFile('dragon.png') && allyByFile('dragon.png').flip === true);
     const pw = await abyssScene.planCombatLayout(mkState({
         kind: 'wild',
         abyssRun: { currentEncounterType: 'wild_summon', currentEncounterData: { species: 'agumon', rarity: 'RARE' } },

@@ -423,19 +423,25 @@ const ENEMY_FACES_LEFT = new Set(['SHADOW_STALKER', 'ELDER_CHAOS']);  // hybride
 // first; ENEMY_FACES_LEFT above stays as the legacy-art fallback.
 // Flip rule on the mirrored stage (enemy wing RIGHT, facing LEFT):
 //   flip = nativeFacing === 'R'. Tweak one row → one sprite turns.
+// ⚠️ round-15 RE-AUDIT (owner 09:15Z: "some of your generated enemies are
+// facing the wrong direction"): every head was re-cropped at 6× with a
+// center BISECTOR drawn on the zoom sheet — a head right-of-the-bisector is
+// natively RIGHT. Four rows were misfiled 'F' and never flipped, so they
+// rendered staring AWAY from the hero (archon's crested helm, brute's single
+// eye, overseer's eye pair, all right-of-center). Corrected:
 const ENEMY_FACING = {
-    // audited 'L' (side-profile heads, 3x head-crop pass 2026-10-10):
-    MUTATED_HOUND: 'L', SHADOW_STALKER: 'L', VENOM_SPIDER: 'L',
-    ABYSSAL_GOD: 'L', DUSK_CRAWLER: 'L', CRIMSON_DEVOURER: 'L',
-    // round-14 6× head-crop audit: the weaver's head sits left-of-center with
-    // the horns sweeping BACK-right — natively left-facing (was misfiled 'F')
-    ABYSS_WEAVER: 'L',
+    // audited 'L' (side-profile heads — verified on the bisector zoom sheet):
+    MUTATED_HOUND: 'L', SHADOW_STALKER: 'L', ABYSSAL_GOD: 'L', DUSK_CRAWLER: 'L',
+    CRIMSON_DEVOURER: 'L', ABYSS_WEAVER: 'L',
+    // round-15: regenerated in the grim dusk family, art delivered LEFT-facing
+    VOID_HARBINGER: 'L', CORRUPTED_GUARDIAN: 'L',
+    // round-15 bisector audit: natively RIGHT-facing → MUST flip to face hero
+    ELEMENTAL_ARCHON: 'R', GLOOM_BRUTE: 'R', MUTATED_OVERSEER: 'R',
+    // accuracy rows (unflipped art anyway — flip only fires on 'R'):
+    BLOOD_REAVER: 'L', INFECTED_COLOSSUS: 'L', VOID_TITAN: 'L',
     // audited 'F' (front-facing — never flipped):
-    VOID_CORRUPTED: 'F', BLOOD_REAVER: 'F', VOID_HARBINGER: 'F',
-    MUTATED_OVERSEER: 'F', INFECTED_COLOSSUS: 'F', CORRUPTED_GUARDIAN: 'F',
-    ELDER_CHAOS: 'F', PRIMORDIAL_CHAOS: 'F', ELEMENTAL_ARCHON: 'F',
-    VOID_TITAN: 'F', GLOOM_BRUTE: 'F', NIGHT_WRAITH: 'F',
-    HOLLOW_SERAPH: 'F',
+    VENOM_SPIDER: 'F', VOID_CORRUPTED: 'F', ELDER_CHAOS: 'F',
+    PRIMORDIAL_CHAOS: 'F', NIGHT_WRAITH: 'F', HOLLOW_SERAPH: 'F',
 };
 function enemyNativeFacing(id) {
     const key = String(id || '').toUpperCase();
@@ -454,8 +460,13 @@ function enemyNativeFacing(id) {
 // the snout/jaw/horn all extend RIGHT of the eye. SKITTERSWARM demoted to
 // neutral: at 6× the swarm's heads point in mixed directions (no real
 // single-direction bias → never flip, per the rule below).
-const SUMMON_FACES_LEFT = new Set(['BAT', 'GIANT', 'YETI']);
-const SUMMON_FACES_RIGHT = new Set(['DRAGON', 'PLAGUEFANG', 'DINO', 'BOAR', 'SNAKE', 'REPTILE']);
+// ⚠️ round-15 (owner 09:15Z proof: the ally Drake stared at the player's
+// back in r14_A3): the dragon art is NATIVELY LEFT-facing — render-verified
+// on the round-14 proof sheet. Moved to FACES_LEFT so allies mirror it to
+// face RIGHT toward the enemy wing and wild dragons on the right wing keep
+// facing LEFT toward the hero with NO flip.
+const SUMMON_FACES_LEFT = new Set(['BAT', 'GIANT', 'YETI', 'DRAGON']);
+const SUMMON_FACES_RIGHT = new Set(['PLAGUEFANG', 'DINO', 'BOAR', 'SNAKE', 'REPTILE']);
 const summonFaceKey = (file) => String(file || '').replace(/\.png$/i, '').toUpperCase();
 // best-effort species key for a wild summon BEFORE its art resolves
 function planWildSpeciesKey(state, enemy) {
@@ -491,11 +502,21 @@ const BG_META = {
     // "different and unique maps", keep the existing three): five NEW
     // crimson-dusk stages generated from the owner's reference, floor bands
     // measured on the 1920x1440 renders (zoom pass 2026-10-10)
-    'crimson_dunes_abyss.png':      { floorTop: 0.48, floorBottom: 0.95, vp: [0.50, 0.30], tags: ['dunes', 'open'],     suit: ['beast', 'brute', 'undead', 'flying'] },
+    // (crimson_dunes_abyss / sunken_amphitheater_abyss removed from the pool
+    //  AND this table by owner ruling round-15 2026-10-10 — "the arena and
+    //  sand dune looking ones literally don't fit"; files deleted, entries
+    //  kept out so a stray copy can never be staged)
     'ruined_causeway_abyss.png':    { floorTop: 0.52, floorBottom: 0.95, vp: [0.50, 0.38], tags: ['causeway', 'gate'],  suit: ['brute', 'undead', 'arcane', 'beast'] },
     'bone_fields_abyss.png':        { floorTop: 0.47, floorBottom: 0.95, vp: [0.44, 0.38], tags: ['basin', 'bones'],    suit: ['undead', 'beast', 'ethereal'] },
     'obsidian_ridge_abyss.png':     { floorTop: 0.40, floorBottom: 0.95, vp: [0.50, 0.28], tags: ['volcanic', 'ridge'], suit: ['brute', 'beast', 'arcane'] },
-    'sunken_amphitheater_abyss.png': { floorTop: 0.63, floorBottom: 0.95, vp: [0.50, 0.42], tags: ['arena', 'tiered'],   suit: ['brute', 'undead', 'ethereal', 'arcane', 'flying', 'beast', 'aquatic'] },
+    // 🕳️ round-15 (owner 09:15Z: "2 of the backgrounds — the arena and sand
+    // dune looking ones — literally don't fit"): amphitheater + dunes DELETED
+    // from the pool and disk; replaced by two unique maps generated from the
+    // APPROVED dusk family (bone_fields / obsidian_ridge anchors), floor
+    // bands grid-measured on the 1200x900 cover-fits. Flat walkable floors
+    // only — no tiered seating, no dune slopes.
+    'ashen_basilica_abyss.png':     { floorTop: 0.66, floorBottom: 0.95, vp: [0.50, 0.44], tags: ['basilica', 'nave'],     suit: ['undead', 'ethereal', 'arcane', 'brute', 'flying'] },
+    'withered_grove_abyss.png':     { floorTop: 0.47, floorBottom: 0.95, vp: [0.50, 0.30], tags: ['grove', 'wasteland'],   suit: ['beast', 'undead', 'ethereal', 'flying'] },
 };
 // creature → habitat (drives stage compatibility; audit §5 "choose
 // backgrounds by tag compatibility with the enemy/summon set")
@@ -703,10 +724,20 @@ async function planCombatLayout(state, opts = {}) {
     // Example mirror of the approved round-4 layout — active enemy front-RIGHT
     // (fx 0.68-0.70) facing the hero across the open center aisle, pack
     // staggering back-RIGHT + higher, every row clamped to the stage floor.
+    // formation slots — 🕳️ round-15 REBUILD (owner 09:15Z: "your layout and
+    // formation arrangement looks so trash"): the round-13/14 ladder marched
+    // the pack members TOWARD THE FRAME EDGE (fx 0.855/0.912) while the
+    // perspective vanishing point sits CENTER — back rows were pushed the
+    // wrong way, hugging the edge at crushed sizes, which read as bodies
+    // strewn across the stage. Proper depth staging: the ACTIVE enemy holds
+    // front-RIGHT (low, biggest), pack members step back toward the
+    // vanishing point (deeper = LEFTWARD + higher on the floor plane),
+    // de-crushed size ladder (0.82 / 0.70 with a 0.92 depth cap). The right
+    // half stays the enemy wing; the open center aisle stays open.
     const FORMATIONS = {
-        1: [{ fx: 0.700, fy: 0.680, mul: 0.97 }],
-        2: [{ fx: 0.690, fy: 0.688, mul: 0.94 }, { fx: 0.855, fy: 0.618, mul: 0.78 }],
-        3: [{ fx: 0.680, fy: 0.692, mul: 0.94 }, { fx: 0.820, fy: 0.628, mul: 0.76 }, { fx: 0.912, fy: 0.576, mul: 0.64 }],
+        1: [{ fx: 0.735, fy: 0.706, mul: 1.00 }],
+        2: [{ fx: 0.745, fy: 0.710, mul: 1.00 }, { fx: 0.620, fy: 0.645, mul: 0.82 }],
+        3: [{ fx: 0.750, fy: 0.712, mul: 1.00 }, { fx: 0.635, fy: 0.650, mul: 0.82 }, { fx: 0.552, fy: 0.592, mul: 0.70 }],
     };
     // ally row beside/behind the player (audit: "never on top of the
     // player's body"); a third ally is supported for the test matrix.
@@ -737,8 +768,8 @@ async function planCombatLayout(state, opts = {}) {
     // BEHIND-LEFT of a centered hero, staring at the back of his head.
     const ALLY_ARC = {
         1: [{ fx: 0.360, fy: 0.672, mul: 0.62 }],
-        2: [{ fx: 0.360, fy: 0.672, mul: 0.62 }, { fx: 0.450, fy: 0.630, mul: 0.58 }],
-        3: [{ fx: 0.356, fy: 0.676, mul: 0.60 }, { fx: 0.446, fy: 0.634, mul: 0.57 }, { fx: 0.528, fy: 0.596, mul: 0.54 }],
+        2: [{ fx: 0.360, fy: 0.672, mul: 0.62 }, { fx: 0.442, fy: 0.634, mul: 0.58 }],
+        3: [{ fx: 0.356, fy: 0.676, mul: 0.60 }, { fx: 0.436, fy: 0.638, mul: 0.57 }, { fx: 0.498, fy: 0.602, mul: 0.54 }],
     };
     const ALLY_LANE_MAXW = 170;   // px of horizontal lane per summon (content)
     // the hero: FRONT-LEFT — the actual Battle-Example position (owner 08:09Z:
@@ -769,7 +800,7 @@ async function planCombatLayout(state, opts = {}) {
         // species must never render larger than the front-row actor on the
         // same plane — deeper reads smaller, no exceptions
         if (m.kind === 'pack' && actors.length && actors[0].h) {
-            h = Math.min(h, Math.round(actors[0].h * 0.88));
+            h = Math.min(h, Math.round(actors[0].h * 0.92));
         }
         actors.push({
             role: m.kind, ref: m.e, qIndex: m.qIndex,
@@ -913,12 +944,17 @@ async function planCombatLayout(state, opts = {}) {
         if (m.a.role === 'ally') {
             // round-14: the party stands BETWEEN the hero and the enemy wing
             // (frozen player-left / summon-right) — retreat LEFT toward the
-            // hero when squeezed, never into the enemy corridor
+            // hero when squeezed, never into the enemy corridor.
+            // round-15: hi drops to 0.505W — the enemy back rows now step
+            // toward the vanishing point (down to 0.552W), so the ally arc
+            // must stop short of them and keep the center aisle open.
             m.lo = playerBox0 ? Math.max(Math.round(W * 0.155), playerBox0.right + 14) : Math.round(W * 0.155);
-            m.hi = Math.round(W * 0.575);
+            m.hi = Math.round(W * 0.505);
             if (m.hi < m.lo) m.hi = m.lo;
         } else {                    // pack / wild — the enemy corridor (right wing)
-            m.lo = Math.round(W * 0.615);
+            // round-15: lo drops to 0.535W — back-row slots retreat toward
+            // the vanishing point instead of the frame edge
+            m.lo = Math.round(W * 0.535);
             // RIGHT-EDGE GUARD: a wide back-row body must never render past
             // the frame (12px margin) — clamp the corridor to its own width
             m.hi = Math.min(Math.round(W * 0.92), Math.round(1188 - m.halfW));
