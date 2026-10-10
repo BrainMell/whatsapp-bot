@@ -5,3 +5,10 @@ comics: text=819 images=1104
 movies: text=435 images=70
 series: text=1631 images=7529
 sources: opentdb, the-trivia-api, steamspy, tvmaze, anilist(+manga ext), kitsu, wikidata(p18+p154 games), enwiki lists+infobox scrape, enwiki pageimages
+
+=== v7 lore rebuild 2026-10-10T10:46:06.248Z ===
+total text=7034 lore=6554 (93.2%) prod=480 images=8727
+games    text= 1997 lore= 1877 prod=120 (6.0%) images=24
+comics   text= 1875 lore= 1755 prod=120 (6.4%) images=1104
+movies   text= 1836 lore= 1716 prod=120 (6.5%) images=70
+series   text= 1326 lore= 1206 prod=120 (9.0%) images=7529
