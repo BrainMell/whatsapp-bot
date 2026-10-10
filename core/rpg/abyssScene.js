@@ -868,7 +868,7 @@ async function planCombatLayout(state, opts = {}) {
             // the near-right corner — full-sized bodies, no edge-crush
             const ROSE = {
                 1: [{ fx: 0.870, fy: 0.660, mul: 0.80 }],
-                2: [{ fx: 0.860, fy: 0.640, mul: 0.80 }, { fx: 0.922, fy: 0.715, mul: 0.72 }],
+                2: [{ fx: 0.860, fy: 0.605, mul: 0.80 }, { fx: 0.922, fy: 0.700, mul: 0.72 }],
             };
             packSlots = (ROSE[packSlots.length] || packSlots).map((s) => ({ ...s }));
         }
