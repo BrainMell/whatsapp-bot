@@ -538,6 +538,15 @@ async function buildThemeSongQuestionEntry(entry, others, difficulty, goService,
     const mustOk = entry.mustTitle.every((w) => metaTitle.includes(_norm(w)));
     if (!mustOk) { audioCache.markFail(cacheKey); console.log(`[Quiz] preplan theme ${entry.show}: title "${info.metadata.title}" missed mustTitle [${entry.mustTitle.join(",")}]`); return null; }
   }
+  // 2026-10-10 preplanned pack: ANY-of phrases (canonical uploads often carry
+  // CJK titles - the romanization never appears, e.g. LiSA's Gurenge video is
+  // titled "\u7d05\u84ee\u83ef"). _norm strips non-ASCII, so the raw title is
+  // checked too.
+  if (Array.isArray(entry.mustTitleAny) && entry.mustTitleAny.length) {
+    const hay = metaTitle + " " + String(info.metadata.title || "").toLowerCase();
+    const anyOk = entry.mustTitleAny.some((w) => hay.includes(String(w).toLowerCase()));
+    if (!anyOk) { audioCache.markFail(cacheKey); console.log(`[Quiz] preplan theme ${entry.show}: title "${info.metadata.title}" missed mustTitleAny [${entry.mustTitleAny.join(",")}]`); return null; }
+  }
   const showN = _norm(entry.show);
   const searchN = _norm(entry.search);
   if (_SONG_VARIANT_RE.test(metaTitle)) { audioCache.markFail(cacheKey); return null; }

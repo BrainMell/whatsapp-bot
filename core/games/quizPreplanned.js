@@ -179,49 +179,49 @@ const TRIVIA = [
 // standard mode clips 25s).
 const THEMES = [
   // ---- games (5) ----
-  // mustTitle: words that MUST appear in the returned metadata title - keeps
+  // mustTitleAny: ANY phrase must appear in the returned metadata title - keeps
   // the canonical upload ("God of War Main Theme") from being satisfied by
   // any random track off the same OST.
   {
     show: "Devil May Cry", search: "Devil Trigger", type: "game",
-    alts: ["Devil May Cry 5", "DMC", "DMC5", "Devil Trigger"], cacheKey: "preplan:devilmaycry", mustTitle: ["devil trigger"],
+    alts: ["Devil May Cry 5", "DMC", "DMC5", "Devil Trigger"], cacheKey: "preplan:devilmaycry", mustTitleAny: ["devil trigger"],
   },
   {
     show: "God of War", search: "God of War Bear McCreary", type: "game",
-    alts: ["God of War 2018", "God of War 4", "GoW", "God of War Ragnarok"], cacheKey: "preplan:godofwar", mustTitle: ["god of war"],
+    alts: ["God of War 2018", "God of War 4", "GoW", "God of War Ragnarok"], cacheKey: "preplan:godofwar", mustTitleAny: ["god of war"],
   },
   {
     show: "Skyrim", search: "Dragonborn Jeremy Soule Skyrim", type: "game",
-    alts: ["The Elder Scrolls V Skyrim", "Elder Scrolls", "Skyrim"], cacheKey: "preplan:skyrim", mustTitle: ["dragonborn"],
+    alts: ["The Elder Scrolls V Skyrim", "Elder Scrolls", "Skyrim"], cacheKey: "preplan:skyrim", mustTitleAny: ["dragonborn"],
   },
   {
     show: "DOOM", search: "BFG Division Mick Gordon", type: "game",
-    alts: ["Doom", "Doom 2016", "Doom Eternal"], cacheKey: "preplan:doom", mustTitle: ["bfg division"],
+    alts: ["Doom", "Doom 2016", "Doom Eternal"], cacheKey: "preplan:doom", mustTitleAny: ["bfg division"],
   },
   {
     show: "Minecraft", search: "Sweden C418 Minecraft", type: "game",
-    alts: ["Minecraft"], cacheKey: "preplan:minecraft", mustTitle: ["sweden"],
+    alts: ["Minecraft"], cacheKey: "preplan:minecraft", mustTitleAny: ["sweden"],
   },
   // ---- anime (5) ----
   {
     show: "Solo Leveling", search: "LEveL SawanoHiroyuki", type: "anime",
-    alts: ["Na Honjaman Level Up", "Only I Level Up", "Solo Leveling"], cacheKey: "preplan:soleoleveling", mustTitle: ["level"],
+    alts: ["Na Honjaman Level Up", "Only I Level Up", "Solo Leveling"], cacheKey: "preplan:soleoleveling", mustTitleAny: ["level"],
   },
   {
     show: "Dragon Ball Z", search: "Cha-La Head-Cha-La 2005 Version", type: "anime",
-    alts: ["DBZ", "Dragon Ball"], cacheKey: "preplan:dragonballz", mustTitle: ["cha la head"],
+    alts: ["DBZ", "Dragon Ball"], cacheKey: "preplan:dragonballz", mustTitleAny: ["cha la head", "cha-la head", "\u30c9\u30e9\u30b4\u30f3"],
   },
   {
     show: "Attack on Titan", search: "Guren no Yumiya Linked Horizon", type: "anime",
-    alts: ["Shingeki no Kyojin", "AoT"], cacheKey: "preplan:attackontitan", mustTitle: ["guren no yumiya"],
+    alts: ["Shingeki no Kyojin", "AoT"], cacheKey: "preplan:attackontitan", mustTitleAny: ["guren no yumiya", "\u7d05\u84ee\u306e\u5f13\u77e2"],
   },
   {
     show: "Demon Slayer", search: "Gurenge LiSA", type: "anime",
-    alts: ["Kimetsu no Yaiba"], cacheKey: "preplan:demonslayer", mustTitle: ["gurenge"],
+    alts: ["Kimetsu no Yaiba"], cacheKey: "preplan:demonslayer", mustTitleAny: ["gurenge", "\u7d05\u84ee\u83ef"],
   },
   {
     show: "One Piece", search: "We Are! Hiroshi Kitadani One Piece", type: "anime",
-    alts: ["One Piece"], cacheKey: "preplan:onepiece", mustTitle: ["we are"],
+    alts: ["One Piece"], cacheKey: "preplan:onepiece", mustTitleAny: ["we are"],
   },
 ];
 
