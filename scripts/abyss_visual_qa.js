@@ -414,10 +414,12 @@ check('pack fight: queued members join the stage', pack.pack.length === 2);
         abyssRun: { currentEncounterType: 'combat' },
         enemies: [{ name: 'GLOOM BRUTE', isEnemy: true, spriteIndex: 72, currentHP: 900, stats: { hp: 900, maxHp: 1200 } }],
     }), { forceBg: 'dark_hall_abyss.png' });
-    check('round-17 cast sink: basilica feet land IN the floor band (≥ 96px below the wall base, not on the seam)',
-        pbasilica.player.gy >= 690 && pbasilica.enemy.gy >= pbasilica.player.gy - 8);
+    check('round-17 cast sink: basilica enemy wing lands IN the floor band (feet ≥ 690, ~107px below the wall base — not on the seam)',
+        pbasilica.enemy.gy >= 690);
+    check('round-17 cast sink: the player keeps the frozen HUD-panel cap (feet ≤ 646, never inside the panel)',
+        pbasilica.player.gy >= 628 && pbasilica.player.gy <= 646);
     check('round-17 cast sink: shallow-band stages unchanged (dark_hall feet at the frozen 0.700 line)',
-        Math.abs(phall.player.gy - 630) <= 2);
+        Math.abs(phall.player.gy - 630) <= 2 && Math.abs(phall.enemy.gy - 637) <= 4);
     check('allies stand in the arc ABOVE the HUD panel (feet clear of panel top 644)',
         pwild.allies.every((a) => a.gy < 646));
 
