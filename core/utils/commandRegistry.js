@@ -390,7 +390,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'murder end', desc: 'Host/moderator closes the case early (refunded before the first dawn).', usage: 'murder end' },
     { cmd: 'murder lb', desc: 'Hall of Shadows - the all-time Blackvale ledger: wins, kills, saves, sharp votes.', usage: 'murder lb' },
     { cmd: 'murder help', desc: 'How to survive Blackvale Manor.', usage: 'murder help' },
-    { cmd: 'quiz', desc: 'Start an anime quiz on any title - AI questions from real AniList data.', usage: 'quiz "<anime>" [count 1-15] [easy/medium/hard]' },
+    { cmd: 'quiz', desc: 'Dataset-backed quiz: games, comics, movies, series (+ logos, song, audio, random).', usage: 'quiz <games|comics|movies|series|logos|song|audio|random> [count 3-50]' },
     { cmd: 'quiz pick', desc: 'Choose the anime when your quiz title is ambiguous.', usage: 'quiz pick <number>' },
     { cmd: 'quiz end', desc: 'End the running quiz early (starter or admins).', usage: 'quiz end' },
     { cmd: 'quizboard', desc: 'Quiz leaderboard for this chat - Zeni, correct answers, wins.', usage: 'quizboard' }

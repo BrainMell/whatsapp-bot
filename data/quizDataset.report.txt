@@ -1,0 +1,7 @@
+quizDataset v3 — 2026-10-10T09:08:51.749Z
+3137KB
+games: text=926 images=24
+comics: text=249 images=204
+movies: text=366 images=0
+series: text=1631 images=7529
+sources: opentdb, the-trivia-api, steamspy, tvmaze, anilist, wikidata(p18), enwiki lists+infobox scrape, enwiki pageimages

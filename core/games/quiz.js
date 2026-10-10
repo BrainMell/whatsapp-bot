@@ -39,6 +39,7 @@ const quizLore = require("./quizLore");
 const quizConfigMod = require("./quizConfig"); // P16 central config + quizmod
 const quizBank = require("./quizBank");        // P15 stable-identity bank
 const quizMediaMod = require("./quizMedia");   // 2026-09-27 logos + spot-the-song modes
+const quizDatasetMod = require("./quizDataset"); // 2026-10-10 dataset categories (games/comics/movies/series)
 const mediaWorker = require("../utils/mediaWorker"); // 2026-09-27 shared media job runner
 const imageGate = require("../utils/imageGate");         // 2026-09-27 pixel-level gates
 const visionVerify = require("../utils/visionVerify");   // 2026-09-27 subject-match verify (Box 2 provider)
@@ -1827,6 +1828,9 @@ function mediaKeyFor(session) {
   // song questions reuse across sessions like lore questions do.
   if (session.mode === "logos") return "mode:logos";
   if (session.mode === "song") return "mode:songs";
+  // 2026-10-10: random-ds mixes dataset rounds + one Logo Round - the only
+  // banked domain in the mix is logos, so share that bank bucket.
+  if (session.mode === "random-ds") return "mode:logos";
   return session.wiki
     ? `wiki:${session.wiki}`
     : `${session.anime?.source || "x"}:${session.anime?.id || session.title}`;
@@ -1851,6 +1855,17 @@ async function generateSectionQuestions(session, section, sock, chatId) {
   const usedKeys = session.usedKeys;
   const mk = mediaKeyFor(session);
 
+  // ── 2026-10-10 OWNER OVERHAUL: dataset modes (games/comics/movies/series) ──
+  // Fully synchronous + offline: entries come from data/quizDataset.json
+  // (images verified at build time). No LLM, no network, no bank writes -
+  // usage-fairness + the session usedKeys set handle variety/dedup.
+  if (["games", "comics", "movies", "series"].includes(section.domain)) {
+    const fresh = quizDatasetMod.buildDatasetQuestions({ mode: section.domain, count: sectionCount, usedKeys, difficulty: cfg.difficulty });
+    for (const q of fresh || []) questions.push(q);
+    section.state = SECTION_STATES.READY;
+    section.questions = questions.slice(0, sectionCount);
+    return section.questions;
+  }
   // ── 2026-09-27: standalone media modes (logos / song) ──
   // LLM-free deterministic generation with real verified assets. Everything
   // downstream (READY state, banking, postQuestion) is shared with lore.
@@ -2657,6 +2672,9 @@ function parseQuizArgs(raw) {
   if (!rest) return out;
   // standalone media modes (before random/quoted handling; "spot the song" is multi-word)
   const MODE_ALIASES = { logos: "logos", logo: "logos", brands: "logos", brand: "logos", company: "logos", companies: "logos" };
+  // 💡 2026-10-10 OWNER OVERHAUL: dataset-backed categories (pre-built data,
+  // zero live search). anime folds into series, manga into comics.
+  const DATASET_ALIASES = { games: "games", game: "games", gaming: "games", videogames: "games", videogame: "games", comics: "comics", comic: "comics", manga: "comics", movies: "movies", movie: "movies", films: "movies", film: "movies", series: "series", tv: "series", television: "series", shows: "series", show: "series" };
   const SONG_ALIASES = { song: "song", songs: "song", music: "song" };
   // 💡 FIX (owner brief §2): ".j quiz audio N" was never a registered alias -
   // "audio" fell through as a franchise TITLE and the mode errored out. Now:
@@ -2686,6 +2704,10 @@ function parseQuizArgs(raw) {
     out.mode = "logos";
     out.title = "__logos__";
     rest = rest.slice(firstWord.length).trim();
+  } else if (DATASET_ALIASES[firstWord]) {
+    out.mode = DATASET_ALIASES[firstWord];
+    out.title = `__${out.mode}__`;
+    rest = rest.slice(firstWord.length).trim();
   }
   // random mode?
   if (/^random\b/i.test(rest)) {
@@ -2694,29 +2716,25 @@ function parseQuizArgs(raw) {
     rest = rest.replace(/^random\b/i, "").trim();
   }
   const quoted = rest.match(/"([^"]{2,})"/);
-  if (quoted) {
-    out.title = out.randomMode ? out.title : quoted[1].trim();
+  if (quoted && !out.mode && !out.randomMode) {
+    // 💡 2026-10-10 OWNER OVERHAUL: free-form franchise search RETIRED (the
+    // live AniList/wiki hunt was unreliable). Capture the title so startQuiz
+    // can guide the user to the dataset categories instead.
+    out.retiredTitle = quoted[1].trim();
     rest = (rest.slice(0, quoted.index) + " " + rest.slice(quoted.index + quoted[0].length)).trim();
   }
   const tokens = rest.split(/\s+/).filter(Boolean);
   const diffTokens = { easy: "easy", e: "easy", medium: "medium", m: "medium", normal: "medium", hard: "hard", h: "hard", insane: "hard" };
-  // pop -s/--section <domain>, -images <n>, -audio <n> (may sit anywhere)
+  // 💡 2026-10-10 OWNER OVERHAUL: -s/-images/-audio flags retired together
+  // with the live-search pipeline (dataset quizzes pick their own media
+  // mix; `.j quiz audio` stays as a standalone mode). Absorb silently so
+  // old muscle-memory commands still start a quiz.
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i].toLowerCase();
-    if ((t === "-s" || t === "--section" || t === "--topic") && tokens[i + 1]) {
-      const dom = tokens[i + 1].toLowerCase();
-      const mapped = quizLore.SECTION_ALIASES[dom];
-      if (mapped) out.section = mapped;
-      else out.notes.push(`Unknown section "${tokens[i + 1]}" - valid: plot, characters, cosmology, powerscaling, production.`);
-      tokens.splice(i, 2);
-      i--;
-    } else if ((t === "-images" || t === "--images" || t === "-i") && tokens[i + 1]) {
-      out.images = tokens[i + 1];
-      tokens.splice(i, 2);
-      i--;
-    } else if ((t === "-audio" || t === "--audio") && tokens[i + 1]) {
-      out.audio = tokens[i + 1];
-      tokens.splice(i, 2);
+    if (t.startsWith("-")) {
+      const flagWithArg = ["-s", "--section", "--topic", "-images", "--images", "-i", "-audio", "--audio"].includes(t) && tokens[i + 1];
+      out.notes.push(`Flag "${t}" retired - dataset quizzes pick their own mix.`);
+      tokens.splice(i, flagWithArg ? 2 : 1);
       i--;
     }
   }
@@ -2737,10 +2755,9 @@ function parseQuizArgs(raw) {
     }
     break;
   }
-  if (!out.title) {
-    out.title = tokens.join(" ").trim();
-  } else if (tokens.length && !out.randomMode) {
-    out.notes.push(`Ignored extra words after the quoted title: "${tokens.join(" ")}".`);
+  if (!out.title && tokens.length && !out.randomMode && !out.mode) {
+    // leftover bare words = a typed franchise name - search retired, guide instead
+    out.retiredTitle = tokens.join(" ").trim();
   }
   if (out.randomMode) out.title = "__random__";
   return out;
@@ -2835,32 +2852,37 @@ async function startQuiz(sock, chatId, senderJid, botMarker, m, rawArgs, senderN
     const prefix = botConfig.getPrefix();
     return {
       handled: true,
-      message: botMarker + `🎯 *Lore Quiz*
+      message: botMarker + `🎯 *Quiz*
 
-Test your knowledge of a show, game, comic or movie - its story, characters, cosmology and world-building.
+Pick a category — every quiz is dataset-backed: instant prep, real images, no searching.
 
-Start one:
-\`${prefix} quiz "Fullmetal Alchemist Brotherhood"\`
-\`${prefix} quiz "One Piece" 5 hard\`
-\`${prefix} quiz "Elden Ring" 5 hard -s cosmology\`
-\`${prefix} quiz "Re:Zero" 20 hard -images 5\`
-\`${prefix} quiz random 20 -images 5 -audio 3\`
+Categories (trivia + picture rounds):
+\`${prefix} quiz games 15\` - 🎮 video games: covers, studios, trivia
+\`${prefix} quiz comics 15\` - 💥 comics & manga: covers, characters, publishers
+\`${prefix} quiz movies 15\` - 🎬 movies: posters, directors, release years
+\`${prefix} quiz series 15\` - 📺 TV shows & anime: posters, cast, characters
 
-Media modes (no LLM - fast!):
-\`${prefix} quiz logos 15\` - 🏢 name the brand behind Wikipedia logos
+Special rounds (unchanged):
+\`${prefix} quiz logos 15\` - 🏢 name the brand behind the logo
 \`${prefix} quiz song 10\` - 🎵 spot the song from a real audio clip
 \`${prefix} quiz audio 10\` - 📺 theme songs from shows/movies/games
+\`${prefix} quiz random 20\` - 🎲 mixed playlist across all categories
 
-Options:
-• count: up to 50 questions (default 10) - 40+ quizzes play in named sections
-• difficulty: easy / medium / hard (default medium)
-• section (optional): \`-s plot\` / \`-s characters\` / \`-s cosmology\` / \`-s powerscaling\` / \`-s production\` forces that topic
-• \`-images <n>\` adds n picture questions (character ID)
-• \`-audio <n>\` adds n audio questions (theme songs / voices)
-• \`random\` mixes franchises across ALL of fiction, one per section
-
-During the quiz, answer by simply typing the answer in chat (or \`${prefix} <letter>\` when options are shown). One answer per player per question!
+During the quiz, answer by typing the answer in chat (or \`${prefix} <letter>\` when options are shown). One answer per player per question!
 Leaderboard: \`${prefix} quizboard\` • Cancel: \`${prefix} quiz end\` • Mods: \`${prefix} quizmod\``,
+    };
+  }
+
+  // 💡 2026-10-10 OWNER OVERHAUL: free-form franchise search retired.
+  if (parsed.retiredTitle) {
+    const prefix = botConfig.getPrefix();
+    return {
+      handled: true,
+      message: botMarker + `ℹ️ Searching quizzes by title has been retired (the old live search was unreliable and slow).
+
+Pick a category instead:
+\`${prefix} quiz games\` • \`${prefix} quiz comics\` • \`${prefix} quiz movies\` • \`${prefix} quiz series\`
+Special rounds: \`logos\` • \`song\` • \`audio\` • \`random\``,
     };
   }
 
@@ -2936,8 +2958,12 @@ function planningLabel(parsed) {
   if (parsed.mode === "logos") return "the logo round";
   if (parsed.mode === "song") return "spot the song";
   if (parsed.mode === "audio") return "theme songs";
-  if (parsed.randomMode) return "random mode";
-  return String(parsed.title || "the quiz").slice(0, 60);
+  if (parsed.mode === "games") return "the games quiz";
+  if (parsed.mode === "comics") return "the comics quiz";
+  if (parsed.mode === "movies") return "the movies quiz";
+  if (parsed.mode === "series") return "the series quiz";
+  if (parsed.randomMode) return "random mix";
+  return String(parsed.retiredTitle || parsed.title || "the quiz").slice(0, 60);
 }
 
 function startPrepHeartbeat(prep, sock, chatId, botMarker, label) {
@@ -2987,6 +3013,8 @@ async function parkReadySession(sock, chatId, session, { head, introImage, botMa
   const mediaNote = session.mode === "song" ? " with song clips"
     : session.mode === "logos" ? " with logo images"
     : session.mode === "audio" ? " with theme-song clips"
+    : ["games", "comics", "movies", "series"].includes(session.mode) ? " (trivia + picture rounds)"
+    : session.mode === "random-ds" ? " (mixed rounds)"
     : (session.cfg.imageQuestionCount > 0 || session.cfg.audioQuestionCount > 0) ? " (media included)"
     : "";
   const readyMsg = botMarker
@@ -3134,33 +3162,19 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     {
       const bits = [];
       if (mixedRandom) {
-        // mirror buildRandomMixedPlan's math so the announcement is true
-        // (estimate only - the authoritative plan recomputes with real
-        // availability after franchise resolution; the ready card shows
-        // the actual sections)
+        // 💡 2026-10-10 OWNER OVERHAUL: random is now a deterministic dataset
+        // playlist (Logo Round + round-robin games/movies/series/comics).
+        // No lore, no song clips, no franchise resolution.
         let logosN = Math.min(6, Math.max(3, Math.round(cfg.questionCount * 0.2)));
-        let songN = Math.min(5, Math.max(3, Math.round(cfg.questionCount * 0.15)));
-        let imgN = cfg.imageQuestionCount > 0
-          ? cfg.imageQuestionCount
-          : Math.min(3, Math.max(2, Math.round(cfg.questionCount * 0.1)));
-        const loreMin = Math.max(6, Math.ceil(cfg.questionCount * 0.4));
-        while (cfg.questionCount - (logosN + songN + imgN) < loreMin) {
-          if (logosN > 3) logosN--;
-          else if (songN > 3) songN--;
-          else if (imgN > 2) imgN--;
-          else break;
-        }
-        bits.push(`🏢 ${logosN} logos`, `🎵 ${songN} song clips`);
-        if (imgN > 0) bits.push(`🖼 ${imgN} pictures`);
-        bits.push(`📚 lore from different worlds`);
+        bits.push(`🏢 ${logosN} logos`, `🎲 mixed dataset rounds`);
       } else {
-        if (cfg.imageQuestionCount > 0) bits.push(`🖼 ${cfg.imageQuestionCount} image question${cfg.imageQuestionCount > 1 ? "s" : ""}`);
-        if (cfg.audioQuestionCount > 0) bits.push(`🎵 ${cfg.audioQuestionCount} audio question${cfg.audioQuestionCount > 1 ? "s" : ""}`);
-        if (parsed.mode === "logos") bits.push(`🏢 brand logos`);
+        const DS_LABELS = { games: "🎮 games dataset", comics: "💥 comics dataset", movies: "🎬 movies dataset", series: "📺 series dataset" };
+        if (DS_LABELS[parsed.mode]) bits.push(DS_LABELS[parsed.mode]);
+        else if (parsed.mode === "logos") bits.push(`🏢 brand logos`);
         else if (parsed.mode === "song") bits.push(`🎵 song clips`);
         else if (parsed.mode === "audio") bits.push(`📺 theme songs`);
-        else if (parsed.randomMode) bits.push(`📚 lore across fiction`);
-        else if (parsed.title) bits.push(`📚 lore from "${String(parsed.title).slice(0, 40)}"`);
+        else if (parsed.randomMode) bits.push(`🎲 mixed dataset rounds + logos`);
+        else if (parsed.retiredTitle) bits.push(`ℹ️ title search retired`);
       }
       await safeSend(sock, chatId, {
         text: botMarker + `🛠 *QUIZ PLANNING* ${mentionOf(senderJid)}\nBuilding a ${cfg.questionCount}-question ${cfg.difficulty} quiz: ${bits.join(" • ")}.\nI'll tag you here the moment it's ready to start - the bot stays fully usable meanwhile.`,
@@ -3245,6 +3259,114 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       // 2026-09-27 planning mode: media modes ALWAYS park for the go command
       await parkReadySession(sock, chatId, session, { head, introImage: null, botMarker, m, senderJid, prefix });
       ownsSlot = false; // OWNER SPEC §4: the slot now rides with the parked session
+      return;
+    }
+
+    // ── 2026-10-10 OWNER OVERHAUL: dataset modes + random mix ──
+    // games/comics/movies/series (+ random as a mixed dataset playlist with a
+    // Logo Round opener). LLM-free, search-free: sections build from
+    // data/quizDataset.json (pre-verified at build time) and the existing
+    // verified logo dataset. Prep is instant - the whole ready-gate flow is
+    // shared with the media modes above.
+    const DS_MODES = ["games", "comics", "movies", "series"];
+    if (DS_MODES.includes(parsed.mode) || parsed.randomMode) {
+      const DS_TITLES = { games: "Games Quiz", comics: "Comics Quiz", movies: "Movies Quiz", series: "Series Quiz" };
+      const DS_NAMES = { games: "Games", comics: "Comics", movies: "Movies", series: "Series" };
+      const size = Math.max(3, cfg.sectionSize);
+      const domainPlan = [];
+      if (DS_MODES.includes(parsed.mode)) {
+        let left = cfg.questionCount;
+        while (left > 0) {
+          const give = Math.min(size, left);
+          domainPlan.push({ name: `${DS_NAMES[parsed.mode]} Round ${domainPlan.length + 1}`, domain: parsed.mode, perSection: give });
+          left -= give;
+        }
+      } else {
+        // random = mixed playlist: Logo Round first (fastest to verify), then
+        // round-robin dataset categories. No lore search anywhere.
+        let left = cfg.questionCount;
+        if (cfg.questionCount >= 9) {
+          const logosN = Math.min(6, Math.max(3, Math.round(cfg.questionCount * 0.2)));
+          domainPlan.push({ name: "Logo Round", domain: "logos", perSection: logosN });
+          left -= logosN;
+        }
+        const rot = ["games", "movies", "series", "comics"];
+        let ri = 0;
+        while (left > 0) {
+          const give = Math.min(size, left);
+          const d = rot[ri % rot.length];
+          domainPlan.push({ name: `${DS_NAMES[d]} Round`, domain: d, perSection: give });
+          ri += 1; left -= give;
+        }
+      }
+      const modeTitle = DS_MODES.includes(parsed.mode) ? DS_TITLES[parsed.mode] : "Random Mix";
+      const session = {
+        cfg,
+        title: modeTitle,
+        wiki: null,
+        anime: null,
+        franchise: null,
+        mediaType: DS_MODES.includes(parsed.mode) ? parsed.mode : "dataset",
+        difficulty: cfg.difficulty,
+        section: null,
+        mode: DS_MODES.includes(parsed.mode) ? parsed.mode : "random-ds",
+        sections: domainPlan.map((p) => ({
+          name: p.name, domain: p.domain, perSection: p.perSection,
+          state: SECTION_STATES.GENERATING, questions: [], canCarryAudio: false,
+        })),
+        sectionJobs: {},
+        activeSection: 0,
+        idx: 0,
+        questionNo: 0,
+        scores: new Map(),
+        revealed: [],
+        answeredBy: new Map(),
+        usedKeys: new Set(),
+        askedBy: senderJid,
+        askedByName: senderName,
+        startedAt: Date.now(),
+        token: 0,
+        cancelled: false,
+        timerId: null,
+        nextTimerId: null,
+        reassureTimerId: null,
+        qStartedAt: Date.now(),
+        qOpenUntil: 0,
+        qEpoch: 0,
+        revealLock: false,
+        callLLM: null,
+        animeCharacters: [],
+        charIndex: null,
+        otherTitles: [],
+      };
+      prep.session = session;
+      if (prep.cancelled) { session.cancelled = true; abortPrep(); return; }
+      // dataset sections build instantly; the logos round fetches a handful of
+      // verified images - build EVERY section now so the ready card is real.
+      for (let i = 0; i < session.sections.length; i++) {
+        await ensureSectionGenerating(session, i, sock, chatId);
+        if (prep.cancelled || session.cancelled) { abortPrep(); return; }
+      }
+      stopPrepTimers(prep);
+      const built = session.sections.reduce((a, s) => a + s.questions.length, 0);
+      if (built < Math.min(3, cfg.questionCount)) {
+        pendingPrep.delete(chatId);
+        releaseLifecycle(chatId);
+        await sock.sendMessage(chatId, {
+          text: botMarker + `❌ Could not build a *${modeTitle}* right now (dataset unavailable). Try again in a minute.`,
+        }, { quoted: m }).catch(() => {});
+        return;
+      }
+      const totalQs = plannedTotal(session);
+      let head = botMarker + `🎯 *QUIZ STARTED - ${modeTitle.toUpperCase()}* 🎯\n\n`;
+      head += `🗂 ${totalQs} questions from the ${DS_MODES.includes(parsed.mode) ? DS_NAMES[parsed.mode] : "mixed"} dataset (trivia + real images)\n`;
+      head += `📚 ${cfg.difficulty.toUpperCase()} • ${POINTS[cfg.difficulty]} Zeni per correct (+20 speed bonus)\n`;
+      head += `✍️ Answer: just type the answer in chat - or \`${prefix} <letter>\` for multiple choice. One answer per player per question\n`;
+      head += `⏱ ${cfg.timePerQuestion}s per question\n`;
+      head += `🛑 Cancel: \`${prefix} quiz end\`\n\n`;
+      head += `Let's go! 🚀`;
+      await parkReadySession(sock, chatId, session, { head, introImage: null, botMarker, m, senderJid, prefix });
+      ownsSlot = false;
       return;
     }
 
