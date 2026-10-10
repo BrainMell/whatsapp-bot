@@ -138,4 +138,7 @@ assert(!matches(T["gow-kratos"], "Deimos"), "wrong GoW answer rejected");
     console.log("logo build SKIPPED (network down in QA sandbox) - verified on-box later");
   }
   console.log(process.exitCode ? "QA FAILED" : "QA ALL GREEN");
+  // quiz.js boots media-worker heartbeats + intervals that keep the event
+  // loop alive forever - three orphaned QA processes taught us this. Exit hard.
+  process.exit(process.exitCode || 0);
 })();

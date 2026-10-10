@@ -69,7 +69,7 @@ const TRIVIA = [
   {
     id: "db-u2-god", franchise: "Dragon Ball", fmt: "typed", difficulty: "medium", topic: "Dragon Ball",
     q: "In Dragon Ball Super, who is the God of Destruction of Universe 2?",
-    answer: "Heles", alts: ["Heles", "Helles"],
+    answer: "Heles", alts: ["Helles"],
   },
   {
     id: "db-granolah-ai", franchise: "Dragon Ball", fmt: "typed", difficulty: "hard", topic: "Dragon Ball",
