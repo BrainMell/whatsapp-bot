@@ -205,7 +205,7 @@ const LOGOS_POOL = (() => {
   ];
   // dataset-sourced additions: only entries that carry a verified modern logo
   for (const b of ((logoDataset && logoDataset.brands) || [])) {
-    if (!b || !b.name || !b.file || !b.modern) continue;
+    if (!b || !b.name || !b.modern || (!b.file && !b.url)) continue;
     all.push({ name: b.name, wiki: b.wiki || b.name, cat: b.cat || "Brands" });
   }
   const seen = new Set();
