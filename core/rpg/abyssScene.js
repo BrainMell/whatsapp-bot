@@ -477,6 +477,114 @@ function enemyNativeFacing(id) {
 const SUMMON_FACES_LEFT = new Set([]);
 const SUMMON_FACES_RIGHT = new Set(['PLAGUEFANG', 'DINO', 'BOAR', 'SNAKE', 'REPTILE', 'BOGLURK', 'FIREGUARD', 'FROSTPEEP', 'LUMENMOTH', 'DRAGON', 'GIANT', 'YETI', 'STARNAIL']);
 const summonFaceKey = (file) => String(file || '').replace(/\.png$/i, '').toUpperCase();
+
+// ── round-18 PLAYER ART FACING (owner 13:24Z: "Some player Sprites like
+// ninja facing the wrong way across regular dungeons and pvp") ──
+// The side-path hero stands front-LEFT and must face RIGHT toward the enemy
+// wing, but class art is NOT uniformly natively-right. A 10x bisector audit
+// of all 130 class sprites (mirrored-twin cross-check at every dispute;
+// scout1-4 kept RIGHT as the production-verified anchor) proves 82 files
+// are natively LEFT — the whole fighter/apprentice/rogue/ninja(1)/zenmaster/
+// archmage/druid families among them. The SAME corrected table landed in the
+// Go renderer (Bot_generation pkg/combat/sprites.go) so classic dungeons +
+// PvP stay in lockstep — one audit, both pipelines.
+//   PLAYER_ART_FACES_LEFT   natively LEFT → mirrored in the front-left slot
+//   PLAYER_ART_FACES_NEVER  per-file 'F' headroom (owner R12: "don't make a
+//                           universal rule... leave head room") — never flips
+// Unlisted files default to native-RIGHT (no flip), matching today's art.
+const PLAYER_ART_FACES_LEFT = new Set([
+        "berserker1.png",
+        "berserker2.png",
+        "doomslayer2.png",
+        "fighter1.png",
+        "god_hand (1).png",
+        "monk.png",
+        "nightblade (1).png",
+        "paladin (4).png",
+        "paladin (6).png",
+        "rogue (1).png",
+        "rogue (2).png",
+        "rogue (3).png",
+        "rogue (4).png",
+        "templar (1).png",
+        "templar (2).png",
+        "templar (4).png",
+        "templar (5).png",
+        "templar (6).png",
+        "templar (7).png",
+        "templar (8).png",
+        "templar (9).png",
+        "acolyte.png",
+        "apprentice1.png",
+        "apprentice2.png",
+        "apprentice3.png",
+        "apprentice4.png",
+        "archdruid (3).png",
+        "archdruid (4).png",
+        "archdruid (6).png",
+        "archdruid (9).png",
+        "archmage (1).png",
+        "archmage (12).png",
+        "archmage (2).png",
+        "archmage (4).png",
+        "archmage (9).png",
+        "cleric (1).png",
+        "cleric (2).png",
+        "cleric (4).png",
+        "cleric (5).png",
+        "cleric (6).png",
+        "druid (1).png",
+        "druid (2).png",
+        "druid (3).png",
+        "druid (4).png",
+        "druid (5).png",
+        "druid (6).png",
+        "elementalist (1).png",
+        "elementalist (3).png",
+        "fighter2.png",
+        "fighter3.png",
+        "lich.png",
+        "ninja (1).png",
+        "ninja (2).png",
+        "ninja (3).png",
+        "ninja (4).png",
+        "ninja (5).png",
+        "saint (1).png",
+        "saint (2).png",
+        "saint (3).png",
+        "saint (4).png",
+        "samuri (1).png",
+        "samuri (10).png",
+        "samuri (11).png",
+        "samuri (4).png",
+        "samuri (5).png",
+        "samuri (6).png",
+        "samuri (8).png",
+        "samuri (9).png",
+        "timelord (1).png",
+        "timelord (3).png",
+        "timelord (4).png",
+        "timelord (5).png",
+        "tycoon.png",
+        "voidwalker (1).png",
+        "voidwalker (4).png",
+        "voidwalker (7).png",
+        "warlord2.png",
+        "warlord3.png",
+        "warrior2.png",
+        "warrior3.png",
+        "warrior4.png",
+        "zenmaster.png",
+]);
+const PLAYER_ART_FACES_NEVER = new Set([]);   // per-file headroom, empty today
+function playerFaceKey(file) {
+    return String(file || '').toLowerCase().replace(/^graded:/, '');
+}
+function playerArtFlipFor(file) {
+    const k = playerFaceKey(file);
+    if (PLAYER_ART_FACES_NEVER.has(k)) return false;   // 'F' headroom wins
+    return PLAYER_ART_FACES_LEFT.has(k);               // native LEFT → mirror
+}
 // best-effort species key for a wild summon BEFORE its art resolves
 function planWildSpeciesKey(state, enemy) {
     const sp = state && state.abyssRun && state.abyssRun.currentEncounterData
@@ -944,15 +1052,20 @@ async function planCombatLayout(state, opts = {}) {
             });
         }
     } catch (e) { /* ally art is cosmetic — never fail the scene for it */ }
-    // player — front-left slot (Battle-Example position), native art faces
-    // RIGHT toward the enemy wing (the old side layout mirrored it left)
+    // player — front-left slot (Battle-Example position), MUST face RIGHT
+    // toward the enemy wing. round-18: class art is NOT uniformly natively-
+    // right (owner: "Some player Sprites like ninja facing the wrong way") —
+    // natively-LEFT class art is mirrored here via the audited
+    // PLAYER_ART_FACES_LEFT table; PLAYER_ART_FACES_NEVER keeps per-file 'F'
+    // headroom (owner R12 rule). Boss path stays untouched (frozen).
     const pgy = floorClamp(SY(FY(PLAYER_SLOT.fy)));
+    const pFile = playerSpriteFileFor(me);
     actors.push({
         role: 'player', ref: me,
         cx: SX(PLAYER_SLOT.fx), gy: pgy,
         h: Math.round(perspH(pgy) * 0.94),
-        flip: false, name: safeName((me && me.name) || 'You', 16),
-        file: playerSpriteFileFor(me),
+        flip: playerArtFlipFor(pFile), name: safeName((me && me.name) || 'You', 16),
+        file: pFile,
     });
 
     // ── bbox collision resolve (audit §3/§D): measure the real content,
