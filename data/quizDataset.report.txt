@@ -12,3 +12,18 @@ games    text= 1997 lore= 1877 prod=120 (6.0%) images=24
 comics   text= 1875 lore= 1755 prod=120 (6.4%) images=1104
 movies   text= 1836 lore= 1716 prod=120 (6.5%) images=70
 series   text= 1326 lore= 1206 prod=120 (9.0%) images=7529
+
+=== v8.2 fandom lead fix-up 2026-10-10T16:24:16.270Z ===
+fandom items=182 text+=182 art+=0
+per-cat text: {"games":0,"comics":182,"movies":0,"series":0} art: {"games":0,"comics":0,"movies":0,"series":0}
+total text=7216 lore=6736 (93.3%)
+
+=== v8.1 image backfill 2026-10-10T16:27:34.760Z ===
+steam=420 imdb=246
+games: +420 verified images (pool 444)
+movies: +246 verified images (pool 316)
+
+=== v8.2 fandom lead fix-up 2026-10-10T16:27:48.651Z ===
+fandom items=182 text+=182 art+=0
+per-cat text: {"games":0,"comics":182,"movies":0,"series":0} art: {"games":0,"comics":0,"movies":0,"series":0}
+total text=9366 lore=8886 (94.9%)

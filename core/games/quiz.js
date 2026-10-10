@@ -2386,8 +2386,10 @@ async function revealAndAdvance(sock, chatId, session, winner, timedOut) {
       session.revealed.push({ q: q.q, correct: correctText, winner: winner.name, timedOut: false });
       // 💡 critical send: reveals go through safeSend - a dropped reveal is
       // exactly the "answers counted wrong / where did my point go" class.
+      // 💡 v8: typed questions have no meaningful letter - drop it from the reveal
+      const ansPart = q.hideOptions ? "answered it" : `answered ${LETTERS[q.correct]}`;
       await safeSend(sock, chatId, {
-        text: BOT_SAFE(`✅ *Correct!* ${winner.name} answered ${LETTERS[q.correct]} (+${pts} Zeni)\nThe answer was: *${correctText}*`),
+        text: BOT_SAFE(`✅ *Correct!* ${winner.name} ${ansPart} (+${pts} Zeni)\nThe answer was: *${correctText}*`),
       }, { label: `reveal:${session.questionNo}` });
     } else if (timedOut) {
       session.revealed.push({ q: q.q, correct: correctText, winner: null, timedOut: true });
@@ -2570,6 +2572,27 @@ function isQuestionOpen(chatId) {
   return !!(s && !s.cancelled && s.qOpenUntil && Date.now() <= s.qOpenUntil);
 }
 
+// 💡 v8 typed-answer support (owner 2026-10-10: "make most of the questions
+// type the answer instead of the ABCD ... allow multiple answers, not just
+// the one"): typed questions (dataset fmt:"typed", flagged q.typed) accept
+// ANY listed alternative answer (q.alts) plus a small typo tolerance so
+// "Breaking Bad", "breaking bad" and "Breaking Badd" all count. Exact-match
+// behavior for logo/audio/image-MC questions is untouched.
+function _lev(a, b) {
+  if (a === b) return 0;
+  const m = a.length, n = b.length;
+  if (!m || !n) return Math.max(m, n);
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[n];
+}
+
 async function handleAnswer(sock, chatId, senderJid, answerText, botMarker, m, senderName, opts = {}) {
   // 💡 DIRECT ANSWER FORMAT (2026-09-28 owner spec §1): while a question is
   // open, the engine routes PLAIN chat text here with { bareText: true } -
@@ -2614,6 +2637,20 @@ async function handleAnswer(sock, chatId, senderJid, answerText, botMarker, m, s
           const on = norm(o);
           return on.length && (on === guess || on.split(" ").join("") === guess.split(" ").join(""));
         });
+      }
+      // 💡 v8 typed questions: multiple accepted answers (owner directive).
+      // Any alias in q.alts counts as correct, plus a small levenshtein
+      // tolerance (1 char, 2 for long answers) forgives typos on long
+      // titles. Only fires on q.typed - logo/audio/image-MC matching is
+      // untouched.
+      if (idx < 0 && q.typed) {
+        const pool = [String((q.options && q.options[q.correct]) || ""), ...(Array.isArray(q.alts) ? q.alts : [])]
+          .map(norm).filter(Boolean);
+        if (pool.includes(guess)) idx = q.correct;
+        else if (guess.length >= 5) {
+          const tol = guess.length >= 12 ? 2 : 1;
+          if (pool.some((p) => p.length >= 5 && _lev(p, guess) <= tol)) idx = q.correct;
+        }
       }
     }
   }
@@ -3784,6 +3821,7 @@ module.exports = {
   confirmStart,
   endQuiz,
   handleAnswer,
+  _lev,
   handleQuizMod,
   showLeaderboard,
   isQuizAnswerText,

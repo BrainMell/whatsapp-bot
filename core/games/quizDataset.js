@@ -105,37 +105,42 @@ function buildDatasetQuestions({ mode, count, usedKeys, difficulty }) {
   const pickedText = orderText.slice(0, Math.max(0, count - pickedImg.length));
 
   const out = [];
-  for (const q of pickedText) {
-    used.add(`ds:${mode}:t${q.id}`);
-    usage.counts[String(q.id)] = (usage.counts[String(q.id)] || 0) + 1;
-    out.push({
+  const emit = (q, kind) => {
+    // 💡 v8 (owner 2026-10-10: "make most of the questions type the answer
+    // instead of the ABCD ... allow multiple answers"): dataset questions
+    // marked fmt:"typed" post WITHOUT options - players type the answer.
+    // Distractors are stripped entirely from typed questions so a wrong
+    // option text can never false-match. q.alts carries alternative
+    // accepted answers; quiz.js handleAnswer matches alts + typo tolerance.
+    const isTyped = q.fmt === "typed";
+    const alts = isTyped && Array.isArray(q.alts) ? q.alts.map(String).filter(Boolean).slice(0, 6) : [];
+    return {
       q: q.q,
-      options: q.options,
-      correct: q.correct,
+      options: isTyped ? [q.options[q.correct]] : q.options,
+      correct: isTyped ? 0 : q.correct,
+      alts,
+      typed: isTyped,
+      hideOptions: isTyped,
       difficulty: q.difficulty,
       topic: q.topic || mode,
       domain: mode,
-      type: "text",
-      hideOptions: false,
+      type: kind,
       loreRef: null,
-    });
+      ...(kind === "image" ? {
+        assetKey: q.img,
+        asset: { kind: "image", url: q.img, mime: "image/jpeg", subject: q.subject || "", source: q.source || "dataset" },
+      } : {}),
+    };
+  };
+  for (const q of pickedText) {
+    used.add(`ds:${mode}:t${q.id}`);
+    usage.counts[String(q.id)] = (usage.counts[String(q.id)] || 0) + 1;
+    out.push(emit(q, "text"));
   }
   for (const q of pickedImg) {
     used.add(`ds:${mode}:i${q.id}`);
     usage.counts[String(q.id)] = (usage.counts[String(q.id)] || 0) + 1;
-    out.push({
-      q: q.q,
-      options: q.options,
-      correct: q.correct,
-      difficulty: q.difficulty,
-      topic: q.topic || mode,
-      domain: mode,
-      type: "image",
-      hideOptions: false,
-      assetKey: q.img,
-      asset: { kind: "image", url: q.img, mime: "image/jpeg", subject: q.subject || "", source: q.source || "dataset" },
-      loreRef: null,
-    });
+    out.push(emit(q, "image"));
   }
   saveUsage(mode, usage);
   return _shuffle(out);
