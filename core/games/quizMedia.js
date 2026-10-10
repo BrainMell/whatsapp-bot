@@ -534,7 +534,11 @@ async function buildThemeSongQuestionEntry(entry, others, difficulty, goService,
   // returned title - pins the canonical track (e.g. the actual "Main Theme",
   // not any random track from the same OST). Pack-only field; the regular
   // pool has no mustTitle and behaves exactly as before.
-  if (Array.isArray(entry.mustTitle) && entry.mustTitle.length) {
+  // ⚠️ mustTitleAny supersedes mustTitle: _norm strips non-ASCII, so an
+  // EVERY-gate with romaji ("gurenge") hard-fails the real CJK upload
+  // ("LiSA『紅蓮華』…") before the ANY-gate (which checks the raw title and
+  // knows 紅蓮華) ever gets a vote - live 2026-10-10T21:03Z joker incident.
+  if (!Array.isArray(entry.mustTitleAny) && Array.isArray(entry.mustTitle) && entry.mustTitle.length) {
     const mustOk = entry.mustTitle.every((w) => metaTitle.includes(_norm(w)));
     if (!mustOk) { audioCache.markFail(cacheKey); console.log(`[Quiz] preplan theme ${entry.show}: title "${info.metadata.title}" missed mustTitle [${entry.mustTitle.join(",")}]`); return null; }
   }

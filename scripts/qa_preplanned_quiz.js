@@ -28,7 +28,12 @@ for (const t of pack.PACK.trivia) {
 }
 assert(JSON.stringify(fr) === JSON.stringify({ "Dragon Ball": 5, "Solo Leveling": 5, "Devil May Cry": 5, "God of War": 5 }), `franchise split 5/5/5/5 (${JSON.stringify(fr)})`);
 assert(pack.PACK.themes.length === 10, "10 themes");
-for (const t of pack.PACK.themes) assert(Array.isArray(t.mustTitle) && t.mustTitle.length, `mustTitle pinned ${t.show}`);
+for (const t of pack.PACK.themes) {
+  assert(Array.isArray(t.mustTitleAny) && t.mustTitleAny.length, `mustTitleAny pinned ${t.show}`);
+  assert(!t.mustTitle, `no legacy mustTitle on ${t.show} (mustTitleAny supersedes; romaji EVERY-gate would hard-fail CJK uploads)`);
+}
+assert(pack.PACK.themes.find((t) => t.show === "Demon Slayer").mustTitleAny.some((w) => w.includes("紅蓮華") || /gurenge/i.test(w)), "Demon Slayer gate knows 紅蓮華/gurenge");
+assert(pack.PACK.themes.find((t) => t.show === "Attack on Titan").mustTitleAny.some((w) => w.includes("紅蓮の弓矢") || /guren no yumiya/i.test(w)), "AoT gate knows 紅蓮の弓矢/guren no yumiya");
 assert(pack.PACK.themes.filter((t) => t.type === "game").length === 5, "5 game themes");
 assert(pack.PACK.themes.filter((t) => t.type === "anime").length === 5, "5 anime themes");
 assert(new Set(pack.PACK.themes.map((t) => t.show)).size === 10, "theme shows unique");
