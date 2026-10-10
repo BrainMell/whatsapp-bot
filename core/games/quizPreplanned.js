@@ -55,7 +55,7 @@ const BRANDS = [
   { name: "Starbucks", wiki: "Starbucks", cat: "Food & Drink" },
   { name: "Nike", wiki: "Nike, Inc.", cat: "Fashion" },
   { name: "Adidas", wiki: "Adidas", cat: "Fashion" },
-  { name: "Ferrari", wiki: "Ferrari", cat: "Cars" },
+  { name: "Toyota", wiki: "Toyota", cat: "Cars" },
 ];
 
 // ── 20 trivia questions - answers hand-verified against canon (owner:
