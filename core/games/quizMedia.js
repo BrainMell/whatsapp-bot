@@ -126,7 +126,24 @@ function embeddingsIndex() {
   try {
     if (!logoEmbeddings || !logoEmbeddings.model) { _embIndex = false; return _embIndex; }
     const names = Object.keys(logoEmbeddings.vectors || {});
-    _embIndex = { names, get: (n) => logoEmbeddings.vectors[n] || null };
+    // 💡 FIX 2026-10-09: vectors are int8-quantized {q: base64, s: scale} —
+    // dequantize HERE. _cosine expects float arrays; a bare object has no
+    // .length, so the whole visual-decoy path silently degraded to the
+    // same-category shuffle ever since this shipped.
+    _embIndex = {
+      names,
+      get: (n) => {
+        const raw = logoEmbeddings.vectors[n];
+        if (!raw || !raw.q) return null;
+        try {
+          const q = Buffer.from(raw.q, "base64");
+          if (!q.length) return null;
+          const out = new Float32Array(q.length);
+          for (let i = 0; i < q.length; i++) out[i] = (q[i] / 127) * (raw.s || 1);
+          return out;
+        } catch { return null; }
+      },
+    };
   } catch { _embIndex = false; }
   return _embIndex;
 }
