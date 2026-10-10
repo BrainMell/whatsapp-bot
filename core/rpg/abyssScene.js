@@ -427,12 +427,15 @@ const ENEMY_FACING = {
     // audited 'L' (side-profile heads, 3x head-crop pass 2026-10-10):
     MUTATED_HOUND: 'L', SHADOW_STALKER: 'L', VENOM_SPIDER: 'L',
     ABYSSAL_GOD: 'L', DUSK_CRAWLER: 'L', CRIMSON_DEVOURER: 'L',
+    // round-14 6× head-crop audit: the weaver's head sits left-of-center with
+    // the horns sweeping BACK-right — natively left-facing (was misfiled 'F')
+    ABYSS_WEAVER: 'L',
     // audited 'F' (front-facing — never flipped):
     VOID_CORRUPTED: 'F', BLOOD_REAVER: 'F', VOID_HARBINGER: 'F',
     MUTATED_OVERSEER: 'F', INFECTED_COLOSSUS: 'F', CORRUPTED_GUARDIAN: 'F',
     ELDER_CHAOS: 'F', PRIMORDIAL_CHAOS: 'F', ELEMENTAL_ARCHON: 'F',
     VOID_TITAN: 'F', GLOOM_BRUTE: 'F', NIGHT_WRAITH: 'F',
-    HOLLOW_SERAPH: 'F', ABYSS_WEAVER: 'F',
+    HOLLOW_SERAPH: 'F',
 };
 function enemyNativeFacing(id) {
     const key = String(id || '').toUpperCase();
@@ -471,21 +474,28 @@ function planWildSpeciesKey(state, enemy) {
 //   suit  — creature habitats this stage reads right for (owner defect A:
 //   "some backgrounds do not suit the creatures placed on them" — a flat
 //   cartoon dragon on a dark plaza).
+// 🕳️ round-14 REMEASURE (owner 08:09Z: "the backgrounds some are so off the
+// monsters are floating"): every band below was re-measured on the actual
+// 1200×900 cover-fit render of each stage (grid-overlay pass) — the old
+// values were eyeballed too generous (dark_hall family 0.50 with the real
+// wall base at 0.53; amphitheater 0.50 with the tier WALL running to 0.62,
+// which put back-row bodies ON the wall). floorClamp() below now hard-clamps
+// every slot's feet into the stage's readable floor band.
 const BG_META = {
-    'dark_hall_abyss.png':      { floorTop: 0.50, floorBottom: 0.985, vp: [0.50, 0.47], tags: ['plaza', 'wide'],    suit: ['beast', 'brute', 'undead'] },
-    'drowned_vault_abyss.png':  { floorTop: 0.50, floorBottom: 0.985, vp: [0.50, 0.48], tags: ['plaza', 'pit'],    suit: ['aquatic', 'undead', 'brute'] },
+    'dark_hall_abyss.png':      { floorTop: 0.53, floorBottom: 0.95, vp: [0.50, 0.47], tags: ['plaza', 'wide'],    suit: ['beast', 'brute', 'undead'] },
+    'drowned_vault_abyss.png':  { floorTop: 0.53, floorBottom: 0.95, vp: [0.50, 0.48], tags: ['plaza', 'pit'],    suit: ['aquatic', 'undead', 'brute'] },
     // (mist_hollow_abyss removed from the pool by owner ruling 2026-10-10 —
     //  file deleted; entry kept out so a stray copy can never be staged)
-    'violet_sanctum_abyss.png': { floorTop: 0.50, floorBottom: 0.985, vp: [0.50, 0.47], tags: ['plaza', 'sanctum'], suit: ['ethereal', 'arcane', 'flying', 'brute', 'undead'] },
+    'violet_sanctum_abyss.png': { floorTop: 0.53, floorBottom: 0.95, vp: [0.50, 0.47], tags: ['plaza', 'sanctum'], suit: ['ethereal', 'arcane', 'flying', 'brute', 'undead'] },
     // 🕳️ round-13 (owner 02:56Z image-2 brief: dusk-wasteland inspiration,
     // "different and unique maps", keep the existing three): five NEW
     // crimson-dusk stages generated from the owner's reference, floor bands
     // measured on the 1920x1440 renders (zoom pass 2026-10-10)
-    'crimson_dunes_abyss.png':      { floorTop: 0.42, floorBottom: 0.985, vp: [0.50, 0.30], tags: ['dunes', 'open'],     suit: ['beast', 'brute', 'undead', 'flying'] },
-    'ruined_causeway_abyss.png':    { floorTop: 0.44, floorBottom: 0.985, vp: [0.50, 0.38], tags: ['causeway', 'gate'],  suit: ['brute', 'undead', 'arcane', 'beast'] },
-    'bone_fields_abyss.png':        { floorTop: 0.44, floorBottom: 0.985, vp: [0.44, 0.38], tags: ['basin', 'bones'],    suit: ['undead', 'beast', 'ethereal'] },
-    'obsidian_ridge_abyss.png':     { floorTop: 0.40, floorBottom: 0.985, vp: [0.50, 0.28], tags: ['volcanic', 'ridge'], suit: ['brute', 'beast', 'arcane'] },
-    'sunken_amphitheater_abyss.png': { floorTop: 0.50, floorBottom: 0.90, vp: [0.50, 0.42], tags: ['arena', 'tiered'],   suit: ['brute', 'undead', 'ethereal', 'arcane', 'flying', 'beast', 'aquatic'] },
+    'crimson_dunes_abyss.png':      { floorTop: 0.48, floorBottom: 0.95, vp: [0.50, 0.30], tags: ['dunes', 'open'],     suit: ['beast', 'brute', 'undead', 'flying'] },
+    'ruined_causeway_abyss.png':    { floorTop: 0.52, floorBottom: 0.95, vp: [0.50, 0.38], tags: ['causeway', 'gate'],  suit: ['brute', 'undead', 'arcane', 'beast'] },
+    'bone_fields_abyss.png':        { floorTop: 0.47, floorBottom: 0.95, vp: [0.44, 0.38], tags: ['basin', 'bones'],    suit: ['undead', 'beast', 'ethereal'] },
+    'obsidian_ridge_abyss.png':     { floorTop: 0.40, floorBottom: 0.95, vp: [0.50, 0.28], tags: ['volcanic', 'ridge'], suit: ['brute', 'beast', 'arcane'] },
+    'sunken_amphitheater_abyss.png': { floorTop: 0.63, floorBottom: 0.95, vp: [0.50, 0.42], tags: ['arena', 'tiered'],   suit: ['brute', 'undead', 'ethereal', 'arcane', 'flying', 'beast', 'aquatic'] },
 };
 // creature → habitat (drives stage compatibility; audit §5 "choose
 // backgrounds by tag compatibility with the enemy/summon set")
@@ -657,6 +667,18 @@ async function planCombatLayout(state, opts = {}) {
     const tr = await bgCoverTransform(plan.bg, plan.bgDir);
     const SX = (fx) => Math.round(tr ? tr.ox + fx * tr.iw * tr.s : fx * W);
     const SY = (fy) => Math.round(tr ? tr.oy + fy * tr.ih * tr.s : fy * H);
+    // 🕳️ round-14 (owner 08:09Z: "the backgrounds some are so off the monsters
+    // are floating"): fixed fy slots were calibrated on the original plaza
+    // stages — on the dusk stages (and worst on the amphitheater's tier WALL)
+    // they put bodies on walls / above the readable ground. Every slot's feet
+    // are now hard-clamped into the stage's MEASURED floor band (BG_META).
+    const _meta = BG_META[plan.bg] || null;
+    const floorClamp = (gy) => {
+        if (!_meta) return gy;
+        const top = SY(_meta.floorTop) + 6;
+        const bot = SY(_meta.floorBottom) - 6;
+        return Math.min(Math.max(gy, top), bot);
+    };
 
     // formation slots (audit §3): enemies back-left upper ON the floor plane,
     // never at the screen edge; front slot = the ACTIVE enemy, queued pack
@@ -675,10 +697,16 @@ async function planCombatLayout(state, opts = {}) {
     // WIDER than the old amalgamations — the 2/3-body ladders were re-spread
     // (fx gaps +, back rows climb higher) so wide bodies separate WITHOUT the
     // shrink pass flattening them (owner: "enemies overlaying" ban).
+    // formation slots — 🕳️ round-14 REBALANCE (owner 08:09Z: "I gave you a
+    // reference image for the position and you butchered it, the player is in
+    // the center why?"): the front enemy slot moves to the TRUE Battle-
+    // Example mirror of the approved round-4 layout — active enemy front-RIGHT
+    // (fx 0.68-0.70) facing the hero across the open center aisle, pack
+    // staggering back-RIGHT + higher, every row clamped to the stage floor.
     const FORMATIONS = {
-        1: [{ fx: 0.705, fy: 0.700, mul: 0.97 }],
-        2: [{ fx: 0.660, fy: 0.712, mul: 0.94 }, { fx: 0.852, fy: 0.630, mul: 0.78 }],
-        3: [{ fx: 0.655, fy: 0.716, mul: 0.94 }, { fx: 0.800, fy: 0.638, mul: 0.76 }, { fx: 0.908, fy: 0.566, mul: 0.64 }],
+        1: [{ fx: 0.700, fy: 0.680, mul: 0.97 }],
+        2: [{ fx: 0.690, fy: 0.688, mul: 0.94 }, { fx: 0.855, fy: 0.618, mul: 0.78 }],
+        3: [{ fx: 0.680, fy: 0.692, mul: 0.94 }, { fx: 0.820, fy: 0.628, mul: 0.76 }, { fx: 0.912, fy: 0.576, mul: 0.64 }],
     };
     // ally row beside/behind the player (audit: "never on top of the
     // player's body"); a third ally is supported for the test matrix.
@@ -703,16 +731,21 @@ async function planCombatLayout(state, opts = {}) {
     // arcing up-LEFT across the band ABOVE the HUD panel (feet ≤ 0.71H so
     // nobody sinks into the panel; the HUD no-go lift below stays as a
     // belt-and-braces guard for odd art aspect ratios).
+    // ally arc — 🕳️ round-14 (owner 08:09Z rebuke + FROZEN player-left /
+    // summon-right rule): the summons stand to the hero's RIGHT — between him
+    // and the enemy wing, arcing up toward it. The round-13 build had them
+    // BEHIND-LEFT of a centered hero, staring at the back of his head.
     const ALLY_ARC = {
-        1: [{ fx: 0.400, fy: 0.700, mul: 0.62 }],
-        2: [{ fx: 0.435, fy: 0.702, mul: 0.62 }, { fx: 0.282, fy: 0.660, mul: 0.58 }],
-        3: [{ fx: 0.452, fy: 0.706, mul: 0.60 }, { fx: 0.328, fy: 0.664, mul: 0.57 }, { fx: 0.212, fy: 0.620, mul: 0.54 }],
+        1: [{ fx: 0.360, fy: 0.672, mul: 0.62 }],
+        2: [{ fx: 0.360, fy: 0.672, mul: 0.62 }, { fx: 0.450, fy: 0.630, mul: 0.58 }],
+        3: [{ fx: 0.356, fy: 0.676, mul: 0.60 }, { fx: 0.446, fy: 0.634, mul: 0.57 }, { fx: 0.528, fy: 0.596, mul: 0.54 }],
     };
     const ALLY_LANE_MAXW = 170;   // px of horizontal lane per summon (content)
-    // the hero: front-LEFT of the open stage (Battle-Example position), feet
-    // clear of the HUD panel's right edge even for cloak-wide class sprites
-    // (measured ROGUE halfW ≈ 101 → 612 − 101 = 511 > 505).
-    const PLAYER_SLOT = { fx: 0.510, fy: 0.818 };
+    // the hero: FRONT-LEFT — the actual Battle-Example position (owner 08:09Z:
+    // "the player is in the center why?"). fx 0.260 mirrors the approved
+    // round-4 player slot (cx 890 → 310 on the mirrored stage); feet at
+    // fy 0.700 stay 14px above the HUD panel's top edge (y 644).
+    const PLAYER_SLOT = { fx: 0.260, fy: 0.700 };
 
     const queue = (state.abyssRun && Array.isArray(state.abyssRun.packQueue) && !isWildSummon)
         ? state.abyssRun.packQueue.filter(Boolean) : [];
@@ -729,7 +762,7 @@ async function planCombatLayout(state, opts = {}) {
         const art = m.kind === 'wild' ? null : resolveEnemyArtRegular(m.e);
         const speciesKey = m.kind === 'wild' ? summonFaceKey(plan.wildSpecies) : null;
         const sizeMul = m.kind === 'wild' ? summonSizeOf(speciesKey) : enemySizeOf(enemyIdOf(m.e));
-        const cx = SX(m.slot.fx), gy = SY(m.slot.fy);
+        const cx = SX(m.slot.fx), gy = floorClamp(SY(m.slot.fy));
         let h = Math.round(perspH(gy) * m.slot.mul * sizeMul
             * (m.kind === 'wild' ? 1.18 : 1.12));
         // DEPTH CAP (VLM critic, bg4_2e zoom-verified): a big-bodied back-row
@@ -776,7 +809,7 @@ async function planCombatLayout(state, opts = {}) {
             const art = await resolveSummonArt(s.species || s.name);
             const slot = arc[i] || arc[arc.length - 1];
             const speciesKey = summonFaceKey(art ? art.file : (s.species || s.name));
-            const cx = SX(slot.fx), gy = SY(slot.fy);
+            const cx = SX(slot.fx), gy = floorClamp(SY(slot.fy));
             actors.push({
                 role: 'ally', ref: s, art: art ? { img: art.img, file: art.file } : null,
                 cx, gy,
@@ -792,10 +825,11 @@ async function planCombatLayout(state, opts = {}) {
     } catch (e) { /* ally art is cosmetic — never fail the scene for it */ }
     // player — front-left slot (Battle-Example position), native art faces
     // RIGHT toward the enemy wing (the old side layout mirrored it left)
+    const pgy = floorClamp(SY(PLAYER_SLOT.fy));
     actors.push({
         role: 'player', ref: me,
-        cx: SX(PLAYER_SLOT.fx), gy: SY(PLAYER_SLOT.fy),
-        h: Math.round(perspH(SY(PLAYER_SLOT.fy)) * 0.94),
+        cx: SX(PLAYER_SLOT.fx), gy: pgy,
+        h: Math.round(perspH(pgy) * 0.94),
         flip: false, name: safeName((me && me.name) || 'You', 16),
         file: playerSpriteFileFor(me),
     });
@@ -877,13 +911,14 @@ async function planCombatLayout(state, opts = {}) {
     for (const m of measured) {
         if (m.a.role === 'player' || m.a.role === 'active') { m.lo = m.a.cx; m.hi = m.a.cx; continue; }
         if (m.a.role === 'ally') {
-            // mirrored stage: the party arcs BEHIND-LEFT of the hero, above
-            // the HUD panel — retreat LEFT, never into the enemy wing
-            m.lo = Math.round(W * 0.15);
-            m.hi = playerBox0 ? Math.round(playerBox0.left - m.halfW - 16) : Math.round(W * 0.45);
+            // round-14: the party stands BETWEEN the hero and the enemy wing
+            // (frozen player-left / summon-right) — retreat LEFT toward the
+            // hero when squeezed, never into the enemy corridor
+            m.lo = playerBox0 ? Math.max(Math.round(W * 0.155), playerBox0.right + 14) : Math.round(W * 0.155);
+            m.hi = Math.round(W * 0.575);
             if (m.hi < m.lo) m.hi = m.lo;
         } else {                    // pack / wild — the enemy corridor (right wing)
-            m.lo = Math.round(W * 0.40);
+            m.lo = Math.round(W * 0.615);
             // RIGHT-EDGE GUARD: a wide back-row body must never render past
             // the frame (12px margin) — clamp the corridor to its own width
             m.hi = Math.min(Math.round(W * 0.92), Math.round(1188 - m.halfW));
@@ -1172,7 +1207,7 @@ async function drawActorGrounded(ctx, art, cx, groundY, ch, opts = {}) {
         // ground line under the visible foot band, so darkness starts AT the
         // feet instead of below them.
         const weldRy = Math.max(5, Math.round(ch * 0.020));
-        const wAlpha = Math.min(0.62, 0.46 * (opts.shadowBoost || 1.35)
+        const wAlpha = Math.min(0.74, 0.46 * (opts.shadowBoost || 1.35)
             * (opts.alpha != null ? opts.alpha : 1));
         ctx.save();
         ctx.translate(flip ? cx - footOff : cx + footOff, groundY + weldRy * 0.35);
@@ -1400,7 +1435,7 @@ async function drawCombatScene(ctx, plan, live, opts = {}) {
         if (!p.art) continue;
         spritePass.push({ gy: p.gy, run: async () => {
             const d = await drawActorGrounded(ctx, p.art, p.cx, p.gy, p.h,
-                { flip: p.flip, alpha: p.alpha, shadowBoost: 1.8, shadowRyMin: 16, shadowWide: true, pixelSnap: true });
+                { flip: p.flip, alpha: p.alpha, shadowBoost: 2.05, shadowRyMin: 16, shadowWide: true, pixelSnap: true });
             if (d) p.drawnH = d.h;
         } });
     }
@@ -1410,7 +1445,7 @@ async function drawCombatScene(ctx, plan, live, opts = {}) {
             // that turn render (opts.hitEnemy — per-turn, never frozen)
             const d = await drawActorGrounded(ctx, plan.enemy.art, plan.enemy.cx, plan.enemy.gy, plan.enemy.h,
                 { flip: plan.enemy.flip, tint: opts.hitEnemy ? HIT_TINT : null,
-                  shadowBoost: plan.kind === 'summon' ? 1.8 : 1.85, shadowRyMin: 16, shadowWide: true, pixelSnap: true });
+                  shadowBoost: plan.kind === 'summon' ? 2.05 : 2.1, shadowRyMin: 16, shadowWide: true, pixelSnap: true });
             if (d) plan.enemy.drawnH = d.h;
         } });
     }
@@ -1418,7 +1453,7 @@ async function drawCombatScene(ctx, plan, live, opts = {}) {
         if (!a.art) continue;
         spritePass.push({ gy: a.gy, run: async () => {
             const d = await drawActorGrounded(ctx, a.art, a.cx, a.gy, a.h,
-                { alpha: a.alpha || 0.96, flip: a.flip, shadowBoost: 1.7, shadowRyMin: 15, shadowWide: true, pixelSnap: true });
+                { alpha: a.alpha || 0.96, flip: a.flip, shadowBoost: 1.95, shadowRyMin: 15, shadowWide: true, pixelSnap: true });
             if (d) a.drawnH = d.h;
         } });
     }
@@ -1448,7 +1483,7 @@ async function drawCombatScene(ctx, plan, live, opts = {}) {
         const art = await gradedPlayerArt(plan.player.file, ambient);
         spritePass.push({ gy: plan.player.gy, run: async () => {
             const d = await drawActorGrounded(ctx, art, plan.player.cx, plan.player.gy, plan.player.h,
-                { flip: !!plan.player.flip, shadowBoost: 1.6, shadowRyMin: 14, shadowWide: true, pixelSnap: true });
+                { flip: !!plan.player.flip, shadowBoost: 1.85, shadowRyMin: 14, shadowWide: true, pixelSnap: true });
             if (d) plan.player.drawnH = d.h;
         } });
     }
