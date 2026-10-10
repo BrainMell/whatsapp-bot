@@ -86,7 +86,11 @@ function buildPayload(players, enemies, options = {}) {
         // approved E-series audit renders). The Go service mirrors this guard.
         background: String(options.backgroundPath
             ? options.backgroundPath.split(/[\/\\]/).pop()
-            : (String(options.combatType).toUpperCase() === 'PVP' ? 'spark_15.png' : 'spark_1.png'))
+            // 💡 OWNER BRIEF 2026-10-09 §2 (encounter bg consistency): the PVE
+            // fallback was spark_1 (a legacy flat) — any flow that omitted
+            // backgroundPath leaked the old style AND mismatched the fight's
+            // own background. env1 = the new-style lava cavern, deterministic.
+            : (String(options.combatType).toUpperCase() === 'PVP' ? 'spark_15.png' : 'env1.png'))
     };
 }
 

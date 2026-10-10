@@ -3558,6 +3558,9 @@ function createEnemy(enemyType, level = 1) {
     abilities: template.abilities,
     statusEffects: [],
     isEnemy: true,
+    // 💡 OWNER BRIEF 2026-10-09 §2 (enemy sprite swap): per-instance stable
+    // seed for the Go renderer's rotation/dedupe (1..99; 0 = legacy fallback)
+    spriteIndex: 1 + Math.floor(Math.random() * 99),
     loot: template.loot,
     xp: Math.floor(template.xp * (1 + (level - 1) * 0.3)),
     gold: Math.floor(template.gold * 3 * (1 + (level - 1) * 0.8)),
@@ -8635,6 +8638,16 @@ async function nextStage(sock, groq, sessionKey) {
       state.votes = {};
       state.currentEncounter = null; // Clear stale encounter
       state.isBranching = true; // Set flag
+      state.voteProcessing = false; // 💡 fresh window accepts votes again
+      // 💡 OWNER BRIEF 2026-10-09 §3 (overlapping voting encounters): clear
+      // any pending vote timer BEFORE opening a new window, and stamp this
+      // window with a generation id. Previously a vote opening while another
+      // window was still pending OVERWROTE the timer handle (old timer
+      // unfireable → fired later) — two vote prompts went live at once and
+      // both processed the same .j vote bag. Stale timers are now no-ops.
+      if (state.timers.vote) clearTimeout(state.timers.vote);
+      state.voteGen = (state.voteGen || 0) + 1;
+      const voteGen = state.voteGen;
       try {
         await sock.sendMessage(state.chatId, { text: msg });
       } catch (err) {
@@ -8646,6 +8659,7 @@ async function nextStage(sock, groq, sessionKey) {
 
       const voteTime = 30000; // 30s for both solo and group (matches message)
       state.timers.vote = setTimeout(() => {
+        if (state.voteGen !== voteGen) return; // stale window — superseded
         const v1 = Object.values(state.votes).filter((v) => v === "1").length;
         const v2 = Object.values(state.votes).filter((v) => v === "2").length;
 
@@ -9143,6 +9157,11 @@ async function handleNonCombatEncounter(sock, encounter, sessionKey) {
   state.voteProcessing = false;
 
   // Auto-timeout if no one votes
+  // 💡 OWNER BRIEF 2026-10-09 §3: clear-before-set + generation stamp (see
+  // crossroad opener) — stale vote timers can no longer double-fire.
+  if (state.timers.vote) clearTimeout(state.timers.vote);
+  state.voteGen = (state.voteGen || 0) + 1;
+  const voteGen = state.voteGen;
   let timer;
   if (state.solo) {
     timer = 15000; // Reduced to 15s for solo
@@ -9154,6 +9173,7 @@ async function handleNonCombatEncounter(sock, encounter, sessionKey) {
   }
 
   state.timers.vote = setTimeout(() => {
+    if (state.voteGen !== voteGen) return; // stale window — superseded
     if (state.active && !state.voteProcessing) {
       processVotes(sock, encounter, sessionKey).catch((e) =>
         console.error("[Quest] processVotes error:", e?.message || e),
@@ -12033,6 +12053,14 @@ module.exports = {
     const allVoted = state.players.every((p) => state.votes[p.jid]);
 
     if (allVoted && state.isBranching) {
+      // 💡 OWNER BRIEF 2026-10-09 §4 (vote → battle → boss chain): without a
+      // re-entry guard, EVERY vote landing after "all voted" re-scheduled
+      // processBranchChoice — the branch resolved twice+ (elite fight AND the
+      // dungeon flow racing ahead into the boss fight). One resolution per
+      // window: voteProcessing blocks further .j vote input, and the next
+      // window opener resets it.
+      if (state.voteProcessing) return "❌ Votes are already being processed.";
+      state.voteProcessing = true;
       clearTimeout(state.timers.vote);
       const sock = state.sock;
       const sessionKey = state.sessionKey;

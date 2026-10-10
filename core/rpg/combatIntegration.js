@@ -189,9 +189,10 @@ async function renderCombatEnd(players, enemies, victory, rewards = null, option
                 enemySpecies: String(e0.species || ((e0.isWildSummon || e0._isSummon) ? (e0.speciesId || e0.id) : '') || ''),
                 rank: String(options.rank || ''),
                 floor: Math.floor(Number(options.floor) || 0),
+                // 💡 OWNER BRIEF 2026-10-09 §2: deterministic new-style fallback
                 background: String(options.backgroundPath
                     ? options.backgroundPath.split(/[\\/]/).pop()
-                    : 'spark_1.png'),
+                    : 'env1.png'),
             }
         );
     } catch (error) {

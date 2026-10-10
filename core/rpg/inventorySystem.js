@@ -1379,8 +1379,11 @@ function useItem(userId, rawItemId, targetSlot = null) {
         // actual maxEnergy is 1135, not the 100 default this code assumed.
         const derivedStats = progression.getBaseStats(userId, user.class);
         const maxEn = derivedStats.maxEnergy || 100;
-        // Default current energy to maxEn on first use (undefined → full).
-        const currentEn = user.energy !== undefined ? user.energy : maxEn;
+        // 💡 OWNER BRIEF 2026-10-09 §2: energy items must feed the CANONICAL
+        // persistent pool (the one mining/quests/abyss drain). They used to
+        // write the dead legacy `user.energy` field — an Ether restored a bar
+        // nobody reads, so mining still said "Not enough energy!".
+        const currentEn = economy.getPersistentEnergy(userId, maxEn);
         if (currentEn >= maxEn) {
             return { success: false, message: `⚡ *${itemInfo.name}* - your Energy is already full (${currentEn}/${maxEn})! Item not consumed.` };
         }
@@ -1389,8 +1392,9 @@ function useItem(userId, rawItemId, targetSlot = null) {
         // with the derived maxEnergy (same fix the maxEn read already got).
         const enPct = Number(itemInfo.effectValue) > 0 ? Number(itemInfo.effectValue) : 0.30;
         const enGain = Math.max(1, Math.floor(maxEn * enPct));
-        user.energy = Math.min(maxEn, currentEn + enGain);
-        effectMsg = `⚡ Restored **${enGain} Energy** (${Math.round(enPct * 100)}%)! (Now ${user.energy}/${maxEn})`;
+        economy.setPersistentEnergy(userId, Math.min(maxEn, currentEn + enGain), maxEn);
+        const newEn = economy.getPersistentEnergy(userId, maxEn);
+        effectMsg = `⚡ Restored **${enGain} Energy** (${Math.round(enPct * 100)}%)! (Now ${newEn}/${maxEn})`;
     }
     else if (itemId === 'silver_veil' || itemInfo.effect === 'toggle_level_veil') {
         // 💡 NEW RUINS REWARD (2026-10-03): toggle the level veil. NOT consumed
@@ -1451,16 +1455,20 @@ function useItem(userId, rawItemId, targetSlot = null) {
         const user = economy.getUser(userId);
         const derivedStats = progression.getBaseStats(userId, user.class);
         const maxEn = derivedStats.maxEnergy || 100;
-        const currentEn = user.energy !== undefined ? user.energy : maxEn;
-        user.energy = Math.min(maxEn, currentEn + 50);
-        effectMsg = `⚡ Restored **50 Energy**! (Now ${user.energy}/${maxEn})`;
+        // 💡 OWNER BRIEF 2026-10-09 §2: write the canonical persistent pool.
+        const currentEn = economy.getPersistentEnergy(userId, maxEn);
+        economy.setPersistentEnergy(userId, Math.min(maxEn, currentEn + 50), maxEn);
+        const newEn = economy.getPersistentEnergy(userId, maxEn);
+        effectMsg = `⚡ Restored **50 Energy**! (Now ${newEn}/${maxEn})`;
     }
     else if (itemId === 'ether') {
         const user = economy.getUser(userId);
         const derivedStats = progression.getBaseStats(userId, user.class);
         const maxEn = derivedStats.maxEnergy || 100;
-        user.energy = maxEn;
-        effectMsg = `⚡ Restored **100% Energy**! (Now ${user.energy}/${maxEn})`;
+        // 💡 OWNER BRIEF 2026-10-09 §2: Ether must refill the canonical
+        // persistent pool — the one MINING drains (see mineOre).
+        economy.setPersistentEnergy(userId, maxEn, maxEn);
+        effectMsg = `⚡ Restored **100% Energy**! (Now ${maxEn}/${maxEn})`;
     }
     else if (itemId === 'rabbit_foot') {
         const user = economy.getUser(userId);
@@ -1477,14 +1485,16 @@ function useItem(userId, rawItemId, targetSlot = null) {
             : (rawClass || 'FIGHTER');
         const derivedStats = progression.getBaseStats(userId, classId);
         const maxEn = derivedStats.maxEnergy || 100;
-        const currentEn = user.energy !== undefined ? user.energy : maxEn;
+        // 💡 OWNER BRIEF 2026-10-09 §2: write the canonical persistent pool.
+        const currentEn = economy.getPersistentEnergy(userId, maxEn);
         if (currentEn >= maxEn) {
             return { success: false, message: `⚡ *${itemInfo.name}* - your Energy is already full (${currentEn}/${maxEn})! Item not consumed.` };
         }
         const enPct = Number(itemInfo.effectValue) > 0 ? Number(itemInfo.effectValue) : 0.40;
         const enGain = Math.max(1, Math.floor(maxEn * enPct));
-        user.energy = Math.min(maxEn, currentEn + enGain);
-        effectMsg = `⚡ Restored **${enGain} Energy** (${Math.round(enPct * 100)}%)! (Now ${user.energy}/${maxEn})`;
+        economy.setPersistentEnergy(userId, Math.min(maxEn, currentEn + enGain), maxEn);
+        const newEn = economy.getPersistentEnergy(userId, maxEn);
+        effectMsg = `⚡ Restored **${enGain} Energy** (${Math.round(enPct * 100)}%)! (Now ${newEn}/${maxEn})`;
     }
     else if (COMBAT_ONLY_ITEM_EFFECTS.has(itemInfo.effect)) {
         // Battle-only consumables (bombs, smokes, revives...): keep them

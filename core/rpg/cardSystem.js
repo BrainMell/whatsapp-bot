@@ -1429,6 +1429,29 @@ function getDeckHash(cards) {
     return cards.map(c => c.cardId + (c.isLocked ? 'L' : 'U')).join('|');
 }
 
+// ── 💡 OWNER BRIEF 2026-10-09 §1: resilient card-name matching ─────────────
+// "olivier armstrong" must hit "Olivier Mira Armstrong" (missing middle
+// names, word order, punctuation, quote chars). Tokens AND-match, results
+// ranked by relevance. Used by info / cs / ci / series.
+function _nameTokens(q) {
+    return String(q || '').toLowerCase().replace(/["'`\u2018\u2019\u201C\u201D]/g, ' ')
+        .split(/[^a-z0-9]+/).filter(t => t.length >= 2);
+}
+function _cardMatchesTokens(card, tokens, includeSeries) {
+    if (!tokens.length) return true;
+    const name = String(card.cardName || '').toLowerCase();
+    const hay = includeSeries ? `${name} ${String(card.animeName || '').toLowerCase()}` : name;
+    return tokens.every(t => hay.includes(t));
+}
+function _cardRelevance(card, tokens) {
+    const name = String(card.cardName || '').toLowerCase();
+    const q = tokens.join(' ');
+    if (q && name === q) return 0;
+    if (q && name.startsWith(q)) return 1;
+    if (tokens.length && tokens.every(t => name.includes(t))) return 2;
+    return 3;
+}
+
 function sendUsage(reply, cmd, usage, example) {
   let msg = `📖  *USAGE*\n\n`;
   msg += `⌨️ ⟢ *Command:* \`${cmd}\`\n`;
@@ -2626,11 +2649,23 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
     return reply(`⚠️  *ID NOT IN DATABASE*\n\n🆔 ⟢ *ID:* _"${query}"_\n📍 ⟢ _Standard format, but no card with this ID exists_\n\n💡 ⟢ _Use_ \`${p} info <card name>\` _to search by name instead_`);
   }
 
-  // Partial name search
-  const matches = ALL_CARDS().filter(c =>
-    c.cardName.toLowerCase().includes(query) &&
-    (!animeFilter || c.animeName.toLowerCase().includes(animeFilter))
+  // Partial name search — 💡 OWNER BRIEF 2026-10-09 §1: token-AND matching +
+  // relevance ranking. The old whole-string includes() missed "olivier
+  // armstrong" vs the stored "Olivier Mira Armstrong" (missing middle name).
+  const tokens = _nameTokens(query);
+  const animeTokens = _nameTokens(animeFilter);
+  let matches = ALL_CARDS().filter(c =>
+      _cardMatchesTokens(c, tokens, false) &&
+      (!animeTokens.length || animeTokens.every(t => String(c.animeName || '').toLowerCase().includes(t)))
   );
+  if (!matches.length && tokens.length) {
+      // second chance: let series names satisfy the tokens before giving up
+      matches = ALL_CARDS().filter(c => _cardMatchesTokens(c, tokens, true));
+  }
+  matches.sort((a, b) =>
+      _cardRelevance(a, tokens) - _cardRelevance(b, tokens) ||
+      String(a.tier).localeCompare(String(b.tier), undefined, { numeric: true }) ||
+      String(a.id).localeCompare(String(b.id)));
 
   if (matches.length === 0) return reply(`❌  *CARD NOT FOUND*\n\n🔎 ⟢ *Query:* _"${query}"_${animeFilter ? `\n📺 ⟢ *Anime:* _${animeFilter}_` : ''}`);
 
@@ -3458,7 +3493,7 @@ async function cmdCS(reply, args = [], perms = {}) {
   // Non-mods cannot search event (E-tier) cards.
   const canViewEvents = perms.isOwner || perms.isCardMod;
   const p = P();
-  if (args.length === 0) return sendUsage(reply, `${p} cs`, `${p} cs <name or series> [tier n] [--page n]`, `${p} cs goku tier S`);
+  if (args.length === 0) return sendUsage(reply, `${p} cs`, `${p} cs <name or series> [| tier] [--page n]`, `${p} cs olivier armstrong | 5`);
 
   let page = 1;
   const pageIdx = args.findIndex(a => a === '--page' || a === '-p');
@@ -3467,18 +3502,29 @@ async function cmdCS(reply, args = [], perms = {}) {
     args.splice(pageIdx, 2);
   }
 
+  // 💡 OWNER BRIEF 2026-10-09 §1: ".j cs olivier armstrong | 5" — the pipe IS
+  // a tier separator. The old parser only knew the literal word "tier", so
+  // the pipe + number were swallowed into the query and valid names failed.
   let tierFilter = null;
-  const tierIdx = args.findIndex(a => a.toLowerCase() === 'tier');
-  if (tierIdx !== -1 && args[tierIdx + 1]) {
-    tierFilter = args[tierIdx + 1].toUpperCase();
-    args.splice(tierIdx, 2);
+  let work = args.slice();
+  const pipeIdx = work.indexOf('|');
+  if (pipeIdx !== -1) {
+    if (work[pipeIdx + 1]) tierFilter = String(work[pipeIdx + 1]).toUpperCase();
+    work = work.slice(0, pipeIdx);
+  }
+  const tierWordIdx = work.findIndex(a => a.toLowerCase() === 'tier');
+  if (tierWordIdx !== -1 && work[tierWordIdx + 1]) {
+    tierFilter = String(work[tierWordIdx + 1]).toUpperCase();
+    work.splice(tierWordIdx, 2);
   }
 
-  const query = args.join(' ').toLowerCase().trim();
-  let matches = ALL_CARDS().filter(c => 
-    c.cardName.toLowerCase().includes(query) || 
-    c.animeName.toLowerCase().includes(query) ||
-    c.id.toLowerCase() === query
+  const query = work.join(' ').toLowerCase().trim();
+  // 💡 OWNER BRIEF §1: token-AND matching across name AND series (the old
+  // whole-string includes() had the "Olivier Mira Armstrong" failure mode).
+  const tokens = _nameTokens(query);
+  let matches = ALL_CARDS().filter(c =>
+    _cardMatchesTokens(c, tokens, true) ||
+    (query && String(c.id).toLowerCase() === query)
   );
 
   if (tierFilter) {
@@ -3502,6 +3548,12 @@ async function cmdCS(reply, args = [], perms = {}) {
   }
   
   if (matches.length === 0) return reply(`🔍 No cards found matching *"${query}"*${tierFilter ? ` in Tier ${tierFilter}` : ''}`);
+
+  // 💡 OWNER BRIEF §1: best matches first (exact-name > name-prefix > spread)
+  matches.sort((a, b) =>
+    _cardRelevance(a, tokens) - _cardRelevance(b, tokens) ||
+    String(a.tier).localeCompare(String(b.tier), undefined, { numeric: true }) ||
+    String(a.id).localeCompare(String(b.id)));
 
   const pageSize = 15;
   const totalFound = matches.length;
@@ -4388,6 +4440,12 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       await cmdCS(reply, args, { isOwner, isCardMod });
       return true;
 
+    // 💡 OWNER BRIEF 2026-10-09 §1: global series search (name + maker,
+    // grouped by tier, paginated)
+    case 'series':
+      await cmdSeries(reply, args, { isOwner, isCardMod });
+      return true;
+
     case 'buycard':
       await cmdBuyCard(senderJid, reply, args);
       return true;
@@ -5058,20 +5116,31 @@ async function cmdCi(senderJid, reply, args) {
     return reply(`❌ Usage: \`${p} Ci "<card name>" | <tier>\`\n💡 Example: \`${p} Ci "Edward Elric" | 5\``);
   }
   const [namePart, tierPart] = fullQuery.split('|').map(s => s.trim());
-  const tier = parseInt(tierPart);
-  if (isNaN(tier) || tier < 1 || tier > 7) {
-    return reply(`❌ Invalid tier. Use a number 1-7.`);
+  // 💡 OWNER BRIEF 2026-10-09 §1: strip quote characters from the name part —
+  // `.j ci "Olivier Armstrong" | 5` used to search the LITERAL `"olivier
+  // armstrong"` (quotes included) and always miss.
+  const nameClean = String(namePart || '').replace(/["'`\u2018\u2019\u201C\u201D]/g, ' ').trim();
+  const tier = String(tierPart || '').trim().toUpperCase() === 'S'
+      ? 'S'
+      : parseInt(tierPart, 10);
+  const tierOk = tier === 'S' || (!isNaN(tier) && tier >= 1 && tier <= 7);
+  if (!tierOk) {
+    return reply(`❌ Invalid tier. Use a number 1-7 or S.`);
   }
-  // Search card index for matching name
-  // 💡 FIX 2026-08-31: cards_data.json stores tier as STRING ("5"), but tier
-  // here is a Number (parseInt) - strict === never matched, so this lookup
-  // ALWAYS returned "no card found". Compare as strings.
+  if (!nameClean) {
+    return reply(`❌ No card name given. Usage: \`${p} Ci "<card name>" | <tier>\``);
+  }
+  // Token-AND matching (owner brief §1) — same resilience as info/cs, plus
+  // the 2026-08-31 string-tier compare (see note below).
+  const tokens = _nameTokens(nameClean);
   const cardIndex = CARD_INDEX();
   const matchingCards = Object.values(cardIndex).filter(c =>
-    c.cardName?.toLowerCase().includes(namePart.toLowerCase()) && String(c.tier) === String(tier)
-  );
+    _cardMatchesTokens(c, tokens, true) && String(c.tier) === String(tier)
+  ).sort((a, b) =>
+    _cardRelevance(a, tokens) - _cardRelevance(b, tokens) ||
+    String(a.id).localeCompare(String(b.id)));
   if (!matchingCards.length) {
-    return reply(`❌ No card found matching "${namePart}" in Tier ${tier}.`);
+    return reply(`❌ No card found matching "${nameClean}" in Tier ${tier}.`);
   }
   const card = matchingCards[0];
   // Count how many players hold this card
@@ -5085,6 +5154,63 @@ async function cmdCi(senderJid, reply, args) {
     `📦 Total copies: *${totalCopies}*\n\n` +
     `💡 Use \`${p} info ${card.id}\` for full card details.`
   );
+}
+
+// 💡 OWNER BRIEF 2026-10-09 §1: `.j series` — search the GLOBAL card database
+// for every card in a series (NOT user-owned), grouped by tier, each entry
+// showing the card name + maker (creator) instead of collection numbers.
+// Paginated: `.j series <name> [--page n]`.
+async function cmdSeries(reply, args = [], perms = {}) {
+  const canViewEvents = perms.isOwner || perms.isCardMod;
+  const p = P();
+  let page = 1;
+  const pageIdx = args.findIndex(a => a === '--page' || a === '-p');
+  if (pageIdx !== -1 && args[pageIdx + 1]) {
+    page = parseInt(args[pageIdx + 1]) || 1;
+    args.splice(pageIdx, 2);
+  }
+  const rawName = args.join(' ').trim();
+  const tokens = _nameTokens(rawName);
+  if (!tokens.length) {
+    return sendUsage(reply, `${p} series`, `${p} series <series name> [--page n]`, `${p} series fullmetal alchemist`);
+  }
+  let cards = ALL_CARDS().filter(c =>
+    tokens.every(t => String(c.animeName || '').toLowerCase().includes(t))
+  );
+  // 💡 consistent with cs: event (E-tier) cards hidden from non-mods
+  if (!canViewEvents) cards = cards.filter(c => !isEventCard(c));
+  if (!cards.length) {
+    return reply(`🔍 *NO SERIES FOUND*\n\n📚 ⟢ No cards whose series matches _"${rawName}"_\n\n💡 ⟢ Try a partial name, e.g. \`${p} series fullmetal\``);
+  }
+  // most frequent series name is the display title
+  const counts = {};
+  cards.forEach(c => { const a = c.animeName || 'Unknown'; counts[a] = (counts[a] || 0) + 1; });
+  const seriesName = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+  const tierOrder = { '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, 'S': 7, 'E': 8 };
+  cards.sort((a, b) =>
+    (tierOrder[String(a.tier)] || 9) - (tierOrder[String(b.tier)] || 9) ||
+    String(a.cardName).localeCompare(String(b.cardName)) ||
+    String(a.id).localeCompare(String(b.id)));
+  const byTier = {};
+  cards.forEach(c => { byTier[c.tier] = (byTier[c.tier] || 0) + 1; });
+  const tierLine = Object.keys(byTier)
+    .sort((a, b) => (tierOrder[a] || 9) - (tierOrder[b] || 9))
+    .map(t => `T${t}×${byTier[t]}`).join(' · ');
+  const pageSize = 15;
+  const totalPages = Math.max(1, Math.ceil(cards.length / pageSize));
+  if (page > totalPages) page = totalPages;
+  const start = (page - 1) * pageSize;
+  const chunk = cards.slice(start, start + pageSize);
+  let msg = `📚 *${seriesName}*\n`;
+  msg += `📦 ${cards.length} cards · ${tierLine}\n`;
+  msg += `📖 Page: ${page} / ${totalPages}\n\n`;
+  chunk.forEach(c => {
+    msg += `▫️ *${c.cardName}* (T${c.tier})\n   ➥ Maker: _${c.creator || 'Unknown'}_ | ID: \`${c.id}\`\n`;
+  });
+  if (totalPages > 1) {
+    msg += `\n💡 Use \`${p} series ${rawName} --page ${page < totalPages ? page + 1 : 1}\` for more.`;
+  }
+  return reply(msg);
 }
 
 // 💡 P3 (2026-08-16): EndAuction - owner manually closes an auction early.

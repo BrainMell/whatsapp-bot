@@ -1375,7 +1375,15 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     scaled.statusEffects = [];
     scaled.isEnemy = true;
     scaled.enemyIndex = enemyIndex;
-    
+
+    // 💡 OWNER BRIEF 2026-10-09 §2 (enemy sprite swap): the Go renderer's
+    // dedupe used to break ties by ARRAY POSITION, so when one same-type
+    // enemy died the survivors' sprites reshuffled. A per-INSTANCE stable
+    // seed (1..99, alive for the whole fight) makes the renderer's rotation
+    // AND dedupe deterministic per enemy — 0 is excluded because the Go side
+    // treats 0 as "no seed, fall back to position".
+    scaled.spriteIndex = 1 + Math.floor(Math.random() * 99);
+
     return scaled;
 }
 
