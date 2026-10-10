@@ -5468,6 +5468,12 @@ async function cmdTokenLB(senderJid, reply, args = []) {
   return reply(msg);
 }
 
+// 💡 OWNER BRIEF 2026-10-09 §1 diagnostics: env-guarded hook so QA harnesses
+// can drive the card search internals without the full bot runtime.
+if (process.env.CARD_DIAG === '1') {
+  module.exports.__diag = { cmdInfo, cmdCS, cmdCi, cmdSeries, _nameTokens, _cardMatchesTokens, _cardRelevance };
+}
+
 module.exports = {
   init, handleCommand, doSpawn, CardStat, UserCard, CardMarket, CardDeck, instances,
   bindSocket,
