@@ -138,28 +138,28 @@ async function _loadPlayerSprite(classId, spriteIndex) {
 // run carries in state.backgroundPath. Local committed art mirrors each
 // theme; anything unknown falls back to the always-present dark stone.
 const ENV_CARD_ART = {
-    'env1.png': 'cards/fire.jpg',            // Fire Cave
+    'env1.png': 'cards/fire.jpg',            // Fire Cave (lava interior)
     'env2.png': 'cards/ice.jpg',             // Ice Cave
     'env3.png': 'cards/toxic.jpg',           // Toxic Cave
-    // 💡 OWNER RULING 2026-10-09: legacy spark_* flats purged from the dungeon
-    // pool — dead-world card art mirrors the new painted halls (abyss/ subdir)
-    'ember_depths.png': 'abyss/ember_depths.png',       // Dragon's Lair
-    'void_sanctum.png': 'abyss/void_sanctum.png',       // Void Dimension
-    'crystal_vault.png': 'abyss/crystal_vault.png',     // Sci Fi City
-    'obsidian_throne.png': 'abyss/obsidian_throne.png', // Demon Castle
-    'ossuary_hall.png': 'abyss/ossuary_hall.png',       // Desert
-    'blood_chapel.png': 'abyss/blood_chapel.png',       // Infected Afterlife
-    'frost_reliquary.png': 'abyss/frost_reliquary.png', // Pre Infected Afterlife
-    'fungal_grotto.png': 'abyss/fungal_grotto.png',     // Simple Forest
-    // legacy keys kept as fallbacks for in-flight runs started before the swap
-    'spark_3.png': 'cards/desert.jpg',       // Desert (legacy)
-    'spark_1.png': 'cards/forest.jpg',       // Simple Forest (legacy)
-    'spark_2.png': 'spark_10.png',           // Demon Castle (dark stone)
-    'spark_2-night.png': 'spark_10.png',     // Void Dimension (dark stone, deeper tint)
-    'spark_10.png': 'spark_10.png',          // Sci Fi City / stone interior
-    'spark_8.png': 'cards/fire.jpg',         // Dragon's Lair
-    'spark_1-night.png': 'spark_7.png',      // Infected Afterlife
-    'spark_7.png': 'spark_7.png',            // Pre Infected Afterlife
+    // 💡 OWNER RULING 2026-10-10: the dungeon pools wear the RESTORED
+    // cave/field family (spark_*) — the painted halls went back to being
+    // ABYSS-BOSS art only. Dead-world card art mirrors each backdrop theme;
+    // every target here is committed in this repo (ENV_DIR or cards/).
+    'spark_1.png': 'cards/desert.jpg',       // cracked badlands (DESERT / SIMPLE_FOREST)
+    'spark_1-night.png': 'cards/ash.jpg',    // blighted night (INFECTED_AFTERLIFE / TOXIC_CAVE)
+    'spark_2.png': 'cards/ash.jpg',          // crimson night (DEMON_CASTLE / FIRE_CAVE / DRAGON_LAIR)
+    'spark_2-night.png': 'cards/sea.jpg',    // void night (VOID_DIMENSION / SCI_FI_CITY / DEMON_CASTLE)
+    'spark_3.png': 'cards/desert.jpg',       // golden dunes (DESERT)
+    'spark_3-night.png': 'cards/sea.jpg',    // drowned coast at night
+    'spark_4.png': 'cards/sea.jpg',          // dark mire (TOXIC_CAVE / INFECTED_AFTERLIFE)
+    'spark_5.png': 'cards/desert.jpg',       // sunlit shore (PRE_INFECTED / SIMPLE_FOREST)
+    'spark_6.png': 'cards/sea.jpg',          // drowned coast (INFECTED_AFTERLIFE / VOID_DIMENSION)
+    'spark_7.png': 'cards/ice.jpg',          // snowy pines (ICE_CAVE / PRE_INFECTED_AFTERLIFE)
+    'spark_8.png': 'cards/storm.jpg',        // moonlit peaks (DRAGON_LAIR / DESERT / VOID)
+    'spark_10.png': 'spark_10.png',          // dark stone hall (SCI_FI_CITY / ruins; self-committed)
+    'spark_15.png': 'cards/ash.jpg',         // tiled arena, red sky (SCI_FI_CITY)
+    'forest.png': 'cards/forest.jpg',        // treeline (SIMPLE_FOREST)
+    'background3.png': 'cards/ice.jpg',      // open snowfield (PRE_INFECTED_AFTERLIFE)
 };
 
 async function _loadEnvArt(backgroundPath, environmentKey) {

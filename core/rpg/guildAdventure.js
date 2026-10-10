@@ -186,11 +186,25 @@ const DUNGEON_RANKS = {
   },
 };
 
+// 💡 OWNER RULING 2026-10-10 (backgrounds, supersedes the 2026-10-09 purge):
+// 1. The 2026-10-09 ruling removed the legacy env flats — that part stands.
+// 2. But the painted halls (ember_depths / void_sanctum / obsidian_throne / …)
+//    are ABYSS-BOSS art — the owner pulled them OUT of the dungeon pools:
+//    "why did you remove all others and use the abyss boss ones.. those are
+//    for Abyss bosses". The cave/field backgrounds (spark_* family) were
+//    never deleted — they are restored here as the dungeon look.
+// 3. "diversify the backgrounds": every environment now carries a themed
+//    bgPool; each RUN rolls one member (startJourney) and keeps it for the
+//    whole run — start card, battles and dead-world art all see the SAME
+//    file, while consecutive runs stop repeating the same backdrop.
+//    Every pool file has a measured standable-ground entry in the Go
+//    service's groundmap.json and exists on BOTH boxes (no stub risk).
 const DUNGEON_ENVIRONMENTS = {
   DRAGON_LAIR: {
     id: "DRAGON_LAIR",
     name: "Dragon’s Lair",
-    asset: "ember_depths.png",  // 💡 OWNER RULING 2026-10-09: legacy spark_8 (flat moon field) PURGED — new-style painted halls replace all legacy env flats (lava-cavern style, see FIRE_CAVE)
+    asset: "spark_8.png",  // 💡 OWNER RULING 2026-10-10: spark family RESTORED (moonlit peaks read a wyrm's roost); halls (ember_depths) are abyss-boss art — out of the dungeon pool
+    bgPool: ["spark_8.png", "env1.png", "spark_2.png"],  // moonlit peaks / lava cavern / crimson night
     mobs: ["DRAKE_SCOUT", "FIRE_BREATHER"],
     bosses: ["ANCIENT_DRAGON_BOSS"],
     modifier: {
@@ -204,7 +218,8 @@ const DUNGEON_ENVIRONMENTS = {
   FIRE_CAVE: {
     id: "FIRE_CAVE",
     name: "Fire Cave",
-    asset: "env1.png",  // 💡 ART-FIX 2026-09-11: was spark_2.png (crimson mountains) - env1 IS the lava cave interior
+    asset: "env1.png",  // 💡 ART-FIX 2026-09-11: was spark_2.png (crimson mountains) - env1 IS the lava cave interior (owner 2026-10-09: the lava card is the style he wants)
+    bgPool: ["env1.png", "spark_2.png", "spark_8.png"],  // lava cavern / crimson night / moonlit peaks
     mobs: ["FLAME", "ELDER_FLAME", "MAGMA_BRUTE", "HELLFIRE_DEMON"],
     bosses: ["INFERNAL_OVERLORD", "PRIMORDIAL_FLAME"],
     modifier: {
@@ -218,6 +233,7 @@ const DUNGEON_ENVIRONMENTS = {
     id: "ICE_CAVE",
     name: "Ice Cave",
     asset: "env2.png",  // 💡 ART-FIX 2026-09-11: was spark_5.png (a SUNNY BEACH!) - env2 IS the ice cave interior
+    bgPool: ["env2.png", "spark_7.png", "spark_8.png"],  // ice cavern / snowy pines / moonlit peaks
     mobs: ["FROST_GHOUL", "GLACIAL_BEAST", "BLIZZARD_WRAITH"],
     bosses: ["PERMAFROST_TITAN"],
     modifier: {
@@ -231,6 +247,7 @@ const DUNGEON_ENVIRONMENTS = {
     id: "TOXIC_CAVE",
     name: "Toxic Cave",
     asset: "env3.png",  // 💡 ART-FIX 2026-09-11: was spark_6.png (dark ocean) - env3 IS the toxic cave interior
+    bgPool: ["env3.png", "spark_4.png", "spark_1-night.png"],  // toxic cavern / dark mire / blighted night
     mobs: ["DROWNED_ONE", "TIDE_LURKER", "MIST_WALKER"],
     bosses: ["LEVIATHAN_SPAWN"],
     modifier: {
@@ -243,7 +260,8 @@ const DUNGEON_ENVIRONMENTS = {
   VOID_DIMENSION: {
     id: "VOID_DIMENSION",
     name: "Void Dimension",
-    asset: "void_sanctum.png",  // 💡 OWNER RULING 2026-10-09: legacy spark_2-night (flat night field) PURGED
+    asset: "spark_2-night.png",  // 💡 OWNER RULING 2026-10-10: spark family RESTORED (void night plains); halls (void_sanctum) are abyss-boss art — out of the dungeon pool
+    bgPool: ["spark_2-night.png", "spark_6.png", "spark_8.png"],  // void night / drowned coast / moonlit peaks
     mobs: ["VOID_CORRUPTED", "ABYSSAL_HORROR"],
     bosses: ["VOID_TITAN", "PRIMORDIAL_CHAOS"],
     modifier: { type: "TIME_DILATION", desc: "Random turn order manipulation" },
@@ -252,7 +270,8 @@ const DUNGEON_ENVIRONMENTS = {
   SCI_FI_CITY: {
     id: "SCI_FI_CITY",
     name: "Sci-Fi City",
-    asset: "crystal_vault.png",  // 💡 OWNER RULING 2026-10-09: legacy spark_10 (flat brick wall) PURGED
+    asset: "spark_10.png",  // 💡 OWNER RULING 2026-10-10: spark family RESTORED (dark stone interior); halls (crystal_vault) are abyss-boss art — out of the dungeon pool
+    bgPool: ["spark_10.png", "spark_15.png", "spark_2-night.png"],  // stone hall / tiled arena / night exterior
     mobs: ["VOID_SEEKER", "ABYSSAL_HORROR"],  // 💡 was TSUNAMI_WALKER (water mob in a city)
     bosses: ["KRAKEN_SPAWN"],
     modifier: { type: "COVER_SYSTEM", desc: "Defense bonus from structures" },
@@ -261,7 +280,8 @@ const DUNGEON_ENVIRONMENTS = {
   DEMON_CASTLE: {
     id: "DEMON_CASTLE",
     name: "Demon Castle",
-    asset: "obsidian_throne.png",  // 💡 OWNER RULING 2026-10-09: legacy spark_2 (flat purple badlands) PURGED — Mutation Prime now earns a literal throne room
+    asset: "spark_2.png",  // 💡 OWNER RULING 2026-10-10: spark family RESTORED (crimson demon night — Mutation Prime's home turf); halls (obsidian_throne) are abyss-boss art — out of the dungeon pool
+    bgPool: ["spark_2.png", "spark_2-night.png", "spark_8.png"],  // crimson night / void night / moonlit peaks
     mobs: ["HELLFIRE_DEMON", "STAR_EATER"],
     bosses: [
       "MUTATION_PRIME",
@@ -279,7 +299,8 @@ const DUNGEON_ENVIRONMENTS = {
   DESERT: {
     id: "DESERT",
     name: "Desert",
-    asset: "ossuary_hall.png",  // 💡 OWNER RULING 2026-10-09: legacy spark_3 (flat dunes) PURGED — bleached bone-hall reads dry/dead
+    asset: "spark_3.png",  // 💡 OWNER RULING 2026-10-10: spark family RESTORED (golden dunes); halls (ossuary_hall) are abyss-boss art — out of the dungeon pool
+    bgPool: ["spark_3.png", "spark_1.png", "spark_8.png"],  // dunes / cracked badlands / moonlit field
     mobs: ["STONE_HULK", "CRYSTAL_CORRUPTED", "EARTH_WARDEN"],
     bosses: ["GOLEM_KING", "MOUNTAIN_COLOSSUS"],
     modifier: {
@@ -292,7 +313,8 @@ const DUNGEON_ENVIRONMENTS = {
   INFECTED_AFTERLIFE: {
     id: "INFECTED_AFTERLIFE",
     name: "Infected Afterlife",
-    asset: "blood_chapel.png",  // 💡 OWNER RULING 2026-10-09: legacy spark_1-night (flat night plains) PURGED
+    asset: "spark_1-night.png",  // 💡 OWNER RULING 2026-10-10: spark family RESTORED (corrupted night plains); halls (blood_chapel) are abyss-boss art — out of the dungeon pool
+    bgPool: ["spark_1-night.png", "spark_4.png", "spark_6.png"],  // blighted night / dark mire / drowned coast
     mobs: ["FLESH_ABOMINATION", "CHIMERA_BEAST"],
     bosses: ["PERFECT_MUTATION"],
     modifier: { type: "CORRUPTION", desc: "Damage increases over time" },
@@ -301,7 +323,8 @@ const DUNGEON_ENVIRONMENTS = {
   PRE_INFECTED_AFTERLIFE: {
     id: "PRE_INFECTED_AFTERLIFE",
     name: "Pre-Infected Afterlife",
-    asset: "frost_reliquary.png",  // 💡 OWNER RULING 2026-10-09: legacy spark_7 (flat snowy peaks) PURGED — gothic reliquary reads holy ground
+    asset: "spark_7.png",  // 💡 OWNER RULING 2026-10-10: spark family RESTORED (pure snowy peaks = holy ground); halls (frost_reliquary) are abyss-boss art — out of the dungeon pool
+    bgPool: ["spark_7.png", "spark_5.png", "background3.png"],  // snowy pines / sunlit shore / open snowfield
     mobs: ["FROST_FLAME_WARDEN", "STORM_EARTH_TITAN"],
     bosses: ["ELEMENTAL_SOVEREIGN"],
     modifier: { type: "PURITY_AURA", desc: "Cleanses debuffs randomly" },
@@ -310,7 +333,8 @@ const DUNGEON_ENVIRONMENTS = {
   SIMPLE_FOREST: {
     id: "SIMPLE_FOREST",
     name: "Simple Forest",
-    asset: "fungal_grotto.png",  // 💡 OWNER RULING 2026-10-09: legacy spark_1 (flat meadow) PURGED — overgrown grotto reads dense foliage
+    asset: "spark_1.png",  // 💡 OWNER RULING 2026-10-10: spark family RESTORED (open meadow); halls (fungal_grotto) are abyss-boss art — out of the dungeon pool
+    bgPool: ["spark_1.png", "forest.png", "spark_5.png"],  // meadow / treeline / sunlit shore
     mobs: ["OBSIDIAN_JUGGERNAUT", "DIAMOND_SENTINEL"],
     bosses: ["MOUNTAIN_COLOSSUS"],
     modifier: { type: "DENSE_FOLIAGE", desc: "Line-of-sight blocked" },
@@ -2158,7 +2182,7 @@ async function startRuinsCombat(sock, chatId, senderJid, spec) {
     name: spec.name || 'Ruins Encounter',
     enemies,
     theme: 'ruins',
-    background: spec.background || 'env1.png',  // 💡 OWNER RULING 2026-10-09: spark_1 flat purged — new-style lava cavern default
+    background: spec.background || 'spark_10.png',  // 💡 OWNER RULING 2026-10-10: cave-stone hall (owner's liked set) — ruins fights keep the dark stone cave look, env1 legacy flat is out
     intro: spec.greeting || '',
     // ⚔️ square map fragment - drawn in the battle scene's bottom-right panel
     ruinsMap: spec.mapFragment || null,
@@ -2183,7 +2207,7 @@ async function startTutorialQuest(sock, chatId, senderJid, spec = {}) {
   return startRuinsCombat(sock, chatId, senderJid, {
     enemies: [{ type: spec.enemy || 'GARDEN_SLIME', level: 1 }],
     rank: 'F',
-    background: spec.background || 'env1.png',  // 💡 OWNER RULING 2026-10-09: spark_1 flat purged
+    background: spec.background || 'spark_1.png',  // 💡 OWNER RULING 2026-10-10: open meadow for the tutorial fight (spark family restored)
     name: spec.name,
     greeting: spec.greeting,
     groq: spec.groq,
@@ -2198,7 +2222,7 @@ async function startTutorialGroupQuest(sock, chatId, senderJid, spec = {}) {
   return startRuinsCombat(sock, chatId, senderJid, {
     enemies: [{ type: spec.enemy || 'GARDEN_SLIME', level: 1 }],
     rank: 'F',
-    background: spec.background || 'env2.png',  // 💡 OWNER RULING 2026-10-09: spark_2 flat purged
+    background: spec.background || 'spark_2.png',  // 💡 OWNER RULING 2026-10-10: crimson night plains for the group tutorial (spark family restored)
     name: spec.name,
     greeting: spec.greeting,
     groq: spec.groq,
@@ -7958,6 +7982,21 @@ const initAdventure = async (
     environment = DUNGEON_ENVIRONMENTS[randomEnvKey];
   }
 
+  // 💡 OWNER RULING 2026-10-10 (diversify backgrounds): roll ONE member of
+  // the environment's bgPool for this run and freeze it into the env object
+  // that travels with the state. start card (envAsset), every battle
+  // (backgroundPath) and the dead-world card art (deadWorld.js reads
+  // state.environment.asset) all key off the SAME file, so the encounter
+  // background stays stable end-to-end while runs stop repeating backdrops.
+  const bgRoll =
+    environment.bgPool && environment.bgPool.length
+      ? environment.bgPool[Math.floor(Math.random() * environment.bgPool.length)]
+      : environment.asset;
+  const chosenEnv =
+    bgRoll === environment.asset
+      ? environment
+      : Object.assign({}, environment, { asset: bgRoll });
+
   const state = JSON.parse(JSON.stringify(INITIAL_STATE_TEMPLATE));
   Object.assign(state, {
     active: true,
@@ -7974,8 +8013,8 @@ const initAdventure = async (
     lastActivity: Date.now(),
     dungeonRank: upperRank,
     difficulty: rankData.difficulty,
-    environment: environment,
-    backgroundPath: `rpgasset/environment/${environment.asset}`,
+    environment: chosenEnv,
+    backgroundPath: `rpgasset/environment/${chosenEnv.asset}`,
     encounter: 0,
     maxEncounters: rankData.encounters,
     players: [],
@@ -8070,7 +8109,7 @@ ${solo ? `👤 *Solo Quest:* Starting now...` : `👉 Type \`${botConfig.getPref
       dungeonRank: upperRank,
       encounters: rankData.encounters,
       environment: environment.name,
-      envAsset: environment.asset,
+      envAsset: chosenEnv.asset,  // 💡 OWNER RULING 2026-10-10: same rolled bg as the battles (start card matches the run)
       joinMs: GAME_CONFIG.REGISTRATION_TIME,
       minPlayers: GAME_CONFIG.MIN_PLAYERS,
     },
