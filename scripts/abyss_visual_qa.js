@@ -218,12 +218,15 @@ section('§6 — frozen layout + render contract');
     // staggered down the RIGHT half (back-top → front-bottom), party arc
     // behind the hero above the HUD panel. Boss tower untouched.
     const pc = await abyssScene.planCombatLayout(mkState());
-    check('side layout: enemy wing on the RIGHT half (Battle-Example positions)', pc.enemy.cx > abyssScene.W * 0.55 && pc.enemy.cx < abyssScene.W * 0.78 && pc.enemy.gy > 580 && pc.enemy.gy < 700);
-    check('side layout: player front-LEFT (clear of the HUD panel right edge)', pc.player.cx < abyssScene.W * 0.55 && pc.player.cx > abyssScene.W * 0.38);
+    check('side layout: enemy wing on the RIGHT half (Battle-Example positions)', pc.enemy.cx > abyssScene.W * 0.55 && pc.enemy.cx < abyssScene.W * 0.78 && pc.enemy.gy > 560 && pc.enemy.gy < 700);
+    // round-14 (owner 08:09Z: "the player is in the center why?"): the hero
+    // holds the TRUE front-left corner slot (fx 0.260) with feet ABOVE the
+    // HUD panel, not center-right of it
+    check('side layout: player FRONT-LEFT (Battle-Example corner slot)', pc.player.cx >= abyssScene.W * 0.20 && pc.player.cx <= abyssScene.W * 0.35);
     check('side layout: player faces RIGHT toward the enemy wing (no flip)', pc.player.flip === false);
-    check('side layout: player feet clear the HUD panel (panel right edge 505)', pc.player.cx - (pc.player.halfW || pc.player.h * 0.42) > 505);
-    check('grounding: enemy feet on the visible floor plane', pc.enemy.gy > 580 && pc.enemy.gy < 700);
-    check('grounding: player depth still in front', pc.enemy.gy < pc.player.gy);
+    check('side layout: player feet clear the HUD panel TOP (y 644)', pc.player.gy < 644);
+    check('grounding: enemy feet on the visible floor plane', pc.enemy.gy > 540 && pc.enemy.gy < 700);
+    check('grounding: player depth still in front', pc.enemy.gy < pc.player.gy + 30);
     const boss = await abyssScene.planCombatLayout(mkState({ enemies: [{ name: '⚡ INFERNO LORD', isBoss: true, bossId: 'INFERNO_LORD', spriteIndex: 43, currentHP: 9000, stats: { hp: 9000, maxHp: 12000 } }] }));
     check('boss keeps the centered tower (boss-exclusive style)', Math.abs(boss.enemy.cx - abyssScene.W / 2) < 1);
     check('boss grounded on the floor plane too (floating fix)', boss.enemy.gy > 600 && boss.enemy.gy < 700);
@@ -279,7 +282,7 @@ check('pack fight: queued members join the stage', pack.pack.length === 2);
         enemies: [{ name: 'Agumon', isWildSummon: true, spriteIndex: 0, currentHP: 400, stats: { hp: 400, maxHp: 600 } }],
     }));
     check('§7 round-13: wild summon takes the ENEMY side (RIGHT wing, facing left)', pw.enemy.cx > abyssScene.W * 0.55);
-    check('§7 round-13: player holds the party side (front-LEFT, facing right)', pw.player.cx < abyssScene.W * 0.55 && pw.player.flip === false);
+    check('§7 round-13: player holds the party side (front-LEFT, facing right)', pw.player.cx <= abyssScene.W * 0.35 && pw.player.flip === false);
     check('§7 summon: grounded on the floor plane (not the old floating 566 line)', pw.enemy.gy > 580 && pw.enemy.gy < 700);
     check('§7 summon: wild species carried for the pill', pw.wildSpecies === 'agumon');
 
