@@ -7,7 +7,6 @@
  *   3. dataset sanity: counts, dup stems, dead-format checks
  */
 'use strict';
-process.chdir("/home/z/my-project") || 0;
 const BOT = "/home/ubuntu/whatsapp-bot";
 
 let fails = 0;
