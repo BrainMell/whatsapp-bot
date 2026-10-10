@@ -1,0 +1,40 @@
+LOGO TIER REPORT — 2026-10-10T22:36:27.863Z
+brands: 2152 | easy 862 (40.1%) | medium 879 (40.8%) | hard 411 (19.1%)
+method: pv90 = sum of the last 3 available MONTHS of enwiki pageviews (REST per-article, monthly, all-access/user, paced ~1 req/s after burst-429 diagnosis; canonical titles pre-resolved via Wikidata sitelinks); score=0.65*norm(log10(pv90+1))+0.35*norm(log10(sitelinks+1)); top35% easy / mid40% medium / bottom25% hard; overrides: MEGA list -> easy, (pv90<300 && sl<8) -> hard, zero-signal -> hard
+
+EASY samples: Xiaomi(37595), Linux(83018), Wi-Fi(54796), WhatsApp(193125), Cash App(26368), Lyft(14008), App Store(52324), Pringles(24411), Chick-fil-A(63242), Taco Bell(49852), Twix(11536), Sprite(19467), Heinz(25132), Tesla(138741), Honda(57886)
+MEDIUM samples: Salesforce(44393), DJI(19776), Viber(11639), Line(11330), Bolt(12360), Apple Pay(18128), Dairy Queen(35020), Chupa Chups(12051), Ferrero Rocher(21939), Cheetos(22042), Lipton(14317), Gatorade(37183), Maggi(20291), Whataburger(26780), Culver's(26265)
+HARD samples: KakaoTalk(7004), Shopee(11845), Zomato(8755), Kinder(7622), Illy(4429), Nerf(7210), Audible(9579), M-Pesa(4944), Ripple(12772), O2(8652), Tropicana(7725), Hellmann's(7622), Michelob Ultra(5974), ASOS(824), Monzo(13081)
+
+per-category tier counts:
+  Brands: easy 317 / medium 410 / hard 81
+  Sports: easy 102 / medium 107 / hard 18
+  Tech: easy 75 / medium 76 / hard 23
+  Entertainment & Gaming: easy 67 / medium 31 / hard 2
+  Media & TV: easy 57 / medium 58 / hard 17
+  Cars: easy 52 / medium 14 / hard 14
+  Food & Drink: easy 43 / medium 44 / hard 56
+  Apps & Social: easy 31 / medium 13 / hard 7
+  Fashion: easy 25 / medium 20 / hard 27
+  Retail & Banking: easy 23 / medium 14 / hard 1
+  Airlines & Travel: easy 19 / medium 23 / hard 4
+  Industry & Energy: easy 13 / medium 24 / hard 2
+  Health & Beauty: easy 10 / medium 3 / hard 1
+  Telecom: easy 9 / medium 2 / hard 11
+  Fintech & Crypto: easy 7 / medium 6 / hard 6
+  Travel: easy 4 / medium 6 / hard 9
+  Gaming: easy 3 / medium 7 / hard 18
+  Industry: easy 3 / medium 4 / hard 14
+  Media: easy 1 / medium 7 / hard 19
+  Fintech: easy 1 / medium 4 / hard 15
+  Apps: easy 0 / medium 2 / hard 21
+  Retail: easy 0 / medium 3 / hard 28
+  Health: easy 0 / medium 1 / hard 17
+
+MEGA override sanity (should all be easy):
+  Coca-Cola: easy pv90=108047 sl=150
+  Nike: easy pv90=82297 sl=89
+  Apple: easy pv90=241020 sl=183
+  McDonald's: easy pv90=151307 sl=137
+  PUBG: easy pv90=103 sl=0
+  Bitcoin: easy pv90=125557 sl=153

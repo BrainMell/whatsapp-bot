@@ -2959,6 +2959,22 @@ async function startQuiz(sock, chatId, senderJid, botMarker, m, rawArgs, senderN
   }
 
   const parsed = parseQuizArgs(rawArgs);
+  // 💡 FIX (qa_quiz dataset-era run 2026-10-11): the dedicated retirement
+  // guidance was DEAD CODE — free-form titles parse to retiredTitle with an
+  // empty title, so the `!parsed.title` usage card always fired first and
+  // users got the generic category menu with no explanation. Check the
+  // retirement FIRST so ".j quiz "Naruto"" explains WHY it can't search.
+  if (parsed.retiredTitle) {
+    const prefix = botConfig.getPrefix();
+    return {
+      handled: true,
+      message: botMarker + `ℹ️ Searching quizzes by title has been retired (the old live search was unreliable and slow).
+
+Pick a category instead:
+\`${prefix} quiz games\` • \`${prefix} quiz comics\` • \`${prefix} quiz movies\` • \`${prefix} quiz series\`
+Special rounds: \`logos\` • \`song\` • \`audio\` • \`random\``,
+    };
+  }
   if (!parsed.title) {
     const prefix = botConfig.getPrefix();
     return {
@@ -2982,19 +2998,6 @@ Special rounds (unchanged):
 
 During the quiz, answer by typing the answer in chat (or \`${prefix} <letter>\` when options are shown). One answer per player per question!
 Leaderboard: \`${prefix} quizboard\` • Cancel: \`${prefix} quiz end\` • Mods: \`${prefix} quizmod\``,
-    };
-  }
-
-  // 💡 2026-10-10 OWNER OVERHAUL: free-form franchise search retired.
-  if (parsed.retiredTitle) {
-    const prefix = botConfig.getPrefix();
-    return {
-      handled: true,
-      message: botMarker + `ℹ️ Searching quizzes by title has been retired (the old live search was unreliable and slow).
-
-Pick a category instead:
-\`${prefix} quiz games\` • \`${prefix} quiz comics\` • \`${prefix} quiz movies\` • \`${prefix} quiz series\`
-Special rounds: \`logos\` • \`song\` • \`audio\` • \`random\``,
     };
   }
 
