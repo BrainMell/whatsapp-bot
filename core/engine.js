@@ -6134,7 +6134,17 @@ What to do:
 
       // Filter out flags
       const cleanArgs = args.filter((a) => !a.startsWith("-"));
-      const categoryOrCommandInput = cleanArgs.join(" ").toLowerCase().trim();
+      // 💡 2026-10-11: trailing page number support (.j menu rpg 2).
+      // Big categories paginate — the WhatsApp image-caption limit is 1024
+      // chars and the RPG/CARDS/GAMES category lists long ago outgrown it
+      // (commands silently vanished off the bottom of the card).
+      let menuPageNum = 1;
+      let menuPathArgs = cleanArgs;
+      if (menuPathArgs.length > 1 && /^\d+$/.test(menuPathArgs[menuPathArgs.length - 1])) {
+        menuPageNum = parseInt(menuPathArgs[menuPathArgs.length - 1], 10);
+        menuPathArgs = menuPathArgs.slice(0, -1);
+      }
+      const categoryOrCommandInput = menuPathArgs.join(" ").toLowerCase().trim();
 
       // Resolve: is it a known category or a known command?
       let targetCategory = null;
@@ -6184,15 +6194,38 @@ ${targetCategory}`;
         return await sendMenuWithBanner(sock, chatId, explainMsg);
       }
 
-      // 2. CATEGORY DETAIL (.j menu <category>)
+      // 2. CATEGORY DETAIL (.j menu <category> [page])
       if (targetCategory) {
         const cmds = COMMAND_REGISTRY[targetCategory] || [];
         const visibleCmds = cmds.filter((c) => !c.hidden || showHidden);
         const emoji = CATEGORY_EMOJIS[targetCategory] || "📂";
-        let catMsg = GET_BANNER(`${emoji} ${targetCategory.toUpperCase()}`) + `\n\n`;
-        visibleCmds.forEach((c) => {
-          catMsg += `➤ \`${prefix} ${c.cmd}\` - ${c.desc.split(".")[0]}\n`;
-        });
+        // 💡 2026-10-11: paginate long categories. Budget leaves room for
+        // banner (~5 lines), footer hints and the rotating tip.
+        const PAGE_BUDGET = 870;
+        const lines = visibleCmds.map(
+          (c) => `➤ \`${prefix} ${c.cmd}\` - ${c.desc.split(".")[0]}`,
+        );
+        const pages = [];
+        let cur = [];
+        let curLen = 0;
+        for (const ln of lines) {
+          const addLen = ln.length + 1;
+          if (cur.length && curLen + addLen > PAGE_BUDGET) {
+            pages.push(cur);
+            cur = [];
+            curLen = 0;
+          }
+          cur.push(ln);
+          curLen += addLen;
+        }
+        if (cur.length) pages.push(cur);
+        const pageNum = Math.max(1, Math.min(menuPageNum || 1, pages.length));
+        let catMsg =
+          GET_BANNER(`${emoji} ${targetCategory.toUpperCase()}`) + `\n\n`;
+        catMsg += pages[pageNum - 1].join("\n");
+        if (pages.length > 1) {
+          catMsg += `\n\n➤ Page ${pageNum}/${pages.length} - \`${prefix} menu ${targetCategory.toLowerCase()} <page>\` to browse.`;
+        }
         catMsg += `\n➤ Type \`${prefix} menu\` to go back.`;
         return await sendMenuWithBanner(sock, chatId, catMsg);
       }
@@ -6226,9 +6259,12 @@ ${targetCategory}`;
 
       mainMsg += `\n➤ Type \`${prefix} menu <CATEGORY>\` to see its commands.`;
 
-      // 💡 ROTATING TIPS: 30 tips, one randomly chosen each time the menu opens.
+      // 💡 ROTATING TIPS: one randomly chosen each time the menu opens.
       // Covers blacksmith, crafting, combat, cards, guilds, economy, PvP, Abyss,
       // and general gameplay. Keeps the menu feeling fresh + teaches mechanics.
+      // 💡 2026-10-11 (owner): MOD TIPS live ONLY in the mod terminal now —
+      // players were seeing moderator tips (cards on/off, glock, resetwarn)
+      // in the regular menu. See MOD_TIPS in ./utils/modMenuData.js.
       const TIPS = [
         `Use \`${prefix} blacksmith\` to check and repair your gear! Broken items lose all stats.`,
         `Enhancement stones stack additively, not multiplicatively. A Legendary Stone (+35%) is always better than 3 Minor Stones (+15%).`,
@@ -6257,22 +6293,32 @@ ${targetCategory}`;
         `Overkill damage (2× the killing blow) grants bonus Zeni. Save your ultimates for the killing blow!`,
         `Skills don't reset between floors in the Abyss. If you used your ultimate on Floor 1, it's on cooldown for Floor 2.`,
         `Cards spawn every 20 minutes in enabled chats. Use \`${prefix} spawninfo\` to check the timer.`,
-        `Event cards (E-tier) never spawn naturally - they're only available via \`${prefix} eshop\` or admin \`${prefix} espawn\`.`,
+        `Event cards (E-tier) never spawn naturally - your ways in are the \`${prefix} eshop\` and live token events.`,
         `Investment system offers 5-80% interest rates. Higher risk = higher reward, but you can lose your principal.`,
         `Wealth tax runs every 72 hours. Keep your wallet balanced or the taxman cometh.`,
         // 💡 2026-09-10: non-RPG tips - groups, games, utility, economy ops.
-        `5 warnings = automatic kick. Mods can wipe your slate with \`${prefix} resetwarn\`.`,
         `Reply to any message and use \`${prefix} pin\` to pin it for the whole group.`,
-        `\`${prefix} glock rank <level>\` locks the chat behind a rank gate - \`${prefix} glock open\` frees it.`,
-        `\`${prefix} cards on\` / \`${prefix} cards off\` toggles card spawns for this group only.`,
         `Deck creators: submit to the eShop, then a mod approves it via the deck queue.`,
         `Type \`${prefix} menu <command>\` on ANY command to see its full usage guide.`,
-        `\`${prefix} menu -h\` reveals the hidden moderator category (mods see it anyway).`,
         `Type \`${prefix} bots\` to see which bot instances are online right now.`,
         `The GAMES category has Wordle and more - type \`${prefix} menu games\` to browse.`,
         `Search the web straight from chat: \`${prefix} search <query>\`.`,
         `Turn images into stickers with the STICKERS tools - \`${prefix} menu stickers\`.`,
         `Interactions (\`${prefix} hug\`, \`${prefix} slap\`...) - \`${prefix} reactions\` lists them all.`,
+        // 💡 2026-10-11: tips for the new-generation features (menu freshness pass).
+        `Quiz nights run logo challenges, theme songs and dataset trivia - try \`${prefix} quiz logos 15\`.`,
+        `Logo rounds come in easy / medium / hard tiers - bigger Zeni for harder brands.`,
+        `Sell the gear you never use: \`${prefix} market sell item <bag#> <price>\` lists it on the player market.`,
+        `Browse everything players are selling - items, runes, summons - with \`${prefix} itemmarket\`.`,
+        `Prefer crisp static images? \`${prefix} anim off\` switches collection/deck renders to PNG.`,
+        `New here? \`${prefix} tutorial start\` walks you through your first battle hands-on.`,
+        `Materials pile up fast - \`${prefix} forge\` and \`${prefix} cook\` turn them into gear and food.`,
+        `\`${prefix} gear\` shows every equipped item with its remaining durability - broken gear does nothing.`,
+        `Only ONE Dragon God will ever be crowned. Check who holds the crown: \`${prefix} dglord\`.`,
+        `Mining energy recovers over time - plan your deepest expedition for a full bar.`,
+        `When war opens in the Ruins, \`${prefix} gw join\` enrolls your guild - battles are fought in your DMs.`,
+        `Track your kill count with \`${prefix} kills\` - the Fortune Teller keeps the ledger.`,
+        `Card hunters: \`${prefix} cardlb\` shows the top collectors on the server, per tier too.`,
       ];
       // 💡 LORE TIP SLOT (lore_drop_system.md §3 "general"): one menu in six
       // appends a general-world lore drop as its OWN message after the menu

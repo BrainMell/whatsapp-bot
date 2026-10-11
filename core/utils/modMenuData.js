@@ -73,6 +73,21 @@ const MOD_MENU = {
       { cmd: "sandbox", usage: "mod sandbox <on|off|status|save|reset|...>", desc: "Sandbox test environment (many subcommands).", console: true },
       { cmd: "godmode", usage: "mod godmode <on|off>", desc: "Sandbox godmode toggle - testing only.", console: true },
       { cmd: "modclass", usage: "modclass <name|ID>", desc: "Switch YOUR class freely (no args = class list)." },
+      { cmd: "mentor", usage: "mentor [status|new|ids|find|preview|media|promote]", desc: "Mining-shoob dashboard: mods watch the mine, owner promotes." },
+    ],
+  },
+
+  GUILDWAR: {
+    name: "Guild War",
+    emoji: "⚔️",
+    tier: "rpg",
+    commands: [
+      { cmd: "gw start", usage: "gw start [alignment] | -test", desc: "Open war registration from the feed group. -test = small skirmish.", eg: "gw start -test" },
+      { cmd: "gw forcestart", usage: "gw forcestart", desc: "Skip registration and deploy the war now." },
+      { cmd: "gw status", usage: "gw status", desc: "Live war standings." },
+      { cmd: "gw end", usage: "gw end", desc: "Conclude the running war and distribute rewards." },
+      { cmd: "gw abort", usage: "gw abort", desc: "Abort the war - no rewards, record closed." },
+      { cmd: "gw rpg", usage: "gw rpg <on|off|status|list>", desc: "Mark this GC RPG-friendly for organic war calls." },
     ],
   },
 
@@ -92,7 +107,10 @@ const MOD_MENU = {
       { cmd: "spawnset", usage: "spawnset <minutes|reset|tier ...>", desc: "Spawn interval + tier weights." },
       { cmd: "spawninfo", usage: "spawninfo", desc: "Current spawn configuration + timer." },
       { cmd: "reloadcards", usage: "reloadcards", desc: "Reload cards_data.json without a restart." },
-      { cmd: "setmarketprice", usage: "setmarketprice <tier> <amount>", desc: "Card market reference prices." },
+      { cmd: "t2ecoll", usage: "t2ecoll <add|remove|clear>", desc: "Manage the event (E-tier) collection pool.", eg: "t2ecoll add <slot> <cardId>" },
+      { cmd: "tokenlb", usage: "tokenlb", desc: "Event token leaderboard (alias: tlb)." },
+      { cmd: "tokenreset", usage: "tokenreset @user", desc: "Reset a player's event tokens to zero." },
+      { cmd: "src", usage: "src @user <card>", desc: "Super RC - strip a protected/locked card." },
       { cmd: "rc", usage: "rc @user <card> [tier]", desc: "Force-remove a player's card." },
       { cmd: "erc", usage: "erc @user <eventcard>", desc: "Force-remove a player's event card." },
       { cmd: "trc", usage: "trc @user <tokens>", desc: "Remove event tokens from a player." },
@@ -176,6 +194,7 @@ const MOD_MENU = {
       { cmd: "instances", usage: "instances", desc: "Cross-instance health dashboard." },
       { cmd: "debug", usage: "debug", desc: "Dump live connection/queue internals." },
       { cmd: "opscheck", usage: "opscheck", desc: "Verify deploy pipeline: commit, uptime, host." },
+      { cmd: "diag", usage: "diag", desc: "Image pipeline diagnostic: banner, renderers, send path." },
       { cmd: "category", usage: "category <enable|disable> <cat>", desc: "Toggle command categories (categories = list)." },
       { cmd: "reload", usage: "reload", desc: "Reload bot caches + both Go image servers." },
       { cmd: "abyss admin", usage: "abyss admin <reset|clear|setfloor|purge|inspect>", desc: "Abyss admin actions." },
@@ -300,6 +319,18 @@ const MOD_TIPS = [
   `Bug reports: \`{p} bug\` to file, \`{p} issues\` to review, \`{p} organizeissues\` to tidy with Groq.`,
   `\`{p} testmode on\` locks the RPG for everyone except testers and mods.`,
   `\`{p} mod <command>\` with no extra args explains that command.`,
+  // 💡 2026-10-11: mod tips moved OUT of the regular menu (owner: players
+  // were seeing moderator tips like cards on/off + glock). These now live here.
+  `5 warnings = auto-kick. Wipe a slate with \`{p} resetwarn @user\`.`,
+  `\`{p} glock rank <level>\` rank-locks the chat; \`{p} gunlock\` frees it.`,
+  `\`{p} cards on\` / \`{p} cards off\` toggles spawns for this group only.`,
+  `\`{p} menu -h\` shows the hidden MODERATOR category in the regular menu.`,
+  `\`{p} gw forcestart\` deploys a registering war now; \`{p} gw abort\` cancels, no rewards.`,
+  `\`{p} tokenreset @user\` zeroes event tokens; \`{p} tokenlb\` shows the race.`,
+  `\`{p} mentor\` opens the mining dashboard - only the owner can promote watchers.`,
+  `\`{p} quizmod timer 45\` style settings tune quizzes per group (no args = view).`,
+  `\`{p} src\` is the Super RC: strips locked/protected cards - double-check the target.`,
+  `\`{p} mod createclass\` / \`{p} mod createskill\` open the interactive creators in DMs.`,
 ];
 
 module.exports = { MOD_MENU, MOD_TIPS, findStandalone };
