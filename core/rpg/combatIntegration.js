@@ -30,8 +30,21 @@ async function renderCombatStart(players, enemies, encounterInfo) {
 
 async function renderCombatTurn(players, enemies, turnInfo, options = {}) {
     try {
-        const playersToShow = players.filter(p => p.currentHP > 0 || p.justDied);
-        const enemiesToShow = enemies.filter(e => e.currentHP > 0 || e.justDied);
+        // 💀 FIX 2026-10-11 (owner fight-card audit): send the FULL ROSTER
+        // every turn — dead enemies included (they carry justDied + 0 HP and
+        // the Go renderer hides them itself). The old filter
+        // `e.currentHP > 0 || e.justDied` had two failure modes:
+        //   1. enemies built without a currentHP field (createEnemy sets only
+        //      stats.hp) were ALL dropped on TURN renders → the classic
+        //      "defend card shows no enemy at all" report;
+        //   2. compacting the array shifted every survivor into the dead
+        //      enemy's slot: positions repacked, sprites reshuffled and the
+        //      last slot went empty ("the dead one stays visible while an
+        //      enemy in another position disappears").
+        // The Go service keys positions/sprites off the original roster index,
+        // so the roster it receives must never be compacted mid-fight.
+        const playersToShow = players.filter(p => ((p.currentHP ?? p.stats?.hp) > 0) || p.justDied);
+        const enemiesToShow = enemies;
 
         // Build animation action payload from turnInfo (if actionable)
         // The Go service uses this to render VFX, sprite reactions, and HP interpolation.

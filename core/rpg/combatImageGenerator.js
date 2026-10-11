@@ -26,7 +26,20 @@ function buildPayload(players, enemies, options = {}) {
             // profileCardRenderer) - combat previously fell back to a DIFFERENT
             // class ('FIGHTER'), so unknown/mod-created classes rendered a
             // different sprite in combat than on their character sheet.
-            class: String(p.class?.id || p.class || 'APPRENTICE'),
+            // 💀 FIX 2026-10-11 (owner fight-card audit): guildAdventure's
+            // CLASSES entries carry NO `id` field, so p.class?.id was undefined
+            // and String(p.class) serialized the whole object as
+            // "[object Object]" - the Go registry missed and EVERY base-class
+            // hero rendered as Fighter1 in battle while the QUESTSTART portrait
+            // (which sends userClass.id) showed the real class. Resolve the id
+            // through .name too, drop objects entirely, and normalize the case
+            // so the payload always carries a registry-shaped key ("NECROMANCER").
+            class: String(
+                p.class?.id ||
+                (typeof p.class?.name === 'string' ? p.class.name : '') ||
+                (typeof p.class === 'string' ? p.class : '') ||
+                'APPRENTICE'
+            ).trim().toUpperCase(),
             level: Math.floor(Number(p.level) || 1),
             hp: Math.floor(Number(p.hp || 0)),
             maxHp: Math.floor(Number(p.stats?.maxHp || p.maxHp || 100)),

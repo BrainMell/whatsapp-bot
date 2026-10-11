@@ -733,6 +733,7 @@ const CLASSES = {
   },
 
   WARLOCK: {
+    id: "WARLOCK",
     name: "Warlock",
     icon: "👹",
     desc: "Dark caster who drains life",
@@ -775,6 +776,7 @@ const CLASSES = {
   },
 
   ELEMENTALIST: {
+    id: "ELEMENTALIST",
     name: "Elementalist",
     icon: "🌪️",
     desc: "Master of all elements",
@@ -822,6 +824,7 @@ const CLASSES = {
 
   // SUPPORT CLASSES
   CLERIC: {
+    id: "CLERIC",
     name: "Cleric",
     icon: "✨",
     desc: "Divine healer who keeps the party alive",
@@ -864,6 +867,7 @@ const CLASSES = {
   },
 
   DRUID: {
+    id: "DRUID",
     name: "Druid",
     icon: "🌿",
     desc: "Nature magic with healing and shapeshifting",
@@ -908,6 +912,7 @@ const CLASSES = {
 
   // HYBRID CLASSES
   NECROMANCER: {
+    id: "NECROMANCER",
     name: "Necromancer",
     icon: "💀",
     desc: "Dark summoner who raises the dead",
@@ -950,6 +955,7 @@ const CLASSES = {
   },
 
   MERCHANT: {
+    id: "MERCHANT",
     name: "Merchant",
     icon: "💰",
     desc: "Capitalist who uses gold as power",
@@ -994,6 +1000,7 @@ const CLASSES = {
   },
 
   CHRONOMANCER: {
+    id: "CHRONOMANCER",
     name: "Chronomancer",
     icon: "⏰",
     desc: "Time mage who manipulates turns",
@@ -2102,8 +2109,16 @@ async function startRuinsCombat(sock, chatId, senderJid, spec) {
     // 💡 Phase B: TUTORIAL_QUEST (controlled solo quest) and TUTORIAL_GROUP
     // (fake-party demo) reuse the same no-ruins safety but keep rewards.
     mode: isTutorialGroup ? 'TUTORIAL_GROUP' : (isTutorial ? 'TUTORIAL' : (spec.tutorialQuest ? 'TUTORIAL_QUEST' : 'RUINS')),
+    // 💀 FIX 2026-10-11 (owner fight-card audit): pin the fight background at
+    // creation. state.backgroundPath used to stay undefined here, so every
+    // combat render fell back to the Go service's env1.png lava cavern - the
+    // tutorial/ruins fight changed backdrop mid-chat ("background changes on
+    // defend, then returns to normal"). spec.background is the owner-ruled
+    // arena for this fight (tutorial = spark_1 open meadow, ruins = spark_10
+    // cave-stone hall).
     solo: !isTutorialGroup && !isCoop,
     dungeonRank: spec.rank || 'C',
+    backgroundPath: spec.background ? `rpgasset/environment/${spec.background}` : undefined,
     // 💡 Phase B FIX (2026-10-04): this fight IS encounter #1 of #max.
     // Standard journeys enter combat via nextStage (which increments
     // encounter 0→1 BEFORE the first fight). startRuinsCombat starts combat
@@ -3582,6 +3597,12 @@ function createEnemy(enemyType, level = 1) {
     abilities: template.abilities,
     statusEffects: [],
     isEnemy: true,
+    // 💀 FIX 2026-10-11 (owner fight-card audit): enemies MUST carry currentHP
+    // from birth. It used to be set only on the first damage event, so the
+    // TURN-image filter (`e.currentHP > 0 || e.justDied`) dropped EVERY enemy
+    // on every turn card — the tutorial/ruins fight rendered an empty
+    // battlefield after its start card ("enemy disappears entirely").
+    currentHP: Math.floor(template.stats.hp * (1 + (level - 1) * 0.2)),
     // 💡 OWNER BRIEF 2026-10-09 §2 (enemy sprite swap): per-instance stable
     // seed for the Go renderer's rotation/dedupe (1..99; 0 = legacy fallback)
     spriteIndex: 1 + Math.floor(Math.random() * 99),
@@ -4466,6 +4487,16 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   state.enemies = encounter.enemies;
   // Stamp dungeon rank on each enemy so calculateDamage can apply SS+ damage floor
   state.enemies.forEach(e => { e.rank = state.dungeonRank; });
+  // 💀 FIX 2026-10-11 (owner fight-card audit): honor encounter.background as
+  // a fallback so a fight can never render on the Go service's env1.png
+  // fallback arena. Classic quests pin backgroundPath at initAdventure; ruins/
+  // tutorial fights pin it in startRuinsCombat — this covers any other flow
+  // whose encounter carries an explicit background but no state-level one.
+  if (!state.backgroundPath && encounter.background) {
+    state.backgroundPath = encounter.background.startsWith('rpgasset/')
+      ? encounter.background
+      : `rpgasset/environment/${encounter.background}`;
+  }
   state.currentEncounterType = encounter.type || "COMBAT";
   // ⚔️ ruins encounter scene payload (square map panel, bottom-right)
   state.ruinsMap = encounter.ruinsMap || null;
