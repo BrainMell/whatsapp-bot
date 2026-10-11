@@ -7652,7 +7652,18 @@ async function handleAbyssVictory(sock, sessionKey) {
   if (state.enemies[0]?.isBoss) run.bossesKilled = (run.bossesKilled || 0) + 1;
 
   // Award rewards
-  const rewards = abyssSystem.getFloorRewards(state.abyssFloor, state.enemies[0]?.isBoss);
+  // 💡 XP RESTORED + PARTY-SCALED (owner 2026-10-11: "add experience as a
+  // reward back into the abyss it was removed a couple of commits ago
+  // investigate removal and undo" — chat 19:24Z: "I turned it off to add
+  // coop"). Co-op scales the enemy +60%HP/+15%atk per extra player but left
+  // rewards FLAT, so each member effectively earned 1/n of a solo floor's
+  // XP — players read that as "XP removed". Undo: rewardMult = 1 + 0.5 per
+  // extra party member, paid per member (solo stays exactly rewardMult=1).
+  const __partyN = run.isCoop
+    ? Math.max(1, Math.max((run.party || []).length, (state.players || []).length))
+    : 1;
+  const rewards = abyssSystem.getFloorRewards(
+    state.abyssFloor, state.enemies[0]?.isBoss, 1 + 0.5 * (__partyN - 1));
   // 💡 CO-OP: loot is paid PER FLOOR to EVERY party member immediately and the
   // shared accumulator stays zeroed (retreat/death paths can't double-pay).
   let coopPayoutMsg = '';
@@ -8185,8 +8196,12 @@ async function endCombat(sock, victory, sessionKey, expectedGen) {
       try {
         if (victory && state.abyssRun) {
           const __run = state.abyssRun;
+          // party-scaled ledger (must match the actual handleAbyssVictory payout)
+          const __partyN = __run.isCoop
+            ? Math.max(1, Math.max((__run.party || []).length, (state.players || []).length))
+            : 1;
           const __rewards = require('./abyssSystem').getFloorRewards(
-            state.abyssFloor, state.enemies[0]?.isBoss);
+            state.abyssFloor, state.enemies[0]?.isBoss, 1 + 0.5 * (__partyN - 1));
           const __eco = require('./economy');
           const __u = __eco.getUser(state.players[0]?.jid) || {};
           const __clrBuf = await require('./abyssScene').renderAbyssResultCard({

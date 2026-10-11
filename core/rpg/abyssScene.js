@@ -791,23 +791,47 @@ async function planCombatLayout(state, opts = {}) {
             flip: false,
         };
         try {
-            const allies = (state.summons || []).filter((s) => s && !s.isDead).slice(0, 2);
-            for (let i = 0; i < allies.length; i++) {
-                const s = allies[i];
-                const art = await resolveSummonArt(s.species || s.name);
+            // 💡 CO-OP (owner 2026-10-11: "new abyss coop doesn't add friend
+            // player sprite"): real party members take the flank arc FIRST
+            // (closest to the hero), summons fill what's left. Solo scenes
+            // render byte-identical to the approved composition (no co-op
+            // members → same array, same slots, same order).
+            const __coop = (state.players || []).slice(1, 5).filter((p) => p && !p.isDead);
+            const __summons = (state.summons || []).filter((s) => s && !s.isDead);
+            const __arc = [];
+            for (const m of __coop) __arc.push({ kind: 'coop', ref: m });
+            for (const s of __summons) __arc.push({ kind: 'summon', ref: s });
+            for (let i = 0; i < __arc.length && i < 2; i++) {
+                const a = __arc[i];
                 const slot = { cx: 400 - i * 118, gy: 640 + i * 8 };
-                plan.allies.push({
-                    art: art ? { img: art.img, file: art.file } : null,
-                    cx: slot.cx, gy: slot.gy,
-                    h: Math.round(perspH(slot.gy) * (i === 0 ? 0.62 : 0.56)),
-                    // round-16 FIX: boss allies stand LEFT of the boss and face
-                    // RIGHT toward it — mirror the natively-LEFT art (same
-                    // rule as the side-path ally arc). The old FACES_RIGHT
-                    // test inverted this: boar/snake/dino/plaguefang/reptile
-                    // were mirrored to face AWAY from the boss.
-                    flip: art ? SUMMON_FACES_LEFT.has(summonFaceKey(art.file)) : false,
-                    name: safeName(s.name, 16),
-                });
+                if (a.kind === 'coop') {
+                    const file = playerSpriteFileFor(a.ref);
+                    const art = await coopMemberArt(a.ref);
+                    plan.allies.push({
+                        art,
+                        cx: slot.cx, gy: slot.gy,
+                        h: Math.round(perspH(slot.gy) * (i === 0 ? 0.62 : 0.56)),
+                        // boss path hero faces the boss un-mirrored — members match
+                        flip: false,
+                        name: safeName((a.ref && a.ref.name) || 'Ally', 16),
+                        isCoop: true, file,
+                    });
+                } else {
+                    const s = a.ref;
+                    const art = await resolveSummonArt(s.species || s.name);
+                    plan.allies.push({
+                        art: art ? { img: art.img, file: art.file } : null,
+                        cx: slot.cx, gy: slot.gy,
+                        h: Math.round(perspH(slot.gy) * (i === 0 ? 0.62 : 0.56)),
+                        // round-16 FIX: boss allies stand LEFT of the boss and face
+                        // RIGHT toward it — mirror the natively-LEFT art (same
+                        // rule as the side-path ally arc). The old FACES_RIGHT
+                        // test inverted this: boar/snake/dino/plaguefang/reptile
+                        // were mirrored to face AWAY from the boss.
+                        flip: art ? SUMMON_FACES_LEFT.has(summonFaceKey(art.file)) : false,
+                        name: safeName(s.name, 16),
+                    });
+                }
             }
         } catch (e) { /* ally art is cosmetic — never fail the scene for it */ }
         if (plan.player) plan.player.file = playerSpriteFileFor(me);
@@ -1047,26 +1071,52 @@ async function planCombatLayout(state, opts = {}) {
         }
     }
     // deployed ally summons — the party arc (see ALLY_ARC above)
+    // 💡 CO-OP (owner 2026-10-11: "new abyss coop doesn't add friend player
+    // sprite"): co-op party members stand in the arc BEFORE summons — real
+    // players flank the hero, summons fill remaining slots. With no co-op
+    // members the arc is exactly the pre-coop summon arc.
     try {
-        const allies = (state.summons || []).filter((s) => s && !s.isDead).slice(0, 3);
-        const arc = ALLY_ARC[Math.min(3, Math.max(1, allies.length))] || ALLY_ARC[1];
-        for (let i = 0; i < allies.length; i++) {
-            const s = allies[i];
-            const art = await resolveSummonArt(s.species || s.name);
+        const coop = (state.players || []).slice(1, 5).filter((p) => p && !p.isDead);
+        const summons = (state.summons || []).filter((s) => s && !s.isDead).slice(0, 3);
+        const arcActors = [];
+        for (const m of coop) arcActors.push({ kind: 'coop', ref: m });
+        for (const s of summons) arcActors.push({ kind: 'summon', ref: s });
+        const arc = ALLY_ARC[Math.min(3, Math.max(1, arcActors.length))] || ALLY_ARC[1];
+        for (let i = 0; i < arcActors.length && i < 3; i++) {
+            const a = arcActors[i];
             const slot = arc[i] || arc[arc.length - 1];
-            const speciesKey = summonFaceKey(art ? art.file : (s.species || s.name));
             const cx = SX(slot.fx), gy = floorClamp(SY(FY(slot.fy)));
-            actors.push({
-                role: 'ally', ref: s, art: art ? { img: art.img, file: art.file } : null,
-                cx, gy,
-                h: Math.round(perspH(gy) * slot.mul * 0.96),
-                // party side faces RIGHT (toward the enemy wing) — mirror
-                // only the natively-left art
-                flip: art ? SUMMON_FACES_LEFT.has(summonFaceKey(art.file)) : false,
-                name: safeName(s.name, 16),
-                speciesKey,
-                alpha: 0.96,
-            });
+            if (a.kind === 'coop') {
+                const file = playerSpriteFileFor(a.ref);
+                const art = await coopMemberArt(a.ref);
+                actors.push({
+                    role: 'ally', ref: a.ref, art,
+                    cx, gy,
+                    h: Math.round(perspH(gy) * slot.mul * 0.96),
+                    // party side faces RIGHT (toward the enemy wing) — same
+                    // audited per-file flip table as the hero
+                    flip: playerArtFlipFor(file),
+                    name: safeName((a.ref && a.ref.name) || 'Ally', 16),
+                    speciesKey: undefined,
+                    alpha: 1,
+                    isCoop: true, file,
+                });
+            } else {
+                const s = a.ref;
+                const art = await resolveSummonArt(s.species || s.name);
+                const speciesKey = summonFaceKey(art ? art.file : (s.species || s.name));
+                actors.push({
+                    role: 'ally', ref: s, art: art ? { img: art.img, file: art.file } : null,
+                    cx, gy,
+                    h: Math.round(perspH(gy) * slot.mul * 0.96),
+                    // party side faces RIGHT (toward the enemy wing) — mirror
+                    // only the natively-left art
+                    flip: art ? SUMMON_FACES_LEFT.has(summonFaceKey(art.file)) : false,
+                    name: safeName(s.name, 16),
+                    speciesKey,
+                    alpha: 0.96,
+                });
+            }
         }
     } catch (e) { /* ally art is cosmetic — never fail the scene for it */ }
     // player — front-left slot (Battle-Example position), MUST face RIGHT
@@ -1323,6 +1373,20 @@ function playerSpriteFileFor(player) {
     try {
         const f = resolvePlayerSpriteFile(player || {});
         return f || null;
+    } catch (e) { return null; }
+}
+
+// 💡 CO-OP PARTY SPRITES (owner 2026-10-11: "new abyss coop doesn't add
+// friend player sprite"): co-op party members (state.players[1..]) must stand
+// on the party side like the hero — same graded class art, name-tagged.
+// Loads the member's class sprite through the SAME scene-grade pass the hero
+// gets (ambient grading), so a friend reads as an actor, not a hub widget.
+async function coopMemberArt(player) {
+    try {
+        const file = playerSpriteFileFor(player || {});
+        if (!file) return null;
+        const graded = await gradedPlayerArt(file);
+        return graded ? { img: graded, file } : null;
     } catch (e) { return null; }
 }
 
@@ -1662,6 +1726,11 @@ async function drawCombatScene(ctx, plan, live, opts = {}) {
         // flank allies stand BEHIND the tower
         for (const a of plan.allies || []) {
             await drawActorGrounded(ctx, a.art || null, a.cx, a.gy, a.h, { alpha: 0.92, flip: a.flip });
+            // 💡 CO-OP: name-tag real party members (summons stay unt tagged)
+            if (a.isCoop) {
+                pillLocal(ctx, a.cx, a.gy + 20, safeName(a.name || 'Ally', 16),
+                    'bold 12px sans-serif', 9, 'rgba(8,6,14,0.82)', 'rgba(150,120,220,0.55)', '#e8ddff');
+            }
         }
         if (plan.enemy && plan.enemy.art) {
             const drawn = await drawActorGrounded(ctx, plan.enemy.art, plan.enemy.cx, plan.enemy.gy, plan.enemy.h,
@@ -1761,6 +1830,12 @@ async function drawCombatScene(ctx, plan, live, opts = {}) {
             const d = await drawActorGrounded(ctx, a.art, a.cx, a.gy, a.h,
                 { alpha: a.alpha || 0.96, flip: a.flip, shadowBoost: 1.95, shadowRyMin: 15, shadowWide: true, pixelSnap: true });
             if (d) a.drawnH = d.h;
+            // 💡 CO-OP: name-tag real party members so the friend reads as a
+            // player on the stage, not a extra mob (owner 2026-10-11)
+            if (a.isCoop) {
+                pillLocal(ctx, a.cx, a.gy + 20, safeName(a.name || 'Ally', 16),
+                    'bold 12px sans-serif', 9, 'rgba(8,6,14,0.82)', 'rgba(150,120,220,0.55)', '#e8ddff');
+            }
         } });
     }
     if (plan.player && plan.player.file) {
