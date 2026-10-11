@@ -221,6 +221,13 @@ abyss_fresh_runs() {
   echo "\${OUT:-0}"
 }
 restart_all() {
+  # ⚠️ DEPLOY NOTIFY before the deferred restart actually lands (the deploy-time
+  # notify happened hours ago; Mellow wants the heads-up right before the bump)
+  for DP in 3001 3002 3003; do
+    curl -s -m 8 -X POST "http://127.0.0.1:\${DP}/notify-deploy" \\
+      -H 'Content-Type: application/json' -d '{}' >/dev/null 2>&1 || true
+  done
+  sleep 3
   for A in \${APPS//,/ }; do
     pm2 describe "\$A" >/dev/null 2>&1 && pm2 restart "\$A" --update-env >/dev/null 2>&1 || true
     sleep 15
