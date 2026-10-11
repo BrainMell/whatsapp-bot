@@ -5,6 +5,12 @@
 // creep bound is preserved by scripts/gated_daily_restart.sh (crontab
 // 05:10 UTC), which defers until the bot has been chat-quiet for 180s.
 // Settings mirrored from the live pm2 config (2026-10-10T18:50Z) verbatim.
+// round-21 (2026-10-11T15:1xZ): 3 mid-run pm2 memory kills in 13 min
+// (14:34/14:44/14:47 UTC) during combat-card bursts. Kill-moment telemetry:
+// rss=401-426MB but heap only 176/185MB + external 39MB -> ~185MB is NATIVE
+// malloc retention (glibc arenas; combat spam 400 cmds/day, card bursts).
+// Fix: MALLOC_ARENA_MAX=2 + 16MB trim threshold (return free pages to OS),
+// cap 380M->430M for burst headroom (box has ~448MB avail + reclaimable cache).
 module.exports = {
   apps: [{
     name: 'wa-joker',
@@ -13,7 +19,7 @@ module.exports = {
     exec_mode: 'fork',
     instances: 1,
     autorestart: true,
-    max_memory_restart: '380M',
+    max_memory_restart: '430M',
     exp_backoff_restart_delay: 100,
     max_restarts: 20,
     min_uptime: '30s',
@@ -29,6 +35,8 @@ module.exports = {
       GLOBAL_SCHEDULERS: '0',
       START_DELAY_MS: '0',
       PORT: 3002,
+      MALLOC_ARENA_MAX: '2',
+      MALLOC_TRIM_THRESHOLD_: '16777216',
     },
   }],
 };
