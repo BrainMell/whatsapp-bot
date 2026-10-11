@@ -80,7 +80,6 @@ async function handlePowerscaleSelection(chatId, selection) {
     }
 
     const chosen = pending.characters[idx - 1];
-    pendingSelections.delete(chatId); // clear pending
 
     console.log(`[Powerscale] User selected: ${chosen.name} (${chosen.url})`);
 
@@ -89,10 +88,39 @@ async function handlePowerscaleSelection(chatId, selection) {
         console.log(`[Powerscale] Fetch response:`, JSON.stringify(data));
 
         if (!data || data.error) {
+            pendingSelections.delete(chatId); // clear pending
             return { success: false, error: data?.error || 'Failed to fetch character data' };
         }
 
+        // ── FIX 2026-10-11: disambiguation pages used to render as a broken
+        // card with zero stats. The scraper now flags them (and filters them
+        // out of search results entirely). If one still slips through, keep
+        // the pending list ALIVE so the user can pick a more specific entry.
         const stats = data.stats || {};
+        const isDisambig =
+            data.isDisambiguation === true ||
+            (!Object.keys(stats).length && /may refer to|disambiguation page/i.test(data.summary || ''));
+        if (isDisambig) {
+            const remaining = pending.characters
+                .map((c, i) => ({ ...c, n: i + 1 }))
+                .filter((c) => c.url !== chosen.url);
+            const list = remaining
+                .slice(0, 10)
+                .map((c) => `*${c.n}.* ${c.name}`)
+                .join('\n');
+            return {
+                success: false,
+                keepPending: true,
+                error:
+                    `⚠️ *${chosen.name}* is a disambiguation page (multiple characters share that name).\n\n` +
+                    (list
+                        ? `Pick one of these instead:\n${list}`
+                        : 'Try a more specific search, e.g. the character\'s full name or series.'),
+            };
+        }
+
+        pendingSelections.delete(chatId); // clear pending (real hit)
+
         let message = `[ POWER SCALING: ${data.name.toUpperCase()} ]\n\n`;
 
         if (data.summary && data.summary.length > 0) {
@@ -129,6 +157,7 @@ async function handlePowerscaleSelection(chatId, selection) {
 
     } catch (error) {
         console.error('[Powerscale] Fetch failed:', error.message);
+        pendingSelections.delete(chatId);
         return { success: false, error: error.message };
     }
 }

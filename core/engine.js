@@ -962,7 +962,12 @@ function formatUptime(ms) {
 
 const ffmpeg = require("fluent-ffmpeg");
 ffmpeg.setFfmpegPath(process.env.FFMPEG_PATH || "ffmpeg");
-const { getAnikaiBestMatch } = require('./utils/anikaiResolver');
+// 💡 FIX 2026-10-11: api.jikan.moe went TCP-unreachable (Hetzner edge blackholes
+// the boxes AND the wider net — whole `.j anime *` suite timed out) and
+// anikai.to's domain died (DNS gone, parked). The anime suite + watch links
+// now run on AniList GraphQL (proven reachable from both boxes).
+const anilist = require('./utils/anilist');
+const { getAnikaiBestMatch } = anilist; // compat alias = getWatchLink (anikaiResolver retired)
 const runSecurity = require('./utils/security');
 const { fetchPfp: fetchPfpCached } = require('./utils/pfpCache'); // 💡 PERF PATCH 2026-07-27: cached + 8s-timeout PFP fetcher
 const tictactoe = require('./games/tictactoe');
@@ -1787,24 +1792,20 @@ async function startBot(configInstance) {
     global[`__${BOT_ID}_anime_search_cache_by_msgid`] =
       global[`__${BOT_ID}_anime_search_cache_by_msgid`] || new Map();
 
-    // Accurate watch link resolution via Go Service
+    // 💡 FIX 2026-10-11: watch links come from AniList externalLinks (official
+    // streaming pages) instead of the dead anikai.to domain.
     const getAnikaiLink = async (title) => {
       try {
-        return await goService.getAnikaiLink(title);
+        return await anilist.getWatchLink(title);
       } catch {
-        const slug = title
-          .toLowerCase()
-          .replace(/[^a-z0-9\s-]/g, "")
-          .replace(/\s+/g, "-")
-          .replace(/-+/g, "-");
-        return `https://anikai.to/watch/${slug}-episode-1`;
+        return `https://anilist.co/search/anime?search=${encodeURIComponent(title || "")}`;
       }
     };
 
     // Helper to get Best Match Link
     const getBestWatchLink = async (title) => {
       try {
-        return await getAnikaiBestMatch(title);
+        return await anilist.getWatchLink(title);
       } catch {
         return getAnikaiLink(title);
       }
@@ -1817,31 +1818,15 @@ async function startBot(configInstance) {
     async function handleAnimeSearch(sock, chatId, query, m) {
       await sock.sendMessage(chatId, { react: { text: `🔎`, key: m.key } });
       try {
-        // Respect Jikan rate limit (3 req/sec)
-        await new Promise((r) => setTimeout(r, 1000));
-
-        let list = [];
-        try {
-          const got = await getGot();
-          const r = await got
-            .get(
-              `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}`,
-            )
-            .json();
-          list = r.data || [];
-        } catch (gotErr) {
-          console.error("GotScraping Anime Search Error:", gotErr.message);
-          const r = await axios.get(
-            `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}`,
-            { timeout: 15000 },
-          );
-          list = r.data.data || [];
-        }
+        // 💡 FIX 2026-10-11: AniList GraphQL (Jikan is TCP-dead). No 1s
+        // rate-limit sleep needed — AniList allows 90 req/min and the module
+        // caches responses for 10 min.
+        const list = await anilist.searchAnime(query, 15);
 
         if (!list.length) {
           await sock.sendMessage(chatId, { react: { text: `❌`, key: m.key } });
           return sock.sendMessage(chatId, {
-            text: BOT_MARKER + "No results found on Jikan/MAL.",
+            text: BOT_MARKER + "No results found for that title.",
           });
         }
 
@@ -1881,7 +1866,7 @@ async function startBot(configInstance) {
       } catch (err) {
         console.error("Anime Search Error:", err);
         await sock.sendMessage(chatId, {
-          text: BOT_MARKER + "Search failed. Jikan API might be overloaded.",
+          text: BOT_MARKER + "Search failed. The anime service is busy — try again shortly.",
         });
       }
     }
@@ -1889,17 +1874,15 @@ async function startBot(configInstance) {
     async function handleAnimeTrending(sock, chatId, m) {
       await sock.sendMessage(chatId, { react: { text: "🔥", key: m.key } });
       try {
-        const r = await axios.get(
-          `https://api.jikan.moe/v4/top/anime?filter=bypopularity&limit=20`,
-        );
-        const list = r.data.data || [];
+        // 💡 FIX 2026-10-11: AniList TRENDING_DESC (was Jikan bypopularity)
+        const list = await anilist.trending(20);
         if (!list.length) throw new Error("No data");
 
         const pick =
           list[Math.floor(Math.random() * Math.min(10, list.length))];
         const watchLink = await getBestWatchLink(pick.title);
 
-        const caption = `🔥 *ANIME TRENDING* 🔥\n\n🎬 *${pick.title}*\n⭐ Score: ${pick.score || "N/A"}\n\n📖 *Synopsis:* ${(pick.synopsis || "").slice(0, 280)}...\n━━━━━━━━━━━━━━━━━━\n📥 *WATCH:* ${watchLink}\n🔗 MAL: ${pick.url}`;
+        const caption = `🔥 *ANIME TRENDING* 🔥\n\n🎬 *${pick.title}*\n⭐ Score: ${pick.score || "N/A"}\n\n📖 *Synopsis:* ${(pick.synopsis || "").slice(0, 280)}...\n━━━━━━━━━━━━━━━━━━\n📥 *WATCH:* ${watchLink}\n🔗 AniList: ${pick.url}`;
 
         const imageUrl = resolveImageUrl(
           pick.images?.jpg?.large_image_url || pick.images?.jpg?.image_url,
@@ -1917,10 +1900,8 @@ async function startBot(configInstance) {
     async function handleAnimeAiring(sock, chatId, m) {
       await sock.sendMessage(chatId, { react: { text: `📡`, key: m.key } });
       try {
-        const r = await axios.get(
-          "https://api.jikan.moe/v4/seasons/now?limit=12",
-        );
-        const list = r.data.data || [];
+        // 💡 FIX 2026-10-11: AniList current-season RELEASING (was Jikan seasons/now)
+        const list = await anilist.airing(12);
         if (!list.length) throw new Error("No data");
 
         const pick = list[Math.floor(Math.random() * list.length)];
@@ -1930,7 +1911,7 @@ async function startBot(configInstance) {
           .join("\n");
         const watchLink = await getBestWatchLink(pick.title);
 
-        const caption = `📡 *CURRENTLY AIRING* 📡\n\nTop this week:\n${top3}\n\n🔍 *Highlight:*\n🎬 *${pick.title}*\n⭐ Score: ${pick.score || "N/A"}\n━━━━━━━━━━━━━━━━━━\n📥 *WATCH:* ${watchLink}\n🔗 MAL: ${pick.url}`;
+        const caption = `📡 *CURRENTLY AIRING* 📡\n\nTop this week:\n${top3}\n\n🔍 *Highlight:*\n🎬 *${pick.title}*\n⭐ Score: ${pick.score || "N/A"}\n━━━━━━━━━━━━━━━━━━\n📥 *WATCH:* ${watchLink}\n🔗 AniList: ${pick.url}`;
 
         const imageUrl = resolveImageUrl(
           pick.images?.jpg?.large_image_url || pick.images?.jpg?.image_url,
@@ -1948,15 +1929,13 @@ async function startBot(configInstance) {
     async function handleAnimeUpcoming(sock, chatId, m) {
       await sock.sendMessage(chatId, { react: { text: `⏳`, key: m.key } });
       try {
-        const r = await axios.get("https://api.jikan.moe/v4/seasons/upcoming", {
-          timeout: 10000,
-        });
-        const list = r.data.data || [];
+        // 💡 FIX 2026-10-11: AniList next-season NOT_YET_RELEASED (was Jikan seasons/upcoming)
+        const list = await anilist.upcoming(15);
         const pick =
           list[Math.floor(Math.random() * Math.min(15, list.length))];
         const watchLink = await getBestWatchLink(pick.title);
 
-        const caption = `⏳ *UPCOMING ANIME* ⏳\n\n🎬 *${pick.title}*\n📅 Expected: ${pick.year || "TBA"}\n━━━━━━━━━━━━━━━━━━\n📥 *PREVIEW:* ${watchLink}\n🔗 MAL: ${pick.url}`;
+        const caption = `⏳ *UPCOMING ANIME* ⏳\n\n🎬 *${pick.title}*\n📅 Expected: ${pick.year || "TBA"}\n━━━━━━━━━━━━━━━━━━\n📥 *PREVIEW:* ${watchLink}\n🔗 AniList: ${pick.url}`;
 
         const imageUrl = resolveImageUrl(
           pick.images?.jpg?.large_image_url || pick.images?.jpg?.image_url,
@@ -1974,14 +1953,13 @@ async function startBot(configInstance) {
     async function handleAnimeTop(sock, chatId, m) {
       await sock.sendMessage(chatId, { react: { text: `🏆`, key: m.key } });
       try {
-        const r = await axios.get(
-          "https://api.jikan.moe/v4/top/anime?limit=25",
-        );
+        // 💡 FIX 2026-10-11: AniList SCORE_DESC (was Jikan top/anime)
+        const list = await anilist.top(25);
         const pick =
-          r.data.data[Math.floor(Math.random() * r.data.data.length)];
+          list[Math.floor(Math.random() * list.length)];
         const watchLink = await getBestWatchLink(pick.title);
 
-        const caption = `🏆 *TOP ANIME* 🏆\n\n🏅 Rank: #${pick.rank || "N/A"}\n🎬 *${pick.title}*\n⭐ Score: ${pick.score || "N/A"}\n━━━━━━━━━━━━━━━━━━\n📥 *WATCH:* ${watchLink}\n🔗 MAL: ${pick.url}`;
+        const caption = `🏆 *TOP ANIME* 🏆\n\n🏅 Rank: #${pick.rank || "N/A"}\n🎬 *${pick.title}*\n⭐ Score: ${pick.score || "N/A"}\n━━━━━━━━━━━━━━━━━━\n📥 *WATCH:* ${watchLink}\n🔗 AniList: ${pick.url}`;
 
         const imageUrl = resolveImageUrl(
           pick.images?.jpg?.large_image_url || pick.images?.jpg?.image_url,
@@ -1999,11 +1977,11 @@ async function startBot(configInstance) {
     async function handleAnimeRandom(sock, chatId, m) {
       await sock.sendMessage(chatId, { react: { text: `🎲`, key: m.key } });
       try {
-        const r = await axios.get("https://api.jikan.moe/v4/random/anime");
-        const a = r.data.data;
+        // 💡 FIX 2026-10-11: AniList random sample (was Jikan random/anime)
+        const a = await anilist.randomAnime();
         const watchLink = await getBestWatchLink(a.title);
 
-        const caption = `🎲 *RANDOM ANIME* 🎲\n\n🎬 *Title:* ${a.title}\n⭐ Score: ${a.score || "N/A"}\n📼 Episodes: ${a.episodes || "Unknown"}\n━━━━━━━━━━━━━━━━━━\n📥 *WATCH:* ${watchLink}\n🔗 MAL: ${a.url}`;
+        const caption = `🎲 *RANDOM ANIME* 🎲\n\n🎬 *Title:* ${a.title}\n⭐ Score: ${a.score || "N/A"}\n📼 Episodes: ${a.episodes || "Unknown"}\n━━━━━━━━━━━━━━━━━━\n📥 *WATCH:* ${watchLink}\n🔗 AniList: ${a.url}`;
 
         const imageUrl = resolveImageUrl(
           a.images?.jpg?.large_image_url || a.images?.jpg?.image_url,
@@ -2058,11 +2036,9 @@ async function startBot(configInstance) {
               `Usage: \`${botConfig.getPrefix().toLowerCase()}\` anime rank <name>`,
           });
 
-        // 1. Fetch Jikan Data
-        const jikanRes = await axios.get(
-          `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&type=tv&limit=1`,
-        );
-        const a = jikanRes.data.data?.[0];
+        // 1. Fetch data (💡 FIX 2026-10-11: AniList, was Jikan)
+        const alMatches = await anilist.searchAnime(query, 1);
+        const a = alMatches[0];
         if (!a)
           return sock.sendMessage(chatId, {
             text: BOT_MARKER + "❌ Series not found.",
@@ -2118,10 +2094,9 @@ async function startBot(configInstance) {
     async function handleAnimeStudio(sock, chatId, m, studio) {
       await sock.sendMessage(chatId, { react: { text: `🎥`, key: m.key } });
       try {
-        const res = await axios.get(
-          `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(studio)}&limit=15&order_by=popularity`,
-        );
-        const pool = res.data.data || [];
+        // 💡 FIX+UPDATE 2026-10-11: real studio search via AniList's Studio
+        // entity (the old Jikan handler searched ANIME by the studio's name).
+        const pool = await anilist.studioAnime(studio, 15);
         if (!pool.length)
           return sock.sendMessage(chatId, {
             text: BOT_MARKER + `No anime found for studio: ${studio}`,
@@ -9840,11 +9815,13 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                         );
                         if (!result) return;
                         if (!result.success) {
+                          // keepPending = disambiguation hit — the list stays
+                          // alive so the user can pick a more specific entry.
                           await sock.sendMessage(chatId, {
-                            react: { text: "❌", key: m.key },
+                            react: { text: result.keepPending ? "🔁" : "❌", key: m.key },
                           });
                           return await sock.sendMessage(chatId, {
-                            text: BOT_MARKER + `❌ ${result.error}`,
+                            text: BOT_MARKER + `${result.keepPending ? "" : "❌ "}${result.error}`,
                           });
                         }
                         if (result.imageUrl) {
@@ -9926,7 +9903,7 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                         // Fallback to the cached slug generator if the scraper fails
                         downloadLink = cached.downloadFn
                           ? cached.downloadFn(a.title)
-                          : `https://anikai.to/watch/${a.title.toLowerCase().replace(/[^a-z0-9]/g, "-")}-episode-1`;
+                          : `https://anilist.co/search/anime?search=${encodeURIComponent(a.title || "")}`;
                       }
 
                       const caption = `
@@ -23848,15 +23825,9 @@ _Latest anime updates • Anime Corner_
                       } catch (err) {
                         console.error("Anime news error:", err);
 
-                        // fallback → Jikan API
+                        // fallback → AniList spotlight (Jikan is dead, 2026-10-11)
                         try {
-                          const res = await axios.get(
-                            "https://api.jikan.moe/v4/top/anime?filter=airing&limit=10",
-                          );
-                          const anime =
-                            res.data.data[
-                              Math.floor(Math.random() * res.data.data.length)
-                            ];
+                          const anime = await anilist.randomAnime();
 
                           const caption = `
 ╔══════════════════════╗
@@ -25872,21 +25843,67 @@ Write ONE witty verdict line (max 90 chars) about their compatibility. Roast the
                       });
                       try {
                         let imgUrl = "";
+                        let waifuSampleUrl = "";
+                        // 💡 FIX 2026-10-11: nekos.best is unreachable from the
+                        // boxes and waifu.pics' domain was parked (redirects to
+                        // a design agency). Switched to SFW booru JSON APIs
+                        // that ARE reachable: safebooru.org primary (random
+                        // page over tagged posts), yande.re fallback
+                        // (rating:safe locked).
                         try {
-                          const res = await axios.get("https://nekos.best/api/v2/waifu", { timeout: 8000 });
-                          if (res.data && res.data.results && res.data.results[0] && res.data.results[0].url) {
-                            imgUrl = res.data.results[0].url;
+                          // 💡 NOTE: safebooru's literal `waifu` tag has only
+                          // ~a dozen posts — `1girl solo` is the anime-girl
+                          // pool (200k+) and safebooru is SFW-only anyway.
+                          const pid = Math.floor(Math.random() * 7000);
+                          const res = await axios.get(
+                            "https://safebooru.org/index.php",
+                            {
+                              params: {
+                                page: "dapi", s: "post", q: "index",
+                                json: "1", limit: 25, tags: "1girl solo", pid,
+                              },
+                              timeout: 9000,
+                            },
+                          );
+                          const posts = Array.isArray(res.data) ? res.data : [];
+                          const good = posts.filter((p) => p && (p.image || p.file_url));
+                          if (good.length) {
+                            const pick = good[Math.floor(Math.random() * good.length)];
+                            imgUrl = pick.file_url || `https://safebooru.org/images/${pick.directory}/${pick.image}`;
+                            waifuSampleUrl = pick.sample_url || "";
                           }
-                        } catch (nekoErr) {
-                          console.log("Nekos.best failed, trying waifu.pics", nekoErr.message);
-                          const res = await axios.get("https://api.waifu.pics/sfw/waifu", { timeout: 8000 });
-                          if (res.data && res.data.url) {
-                            imgUrl = res.data.url;
+                        } catch (sbErr) {
+                          console.log("Safebooru failed, trying yande.re", sbErr.message);
+                        }
+
+                        if (!imgUrl) {
+                          const res = await axios.get(
+                            "https://yande.re/post.json",
+                            {
+                              params: { limit: 50, tags: "rating:safe order:random" },
+                              timeout: 9000,
+                              headers: { "User-Agent": "wa-jake-bot/1.0 (anime command)" },
+                            },
+                          );
+                          const posts = Array.isArray(res.data) ? res.data : [];
+                          const good = posts.filter((p) => p && (p.file_url || p.sample_url) && (p.rating === "s" || (p.tags || "").length >= 0));
+                          const pick = good[0] || posts[0];
+                          if (pick) {
+                            imgUrl = pick.file_url || pick.sample_url || pick.jpeg_url;
+                            waifuSampleUrl = pick.sample_url || pick.jpeg_url || "";
                           }
                         }
 
                         if (imgUrl) {
-                          const imageResponse = await axios.get(imgUrl, { responseType: "arraybuffer", timeout: 15000 });
+                          let imageResponse = await axios.get(imgUrl, { responseType: "arraybuffer", timeout: 15000 });
+                          // 💡 booru originals can be 10MB+ PNGs — swap to the
+                          // smaller sample rendition when one is available.
+                          if (imageResponse.data.length > 8 * 1024 * 1024 && waifuSampleUrl) {
+                            try {
+                              const smaller = await axios.get(waifuSampleUrl, { responseType: "arraybuffer", timeout: 15000 });
+                              if (smaller.data.length < imageResponse.data.length) imageResponse = smaller;
+                            } catch (_) { /* keep the original buffer */ }
+                          }
                           await sock.sendMessage(chatId, {
                             image: Buffer.from(imageResponse.data),
                             caption: `${BOT_MARKER}🌸 Here is your Waifu!`
