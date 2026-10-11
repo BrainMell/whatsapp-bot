@@ -1357,6 +1357,9 @@ async function planCombatLayout(state, opts = {}) {
             plan.allies.push({
                 art: a.art, cx: a.cx, gy: a.gy, h: a.h, flip: a.flip,
                 name: a.name, speciesKey: a.speciesKey, halfW: a.halfW,
+                // 💡 CO-OP: keep the member markers through the resolver so the
+                // name pill fires and QA can assert the friend is on stage
+                isCoop: a.isCoop || undefined, file: a.file || undefined,
             });
         } else if (a.role === 'pack') {
             plan.pack.push({ art: a.art, cx: a.cx, gy: a.gy, h: a.h, flip: a.flip, alpha: a.alpha, plateName: a.name, halfW: a.halfW });
@@ -1383,10 +1386,25 @@ function playerSpriteFileFor(player) {
 // gets (ambient grading), so a friend reads as an actor, not a hub widget.
 async function coopMemberArt(player) {
     try {
-        const file = playerSpriteFileFor(player || {});
-        if (!file) return null;
-        const graded = await gradedPlayerArt(file);
-        return graded ? { img: graded, file } : null;
+        const p = player || {};
+        const file = playerSpriteFileFor(p);
+        // 💡 stub-proof ladder: resolved name first, then the rest of the
+        // class's sprite set, then the guaranteed apprentice baseline — the
+        // friend ALWAYS renders (owner: "doesn't add friend player sprite").
+        const candidates = [];
+        if (file) candidates.push(file);
+        try {
+            const pr = require('./profileCardRenderer');
+            const clsKey = String(p.classId || p.class?.id || '').toUpperCase();
+            const set = pr.CLASS_SPRITE_SETS[clsKey] || pr.CLASS_SPRITE_SETS.APPRENTICE || [];
+            for (const f of set) if (f && !candidates.includes(f)) candidates.push(f);
+        } catch (e) { /* set walk is best-effort */ }
+        if (!candidates.includes('apprentice1.png')) candidates.push('apprentice1.png');
+        for (const f of candidates) {
+            const graded = await gradedPlayerArt(f);
+            if (graded) return { img: graded.img, file: f };
+        }
+        return null;
     } catch (e) { return null; }
 }
 
@@ -1396,6 +1414,17 @@ async function coopMemberArt(player) {
 // sprite itself via source-atop veils (alpha-preserving): an obsidian-violet
 // ambient pass + a faint cold rim pass. Cached per file. ──
 const _playerGradeCache = new Map();
+// 💡 LFS-STUB RESILIENCE (owner coop ticket 2026-10-11): class sprites exist in
+// TWO spellings — "Rogue (1).png" (space) vs "Rogue_(1).png" (underscore) —
+// and the space family contains git-LFS POINTER STUBS (ASCII text instead of
+// pixels; canvas throws "Unsupported image type"). When the resolved name
+// fails to load, walk the spelling variants so a real PNG always wins.
+function _spriteNameVariants(f) {
+    const out = new Set([f]);
+    if (/ \(/.test(f)) out.add(f.replace(/ \(/g, '_('));
+    if (/_\(/.test(f)) out.add(f.replace(/_\(/g, ' ('));
+    return [...out];
+}
 async function gradedPlayerArt(file, ambient = 0.30) {
     if (!file) return null;
     // cache per file + quantized ambient bucket (scene-adaptive veils differ)
@@ -1404,7 +1433,14 @@ async function gradedPlayerArt(file, ambient = 0.30) {
     if (_playerGradeCache.has(key)) return _playerGradeCache.get(key);
     const dirs = [path.join(RPGASSET, 'characters', 'clean'), path.join(RPGASSET, 'characters')];
     let img = null;
-    for (const d of dirs) { img = await loadBg(file, d); if (img) break; }
+    let resolved = file;
+    outer:
+    for (const f of _spriteNameVariants(file)) {
+        for (const d of dirs) {
+            img = await loadBg(f, d);
+            if (img) { resolved = f; break outer; }
+        }
+    }
     if (!img) { _playerGradeCache.set(key, null); return null; }
     try {
         const off = createCanvas(img.width, img.height);
@@ -1416,11 +1452,11 @@ async function gradedPlayerArt(file, ambient = 0.30) {
         octx.fillStyle = `rgba(64,52,110,${(bucket * 0.4).toFixed(2)})`;   // cold rim cast
         octx.fillRect(0, 0, off.width, off.height);
         octx.globalCompositeOperation = 'source-over';
-        const art = { img: off, file: `graded:${file}` };
+        const art = { img: off, file: `graded:${resolved}` };
         _playerGradeCache.set(key, art);
         return art;
     } catch (e) {
-        const art = { img, file };
+        const art = { img, file: resolved };
         _playerGradeCache.set(key, art);
         return art;
     }
