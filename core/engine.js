@@ -55,6 +55,7 @@ const play = require("play-dl");
 const yts = require("yt-search");
 const ytdl = require("@distube/ytdl-core");
 const { Sticker, StickerTypes } = require("wa-sticker-formatter");
+const stickerPack = require("./utils/stickerPack"); // native WhatsApp sticker packs (.j s -p)
 const { parseHTML } = require("linkedom");
 
 // ═══ 🤝 GC COEXISTENCE (owner 2026-10-07: "scrape the one-group-per-bot
@@ -13353,6 +13354,203 @@ Usage: ${newUsage}/5${warningText}`;
                   // STICKER CONVERSION COMMANDS
                   // ============================================
 
+                  // --- COMMAND: `.j s -p [count] <query>` (Pinterest search →
+                  //     NATIVE WhatsApp sticker pack) ---
+                  // Must be matched BEFORE the plain `.j s -<flag>` block
+                  // below, otherwise "-p" would fall into the media handler's
+                  // unknown-flag path and silently make a normal sticker.
+                  // Sends ONE stickerPackMessage (cover + "N stickers" +
+                  // "View sticker pack" card) instead of N loose stickers.
+                  if (
+                    lowerTxt ===
+                      `${botConfig.getPrefix().toLowerCase()} s -p` ||
+                    lowerTxt.startsWith(
+                      `${botConfig.getPrefix().toLowerCase()} s -p `,
+                    )
+                  ) {
+                    const packArgs = lowerTxt
+                      .replace(
+                        `${botConfig.getPrefix().toLowerCase()} s -p`,
+                        "",
+                      )
+                      .trim();
+
+                    let packCount = stickerPack.DEFAULT_PACK_STICKERS;
+                    let packTerm = packArgs;
+                    const packParts = packArgs.split(" ");
+                    if (
+                      packParts[0] &&
+                      !isNaN(packParts[0]) &&
+                      parseInt(packParts[0]) > 0
+                    ) {
+                      packCount = parseInt(packParts[0]);
+                      packTerm = packParts.slice(1).join(" ").trim();
+                    }
+                    packCount = Math.min(
+                      Math.max(1, packCount),
+                      stickerPack.MAX_PACK_STICKERS,
+                    );
+
+                    if (!packTerm) {
+                      const p = botConfig.getPrefix();
+                      return await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          `📦 *STICKER PACK*\n\nSearch Pinterest and send everything as ONE WhatsApp sticker pack (with a "View sticker pack" button).\n\n▸ \`${p} s -p goku\`       _8 stickers_\n▸ \`${p} s -p 15 goku\`  _15 stickers (max 30)_\n\n💡 Regular singles still work: \`${p} s 5 goku\``,
+                      });
+                    }
+
+                    // pack buffers live at handler scope so the catch-block
+                    // fallback can still send them individually
+                    const packBufs = [];
+                    let packSkipped = 0;
+                    try {
+                      await sock.sendMessage(chatId, {
+                        react: { text: "📦", key: m.key },
+                      });
+
+                      const packImages = await searchPinterest(
+                        packTerm,
+                        packCount,
+                      );
+                      if (!packImages.length) {
+                        await sock.sendMessage(chatId, {
+                          react: { text: "❌", key: m.key },
+                        });
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + "❌ No results found.",
+                        });
+                      }
+
+                      // download + convert each hit to a 512 webp (same size
+                      // guards as the loose-search flow: HEAD-probe then a
+                      // capped GET, skip anything unusable)
+                      for (let i = 0; i < packImages.length; i++) {
+                        try {
+                          // keep the command watchdog fed while the pack builds
+                          if (
+                            typeof _cmdContext !== "undefined" &&
+                            _cmdContext
+                          ) {
+                            _cmdContext.timeoutMs =
+                              Date.now() - _cmdStartTime + 30000;
+                          }
+                          try {
+                            const head = await axios.head(packImages[i], {
+                              timeout: 6000,
+                              maxRedirects: 4,
+                            });
+                            const len = parseInt(
+                              head.headers["content-length"],
+                              10,
+                            );
+                            const ctype = String(
+                              head.headers["content-type"] || "",
+                            );
+                            if (ctype && !ctype.startsWith("image/")) {
+                              packSkipped++;
+                              continue;
+                            }
+                            if (len && len > 8 * 1024 * 1024) {
+                              packSkipped++;
+                              continue;
+                            }
+                          } catch (headErr) {
+                            // no HEAD support: let the capped GET decide
+                          }
+                          const resp = await axios.get(packImages[i], {
+                            responseType: "arraybuffer",
+                            timeout: 15000,
+                            maxContentLength: 10 * 1024 * 1024,
+                          });
+                          const raw = Buffer.from(resp.data);
+                          const stickerConv = new Sticker(raw, {
+                            pack: `${packTerm} Pack 🃏`,
+                            author:
+                              system.get(
+                                `sticker_author_name_${BOT_ID}`,
+                              ) ||
+                              m.pushName ||
+                              `${botConfig.getBotName()} User`,
+                            type: StickerTypes.CROPPED,
+                            quality: 70,
+                          });
+                          packBufs.push(await stickerConv.toBuffer());
+                        } catch (imgErr) {
+                          console.log(
+                            `Skipping pack image ${i + 1}:`,
+                            imgErr.message,
+                          );
+                          packSkipped++;
+                        }
+                      }
+
+                      if (!packBufs.length) {
+                        await sock.sendMessage(chatId, {
+                          react: { text: "❌", key: m.key },
+                        });
+                        return await sock.sendMessage(chatId, {
+                          text:
+                            BOT_MARKER +
+                            `❌ No usable results (sources too big or unreachable). Try a different search.`,
+                        });
+                      }
+
+                      await sock.sendMessage(chatId, {
+                        react: { text: "⏳", key: m.key },
+                      });
+
+                      const trayPng = await stickerPack.buildTrayPng(packBufs);
+                      const packMsg = await stickerPack.buildStickerPackMessage(
+                        {
+                          sock,
+                          name: `${
+                            packTerm.charAt(0).toUpperCase() + packTerm.slice(1)
+                          } Pack 🃏`,
+                          publisher:
+                            system.get(`sticker_author_name_${BOT_ID}`) ||
+                            botConfig.getBotName(),
+                          stickerBuffers: packBufs,
+                          trayPng,
+                        },
+                      );
+                      await stickerPack.sendStickerPack(sock, chatId, packMsg);
+
+                      await sock.sendMessage(chatId, {
+                        react: { text: "✅", key: m.key },
+                      });
+                      await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          `📦 Sent *${packTerm}* pack — ${packBufs.length} sticker${packBufs.length === 1 ? "" : "s"}${packSkipped ? ` (${packSkipped} skipped)` : ""}. Tap *View sticker pack* to add it to your stickers.`,
+                      });
+                    } catch (packErr) {
+                      console.error("Sticker Pack Error:", packErr.message);
+                      await sock.sendMessage(chatId, {
+                        react: { text: "❌", key: m.key },
+                      });
+                      await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          `⚠️️ Pack upload failed — sending the stickers individually instead.`,
+                      });
+                      // graceful fallback: same stickers, loose form
+                      try {
+                        for (const buf of packBufs || []) {
+                          await sock.sendMessage(chatId, { sticker: buf });
+                          await new Promise((res) => setTimeout(res, 300));
+                        }
+                      } catch (fbErr) {
+                        console.error(
+                          "Sticker Pack fallback error:",
+                          fbErr.message,
+                        );
+                      }
+                    }
+
+                    return;
+                  }
+
                   // --- COMMAND: `.j s` (reply to image/video → sticker) ---
                   // Flags: (default) -f -c -c1 -c2 -g -r -bb -n -r1 -r2 -r3 -r4 -spin
                   if (
@@ -13435,7 +13633,9 @@ Usage: ${newUsage}/5${warningText}`;
                         `▸ \`${p} s -r4\`  🪞 Flip horizontal\n\n` +
                         `*── Search ──*\n` +
                         `▸ \`${p} s [count] <query>\`  Search Pinterest\n` +
-                        `   _e.g._ \`${p} s 5 goku\``;
+                        `   _e.g._ \`${p} s 5 goku\`\n` +
+                        `▸ \`${p} s -p [count] <query>\`  📦 Send results as ONE sticker pack\n` +
+                        `   _e.g._ \`${p} s -p 15 goku\` (_max 30_)`;
                       return await sock.sendMessage(chatId, { text: usage });
                     }
 
