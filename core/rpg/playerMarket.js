@@ -27,6 +27,7 @@ const TAX_RATE = 0.10;        // unified sale tax
 let _migrated = false;
 
 function ZENI() { return economy.getZENI ? economy.getZENI() : '💰'; }
+function P() { try { return require('../botConfig').getPrefix() || '.'; } catch (e) { return '.'; } }
 
 function newListingId() {
   return 'M-' + crypto.randomBytes(4).toString('hex').toUpperCase();
@@ -118,8 +119,8 @@ async function cmdBrowse(senderJid, reply, args = []) {
   ]);
   if (active.length === 0) {
     return reply(kind
-      ? `📭 No ${kind} listings right now. Sellers: \`${'.'}market sell ${kind} <#> <price>\``
-      : '📭 The player market is empty. Be the first seller: `.market sell item <bag#> <price>`'), true;
+      ? `📭 No ${kind} listings right now. Sellers: \`${P()} market sell ${kind === 'item' ? 'item <bag#>' : kind} <...> <price>\``
+      : `📭 The player market is empty. Be the first seller: \`${P()} market sell item <bag#> <price>\``), true;
   }
   const KIND_ICON = { item: '📦', rune: '💎', summon: '🐉' };
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -147,9 +148,9 @@ async function cmdSell(senderJid, reply, args = []) {
   if (!['item', 'rune', 'summon'].includes(what)) {
     return reply(
       `❌ Usage:\n` +
-      `• \`market sell item <bagSlot#> <price> [qty]\`\n` +
-      `• \`market sell rune <runeId> <price>\`\n` +
-      `• \`market sell summon <summon#|id> <price>\`\n` +
+      `• \`${P()} market sell item <bagSlot#> <price> [qty]\`\n` +
+      `• \`${P()} market sell rune <runeId> <price>\`\n` +
+      `• \`${P()} market sell summon <summon#|id> <price>\`\n` +
       `_Slot numbers come from your bag command. 10% tax on sale._`
     ), true;
   }
@@ -482,10 +483,11 @@ async function cmdMy(senderJid, reply) {
 
 // Legacy help text (surfaced by old command menus)
 function unifiedHelp() {
+  const p = P();
   return `🏪 *PLAYER MARKET* — one market for everything\n\n` +
-    `• \`market\` - browse all listings\n• \`market items|runes|summons\` - browse by kind\n` +
-    `• \`market sell item <bag#> <price> [qty]\`\n• \`market sell rune <runeId> <price>\`\n` +
-    `• \`market sell summon <#|id> <price>\`\n• \`market buy <id|#>\` · \`market cancel <id>\` · \`market my\`\n\n_10% tax on sale. Old commands (listitem, rune sell, summon market ...) still work._`;
+    `• \`${p} market\` - browse all listings\n• \`${p} market items|runes|summons\` - browse by kind\n` +
+    `• \`${p} market sell item <bag#> <price> [qty]\`\n• \`${p} market sell rune <runeId> <price>\`\n` +
+    `• \`${p} market sell summon <#|id> <price>\`\n• \`${p} market buy <id|#>\` · \`${p} market cancel <id>\` · \`${p} market my\`\n\n_10% tax on sale. Old commands (listitem, rune sell, summon market ...) still work._`;
 }
 
 module.exports = { cmdBrowse, cmdSell, cmdBuy, cmdCancel, cmdMy, ensureMigrated, unifiedHelp, newListingId };
