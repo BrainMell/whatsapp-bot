@@ -201,8 +201,23 @@ async function opAstickerFrames(buf) {
   return frames;
 }
 
+// 2026-10-11 lifecycle fix (Box2 swap re-inflation 378MB -> 1170MB): this
+// worker used to be IMMORTAL (`setInterval(() => {}, 1<<30)` - "the parent
+// kills us"). But a SIGKILLed parent (liveness canary / pm2 cap) can't kill
+// anything - each parent death orphaned one ~30-100MB worker to ppid=1, and
+// 13 of them parked ~750MB in swap overnight. Swap pressure then stalls the
+// event loop, which triggers the canary again - a self-feeding loop.
+// Now the worker self-recycles: (1) if the IPC channel closes (parent died),
+// exit within seconds - an orphan cannot ever receive another job; (2) after
+// IDLE_EXIT_MS with zero jobs, exit 0 - the parent re-forks on demand and its
+// exit handler treats code 0 as a clean recycle (no poison, no circuit).
+
+const IDLE_EXIT_MS = Math.max(30000, parseInt(process.env.SHARP_WORKER_IDLE_MS || '600000', 10));
+let lastActivity = Date.now();
+
 process.on('message', async (msg) => {
   if (!msg || typeof msg.id !== 'number' || typeof msg.op !== 'string') return;
+  lastActivity = Date.now();
   const t0 = Date.now();
   // per-op watchdog: a wedged op kills THIS child so the parent respawns a
   // clean one - the parent's own timeout is the outer safety net.
@@ -222,5 +237,17 @@ process.on('message', async (msg) => {
   }
 });
 
-// stay alive; the parent kills us on timeout/shutdown
-setInterval(() => {}, 1 << 30);
+// self-recycling keepalive (see lifecycle note at top):
+//   - channel closed (orphaned by a SIGKILLed parent) -> exit within seconds
+//   - idle past IDLE_EXIT_MS -> notify the parent (id:-2) then exit 0
+setInterval(() => {
+  if (!process.connected) {
+    try { process.exit(0); } catch (e) {}
+    return;
+  }
+  if (Date.now() - lastActivity > IDLE_EXIT_MS) {
+    try { process.send({ id: -2, op: 'idle-exit' }); } catch (e) {}
+    // small delay so the detach notice flushes over IPC before we vanish
+    setTimeout(() => { try { process.exit(0); } catch (e) {} }, 250);
+  }
+}, 5000);

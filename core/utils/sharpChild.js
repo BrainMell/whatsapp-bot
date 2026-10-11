@@ -51,6 +51,13 @@ const exitTimes = [];      // abnormal exit timestamps (circuit breaker)
 let circuitOpenUntil = 0;
 let _stats = { jobs: 0, done: 0, rejects: 0, timeouts: 0, respawns: 0, poisoned: 0, circuitOpens: 0 };
 
+// 2026-10-11 orphan prevention: on ANY graceful parent exit (pm2 stop, SIGINT,
+// process.exit) reap the worker synchronously. SIGKILL can't be caught - that
+// path is covered by the worker's own channel-closed self-exit instead.
+process.on('exit', () => {
+  if (child) { try { child.kill('SIGKILL'); } catch { /* already gone */ } }
+});
+
 function sha256(buf) {
   return crypto.createHash('sha256').update(buf).digest('hex');
 }
@@ -82,6 +89,15 @@ function spawnWorker() {
   });
   child.on('message', (msg) => {
     if (!msg || typeof msg.id !== 'number') return;
+    // id:-2 = worker idle-exit notice: detach FIRST so the next job re-forks
+    // instead of being sent into a channel that is about to close (2026-10-11
+    // worker self-recycle lifecycle). No pending jobs can exist here - the
+    // worker only idles out after 10 jobless minutes.
+    if (msg.id === -2) {
+      if (child) { try { child.disconnect && child.disconnect(); } catch { /* racing exit */ } }
+      child = null;
+      return;
+    }
     const job = pending.get(msg.id);
     if (!job) return;
     pending.delete(msg.id);

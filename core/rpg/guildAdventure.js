@@ -4780,6 +4780,10 @@ async function checkCombatEnd(sock, state, sessionKey) {
 }
 
 async function processCombatTurn(sock, sessionKey) {
+  // 🫀 liveness v2: automated combat turn = a match is LIVE. The canary holds
+  // its stall-kill for this grace window instead of SIGKILLing mid-quest
+  // (2026-10-11: a recovering 78s memory stall ate a player's quest turn).
+  try { require('../utils/livenessCanary').noteBattleActivity(); } catch (e) {}
   const state = gameStates.get(sessionKey);
   if (!state || !state.inCombat) return;
 
@@ -10363,6 +10367,10 @@ const handleCombatAction = async (
   actionType,
   target,
 ) => {
+  // 🫀 liveness v2: a player acted in a live match - feed the canary's
+  // battle-grace window (quest / ruins / tutorial / abyss-scene combat all
+  // route through here + processCombatTurn).
+  try { require('../utils/livenessCanary').noteBattleActivity(); } catch (e) {}
   const state = getGameState(chatId, senderJid);
   if (!state || !state.inCombat) {
     return "❌ Not in combat!";
