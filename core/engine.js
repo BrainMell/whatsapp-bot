@@ -5924,6 +5924,14 @@ What to do:
           );
         }
 
+        // 3.5 💡 Phase C (2026-10-11): deliver pending tutorial-unlock cards.
+        // Milestone crossings are queued by progression.addXP (state-only);
+        // the cards go out on the player's next interaction - this hook fires
+        // on every player message, so delivery is at most one message late.
+        try {
+          await require('./rpg/tutorial').deliverPendingUnlocks(userId, sock, chatId);
+        } catch (e) { /* never break the interaction path */ }
+
         // 4. 💡 2026-09-12: adventurer RANK-UP → ROYAL DECREE parchment card
         // (same family as the Royal Decree profile card). updateAdventurerRank is
         // promote-if-higher, so whichever system checks first (dungeon summary,
@@ -11919,20 +11927,23 @@ _💡 Reply with another number from your search list!_`.trim();
                       // 💡 NEW PLAYER TUTORIAL (2026-10-03): `.j tutorial start`
                       // launches the interactive hands-on version (messages land
                       // in this chat; best experienced in DMs).
-                      if ((cmdArgs[1] || "").toLowerCase() === "start") {
-                        try {
-                          const tut = require("./rpg/tutorial");
-                          const res = await tut.handleDM(sock, senderJid, chatId, "tutorial start", BOT_MARKER, { prefix: botConfig.getPrefix() });
-                          if (res && res.text) await sock.sendMessage(chatId, { text: BOT_MARKER + res.text });
-                          if (cmdArgs[2] !== "silent") {
-                            await sock.sendMessage(chatId, { text: BOT_MARKER + `💡 Tip: run the tutorial in my DMs for the cleanest experience.` });
-                          }
-                        } catch (e) {
-                          console.error("[Tutorial] start error:", e.message);
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Tutorial could not start - try again in a moment." });
+                      // 💡 Phase C (2026-10-11): pass-through of the FULL arg
+                      // string - `tutorial <track>`, `tutorial list`,
+                      // `tutorial start <track>` all route into the track machine.
+                      try {
+                        const tut = require("./rpg/tutorial");
+                        const tutArgStr = cmdArgs.slice(1).filter(a => a !== "silent").join(" ");
+                        const res = await tut.handleDM(sock, senderJid, chatId, "tutorial " + tutArgStr, BOT_MARKER, { prefix: botConfig.getPrefix() });
+                        if (res && res.text) await sock.sendMessage(chatId, { text: BOT_MARKER + res.text });
+                        if (cmdArgs[2] !== "silent") {
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + `💡 Tip: run tutorials in my DMs for the cleanest experience.` });
                         }
+                      } catch (e) {
+                        console.error("[Tutorial] start error:", e.message);
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Tutorial could not start - try again in a moment." });
                         return;
                       }
+                      return; // tutorial verb handled (track menu / begin / list)
                       let msg = `🎓 *RPG ADVENTURE GUIDE* 🎓\n\n`;
                       msg += `Welcome to the legend! Here is how to navigate your new life:\n\n`;
                       msg += `━━━━━━━━━━━━━━━\n`;

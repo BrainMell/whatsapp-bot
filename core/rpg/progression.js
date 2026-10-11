@@ -192,6 +192,8 @@ function getUser(userId) {
                 mainUser2.skillPoints = (mainUser2.skillPoints || 0) + skillPointsGained;
             }
             console.log(`[Progression] Forward level-up sync for ${userId}: Lv.${oldLevel} → Lv.${p.level} (+${levelUps.length} levels, +${statPointsGained} stat pts, +${skillPointsGained} skill pts)`);
+            // 💡 Phase C: milestone tutorial track unlocks (self-healing path)
+            try { require('./tutorial').recordLevelUps(userId, levelUps); } catch (e) { /* non-fatal */ }
             economy.saveUser(userId);
         }
     }
@@ -287,6 +289,10 @@ function addXP(userId, amount = 10, source = 'Unknown') {
             mainUser.skillPoints = (mainUser.skillPoints || 0) + skillPointsGained;
             economy.saveUser(userId);
         }
+        
+        // 💡 Phase C (2026-10-11): milestone tutorial track unlocks. Pure state
+        // mutation (no I/O beyond the save) - can never break the XP path.
+        try { require('./tutorial').recordLevelUps(userId, levelUps); } catch (e) { /* non-fatal */ }
         
         return { leveledUp: true, oldLevel, newLevel: user.level, levelsGained: levelUps.length, statPointsGained, skillPointsGained, xpGained: amount, source };
     }
