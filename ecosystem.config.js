@@ -26,13 +26,18 @@
 //                         3 processes running them = 3x tax / 3x regen.
 //   START_DELAY_MS      - stagger cold boots so WhatsApp sessions
 //                         never reconnect simultaneously (same-IP limit).
-//   cron_restart        - STAGGERED per tenant (04:30 jake / 04:45 subaru):
-//                         simultaneous same-IP relogins burn the relogin
-//                         budget and can trigger hours-long 408 storms.
+//   cron_restart        - REMOVED 2026-10-11: raw pm2 cron restarts killed
+//                         any in-memory match in progress at 04:30/04:45 with
+//                         zero activity checks ("can't play a full game without
+//                         a restart"). Replaced by the MATCH-AWARE gated daily
+//                         restart: crontab 05:25 UTC ->
+//                         scripts/gated_daily_restart.sh (APPS=wa-jake,wa-subaru)
+//                         - chat-quiet + no fresh AbyssRun, skips today when
+//                         players are still live. The 15s sleep in restart_all
+//                         keeps the same-IP relogin stagger this cron once
+//                         provided.
 //   max_memory_restart  - per-tenant ceiling (shared process sat at
 //                         380-450MB; a single tenant idles ~100-150MB).
-//   cron_restart 04:30  - daily off-peak restart bounds the slow RSS
-//                         creep (replaces the old crontab line).
 //   --heapsnapshot-signal=SIGUSR2 - `pm2 trigger`-less leak triage:
 //                         kill -USR2 <pid> writes a .heapsnapshot for
 //                         heap analysis without killing the session.
@@ -61,7 +66,8 @@ module.exports = {
       name: 'wa-jake',
       out_file: '~/.pm2/logs/wa-jake-out.log',
       error_file: '~/.pm2/logs/wa-jake-error.log',
-      cron_restart: '30 4 * * *',
+      // cron_restart REMOVED (2026-10-11) - see header. Gated daily restart
+      // via crontab + scripts/gated_daily_restart.sh (match-aware).
       env: {
         NODE_ENV: 'production',
         BOT_INSTANCE: 'Jake',
@@ -75,7 +81,8 @@ module.exports = {
       name: 'wa-subaru',
       out_file: '~/.pm2/logs/wa-subaru-out.log',
       error_file: '~/.pm2/logs/wa-subaru-error.log',
-      cron_restart: '45 4 * * *',
+      // cron_restart REMOVED (2026-10-11) - see header. Gated daily restart
+      // via crontab + scripts/gated_daily_restart.sh (match-aware).
       env: {
         NODE_ENV: 'production',
         BOT_INSTANCE: 'Subaru',
