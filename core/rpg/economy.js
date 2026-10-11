@@ -254,9 +254,53 @@ async function saveUser(userId) {
         }
 
         const now = new Date();
+        // 💡 FIX 2026-10-11 (owner: "equipped items revert to old gear —
+        // Hive-Core Band -> Iron Ring, Grips of the Forgotten -> Dark Matter
+        // Gauntlets, wand -> Necrotic Carver, amulet stuck on Lucky Charm"):
+        // the stale-guard merge PROTECTED the DB on the merge path, but the
+        // write itself was still a WHOLE-DOCUMENT $set. Any process whose
+        // cache was stale could therefore revert fields it never touched
+        // (jake/subaru hold full user copies; their 60s regen ticks saved
+        // whole docs). Verified live: wa-joker's 10:38 merge log showed
+        // "overlay: [equipment, history, ...]" — after that, the player's
+        // freshly equipped items were gone from the DB AND from her inventory
+        // (equip removes the new item, so the reversion DESTROYED them).
+        //
+        // THE FIX: write ONLY the fields this process actually changed since
+        // its baseline (diff-based field-level $set). A process with a stale
+        // cache now writes an EMPTY diff for untouched fields — it can no
+        // longer revert anything it didn't modify. Untouched fields simply
+        // are not in the update. Deletions (e.g. the equipment.weapon
+        // migration) become $unset operations.
+        let writeSet;
+        let unsetSet = {};
+        let base = {};
+        if (meta) {
+            try { base = JSON.parse(meta.baseJson || '{}'); } catch (e) { base = {}; }
+            writeSet = {};
+            for (const k of Object.keys(payload)) {
+                if (!Object.prototype.hasOwnProperty.call(base, k)) {
+                    writeSet[k] = payload[k]; // added by us
+                    continue;
+                }
+                let same = false;
+                try { same = isDeepStrictEqual(jsonNorm(payload[k]), base[k] === undefined ? null : base[k]); } catch (e) { same = false; }
+                if (!same) writeSet[k] = payload[k]; // genuinely changed by us
+            }
+            for (const k of Object.keys(base)) {
+                if (!Object.prototype.hasOwnProperty.call(payload, k)) unsetSet[k] = "";
+            }
+        } else {
+            // no baseline (runtime-created user / unserializable snapshot):
+            // behave exactly as before (whole doc). New users have no
+            // sibling contention, so this stays safe.
+            writeSet = payload;
+        }
+        const updateDoc = { $set: { ...writeSet, updatedAt: now } };
+        if (Object.keys(unsetSet).length) updateDoc.$unset = unsetSet;
         const after = await User.findOneAndUpdate(
             { userId: canonicalId },
-            { $set: { ...payload, updatedAt: now } },
+            updateDoc,
             { upsert: true, returnDocument: 'after' }
         );
         // our next save's baseline = the doc AS WRITTEN, so a later sibling

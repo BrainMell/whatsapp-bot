@@ -8086,6 +8086,18 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 sticker: 90000,  // media download + webp convert + send
                 ai: 120000,      // LLM reply (long completions)
                 imagine: 150000, // image generation services
+                // 💡 FIX 2026-10-11 (owner: "the 45 second thing sending even
+                // when the bot is working"): both commands legitimately run
+                // longer than 45s when the work is REAL — `.j s` sends up to 30
+                // stickers serially (~3-8s EACH = 90-240s), tovid converts a
+                // 73+-frame animated webp through sharp+ffmpeg+upload. The
+                // generic ceiling fired its false "backend service" warning
+                // MID-DELIVERY (screenshots 2026-10-11 11:51/11:59/12:07).
+                // Both handlers ALSO extend their own window per-step below
+                // (rolling 30s of silence = real stall), so these map values
+                // are just the base ceiling.
+                s: 240000,       // sticker search: up to 30 × (download+convert+send)
+                tovid: 180000,   // animated webp → gif → mp4 → upload
               };
               // 💡 FIX 2026-07-29: Capture context for the timeout catch handler.
               const _cmdContext = { primaryCmd: null, senderJid: null, chatId: null, txt: null, timeoutMs: null };
@@ -10845,6 +10857,21 @@ _💡 Reply with another number from your search list!_`.trim();
                             `❌ You need to register first!\n\nType: \`${currentPrefix} register <nickname>\``,
                         });
                         return;
+                      }
+
+                      // 💡 SOLO RESUME (2026-10-11, owner: "add a .j solo resume,
+                      // like the abyss resume just incase combat cuts"): rebuild a
+                      // solo fight that was cut by a restart from the
+                      // SoloCombatSnapshot doc (saved at fight start + every action).
+                      if (cmdArgs[1] === "resume" || cmdArgs[1] === "continue") {
+                        const _resumeResult = await guildAdventure.resumeSoloCombat(
+                          sock,
+                          chatId,
+                          senderJid,
+                        );
+                        return sock.sendMessage(chatId, {
+                          text: BOT_MARKER + (_resumeResult?.message || "❌ Could not resume."),
+                        });
                       }
 
                       if (cmdArgs[1] === "stop" || cmdArgs[1] === "end") {
@@ -13682,12 +13709,49 @@ Usage: ${newUsage}/5${warningText}`;
                       const customAuthor = system.get(`sticker_author_name_${BOT_ID}`);
 
                       let successCount = 0;
+                      let skippedTooBig = 0;
 
                       for (let i = 0; i < images.length; i++) {
                         try {
-                          // Download image
+                          // 💡 FIX 2026-10-11 (owner: "45s thing + too big to
+                          // convert"): (a) keep a rolling 30s silence window on
+                          // the command watchdog while stickers keep flowing —
+                          // each successful send buys another 30s, so the 45s
+                          // timeout can only fire on a REAL stall now; (b) HEAD
+                          // -probe each source first and skip anything bigger
+                          // than WhatsApp's useful sticker range — a 30MB 8K
+                          // wallpaper used to stall the download AND the
+                          // conversion for nothing.
+                          if (typeof _cmdContext !== "undefined" && _cmdContext) {
+                            _cmdContext.timeoutMs =
+                              Date.now() - _cmdStartTime + 30000;
+                          }
+                          try {
+                            const head = await axios.head(images[i], {
+                              timeout: 6000,
+                              maxRedirects: 4,
+                            });
+                            const len = parseInt(head.headers["content-length"], 10);
+                            const ctype = String(head.headers["content-type"] || "");
+                            if (ctype && !ctype.startsWith("image/")) {
+                              skippedTooBig++;
+                              continue;
+                            }
+                            if (len && len > 8 * 1024 * 1024) {
+                              skippedTooBig++;
+                              continue;
+                            }
+                          } catch (headErr) {
+                            // No HEAD support / slow host: fall through and let
+                            // the capped GET below decide.
+                          }
+
+                          // Download image (size-capped + hard timeout so one
+                          // dead host can't stall the whole batch)
                           const response = await axios.get(images[i], {
                             responseType: "arraybuffer",
+                            timeout: 15000,
+                            maxContentLength: 10 * 1024 * 1024,
                           });
                           const buffer = Buffer.from(response.data);
 
@@ -13723,11 +13787,17 @@ Usage: ${newUsage}/5${warningText}`;
                           text:
                             BOT_MARKER + `✅ Sent ${successCount} stickers!`,
                         });
+                      } else if (successCount > 0) {
+                        await sock.sendMessage(chatId, {
+                          text:
+                            BOT_MARKER +
+                            `⚠️️ Sent ${successCount}/${images.length} stickers (some failed${skippedTooBig ? ` — ${skippedTooBig} too big for stickers` : ""})`,
+                        });
                       } else {
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
-                            `⚠️️ Sent ${successCount}/${images.length} stickers (some failed)`,
+                            `❌ No usable results (sources too big or unreachable). Try a different search.`,
                         });
                       }
                     } catch (err) {
@@ -13955,6 +14025,15 @@ Usage: ${newUsage}/5${warningText}`;
                       if (!buffer || buffer.length === 0)
                         throw new Error("Empty media buffer");
 
+                      // 💡 FIX 2026-10-11: rolling 30s silence window on the
+                      // command watchdog — tovid legitimately takes >45s on big
+                      // animated stickers, the false "backend service" warning
+                      // fired MID-conversion (screenshot 12:07). Each completed
+                      // step buys another 30s; only a REAL stall trips it now.
+                      if (typeof _cmdContext !== "undefined" && _cmdContext) {
+                        _cmdContext.timeoutMs = Date.now() - _cmdStartTime + 30000;
+                      }
+
                       if (!fs.existsSync("./temp")) fs.mkdirSync("./temp");
                       fs.writeFileSync(tempSticker, buffer);
 
@@ -13989,11 +14068,17 @@ Usage: ${newUsage}/5${warningText}`;
                         const toGif = `"${FFMPEG_PATH}" -i "${tempSticker}" -vf "fps=20,scale=512:-1:flags=lanczos" -y "${tempGif}"`;
                         await execPromise(toGif);
                       }
+                      if (typeof _cmdContext !== "undefined" && _cmdContext) {
+                        _cmdContext.timeoutMs = Date.now() - _cmdStartTime + 30000;
+                      }
 
                       // 2. GIF -> MP4 (ffmpeg decodes GIF fine)
                       if (fs.existsSync(tempGif) && !fs.existsSync(tempVideo)) {
                         const toMp4 = `"${FFMPEG_PATH}" -i "${tempGif}" -movflags faststart -pix_fmt yuv420p -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" -y "${tempVideo}"`;
                         await execPromise(toMp4);
+                      }
+                      if (typeof _cmdContext !== "undefined" && _cmdContext) {
+                        _cmdContext.timeoutMs = Date.now() - _cmdStartTime + 45000; // upload needs headroom
                       }
 
                       // 3. Last resort: direct WebP -> MP4 (only ever worked for
@@ -21784,13 +21869,16 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                       const _abyssCombatState = guildAdventure.getGameState(`${chatId}_${senderJid}`);
                       const _abyssInCombat = _abyssCombatState?.inCombat === true;
                       const _abyssReadOnly = ['status', 'info', 'leaderboard', 'lb', 'best', 'help', 'admin', 'mod'];
+                      // 💡 CO-OP: 'join' is intentionally allowed DURING combat —
+                      // it drops the joiner into the live party fight.
+                      const _abyssJoinable = ['join'];
                       // 2026-09-15 (owner: "abyss retreat/leave doesnt work ... wait for encounter to end"):
                       // retreat/extract/leave/exit/flee ARE the extraction path - they must work
                       // mid-battle too (combat flee is blocked in the Abyss, so gating them here
                       // left the player with NO way out of a fight). Only state-mutating subs
                       // (enter/resume/collect/choose/skip) stay gated during active combat.
                       const _abyssExtractors = ['retreat', 'extract', 'leave', 'exit', 'flee'];
-                      if (_abyssInCombat && !_abyssReadOnly.includes(abyssSub) && !_abyssExtractors.includes(abyssSub)) {
+                      if (_abyssInCombat && !_abyssReadOnly.includes(abyssSub) && !_abyssExtractors.includes(abyssSub) && !_abyssJoinable.includes(abyssSub)) {
                         return sock.sendMessage(chatId, { text: BOT_MARKER + `⚔️ You are in active combat! Finish the round with \`${botConfig.getPrefix()} combat attack\`, or extract now with \`${botConfig.getPrefix()} abyss retreat\` (keeps 100% loot).` });
                       }
                       // Mid-combat extraction: defuse the live encounter BEFORE the retreat runs,
@@ -21832,6 +21920,8 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                         msg += `• \`${botConfig.getPrefix()} combat flee\` - flee (penalty)\n\n`;
                         msg += `*Abyss Commands:*\n`;
                         msg += `• \`${botConfig.getPrefix()} abyss enter\` - start a run (12h cooldown; entry obeys the universal 6h gate: 5h locked + 1h open)\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss coop\` - start a CO-OP run (up to 4 players, enemies scale up)\n`;
+                        msg += `• \`${botConfig.getPrefix()} abyss join\` - join the open co-op run (any time)\n`;
                         msg += `• \`${botConfig.getPrefix()} abyss resume\` - restart combat after disconnect\n`;
                         msg += `• \`${botConfig.getPrefix()} abyss collect\` - collect treasure\n`;
                         msg += `• \`${botConfig.getPrefix()} abyss choose <1/2>\` - event choice\n`;
@@ -21844,6 +21934,104 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                         msg += `*Score:* deepestFloor × 100 + monstersKilled × 5`;
                         await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                         return;
+                      }
+
+                      // 💡 CO-OP ABYSS (2026-10-11, owner: "add a co-op mode for
+                      // the abyss"): .j abyss coop opens a shared run (host),
+                      // .j abyss join joins the newest open run.
+                      if (abyssSub === 'coop' || abyssSub === 'party') {
+                        try {
+                          const economy = require('./rpg/economy');
+                          const progression = require('./rpg/progression');
+                          const user = economy.getUser(senderJid);
+                          if (!user) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to register first! Type `.j register <nickname>`.' });
+                          }
+                          const userClassObj = economy.getUserClass(senderJid);
+                          const classIdForAbyss = userClassObj?.id || user.class || 'FIGHTER';
+                          const baseStats = progression.getBaseStats(senderJid, classIdForAbyss);
+                          const playerStats = {
+                            hp: baseStats.hp,
+                            maxHp: baseStats.hp,
+                            energy: baseStats.maxEnergy || 100,
+                            maxEnergy: baseStats.maxEnergy || 100,
+                            atk: baseStats.atk || 10,
+                            def: baseStats.def || 5,
+                            spd: baseStats.spd || 5,
+                          };
+                          const result = await abyssSystem.startCoopRun(senderJid, playerStats, { playerClassId: classIdForAbyss });
+                          if (!result.success) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          }
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          // Host's floor 1 starts immediately (party can still join
+                          // mid-fight — joining pushes them into the live fight)
+                          const run = result.run;
+                          if ((run.currentEncounterType === 'combat' || run.currentEncounterType === 'wild_summon') && run.currentEnemy) {
+                            try {
+                              await guildAdventure.startAbyssCoopCombat(sock, chatId, senderJid, run.currentEnemy, run, 1);
+                            } catch (combatErr) {
+                              console.error('[Abyss] coop combat failed to start:', combatErr.message);
+                              return sock.sendMessage(chatId, { text: BOT_MARKER + '⚠️ Co-op run started but combat failed to initialize. Use `.j abyss resume` to retry.' });
+                            }
+                          }
+                          return;
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
+                      }
+
+                      if (abyssSub === 'join') {
+                        try {
+                          const economy = require('./rpg/economy');
+                          const user = economy.getUser(senderJid);
+                          if (!user) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to register first! Type `.j register <nickname>`.' });
+                          }
+                          const result = await abyssSystem.joinCoopRun(senderJid);
+                          if (!result.success) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                          }
+                          const run = result.run;
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + `${result.message}\n_Host: +${(run.hostJid || '').split('@')[0]}_` });
+                          // If the party is already mid-fight, drop the new member
+                          // straight INTO the live combat at full HP.
+                          const hostKey = `${chatId}_${run.hostJid}`;
+                          const live = guildAdventure.getGameState(hostKey);
+                          if (live && live.isAbyss && live.inCombat && !live.players.some((p) => p.jid === senderJid)) {
+                            const userClassObj2 = economy.getUserClass(senderJid);
+                            const classId2 = userClassObj2?.id || user.class || 'FIGHTER';
+                            const baseStats2 = require('./rpg/progression').getBaseStats(senderJid, classId2);
+                            live.players.push({
+                              jid: senderJid,
+                              name: user.nickname || economy.getDisplayName(senderJid),
+                              class: userClassObj2 || { id: 'FIGHTER', name: 'Fighter', icon: '⚔️' },
+                              isDead: false,
+                              stats: {
+                                hp: baseStats2.hp, maxHp: baseStats2.hp,
+                                atk: baseStats2.atk, def: baseStats2.def, mag: baseStats2.mag,
+                                spd: baseStats2.spd, luck: baseStats2.luck, crit: baseStats2.crit,
+                                dmgReduction: baseStats2.dmgReduction || 0, evasion: baseStats2.evasion || 0,
+                                energy: baseStats2.maxEnergy || 100, maxEnergy: baseStats2.maxEnergy || 100,
+                              },
+                              equipment: require('./rpg/inventorySystem').getEquipment(senderJid) || {},
+                              adventurerRank: user.adventurerRank || 'F',
+                              level: require('./rpg/progression').getLevel(senderJid),
+                              currentHP: baseStats2.hp,
+                              mana: 100, maxMana: 100,
+                              xpEarned: 0, goldEarned: 0,
+                              combatStats: { damageDealt: 0, damageTaken: 0, turnsTaken: 0 },
+                              pendingActions: {}, buffs: [], statusEffects: [], actionGauge: 0,
+                            });
+                            // Note: the enemy was scaled for the party size at fight
+                            // start; a mid-fight joiner tips the odds in the party's
+                            // favor (intended — rescuing a doomed floor feels GOOD).
+                            await sock.sendMessage(chatId, { text: BOT_MARKER + `⚔️ ${user.nickname || 'You'} dropped into the ONGOING fight at full HP!` });
+                          }
+                          return;
+                        } catch (e) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
+                        }
                       }
 
                       // .g abyss enter - start a run
@@ -22058,7 +22246,11 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '⚠️ You are already in combat! Use `${botConfig.getPrefix()} combat attack` to fight.' });
                           }
                           await sock.sendMessage(chatId, { text: BOT_MARKER + `⚔️ *Resuming Abyss combat on floor ${run.currentFloor}...*` });
-                          await guildAdventure.startAbyssCombat(sock, chatId, senderJid, run.currentEnemy, run, run.currentFloor);
+                          if (run.isCoop) {
+                            await guildAdventure.startAbyssCoopCombat(sock, chatId, run.hostJid || senderJid, run.currentEnemy, run, run.currentFloor);
+                          } else {
+                            await guildAdventure.startAbyssCombat(sock, chatId, senderJid, run.currentEnemy, run, run.currentFloor);
+                          }
                           return;
                         } catch (e) {
                           console.error('[Abyss resume] failed:', e.message);
@@ -22075,7 +22267,17 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                           }
                           let msg = `🕳️ *ABYSS RUN STATUS*\n\n`;
                           msg += `📊 Floor: ${run.currentFloor}\n`;
-                          msg += `❤️ HP: ${run.currentHp}/${run.playerSnapshot.maxHp}\n`;
+                          // 💡 CO-OP: show the party
+                          if (run.isCoop) {
+                            const _names = (run.party || []).map((m) => `${m.name || m.jid.split('@')[0]} (${m.hp}HP)`).join(', ');
+                            msg += `👥 *Co-op Party (${(run.party || []).length}/4):* ${_names}\n`;
+                            const _me = (run.party || []).find((m) => m.jid === senderJid);
+                            if (_me) {
+                              msg += `❤️ Your HP: ${_me.hp}/${run.playerSnapshot.maxHp}\n`;
+                            }
+                          } else {
+                            msg += `❤️ HP: ${run.currentHp}/${run.playerSnapshot.maxHp}\n`;
+                          }
                           msg += `⚡ Energy: ${run.currentEnergy}/${run.playerSnapshot.maxEnergy}\n`;
                           msg += `☠️ Monsters Slain: ${run.monstersKilled}\n`;
                           msg += `👑 Bosses Slain: ${run.bossesKilled}\n\n`;

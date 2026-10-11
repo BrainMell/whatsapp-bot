@@ -423,6 +423,49 @@ function formatUptime(seconds) {
     return dDisplay + hDisplay + mDisplay + sDisplay;
 }
 
+// ============================================================
+// ⚠️ DEPLOY NOTIFY (2026-10-11, owner: "if there's gonna be a commit and a
+// restart the bot should send a message saying any active game might be
+// interrupted because an update is pushing to the GCs marked as RPG")
+// The deploy script curls this endpoint BEFORE `pm2 restart` so every
+// RPG-marked GC gets a heads-up while the bot is still connected. Fire-and-
+// forget from the deploy side: messages flush before the restart lands.
+app.use(express.json());
+app.post('/notify-deploy', async (req, res) => {
+    try {
+        const engine = require('./core/engine');
+        const sock = engine.getSock ? engine.getSock() : null;
+        if (!sock) {
+            return res.status(503).json({ ok: false, reason: 'socket-not-ready' });
+        }
+        // Process-level identity (no ALS context here) — same resolution the
+        // Guild War tick broadcast uses.
+        let botId = 'global';
+        try { botId = require('./core/utils/botInstance').resolveBotId(); } catch (e) {}
+        const system = require('./core/utils/system');
+        const gcs = system.get(`gw_rpg_gcs_${botId}`, []) || [];
+        const message = (req.body && typeof req.body.message === 'string' && req.body.message.trim())
+            ? req.body.message.trim()
+            : "⚠️ *UPDATE INCOMING* 🛠️\n\nA bot update is being pushed right now — any active game (solo quests, Abyss runs, Guild Wars) may be interrupted in the next minute or two.\n\nAfter the update: solo fights → `.j solo resume` · Abyss fights → `.j abyss resume`\n\nSorry for the bump!";
+        let sent = 0;
+        const failed = [];
+        for (const gc of gcs) {
+            try {
+                await sock.sendMessage(gc, { text: message });
+                sent++;
+                await new Promise((r) => setTimeout(r, 400)); // gentle pacing
+            } catch (e) {
+                failed.push(gc);
+            }
+        }
+        console.log(`⚠️ [DeployNotify] bot=${botId} sent=${sent}/${gcs.length} failed=${failed.length}`);
+        return res.json({ ok: true, botId, sent, total: gcs.length, failed });
+    } catch (e) {
+        console.error('[DeployNotify] error:', e.message);
+        return res.status(500).json({ ok: false, error: e.message });
+    }
+});
+
 app.listen(port, '0.0.0.0', () => {
   console.log(`📡 Keep-alive server listening on port ${port}`);
 });

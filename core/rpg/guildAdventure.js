@@ -1181,8 +1181,20 @@ const CONSUMABLES = {
     cost: 500,
     effect: "flee",
     chance: 80,
-    desc: "Allows the party to escape combat (80% chance).",
+    desc: "Allows the party to escape combat (80% chance). Useless in high-tier dungeons and deep Abyss floors.",
     icon: "💨",
+  },
+  // 💡 2026-10-11 (owner: "add an item called distraction Charm that helps
+  // escape since the smoke bomb shouldn't work in high tier dungeons... the
+  // charm should have a 50% chance of failing"): the deep-content escape
+  // option. Works EVERYWHERE (smoke bomb doesn't), but coin-flip reliability.
+  distraction_charm: {
+    name: "Distraction Charm",
+    cost: 1200,
+    effect: "flee",
+    chance: 50,
+    desc: "Whispers a lie to the dark - 50% chance to escape ANY fight, even high-tier dungeons and the deep Abyss. Fails hilariously.",
+    icon: "🧿",
   },
   bomb: {
     name: "Bomb",
@@ -1229,6 +1241,7 @@ const SHOP_LIST = [
   "phoenix_down",
   "bomb",
   "smoke_bomb",
+  "distraction_charm",
   "abyssal_detonator",
 ];
 
@@ -2684,6 +2697,9 @@ function deleteGameState(chatId, senderJid = null) {
       if (t) clearTimeout(t);
     });
   }
+  // 💡 CO-OP ABYSS: a deleted shared session releases its participant index
+  // entries (members elsewhere in chat would otherwise keep resolving a ghost).
+  try { cleanupCoopIndexForSession(key); } catch (e) {}
   gameStates.delete(key);
 }
 
@@ -4727,6 +4743,11 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   // beat (4s) gives players a moment to read the scene without feeling
   // like the enemy went AFK.
   const startDelay = state.solo ? 0 : 4000;
+  // 💡 SOLO RESUME: snapshot the fight the moment it starts so a restart
+  // mid-first-turn still leaves a resume point (refreshed every action below).
+  if (_soloSnapshotEligible(state)) {
+    saveSoloSnapshot(sessionKey).catch(() => {});
+  }
   state.timers.combatStart = setTimeout(async () => {
     try {
       if (!state.inCombat) return; // Safety check
@@ -5840,12 +5861,91 @@ async function performAction(sock, player, action, sessionKey) {
               resultMsg += `\n💀 ${target.name} has fallen!`;
             }
             break;
-          case "flee":
+          case "flee": {
+            // 💡 REWORK 2026-10-11 (owner: "the smoke bomb doesn't work at all"):
+            // ROOT CAUSE for the Abyss — the old code called endAdventure(),
+            // which knows NOTHING about abyss runs: the AbyssRun doc stayed
+            // 'active' mid-floor with no combat state, so the enemy came back
+            // at full HP on the next command and the spent bomb did nothing.
+            // Now: Abyss flees run the REAL extraction path (abyssSystem.retreat
+            // — same as .j abyss retreat: run ends, 100% loot paid out).
+            // Also implements the owner's design: smoke bomb is USELESS in
+            // high-tier content (deep Abyss floor 21+ / S-rank+ dungeons), the
+            // Distraction Charm works everywhere but fails 50% of the time.
+            const _fleeIsAbyss = !!state.isAbyss;
+            const _fleeFloor = Number(state.abyssFloor) || 0;
+            const _fleeRank =
+              typeof state.dungeonRank === "string"
+                ? state.dungeonRank.toUpperCase()
+                : "";
+            const _fleeHighTier =
+              (_fleeIsAbyss && _fleeFloor >= 21) ||
+              (!_fleeIsAbyss && ["S", "SS", "SSS", "DRAGON", "GOD"].includes(_fleeRank));
+            if (itemKey === "smoke_bomb" && _fleeHighTier) {
+              // (belt-and-braces: the parse layer blocks this BEFORE consuming
+              // — this branch only catches legacy pendingActions built before
+              // that gate shipped)
+              resultMsg += `\n💨 The smoke bomb pops... and the ${_fleeIsAbyss ? `void pressure (floor ${_fleeFloor})` : `dungeon's density (${_fleeRank}-rank)`} snuffs it instantly. There is no hiding here!`;
+              break;
+            }
+            const _chancePct = Number(item.chance) || 100;
+            if (Math.random() * 100 >= _chancePct) {
+              resultMsg += `\n✨ The ${item.name} ${itemKey === "distraction_charm" ? "shatters into useless glitter" : "puffs out harmlessly"}! (_${Math.round(_chancePct)}% escape chance_) The enemies close in!`;
+              break; // escape failed - item spent, the turn is wasted
+            }
+            if (_fleeIsAbyss) {
+              // 💡 CO-OP: a MEMBER using an escape item slips out of the PARTY
+              // only — the shared run and the fight continue for everyone else.
+              // The HOST (or a solo runner) extracts the whole run.
+              const _fleer =
+                state.players.find((p) => p.jid === player.jid) ||
+                state.players[0];
+              const _isCoopRun = !!(state.abyssRun && state.abyssRun.isCoop);
+              const _isMember = _isCoopRun && state.abyssRun.hostJid && _fleer.jid !== state.abyssRun.hostJid;
+              if (_isMember) {
+                resultMsg += `\n💨 A diversion! ${_fleer.name} slips out of the Abyss — the party fights on!`;
+                // (message itself is delivered by the generic post-switch send —
+                // no early send here, this path FALLS THROUGH to the normal
+                // turn flow so the fight continues without the leaver)
+                try {
+                  const abyssSystem = require("./abyssSystem");
+                  await abyssSystem.leaveCoopRun(_fleer.jid);
+                } catch (_leaveErr) {
+                  console.error("[Abyss] member flee failed:", _leaveErr.message);
+                }
+                // Remove from the live fight + participant index
+                state.players = state.players.filter((p) => p.jid !== _fleer.jid);
+                delete state.pendingActions[_fleer.jid];
+                cleanupCoopIndexFor(_fleer.jid);
+              } else {
+                resultMsg += `\n💨 A diversion! You slip out of the Abyss with your loot!`;
+                try {
+                  await sock.sendMessage(state.chatId, { text: resultMsg });
+                } catch (e) {}
+                const abyssSystem = require("./abyssSystem");
+                try {
+                  const _retreatResult = await abyssSystem.retreat(_fleer.jid);
+                  if (_retreatResult && _retreatResult.message) {
+                    await sock.sendMessage(state.chatId, {
+                      text: _retreatResult.message,
+                    });
+                  }
+                } catch (_retreatErr) {
+                  console.error("[Abyss] smoke-bomb retreat failed:", _retreatErr.message);
+                }
+                if (_isCoopRun) cleanupCoopIndexForSession(state.sessionKey || sessionKey);
+                state.active = false;
+                deleteGameState(sessionKey);
+                return;
+              }
+            } else {
             resultMsg += `\n💨 The smoke bomb creates a diversion! The party escapes!`;
             try {
               await sock.sendMessage(state.chatId, { text: resultMsg });
             } catch (e) {}
             return endAdventure(sock, sessionKey, false); // End without victory but alive
+            }
+          }
           case "revive":
             if (target.isDead) {
               target.isDead = false;
@@ -5938,6 +6038,13 @@ async function performAction(sock, player, action, sessionKey) {
     // cause overlapping turn processing.)
     if (state && player) {
       try { delete state.pendingActions[player.jid]; } catch (e) {}
+    }
+    // 💡 SOLO RESUME: refresh the resume point after every completed action so
+    // a restart mid-fight always restores the CURRENT turn state. Skipped when
+    // the action ended the fight (endAdventure already cleared the snapshot and
+    // inCombat is false by then).
+    if (state && state.inCombat && _soloSnapshotEligible(state)) {
+      saveSoloSnapshot(sessionKey).catch(() => {});
     }
   }
 }
@@ -7116,6 +7223,399 @@ async function startAbyssCombat(sock, chatId, senderJid, enemy, abyssRun, floor)
   return { success: true };
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// 💡 CO-OP ABYSS COMBAT (2026-10-11, owner: "add a co-op mode for the abyss")
+// Multi-player variant of startAbyssCombat: builds a combat player entity for
+// EVERY party member (host first), scales the enemy for the party size, marks
+// the state solo=false, and registers each member in _coopIndex so their
+// `.j combat …` commands resolve to the SHARED session from anywhere.
+// ═══════════════════════════════════════════════════════════════════════
+async function startAbyssCoopCombat(sock, chatId, hostJid, enemy, abyssRun, floor) {
+  const sessionKey = scopedKey(`${chatId}_${hostJid}`);
+
+  if (gameStates.has(sessionKey)) {
+    const existing = gameStates.get(sessionKey);
+    if (existing.inCombat) {
+      return { success: false, message: '❌ The party is already in combat.' };
+    }
+  }
+
+  const party = (abyssRun.party || []).filter((m) => m && m.jid);
+  if (party.length === 0) {
+    // Degenerate party (everyone left) — fall back to a host-only fight
+    party.push({ jid: hostJid, hp: abyssRun.currentHp || 0, energy: abyssRun.currentEnergy || 0 });
+  }
+
+  const players = [];
+  for (const member of party) {
+    const user = economy.getUser(member.jid);
+    if (!user) continue; // unregistered party member skips the fight
+    const userClass = economy.getUserClass(member.jid) || { id: 'FIGHTER', name: 'Fighter', icon: '⚔️' };
+    const classId = userClass?.id || (typeof user.class === 'string' ? user.class : 'FIGHTER');
+    const baseStats = progression.getBaseStats(member.jid, classId);
+    const hp = Math.max(1, Number(member.hp) || baseStats.hp);
+    const energy = Math.max(0, Number(member.energy) || baseStats.maxEnergy || 100);
+    players.push({
+      jid: member.jid,
+      name: user.nickname || user.profile?.nickname || economy.getDisplayName(member.jid),
+      class: userClass,
+      isDead: false,
+      stats: {
+        hp, maxHp: baseStats.hp,
+        atk: baseStats.atk, def: baseStats.def, mag: baseStats.mag,
+        spd: baseStats.spd, luck: baseStats.luck, crit: baseStats.crit,
+        dmgReduction: baseStats.dmgReduction || 0, evasion: baseStats.evasion || 0,
+        energy, maxEnergy: baseStats.maxEnergy || 100,
+      },
+      equipment: inventorySystem.getEquipment(member.jid) || {},
+      adventurerRank: user.adventurerRank || 'F',
+      level: progression.getLevel(member.jid),
+      currentHP: hp,
+      mana: 100, maxMana: 100,
+      xpEarned: 0, goldEarned: 0,
+      combatStats: { damageDealt: 0, damageTaken: 0, turnsTaken: 0 },
+      pendingActions: {},
+      buffs: [],
+      statusEffects: [],
+      actionGauge: 0,
+    });
+  }
+  if (players.length === 0) {
+    return { success: false, message: '❌ No registered party members found for the co-op fight.' };
+  }
+
+  // Enemy scales with party size so 4 players ≠ free win:
+  // HP +60% per extra player, ATK/DEF/MAG +15% per extra player.
+  const n = players.length;
+  const enemyHp = (enemy.stats?.hp ?? enemy.hp) * (1 + 0.6 * (n - 1));
+  const enemyMaxHp = (enemy.stats?.maxHp ?? enemy.maxHp) * (1 + 0.6 * (n - 1));
+  const scale = 1 + 0.15 * (n - 1);
+  const combatEnemy = {
+    id: enemy.id || `abyss_${floor}`,
+    name: enemy.name,
+    icon: enemy.icon || (enemy.isBoss ? '👹' : '👾'),
+    isEnemy: true,
+    isBoss: enemy.isBoss || false,
+    isWildSummon: enemy.isWildSummon || false,
+    level: enemy.level || floor,
+    spriteIndex: Math.max(0, Math.floor(Number(enemy.spriteIndex) || 0)),
+    bossId: enemy.bossId || '',
+    humanoid: enemy.humanoid || false,
+    variantTag: enemy.variantTag || null,
+    variantKind: enemy.variantKind || null,
+    dialogueFirst: enemy.dialogueFirst || false,
+    stats: {
+      hp: Math.floor(enemyHp),
+      maxHp: Math.floor(enemyMaxHp),
+      atk: Math.floor((enemy.stats?.atk ?? enemy.atk ?? 10) * scale),
+      def: Math.floor((enemy.stats?.def ?? enemy.def ?? 5) * scale),
+      spd: enemy.stats?.spd ?? enemy.spd ?? 5,
+      mag: Math.floor((enemy.stats?.mag ?? enemy.atk ?? 10) * scale),
+    },
+    currentHP: Math.floor(enemyHp),
+    maxHP: Math.floor(enemyMaxHp),
+    mana: 100, maxMana: 100,
+    archetype: enemy.archetype || (enemy.isBoss ? 'BOSS' : 'BRUTE'),
+    abilities: enemy.abilities || [],
+    statusEffects: [],
+    cooldowns: {},
+    actionGauge: 0,
+    xpReward: enemy.xpReward || 0,
+    goldReward: enemy.goldReward || 0,
+    isDead: false,
+    justDied: false,
+  };
+
+  const state = {
+    chatId,
+    players,
+    enemies: [combatEnemy],
+    inCombat: false,
+    combatProcessing: false,
+    active: true,
+    phase: 'COMBAT',
+    solo: false,
+    mode: 'ABYSS',
+    isAbyss: true,
+    abyssRun: abyssRun,
+    abyssFloor: floor,
+    encounter: 1,
+    maxEncounters: 1,
+    currentEncounterType: 'COMBAT',
+    combatRound: 0,
+    turnCount: 0,
+    pendingActions: {},
+    combatHistory: [],
+    backgroundPath: 'rpgasset/environment/spark_1-night.png',
+    stats: { monstersKilled: 0, bossesDefeated: 0, treasuresFound: 0, trapsTriggered: 0, playersRevived: 0 },
+    roundLog: [],
+    timers: {},
+    groq: null,
+    sock_ref: sock,
+    dungeonRank: 0,
+    difficulty: 0,
+    isProcessing: false,
+    isEndingCombat: false,
+    isCoopAbyss: true,
+  };
+  state.botId = botScope();
+  state.sessionKey = sessionKey;
+  gameStates.set(sessionKey, state);
+
+  // 💡 Register every member in the co-op participant index so their
+  // `.j combat …` commands resolve this shared session (same pattern the
+  // ruins room sessions use).
+  const rawKey = unscopeKey(sessionKey);
+  for (const p of players) _coopIndex.set(p.jid, rawKey);
+
+  await startCombat(sock, null, { enemies: [combatEnemy], type: 'COMBAT' }, sessionKey);
+
+  return { success: true };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 💡 SOLO COMBAT RESUME (2026-10-11, owner: "add a .j solo resume, like
+// the abyss resume just incase combat cuts")
+// A restart (deploy/crash/watchdog) wipes the in-memory gameStates Map and
+// a solo quest fight died with it — the Abyss had a resume path (its run
+// doc persists) but regular solo fights had nothing. These three functions
+// give solo fights the same contract:
+//   • saveSoloSnapshot  — upserted at fight start + after EVERY player action
+//   • resumeSoloCombat  — `.j solo resume` rebuilds the fight from the doc
+//   • clearSoloSnapshot — fired when the quest/fight ends (all end paths)
+// Solo-only by design: abyss runs already have `.j abyss resume`, co-op
+// parties and ruins rooms share live state with other players.
+// ═══════════════════════════════════════════════════════════════════════
+const SOLO_SNAPSHOT_STALE_MS = 2 * 60 * 60 * 1000; // 2h — older than this is a dead fight
+
+function _soloSnapshotEligible(state) {
+  return !!(
+    state &&
+    state.solo === true &&
+    !state.isAbyss &&
+    state.mode !== 'TUTORIAL' &&
+    state.mode !== 'RUINS' &&
+    Array.isArray(state.enemies) && state.enemies.length > 0 &&
+    Array.isArray(state.players) && state.players.length > 0 &&
+    typeof state.sessionKey === 'string'
+  );
+}
+
+async function saveSoloSnapshot(sessionKey) {
+  try {
+    const state = gameStates.get(sessionKey);
+    if (!_soloSnapshotEligible(state) || !state.inCombat) return;
+    const player = state.players[0];
+    if (!player || !player.jid) return;
+    const SoloCombatSnapshot = require('../models/SoloCombatSnapshot');
+    let botId = null;
+    try { botId = botScope(); } catch (e) {}
+    await SoloCombatSnapshot.findOneAndUpdate(
+      { userId: player.jid },
+      {
+        userId: player.jid,
+        botId,
+        chatId: state.chatId,
+        sessionKey: unscopeKey(state.sessionKey),
+        mode: state.mode || 'QUEST',
+        dungeonRank: state.dungeonRank ?? 0,
+        difficulty: state.difficulty || 0,
+        encounter: state.encounter || 1,
+        maxEncounters: state.maxEncounters || 1,
+        currentEncounterType: state.currentEncounterType || 'COMBAT',
+        backgroundPath: state.backgroundPath || '',
+        combatRound: state.combatRound || 0,
+        enemies: state.enemies.map((e) => ({
+          id: e.id, name: e.name, icon: e.icon || '👾', isEnemy: true,
+          isBoss: !!e.isBoss, level: e.level || 1, spriteIndex: e.spriteIndex || 0,
+          bossId: e.bossId || '', archetype: e.archetype || 'BRUTE',
+          abilities: e.abilities || [], rank: e.rank || state.dungeonRank,
+          stats: {
+            hp: e.stats?.hp, maxHp: e.stats?.maxHp, atk: e.stats?.atk,
+            def: e.stats?.def, spd: e.stats?.spd, mag: e.stats?.mag,
+          },
+          currentHP: e.currentHP ?? e.stats?.hp, maxHP: e.maxHP ?? e.stats?.maxHp,
+          xpReward: e.xpReward || 0, goldReward: e.goldReward || 0,
+          isDead: !!e.isDead, statusEffects: e.statusEffects || [],
+        })),
+        playerJid: player.jid,
+        playerHp: player.stats.hp,
+        playerMaxHp: player.stats.maxHp,
+        playerEnergy: player.stats.energy || 0,
+        playerMaxEnergy: player.stats.maxEnergy || 100,
+      },
+      { upsert: true, setDefaultsOnInsert: true },
+    );
+  } catch (e) {
+    // Snapshot failures must NEVER break the live fight
+    console.error('[SoloResume] save failed:', e.message);
+  }
+}
+
+async function clearSoloSnapshot(sessionKeyOrUserId) {
+  try {
+    const SoloCombatSnapshot = require('../models/SoloCombatSnapshot');
+    // Accept a raw session key ("chat_jid") or a user JID directly
+    if (sessionKeyOrUserId.includes('@')) {
+      await SoloCombatSnapshot.deleteOne({ userId: sessionKeyOrUserId });
+      return;
+    }
+    const raw = unscopeKey(sessionKeyOrUserId);
+    const jid = raw.includes('_') ? raw.slice(raw.indexOf('_') + 1) : null;
+    if (jid) await SoloCombatSnapshot.deleteOne({ userId: jid });
+  } catch (e) {
+    console.error('[SoloResume] clear failed:', e.message);
+  }
+}
+
+async function resumeSoloCombat(sock, chatId, senderJid) {
+  const SoloCombatSnapshot = require('../models/SoloCombatSnapshot');
+  const sessionKey = scopedKey(`${chatId}_${senderJid}`);
+
+  if (gameStates.has(sessionKey)) {
+    const existing = gameStates.get(sessionKey);
+    if (existing.inCombat) {
+      return { success: false, message: '⚔️ You are already in combat! Use the fight commands.' };
+    }
+  }
+
+  let snap;
+  try {
+    snap = await SoloCombatSnapshot.findOne({ userId: senderJid }).sort({ updatedAt: -1 });
+  } catch (e) {
+    return { success: false, message: '❌ Failed to look up your last fight: ' + e.message };
+  }
+  if (!snap) {
+    return { success: false, message: `❌ No interrupted solo fight found.\n_Only fights that were cut by a restart leave a resume point._` };
+  }
+  if (snap.botId && snap.botId !== botScope()) {
+    return { success: false, message: `❌ Your interrupted fight belongs to another bot (${snap.botId}). Resume it there.` };
+  }
+  const age = Date.now() - new Date(snap.updatedAt).getTime();
+  if (age > SOLO_SNAPSHOT_STALE_MS) {
+    await clearSoloSnapshot(senderJid);
+    return { success: false, message: '⌛ That fight is too old to resume (over 2 hours stale). Start a fresh quest with `.j solo <rank>`.' };
+  }
+
+  const user = economy.getUser(senderJid);
+  if (!user) return { success: false, message: '❌ You need to register first.' };
+
+  const userClass = economy.getUserClass(senderJid) || { id: 'FIGHTER', name: 'Fighter', icon: '⚔️' };
+  const classId = userClass?.id || (typeof user.class === 'string' ? user.class : 'FIGHTER');
+  const baseStats = progression.getBaseStats(senderJid, classId);
+
+  const player = {
+    jid: senderJid,
+    name: user.nickname || user.profile?.nickname || economy.getDisplayName(senderJid),
+    class: userClass,
+    isDead: false,
+    stats: {
+      hp: Math.max(1, Number(snap.playerHp) || baseStats.hp),
+      maxHp: baseStats.hp,
+      atk: baseStats.atk,
+      def: baseStats.def,
+      mag: baseStats.mag,
+      spd: baseStats.spd,
+      luck: baseStats.luck,
+      crit: baseStats.crit,
+      dmgReduction: baseStats.dmgReduction || 0,
+      evasion: baseStats.evasion || 0,
+      energy: Math.max(0, Number(snap.playerEnergy) || baseStats.maxEnergy || 100),
+      maxEnergy: baseStats.maxEnergy || 100,
+    },
+    equipment: inventorySystem.getEquipment(senderJid) || {},
+    adventurerRank: user.adventurerRank || 'F',
+    level: progression.getLevel(senderJid),
+    currentHP: Math.max(1, Number(snap.playerHp) || baseStats.hp),
+    mana: 100,
+    maxMana: 100,
+    xpEarned: 0,
+    goldEarned: 0,
+    combatStats: { damageDealt: 0, damageTaken: 0, turnsTaken: 0 },
+    pendingActions: {},
+    buffs: [],
+    statusEffects: [],
+    actionGauge: 0,
+  };
+
+  // Rebuild enemies EXACTLY as they were (current HP, dead flags, statuses)
+  const restoredEnemies = (snap.enemies || []).map((e, idx) => ({
+    id: e.id || `resumed_${idx}`,
+    name: e.name || 'Enemy',
+    icon: e.icon || '👾',
+    isEnemy: true,
+    isBoss: !!e.isBoss,
+    level: e.level || 1,
+    spriteIndex: Math.max(0, Math.floor(Number(e.spriteIndex) || 0)),
+    bossId: e.bossId || '',
+    humanoid: !!e.humanoid,
+    archetype: e.archetype || 'BRUTE',
+    abilities: e.abilities || [],
+    rank: e.rank || snap.dungeonRank,
+    stats: {
+      hp: e.stats?.hp ?? e.currentHP ?? 1,
+      maxHp: e.stats?.maxHp ?? e.maxHP ?? 1,
+      atk: e.stats?.atk ?? 10,
+      def: e.stats?.def ?? 5,
+      spd: e.stats?.spd ?? 5,
+      mag: e.stats?.mag ?? 10,
+    },
+    currentHP: e.currentHP ?? e.stats?.hp ?? 1,
+    maxHP: e.maxHP ?? e.stats?.maxHp ?? 1,
+    mana: 100,
+    maxMana: 100,
+    statusEffects: e.statusEffects || [],
+    cooldowns: {},
+    actionGauge: 0,
+    xpReward: e.xpReward || 0,
+    goldReward: e.goldReward || 0,
+    isDead: !!e.isDead,
+    justDied: false,
+  }));
+  if (restoredEnemies.length === 0) {
+    await clearSoloSnapshot(senderJid);
+    return { success: false, message: '❌ The saved fight has no enemies left — start a fresh quest.' };
+  }
+
+  const state = {
+    chatId,
+    players: [player],
+    enemies: restoredEnemies,
+    inCombat: false,
+    combatProcessing: false,
+    active: true,
+    phase: 'COMBAT',
+    solo: true,
+    mode: snap.mode || 'QUEST',
+    dungeonRank: snap.dungeonRank ?? 0,
+    difficulty: snap.difficulty || 0,
+    encounter: snap.encounter || 1,
+    maxEncounters: snap.maxEncounters || 1,
+    currentEncounterType: snap.currentEncounterType || 'COMBAT',
+    combatRound: snap.combatRound || 0,
+    turnCount: 0,
+    pendingActions: {},
+    combatHistory: [],
+    backgroundPath: snap.backgroundPath || '',
+    stats: { monstersKilled: 0, bossesDefeated: 0, treasuresFound: 0, trapsTriggered: 0, playersRevived: 0 },
+    roundLog: [],
+    timers: {},
+    groq: null,
+    sock_ref: sock,
+    isProcessing: false,
+    isEndingCombat: false,
+    // 💡 flag the rebuild so the start scene says RESUMED, not BATTLE COMMENCES
+    _resumedFromSnapshot: true,
+  };
+  state.botId = botScope();
+  state.sessionKey = sessionKey;
+  gameStates.set(sessionKey, state);
+
+  await startCombat(sock, null, { enemies: restoredEnemies, type: snap.currentEncounterType || 'COMBAT', background: snap.backgroundPath || undefined }, sessionKey);
+
+  return { success: true, message: `⚔️ *SOLO FIGHT RESUMED* — round ${snap.combatRound || 0}, ${restoredEnemies.filter((e) => !e.isDead).length} enemy(ies) still standing.` };
+}
+
 /**
  * Handle Abyss victory - advance to next floor with new encounter.
  */
@@ -7153,8 +7653,35 @@ async function handleAbyssVictory(sock, sessionKey) {
 
   // Award rewards
   const rewards = abyssSystem.getFloorRewards(state.abyssFloor, state.enemies[0]?.isBoss);
-  run.lootAccumulator.xp += rewards.xp;
-  run.lootAccumulator.gold += rewards.gold;
+  // 💡 CO-OP: loot is paid PER FLOOR to EVERY party member immediately and the
+  // shared accumulator stays zeroed (retreat/death paths can't double-pay).
+  let coopPayoutMsg = '';
+  if (run.isCoop) {
+    const progression = require('./progression');
+    for (const p of state.players) {
+      try {
+        if (rewards.xp > 0) progression.awardXP(p.jid, rewards.xp, `Abyss co-op F${state.abyssFloor}`);
+        if (rewards.gold > 0) economy.addMoney(p.jid, rewards.gold, `Abyss co-op F${state.abyssFloor}`, 'abyss');
+      } catch (payErr) {
+        console.error('[Abyss] co-op per-floor payout failed for', p.jid, payErr.message);
+      }
+    }
+    // Sync every member's HP/energy back into the run doc for the next floor
+    run.lootAccumulator = { xp: 0, gold: 0, runes: [], items: [] };
+    const _party = run.party || [];
+    for (const p of state.players) {
+      const m = _party.find((x) => x.jid === p.jid);
+      if (m) { m.hp = Math.max(1, p.stats.hp); m.energy = p.stats.energy || 0; }
+    }
+    run.markModified?.('party');
+    // carry-over HP for the HOST fields (used by status display + solo fallback)
+    run.currentHp = Math.max(1, state.players[0].stats.hp);
+    run.currentEnergy = state.players[0].stats.energy || 0;
+    coopPayoutMsg = `👥 Party split: each member earned +${rewards.xp} XP, +${rewards.gold} Zeni\n`;
+  } else {
+    run.lootAccumulator.xp += rewards.xp;
+    run.lootAccumulator.gold += rewards.gold;
+  }
 
   try {
     economy.trackMissionStat(senderJid, 'kills', 1);
@@ -7237,7 +7764,11 @@ async function handleAbyssVictory(sock, sessionKey) {
     await loreDrops.sendOwn(sock, state.chatId, __packDrop);
 
     deleteGameState(sessionKey);
-    await startAbyssCombat(sock, state.chatId, senderJid, nextPackEnemy, run, state.abyssFloor);
+    if (run.isCoop) {
+      await startAbyssCoopCombat(sock, state.chatId, run.hostJid || senderJid, nextPackEnemy, run, state.abyssFloor);
+    } else {
+      await startAbyssCombat(sock, state.chatId, senderJid, nextPackEnemy, run, state.abyssFloor);
+    }
     return;
   }
 
@@ -7276,7 +7807,11 @@ async function handleAbyssVictory(sock, sessionKey) {
 
   // Build and send message
   let msg = `✅ *Floor ${state.abyssFloor} cleared!*\n`;
-  msg += `🎁 +${rewards.xp} XP, +${rewards.gold} Zeni${runeMsg}${fragmentMsg}\n`;
+  if (run.isCoop) {
+    msg += `${coopPayoutMsg}`;
+  } else {
+    msg += `🎁 +${rewards.xp} XP, +${rewards.gold} Zeni${runeMsg}${fragmentMsg}\n`;
+  }
   msg += `❤️ HP: ${Math.floor(run.currentHp)}/${Math.floor(run.playerSnapshot?.maxHp || 0)}\n\n`;
 
   // 💡 LORE DROP (victory attach point, abyss.md §4): ONE drop keyed by the
@@ -7319,14 +7854,22 @@ async function handleAbyssVictory(sock, sessionKey) {
     msg += `_Use \`${botConfig.getPrefix()} combat attack\` to fight!_`;
     try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e) {}
     await loreDrops.sendOwn(sock, state.chatId, __victoryDrop || __openerDrop);
-    await startAbyssCombat(sock, state.chatId, senderJid, encounter.enemy, run, newFloor);
+    if (run.isCoop) {
+      await startAbyssCoopCombat(sock, state.chatId, run.hostJid || senderJid, encounter.enemy, run, newFloor);
+    } else {
+      await startAbyssCombat(sock, state.chatId, senderJid, encounter.enemy, run, newFloor);
+    }
   } else if (encounter.type === 'wild_summon') {
     msg += `🐉 *Floor ${newFloor}* - Wild ${encounter.wildSummonSpecies} appeared!*\n`;
     msg += `HP: ${Math.floor(encounter.enemy.stats.hp)}/${Math.floor(encounter.enemy.stats.maxHp)}\n`;
     msg += `⚠️ _Defeat it to earn Summon Fragments!_\n`;
     msg += `_Use \`${botConfig.getPrefix()} combat attack\` to fight!_`;
     try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e) {}
-    await startAbyssCombat(sock, state.chatId, senderJid, encounter.enemy, run, newFloor);
+    if (run.isCoop) {
+      await startAbyssCoopCombat(sock, state.chatId, run.hostJid || senderJid, encounter.enemy, run, newFloor);
+    } else {
+      await startAbyssCombat(sock, state.chatId, senderJid, encounter.enemy, run, newFloor);
+    }
   } else if (encounter.type === 'treasure') {
     msg += `${encounter.treasure.icon} *Floor ${newFloor}* - ${encounter.treasure.name}\n`;
     msg += `_${encounter.treasure.desc}_\n\n`;
@@ -7827,7 +8370,11 @@ async function endCombat(sock, victory, sessionKey, expectedGen) {
         const abyssSystem = require('./abyssSystem');
         // Build a death message from the combat state
         const deathMsg = `💀 Defeated on Abyss floor ${state.abyssFloor || 1}!`;
-        const __dr = await abyssSystem.processDeath(state.players[0]?.jid, state.abyssRun, deathMsg);
+        // 💡 CO-OP: a whole-party wipe fails the SHARED run and records a
+        // leaderboard entry per member (loot was paid per floor, nothing to lose).
+        const __dr = (state.abyssRun && state.abyssRun.isCoop)
+          ? await abyssSystem.processCoopDeath(state.abyssRun, deathMsg)
+          : await abyssSystem.processDeath(state.players[0]?.jid, state.abyssRun, deathMsg);
         // 2026-10-09 14:07Z (owner: "the abyss retreat still used the old
         // image card style"): FALLEN joins the abyss-scene result card family
         // (same painter as EXTRACTED + the descent card). Text fallback kept.
@@ -7863,6 +8410,9 @@ async function endCombat(sock, victory, sessionKey, expectedGen) {
         }
       } catch (e) {
         console.error('[Abyss] processDeath after combat failed:', e.message);
+      }
+      if (state.abyssRun && state.abyssRun.isCoop) {
+        cleanupCoopIndexForSession(state.sessionKey || sessionKey);
       }
       deleteGameState(sessionKey);
       return;
@@ -8647,6 +9197,8 @@ const stopQuest = (chatId, senderJid = null, isAdmin = false) => {
         wasSolo = state.solo;
         state.active = false;
         state.phase = "IDLE";
+        // 💡 SOLO RESUME: a stopped quest drops its resume point
+        if (_soloSnapshotEligible(state)) clearSoloSnapshot(state.sessionKey || key).catch(() => {});
         if (state.timers) {
           Object.values(state.timers).forEach((timer) => {
             if (timer) clearTimeout(timer);
@@ -9577,6 +10129,11 @@ async function processVotes(sock, encounter, sessionKey) {
 async function endAdventure(sock, sessionKey, victory = true) {
   const state = gameStates.get(sessionKey);
   if (!state) { END_DEBUG(`endAdventure ABORT: no state for ${sessionKey}`); return; }
+  // 💡 SOLO RESUME: the quest is over (any ending) — drop the resume point so
+  // `.j solo resume` can't resurrect a finished fight.
+  if (_soloSnapshotEligible(state)) {
+    clearSoloSnapshot(state.sessionKey || sessionKey).catch(() => {});
+  }
   const __endT0 = Date.now();
   END_DEBUG(`endAdventure ENTER key=${sessionKey} victory=${victory} mode=${state.mode} rank=${state.dungeonRank} players=${state.players?.length} abyss=${!!state.isAbyss}`);
 
@@ -10498,6 +11055,25 @@ const handleCombatAction = async (
     }
 
     const selectedItem = usableItems[itemIndex];
+
+    // 💡 2026-10-11 (owner: "the smoke bomb shouldn't work in high tier
+    // dungeons"): block the smoke bomb at PARSE time so the item is NOT
+    // consumed and the player's turn is not wasted — they get an immediate
+    // explanation + the Distraction Charm alternative. The Distraction Charm
+    // (50% escape) is the intended tool for these fights.
+    if (selectedItem.id === "smoke_bomb") {
+      const _pIsAbyss = !!state.isAbyss;
+      const _pFloor = Number(state.abyssFloor) || 0;
+      const _pRank =
+        typeof state.dungeonRank === "string" ? state.dungeonRank.toUpperCase() : "";
+      const _pHighTier =
+        (_pIsAbyss && _pFloor >= 21) ||
+        (!_pIsAbyss && ["S", "SS", "SSS", "DRAGON", "GOD"].includes(_pRank));
+      if (_pHighTier) {
+        return `💨 The smoke bomb is useless here — ${_pIsAbyss ? `the void pressure on floor ${_pFloor} snuffs it instantly` : `this ${_pRank}-rank dungeon is too dense for any smoke to spread`}.\n\n🧿 Use a *Distraction Charm* instead (\`${botConfig.getPrefix()} combat item\` — 50% escape chance, works anywhere).`;
+      }
+    }
+
     action.itemId = selectedItem.id;
     // Optional second target for items
     const parts = (target || "").toString().split(" ");
@@ -12207,6 +12783,12 @@ module.exports = {
   },
   initAdventure,
   joinAdventure,
+  // 💡 CO-OP ABYSS (2026-10-11)
+  startAbyssCoopCombat,
+  // 💡 SOLO RESUME (2026-10-11): snapshot save/restore for restart-cut fights
+  saveSoloSnapshot,
+  resumeSoloCombat,
+  clearSoloSnapshot,
   // exported for qa_quest_flow.js (registration-window expiry simulation)
   startJourney,
   getDungeonMenu,

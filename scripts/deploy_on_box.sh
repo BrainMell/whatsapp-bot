@@ -257,6 +257,17 @@ EOF
 SKIP_RESTART="${SKIP_RESTART:-0}"
 if [ -f "$HOLD_FILE" ]; then SKIP_RESTART=1; fi
 if [ "$SKIP_RESTART" != "1" ]; then
+  # ⚠️ DEPLOY NOTIFY (2026-10-11, owner: "if there's gonna be a commit and a
+  # restart the bot should send a message saying any active game might be
+  # interrupted ... to the GCs marked as rpg"): every RUNNING local bot gets a
+  # POST /notify-deploy BEFORE the restart machinery touches it — it messages
+  # all gw_rpg_gcs_<botId> chats while the sockets are still alive. Ports
+  # 3001-3003 cover jake/joker/subaru; dead ports fail silently in <2s.
+  for DP in 3001 3002 3003; do
+    curl -s -m 8 -X POST "http://127.0.0.1:${DP}/notify-deploy" \
+      -H 'Content-Type: application/json' -d '{}' >/dev/null 2>&1 || true
+  done
+  sleep 3 # let the notices flush
   # Box topology guard (incident 2026-10-08 ~10:02Z, deploy b59d5c17):
   # wa-joker present in pm2 == Box 2. Box 2 hosts wa-joker ONLY —
   # never start/restart wa-jake/wa-subaru/wa-miner there (their auth

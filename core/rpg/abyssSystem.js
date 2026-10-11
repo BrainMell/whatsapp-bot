@@ -50,10 +50,14 @@ function botScope() {
   try { return botConfig.getBotId() || 'global'; } catch (e) { return 'global'; }
 }
 function activeRunFilter(userId) {
+  // 💡 CO-OP (2026-10-11): a run matches you if you OWN it (userId) OR you are
+  // in its party. Mongo $and holds the two independent $or groups apart.
   return {
-    userId,
     status: 'active',
-    $or: [{ botId: botScope() }, { botId: { $exists: false } }, { botId: null }],
+    $and: [
+      { $or: [{ userId }, { 'party.jid': userId }] },
+      { $or: [{ botId: botScope() }, { botId: { $exists: false } }, { botId: null }] },
+    ],
   };
 }
 
@@ -361,6 +365,206 @@ async function startRun(userId, playerStats, ctx = {}) {
     message: startMsg,
     loreDrop: startLoreDrop,
   };
+}
+
+// ─── CO-OP ABYSS (2026-10-11, owner: "add a co-op mode for the abyss") ──
+// One SHARED run doc (host-owned), up to 4 players. Loot is paid PER FLOOR to
+// every member immediately — the shared lootAccumulator stays zeroed so the
+// existing retreat/death payout paths can never double-pay a co-op run.
+const ABYSS_COOP_MAX = 4;
+const ABYSS_COOP_STALE_MS = 30 * 60 * 1000; // lobby with no activity for 30min expires
+
+async function startCoopRun(hostJid, playerStats, ctx = {}) {
+  const economy = require('./economy');
+  const progression = require('./progression');
+
+  // Host's own active run blocks (same rule as solo)
+  const ownActive = await AbyssRun.findOne({ userId: hostJid, status: 'active' });
+  if (ownActive) {
+    const age = Date.now() - new Date(ownActive.updatedAt).getTime();
+    if (age > ABYSS_COOP_STALE_MS) {
+      ownActive.status = 'completed';
+      ownActive.finalFloor = ownActive.currentFloor;
+      ownActive.finalScore = ownActive.currentFloor * 100 + (ownActive.monstersKilled || 0) * 5;
+      await ownActive.save().catch(() => {});
+    } else {
+      return { success: false, message: `❌ You already have an active Abyss run on floor ${ownActive.currentFloor}.\n_Retreat first: \`${P()} abyss retreat\`_` };
+    }
+  }
+
+  // Cooldown applies to the HOST (joiners are exempt — they enter someone else's run)
+  const lastRun = await AbyssRun.findOne({ userId: hostJid, status: { $in: ['completed', 'failed'] } }).sort({ updatedAt: -1 });
+  if (lastRun) {
+    const elapsed = Date.now() - new Date(lastRun.updatedAt).getTime();
+    if (elapsed < RUN_COOLDOWN_MS) {
+      let immune = false;
+      try {
+        const engine = require('../engine');
+        if (typeof engine.isAbyssImmune === 'function') immune = engine.isAbyssImmune(hostJid);
+      } catch (e) {}
+      if (!immune) {
+        const remaining = Math.ceil((RUN_COOLDOWN_MS - elapsed) / 3600000);
+        return { success: false, message: `❌ Abyss cooldown. Try again in ${remaining}h.` };
+      }
+    }
+  }
+
+  const hostName = economy.getDisplayName ? economy.getDisplayName(hostJid) : hostJid.split('@')[0];
+  const run = new AbyssRun({
+    userId: hostJid,
+    botId: botScope(),
+    isCoop: true,
+    hostJid,
+    party: [{ jid: hostJid, name: hostName, hp: playerStats.hp, energy: playerStats.energy }],
+    currentFloor: 1,
+    lootAccumulator: { xp: 0, gold: 0, runes: [], items: [] }, // co-op pays per floor
+    playerSnapshot: {
+      hp: playerStats.hp,
+      maxHp: playerStats.maxHp,
+      energy: playerStats.energy,
+      maxEnergy: playerStats.maxEnergy,
+      atk: playerStats.atk || 10,
+      def: playerStats.def || 5,
+      spd: playerStats.spd || 5,
+    },
+    currentHp: playerStats.hp,
+    currentEnergy: playerStats.energy,
+    status: 'active',
+  });
+
+  const encounter = generateFloorEncounter(1, { playerClassId: ctx.playerClassId });
+  if (encounter.type === 'combat' || encounter.type === 'wild_summon') {
+    run.currentEnemy = encounter.enemy;
+    run.currentEncounterType = encounter.type;
+    run.packQueue = Array.isArray(encounter.packQueue) ? encounter.packQueue : [];
+    if (encounter.type === 'wild_summon') {
+      run.currentEncounterData = { species: encounter.wildSummonSpecies, rarity: encounter.wildSummonRarity };
+    }
+  } else {
+    run.currentEnemy = null;
+    run.currentEncounterType = encounter.type;
+    run.currentEncounterData = encounter.treasure || encounter.event;
+  }
+  await run.save();
+
+  let startMsg = `🕳️ *CO-OP ABYSS RUN STARTED*\n\n`; 
+  startMsg += `👥 *Party (1/${ABYSS_COOP_MAX}):* ${hostName}\n`;
+  startMsg += `_Others descend with \`${P()} abyss join\` — join NOW or at any floor break._\n\n`;
+  if (encounter.type === 'combat') {
+    startMsg += `⚔️ *Floor 1 - ${encounter.enemy.name}*\n_Attack with \`${P()} combat attack\`_\n_Retreat with \`${P()} abyss retreat\`_`;
+  } else if (encounter.type === 'treasure') {
+    startMsg += `${encounter.treasure.icon} *Floor 1 - ${encounter.treasure.name}*\n_Collect with \`${P()} abyss collect\`_`;
+  } else if (encounter.type === 'event') {
+    startMsg += _eventFloorText(encounter.event, 1);
+  } else {
+    startMsg += `🐉 *Floor 1 - Wild ${encounter.wildSummonSpecies} appeared!*`;
+  }
+  return { success: true, run, message: startMsg, encounter };
+}
+
+async function joinCoopRun(memberJid, ctx = {}) {
+  const economy = require('./economy');
+  const progression = require('./progression');
+
+  // A member can't be in two runs at once
+  const existing = await AbyssRun.findOne(activeRunFilter(memberJid));
+  if (existing) {
+    if (existing.isCoop && existing.hostJid !== memberJid) {
+      return { success: false, message: '❌ You are already in a co-op party. Leave with `.j abyss retreat` first.' };
+    }
+    return { success: false, message: `❌ You already have an active Abyss run on floor ${existing.currentFloor}.` };
+  }
+
+  // Newest open co-op run on this bot
+  const run = await AbyssRun.findOne({
+    status: 'active',
+    isCoop: true,
+    $or: [{ botId: botScope() }, { botId: { $exists: false } }, { botId: null }],
+  }).sort({ updatedAt: -1 });
+  if (!run) {
+    return { success: false, message: `❌ No open co-op run right now.\n_Anyone can open one with \`${P()} abyss coop\`._` };
+  }
+  if ((run.party || []).length >= ABYSS_COOP_MAX) {
+    return { success: false, message: `❌ That party is full (${ABYSS_COOP_MAX}/${ABYSS_COOP_MAX}).` };
+  }
+  if ((run.party || []).some((m) => m.jid === memberJid)) {
+    return { success: false, message: '❌ You are already in this party.' };
+  }
+
+  const user = economy.getUser(memberJid);
+  const userClass = economy.getUserClass(memberJid) || { id: 'FIGHTER' };
+  const classId = userClass?.id || (typeof user?.class === 'string' ? user.class : 'FIGHTER');
+  const baseStats = progression.getBaseStats(memberJid, classId);
+
+  run.party.push({
+    jid: memberJid,
+    name: economy.getDisplayName ? economy.getDisplayName(memberJid) : memberJid.split('@')[0],
+    hp: baseStats.hp,
+    energy: baseStats.maxEnergy || 100,
+  });
+  run.playerSnapshot.maxHp = Math.max(run.playerSnapshot.maxHp || 0, baseStats.hp);
+  run.playerSnapshot.maxEnergy = Math.max(run.playerSnapshot.maxEnergy || 0, baseStats.maxEnergy || 100);
+  await run.save();
+
+  const names = (run.party || []).map((m) => m.name).join(', ');
+  return {
+    success: true,
+    run,
+    partySize: run.party.length,
+    partyNames: names,
+    baseStats,
+    message: `👥 *You joined the co-op Abyss run!* (floor ${run.currentFloor}, party ${run.party.length}/${ABYSS_COOP_MAX})\n_Party:_ ${names}`,
+  };
+}
+
+// Member leaves the party (host uses the full retreat). Co-op loot was already
+// paid per floor, so there is nothing to settle here.
+async function leaveCoopRun(memberJid) {
+  const run = await AbyssRun.findOne(activeRunFilter(memberJid));
+  if (!run || !run.isCoop) {
+    return { success: false, message: '❌ No co-op run found.' };
+  }
+  if (run.hostJid === memberJid) {
+    return { success: false, hostRetreat: true, message: 'ℹ️ You are the host — retreating ends the run for the whole party.' };
+  }
+  const leaver = (run.party || []).find((m) => m.jid === memberJid);
+  run.party = (run.party || []).filter((m) => m.jid !== memberJid);
+  await run.save();
+  return {
+    success: true,
+    run,
+    message: `🚪 *You left the co-op run on floor ${run.currentFloor}.*\n_Loot already earned is yours to keep (${leaver ? leaver.name : 'adventurer'})._`,
+  };
+}
+
+// Whole-party wipe: fail the run, leaderboard entry per member (co-op loot was
+// paid per floor, so there is no accumulator to carve 10% out of).
+async function processCoopDeath(run, deathMsg) {
+  if (run.status !== 'active') return { success: false, message: 'Run already ended.' };
+  const score = run.currentFloor * 100 + (run.monstersKilled || 0) * 5;
+  const members = (run.party || []).map((m) => m.jid);
+
+  let msg = `${deathMsg}\n\n💀 *THE PARTY HAS FALLEN* (floor ${run.currentFloor})\n`;
+  msg += `☠️ Monsters Slain: ${run.monstersKilled || 0}\n`;
+  msg += `👑 Bosses Slain: ${run.bossesKilled || 0}\n`;
+  msg += `📊 Score: ${score}\n\n`;
+  msg += `_Loot from cleared floors was paid out as you went — it is safe._`;
+
+  run.status = 'failed';
+  run.finalScore = score;
+  run.finalFloor = run.currentFloor;
+  run.currentEnemy = null;
+  await run.save();
+
+  for (const jid of members) {
+    await addToLeaderboard(jid, run.currentFloor, run.monstersKilled || 0, run.bossesKilled || 0, score, 'death');
+    try {
+      const guildPerks = require('./guildPerks');
+      guildPerks.awardGuildXp(jid, Math.floor(score / 100), `Abyss co-op (death, F${run.currentFloor})`);
+    } catch (e) {}
+  }
+
+  return { success: true, message: msg, run, died: true };
 }
 
 // ─── GENERATE FLOOR ENCOUNTER ─────────────────────────────────────────────
@@ -956,6 +1160,12 @@ async function retreat(userId) {
   }
   if (run.status !== 'active') return { success: false, message: 'Run already ended.' };
 
+  // 💡 CO-OP: a MEMBER retreating just leaves the party — the run continues
+  // for everyone else. Only the HOST's retreat extracts the whole party.
+  if (run.isCoop && run.hostJid && run.hostJid !== userId) {
+    return leaveCoopRun(userId);
+  }
+
   const keptXp = run.lootAccumulator.xp;
   const keptGold = run.lootAccumulator.gold;
   const score = run.currentFloor * 100 + run.monstersKilled * 5;
@@ -996,6 +1206,14 @@ async function retreat(userId) {
 
   // Add to leaderboard
   await addToLeaderboard(userId, run.currentFloor, run.monstersKilled, run.bossesKilled, score, 'retreat');
+  // 💡 CO-OP: every party member gets their leaderboard entry on a host extract
+  if (run.isCoop) {
+    for (const m of run.party || []) {
+      if (m.jid && m.jid !== userId) {
+        await addToLeaderboard(m.jid, run.currentFloor, run.monstersKilled, run.bossesKilled, score, 'retreat').catch(() => {});
+      }
+    }
+  }
 
   // Award guild XP + war points (full on retreat)
   try {
@@ -1088,6 +1306,12 @@ async function resetWeeklyLeaderboard() {
 }
 
 module.exports = {
+  // 💡 CO-OP ABYSS (2026-10-11)
+  startCoopRun,
+  joinCoopRun,
+  leaveCoopRun,
+  processCoopDeath,
+  ABYSS_COOP_MAX,
   startRun,
   retreat,
   processDeath,

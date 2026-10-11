@@ -60,6 +60,20 @@ const AbyssRunSchema = new mongoose.Schema({
   // so we can track damage taken during the run)
   currentHp: { type: Number, default: 0 },
   currentEnergy: { type: Number, default: 0 },
+  // 💡 CO-OP ABYSS (2026-10-11, owner: "add a co-op mode for the abyss"):
+  // one SHARED run doc owned by the host; up to 4 players descend together.
+  // party[0] is always the host. Members join via `.j abyss join`.
+  // Co-op loot is paid PER FLOOR to every member immediately (the shared
+  // lootAccumulator stays zeroed so retreat/death can't double-pay).
+  isCoop: { type: Boolean, default: false },
+  hostJid: { type: String, default: null },
+  party: [{
+    jid: { type: String, required: true },
+    name: { type: String, default: '' },
+    hp: { type: Number, default: 0 },
+    energy: { type: Number, default: 0 },
+    joinedAt: { type: Date, default: Date.now },
+  }],
   startedAt: { type: Date, default: Date.now },
   lastActionAt: { type: Date, default: Date.now },
   // Status: 'active', 'completed' (retreated), 'failed' (died)
