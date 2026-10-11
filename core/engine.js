@@ -12485,7 +12485,22 @@ _💡 Reply with another number from your search list!_`.trim();
                     quizGame.hasActive(chatId) && quizGame.isQuizAnswerText(lowerTxt);
                   const _quizQuestionOpen =
                     quizGame.hasActive(chatId) && quizGame.isQuestionOpen(chatId);
-                  if (isBotCommand && !_isQuizAnswerMsg && !_quizQuestionOpen && !isOwner && !isGlobalMod(senderJid)) {
+                  // 💡 2026-10-12 (owner: "remove SLOW DOWN for stickers"):
+                  // the sticker tool (`.j s` reply-image conversion AND
+                  // `.j s [count] <query>` search) bypasses the global 5s
+                  // cooldown entirely — check AND set, same semantics as the
+                  // quiz exemption above. Batch sticker work ("s on a lot of
+                  // images") is legitimate media processing: users reply
+                  // `.j s` to image after image seconds apart and the warning
+                  // card kept eating the flow. The sticker tool paces itself
+                  // (300ms send gap in search mode + watchdog silence window),
+                  // and the gambling hard-lock / 20s same-game cooldowns are
+                  // untouched — non-sticker commands still obey the 5s gate.
+                  const _stickerPfx = `${botConfig.getPrefix().toLowerCase()} s`;
+                  const _isStickerCmd =
+                    lowerTxt === _stickerPfx ||
+                    lowerTxt.startsWith(`${_stickerPfx} `);
+                  if (isBotCommand && !_isQuizAnswerMsg && !_quizQuestionOpen && !_isStickerCmd && !isOwner && !isGlobalMod(senderJid)) {
                     const now = Date.now();
                     const gamblingCommands = [
                       "cf",
