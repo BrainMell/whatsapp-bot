@@ -21514,30 +21514,73 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         return;
                       }
 
-                      // 💡 NEW 2026-08-06: .s rune sockets - list ALL socketed runes across all skills
+                      // 💡 2026-10-11: .j rune sockets - visual socket board
+                      // (owner asset overhaul brief): skills x sockets card
+                      // with the player's REAL equipped rune artwork and
+                      // empty slots. Legacy text list stays as the fallback.
                       if (runeSub === 'sockets') {
                         try {
-                          const socketed = await runeSystem.getAllSocketedRunes(senderJid);
-                          if (socketed.length === 0) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '💎 *Socketed Runes*\n\n_No runes socketed. Use `' + botConfig.getPrefix() + ' rune socket <runeName> <skillId>` to socket one._' });
+                          const skillCommandsMod = require('./commands/skillCommands');
+                          const board = await skillCommandsMod.getSocketBoardData(senderJid);
+                          if (!board || !board.rows.length) {
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '💎 *Rune Socket Board*\n\n_No learned skills with rune slots yet. Learn skills via `' + botConfig.getPrefix() + ' skill up <name>` first._' });
                           }
-                          const bySkill = {};
-                          for (const r of socketed) {
-                            if (!bySkill[r.socketedSkillId]) bySkill[r.socketedSkillId] = [];
-                            bySkill[r.socketedSkillId].push(r);
+                          const economyMod = require('./rpg/economy');
+                          const userB = economyMod.getUser(senderJid);
+                          const userClassB = economyMod.getUserClass(senderJid);
+                          const anySocketed = board.totalSocketed > 0;
+                          if (!anySocketed) {
+                            // nothing socketed anywhere -> keep the classic
+                            // guidance text (a board of empty slots tells less)
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '💎 *Rune Socket Board*\n\n_No runes socketed yet._\n\n' + `Your skills have *${board.totalSlots}* rune slots waiting:\n` + board.rows.slice(0, 10).map((r) => `• ${r.skill.name} (Lv ${r.level}) — ${r.sockets.length} slot${r.sockets.length > 1 ? 's' : ''}`).join('\n') + `\n\n_Use \`${botConfig.getPrefix()} rune socket <runeName> <skillId>\` to socket one._` });
                           }
-                          let msg = `💎 *Socketed Runes* (${socketed.length} total, ${Object.keys(bySkill).length} skills)\n\n`;
-                          for (const [skillId, runes] of Object.entries(bySkill)) {
-                            msg += `*${skillId}* (${runes.length} rune${runes.length > 1 ? 's' : ''}):\n`;
+                          const bufB = await skillCommandsMod.renderSocketBoard({
+                            nickname: economyMod.getDisplayName(senderJid),
+                            className: userClassB ? userClassB.name : '',
+                            rank: userB && userB.adventurerRank,
+                            rows: board.rows,
+                            totalSocketed: board.totalSocketed,
+                            totalSlots: board.totalSlots,
+                            omitted: Math.max(0, board.rows.length - 12),
+                          });
+                          if (bufB && bufB.length > 100) {
+                            const lines = [];
+                            for (const r of board.rows) {
+                              const filled = r.sockets.filter(Boolean);
+                              if (!filled.length) continue;
+                              lines.push(`*${r.skill.name}* (Lv ${r.level}):`);
+                              for (const rn of filled) {
+                                const rt = runeSystem.RUNE_TYPES[rn.type];
+                                const tt = runeSystem.RUNE_TIERS[rn.tier];
+                                lines.push(`  ${rt?.icon || '💎'} ${rt?.name || rn.type} (${tt?.name || rn.tier}) - \`${rn.runeId}\``);
+                              }
+                            }
+                            let msgB = `💎 *Rune Socket Board* — ${board.totalSocketed} socketed\n\n` + lines.join('\n');
+                            msgB += `\n\n_Use \`${botConfig.getPrefix()} rune remove <runeId>\` (needs scroll) or \`${botConfig.getPrefix()} rune destroy <runeId>\`._`;
+                            await sock.sendMessage(chatId, {
+                              image: bufB,
+                              caption: msgB.length > 1000 ? msgB.slice(0, 997) + '…' : msgB,
+                              mimetype: 'image/jpeg',
+                            });
+                            return;
+                          }
+                          // card failed -> legacy text list
+                          const socketedF = await runeSystem.getAllSocketedRunes(senderJid);
+                          const bySkillF = {};
+                          for (const r of socketedF) {
+                            if (!bySkillF[r.socketedSkillId]) bySkillF[r.socketedSkillId] = [];
+                            bySkillF[r.socketedSkillId].push(r);
+                          }
+                          let msgF = `💎 *Socketed Runes* (${socketedF.length} total)\n\n`;
+                          for (const [skillId, runes] of Object.entries(bySkillF)) {
+                            msgF += `*${skillId}* (${runes.length}):\n`;
                             for (const r of runes) {
                               const rt = runeSystem.RUNE_TYPES[r.type];
                               const tt = runeSystem.RUNE_TIERS[r.tier];
-                              msg += `  ${rt?.icon || '💎'} ${rt?.name || r.type} (${tt?.name || r.tier}) - \`${r.runeId}\`\n`;
+                              msgF += `  ${rt?.icon || '💎'} ${rt?.name || r.type} (${tt?.name || r.tier}) - \`${r.runeId}\`\n`;
                             }
-                            msg += `\n`;
                           }
-                          msg += `_Use \`${botConfig.getPrefix()} rune remove <runeId>\` to remove (needs scroll) or \`${botConfig.getPrefix()} rune destroy <runeId>\` to destroy._`;
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + msgF });
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
                         }

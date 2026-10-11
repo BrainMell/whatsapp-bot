@@ -58,6 +58,10 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
                         max: skill.maxLevel || 1,
                         tier: skill.tier || 1,
                         state: maxed ? 'maxed' : cur > 0 ? 'learned' : canLearn ? 'open' : 'locked',
+                        // 🎨 2026-10-11 asset overhaul: node artwork filename
+                        // (Go loads core/rpgasset/skills/<icon>.png; absent on
+                        // older binaries -> medallion initials as before).
+                        icon: (() => { try { return require('../rpg/skillAssets').skillArtFile(skillId); } catch (e) { return null; } })() || undefined,
                     });
                 }
                 branches.push({ name: String(treeData.name || 'Path'), skills });
@@ -370,6 +374,10 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
         }
         upBuf = await goService.generatePortraitCard({
             kind: 'SKILLUP',
+            // 🎨 2026-10-11 asset overhaul: per-skill artwork inside the
+            // medallion (Go service loads core/rpgasset/skills/<icon>.png).
+            // Older Go binaries ignore the field - graceful degradation.
+            icon: (() => { try { return require('../rpg/skillAssets').skillArtFile(targetSkill); } catch (e) { return null; } })() || undefined,
             // 🧩 SPRITE CONSISTENCY 2026-09-17: hero sprite fields.
             playerClass: String((userClass && userClass.id) || '').toUpperCase(),
             playerIndex: Math.max(0, Math.floor(Number(user && user.spriteIndex) || 0)),
@@ -595,6 +603,148 @@ function abilityEffectText(effect) {
 // 📋 VIEW ABILITIES (COMBAT LIST)
 // ==========================================
 
+// ==========================================
+// 🔎 ABILITY INSPECTION (2026-10-11, owner overhaul brief)
+//    `.j abilities <number|id|name>` -> stylised skill card with artwork,
+//    tier, stats and the skill's REAL rune sockets (runeSystem slot rules).
+// ==========================================
+const _abilityCards = () => require('../rpg/abilityCards');
+
+async function sendAbilityInspection(sock, chatId, senderJid, senderName, ctx0) {
+    const { user, userClass, ability } = ctx0;
+    const runeSystem = require('../rpg/runeSystem');
+    const skillId = String(ability.id || '');
+    let socketed = [];
+    let slotCount = 1;
+    try {
+        slotCount = runeSystem.getSkillSlotCount(ability);
+        const docs = await runeSystem.getSocketedRunes(senderJid, skillId);
+        socketed = (docs || []).slice(0, slotCount);
+    } catch (e) { /* DB hiccup -> render empty sockets */ }
+    const sockets = [];
+    for (let i = 0; i < slotCount; i++) {
+        const r = socketed[i];
+        sockets.push(r ? { type: r.type, tier: r.tier, runeId: r.runeId } : null);
+    }
+
+    const effect = ability.effect || {};
+    const atkWord = effect.damageType === 'magic' ? 'MAG' : effect.damageType === 'true' ? 'TRUE' : 'ATK';
+    const damageLine = (Number.isFinite(Number(effect.multiplier)) && Number(effect.multiplier) > 0)
+        ? `${Math.round(Number(effect.multiplier) * 100)}% ${atkWord}`
+        : (effect.value !== undefined && effect.value !== null ? `${effect.value}` : '—');
+
+    const buf = await _abilityCards().renderAbilityInspectCard({
+        nickname: senderName,
+        className: userClass ? userClass.name : '',
+        rank: user && user.adventurerRank,
+        skill: {
+            id: skillId,
+            name: ability.name,
+            tier: ability.tier || 1,
+            maxLevel: ability.maxLevel || 1,
+            isUltimate: ability.isUltimate === true,
+            isAscended: ability.isAscended === true,
+        },
+        level: ability.level || 0,
+        effectText: abilityEffectText(effect),
+        energy: ability.cost !== undefined ? ability.cost : (ability.cost !== undefined ? ability.cost : 0),
+        cooldown: ability.cooldown || 0,
+        damageLine,
+        sockets,
+        skillIdHint: skillId,
+    });
+
+    if (buf && buf.length > 100) {
+        const usedTxt = sockets.filter(Boolean).length;
+        const socketLine = usedTxt > 0
+            ? sockets.filter(Boolean).map((r) => `${runeSystem.RUNE_TYPES[r.type]?.icon || '💎'} ${runeSystem.RUNE_TYPES[r.type]?.name || r.type} (${runeSystem.RUNE_TIERS[r.tier]?.name || r.tier}) \`${r.runeId}\``).join('\n')
+            : '_No runes socketed yet._';
+        const caption = getBotMarker() +
+            `🔍 *${ability.name}* — Lv.${ability.level || 0}/${ability.maxLevel || 1}\n` +
+            `${abilityEffectText(effect)}\n\n` +
+            `💎 Rune sockets: *${usedTxt}/${slotCount}*\n${socketLine}\n\n` +
+            `💡 \`${getPrefix()} rune socket <rune> ${skillId}\` • \`${getPrefix()} rune slots ${skillId}\``;
+        await sock.sendMessage(chatId, { image: buf, caption: caption.length > 1000 ? caption.slice(0, 997) + '…' : caption, mimetype: 'image/jpeg' });
+        return;
+    }
+
+    // text fallback (card failed: memory pressure / canvas error)
+    const usedTxt = sockets.filter(Boolean).length;
+    let msg = `🔍 *${ability.name}* — Lv.${ability.level || 0}/${ability.maxLevel || 1}\n`;
+    msg += `tier: ${ability.tier || 1}${ability.isUltimate ? ' (ultimate)' : ''}${ability.isAscended ? ' (ascended)' : ''}\n`;
+    msg += `⚡ ${ability.cost || 0}${ability.cooldown ? ` | ⏱️ CD:${ability.cooldown}` : ''}\n`;
+    const effLine = abilityEffectText(effect);
+    if (effLine) msg += `${effLine}\n`;
+    msg += `\n💎 Rune sockets: ${usedTxt}/${slotCount}\n`;
+    for (const r of sockets) {
+        msg += r
+            ? `  ${runeSystem.RUNE_TYPES[r.type]?.icon || '💎'} ${runeSystem.RUNE_TYPES[r.type]?.name || r.type} (${runeSystem.RUNE_TIERS[r.tier]?.name || r.tier}) \`${r.runeId}\`\n`
+            : `  ◻ _empty_\n`;
+    }
+    msg += `\n💡 \`${getPrefix()} rune socket <rune> ${skillId}\``;
+    await sock.sendMessage(chatId, { text: getBotMarker() + msg });
+}
+
+/**
+ * Data for the `.j rune sockets` board: the player's learned skills that have
+ * rune slots, each with its filled/empty sockets. Socket capacity follows
+ * runeSystem.getSkillSlotCount (T1=1, T2=2, T3+=3) — never invented.
+ */
+async function getSocketBoardData(senderJid) {
+    const economyMod = economy;
+    const user = economyMod.getUser(senderJid);
+    const userClass = economyMod.getUserClass(senderJid);
+    if (!user || !userClass) return null;
+    const classSystem = require('../rpg/classSystem');
+    const runeSystem = require('../rpg/runeSystem');
+    const lineage = classSystem.getLineage(userClass.id);
+    const seen = new Set();
+    const rows = [];
+    for (const classId of lineage) {
+        const tree = skillTree.SKILL_TREES[String(classId || '').toUpperCase()];
+        if (!tree) continue;
+        for (const [, treeData] of Object.entries(tree.trees || {})) {
+            for (const [skillId, skill] of Object.entries(treeData.skills || {})) {
+                const lvl = (user.skills || {})[skillId] || 0;
+                if (lvl <= 0 || seen.has(skillId)) continue;
+                seen.add(skillId);
+                let slotCount = 1;
+                let socketed = [];
+                try {
+                    slotCount = runeSystem.getSkillSlotCount(skill);
+                    socketed = (await runeSystem.getSocketedRunes(senderJid, skillId)) || [];
+                } catch (e) { /* keep defaults */ }
+                const sockets = [];
+                for (let i = 0; i < slotCount; i++) {
+                    const r = socketed[i];
+                    sockets.push(r ? { type: r.type, tier: r.tier, runeId: r.runeId } : null);
+                }
+                rows.push({
+                    skill: {
+                        id: skillId,
+                        name: skill.name || skillId,
+                        tier: skill.tier || 1,
+                        maxLevel: skill.maxLevel || 1,
+                        isUltimate: skill.isUltimate === true,
+                        isAscended: skill.isAscended === true,
+                    },
+                    level: lvl,
+                    sockets,
+                });
+            }
+        }
+    }
+    rows.sort((a, b) => {
+        const au = a.sockets.filter(Boolean).length;
+        const bu = b.sockets.filter(Boolean).length;
+        if (au !== bu) return bu - au;
+        return String(a.skill.name).localeCompare(String(b.skill.name));
+    });
+    const totalSocketed = rows.reduce((s, r) => s + r.sockets.filter(Boolean).length, 0);
+    const totalSlots = rows.reduce((s, r) => s + r.sockets.length, 0);
+    return { rows, totalSocketed, totalSlots };
+}
+
 async function viewAbilities(sock, chatId, senderJid, senderName, pageArg) {
     economy.initializeClass(senderJid);
     const user = economy.getUser(senderJid);
@@ -742,6 +892,43 @@ async function viewAbilities(sock, chatId, senderJid, senderName, pageArg) {
         for (const ability of group.skills) allRows.push({ group, ability });
     }
     for (const ability of mirroredAbilities) allRows.push({ group: null, ability });
+
+    // ── 🔎 INSPECTION MODE (2026-10-11): the default inspection view ──
+    // `.j abilities <number|id|name>` resolves against this player's codex
+    // (numbers = the list numbering, ids = exact, names = exact then substring)
+    // and renders the stylised inspection card. Anything that doesn't resolve
+    // falls through to the legacy list/pagination below.
+    if (pageArg !== undefined && pageArg !== null && String(pageArg).trim() !== '') {
+        const q = String(pageArg).trim();
+        let hit = null;
+        if (/^\d{1,3}$/.test(q)) {
+            const asNum = parseInt(q, 10);
+            if (asNum >= 1 && asNum <= allRows.length) hit = allRows[asNum - 1];
+        } else {
+            const nq = q.toLowerCase().replace(/[^a-z0-9_]+/g, '');
+            if (nq.length >= 3) {
+                hit = allRows.find((r) => String(r.ability.id || '').toLowerCase() === nq)
+                    || allRows.find((r) => String(r.ability.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '') === nq)
+                    || allRows.find((r) => nq.length >= 4 && String(r.ability.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '').includes(nq));
+            }
+        }
+        if (hit) {
+            await sendAbilityInspection(sock, chatId, senderJid, senderName, {
+                user, userClass, level, group: hit.group, ability: hit.ability,
+            });
+            return;
+        }
+        // numeric arg beyond the codex -> treat as a page request (legacy)
+        if (!/^\d{1,3}$/.test(q)) {
+            const nq = q.toLowerCase().replace(/[^a-z0-9_]+/g, '');
+            if (nq.length >= 3) {
+                await sock.sendMessage(chatId, {
+                    text: getBotMarker() + `❌ No learned ability matches *${q}*.\nUse \`${getPrefix()} abilities\` to see your codex, or \`${getPrefix()} skill tree\` to learn more.`,
+                });
+                return;
+            }
+        }
+    }
 
     const totalPages = Math.max(1, Math.ceil(allRows.length / PAGE_SIZE));
     let page = parseInt(pageArg, 10);
@@ -1324,6 +1511,10 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     return sock.sendMessage(chatId, { text: successMsg });
 }
 
+async function renderSocketBoard(payload) {
+    return _abilityCards().renderRuneSocketsCard(payload);
+}
+
 module.exports = {
     displaySkillTree,
     upgradeSkill,
@@ -1331,4 +1522,7 @@ module.exports = {
     viewAbilities,
     learnSkill,
     handleEvolve,
+    sendAbilityInspection,
+    getSocketBoardData,
+    renderSocketBoard,
 };

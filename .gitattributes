@@ -46,3 +46,11 @@ core/rpgasset/summons/sparklinlabs_abyss/*.png -filter -diff -merge -text
 # be real pixels everywhere — reset --hard deploys would otherwise re-stub
 # them as LFS pointers (same hazard as enemies/abyss above)
 core/rpgasset/enemies/abyss/regular_bestiary/*.png -filter -diff -merge -text
+
+# 2026-10-11 rune/skill asset overhaul: sliced icon art + manifests must be
+# real bytes everywhere (reset --hard deploys would otherwise serve LFS
+# pointers to the card renderers — same rule as environment/abyss/regular)
+core/rpgasset/runes/*.png -filter -diff -merge -text
+core/rpgasset/skills/*.png -filter -diff -merge -text
+core/rpgasset/runes/manifest.json -filter -diff -merge -text
+core/rpgasset/skills/manifest.json -filter -diff -merge -text
