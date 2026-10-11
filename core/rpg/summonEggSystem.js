@@ -189,8 +189,25 @@ async function craftEgg(userId, targetTier) {
   }
 
   // Consume fragments + create egg
+  // 💡 FIX 2026-10-10: addItem is ASYNC and can FAIL (inventory full) - the old
+  // fire-and-forget call consumed the 10 fragments and then silently added NO
+  // egg while still returning the success message (players lost fragments and
+  // reported "can't use summons"). Now: await the add; on failure REFUND the
+  // fragments and return the honest error.
   inventorySystem.removeItem(userId, fragId, fragCount);
-  inventorySystem.addItem(userId, tier.eggId, 1);
+  const addRes = await inventorySystem.addItem(userId, tier.eggId, 1);
+  if (!addRes || addRes.success === false) {
+    // Refund (the fragment stack slot existed before we consumed it)
+    try {
+      await inventorySystem.addItem(userId, fragId, fragCount);
+    } catch (e) {
+      console.error('[SummonEgg] fragment refund failed:', e.message);
+    }
+    return {
+      success: false,
+      message: `❌ Couldn't craft the egg - ${addRes?.message || 'inventory is full'}.\n_Your ${fragCount}x ${fragName} were refunded. Free up a bag slot and try again._`
+    };
+  }
 
   const eggName = lootSystem.getItemInfo(tier.eggId)?.name || tier.eggId;
   const fragName = lootSystem.getItemInfo(fragId)?.name || fragId;

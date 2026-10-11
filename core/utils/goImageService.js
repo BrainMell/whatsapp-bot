@@ -454,6 +454,11 @@ class GoImageService {
    * 💡 NOTE: This bypasses _enqueue (the 8s queue timeout is too short
    * for GIF rendering which takes 8-15s). Uses a direct axios call with
    * a 30s timeout instead.
+   *   💡 2026-10-10: raised to 60s — live renders measured 9-39s on Box2
+   *   (base ~7s + ~0.7s/species + CPU contention), so 30s failed intermittently
+   *   and players got no codex/roster card at all. The command layer
+   *   (summonGifDelivery) races a 20s soft budget and falls back to text,
+   *   so responsiveness does not depend on this timeout.
    */
   async generateSummonRosterGIF(data) {
     const startTime = Date.now();
@@ -463,7 +468,7 @@ class GoImageService {
       const baseURL = this.client.defaults.baseURL;
       const response = await axios.post(baseURL + '/api/summons/roster', data, {
         responseType: 'arraybuffer',
-        timeout: 30000,
+        timeout: 60000,
         headers: { 'Content-Type': 'application/json' },
       });
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -481,6 +486,7 @@ class GoImageService {
    * Generate Summon Detail GIF - NEW 2026-08-04
    * Renders a single summon's idle.gif large + detailed info hub.
    * Used by .summon <#> command.
+   *   💡 2026-10-10: timeout 30s → 60s (see generateSummonRosterGIF note).
    */
   async generateSummonDetailGIF(data) {
     const startTime = Date.now();
@@ -490,7 +496,7 @@ class GoImageService {
       const baseURL = this.client.defaults.baseURL;
       const response = await axios.post(baseURL + '/api/summons/detail', data, {
         responseType: 'arraybuffer',
-        timeout: 30000,
+        timeout: 60000,
         headers: { 'Content-Type': 'application/json' },
       });
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);

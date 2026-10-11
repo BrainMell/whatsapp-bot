@@ -26,6 +26,12 @@ const registry = require('../rpg/summonRegistry');
 const rosterRenderer = require('../rpg/summonRosterRenderer');
 const summonSprites = require('../rpg/summonSprites');
 const codexRenderer = require('../rpg/summonCodexRenderer');
+// 💡 FIX 2026-10-10: resilient GIF→MP4 delivery (cache + soft-budget + background
+// follow-through). Root-cause fix for "codex no longer renders animations" and
+// "can't use summons at all": Go GIF renders measured 9-39s, blowing through the
+// 30s axios timeout, the 15s ffmpeg timeout AND the 45s command watchdog —
+// users got a timeout notice and NO card at all.
+const summonGifDelivery = require('../utils/summonGifDelivery');
 
 const getPrefix = () => botConfig.getPrefix();
 
@@ -207,16 +213,15 @@ async function cmdPokedex(sock, chatId, senderJid) {
 
   // 💡 NEW 2026-08-03: Render the roster as an ANIMATED GIF via the Go service.
   // Shows summons doing their idle.gif animations on a sparklinlabs background.
-  // Falls back to node-canvas PNG, then text.
-  try {
-    const goService = require('../utils/goImageService');
-    const summonSystem = require('../rpg/summonSystem');
-    const registry = require('../rpg/summonRegistry');
+  // 💡 REWORKED 2026-10-10: cache + soft-budget + background follow-through
+  // (summonGifDelivery). Falls back to node-canvas PNG (fast failures) or text
+  // (slow renders), and the animated MP4 still arrives as a follow-up.
+  const goService = require('../utils/goImageService');
 
-    console.log('[SummonRoster] Building payload for', summons.length, 'summons');
+  console.log('[SummonRoster] Building payload for', summons.length, 'summons');
 
-    // Build the payload for the Go service
-    const rosterSummons = summons.map(s => {
+  // Build the payload for the Go service
+  const rosterSummons = summons.map(s => {
       const stats = summonSystem.computeEffectiveStats(s);
       const species = registry.getSpecies(s.species);
       return {
@@ -236,96 +241,37 @@ async function cmdPokedex(sock, chatId, senderJid) {
       };
     });
 
-    const activeIdx = summons.findIndex(s => s.summonId === user.activeSummonId);
+  const activeIdx = summons.findIndex(s => s.summonId === user.activeSummonId);
 
-    console.log('[SummonRoster] Calling Go service for GIF...');
-    const gifBuffer = await goService.generateSummonRosterGIF({
-      userNickname: (user.nickname && user.nickname !== 'Adventurer') ? user.nickname : (economy.getDisplayName(user.userId) || 'Adventurer'),
-      slotsUsed: summons.length,
-      slotsMax: user.summonSlots || 5,
-      summons: rosterSummons,
-      activeIndex: activeIdx,
-    });
+  const rosterPayload = {
+    userNickname: (user.nickname && user.nickname !== 'Adventurer') ? user.nickname : (economy.getDisplayName(user.userId) || 'Adventurer'),
+    slotsUsed: summons.length,
+    slotsMax: user.summonSlots || 5,
+    summons: rosterSummons,
+    activeIndex: activeIdx,
+  };
 
-    console.log('[SummonRoster] GIF buffer received:', gifBuffer ? gifBuffer.length + ' bytes' : 'null');
+  const rosterCaption = `🐉 *SUMMON ROSTER* - ${summons.length}/${user.summonSlots || 5} slots\n💡 \`${p} summon <#>\` - view details | \`${p} summon help\` - commands`;
 
-    if (gifBuffer && gifBuffer.length > 0) {
-      // 💡 CRITICAL NOTE FOR FUTURE REFERENCE:
-      // WhatsApp does NOT support GIF as an image format (image: gifBuffer,
-      // mimetype: 'image/gif' silently fails - the bot sends but the user
-      // sees nothing). WhatsApp also can't use video + gifPlayback: true
-      // with a raw GIF buffer (Baileys tries ffmpeg MP4 conversion which
-      // silently fails on Oracle).
-      //
-      // SOLUTION: Convert the GIF to MP4 using ffmpeg on Box 1 (where ffmpeg
-      // IS installed and has enough RAM), THEN send as video + gifPlayback.
-      // The card system already uses this pattern successfully (convertCardImage
-      // returns MP4, sent as video + gifPlayback: true).
-      //
-      // The monkey-patch auto-injects jpegThumbnail for video messages too.
-      console.log('[SummonRoster] Converting GIF to MP4 via ffmpeg...');
-      const { execFileSync } = require('child_process');
-      const fs = require('fs');
-      const tmpGif = '/tmp/summon_roster.gif';
-      const tmpMp4 = '/tmp/summon_roster.mp4';
-      fs.writeFileSync(tmpGif, gifBuffer);
+  await summonGifDelivery.deliverSummonGif({
+    kind: 'roster',
+    payload: rosterPayload,
+    sock,
+    chatId,
+    caption: rosterCaption,
+    goCall: (pl) => goService.generateSummonRosterGIF(pl),
+    textFallback: buildRosterTextMsg(user, summons, p),
+    pngFallback: async () => {
+      const imageBuffer = await rosterRenderer.renderRoster(user, summons);
+      return (imageBuffer && imageBuffer.length > 0) ? { image: imageBuffer, caption: rosterCaption } : null;
+    },
+    logTag: '[SummonRoster]',
+  });
+}
 
-      try {
-        // Convert GIF → MP4 (fast: ~2-5s for a 7-frame GIF)
-        // -preset ultrafast for speed, -crf 23 for quality
-        // Scale to 720x720 square (WhatsApp gifPlayback prefers square)
-        execFileSync('ffmpeg', [
-          '-y', '-i', tmpGif,
-          '-movflags', 'faststart',
-          '-pix_fmt', 'yuv420p',
-          '-vf', 'scale=720:720:force_original_aspect_ratio=decrease,pad=720:720:(ow-iw)/2:(oh-ih)/2',
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
-          '-an', // no audio
-          tmpMp4,
-        ], { timeout: 15000, stdio: 'pipe' });
-
-        const mp4Buffer = fs.readFileSync(tmpMp4);
-        console.log('[SummonRoster] MP4 converted:', mp4Buffer.length, 'bytes');
-
-        // Send as video with gifPlayback (same pattern as card system)
-        console.log('[SummonRoster] Sending MP4 as video to WhatsApp...');
-        const sendResult = await sock.sendMessage(chatId, {
-          video: mp4Buffer,
-          gifPlayback: true,
-          caption: `🐉 *SUMMON ROSTER* - ${summons.length}/${user.summonSlots || 5} slots\n💡 \`${p} summon <#>\` - view details | \`${p} summon help\` - commands`,
-        });
-        console.log('[SummonRoster] Send result:', sendResult ? 'success' : 'null');
-
-        // Cleanup
-        try { fs.unlinkSync(tmpGif); } catch (e) {}
-        try { fs.unlinkSync(tmpMp4); } catch (e) {}
-        return;
-      } catch (convErr) {
-        console.error('[SummonRoster] ffmpeg conversion failed:', convErr.message);
-        // Fall through to PNG fallback
-        try { fs.unlinkSync(tmpGif); } catch (e) {}
-        try { fs.unlinkSync(tmpMp4); } catch (e) {}
-      }
-    }
-  } catch (e) {
-    console.error('[SummonRoster] GIF render failed, trying PNG fallback:', e.message);
-  }
-
-  // 💡 Fallback: node-canvas PNG (sparklinlabs background, static sprites)
-  try {
-    const imageBuffer = await rosterRenderer.renderRoster(user, summons);
-    if (imageBuffer && imageBuffer.length > 0) {
-      await sock.sendMessage(chatId, {
-        image: imageBuffer,
-        caption: `🐉 *SUMMON CODEX* - ${summons.length}/${user.summonSlots || 5} slots\n💡 \`${p} summon <#>\` - view details | \`${p} summon help\` - commands`
-      });
-      return;
-    }
-  } catch (e) {
-    console.error('[SummonRoster] PNG render failed, falling back to text:', e.message);
-  }
-
-  // ── Text fallback (same as before) ──
+// Text roster card (fallback when the animated GIF is slow/unavailable).
+// 💡 2026-10-10: extracted verbatim from the old inline fallback block.
+function buildRosterTextMsg(user, summons, p) {
   const activeResonances = user.activeResonances || [];
 
   let msg = `🐉 *SUMMON CODEX*\n`;
@@ -368,7 +314,7 @@ async function cmdPokedex(sock, chatId, senderJid) {
   msg += `⚔️ \`${p} summon deploy <#>\` - equip\n`;
   msg += `❓ \`${p} summon help\` - all commands`;
 
-  await sock.sendMessage(chatId, { text: msg });
+  return msg;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -425,97 +371,55 @@ async function cmdNavigate(sock, chatId, senderJid, numStr, rest) {
   }
 
   // Default: show animated detail GIF via Go service (idle.gif + info hub)
-  // Falls back to node-canvas PNG, then text
-  try {
-    const goService = require('../utils/goImageService');
-    const summonSystem = require('../rpg/summonSystem');
-    const s = summons[index];
-    const stats = summonSystem.computeEffectiveStats(s);
-    const species = registry.getSpecies(s.species);
+  // 💡 REWORKED 2026-10-10: resilient pipeline (summonGifDelivery) - same look,
+  // but slow renders can no longer eat the 45s command watchdog.
+  // Falls back to node-canvas PNG, then the text detail view.
+  const goService = require('../utils/goImageService');
+  const s = summons[index];
+  const stats = summonSystem.computeEffectiveStats(s);
+  const species = registry.getSpecies(s.species);
+  const name = s.nickname || species?.name || s.species;
+  const active = user.activeSummonId === s.summonId;
+  const p = getPrefix();
 
-    const detailGifBuffer = await goService.generateSummonDetailGIF({
-      userNickname: (user.nickname && user.nickname !== 'Adventurer') ? user.nickname : (economy.getDisplayName(user.userId) || 'Adventurer'),
-      slotsUsed: summons.length,
-      slotsMax: user.summonSlots || 5,
-      activeIndex: -1,
-      summons: [{
-        species: s.species,
-        nickname: s.nickname || species?.name || s.species,
-        level: s.level || 1,
-        rarity: s.rarity || 'COMMON',
-        element: s.element || species?.element || 'neutral',
-        archetype: s.archetype || species?.archetype || 'BRUTE',
-        loyalty: s.loyalty || 100,
-        hp: stats.hp || 0,
-        atk: stats.atk || 0,
-        def: stats.def || 0,
-        mag: stats.mag || 0,
-        spd: stats.spd || 0,
-        isDeployed: user.activeSummonId === s.summonId,
-      }],
-    });
+  const detailPayload = {
+    userNickname: (user.nickname && user.nickname !== 'Adventurer') ? user.nickname : (economy.getDisplayName(user.userId) || 'Adventurer'),
+    slotsUsed: summons.length,
+    slotsMax: user.summonSlots || 5,
+    activeIndex: -1,
+    summons: [{
+      species: s.species,
+      nickname: s.nickname || species?.name || s.species,
+      level: s.level || 1,
+      rarity: s.rarity || 'COMMON',
+      element: s.element || species?.element || 'neutral',
+      archetype: s.archetype || species?.archetype || 'BRUTE',
+      loyalty: s.loyalty || 100,
+      hp: stats.hp || 0,
+      atk: stats.atk || 0,
+      def: stats.def || 0,
+      mag: stats.mag || 0,
+      spd: stats.spd || 0,
+      isDeployed: user.activeSummonId === s.summonId,
+    }],
+  };
 
-    if (detailGifBuffer && detailGifBuffer.length > 0) {
-      // Convert GIF → MP4 via ffmpeg (same as roster)
-      const { execFileSync } = require('child_process');
-      const fs = require('fs');
-      const tmpGif = '/tmp/summon_detail.gif';
-      const tmpMp4 = '/tmp/summon_detail.mp4';
-      fs.writeFileSync(tmpGif, detailGifBuffer);
+  const detailCaption = `${species?.icon || '🐉'} *${name}*${active ? ' ⭐ DEPLOYED' : ''}\n💡 \`${p} summon ${index + 1} deploy\` - equip | \`${p} summon ${index + 1} trial\` - evolve`;
 
-      try {
-        execFileSync('ffmpeg', [
-          '-y', '-i', tmpGif,
-          '-movflags', 'faststart',
-          '-pix_fmt', 'yuv420p',
-          '-vf', 'scale=720:720:force_original_aspect_ratio=decrease,pad=720:720:(ow-iw)/2:(oh-ih)/2',
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
-          '-an', tmpMp4,
-        ], { timeout: 15000, stdio: 'pipe' });
-
-        const mp4Buffer = fs.readFileSync(tmpMp4);
-        const name = s.nickname || species?.name || s.species;
-        const active = user.activeSummonId === s.summonId;
-        const p = getPrefix();
-
-        await sock.sendMessage(chatId, {
-          video: mp4Buffer,
-          gifPlayback: true,
-          caption: `${species?.icon || '🐉'} *${name}*${active ? ' ⭐ DEPLOYED' : ''}\n💡 \`${p} summon ${index + 1} deploy\` - equip | \`${p} summon ${index + 1} trial\` - evolve`,
-        });
-
-        try { fs.unlinkSync(tmpGif); } catch (e) {}
-        try { fs.unlinkSync(tmpMp4); } catch (e) {}
-        return;
-      } catch (convErr) {
-        console.error('[SummonDetail] ffmpeg conversion failed:', convErr.message);
-        try { fs.unlinkSync(tmpGif); } catch (e) {}
-        try { fs.unlinkSync(tmpMp4); } catch (e) {}
-      }
-    }
-  } catch (e) {
-    console.error('[SummonDetail] GIF render failed, trying PNG fallback:', e.message);
-  }
-
-  // Fallback: node-canvas PNG
-  try {
-    const imageBuffer = await rosterRenderer.renderDetailCard(summons[index], user);
-    if (imageBuffer && imageBuffer.length > 0) {
-      const species = registry.getSpecies(summons[index].species);
-      const name = summons[index].nickname || species?.name || summons[index].species;
-      const active = user.activeSummonId === summons[index].summonId;
-      await sock.sendMessage(chatId, {
-        image: imageBuffer,
-        caption: `${species?.icon || '🐉'} *${name}*${active ? ' ⭐ DEPLOYED' : ''}\n💡 \`${getPrefix()} summon ${index + 1} deploy\` - equip | \`${getPrefix()} summon ${index + 1} trial\` - evolve`
-      });
-      return;
-    }
-  } catch (e) {
-    console.error('[SummonDetail] PNG render failed, falling back to text:', e.message);
-  }
-
-  // Text fallback
-  return await cmdInfo(sock, chatId, senderJid, [summons[index].summonId.slice(-8)]);
+  await summonGifDelivery.deliverSummonGif({
+    kind: 'detail',
+    payload: detailPayload,
+    sock,
+    chatId,
+    caption: detailCaption,
+    goCall: (pl) => goService.generateSummonDetailGIF(pl),
+    textFallback: async () => cmdInfo(sock, chatId, senderJid, [s.summonId.slice(-8)]),
+    pngFallback: async () => {
+      const imageBuffer = await rosterRenderer.renderDetailCard(summons[index], user);
+      return (imageBuffer && imageBuffer.length > 0) ? { image: imageBuffer, caption: detailCaption } : null;
+    },
+    logTag: '[SummonDetail]',
+  });
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -823,52 +727,38 @@ async function cmdCodex(sock, chatId, senderJid, args) {
   });
 
   // Try Go service animated GIF (same as roster, 5 per page)
-  try {
-    const goService = require('../utils/goImageService');
-    const gifBuffer = await goService.generateSummonRosterGIF({
-      userNickname: 'CODEX',
-      slotsUsed: pageSpecies.length,
-      slotsMax: PER_PAGE,
-      summons: rosterSummons,
-      activeIndex: -1,
-    });
+  // 💡 REWORKED 2026-10-10: resilient pipeline - codex pages are deterministic
+  // so the MP4 cache makes repeat views instant; slow renders degrade to the
+  // text page immediately with the animation following as soon as it's ready.
+  const goService = require('../utils/goImageService');
 
-    if (gifBuffer && gifBuffer.length > 0) {
-      // Convert GIF → MP4 via ffmpeg
-      const { execFileSync } = require('child_process');
-      const fs = require('fs');
-      const tmpGif = '/tmp/summon_codex.gif';
-      const tmpMp4 = '/tmp/summon_codex.mp4';
-      fs.writeFileSync(tmpGif, gifBuffer);
+  const codexPayload = {
+    userNickname: 'CODEX',
+    slotsUsed: pageSpecies.length,
+    slotsMax: PER_PAGE,
+    summons: rosterSummons,
+    activeIndex: -1,
+  };
 
-      try {
-        execFileSync('ffmpeg', [
-          '-y', '-i', tmpGif,
-          '-movflags', 'faststart', '-pix_fmt', 'yuv420p',
-          '-vf', 'scale=720:720:force_original_aspect_ratio=decrease,pad=720:720:(ow-iw)/2:(oh-ih)/2',
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-an',
-          tmpMp4,
-        ], { timeout: 15000, stdio: 'pipe' });
+  const codexCaption = `📖 *SUMMON CODEX* - ${allSpecies.length} species | Page ${page}/${totalPages}`
+    + (totalPages > 1 ? `\n💡 \`${p} summon codex <page>\` - navigate` : '');
 
-        const mp4Buffer = fs.readFileSync(tmpMp4);
-        let caption = `📖 *SUMMON CODEX* - ${allSpecies.length} species | Page ${page}/${totalPages}`;
-        if (totalPages > 1) caption += `\n💡 \`${p} summon codex <page>\` - navigate`;
-        await sock.sendMessage(chatId, { video: mp4Buffer, gifPlayback: true, caption });
+  await summonGifDelivery.deliverSummonGif({
+    kind: 'codex',
+    payload: codexPayload,
+    sock,
+    chatId,
+    caption: codexCaption,
+    goCall: (pl) => goService.generateSummonRosterGIF(pl),
+    textFallback: buildCodexTextMsg(allSpecies, page, totalPages, pageSpecies, startIdx, p),
+    pngFallback: null,
+    logTag: '[Codex]',
+  });
+}
 
-        try { fs.unlinkSync(tmpGif); } catch (e) {}
-        try { fs.unlinkSync(tmpMp4); } catch (e) {}
-        return;
-      } catch (convErr) {
-        console.error('[Codex] ffmpeg failed:', convErr.message);
-        try { fs.unlinkSync(tmpGif); } catch (e) {}
-        try { fs.unlinkSync(tmpMp4); } catch (e) {}
-      }
-    }
-  } catch (e) {
-    console.error('[Codex] GIF render failed, trying text:', e.message);
-  }
-
-  // Text fallback
+// Text codex page (fallback when the animated GIF is slow/unavailable).
+// 💡 2026-10-10: extracted verbatim from the old inline fallback block.
+function buildCodexTextMsg(allSpecies, page, totalPages, pageSpecies, startIdx, p) {
   let msg = `📖 *SUMMON CODEX* - Page ${page}/${totalPages}\n`;
   msg += `Total: ${allSpecies.length} species\n\n`;
   pageSpecies.forEach((id, i) => {
@@ -876,7 +766,7 @@ async function cmdCodex(sock, chatId, senderJid, args) {
     msg += `${startIdx + i + 1}. ${s?.icon || '🐉'} *${s?.name || id}* - ${s?.rarity || 'COMMON'} ${s?.element || ''}\n`;
   });
   if (totalPages > 1) msg += `\n💡 \`${p} summon codex <page>\` - navigate`;
-  await sock.sendMessage(chatId, { text: msg });
+  return msg;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1845,9 +1735,19 @@ async function cmdSummonEquip(sock, chatId, senderJid, args) {
   }
 
   // If something is already equipped in that slot, return it to inventory
+  // 💡 FIX 2026-10-10: addItem is ASYNC and can FAIL (bag full) - the old
+  // fire-and-forget call silently DESTROYED the previously equipped gear
+  // (old gear vanished, new gear took the slot). Now: await + abort equip
+  // on failure so nothing is lost.
   const oldGear = summon.summonEquipment?.[slot];
   if (oldGear) {
-    inventorySystem.addItem(senderJid, oldGear.id || oldGear.summonSlot, 1);
+    const giveBack = await inventorySystem.addItem(senderJid, oldGear.id || oldGear.summonSlot, 1);
+    if (!giveBack || giveBack.success === false) {
+      await sock.sendMessage(chatId, {
+        text: `❌ Couldn't unequip your current ${slot} gear - inventory is full.\n_Free up a bag slot and try again. Nothing was changed._`
+      });
+      return;
+    }
   }
 
   // Equip the new gear
