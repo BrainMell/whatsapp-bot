@@ -1110,26 +1110,37 @@ const SummonMarket = require('../models/SummonMarket');
 const SummonModel = require('../models/Summon');
 
 async function cmdMarket(sock, chatId, senderJid, args) {
+  // 💡 UNIFIED PLAYER MARKET (2026-10-11): summon listings live in the same
+  // collection as items and runes now. Same verbs, same UX, one market.
+  const playerMarket = require('../rpg/playerMarket');
+  const pmReply = (text, opts = {}) => sock.sendMessage(chatId, { text, ...(opts && opts.mentions ? { mentions: opts.mentions } : {}) });
   const action = (args[0] || '').toLowerCase();
   const rest = args.slice(1);
 
   switch (action) {
     case 'list':
     case 'browse':
-      return await cmdMarketList(sock, chatId, senderJid);
+      return await playerMarket.cmdBrowse(senderJid, pmReply, ['summons', ...rest]);
     case 'sell':
     case 'list_sell':
-      return await cmdMarketSell(sock, chatId, senderJid, rest);
+      return await playerMarket.cmdSell(senderJid, pmReply, ['summon', ...rest]);
     case 'buy':
-      return await cmdMarketBuy(sock, chatId, senderJid, rest);
+      return await playerMarket.cmdBuy(senderJid, pmReply, rest);
     case 'cancel':
-      return await cmdMarketCancel(sock, chatId, senderJid, rest);
+      return await playerMarket.cmdCancel(senderJid, pmReply, rest);
     case 'my':
     case 'mine':
-      return await cmdMarketMy(sock, chatId, senderJid);
+      return await playerMarket.cmdMy(senderJid, pmReply);
     default:
       await sock.sendMessage(chatId, {
-        text: `🏪 *SUMMON MARKET*\n\nCommands:\n• \`${getPrefix()} summon market list\` - browse summons for sale\n• \`${getPrefix()} summon market sell <id> <price>\` - list a summon\n• \`${getPrefix()} summon market buy <listingId>\` - buy a summon\n• \`${getPrefix()} summon market cancel <listingId>\` - cancel your listing\n• \`${getPrefix()} summon market my\` - view your listings\n\n💡 5% listing fee on sale price. Soulbound summons can't be sold.`
+        text: `🏪 *SUMMON MARKET* — now part of the unified *PLAYER MARKET*
+
+• \`${getPrefix()} market summons\` - browse summons for sale
+• \`${getPrefix()} market sell summon <#|id> <price>\` - list a summon
+• \`${getPrefix()} market buy <id|#>\` - buy
+• \`${getPrefix()} market cancel <id>\` - cancel your listing
+• \`${getPrefix()} market my\` - your listings
+\n💡 10% tax on sale. Soulbound summons can't be sold. Items and runes trade in the same market: \`${getPrefix()} market\``
       });
   }
 }

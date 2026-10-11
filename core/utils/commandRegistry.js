@@ -175,10 +175,15 @@ const COMMAND_REGISTRY = {
     { cmd: 'rune remove', desc: 'Remove a socketed rune (needs scroll).', usage: 'rune remove <runeId>' },
     { cmd: 'rune destroy', desc: 'Permanently destroy a socketed rune.', usage: 'rune destroy <runeId>' },
     { cmd: 'rune slots', desc: 'Check rune slot capacity for a skill.', usage: 'rune slots <skillId>' },
-    { cmd: 'rune sell', desc: 'List a rune for sale on the market.', usage: 'rune sell <runeId> <price>' },
-    { cmd: 'rune buy', desc: 'Buy a listed rune.', usage: 'rune buy <listingId>' },
-    { cmd: 'rune market', desc: 'Browse all runes for sale.', usage: 'rune market' },
-    { cmd: 'rune unsell', desc: 'Cancel a rune market listing.', usage: 'rune unsell <runeId>' },
+    { cmd: 'rune sell', desc: '(alias) List a rune on the unified player market.', usage: 'rune sell <runeId> <price>' },
+    { cmd: 'rune buy', desc: '(alias) Buy a market listing.', usage: 'rune buy <listingId|#>' },
+    { cmd: 'rune market', desc: '(alias) Browse runes on the player market.', usage: 'rune market' },
+    { cmd: 'rune unsell', desc: '(alias) Cancel a rune market listing.', usage: 'rune unsell <runeId>' },
+    { cmd: 'market', desc: 'UNIFIED player market — items, runes and summons in one place.', usage: 'market [items|runes|summons] [page]' },
+    { cmd: 'market sell', desc: 'List an item, rune or summon for sale (10% tax on sale).', usage: 'market sell item <bag#> <price> [qty] | rune <id> <price> | summon <#|id> <price>' },
+    { cmd: 'market buy', desc: 'Buy a market listing.', usage: 'market buy <listingId|#>' },
+    { cmd: 'market cancel', desc: 'Cancel your market listing.', usage: 'market cancel <listingId|#>' },
+    { cmd: 'market my', desc: 'View your active market listings.', usage: 'market my' },
     { cmd: 'abyss', desc: 'Abyss help and floor structure.', usage: 'abyss' },
     { cmd: 'abyss enter', desc: 'Start an Abyss run (12h cooldown, L20+).', usage: 'abyss enter' },
     { cmd: 'abyss attack', desc: 'Attack the current floor enemy.', usage: 'abyss attack' },
@@ -223,7 +228,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'summon resonance', desc: 'View resonance bonuses.', usage: 'summon resonance' },
     { cmd: 'summon codex', desc: 'View ALL summon species.', usage: 'summon codex' },
     { cmd: 'summon forge', desc: 'Soul Forge two summons.', usage: 'summon forge <id1> <id2>' },
-    { cmd: 'summon market', desc: 'Summon trading market.', usage: 'summon market <list/sell/buy/cancel>' }
+    { cmd: 'summon market', desc: '(alias) Summon trading — now part of the unified player market.', usage: 'summon market <list/sell/buy/cancel>' }
   ],
   GROUP: [
     { cmd: 'record', desc: 'Toggle message recording for summaries.', usage: 'record on/off' },

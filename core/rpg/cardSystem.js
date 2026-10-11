@@ -8,7 +8,8 @@
 'use strict';
 
 const fs      = require('fs');
-const itemMarket = require('./itemMarket');
+const itemMarket = require('./itemMarket'); // kept for model access; commands route to playerMarket
+const playerMarket = require('./playerMarket');
 const path    = require('path');
 const axios   = require('axios');
 const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
@@ -4458,26 +4459,41 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       await cmdAuction(senderJid, reply, args);
       return true;
 
-    // 💡 P4 Item Market (2026-08-17): player-to-player item/gear listings.
+    // 💡 P4 Item Market (2026-08-17) → UNIFIED PLAYER MARKET (2026-10-11):
+    // all legacy aliases now route into core/rpg/playerMarket.js (items +
+    // runes + summons in one collection, one 10% tax rule). Old listings
+    // were migrated by ensureMigrated().
     case 'listitem':
     case 'li':
-      await itemMarket.cmdListItem(senderJid, reply, args);
+      await playerMarket.cmdSell(senderJid, reply, ['item', ...args]);
       return true;
 
     case 'unlistitem':
     case 'uli':
-      await itemMarket.cmdUnlistItem(senderJid, reply, args);
+      await playerMarket.cmdCancel(senderJid, reply, args);
       return true;
 
     case 'buyitem':
     case 'bi':
-      await itemMarket.cmdBuyItem(senderJid, reply, args);
+      await playerMarket.cmdBuy(senderJid, reply, args);
       return true;
 
     case 'itemmarket':
     case 'im':
-      await itemMarket.cmdItemMarket(senderJid, reply, args);
+      await playerMarket.cmdBrowse(senderJid, reply, args);
       return true;
+
+    // 💡 UNIFIED PLAYER MARKET front door (2026-10-11)
+    case 'market': {
+      const mSub = String(args[0] || '').toLowerCase();
+      const mRest = args.slice(1);
+      if (mSub === 'sell') await playerMarket.cmdSell(senderJid, reply, mRest);
+      else if (mSub === 'buy') await playerMarket.cmdBuy(senderJid, reply, mRest);
+      else if (mSub === 'cancel' || mSub === 'unlist') await playerMarket.cmdCancel(senderJid, reply, mRest);
+      else if (mSub === 'my' || mSub === 'mine') await playerMarket.cmdMy(senderJid, reply);
+      else await playerMarket.cmdBrowse(senderJid, reply, args); // bare/`items`/`runes`/`summons`/page
+      return true;
+    }
 
 
     case 'bid':

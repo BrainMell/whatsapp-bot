@@ -9620,7 +9620,7 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                       const words = lowerTxt.split(' ');
                       const prefixPart = botConfig.getPrefix().toLowerCase();
                       const firstWord = words[0].startsWith(prefixPart) ? words[0].slice(prefixPart.length) : (words[0].startsWith('.') ? words[0].slice(1) : words[0]);
-                      const RPG_CMDS = new Set(['char', 'character', 'stats', 'kills', 'killcount', 'profile', 'me', 'whois', 'cardstyle', 'setdefaultcard', 'status', 'inventory', 'bag', 'inv', 'dismantle', 'equip', 'unequip', 'use', 'enhance', 'blacksmith', 'repair', 'inspect', 'shop', 'buy', 'recipes', 'craft', 'brew', 'forge', 'cook', 'source', 'mine', 'skill', 'skills', 'skilltree', 'st', 'abilities', 'allocate', 'classes', 'evolve', 'trial', 'quest', 'solo', 'adventure', 'join', 'stop', 'vote', 'raid', 'abyss', 'world', 'bounty', 'duel', 'challenge', 'pvp', 'combat', 'summon', 'summons', 'dragonlord', 'dglord', 'dragongod', 'rune', 'clinic', 'heal', 'health', 'hospital', 'rank', 'adventurer', 'monster', 'handbook', 'guide', 'lore', 'leaderboard', 'lb', 'upgrade', 'claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 't2edeck', 't2ecoll', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'cdeck', 'tokens', 'event', 'setprice', 'esummon', 'fc', 'spawn', 'listitem', 'unlistitem', 'buyitem', 'itemmarket', 'balance', 'bal', 'daily', 'register', 'deposit', 'withdraw', 'transfer', 'rob', 'bug', 'rich', 'lottery', 'invest', 'investment', 'gamble', 'slots', 'dice', 'coinflip', 'blackjack', 'roulette', 'plinko', 'wheel', 'crash', 'cups', 'scratch', 'rps', 'horse', 'hl', 'mines', 'penalty', 'guess', 'guild', 'reset', 'handbook', 'tutorial']);
+                      const RPG_CMDS = new Set(['char', 'character', 'stats', 'kills', 'killcount', 'profile', 'me', 'whois', 'cardstyle', 'setdefaultcard', 'status', 'inventory', 'bag', 'inv', 'dismantle', 'equip', 'unequip', 'use', 'enhance', 'blacksmith', 'repair', 'inspect', 'shop', 'buy', 'recipes', 'craft', 'brew', 'forge', 'cook', 'source', 'mine', 'skill', 'skills', 'skilltree', 'st', 'abilities', 'allocate', 'classes', 'evolve', 'trial', 'quest', 'solo', 'adventure', 'join', 'stop', 'vote', 'raid', 'abyss', 'world', 'bounty', 'duel', 'challenge', 'pvp', 'combat', 'summon', 'summons', 'dragonlord', 'dglord', 'dragongod', 'rune', 'clinic', 'heal', 'health', 'hospital', 'rank', 'adventurer', 'monster', 'handbook', 'guide', 'lore', 'leaderboard', 'lb', 'upgrade', 'claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 't2edeck', 't2ecoll', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'cdeck', 'tokens', 'event', 'setprice', 'esummon', 'fc', 'spawn', 'listitem', 'unlistitem', 'buyitem', 'itemmarket', 'market', 'balance', 'bal', 'daily', 'register', 'deposit', 'withdraw', 'transfer', 'rob', 'bug', 'rich', 'lottery', 'invest', 'investment', 'gamble', 'slots', 'dice', 'coinflip', 'blackjack', 'roulette', 'plinko', 'wheel', 'crash', 'cups', 'scratch', 'rps', 'horse', 'hl', 'mines', 'penalty', 'guess', 'guild', 'reset', 'handbook', 'tutorial']);
                       const isRpg = RPG_CMDS.has(firstWord.toLowerCase());
                       if (isRpg) {
                         const bypass = await testerSystem.canBypassRpgLock(senderJid, chatId);
@@ -21197,144 +21197,36 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         return;
                       }
 
-                      // .g rune sell <runeId> <price> - list a rune for sale on the market
+                      // .g rune sell <runeId> <price> → UNIFIED PLAYER MARKET (2026-10-11)
                       if (runeSub === 'sell') {
-                        const runeId = runeArgs[1];
-                        const price = parseInt(runeArgs[2], 10);
-                        if (!runeId || !price || price <= 0) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} rune sell <runeId> <price>\`` });
-                        }
-                        try {
-                          const Rune = require('./models/Rune');
-                          const CardMarket = require('./models/CardMarket');
-                          const rune = await Rune.findOne({ runeId, ownerJid: senderJid });
-                          if (!rune) return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Rune not found in your inventory.' });
-                          if (rune.socketedSkillId) return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Cannot sell a socketed rune. Remove it first.' });
-                          if (rune.onMarket) return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ This rune is already on the market.' });
-
-                          // Check for existing active listing
-                          const existing = await CardMarket.findOne({ runeId, sellerId: senderJid, status: 'active' });
-                          if (existing) return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ This rune already has an active listing.' });
-
-                          // Create market listing
-                          const listing = new CardMarket({
-                            runeId: rune.runeId,
-                            sellerId: senderJid,
-                            isRune: true,
-                            type: 'sale',
-                            price,
-                            status: 'active',
-                            approvalStatus: 'approved',
-                          });
-                          await listing.save();
-
-                          // Mark rune as on market
-                          rune.onMarket = true;
-                          rune.marketPrice = price;
-                          await rune.save();
-
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Listed ${runeSystem.RUNE_TYPES[rune.type].name} (${runeSystem.RUNE_TIERS[rune.tier].name}) for ${price.toLocaleString()} Zeni.\n_Listing ID: \`${listing._id}\`_\n_Buyers: \`${botConfig.getPrefix()} rune buy ${listing._id}\`_` });
-                        } catch (e) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
-                        }
-                      }
-
-                      // .g rune market - browse runes for sale
-                      if (runeSub === 'market') {
-                        try {
-                          const CardMarket = require('./models/CardMarket');
-                          const Rune = require('./models/Rune');
-                          const listings = await CardMarket.find({ isRune: true, status: 'active' }).sort({ price: 1 }).limit(20);
-                          if (listings.length === 0) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + '💎 *Rune Market*\n\n_No runes for sale right now._' });
-                          }
-                          let msg = `💎 *Rune Market* (${listings.length} listings)\n\n`;
-                          for (const l of listings) {
-                            const rune = await Rune.findOne({ runeId: l.runeId });
-                            if (!rune) continue;
-                            const rt = runeSystem.RUNE_TYPES[rune.type];
-                            const tt = runeSystem.RUNE_TIERS[rune.tier];
-                            msg += `${rt.icon} ${rt.name} (${tt.name}) - ${l.price.toLocaleString()} Zeni\n`;
-                            msg += `  Buy: \`${botConfig.getPrefix()} rune buy ${l._id}\`\n`;
-                            msg += `  Seller: ${l.sellerId.split('@')[0]}\n\n`;
-                          }
-                          await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
-                        } catch (e) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
-                        }
+                        const __pm = require('./rpg/playerMarket');
+                        const __pmReply = (text, opts = {}) => sock.sendMessage(chatId, { text: BOT_MARKER + text, ...(opts && opts.mentions ? { mentions: opts.mentions } : {}) });
+                        await __pm.cmdSell(senderJid, __pmReply, ['rune', ...runeArgs.slice(1)]);
                         return;
                       }
 
-                      // .g rune buy <listingId> - buy a listed rune
-                      if (runeSub === 'buy') {
-                        const listingId = runeArgs[1];
-                        if (!listingId) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} rune buy <listingId>\`` });
-                        }
-                        try {
-                          const CardMarket = require('./models/CardMarket');
-                          const Rune = require('./models/Rune');
-                          const economy = require('./rpg/economy');
-
-                          const listing = await CardMarket.findOne({ _id: listingId, isRune: true, status: 'active' });
-                          if (!listing) return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Listing not found or no longer active.' });
-                          if (listing.sellerId === senderJid) return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You cannot buy your own listing.' });
-
-                          const buyerWallet = economy.getGold(senderJid);
-                          if (buyerWallet < listing.price) {
-                            return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You need ${listing.price.toLocaleString()} Zeni (have ${buyerWallet.toLocaleString()}).` });
-                          }
-
-                          // Transfer funds
-                          economy.removeMoney(senderJid, listing.price, `Rune purchase: ${listing.runeId}`);
-                          economy.addMoney(listing.sellerId, listing.price, `Rune sale: ${listing.runeId}`);
-
-                          // Transfer rune ownership
-                          const rune = await Rune.findOne({ runeId: listing.runeId });
-                          if (rune) {
-                            rune.ownerJid = senderJid;
-                            rune.onMarket = false;
-                            rune.marketPrice = 0;
-                            await rune.save();
-                          }
-
-                          // Mark listing as sold
-                          listing.status = 'sold';
-                          listing.completedAt = new Date();
-                          await listing.save();
-
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Purchased ${rune ? runeSystem.RUNE_TYPES[rune.type].name : 'rune'} for ${listing.price.toLocaleString()} Zeni.\n_Use \`${botConfig.getPrefix()} rune inv\` to see it in your inventory._` });
-                        } catch (e) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
-                        }
+                      // .g rune market → UNIFIED PLAYER MARKET browse (2026-10-11)
+                      if (runeSub === 'market') {
+                        const __pm = require('./rpg/playerMarket');
+                        const __pmReply = (text, opts = {}) => sock.sendMessage(chatId, { text: BOT_MARKER + text, ...(opts && opts.mentions ? { mentions: opts.mentions } : {}) });
+                        await __pm.cmdBrowse(senderJid, __pmReply, ['runes', ...runeArgs.slice(1)]);
+                        return;
                       }
 
-                      // .g rune unsell <runeId> - cancel a market listing
+                      // .g rune buy <listingId> → UNIFIED PLAYER MARKET (2026-10-11)
+                      if (runeSub === 'buy') {
+                        const __pm = require('./rpg/playerMarket');
+                        const __pmReply = (text, opts = {}) => sock.sendMessage(chatId, { text: BOT_MARKER + text, ...(opts && opts.mentions ? { mentions: opts.mentions } : {}) });
+                        await __pm.cmdBuy(senderJid, __pmReply, runeArgs.slice(1));
+                        return;
+                      }
+
+                      // .g rune unsell <runeId> → UNIFIED PLAYER MARKET cancel (2026-10-11)
                       if (runeSub === 'unsell') {
-                        const runeId = runeArgs[1];
-                        if (!runeId) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} rune unsell <runeId>\`` });
-                        }
-                        try {
-                          const Rune = require('./models/Rune');
-                          const CardMarket = require('./models/CardMarket');
-                          const rune = await Rune.findOne({ runeId, ownerJid: senderJid });
-                          if (!rune) return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Rune not found.' });
-                          if (!rune.onMarket) return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ This rune is not on the market.' });
-
-                          // Cancel the listing
-                          await CardMarket.updateOne(
-                            { runeId, sellerId: senderJid, status: 'active' },
-                            { $set: { status: 'cancelled', completedAt: new Date() } }
-                          );
-                          rune.onMarket = false;
-                          rune.marketPrice = 0;
-                          await rune.save();
-
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Removed ${runeSystem.RUNE_TYPES[rune.type].name} from the market.` });
-                        } catch (e) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
-                        }
+                        const __pm = require('./rpg/playerMarket');
+                        const __pmReply = (text, opts = {}) => sock.sendMessage(chatId, { text: BOT_MARKER + text, ...(opts && opts.mentions ? { mentions: opts.mentions } : {}) });
+                        await __pm.cmdCancel(senderJid, __pmReply, runeArgs.slice(1));
+                        return;
                       }
 
                       // .g rune inv - inventory (stacked by type + tier)
