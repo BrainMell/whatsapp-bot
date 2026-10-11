@@ -13915,6 +13915,15 @@ Usage: ${newUsage}/5${warningText}`;
                       );
                     }
 
+                    // 💡 FIX 2026-10-11: hoisted temp paths above the try so the new
+                    // `finally` can clean them up. Previously temp files were only
+                    // deleted on the SUCCESS path — every failed conversion leaked
+                    // its .webp/.gif/.mp4 into ./temp (found 4 leftovers from the
+                    // Oct 8 incident still sitting on Box2).
+                    const timestamp = Date.now();
+                    const tempSticker = `./temp/temp_${timestamp}.webp`;
+                    const tempGif = `./temp/temp_${timestamp}.gif`;
+                    const tempVideo = `./temp/temp_${timestamp}.mp4`;
                     try {
                       await sock.sendMessage(chatId, {
                         react: { text: "⏳", key: m.key },
@@ -13946,31 +13955,55 @@ Usage: ${newUsage}/5${warningText}`;
                       if (!buffer || buffer.length === 0)
                         throw new Error("Empty media buffer");
 
-                      const timestamp = Date.now();
-                      const tempSticker = `./temp/temp_${timestamp}.webp`;
-                      const tempGif = `./temp/temp_${timestamp}.gif`;
-                      const tempVideo = `./temp/temp_${timestamp}.mp4`;
-
                       if (!fs.existsSync("./temp")) fs.mkdirSync("./temp");
                       fs.writeFileSync(tempSticker, buffer);
 
-                      // Robust Video Conversion
-                      // 1. WebP -> GIF (Handles animation)
-                      const toGif = `"${FFMPEG_PATH}" -i "${tempSticker}" -vf "fps=20,scale=512:-1:flags=lanczos" -y "${tempGif}"`;
-
+                      // Robust Video Conversion (REBUILT 2026-10-11, owner: ".j tovid is broken")
+                      // ROOT CAUSE: ffmpeg 6.1.1 (both boxes) CANNOT decode animated
+                      // WebP — its native decoder skips the ANIM/ANMF chunks
+                      // ("image data not found" → 0 frames), so the old webp→gif step
+                      // AND its direct webp→mp4 fallback both failed for every animated
+                      // sticker. Static stickers converted fine; animated ones (tovid's
+                      // entire purpose) always errored. Diagnosed live from the Oct 8
+                      // leftover temp file (73-frame sticker, both outputs 0 bytes).
+                      // FIX: decode with sharp, which reads animated WebP natively
+                      // (libwebp): webp --sharp(animated)--> gif --ffmpeg--> mp4.
+                      // Validated end-to-end on the exact failing sticker: 73/73
+                      // frames survive into a 512x512 h264 mp4. ffmpeg webp→gif stays
+                      // as fallback for sharp-unreadable inputs, then direct webp→mp4.
+                      const sharp = require("sharp");
+                      let sharpGifOk = false;
                       try {
-                        await execPromise(toGif);
-                      } catch (gifErr) {
+                        await sharp(tempSticker, { animated: true }).gif().toFile(tempGif);
+                        sharpGifOk =
+                          fs.existsSync(tempGif) && fs.statSync(tempGif).size > 0;
+                      } catch (sErr) {
                         console.log(
-                          "⚠️️ WebP to GIF failed, attempting direct path...",
+                          "⚠️ sharp webp→gif failed, falling back to ffmpeg:",
+                          sErr.message,
                         );
-                        const toMp4Direct = `"${FFMPEG_PATH}" -i "${tempSticker}" -pix_fmt yuv420p -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" -y "${tempVideo}"`;
-                        await execPromise(toMp4Direct);
+                      }
+                      if (!sharpGifOk) {
+                        // 1a. Fallback: WebP -> GIF via ffmpeg (static stickers, or
+                        // newer ffmpeg builds that can decode animated WebP)
+                        const toGif = `"${FFMPEG_PATH}" -i "${tempSticker}" -vf "fps=20,scale=512:-1:flags=lanczos" -y "${tempGif}"`;
+                        await execPromise(toGif);
                       }
 
+                      // 2. GIF -> MP4 (ffmpeg decodes GIF fine)
                       if (fs.existsSync(tempGif) && !fs.existsSync(tempVideo)) {
                         const toMp4 = `"${FFMPEG_PATH}" -i "${tempGif}" -movflags faststart -pix_fmt yuv420p -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" -y "${tempVideo}"`;
                         await execPromise(toMp4);
+                      }
+
+                      // 3. Last resort: direct WebP -> MP4 (only ever worked for
+                      // static stickers; kept for inputs sharp AND the gif chain reject)
+                      if (
+                        !fs.existsSync(tempVideo) ||
+                        fs.statSync(tempVideo).size === 0
+                      ) {
+                        const toMp4Direct = `"${FFMPEG_PATH}" -i "${tempSticker}" -pix_fmt yuv420p -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" -y "${tempVideo}"`;
+                        await execPromise(toMp4Direct);
                       }
 
                       await sock.sendMessage(
@@ -13983,10 +14016,6 @@ Usage: ${newUsage}/5${warningText}`;
                         { quoted: m },
                       );
 
-                      if (fs.existsSync(tempSticker))
-                        fs.unlinkSync(tempSticker);
-                      if (fs.existsSync(tempGif)) fs.unlinkSync(tempGif);
-                      if (fs.existsSync(tempVideo)) fs.unlinkSync(tempVideo);
                       await sock.sendMessage(chatId, {
                         react: { text: "✅", key: m.key },
                       });
@@ -14003,6 +14032,15 @@ Usage: ${newUsage}/5${warningText}`;
                           ? `❌ Download failed (Network Error). Try again.`
                           : `❌ Video conversion failed. Make sure the sticker is animated and FFmpeg is installed.`,
                       });
+                    } finally {
+                      // 💡 FIX 2026-10-11: always clean temp files (success AND
+                      // error paths). Video is deleted only after sendMessage
+                      // resolved, so the upload is never raced.
+                      for (const f of [tempSticker, tempGif, tempVideo]) {
+                        try {
+                          if (fs.existsSync(f)) fs.unlinkSync(f);
+                        } catch (_) {}
+                      }
                     }
                     return;
                   }
