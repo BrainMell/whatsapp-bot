@@ -48,6 +48,27 @@ function _normalizeShoobCardrURL(raw) {
   return `${url}?size=500`;
 }
 
+// ── Rule34 pure helpers (module-level for offline QA) ─────────────────────
+// booru tag syntax: lowercase, spaces → underscores, strip junk chars
+function toBooruTag(query) {
+  return (query || "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-z0-9_()\-.,]/g, "")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
+}
+// keep still-image posts only, best-scored first, capped
+const R34_IMAGE_EXT = /\.(jpg|jpeg|png)$/i;
+function pickR34Images(posts, count = 10) {
+  return (Array.isArray(posts) ? posts : [])
+    .filter((p) => p && typeof p.file_url === "string" && R34_IMAGE_EXT.test(p.file_url))
+    .sort((a, b) => (parseInt(b.score) || 0) - (parseInt(a.score) || 0))
+    .slice(0, count)
+    .map((p) => p.file_url);
+}
+
 class GoImageService {
   constructor(overrideUrl = null) {
     this.baseUrl = overrideUrl || _explicitGoUrl || _DEFAULT_GO_URL;
@@ -942,16 +963,43 @@ class GoImageService {
   }
 
   /*
-   * Deep Rule34 Scrape (Go Service)
+   * Rule34 search — DIRECT rule34.xxx JSON API (2026-10-12 rewire).
+   * The old Go-service/Browserless scrape route is dead (expired token +
+   * rule34.xxx is now Cloudflare-challenged for HTML, and the dapi JSON API
+   * REQUIRES account API keys — verified live from box egress: plain calls
+   * return 200 "Missing authentication").
+   * Env: R34_API_KEY + R34_USER_ID (free: rule34.xxx account → settings → API key).
+   * Return shape preserved: { images: [url...], count } (+ needsKey flag).
+   * Pure helpers (toBooruTag / pickR34Images) are module-level for offline QA.
    */
   async searchRule34(query, count = 10) {
+    const key = (process.env.R34_API_KEY || "").trim();
+    const uid = (process.env.R34_USER_ID || "").trim();
+    if (!key || !uid) {
+      return {
+        images: [], count: 0, needsKey: true,
+        error: "rule34.xxx API key not configured (R34_API_KEY / R34_USER_ID)",
+      };
+    }
     try {
-      const response = await this.client.get("/api/scrape/rule34", {
-        params: { query, count },
-      });
-      return response.data;
+      const tags = toBooruTag(query);
+      if (!tags) return { images: [], count: 0 };
+      // over-fetch so score filtering still leaves enough
+      const limit = Math.min(50, Math.max(count * 4, 12));
+      const url =
+        `https://api.rule34.xxx/index.php?page=dapi&s=post&q=${encodeURIComponent(tags)}` +
+        `&limit=${limit}&json=1&api_key=${encodeURIComponent(key)}&user_id=${encodeURIComponent(uid)}`;
+      const response = await axios.get(url, { timeout: 15000 });
+      const posts = Array.isArray(response.data) ? response.data : [];
+      const images = pickR34Images(posts, count);
+      return { images, count: images.length };
     } catch (error) {
-      console.error("GoService Rule34 Error:", error.message);
+      const status = error.response?.status;
+      console.error("Rule34 API Error:", status || "", error.message);
+      // 401/403 → key invalid/expired; surface as needsKey so the UI hints setup
+      if (status === 401 || status === 403) {
+        return { images: [], count: 0, needsKey: true, error: "rule34.xxx rejected the configured API key" };
+      }
       return { images: [], count: 0 };
     }
   }
@@ -1322,6 +1370,8 @@ module.exports = _sharedInstance;
 module.exports.GoImageService = GoImageService;
 module.exports.getShared = () => _sharedInstance;
 module.exports._normalizeShoobCardrURL = _normalizeShoobCardrURL; // QA hook
+module.exports.toBooruTag = toBooruTag; // QA hook (rule34 rewire 2026-10-12)
+module.exports.pickR34Images = pickR34Images; // QA hook
 
 // 💡 Manual reload support (`<prefix> reloadservers`): drop the 60s isHealthy()
 // memo so the next image command re-probes the Go service immediately after a

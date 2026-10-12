@@ -58,6 +58,7 @@ const { Sticker, StickerTypes } = require("wa-sticker-formatter");
 const stickerPack = require("./utils/stickerPack"); // native WhatsApp sticker packs (.j s -p)
 const quoteCard = require("./utils/quoteCard"); // .j quote <text> → quote card image (2026-10-12)
 const aiOverview = require("./utils/aiOverview"); // .j google <question> → web-grounded AI-overview answer (2026-10-12)
+const mapCard = require("./utils/mapCard"); // .j map <place> → real-world map card + Google Maps link (2026-10-12)
 const { parseHTML } = require("linkedom");
 
 // ═══ 🤝 GC COEXISTENCE (owner 2026-10-07: "scrape the one-group-per-bot
@@ -2531,10 +2532,140 @@ async function startBot(configInstance) {
       await awardProgression(senderJid, chatId);
     }
 
+    // ─── .j map <place> — real-world map card (2026-10-12) ────────────────
+    // Nominatim geocode → OSM tile composite (3×3, red pin, caption bar) →
+    // JPEG card + tappable Google Maps link. Keyless by design.
+    const _mapTileCache = new Map(); // "z/x/y" → {buf, src} — tile-policy politeness
+    let _mapUsedCarto = false;       // flips when CARTO fallback tiles were used
+    async function handleMapCommand(sock, chatId, rawQuery, m, senderJid) {
+      await sock.sendMessage(chatId, { react: { text: "🗺️", key: m.key } });
+      try {
+        const query = (rawQuery || "").trim().slice(0, 200);
+        if (!query) {
+          await sock.sendMessage(chatId, {
+            text:
+              BOT_MARKER +
+              `🗺️ *MAP USAGE*\n\n\`${botConfig.getPrefix()} map <place>\`\n\nExamples:\n• \`${botConfig.getPrefix()} map Ghana\`\n• \`${botConfig.getPrefix()} map USA chicago\`\n• \`${botConfig.getPrefix()} map Osu, Accra\``,
+          }, { quoted: m });
+          await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+          return;
+        }
+
+        // 1) Geocode (Nominatim — keyless, UA required by their policy)
+        const geoRes = await axios.get(
+          "https://nominatim.openstreetmap.org/search",
+          {
+            params: { q: query, format: "json", limit: 1, addressdetails: 0 },
+            headers: { "User-Agent": "wa-jake-bot/1.0 (WhatsApp bot map command)" },
+            timeout: 12000,
+          },
+        );
+        const hits = Array.isArray(geoRes.data) ? geoRes.data : [];
+        if (!hits.length) {
+          await sock.sendMessage(chatId, {
+            text: BOT_MARKER + `🗺️ couldn't find "${query.slice(0, 80)}" on the map — try adding a country or city (e.g. \`map Springfield, USA\`).`,
+          }, { quoted: m });
+          await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+          return;
+        }
+        const hit = hits[0];
+        const lat = parseFloat(hit.lat), lng = parseFloat(hit.lon);
+        const z = mapCard.fitZoom(hit.boundingbox, {
+          fallback: mapCard.zoomForType(hit.type, hit.class),
+        });
+
+        // 2) Download 3×3 OSM tiles around the point.
+        // ⚠️ Tile usage policy (osm.wiki/Blocked — hit LIVE during testing):
+        // no more than ~2 req/s, honest identified UA with contact, 418-block
+        // pages arrive as VALID PNGs → status must be 200 AND magic checked.
+        // Sequential fetch with a small gap + in-memory cache keeps us polite;
+        // CARTO (CDN, generous) fills any tile OSM refuses. Attribution adapts.
+        const origin = mapCard.pickOriginTile(lat, lng, z, 3);
+        const TILE_UA = "wa-jake-map/1.0 (WhatsApp community bot; +https://github.com/BrainMell/whatsapp-bot)";
+        const _tileCache = _mapTileCache;
+        async function downloadTile(tx, ty) {
+          const ck = `${z}/${tx}/${ty}`;
+          const cached = _tileCache.get(ck);
+          if (cached) return cached;
+          const fetchBuf = (url) =>
+            axios.get(url, { responseType: "arraybuffer", headers: { "User-Agent": TILE_UA }, timeout: 8000 })
+              .then((r) => {
+                const buf = Buffer.from(r.data);
+                return r.status === 200 && buf.length > 500 && buf.slice(0, 4).toString("hex") === "89504e47" ? buf : null;
+              })
+              .catch(() => null);
+          let buf = await fetchBuf(mapCard.tileUrl(tx, ty, z));
+          let src = "osm";
+          if (!buf) {
+            buf = await fetchBuf(`https://basemaps.cartocdn.com/rastertiles/voyager/${z}/${tx}/${ty}.png`);
+            src = "carto";
+          }
+          if (buf) {
+            if (_tileCache.size > 250) _tileCache.clear();
+            _tileCache.set(ck, { buf, src });
+            if (src === "carto") _mapUsedCarto = true;
+          }
+          return buf;
+        }
+        const tileBuffers = [];
+        for (let dy = 0; dy < 3; dy++) {
+          for (let dx = 0; dx < 3; dx++) {
+            tileBuffers.push(await downloadTile(origin.x + dx, origin.y + dy));
+            await new Promise((r) => setTimeout(r, 340)); // ≤ ~3 req/s worst case
+          }
+        }
+        const okTiles = tileBuffers.filter(Boolean).length;
+        if (okTiles === 0) throw new Error("map tiles unavailable right now — try again in a minute");
+
+        // 3) Composite → JPEG
+        const { createCanvas, loadImage } = require("canvas");
+        const canvas = await mapCard.compositeMap({
+          tileBuffers,
+          markerLat: lat, markerLng: lng, z,
+          originX: origin.x, originY: origin.y,
+          label: (hit.display_name || query).split(",").slice(0, 2).join(",").trim(),
+          sub: `${lat.toFixed(4)}, ${lng.toFixed(4)}  ·  zoom ${z}`,
+          attribution: _mapUsedCarto ? "© OpenStreetMap © CARTO" : "© OpenStreetMap contributors",
+          createCanvas, loadImage,
+        });
+        const jpeg = await sharp(canvas.toBuffer("image/png")).jpeg({ quality: 85 }).toBuffer();
+        const thumb = await buildThumbnail(jpeg);
+
+        // 4) Send card + tappable link
+        const mapText = mapCard.buildMapText(hit);
+        const caption = `🗺️ *${(hit.display_name || query).split(",").slice(0, 2).join(",").trim()}*`;
+        const sendPromise = sock.sendMessage(chatId, { image: jpeg, caption, jpegThumbnail: thumb }, { quoted: m });
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Map image send timed out after 15s")), 15000),
+        );
+        await Promise.race([sendPromise, timeoutPromise]);
+        await sock.sendMessage(chatId, { text: BOT_MARKER + mapText }, { quoted: m });
+        console.log(`🗺️ [map] "${query}" → ${hit.display_name?.slice(0, 60)} z=${z} tiles=${okTiles}/9`);
+        await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+      } catch (err) {
+        console.error("Map Command Error:", err.message);
+        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+        await sock.sendMessage(chatId, {
+          text: BOT_MARKER + `🗺️ map failed: ${err.message?.slice(0, 120)}`,
+        }, { quoted: m });
+      }
+      await awardProgression(senderJid, chatId);
+    }
+
     async function handleNsfwCommand(sock, chatId, query, m) {
       await sock.sendMessage(chatId, { react: { text: "🔞", key: m.key } });
       try {
         const data = await goService.searchRule34(query, 5);
+        if (data.needsKey) {
+          // rule34.xxx made API keys mandatory (site-wide policy change).
+          // Owner setup: free account → settings → API key → .env keys.
+          console.error("Rule34 needs API key setup (R34_API_KEY / R34_USER_ID)");
+          await sock.sendMessage(chatId, {
+            text: BOT_MARKER + `🔞 Rule34 now requires an API key on their end — the bot owner needs to add R34_API_KEY + R34_USER_ID to the bot config (free, takes a minute on the site). Ask Mellow to wire it.`,
+          }, { quoted: m });
+          await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+          return;
+        }
         const images = data.images || [];
         if (!images.length)
           return await sock.sendMessage(chatId, {
@@ -12020,6 +12151,19 @@ _💡 Reply with another number from your search list!_`.trim();
                     // .j lore
                     if (primaryCmd === "lore") {
                       await guildAdventure.showLore(sock, chatId);
+                      return;
+                    }
+
+                    // .j map <place> — real-world map card (2026-10-12).
+                    // Bare `.j map` / atlas keywords (beyond/afterlife/abyss/all)
+                    // still fall through to the RPG world charts below.
+                    const __mapQuery = cmdArgs.slice(1).join(" ").trim();
+                    if (
+                      primaryCmd === "map" &&
+                      __mapQuery &&
+                      !["beyond", "afterlife", "abyss", "all"].includes(__mapQuery.toLowerCase())
+                    ) {
+                      await handleMapCommand(sock, chatId, __mapQuery, m, senderJid);
                       return;
                     }
 
@@ -25720,6 +25864,26 @@ Write ONE witty verdict line (max 90 chars) about their compatibility. Roast the
                         senderJid,
                       );
                       return;
+                    }
+
+                    // Map Command (NEW — 2026-10-12). Same scope discipline as
+                    // google/quote: only lowerTxt/cleanTxt/m/sock/chatId/
+                    // senderJid/botConfig are legal here. Requires args — bare
+                    // `.j map` falls through (RPG world atlas handles it).
+                    if (
+                      lowerTxt.startsWith(
+                        `${botConfig.getPrefix().toLowerCase()} map `,
+                      )
+                    ) {
+                      const mq = cleanTxt
+                        .substring(botConfig.getPrefix().length)
+                        .trim()
+                        .replace(/^\S+\s*/, ""); // drop the command word, keep the place's case
+                      const ATLAS_WORDS = ["beyond", "afterlife", "abyss", "all"];
+                      if (mq && !ATLAS_WORDS.includes(mq.toLowerCase())) {
+                        await handleMapCommand(sock, chatId, mq, m, senderJid);
+                        return;
+                      }
                     }
 
                     // Quote Command (NEW)
