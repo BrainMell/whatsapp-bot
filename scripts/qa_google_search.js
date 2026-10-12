@@ -223,7 +223,7 @@ ok("all three parsers wired",
 ok("MIN_RESULTS gate used", engineSrc.includes("parsed.length >= aiOverview.MIN_RESULTS"));
 ok("relevance gate wired (anti-decoy)", engineSrc.includes("aiOverview.relevantEnough(query, parsed)"));
 ok("one immediate retry after all-fail — first ALIVE backend (decoys are per-request; 429-dead ones are never re-hit)", engineSrc.includes("gotResults = await runBackends([firstAlive]);") && /if \(firstAlive\) gotResults = await runBackends\(\[firstAlive\]\);/.test(engineSrc));
-ok("synthesis via groq + SMART model", /handleGoogleSearchCommand[\s\S]{0,9000}groq\.chat\.completions\.create\(\s*\{[\s\S]{0,400}model: MODELS\.SMART/.test(engineSrc));
+ok("synthesis via groq + SMART model", /handleGoogleSearchCommand[\s\S]{0,14000}groq\.chat\.completions\.create\(\s*\{[\s\S]{0,400}model: MODELS\.SMART/.test(engineSrc));
 ok("synthesis failure → results-only fallback",
   engineSrc.includes("aiOverview.buildResultsOnlyMessage(query, results)") &&
   engineSrc.includes("aiOverview.buildOverviewMessage(query, answer, results)"));
@@ -326,12 +326,27 @@ ok("resetSearchState clears cache+breakers", ao.cacheGet("goku vs saitama!") ===
 // engine wiring pins
 const gIdx = (s) => engineSrc.indexOf(s);
 ok("engine wires bing-rss backend with parseBingRss", /name:\s*"bing-rss"/.test(engineSrc) && /parse:\s*aiOverview\.parseBingRss/.test(engineSrc));
-ok("backend order brave → bing → bing-rss → ddg-html → ddg-lite", ["brave", "bing", "bing-rss", "ddg-html", "ddg-lite"].every((n, i, a) => i === 0 || gIdx(`name: "${n}"`) > gIdx(`name: "${a[i - 1]}"`)));
+ok("engine wires tier-2 wikipedia backend with parseWikipediaJson", /name:\s*"wikipedia"/.test(engineSrc) && /parse:\s*aiOverview\.parseWikipediaJson/.test(engineSrc) && engineSrc.includes("en.wikipedia.org/w/api.php"));
+ok("backend order brave → bing → bing-rss → ddg-html → ddg-lite → wikipedia", ["brave", "bing", "bing-rss", "ddg-html", "ddg-lite", "wikipedia"].every((n, i, a) => i === 0 || gIdx(`name: "${n}"`) > gIdx(`name: "${a[i - 1]}"`)));
 ok("cache lookup happens before backends run", gIdx("aiOverview.cacheGet(query)") >= 0 && gIdx("aiOverview.cacheGet(query)") < gIdx("const runBackends"));
 ok("cache hit short-circuits backend loop", /if \(!cached\) \{\s*\n\s*let gotResults = await runBackends\(eligible\(\)\);/.test(engineSrc));
 ok("429 trips the per-backend breaker", engineSrc.includes("aiOverview.noteBackend429(b.name)") && /beErr\?\.response\?\.status === 429/.test(engineSrc));
 ok("retry pass targets first ALIVE backend (not blind backends[0])", /const firstAlive = eligible\(\)\[0\];/.test(engineSrc) && !/runBackends\(\[backends\[0\]\]\)/.test(engineSrc));
 ok("results cached after success for retries", /if \(!cached\) aiOverview\.cacheSet\(query, results, usedBackend\);/.test(engineSrc));
+ok("bing backends reuse a warm cookie jar (decoy-mode guard)", (engineSrc.match(/await bingCookies\(\)/g) || []).length >= 2 && engineSrc.includes("let _bingCookieJar = null"));
+ok("jar force-refreshed before the retry pass", /await bingCookies\(true\);[\s\S]{0,200}const firstAlive = eligible\(\)\[0\];/.test(engineSrc));
+ok("parse receives raw resp.data (JSON APIs need the object)", engineSrc.includes("b.parse(resp.data)"));
+// parseWikipediaJson behavior
+const WIKI_FIXTURE = JSON.stringify({ query: { search: [
+  { ns: 0, title: "Saitama (One-Punch Man)", pageid: 67731630, snippet: "the <span class=\"searchmatch\">strongest</span> character in two series" },
+  { ns: 0, title: "Goku", pageid: 902365, snippet: "Son <span class=\"searchmatch\">Goku</span> is a fictional character" },
+] } });
+const wikiParsed = ao.parseWikipediaJson(WIKI_FIXTURE);
+ok("parseWikipediaJson maps hits to results", wikiParsed.length === 2 && wikiParsed[0].title === "Saitama (One-Punch Man)");
+ok("parseWikipediaJson builds wiki URLs", wikiParsed[1].url === "https://en.wikipedia.org/wiki/Goku" && wikiParsed[0].domain === "en.wikipedia.org");
+ok("parseWikipediaJson strips HTML from snippets", wikiParsed[0].snippet === "the strongest character in two series");
+ok("parseWikipediaJson accepts object form (axios auto-parse)", ao.parseWikipediaJson(JSON.parse(WIKI_FIXTURE)).length === 2);
+ok("parseWikipediaJson garbage/empty safe", ao.parseWikipediaJson("not json").length === 0 && ao.parseWikipediaJson("{}").length === 0 && ao.parseWikipediaJson(null).length === 0);
 
 console.log(`\n${"═".repeat(50)}\nRESULT: ${pass} pass, ${fail} fail ${fail === 0 ? "— ALL GREEN ✅" : "— FAILURES ❌"}`);
 process.exit(fail === 0 ? 0 : 1);

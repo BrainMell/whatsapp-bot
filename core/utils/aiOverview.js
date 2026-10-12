@@ -292,6 +292,37 @@ function parseBingRss(xml) {
   return out;
 }
 
+// en.wikipedia.org/w/api.php?action=query&list=search — tier-2 reference
+// backend. Every full-web engine (brave/bing/ddg/mojeek/…) is hostile to
+// datacenter IPs at least sometimes (verified live 2026-10-12: brave 429s
+// both box IPs, bing flips to fabricated decoys, ddg anomaly-202, mojeek
+// captcha) — the MediaWiki search API, by contrast, is policy-open and
+// honest. Not full-web coverage, but real sourced content beats a hard
+// failure when everything else is rate-limiting. Accepts object (axios
+// auto-parse) or string.
+function parseWikipediaJson(raw) {
+  const out = [];
+  if (!raw) return out;
+  let data;
+  try {
+    data = typeof raw === "string" ? JSON.parse(raw) : raw;
+  } catch {
+    return out;
+  }
+  const hits = data && data.query && Array.isArray(data.query.search)
+    ? data.query.search
+    : [];
+  for (const h of hits) {
+    if (!h || !h.title) continue;
+    const url = `https://en.wikipedia.org/wiki/${encodeURIComponent(
+      String(h.title).replace(/ /g, "_"),
+    )}`;
+    const snippet = stripTags(h.snippet || "");
+    out.push({ title: String(h.title), snippet, url, domain: "en.wikipedia.org" });
+  }
+  return out;
+}
+
 function dedupeAndCap(results, cap = MAX_RESULTS) {
   const seen = new Set();
   const out = [];
@@ -516,6 +547,7 @@ module.exports = {
   parseBingHtml,
   parseBraveHtml,
   parseBingRss,
+  parseWikipediaJson,
   dedupeAndCap,
   cacheGet,
   cacheSet,

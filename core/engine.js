@@ -2413,6 +2413,32 @@ async function startBot(configInstance) {
         // captcha or 403 datacenter IPs (probed same day).
         const UA =
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+        // Bing decoy-mode correlates with cookie-less requests (live 14:45Z:
+        // cold request → fabricated Gmail results for a Goku query; same
+        // request after a bing.com warm-up → real organic items on BOTH the
+        // HTML and RSS endpoints). Lazily fetch and reuse a cookie jar;
+        // force-refreshed before the retry pass.
+        let _bingCookieJar = null;
+        const bingCookies = async (force = false) => {
+          if (_bingCookieJar !== null && !force) return _bingCookieJar;
+          try {
+            const r = await axios.get("https://www.bing.com/", {
+              headers: { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9" },
+              timeout: 8000,
+              maxRedirects: 5,
+            });
+            const set = Array.isArray(r.headers["set-cookie"])
+              ? r.headers["set-cookie"]
+              : [];
+            _bingCookieJar = set
+              .map((c) => String(c).split(";")[0])
+              .filter(Boolean)
+              .join("; ");
+          } catch {
+            _bingCookieJar = _bingCookieJar || "";
+          }
+          return _bingCookieJar;
+        };
         const backends = [
           {
             name: "brave",
@@ -2427,24 +2453,36 @@ async function startBot(configInstance) {
           },
           {
             name: "bing",
-            fn: () =>
-              axios.get("https://www.bing.com/search", {
+            fn: async () => {
+              const cookie = await bingCookies();
+              return axios.get("https://www.bing.com/search", {
                 params: { q: query, count: 10 },
-                headers: { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9" },
+                headers: {
+                  "User-Agent": UA,
+                  "Accept-Language": "en-US,en;q=0.9",
+                  ...(cookie ? { Cookie: cookie } : {}),
+                },
                 timeout: 9000,
                 maxRedirects: 5,
-              }),
+              });
+            },
             parse: aiOverview.parseBingHtml,
           },
           {
             name: "bing-rss",
-            fn: () =>
-              axios.get("https://www.bing.com/search", {
+            fn: async () => {
+              const cookie = await bingCookies();
+              return axios.get("https://www.bing.com/search", {
                 params: { q: query, format: "rss", count: 10 },
-                headers: { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9" },
+                headers: {
+                  "User-Agent": UA,
+                  "Accept-Language": "en-US,en;q=0.9",
+                  ...(cookie ? { Cookie: cookie } : {}),
+                },
                 timeout: 9000,
                 maxRedirects: 5,
-              }),
+              });
+            },
             parse: aiOverview.parseBingRss,
           },
           {
@@ -2475,6 +2513,26 @@ async function startBot(configInstance) {
               }),
             parse: aiOverview.parseDdgLite,
           },
+          // tier-2 reference backend — policy-open MediaWiki search API;
+          // honest, always-up content when every full-web engine is
+          // rate-limiting/challenging the box IPs (see parseWikipediaJson).
+          {
+            name: "wikipedia",
+            fn: () =>
+              axios.get("https://en.wikipedia.org/w/api.php", {
+                params: {
+                  action: "query",
+                  list: "search",
+                  srsearch: query,
+                  srlimit: 6,
+                  format: "json",
+                  origin: "*",
+                },
+                headers: { "User-Agent": UA, Accept: "application/json" },
+                timeout: 9000,
+              }),
+            parse: aiOverview.parseWikipediaJson,
+          },
         ];
 
         // Relevance gate: Bing HTML intermittently serves anti-bot DECOY SERPs
@@ -2488,7 +2546,7 @@ async function startBot(configInstance) {
             try {
               const resp = await b.fn();
               const parsed = aiOverview.dedupeAndCap(
-                b.parse(typeof resp.data === "string" ? resp.data : String(resp.data || "")),
+                b.parse(resp.data),
               );
               const relevant = aiOverview.relevantEnough(query, parsed);
               console.log(`🌐 [google] ${b.name}: ${parsed.length} results, relevant=${relevant} for "${query.slice(0, 60)}"`);
@@ -2517,6 +2575,9 @@ async function startBot(configInstance) {
             // the first backend still alive. Never blindly backends[0]:
             // re-hitting a 429-cooling backend (old behavior) fed Brave more
             // requests during the 13:49Z incident and prolonged the block.
+            // Bing decoys correlate with stale/absent cookies (live 14:45Z)
+            // → force-refresh the jar before this last pass.
+            await bingCookies(true);
             const firstAlive = eligible()[0];
             if (firstAlive) gotResults = await runBackends([firstAlive]);
           }
