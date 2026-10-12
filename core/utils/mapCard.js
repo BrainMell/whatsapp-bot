@@ -1,5 +1,5 @@
 // ============================================
-// 🗺️ MAPCARD — .j map <place> real-world map cards
+// 🗺️ MAPCARD — .j wmap <place> real-world map cards (renamed from .j map 2026-10-12 so the RPG world atlas keeps `map`)
 // Pure, offline-QAable helpers:
 //   - slippy-map tile math (lat/lng ↔ tile x/y)
 //   - zoom fitting from a Nominatim boundingbox

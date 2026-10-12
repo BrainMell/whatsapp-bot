@@ -58,7 +58,7 @@ const { Sticker, StickerTypes } = require("wa-sticker-formatter");
 const stickerPack = require("./utils/stickerPack"); // native WhatsApp sticker packs (.j s -p)
 const quoteCard = require("./utils/quoteCard"); // .j quote <text> → quote card image (2026-10-12)
 const aiOverview = require("./utils/aiOverview"); // .j google <question> → web-grounded AI-overview answer (2026-10-12)
-const mapCard = require("./utils/mapCard"); // .j map <place> → real-world map card + Google Maps link (2026-10-12)
+const mapCard = require("./utils/mapCard"); // .j wmap <place> → real-world map card + Google Maps link (2026-10-12; renamed from `.j map` per owner so the RPG world atlas keeps `map`)
 const { parseHTML } = require("linkedom");
 
 // ═══ 🤝 GC COEXISTENCE (owner 2026-10-07: "scrape the one-group-per-bot
@@ -2545,7 +2545,7 @@ async function startBot(configInstance) {
           await sock.sendMessage(chatId, {
             text:
               BOT_MARKER +
-              `🗺️ *MAP USAGE*\n\n\`${botConfig.getPrefix()} map <place>\`\n\nExamples:\n• \`${botConfig.getPrefix()} map Ghana\`\n• \`${botConfig.getPrefix()} map USA chicago\`\n• \`${botConfig.getPrefix()} map Osu, Accra\``,
+              `🗺️ *MAP USAGE*\n\n\`${botConfig.getPrefix()} wmap <place>\`\n\nExamples:\n• \`${botConfig.getPrefix()} wmap Ghana\`\n• \`${botConfig.getPrefix()} wmap USA chicago\`\n• \`${botConfig.getPrefix()} wmap Osu, Accra\`\n\n_\`${botConfig.getPrefix()} map\` (no w) is the RPG world atlas._`
           }, { quoted: m });
           await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
           return;
@@ -2563,7 +2563,7 @@ async function startBot(configInstance) {
         const hits = Array.isArray(geoRes.data) ? geoRes.data : [];
         if (!hits.length) {
           await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `🗺️ couldn't find "${query.slice(0, 80)}" on the map — try adding a country or city (e.g. \`map Springfield, USA\`).`,
+            text: BOT_MARKER + `🗺️ couldn't find "${query.slice(0, 80)}" on the map — try adding a country or city (e.g. \`wmap Springfield, USA\`).`,
           }, { quoted: m });
           await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
           return;
@@ -2628,7 +2628,11 @@ async function startBot(configInstance) {
           attribution: _mapUsedCarto ? "© OpenStreetMap © CARTO" : "© OpenStreetMap contributors",
           createCanvas, loadImage,
         });
-        const jpeg = await sharp(canvas.toBuffer("image/png")).jpeg({ quality: 85 }).toBuffer();
+        // sharp is BANNED in this file (Oracle native segfault; engine.js deliberately
+        // has no sharp import — this exact line shipped once as bare `sharp(...)` and
+        // threw "sharp is not defined" at dispatch, owner screenshot 2026-10-12 14:09Z).
+        // node-canvas encodes JPEG natively — no re-encode needed.
+        const jpeg = canvas.toBuffer("image/jpeg", 0.85);
         const thumb = await buildThumbnail(jpeg);
 
         // 4) Send card + tappable link
@@ -2640,7 +2644,7 @@ async function startBot(configInstance) {
         );
         await Promise.race([sendPromise, timeoutPromise]);
         await sock.sendMessage(chatId, { text: BOT_MARKER + mapText }, { quoted: m });
-        console.log(`🗺️ [map] "${query}" → ${hit.display_name?.slice(0, 60)} z=${z} tiles=${okTiles}/9`);
+        console.log(`🗺️ [wmap] "${query}" → ${hit.display_name?.slice(0, 60)} z=${z} tiles=${okTiles}/9`);
         await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
       } catch (err) {
         console.error("Map Command Error:", err.message);
@@ -12154,15 +12158,12 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
-                    // .j map <place> — real-world map card (2026-10-12).
-                    // Bare `.j map` / atlas keywords (beyond/afterlife/abyss/all)
-                    // still fall through to the RPG world charts below.
+                    // .j wmap <place> — real-world map card (2026-10-12).
+                    // Renamed from `.j map` per owner (14:13Z) so it can never
+                    // collide with the RPG world atlas: `.j map` (incl. bare and
+                    // any args) now ALWAYS stays with the world charts below.
                     const __mapQuery = cmdArgs.slice(1).join(" ").trim();
-                    if (
-                      primaryCmd === "map" &&
-                      __mapQuery &&
-                      !["beyond", "afterlife", "abyss", "all"].includes(__mapQuery.toLowerCase())
-                    ) {
+                    if (primaryCmd === "wmap") {
                       await handleMapCommand(sock, chatId, __mapQuery, m, senderJid);
                       return;
                     }
@@ -25866,21 +25867,21 @@ Write ONE witty verdict line (max 90 chars) about their compatibility. Roast the
                       return;
                     }
 
-                    // Map Command (NEW — 2026-10-12). Same scope discipline as
-                    // google/quote: only lowerTxt/cleanTxt/m/sock/chatId/
-                    // senderJid/botConfig are legal here. Requires args — bare
-                    // `.j map` falls through (RPG world atlas handles it).
-                    if (
-                      lowerTxt.startsWith(
-                        `${botConfig.getPrefix().toLowerCase()} map `,
-                      )
-                    ) {
-                      const mq = cleanTxt
-                        .substring(botConfig.getPrefix().length)
-                        .trim()
-                        .replace(/^\S+\s*/, ""); // drop the command word, keep the place's case
-                      const ATLAS_WORDS = ["beyond", "afterlife", "abyss", "all"];
-                      if (mq && !ATLAS_WORDS.includes(mq.toLowerCase())) {
+                    // Map Command (2026-10-12; renamed to wmap per owner 14:13Z so
+                    // it can't collide with the RPG `.j map` atlas). Same scope
+                    // discipline as google/quote: only lowerTxt/cleanTxt/m/sock/
+                    // chatId/senderJid/botConfig are legal here. Bare `.j wmap`
+                    // reaches handleMapCommand and shows usage.
+                    {
+                      const _wmapP = botConfig.getPrefix().toLowerCase();
+                      if (
+                        lowerTxt === `${_wmapP} wmap` ||
+                        lowerTxt.startsWith(`${_wmapP} wmap `)
+                      ) {
+                        const mq = cleanTxt
+                          .substring(botConfig.getPrefix().length)
+                          .trim()
+                          .replace(/^\S+\s*/, ""); // drop the command word, keep the place's case
                         await handleMapCommand(sock, chatId, mq, m, senderJid);
                         return;
                       }

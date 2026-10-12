@@ -19,7 +19,7 @@ const COMMAND_REGISTRY = {
   ],
   SEARCH: [
     { cmd: 'google', desc: 'Google any question — real web search synthesized into a cited, AI-overview style answer. (Alias: gog)', usage: 'google <question>' },
-    { cmd: 'map', desc: 'Show a real-world map image of any place — country, city, town or landmark — with a Google Maps link. (Bare .j map = RPG world atlas)', usage: 'map <place>' },
+    { cmd: 'wmap', desc: 'Show a real-world map image of any place — country, city, town or landmark — with a Google Maps link. (.j map stays the RPG world atlas)', usage: 'wmap <place>' },
     { cmd: 'img', desc: 'Search for and download images.', usage: 'img <query>' },
     { cmd: 'audio', desc: 'Search for and download audio/music.', usage: 'audio <query>' },
     { cmd: 'anime search', desc: 'Search for any anime and get download links.', usage: 'anime search <name>' },
@@ -133,7 +133,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'stats', desc: 'View your detailed RPG stats.', usage: 'stats' },
     { cmd: 'kills', desc: 'The Fortune Teller’s reading: souls you sent beyond the veil. First sight needs level 40, abyss floor 31, and the reader’s fee. (Aliases: killcount, slain)', usage: 'kills | kills pay' },
     { cmd: 'combat', desc: 'Combat actions for an active battle: attack, abilities, items, defend, rest.', usage: 'combat <atk/skill/item/def/rest> [n]' },
-    { cmd: 'world', desc: 'The living charts: cosmology atlas and the four realms with their gates. (Alias: maps — .j map <place> is now real-world maps)', usage: 'world [all|beyond|afterlife|abyss]' },
+    { cmd: 'world', desc: 'The living charts: cosmology atlas and the four realms with their gates. (Alias: maps — .j wmap <place> is real-world maps)', usage: 'world [all|beyond|afterlife|abyss]' },
     { cmd: 'evolve', desc: 'Evolve your class when you meet the requirements.', usage: 'evolve' },
     { cmd: 'trial', desc: 'View and start ascension trials for your class.', usage: 'trial [start]' },
     { cmd: 'use', desc: 'Use a consumable from your inventory.', usage: 'use <id/#>' },
