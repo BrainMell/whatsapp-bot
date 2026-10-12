@@ -1695,7 +1695,7 @@ async function renderEvidenceCard({ itemName, art, tag, line, roomName, night, m
 
     // framed item art
     const img = await loadClue(art);
-    const boxW = 560, boxH = 380, boxX = (LAND_W - boxW) / 2, boxY = 300;
+    const boxW = 560, boxH = 320, boxX = (LAND_W - boxW) / 2, boxY = 270;
     if (img) {
       ctx.save();
       ctx.beginPath();
@@ -1711,20 +1711,22 @@ async function renderEvidenceCard({ itemName, art, tag, line, roomName, night, m
     ctx.font = '34px Type';
     if (String(tag) === 'confirmed') {
       ctx.fillStyle = C.crimsonHi;
-      spaced(ctx, '\u00b7 CONFIRMED \u00b7', LAND_W / 2, boxY + boxH + 84, 8);
+      spaced(ctx, '\u00b7 CONFIRMED \u00b7', LAND_W / 2, boxY + boxH + 64, 8);
     } else {
       ctx.fillStyle = C.fog;
-      spaced(ctx, '\u00b7 RUMOUR - CIRCUMSTANTIAL \u00b7', LAND_W / 2, boxY + boxH + 84, 8);
+      spaced(ctx, '\u00b7 RUMOUR - CIRCUMSTANTIAL \u00b7', LAND_W / 2, boxY + boxH + 64, 8);
     }
 
     ctx.font = 'italic 36px PF-MedIt';
     ctx.fillStyle = C.ivory;
     ctx.textAlign = 'center';
-    wrap(ctx, `\u201C${String(line || '')}\u201D`, 240, boxY + boxH + 156, 1120, 50, 3);
+    // wrap() centers each line on x (textAlign is 'center' here) - x must be
+    // the CARD CENTER, not a left margin, or lines spill off the left edge
+    wrap(ctx, `\u201C${String(line || '')}\u201D`, LAND_W / 2, boxY + boxH + 122, 1120, 44, 3);
 
     ctx.font = '26px EB-Reg';
     ctx.fillStyle = C.ivoryDim;
-    ctx.fillText(`night ${night} \u00b7 noted by the house`, LAND_W / 2, LAND_H - 148);
+    ctx.fillText(`night ${night} \u00b7 noted by the house`, LAND_W / 2, LAND_H - 74);
 
     footer(ctx, LAND_W, LAND_H, manorName);
   });
