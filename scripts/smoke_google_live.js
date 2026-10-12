@@ -25,10 +25,16 @@ async function tryBackend(name, url, opts, parse) {
 }
 
 (async () => {
-  // bing-first (matches engine order — DDG anomaly-blocked on box egresses)
-  let results = await tryBackend("bing", "https://www.bing.com/search", {
-    method: "GET", params: { q: query, count: 10 }, headers: { "Accept-Language": "en-US,en;q=0.9" },
-  }, ao.parseBingHtml);
+  // brave-first (matches engine order — verified: Brave serves real results
+  // to box egresses; Bing decoys, DDG anomaly-202, Google JS wall)
+  let results = await tryBackend("brave", "https://search.brave.com/search", {
+    method: "GET", params: { q: query }, headers: { "Accept-Language": "en-US,en;q=0.9" },
+  }, ao.parseBraveHtml);
+  if (!(results.length >= ao.MIN_RESULTS && ao.relevantEnough(query, results))) {
+    results = await tryBackend("bing", "https://www.bing.com/search", {
+      method: "GET", params: { q: query, count: 10 }, headers: { "Accept-Language": "en-US,en;q=0.9" },
+    }, ao.parseBingHtml);
+  }
   if (!(results.length >= ao.MIN_RESULTS && ao.relevantEnough(query, results))) {
     results = await tryBackend("ddg-html", "https://html.duckduckgo.com/html/", {
       method: "POST",

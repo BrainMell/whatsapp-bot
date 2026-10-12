@@ -72,6 +72,31 @@ const BING_FIXTURE = `<html><body><ol id="b_results">
 <li class="b_algo" data-id="3"><h2><a href="https://energy.gov/y">Energy page</a></h2><div class="b_caption"><p>Second real snippet about the sun.</p></div></li>
 </ol></body></html>`;
 
+// anatomy mirrors the live Box2 capture (svelte hashes abbreviated)
+const BRAVE_FIXTURE = `<html><body>
+<div class="snippet svelte-x" data-type="web">
+<a href="https://www.jkrowling.com" target="_self" class="svelte-14r20fy l1">
+<div class="favicon size-m svelte-w"><img src="https://imgs.search.brave.com/abc" alt=""/></div>
+<div class="site-name-content svelte-o"><div class="desktop-small-semibold t-secondary">J.K. Rowling</div>
+<div class="url-wrapper svelte-o"><cite class="snippet-url desktop-small-regular">jkrowling.com <span class="text-ellipsis">› home</span></cite></div></div>
+<div class="title search-snippet-title line-clamp-1 svelte-14r20fy" title="Home - J.K. Rowling">Home - J.K. Rowling</div></a>
+<div class="generic-snippet svelte-g"><div class="content desktop-default-regular t-primary line-clamp-dynamic svelte-g"><span class="t-secondary">16 hours ago -</span> Official website of <strong>J.K. Rowling</strong>, author of the Harry Potter books and other works.</div></div>
+</div>
+<div class="snippet svelte-x" data-type="web">
+<a href="https://en.wikipedia.org/wiki/J._K._Rowling" target="_self" class="svelte-14r20fy l1">
+<div class="favicon size-m svelte-w"><img src="https://imgs.search.brave.com/def" alt=""/></div>
+<div class="url-wrapper svelte-o"><cite class="snippet-url">en.wikipedia.org › wiki</cite></div>
+<div class="title search-snippet-title line-clamp-1 svelte-14r20fy" title="J. K. Rowling - Wikipedia">J. K. Rowling - Wikipedia</div></a>
+<div class="generic-snippet svelte-g"><div class="content svelte-g">J. K. Rowling is the British author who wrote the Harry Potter books.</div></div>
+</div>
+<div class="snippet svelte-x" data-type="web">
+<a href="https://imgs.search.brave.com/nope" class="svelte-x"><div class="title search-snippet-title svelte-x">Brave-internal should be skipped</div></a>
+</div>
+<div class="snippet svelte-jmfu5f" id="related-queries">
+<a href="https://related.example.com/q" class="svelte-r"><div class="title search-snippet-title svelte-r">related query seed</div></a>
+</div>
+</body></html>`;
+
 (async () => {
 // ── A. normalizeQuery ────────────────────────────────────────────────────────
 console.log("\nA. normalizeQuery");
@@ -114,6 +139,16 @@ ok("bing: title + snippet parsed", b[0] && b[0].title === "Solar energy explaine
 ok("bing: entity-encoded markup stripped (real-world Bing artifact)",
   b[0] && b[0].snippet === "Solar panels convert sunlight directly into electricity.", JSON.stringify(b[0] && b[0].snippet));
 ok("bing: empty html → []", ao.parseBingHtml("").length === 0);
+
+const bv = ao.parseBraveHtml(BRAVE_FIXTURE);
+ok("brave: 2 organic results (brave-internal + related-queries cut)", bv.length === 2, `got ${bv.length}: ${JSON.stringify(bv.map(x => x.url))}`);
+ok("brave: nearest wrapping anchor wins (not favicon/infobox)",
+  bv[0] && bv[0].url === "https://www.jkrowling.com" && bv[1] && bv[1].url === "https://en.wikipedia.org/wiki/J._K._Rowling");
+ok("brave: title parsed", bv[0] && bv[0].title === "Home - J.K. Rowling");
+ok("brave: timestamp span dropped, markup stripped, text kept",
+  bv[0] && bv[0].snippet === "Official website of J.K. Rowling, author of the Harry Potter books and other works.", JSON.stringify(bv[0] && bv[0].snippet));
+ok("brave: domain extracted", bv[1] && bv[1].domain === "en.wikipedia.org");
+ok("brave: empty html → []", ao.parseBraveHtml("").length === 0);
 
 // ── D. dedupeAndCap ─────────────────────────────────────────────────────────
 console.log("\nD. dedupeAndCap");
@@ -171,6 +206,7 @@ ok("handler signature (senderJid explicit — scope rule)",
 ok("handler reacts 🔍", /function handleGoogleSearchCommand[\s\S]{0,200}text: "🔍"/.test(engineSrc));
 ok("empty query → sendUsage", /handleGoogleSearchCommand[\s\S]{0,900}sendUsage\(/.test(engineSrc));
 ok("MAX_QUERY guard in handler", engineSrc.includes("query.length > aiOverview.MAX_QUERY"));
+ok("backend 0: brave (primary — verified real results from box egress)", engineSrc.includes("https://search.brave.com/search") && engineSrc.includes("parse: aiOverview.parseBraveHtml"));
 ok("backend 1: ddg html", engineSrc.includes("https://html.duckduckgo.com/html/"));
 ok("backend 2: ddg lite", engineSrc.includes("https://lite.duckduckgo.com/lite/"));
 ok("backend 3: bing", engineSrc.includes("https://www.bing.com/search"));

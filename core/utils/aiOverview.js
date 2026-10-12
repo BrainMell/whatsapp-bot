@@ -84,6 +84,7 @@ function stripTags(s) {
   const once = decodeEntities(String(s || ""));
   return decodeEntities(once.replace(/<[^>]*>/g, " "))
     .replace(/\s+/g, " ")
+    .replace(/\s+([,.;:!?%])/g, "$1") // "Rowling ," → "Rowling," (tag-gap artifacts)
     .trim();
 }
 
@@ -204,6 +205,62 @@ function parseBingHtml(html) {
     const pM = block.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
     const snippet = pM ? stripTags(pM[1]) : "";
     out.push({ title, snippet, url, domain: domainOf(url) });
+  }
+  return out;
+}
+
+// search.brave.com/search?q=... — svelte-rendered organic results.
+// Verified live 2026-10-12 (Box2): Brave serves REAL organic results to the
+// box IP (unlike Bing's decoys / DDG's anomaly-202 / Google's JS wall) —
+// anatomy per result:
+//   <a href="URL" ...> …favicon… <cite class="snippet-url">domain › path</cite>
+//     <div class="title search-snippet-title …" title="T">T</div></a>
+//   <div class="generic-snippet…"><div class="content…">SNIP</div></div>
+function parseBraveHtml(html) {
+  const out = [];
+  if (!html) return out;
+  let h = String(html);
+  // tail sections reuse result-like markup — cut them before parsing
+  const cutAt = h.search(
+    /<div class="snippet[^"]*" id="(related-queries|search-elsewhere)"/,
+  );
+  if (cutAt > 0) h = h.slice(0, cutAt);
+
+  const titleRe =
+    /<div class="title search-snippet-title[^"]*"[^>]*>([\s\S]*?)<\/div>/g;
+  const seen = new Set();
+  let m;
+  while ((m = titleRe.exec(h)) !== null) {
+    const title = stripTags(m[1]);
+    if (!title) continue;
+    // the title sits INSIDE the result's wrapping anchor — take the nearest
+    // preceding external <a href> (favicon/infobox anchors are brave-internal)
+    const before = h.slice(Math.max(0, m.index - 3000), m.index);
+    const hrefs = [...before.matchAll(/<a\s[^>]*href="([^"]+)"/gi)];
+    let url = "";
+    for (let k = hrefs.length - 1; k >= 0; k--) {
+      const u = hrefs[k][1];
+      if (/^https?:\/\//i.test(u) && !/brave\.com/i.test(u)) {
+        url = u;
+        break;
+      }
+    }
+    if (!validUrl(url)) continue;
+    const after = h.slice(m.index, m.index + 2500);
+    let snippet = "";
+    const sM = after.match(
+      /<div class="generic-snippet[\s\S]*?class="content[^"]*"[^>]*>([\s\S]*?)<\/div>/,
+    );
+    if (sM) {
+      snippet = stripTags(
+        sM[1].replace(/<span class="t-secondary">[\s\S]*?<\/span>/g, " "),
+      );
+    }
+    const key = url.replace(/\/+$/, "").toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ title, snippet, url, domain: domainOf(url) });
+    if (out.length >= 10) break;
   }
   return out;
 }
@@ -365,6 +422,7 @@ module.exports = {
   parseDdgHtml,
   parseDdgLite,
   parseBingHtml,
+  parseBraveHtml,
   dedupeAndCap,
   significantWords,
   relevantEnough,
