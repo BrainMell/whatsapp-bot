@@ -1016,9 +1016,12 @@ async function planCombatLayout(state, opts = {}) {
     try {
         const a0 = actors[0];
         if (a0 && a0.art && a0.art.dir && a0.art.file) {
-            const img = await loadBg(a0.art.file, a0.art.dir);
+            // sheet-aware: measure the CROPPED single frame, never the whole
+            // grid (a raw sheet box steered pack slots into the ROSE fallback)
+            const s0 = await sheetSingleArt(a0.art);
+            const img = (s0 && s0.img) ? s0.img : await loadBg(a0.art.file, a0.art.dir);
             if (img) {
-                const box = await measureImageBox(img, a0.art.file);
+                const box = await measureImageBox(img, (s0 && s0.img) ? s0.file : a0.art.file);
                 if (box && box.w > 0) anchorHalfW = Math.round(box.w * (a0.h / box.h) / 2);
             }
         } else if (a0 && a0.art && a0.art.img) {
@@ -1150,10 +1153,13 @@ async function planCombatLayout(state, opts = {}) {
                     if (box) halfW = Math.round(box.w * (a.h / box.h) / 2);
                 }
             } else if (a.art && a.art.dir && a.art.file) {
-                const img = await loadBg(a.art.file, a.art.dir);
+                // sheet-aware (same contract as the draw path — the collision
+                // resolver must measure the single frame, not the grid)
+                const sArt = await sheetSingleArt(a.art);
+                const img = (sArt && sArt.img) ? sArt.img : await loadBg(a.art.file, a.art.dir);
                 if (img) {
-                    const box = await measureImageBox(img, a.art.file);
-                    halfW = Math.round(box.w * (a.h / box.h) / 2);
+                    const box = await measureImageBox(img, (sArt && sArt.img) ? sArt.file : a.art.file);
+                    if (box && box.w > 0) halfW = Math.round(box.w * (a.h / box.h) / 2);
                 }
             } else if (a.art && a.art.img) {
                 const box = await measureImageBox(a.art.img, a.art.file || null);
@@ -1527,16 +1533,112 @@ async function measureImageBox(img, key) {
     if (key) _imgBoxCache.set(key, box);
     return box;
 }
+
+// ── SHEET-SINGLE-FRAME (owner 2026-10-12: "SO WTF ARE THESE SPRITES SHEETS,
+// FULL O SPRITE CHEATS IN BATTLE" — F40 MIRROR / F38 WANDERER proof cards) ──
+// Several enemy-pool files are MULTI-FRAME walk sheets, not single sprites:
+//   Werewolf_0004_brown.png 3600×1385, goblin sheet.png 2700×900,
+//   sahuagin sheet.png 2700×1145, kobold_0000_red.png 2700×1080, …
+// drawActorGrounded scaled the WHOLE sheet to the actor's height, stamping
+// the entire frame grid across the stage (the "60 wolves" screenshots).
+// Fix: detect sheets by size/name, split cells on fully-transparent gutter
+// bands, crop ONE representative frame (largest content bbox) and cache it
+// per file. Audited single sprites (bestiary, abyss natives, 64×96 pool art)
+// never pass the gates and render exactly as before.
+const _sheetCropCache = new Map();   // dir|file → {img, file} | null
+const SHEET_SINGLE_MIN_CELL = 24;
+async function sheetSingleArt(art) {
+    if (!art || !art.dir || !art.file) return null;
+    const key = `${art.dir}|${art.file}`;
+    if (_sheetCropCache.has(key)) return _sheetCropCache.get(key);
+    let result = null;
+    try {
+        const img = await loadImage(path.join(art.dir, art.file)).catch(() => null);
+        if (img && img.width >= 640 && img.height >= 480) {
+            // gate A — obvious sheet shapes only: a "sheet"-named file, or a
+            // monster-pool PNG far wider than any legit single (bestiary
+            // content boxes top out ~1200px; the walk sheets are 2700-3600px).
+            if (/sheet/i.test(art.file) || img.width >= 2000) {
+                const off = createCanvas(img.width, img.height);
+                const octx = off.getContext('2d');
+                octx.drawImage(img, 0, 0);
+                const data = octx.getImageData(0, 0, img.width, img.height).data;
+                const W0 = img.width, H0 = img.height;
+                const colOcc = new Uint8Array(W0), rowOcc = new Uint8Array(H0);
+                for (let y = 0; y < H0; y++) {
+                    const base = y * W0 * 4;
+                    for (let x = 0; x < W0; x++) {
+                        if (data[base + x * 4 + 3] > 16) { colOcc[x] = 1; rowOcc[y] = 1; }
+                    }
+                }
+                const bands = (occ, lim) => {
+                    const out = []; let s = -1;
+                    for (let i = 0; i < lim; i++) {
+                        if (occ[i] && s < 0) s = i;
+                        else if (!occ[i] && s >= 0) { out.push([s, i - 1]); s = -1; }
+                    }
+                    if (s >= 0) out.push([s, lim - 1]);
+                    return out.filter((b) => (b[1] - b[0]) >= 3);   // drop dust lines
+                };
+                const cols = bands(colOcc, W0), rows = bands(rowOcc, H0);
+                // gate B — a real frame GRID (≥2×2 cells on transparent
+                // gutters). Single creatures — even winged/detached-part ones —
+                // almost never have a full-width AND full-height transparent
+                // cross, so audited big singles stay untouched.
+                if (cols.length >= 2 && rows.length >= 2) {
+                    let best = null;
+                    for (const [y0, y1] of rows) {
+                        for (const [x0, x1] of cols) {
+                            let minX = x1, maxX = x0, minY = y1, maxY = y0;
+                            for (let y = y0; y <= y1; y++) {
+                                const base = y * W0 * 4;
+                                for (let x = x0; x <= x1; x++) {
+                                    if (data[base + x * 4 + 3] > 16) {
+                                        if (x < minX) minX = x; if (x > maxX) maxX = x;
+                                        if (y < minY) minY = y; if (y > maxY) maxY = y;
+                                    }
+                                }
+                            }
+                            const w = maxX - minX + 1, h = maxY - minY + 1;
+                            if (!best || w * h > best.w * best.h) best = { x: minX, y: minY, w, h };
+                        }
+                    }
+                    if (best && best.w >= SHEET_SINGLE_MIN_CELL && best.h >= SHEET_SINGLE_MIN_CELL
+                        && (best.w < W0 || best.h < H0)) {
+                        const cell = createCanvas(best.w, best.h);
+                        cell.getContext('2d').drawImage(
+                            img, best.x, best.y, best.w, best.h, 0, 0, best.w, best.h,
+                        );
+                        result = { img: cell, file: `sheetcell:${art.file}` };
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        result = null;   // any failure = legacy behavior (full file)
+    }
+    if (_sheetCropCache.size > 32) _sheetCropCache.clear();
+    _sheetCropCache.set(key, result);
+    return result;
+}
+
 async function drawActorGrounded(ctx, art, cx, groundY, ch, opts = {}) {
     if (!art) return null;
     let img = null;
+    let boxKey = art.file || null;
     if (art.dir && art.file) {
-        img = await loadImage(path.join(art.dir, art.file)).catch(() => null);
+        const single = await sheetSingleArt(art);
+        if (single && single.img) {
+            img = single.img;
+            boxKey = single.file;
+        } else {
+            img = await loadImage(path.join(art.dir, art.file)).catch(() => null);
+        }
     } else if (art.img) {
         img = art.img;
     }
     if (!img) return null;
-    const box = await measureImageBox(img, art.file || null);
+    const box = await measureImageBox(img, boxKey);
     const flip = !!opts.flip;
     let src = img, sx = box.x, sy = box.y, sw = box.w, sh = box.h;
     if (opts.tint) {

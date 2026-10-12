@@ -678,7 +678,7 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
 
     // 💡 Phase C: `tutorial list` / `tutorial <track>` / `tutorial start <track>`
     if (/^(tutorial|start tutorial)(\s+.*)?$/.test(norm)) {
-        const argStr = norm.replace(/^(tutorial|start tutorial)/, '').trim();
+        const argStr = norm.replace(/^(tutorial|start tutorial)/, '').replace(/^\s*start\s+/, '').trim();
         if (/^list$/.test(argStr)) {
             if (!user) return { text: `${PREFIX} Register first - then the academy is open.` };
             return { text: trackListMsg(user, prefix) };
@@ -693,8 +693,29 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
             s.step = 'battle_prep';
             await startPracticeFight(sock, senderJid, prefix);
         } else if (s.step === 'retry_solo') {
+            // FIX 2026-10-12: the old path fired notify('inventory') — a no-op
+            // for the basics track — so a failed training-quest start left the
+            // player stuck forever (retry consumed, nothing happened).
+            // Re-open the quest directly, same contract as the auto-start in
+            // notify('char'): success → solo_fight, busy → retry_solo again.
             s.step = 'solo_quest';
-            await notify(senderJid, 'inventory', { sock, chatId, prefix });
+            try {
+                const guildAdventure = require('./guildAdventure');
+                const res = await guildAdventure.startTutorialQuest(sock, chatId, senderJid, {
+                    greeting: 'A training quest behind the Guild Association. One Garden Slime blocks the path.',
+                });
+                if (!res || res.success === false) {
+                    setStep(senderJid, 'retry_solo');
+                    await send(sock, chatId, `${PREFIX} The training grounds are busy - send \`retry\` in a moment.`);
+                    return {};
+                }
+                setStep(senderJid, 'solo_fight');
+                await send(sock, chatId, stepMessage('solo_fight', prefix, 'basics'));
+            } catch (e) {
+                console.error('[Tutorial] solo quest retry failed:', e?.message);
+                setStep(senderJid, 'retry_solo');
+                await send(sock, chatId, `${PREFIX} The training grounds are busy - send \`retry\` in a moment.`);
+            }
         } else {
             setStep(senderJid, 'group_quest');
             await startGroupDemo(sock, senderJid, prefix);
