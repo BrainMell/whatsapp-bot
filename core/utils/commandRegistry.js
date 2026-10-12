@@ -20,6 +20,7 @@ const COMMAND_REGISTRY = {
   SEARCH: [
     { cmd: 'google', desc: 'Google any question — real web search synthesized into a cited, AI-overview style answer. (Alias: gog)', usage: 'google <question>' },
     { cmd: 'wmap', desc: 'Show a real-world map image of any place — country, city, town or landmark — with a Google Maps link. (.j map stays the RPG world atlas)', usage: 'wmap <place>' },
+    { cmd: 'umap', desc: 'Universe map — real NASA/telescope imagery + facts for planets, moons, stars, nebulae, galaxies, black holes and missions; a video rides along when available. (Alias: space)', usage: 'umap <object>' },
     { cmd: 'img', desc: 'Search for and download images.', usage: 'img <query>' },
     { cmd: 'audio', desc: 'Search for and download audio/music.', usage: 'audio <query>' },
     { cmd: 'anime search', desc: 'Search for any anime and get download links.', usage: 'anime search <name>' },

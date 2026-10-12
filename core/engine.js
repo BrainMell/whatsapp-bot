@@ -59,6 +59,7 @@ const stickerPack = require("./utils/stickerPack"); // native WhatsApp sticker p
 const quoteCard = require("./utils/quoteCard"); // .j quote <text> → quote card image (2026-10-12)
 const aiOverview = require("./utils/aiOverview"); // .j google <question> → web-grounded AI-overview answer (2026-10-12)
 const mapCard = require("./utils/mapCard"); // .j wmap <place> → real-world map card + Google Maps link (2026-10-12; renamed from `.j map` per owner so the RPG world atlas keeps `map`)
+const spaceCard = require("./utils/spaceCard"); // .j umap <object> → universe card: NASA imagery/facts + video when available (owner 2026-10-12 14:33Z: "make this but for the universe")
 const { parseHTML } = require("linkedom");
 
 // ═══ 🤝 GC COEXISTENCE (owner 2026-10-07: "scrape the one-group-per-bot
@@ -2754,6 +2755,163 @@ async function startBot(configInstance) {
         await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
         await sock.sendMessage(chatId, {
           text: BOT_MARKER + `🗺️ map failed: ${err.message?.slice(0, 120)}`,
+        }, { quoted: m });
+      }
+      await awardProgression(senderJid, chatId);
+    }
+
+    // ─── .j umap <object> — universe cards (2026-10-12) ──────────────────────
+    // Owner 14:33Z: "can we make this but for the universe??? And when you
+    // find a specific place the bot can use some kinda open source service to
+    // find videos of planets satellite images blah blah if available?"
+    // Open service: NASA Image & Video Library (images-api.nasa.gov — keyless,
+    // hosts BOTH images and videos). Imagery pipeline mirrors wmap: search →
+    // asset manifest → download → canvas card → JPEG. Video is best-effort:
+    // only sent when the archive offers a sendable mp4 (≤24MB), else a link.
+    const _spaceImgCache = new Map(); // nasaId → Buffer (politeness; ~cap 40)
+    const _spaceVideoCache = new Map(); // resolved q → {url, title} | {url:null}
+    async function handleUniverseCommand(sock, chatId, rawQuery, m, senderJid) {
+      await sock.sendMessage(chatId, { react: { text: "🪐", key: m.key } });
+      try {
+        const query = (rawQuery || "").trim().slice(0, 120);
+        if (!query) {
+          await sock.sendMessage(chatId, {
+            text:
+              BOT_MARKER +
+              `🪐 *UNIVERSE USAGE*\n\n\`${botConfig.getPrefix()} umap <object>\`\n\nExamples:\n• \`${botConfig.getPrefix()} umap mars\`\n• \`${botConfig.getPrefix()} umap pillars of creation\`\n• \`${botConfig.getPrefix()} umap andromeda\`\n• \`${botConfig.getPrefix()} umap voyager 1\`\n\n_Planets · moons · dwarf planets · stars · nebulae · galaxies · black holes · missions_\n_Imagery + facts from the open NASA Image & Video Library — a video rides along when the archive has one._\n\n_\`${botConfig.getPrefix()} space\` works as an alias._`,
+          }, { quoted: m });
+          await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+          return;
+        }
+
+        // 0) resolve against the catalog; unknown objects fall through to a
+        // free-form NASA archive search (the library indexes everything)
+        const body = spaceCard.resolveBody(query);
+        const q = body ? body.q : query;
+        const UA = spaceCard.UA;
+
+        // 1) imagery: search → asset manifest → download (thumb fallback)
+        const searchRes = await axios.get(spaceCard.searchUrl(q, "image"),
+          { headers: { "User-Agent": UA }, timeout: 12000 });
+        const item = spaceCard.pickImageItem(searchRes.data, body ? [body.name, body.type] : [query]);
+        if (!item || !item?.data?.[0]?.nasa_id) {
+          await sock.sendMessage(chatId, {
+            text: BOT_MARKER + `🪐 nothing in the NASA archive for "${query.slice(0, 80)}" — try a planet, moon, nebula or mission name.`,
+          }, { quoted: m });
+          await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+          return;
+        }
+        const nasaId = item.data[0].nasa_id;
+        const itemTitle = String(item.data[0].title || query).slice(0, 90);
+
+        let imageBuf = _spaceImgCache.get(nasaId) || null;
+        if (!imageBuf) {
+          try {
+            const manifest = (await axios.get(spaceCard.assetUrl(nasaId),
+              { headers: { "User-Agent": UA }, timeout: 12000 })).data;
+            let href = spaceCard.pickImageHref(manifest);
+            if (href) {
+              const url = /^https?:/i.test(href) ? href : "https://images-assets.nasa.gov" + href;
+              const r = await axios.get(url, {
+                responseType: "arraybuffer", headers: { "User-Agent": UA },
+                timeout: 25000, maxContentLength: 30 * 1024 * 1024,
+              });
+              if (r.status === 200) imageBuf = Buffer.from(r.data);
+            }
+          } catch (e) { /* thumb fallback below */ }
+          if (!imageBuf && item.links?.[0]?.href) {
+            try {
+              const tUrl = /^https?:/i.test(item.links[0].href) ? item.links[0].href : "https://images-assets.nasa.gov" + item.links[0].href;
+              const r = await axios.get(tUrl, {
+                responseType: "arraybuffer", headers: { "User-Agent": UA },
+                timeout: 15000, maxContentLength: 20 * 1024 * 1024,
+              });
+              if (r.status === 200) imageBuf = Buffer.from(r.data);
+            } catch (e) { /* starfield placeholder in renderer */ }
+          }
+          if (imageBuf) {
+            if (_spaceImgCache.size > 40) _spaceImgCache.clear();
+            _spaceImgCache.set(nasaId, imageBuf);
+          }
+        }
+
+        // 2) card (visual language mirrors the wmap card)
+        const { createCanvas, loadImage } = require("canvas");
+        const canvas = await spaceCard.renderSpaceCard({
+          imageBuf,
+          body: body || { name: query, type: "deep sky", emoji: "🔭", stats: [`NASA archive: ${itemTitle}`] },
+          attribution: "imagery: NASA Image & Video Library",
+          createCanvas, loadImage,
+        });
+        const jpeg = canvas.toBuffer("image/jpeg", 0.9);
+        const thumb = await buildThumbnail(jpeg);
+
+        const cap = `🪐 *${body ? body.name : query}*` + (body ? ` — _${body.type}_` : "");
+        const sendImg = sock.sendMessage(chatId, { image: jpeg, caption: cap, jpegThumbnail: thumb }, { quoted: m });
+        const imgGuard = new Promise((_, rej) => setTimeout(() => rej(new Error("Universe image send timed out after 15s")), 15000));
+        await Promise.race([sendImg, imgGuard]);
+
+        // 3) video — owner asked for it "if available": best-effort, guarded.
+        // Only a sendable mp4 (mobile/preset rendition ≤24MB) is attached;
+        // otherwise the text carries the archive link instead.
+        let sentVideo = false;
+        if (!_spaceVideoCache.has(q)) {
+          try {
+            const vSearch = (await axios.get(spaceCard.searchUrl(q, "video"),
+              { headers: { "User-Agent": UA }, timeout: 12000 })).data;
+            const vItem = (vSearch?.collection?.items || []).find((it) => it?.data?.[0]?.nasa_id);
+            if (vItem) {
+              const vManifest = (await axios.get(spaceCard.assetUrl(vItem.data[0].nasa_id),
+                { headers: { "User-Agent": UA }, timeout: 12000 })).data;
+              let vHref = spaceCard.pickVideoHref(vManifest);
+              if (vHref) {
+                if (!/^https?:/i.test(vHref)) vHref = "https://images-assets.nasa.gov" + vHref;
+                const head = await axios.head(vHref, { headers: { "User-Agent": UA }, timeout: 10000 }).catch(() => null);
+                const len = parseInt(head?.headers?.["content-length"] || "0", 10);
+                _spaceVideoCache.set(q, len > 0 && len <= 24 * 1024 * 1024
+                  ? { url: vHref, title: String(vItem.data[0].title || body?.name || q).slice(0, 90) }
+                  : { url: null, title: null });
+              }
+            } else _spaceVideoCache.set(q, { url: null, title: null });
+          } catch (e) { _spaceVideoCache.set(q, { url: null, title: null }); }
+        }
+        const vCached = _spaceVideoCache.get(q);
+        if (vCached?.url) {
+          try {
+            const vRes = await axios.get(vCached.url, {
+              responseType: "arraybuffer", headers: { "User-Agent": UA },
+              timeout: 30000, maxContentLength: 26 * 1024 * 1024,
+            });
+            const vBuf = Buffer.from(vRes.data);
+            if (vBuf.length > 10000 && vBuf.length <= 26 * 1024 * 1024) {
+              const sendVid = sock.sendMessage(chatId, {
+                video: vBuf,
+                caption: `🎬 *${body ? body.name : query}* — ${vCached.title}`,
+                jpegThumbnail: thumb,
+              }, { quoted: m });
+              const vidGuard = new Promise((_, rej) => setTimeout(() => rej(new Error("video send timed out after 15s")), 15000));
+              await Promise.race([sendVid, vidGuard]);
+              sentVideo = true;
+            }
+          } catch (e) { /* link fallback in text */ }
+        }
+        const videoNote = sentVideo
+          ? "playing above 🎬"
+          : `browse the archive: ${spaceCard.libraryLink(q, "video")}`;
+
+        // 4) facts + links
+        const text = spaceCard.buildSpaceText(
+          body || { name: query, type: "deep sky", emoji: "🔭", stats: [`NASA archive match: ${itemTitle}`, `Date: ${String(item.data[0].date_created || "n/a").slice(0, 10)}`] },
+          { videoNote },
+        );
+        await sock.sendMessage(chatId, { text: BOT_MARKER + text }, { quoted: m });
+        console.log(`🪐 [umap] "${query}" -> ${body ? body.id : "freeform"} img=${imageBuf ? imageBuf.length : 0}B nasaId=${nasaId} video=${sentVideo ? "sent" : "link"}`);
+        await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+      } catch (err) {
+        console.error("Universe Command Error:", err.message);
+        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+        await sock.sendMessage(chatId, {
+          text: BOT_MARKER + `🪐 universe failed: ${err.message?.slice(0, 120)}`,
         }, { quoted: m });
       }
       await awardProgression(senderJid, chatId);
@@ -12268,6 +12426,13 @@ _💡 Reply with another number from your search list!_`.trim();
                     const __mapQuery = cmdArgs.slice(1).join(" ").trim();
                     if (primaryCmd === "wmap") {
                       await handleMapCommand(sock, chatId, __mapQuery, m, senderJid);
+                      return;
+                    }
+
+                    // .j umap <object> — universe cards (2026-10-12). Aliases:
+                    // space. Bare -> usage inside handleUniverseCommand.
+                    if (primaryCmd === "umap" || primaryCmd === "space") {
+                      await handleUniverseCommand(sock, chatId, cmdArgs.slice(1).join(" ").trim(), m, senderJid);
                       return;
                     }
 
@@ -25986,6 +26151,25 @@ Write ONE witty verdict line (max 90 chars) about their compatibility. Roast the
                           .trim()
                           .replace(/^\S+\s*/, ""); // drop the command word, keep the place's case
                         await handleMapCommand(sock, chatId, mq, m, senderJid);
+                        return;
+                      }
+                    }
+
+                    // Universe Command (2026-10-12). Same scope discipline as
+                    // wmap/google/quote: only lowerTxt/cleanTxt/m/sock/chatId/
+                    // senderJid/botConfig are legal here. Bare `.j umap` reaches
+                    // handleUniverseCommand and shows usage. Alias: space.
+                    {
+                      const _umapP = botConfig.getPrefix().toLowerCase();
+                      if (
+                        lowerTxt === `${_umapP} umap` || lowerTxt.startsWith(`${_umapP} umap `) ||
+                        lowerTxt === `${_umapP} space` || lowerTxt.startsWith(`${_umapP} space `)
+                      ) {
+                        const uq = cleanTxt
+                          .substring(botConfig.getPrefix().length)
+                          .trim()
+                          .replace(/^(umap|space)\s*/i, ""); // drop the command word, keep the object's case
+                        await handleUniverseCommand(sock, chatId, uq, m, senderJid);
                         return;
                       }
                     }
