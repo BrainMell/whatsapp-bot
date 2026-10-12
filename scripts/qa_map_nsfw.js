@@ -136,9 +136,11 @@ console.log("\nE. canvas composite");
   const worldIdx = engineSrc.indexOf('if (primaryCmd === "world" || primaryCmd === "maps" || primaryCmd === "map")');
   const dispatchA = engineSrc.indexOf("__mapQuery");
   ok(dispatchA > -1 && dispatchA < worldIdx, "dispatch A (with-args map) sits BEFORE the world atlas block");
-  ok(/ATLAS_WORDS = \["beyond", "afterlife", "abyss", "all"\]/.test(engineSrc), "atlas keyword guard present (RPG atlas preserved)");
-  const dispatchB = engineSrc.indexOf("lowerTxt.startsWith(\n                        `${botConfig.getPrefix().toLowerCase()} map `");
-  ok(dispatchB > -1, "dispatch B (25xxx lowerTxt.startsWith map) present");
+  ok(/ATLAS_WORDS = \["beyond", "afterlife", "abyss", "all"\]|primaryCmd === "map"/.test(engineSrc), "RPG atlas keeps `.j map` (rename-safe guard)");
+  ok(/primaryCmd === "wmap"/.test(engineSrc), "real-world map renamed to wmap (owner 14:13Z — no collision with RPG atlas)");
+  const dispatchB = engineSrc.search(/lowerTxt === `\$\{_wmapP\} wmap`/);
+  ok(dispatchB > -1, "dispatch B (25xxx bare wmap) present");
+  ok(/lowerTxt\.startsWith\(`\$\{_wmapP\} wmap `\)/.test(engineSrc), "dispatch B with-args wmap present");
   ok(dispatchB > engineSrc.indexOf("handleGoogleSearchCommand("), "dispatch B after google dispatch");
   ok(engineSrc.includes("data.needsKey") && engineSrc.includes("R34_API_KEY + R34_USER_ID"), "nsfw needsKey UX wired in engine");
   ok(engineSrc.includes("nominatim.openstreetmap.org/search"), "Nominatim geocode endpoint");
@@ -158,9 +160,9 @@ console.log("\nE. canvas composite");
 
   // ── H. registry ───────────────────────────────────────────────────────────
   console.log("\nH. registry");
-  ok(/cmd: 'map', desc: 'Show a real-world map image/.test(regSrc), "map entry in SEARCH");
-  ok(/Bare \.j map = RPG world atlas/.test(regSrc), "map entry documents bare-command RPG fallback");
-  ok(/Alias: maps — \.j map <place> is now real-world maps/.test(regSrc), "world desc cross-references new map");
+  ok(/cmd: 'wmap', desc: 'Show a real-world map image/.test(regSrc), "wmap entry in SEARCH");
+  ok(/\.j map stays the RPG world atlas/.test(regSrc), "wmap entry documents .j map RPG fallback");
+  ok(/Alias: maps — \.j wmap <place> is real-world maps/.test(regSrc), "world desc cross-references wmap");
   ok(/cmd: 'nsfw', desc: 'Rule34\.xxx image search by tag/.test(regSrc), "nsfw desc updated");
   ok(/usage: 'nsfw \[count\] <tag>'/.test(regSrc), "nsfw usage matches dispatch");
 
