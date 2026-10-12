@@ -754,9 +754,10 @@ function generateFloorEnemy(floor, ctx = {}) {
   const isBoss = isBossFloor(floor);
   const mult = getFloorMultiplier(floor);
 
-  // 💡 PLAYER-VARIANT ENEMIES (owner-confirmed, enemy_variants.md §5):
-  // floors 31+ add player-variant weights (escalation by depth), floor 90+
-  // adds TIMELINE_DRIFTER, MIRROR can replace boss-floor enemies from 31+.
+  // 💡 PLAYER-VARIANT ENEMIES (owner-confirmed, enemy_variants.md §5;
+  // amended 2026-10-12 — owner: MIRROR + WANDERER removed from the abyss
+  // pool): deep floors 50+ can roll OTHER BANNER, floor 90+ adds
+  // TIMELINE_DRIFTER. Boss floors and mid floors stay pure creature pool.
   // Variants use the regular enemy-generation process end to end.
   const variant = enemyVariants.rollAbyssVariant(floor, isBoss, ctx.playerClassId);
   if (variant) return variant;

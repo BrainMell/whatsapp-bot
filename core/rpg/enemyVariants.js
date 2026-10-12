@@ -247,25 +247,36 @@ function _pickOtherClass(playerClassId) {
     return pool[Math.floor(Math.random() * pool.length)];
 }
 
-// ─── SPAWN POLICY (design §5) ────────────────────────────────────────────────
-// Abyss: floors 31+ add player-variant weights (escalation by depth);
-// floor 90+ adds TIMELINE_DRIFTER; MIRROR can replace BOSS-floor enemies
-// from floor 31+ (a boss that fights like you — rare, deniable).
-// Anywhere: a small global chance to swap a dungeon mob for a WANDERER.
+// ─── SPAWN POLICY (design §5, amended 2026-10-12) ───────────────────────────
+// OWNER DIRECTIVE 2026-10-12 (proof-card reply "Remove these 2 sprites from
+// the abyss monster pool"): MIRROR and WANDERER no longer spawn from the
+// ABYSS monster pool. Boss floors no longer roll a MIRROR replacement, and
+// the WANDERER share of the non-boss roll falls through to the regular
+// creature pool. OTHER BANNER and TIMELINE DRIFTER keep their exact previous
+// spawn shares. The ruins/global WANDERER swap (guildAdventure) is a
+// separate system and stays untouched.
 
 const VARIANT_CHANCE = {
     EARLY: 0.00,   // floors 1-30: creatures only (heuristic routing stays clean)
-    MID: 0.12,     // floors 31-49
-    DEEP: 0.20,    // floors 50-89
-    ABYSSAL: 0.25, // floors 90+
+    MID: 0.12,     // floors 31-49 (was WANDERER-only — retired, falls through)
+    DEEP: 0.20,    // floors 50-89 (OTHER BANNER keeps its 50% share)
+    ABYSSAL: 0.25, // floors 90+ (drifter 40% of variants, banner the rest)
 };
-const MIRROR_BOSS_CHANCE = 0.15;      // boss floors 31+
+const MIRROR_BOSS_CHANCE = 0.15;      // RETIRED 2026-10-12 (owner: MIRROR out of the abyss pool)
 const DRIFTER_SHARE_DEEP = 0.0;       // no drifters before 90
 const DRIFTER_SHARE_ABYSSAL = 0.40;   // of variants at 90+
 
 /**
  * Roll a player-variant enemy for an abyss floor. Returns null when the
  * floor keeps its regular creature pool.
+ *
+ * OWNER 2026-10-12: MIRROR and WANDERER are REMOVED from the abyss pool —
+ * boss floors never roll a variant, mid floors (31-49, was WANDERER-only)
+ * fall through to the regular creature pool, and the WANDERER half of the
+ * deep/abyssal kind roll falls through too. Survivor shares are unchanged:
+ * OTHER BANNER = 50% of deep variants (10% of deep floors), TIMELINE
+ * DRIFTER = 40% of abyssal variants (10% of 90+ floors).
+ *
  * @param {number} floor
  * @param {boolean} isBoss
  * @param {string} playerClassId
@@ -274,12 +285,8 @@ const DRIFTER_SHARE_ABYSSAL = 0.40;   // of variants at 90+
 function rollAbyssVariant(floor, isBoss, playerClassId) {
     try {
         const f = Math.floor(Number(floor) || 1);
-        if (isBoss) {
-            if (f >= 31 && Math.random() < MIRROR_BOSS_CHANCE) {
-                return buildVariantEnemy('MIRROR', { floor: f, isBoss: true, playerClassId });
-            }
-            return null;
-        }
+        if (isBoss) return null; // was MIRROR from 31+ — retired (owner 2026-10-12)
+
         let chance = VARIANT_CHANCE.EARLY;
         if (f >= 90) chance = VARIANT_CHANCE.ABYSSAL;
         else if (f >= 50) chance = VARIANT_CHANCE.DEEP;
@@ -289,10 +296,13 @@ function rollAbyssVariant(floor, isBoss, playerClassId) {
         if (f >= 90 && Math.random() < DRIFTER_SHARE_ABYSSAL) {
             return buildVariantEnemy('TIMELINE_DRIFTER', { floor: f, isBoss: false, playerClassId });
         }
-        // Deep floors favor OTHER BANNER (signature archetype behavior);
-        // mid floors favor WANDERER.
-        const kind = f >= 50 && Math.random() < 0.5 ? 'OTHER_BANNER' : 'WANDERER';
-        return buildVariantEnemy(kind, { floor: f, isBoss: false, playerClassId });
+        // Mid floors only ever rolled WANDERER — retired, so they fall
+        // through to the regular creature pool. Deep floors keep their
+        // 50% OTHER BANNER share (signature archetype behavior).
+        if (f >= 50 && Math.random() < 0.5) {
+            return buildVariantEnemy('OTHER_BANNER', { floor: f, isBoss: false, playerClassId });
+        }
+        return null;
     } catch (e) {
         try { console.error('[enemyVariants] rollAbyssVariant error:', e.message); } catch (_) {}
         return null;
