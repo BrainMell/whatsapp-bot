@@ -46,6 +46,18 @@ require.cache[botConfigPath] = {
   exports: { getBotId: () => 'qa-bot', getPrefix: () => '.j', get: () => null },
 };
 
+// ---- QA_NO_MONGO: db + System model stubs so every system.set/get fails
+// fast in-memory instead of buffering 10s per op against an unreachable
+// MongoDB (on-box QA processes have no env/Mongo connection) ----
+const dbPath = require.resolve(path.join(__dirname, '..', 'db.js'));
+require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: async () => { throw new Error('QA: no mongo'); } };
+const systemModelPath = require.resolve(path.join(__dirname, '..', 'core', 'models', 'System.js'));
+const _qaReject = async () => { throw new Error('QA: no mongo'); };
+require.cache[systemModelPath] = {
+  id: systemModelPath, filename: systemModelPath, loaded: true,
+  exports: Object.assign(() => ({}), { find: _qaReject, findOne: _qaReject, updateOne: _qaReject, create: _qaReject, deleteMany: _qaReject }),
+};
+
 const mm = require(path.join(__dirname, '..', 'core', 'games', 'murdermystery', 'index.js'));
 const caseGen = require(path.join(__dirname, '..', 'core', 'games', 'murdermystery', 'caseGen.js'));
 const system = require(path.join(__dirname, '..', 'core', 'utils', 'system.js'));
@@ -345,6 +357,41 @@ function roleCounts(g) {
     caseGen.saveHistory([...caseGen.loadHistory(), c1.sig]);
     const c2 = caseGen.generateCase({ cast, killers: [cast[0]], rooms, methodTitles: ['poisoned claret', 'piano wire', 'a candlestick'] });
     ok(c1.sig !== c2.sig || caseGen.loadHistory().filter((s) => s === c1.sig).length >= 1, '8.2 signatures recorded (recent combo avoidance active)');
+  }
+
+  // ---------- 9. TWIN WHISPER + PUBLIC ASK (owner 2026-10-12 19:32Z) ----------
+  console.log('\n===== 9. WHISPER + PUBLIC ASK =====');
+  {
+    const sock = makeSock(); QA_SOCK = sock;
+    const roster = players(10, 55);
+    const chat = '1203630999009@g.us';
+    await openAndFill(sock, chat, roster);
+    await mm.handleCommand(ctxOf(sock, chat, { sub: 'start', sender: roster[0].jid, name: roster[0].name }));
+    const g = mm._internal.getGame(chat);
+    await waitFor(() => g && g.phase === 'NIGHT');
+    const killers = g.players.filter((p) => p.role === 'KILLER' && p.alive);
+    ok(killers.length === 2, '9.1 twin killers on a 10-player roster');
+    // whisper relay: killer -> partner DM through the bot (night, DMs only)
+    await mm.handleCommand(ctxOf(sock, killers[0].jid, { group: false, chatId: killers[0].jid, sub: 'whisper', rest: 'meet me at the cellar door', sender: killers[0].jid, name: killers[0].name }));
+    ok(sock.out.some((m) => !m.isGroup && m.jid === killers[1].jid && /A whisper reaches you through the dark/.test(m.text) && /cellar door/.test(m.text)), '9.2 whisper relayed to partner killer DM');
+    ok(sock.out.some((m) => !m.isGroup && m.jid === killers[0].jid && /whisper travels/.test(m.text)), '9.3 sender confirmation');
+    await mm.handleCommand(ctxOf(sock, chat, { sub: 'whisper', rest: 'hello', sender: killers[0].jid, name: killers[0].name }));
+    ok(sock.out.some((m) => m.isGroup && /Whispers travel in DMs only/.test(m.text)), '9.4 whisper refused in the GC');
+    const civ = g.players.find((p) => p.role === 'CIVILIAN' && p.alive);
+    await mm.handleCommand(ctxOf(sock, civ.jid, { group: false, chatId: civ.jid, sub: 'whisper', rest: 'let me in', sender: civ.jid, name: civ.name }));
+    ok(sock.out.some((m) => !m.isGroup && m.jid === civ.jid && /not yours to send/.test(m.text)), '9.5 non-killer refused, role-blind');
+    g.phase = 'DISCUSSION';
+    await mm.handleCommand(ctxOf(sock, killers[0].jid, { group: false, chatId: killers[0].jid, sub: 'whisper', rest: 'now?', sender: killers[0].jid, name: killers[0].name }));
+    ok(sock.out.some((m) => !m.isGroup && /only in the dark/.test(m.text)), '9.6 whisper is night-only');
+    // public ask: the ACCOUNT posts to the GC, the sharper observation DMs
+    const asker = g.players.find((p) => p.alive && p.role === 'CIVILIAN');
+    const target = g.players.find((p) => p.alive && p !== asker && p.role !== 'KILLER');
+    const tIdx = g.players.indexOf(target) + 1;
+    await mm.handleCommand(ctxOf(sock, chat, { sub: 'ask', rest: String(tIdx), sender: asker.jid, name: asker.name }));
+    ok(sock.out.some((m) => m.isGroup && /answers before the house/.test(m.text) && m.text.includes(target.char.name)), '9.7 account posted publicly in the GC');
+    ok(!sock.out.some((m) => m.isGroup && /to you alone/.test(m.text)), '9.8 observation never posted to the GC');
+    ok(sock.out.some((m) => !m.isGroup && m.jid === asker.jid && /to you alone/.test(m.text)), '9.9 sharper detail DMs to the asker only');
+    await mm.handleCommand(ctxOf(sock, chat, { sub: 'end', sender: roster[0].jid, name: roster[0].name }));
   }
 
   console.log(`\n===== TOTAL: ${pass} passed, ${fail} failed =====`);

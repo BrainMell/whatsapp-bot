@@ -56,6 +56,18 @@ require.cache[botConfigPath] = {
   exports: { getBotId: () => 'qa-bot', getPrefix: () => '.j', get: () => null },
 };
 
+// ---- QA_NO_MONGO: db + System model stubs so every system.set/get fails
+// fast in-memory instead of buffering 10s per op against an unreachable
+// MongoDB (on-box QA processes have no env/Mongo connection) ----
+const dbPath = require.resolve(path.join(__dirname, '..', 'db.js'));
+require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: async () => { throw new Error('QA: no mongo'); } };
+const systemModelPath = require.resolve(path.join(__dirname, '..', 'core', 'models', 'System.js'));
+const _qaReject = async () => { throw new Error('QA: no mongo'); };
+require.cache[systemModelPath] = {
+  id: systemModelPath, filename: systemModelPath, loaded: true,
+  exports: Object.assign(() => ({}), { find: _qaReject, findOne: _qaReject, updateOne: _qaReject, create: _qaReject, deleteMany: _qaReject }),
+};
+
 const mm = require(path.join(__dirname, '..', 'core', 'games', 'murdermystery', 'index.js'));
 const system = require(path.join(__dirname, '..', 'core', 'utils', 'system.js'));
 const cards = require(path.join(__dirname, '..', 'core', 'games', 'murdermystery', 'cards.js'));
