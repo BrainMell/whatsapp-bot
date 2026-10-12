@@ -21778,7 +21778,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           cardBuf = null;
                         }
                         if (cardBuf && cardBuf.length > 100) {
-                          const cap = getBotMarker() +
+                          const cap = BOT_MARKER +
                             `💎 *Rune Codex* — page ${pageNum}/${totalPages}` +
                             (clamped ? ` (last page — \`${botConfig.getPrefix()} rune list\` starts over)` : '') +
                             `\n_Socket with \`${botConfig.getPrefix()} rune socket <rune> <skillId>\` · inspect a skill with \`${botConfig.getPrefix()} abilities <skillId>\`_`;
