@@ -107,5 +107,33 @@ for (const cat of Object.keys(REG)) {
   else fail(`category ${cat} page OVER LIMIT: ${worst}`);
 }
 
+// ── 4. MENU COMPLETENESS: new commands + alias coverage (2026-10-12 sweep) ──
+console.log('\n📋 MENU COMPLETENESS (new commands + alias mentions)');
+const flat = Object.values(REG).flat();
+const have = (cmd) => flat.some((c) => c.cmd === cmd);
+for (const probe of ['google', 'quote', 'anime', 'skill', 'skilltree', 'st', 'status', 'buy', 'instances', 'opscheck', 'debug']) {
+  if (have(probe)) pass(`registry entry present: ${probe}`);
+  else fail(`registry entry MISSING: ${probe}`);
+}
+const entry = (cmd) => flat.find((c) => c.cmd === cmd);
+const aliasPairs = [
+  ['quest', 'adventure'], ['inventory', 'inv'], ['kills', 'killcount'], ['kills', 'slain'],
+  ['world', 'map'], ['world', 'maps'], ['summon', 'summons'], ['dglord', 'dragongod'],
+  ['gear', 'equipment'], ['stop', 'end'], ['mentor', 'mentoring'],
+  ['instances', 'instance'], ['instances', 'health'],
+];
+for (const [primary, alias] of aliasPairs) {
+  const e = entry(primary);
+  if (!e) { fail(`alias check: primary entry missing: ${primary}`); continue; }
+  if (e.desc.includes(alias)) pass(`${primary} desc mentions alias: ${alias}`);
+  else fail(`${primary} desc does not mention alias: ${alias}`);
+}
+// every alias mention must have a real dispatch site in engine.js
+for (const alias of ['adventure', 'inv', 'killcount', 'slain', 'map', 'maps', 'summons', 'dragongod', 'equipment', 'end', 'mentoring', 'instance', 'health']) {
+  const re = new RegExp(`primaryCmd === ["']${alias}["']`);
+  if (re.test(engine)) pass(`dispatch site exists for alias: ${alias}`);
+  else fail(`no dispatch site for alias: ${alias}`);
+}
+
 console.log(failures ? `\n❌ REGULAR MENU QA: ${failures} failure(s)` : '\n✅ REGULAR MENU QA: all checks passed');
 process.exit(failures ? 1 : 0);
