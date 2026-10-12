@@ -25,9 +25,9 @@ const HERE = __dirname;
 const baileys = require("@whiskeysockets/baileys");
 const AdmZip = require("adm-zip");
 const sharp = require("sharp");
-const pack = require(path.join(HERE, "stickerPack.js"));
+const pack = require(path.join(HERE, "..", "core", "utils", "stickerPack.js"));
 const fs = require("fs");
-const engineSrc = fs.readFileSync(path.join(HERE, "engine.js"), "utf8");
+const engineSrc = fs.readFileSync(path.join(HERE, "..", "core", "engine.js"), "utf8");
 
 // ── A. module integrity ──────────────────────────────────────────────────────
 console.log("\nA. module integrity");
