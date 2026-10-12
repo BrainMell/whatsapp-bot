@@ -14,10 +14,18 @@
 //  10. media gate (images deleted during live case, throttled notice)
 //  11. vote race guard (ballots rejected once the count starts)
 //  12. reminder math (fire BEFORE deadline, not after phase start)
+//  13. night traces (owner 2026-10-12 22:05Z: quiet night + blocked killer
+//      still seed room clues; searches always lead somewhere)
+//  14. mm backstory (public story + account, no secret/role leak)
+//  15. hidden tag before the character profiles (silent mentions, no @text)
 // Run: node scripts/mm_qa3.js  (exit non-zero on failure)
 // ============================================
 
 const path = require('path');
+
+// QA_CLOCK scales the phase clocks (night 3s, dawn-extension 1.5s, discussion
+// 4s, vote 2.5s) so a quiet night's full timeout cycle runs in seconds
+process.env.MM_QA_CLOCK = '1';
 
 // ---- engine stub (same pattern as mm_qa.js) ----
 let QA_SOCK = null;
@@ -85,7 +93,8 @@ function makeSock() {
     async sendMessage(jid, content) {
       // record BOTH text and caption - image sends ride the caption field
       // (on-box real canvas renders cards, so captions are the message text)
-      out.push({ jid: String(jid), isGroup: String(jid).endsWith('@g.us'), image: !!(content && content.image), text: (content && (content.text || content.caption)) || '' });
+      // + mentions (hidden-tag sends ride contextInfo.mentionedJid)
+      out.push({ jid: String(jid), isGroup: String(jid).endsWith('@g.us'), image: !!(content && content.image), text: (content && (content.text || content.caption)) || '', mentions: (content && content.contextInfo && content.contextInfo.mentionedJid) || [] });
       return { key: { id: 'qa' + out.length } };
     },
   };
@@ -395,6 +404,84 @@ function roleCounts(g) {
     ok(sock.out.some((m) => m.isGroup && /answers before the house/.test(m.text) && m.text.includes(target.char.name)), '9.7 account posted publicly in the GC');
     ok(!sock.out.some((m) => m.isGroup && /to you alone/.test(m.text)), '9.8 observation never posted to the GC');
     ok(sock.out.some((m) => !m.isGroup && m.jid === asker.jid && /to you alone/.test(m.text)), '9.9 sharper detail DMs to the asker only');
+    await mm.handleCommand(ctxOf(sock, chat, { sub: 'end', sender: roster[0].jid, name: roster[0].name }));
+  }
+
+  // ---------- 10. NIGHT TRACES: QUIET NIGHT (owner 2026-10-12 22:05Z) ----------
+  console.log('\n===== 10. QUIET-NIGHT TRACES =====');
+  {
+    const sock = makeSock(); QA_SOCK = sock;
+    const roster = players(5, 110);
+    const chat = '1203630888010@g.us';
+    await openAndFill(sock, chat, roster);
+    await mm.handleCommand(ctxOf(sock, chat, { sub: 'start', sender: roster[0].jid, name: roster[0].name }));
+    const g = mm._internal.getGame(chat);
+    // hidden tag: before the profiles spawn, every guest silently tagged
+    const tagMsg = sock.out.find((m) => m.isGroup && /The house presents its guests/.test(m.text));
+    ok(!!tagMsg, '10.1 pre-intro attention notice posted to the GC');
+    ok(tagMsg && Array.isArray(tagMsg.mentions) && roster.every((p) => tagMsg.mentions.includes(p.jid)), '10.2 every guest silently tagged via mentionedJid');
+    ok(tagMsg && !/@@?\d+\s/.test(tagMsg.text) && !/I'?m tagging|tagging you/i.test(tagMsg.text), '10.3 no visible @ text, tagging never announced');
+    ok(await waitFor(() => g && g.phase === 'NIGHT'), '10.4 game reaches NIGHT');
+    // the killer does NOTHING - dawn must still seed room traces
+    ok(await waitFor(() => g.phase === 'DISCUSSION', 25000), '10.5 quiet night resolves to dawn (timeout + one extension)');
+    const tr = g.nightTraces;
+    ok(tr && tr.night === g.night && Array.isArray(tr.items) && tr.items.length >= 2, `10.6 quiet night seeded room traces (${tr ? (tr.items || []).length : 0} >= 2)`);
+    ok(tr && tr.items.every((t) => t.roomIdx != null && g.rooms[t.roomIdx]), '10.7 every trace sits in a real room');
+    ok(sock.out.some((m) => m.isGroup && /The night left things behind/.test(m.text)), '10.8 dawn tells the house the rooms hold something');
+    // search a traced room -> public find
+    const searcher = g.players.find((p) => p.alive);
+    const trace = tr.items.find((t) => !t.found);
+    await mm.handleCommand(ctxOf(sock, chat, { sub: 'search', rest: String(trace.roomIdx + 1), sender: searcher.jid, name: searcher.name }));
+    await sleep(900);
+    ok(trace.found === true, '10.9 trace marked found after the search');
+    ok((g.publicEvidence || []).some((e) => e.night === g.night && e.name === trace.name), '10.10 trace find recorded in the public evidence ledger');
+    ok(sock.out.some((m) => m.isGroup && /turns up something/.test(m.text)), '10.11 trace find announced to the house');
+    // one search per guest still holds
+    await mm.handleCommand(ctxOf(sock, chat, { sub: 'search', rest: '1', sender: searcher.jid, name: searcher.name }));
+    ok(sock.out.some((m) => m.isGroup && /already made your one search/.test(m.text)), '10.12 one-search rule still enforced');
+    // backstory: instant public pull-up, no secret/role leak
+    const about = g.players.find((p) => p.alive && p !== searcher);
+    const frag = about.char.name.split(' ').pop();
+    await mm.handleCommand(ctxOf(sock, chat, { sub: 'backstory', rest: frag, sender: searcher.jid, name: searcher.name }));
+    const bs = sock.out.filter((m) => m.isGroup && m.text.includes(about.char.name) && m.text.includes('Their account stands')).pop();
+    ok(!!bs, '10.13 backstory posted publicly with the standing account');
+    const secretFrag = (g.case.secrets[about.char.id].text || '').split(' ').slice(0, 3).join(' ');
+    ok(bs && !bs.text.includes(secretFrag), '10.14 backstory leaks no secret text');
+    ok(bs && !/KILLER|GUARDIAN|CIVILIAN|INVESTIGATOR/.test(bs.text), '10.15 backstory leaks no role');
+    await mm.handleCommand(ctxOf(sock, chat, { sub: 'end', sender: roster[0].jid, name: roster[0].name }));
+  }
+
+  // ---------- 11. BLOCKED KILLER STILL LEAVES TRACES ----------
+  console.log('\n===== 11. SAVED NIGHT TRACES =====');
+  {
+    const sock = makeSock(); QA_SOCK = sock;
+    const roster = players(5, 120);
+    const chat = '1203630888011@g.us';
+    await openAndFill(sock, chat, roster);
+    await mm.handleCommand(ctxOf(sock, chat, { sub: 'start', sender: roster[0].jid, name: roster[0].name }));
+    const g = mm._internal.getGame(chat);
+    ok(await waitFor(() => g && g.phase === 'NIGHT'), '11.1 game reaches NIGHT');
+    const killer = g.players.find((p) => p.role === 'KILLER');
+    const guardian = g.players.find((p) => p.role === 'GUARDIAN');
+    const victim = g.players.find((p) => p.role === 'CIVILIAN');
+    // the killer chooses the victim and a room
+    const kPool = g.players.filter((p) => p.alive && normJid(p.jid) !== normJid(killer.jid));
+    const kIdx = kPool.findIndex((p) => normJid(p.jid) === normJid(victim.jid)) + 1;
+    await mm.handleCommand(ctxOf(sock, killer.jid, { group: false, chatId: killer.jid, sub: 'kill', rest: String(kIdx), sender: killer.jid, name: killer.name }));
+    await mm.handleCommand(ctxOf(sock, killer.jid, { group: false, chatId: killer.jid, sub: 'room', rest: '5', sender: killer.jid, name: killer.name }));
+    // the guardian stands in the way -> the knife is turned
+    const gPool = g.players.filter((p) => p.alive);
+    const gIdx = gPool.findIndex((p) => normJid(p.jid) === normJid(victim.jid)) + 1;
+    await mm.handleCommand(ctxOf(sock, guardian.jid, { group: false, chatId: guardian.jid, sub: 'protect', rest: String(gIdx), sender: guardian.jid, name: guardian.name }));
+    ok(await waitFor(() => g.phase === 'DISCUSSION', 25000), '11.2 dawn after the save');
+    ok((g.bodies || []).length === 0, '11.3 no body - the save held');
+    const tr = g.nightTraces;
+    ok(tr && Array.isArray(tr.items) && tr.items.length >= 2, `11.4 blocked killer still seeded traces (${tr ? (tr.items || []).length : 0})`);
+    ok(tr && tr.items.some((t) => t.roomIdx === 4), '11.5 the interrupted scene is in the killer\u2019s chosen room (idx 4)');
+    const finder = g.players.find((p) => p.alive && p.role === 'CIVILIAN' && normJid(p.jid) !== normJid(victim.jid));
+    await mm.handleCommand(ctxOf(sock, chat, { sub: 'search', rest: '5', sender: finder.jid, name: finder.name }));
+    await sleep(900);
+    ok((g.publicEvidence || []).some((e) => e.night === g.night), '11.6 the search of the interrupted room yields a clue');
     await mm.handleCommand(ctxOf(sock, chat, { sub: 'end', sender: roster[0].jid, name: roster[0].name }));
   }
 

@@ -362,6 +362,133 @@ function bindEvidence({ kase, cast, killerCharIds, livingCharIds, room, method, 
   return out;
 }
 
+// ---------- night traces (owner 2026-10-12 22:05Z) ----------
+// "Killers must still be able to leave clues even if a guardian saves their
+// target or they don't perform an action that turn... the search should still
+// lead to clues even if the killer or killers did nothing" + "Increase the
+// number of clues that spawn in rooms. Even if nothing happened the night
+// before." Every dawn seeds 2-3 case-tied traces across the rooms:
+//   saved   -> the interrupted scene lives in the killer's chosen room
+//   murder  -> the killer's passage + ambient movement elsewhere
+//   quiet   -> the house moved anyway (ambient movement of the living cast)
+// Public lines stay ambiguous (item + hint, never the owner's name); a
+// sharper finderLine is stored for the searcher's occasional private edge.
+const TRACE_LINES = {
+  interrupted: [
+    (item) => `The visit was interrupted - ${item.name} lies where it was dropped. ${capHint(item.hint)}.`,
+    (item) => `Someone was disturbed here in the dark and left in haste: ${item.name}. ${capHint(item.hint)}.`,
+    (item) => `A scuffle that never finished - the rug is rucked, a chair still rocks, and ${item.name} was left behind. ${capHint(item.hint)}.`,
+    (item) => `The window does not quite latch anymore. On the sill: ${item.name}. ${capHint(item.hint)}.`,
+  ],
+  passage: [
+    (item) => `Whoever came this way in the dark left ${item.name} behind. ${capHint(item.hint)}.`,
+    (item) => `${capHint(item.hint)} - found where no guest admits to walking after midnight.`,
+    (item) => `The route the household does not walk after dark held a surprise this morning: ${item.name}.`,
+  ],
+  ambient: [
+    (item) => `Overnight, ${item.name} surfaced where it does not belong. ${capHint(item.hint)}.`,
+    (item) => `The night staff swept at 2 am - yet here is ${item.name}, fresh-placed. ${capHint(item.hint)}.`,
+    (item) => `Past midnight someone passed through. ${capHint(item.hint)} - and the door will not explain itself.`,
+    (item) => `${capHint(item.hint)} - and every guest swears the room was empty when they left it.`,
+  ],
+};
+const TRACE_FINDER = [
+  (item, owner) => `You know ${item.name} - it belongs to ${owner}\u2019s world. Whether it was dropped, or meant to be found, is the real question.`,
+  (item, owner) => `You have seen ${item.name} before - with ${owner}. Say it aloud and you accuse them; keep it and you carry it alone.`,
+];
+
+function capHint(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+
+function seedNightTraces({ kase, cast, livingCharIds, killerCharIds, rooms, outcome, killerRoomIdx, bodyRoomIdx, usedItemIds }) {
+  if (!kase || !rooms || !rooms.length || !livingCharIds || !livingCharIds.length) return [];
+  const nRooms = rooms.length;
+  const usedRooms = new Set();
+  if (bodyRoomIdx != null && bodyRoomIdx >= 0) usedRooms.add(bodyRoomIdx);
+  const usedItems = new Set(Array.isArray(usedItemIds) ? usedItemIds : []);
+
+  const living = livingCharIds.slice();
+  const killers = (killerCharIds || []).filter((id) => living.includes(id));
+
+  // pick a living guest's personal item not already spent tonight; the killer's
+  // item surfaces more often when their visit was interrupted (still never a
+  // guarantee - half the interrupted traces belong to innocents)
+  const takeItem = (preferKiller) => {
+    for (let tries = 0; tries < 14; tries++) {
+      let pool;
+      if (preferKiller && killers.length && Math.random() < 0.55) pool = killers.slice();
+      else pool = living.filter((id) => !killers.includes(id));
+      if (!pool.length) pool = living.slice();
+      const id = pick(pool);
+      const item = kase.personalItems[id] || pick(PERSONAL_ITEMS);
+      if (!usedItems.has(item.id)) {
+        usedItems.add(item.id);
+        const owner = (cast.find((c) => c.id === id) || {}).name || 'a guest';
+        return { item, linkedCharId: id, linkedName: owner };
+      }
+    }
+    return null; // every living personal item already used tonight
+  };
+  const takeRoom = (force) => {
+    if (force != null && force >= 0 && force < nRooms && !usedRooms.has(force)) {
+      usedRooms.add(force);
+      return force;
+    }
+    for (let tries = 0; tries < 24; tries++) {
+      const r = Math.floor(Math.random() * nRooms);
+      if (!usedRooms.has(r)) { usedRooms.add(r); return r; }
+    }
+    return null; // every room already holds something tonight
+  };
+  const build = (kind, roomIdx, t) => {
+    if (roomIdx == null || !t) return null;
+    return {
+      roomIdx,
+      itemId: t.item.id,
+      art: t.item.art,
+      name: t.item.name,
+      tag: 'rumour',
+      line: pick(TRACE_LINES[kind])(t.item),
+      linkedCharId: t.linkedCharId,
+      linkedName: t.linkedName,
+      finderLine: pick(TRACE_FINDER)(t.item, t.linkedName),
+      found: false,
+    };
+  };
+
+  const items = [];
+  if (outcome === 'saved' && killerRoomIdx != null && killerRoomIdx >= 0) {
+    // the guardian turned the knife - the killer still walked those halls:
+    // their interrupted scene keeps two traces in the chosen room
+    const t1 = takeItem(true);
+    const b1 = build('interrupted', takeRoom(killerRoomIdx), t1);
+    if (b1) items.push(b1);
+    const t2 = takeItem(false);
+    const b2 = build('interrupted', killerRoomIdx, t2);
+    if (b2) items.push(b2);
+    const t3 = takeItem(false);
+    const b3 = build('ambient', takeRoom(null), t3);
+    if (b3) items.push(b3);
+  } else if (outcome === 'murder') {
+    // the body's room already carries its own evidence - the killer's passage
+    // and the house's movement seed the OTHER rooms
+    const t1 = takeItem(Math.random() < 0.35);
+    const b1 = build('passage', takeRoom(null), t1);
+    if (b1) items.push(b1);
+    const t2 = takeItem(false);
+    const b2 = build('ambient', takeRoom(null), t2);
+    if (b2) items.push(b2);
+  } else {
+    // a quiet night - the killer stayed in bed, the house did not
+    const count = Math.random() < 0.5 ? 3 : 2;
+    for (let i = 0; i < count; i++) {
+      const t = takeItem(false);
+      const b = build('ambient', takeRoom(null), t);
+      if (b) items.push(b);
+    }
+  }
+  return items.filter(Boolean);
+}
+
 // statement lookup for `.j mm ask`
 function statementFor(kase, charId) {
   if (!kase || !kase.statements || !kase.statements[charId]) return null;
@@ -379,6 +506,7 @@ module.exports = {
   generateCase,
   validateCase,
   bindEvidence,
+  seedNightTraces,
   statementFor,
   introCaptionFor,
   loadHistory,

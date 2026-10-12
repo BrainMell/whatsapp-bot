@@ -44,11 +44,15 @@ try { economy = require('../../rpg/economy'); } catch (e) { economy = null; }
 // ---------- tunables ----------
 const MIN_PLAYERS = 4;
 const MAX_PLAYERS = 11;        // character pool size
-const NIGHT_MS = 180000;       // 3 minutes of darkness (real humans need to read + act)
-const NUDGE_BEFORE_MS = 45000; // "the night is thinning" DM before dawn
-const DAWN_EXTEND_MS = 60000;  // one extension while a required actor sleeps
-const DISCUSS_MS = 300000;     // 5 minutes of accusations (and one search each)
-const VOTE_MS = 90000;         // 90s on the ballot
+// MM_QA_CLOCK=1 scales the phase clocks so harnesses can exercise full night
+// cycles (including a quiet night's one dawn extension) in seconds; without
+// the env these are the production values, untouched.
+const QA_CLOCK = !!process.env.MM_QA_CLOCK;
+const NIGHT_MS = QA_CLOCK ? 3000 : 180000;       // 3 minutes of darkness (real humans need to read + act)
+const NUDGE_BEFORE_MS = QA_CLOCK ? 800 : 45000;  // "the night is thinning" DM before dawn
+const DAWN_EXTEND_MS = QA_CLOCK ? 1500 : 60000;  // one extension while a required actor sleeps
+const DISCUSS_MS = QA_CLOCK ? 4000 : 300000;     // 5 minutes of accusations (and one search each)
+const VOTE_MS = QA_CLOCK ? 2500 : 90000;         // 90s on the ballot
 const LOBBY_TTL_MS = 30 * 60000;
 // --- zombie retirement (2026-10-06): an abandoned game cycles
 // night->dawn->discussion->vote forever (~9.5 min/round) and was found on
@@ -981,6 +985,20 @@ async function startGame(ctx) {
       `Role cards: check your DMs. Do not reveal yours.`);
   }
 
+  // owner 2026-10-12: before the character profiles spawn, every guest is
+  // silently tagged through the hidden-tag mechanism (mentions ride the
+  // contextInfo - the ping lands, no @name shows in the body) with a line
+  // telling the house why the descriptions matter. The tagging itself is
+  // never announced.
+  try {
+    await sock.sendMessage(chatId, {
+      text: `${botMarker}🕯️ The house presents its guests. Read every character description closely - they are threads, and the evidence will pull them.`,
+      contextInfo: { mentionedJid: g.players.map((p) => p.jid).filter(Boolean) },
+    });
+  } catch (e) {
+    await sendGroup(sock, chatId, `${botMarker}🕯️ The house presents its guests. Read every character description closely - they are threads, and the evidence will pull them.`);
+  }
+
   // cast introductions (owner MD §7): one portrait card + backstory caption
   // every 30s, then the first night. Cancellation-safe: the chain checks the
   // game still exists in STARTING at every step; introDone is persisted BEFORE
@@ -1440,6 +1458,42 @@ async function resolveNight(sock, chatId, _reason) {
     console.log(`🔪 [MurderMystery] NIGHT ${g.night}: morning healed after mid-resolution restart (unfound body present)`);
   }
 
+  // ---- night traces (owner 2026-10-12: "killers must still be able to leave
+  // clues even if a guardian saves their target or they don't perform an
+  // action" + "increase the number of clues that spawn in rooms, even if
+  // nothing happened the night before") - EVERY night seeds case-tied traces
+  // into the rooms, whatever happened in the dark ----
+  if (g.case) {
+    try {
+      const tonightBody = (g.bodies || []).find((b) => b.night === g.night);
+      const spentItems = [];
+      for (const b of (g.bodies || [])) {
+        if (b.night !== g.night || !Array.isArray(b.evidence)) continue;
+        for (const ev of b.evidence) { if (ev && ev.itemId) spentItems.push(ev.itemId); }
+      }
+      g.nightTraces = {
+        night: g.night,
+        items: caseGen.seedNightTraces({
+          kase: g.case,
+          cast: g.players.map((p) => p.char),
+          livingCharIds: alivePlayers(g).map((p) => p.char.id),
+          killerCharIds: g.players.filter((p) => p.role === 'KILLER' && p.alive).map((p) => p.char.id),
+          rooms: g.rooms,
+          outcome,
+          killerRoomIdx: g.killerRoomIdx != null ? g.killerRoomIdx : null,
+          bodyRoomIdx: tonightBody ? tonightBody.roomIdx : null,
+          usedItemIds: spentItems,
+        }),
+      };
+      console.log(`🔪 [MurderMystery] NIGHT ${g.night}: ${g.nightTraces.items.length} room traces seeded (outcome=${outcome})`);
+    } catch (e) {
+      g.nightTraces = { night: g.night, items: [] };
+      console.error('🔪 [MurderMystery] trace seeding failed:', e.message);
+    }
+    persistGames();
+  }
+  const tracesUp = (g.nightTraces && g.nightTraces.night === g.night && g.nightTraces.items.length) || 0;
+
   // ---- public morning card (never names the victim - the body must be found) ----
   await sleep(1200);
   try {
@@ -1453,13 +1507,15 @@ async function resolveNight(sock, chatId, _reason) {
     if (buf) {
       await sendGroupImage(sock, chatId, buf,
         `☀️ *DAWN - NIGHT ${g.night}*\n\n${outcome === 'murder' ? 'A murder was committed in the night. The body has *not* been found.' : outcome === 'saved' ? 'Someone almost died last night. No one did.' : 'No one died last night.'}\n\n` +
-        `🔍 Every living guest may search *one* room before the vote: \`${g.prefix} mm search <number|room>\` - in the group or in your DMs.`);
+        `🔍 Every living guest may search *one* room before the vote: \`${g.prefix} mm search <number|room>\` - in the group or in your DMs.` +
+        (tracesUp ? `\n🌑 The night left things behind in the rooms - turn them over well.` : ''));
     } else throw new Error('morning render null');
   } catch (e) {
     await sendGroup(sock, chatId,
       `☀️ *DAWN - NIGHT ${g.night}*\n\n${morningLine}\n\n` +
       `${outcome === 'murder' ? 'A murder was committed in the night. The body has *not* been found.' : outcome === 'saved' ? 'Someone almost died last night. No one did.' : 'No one died last night.'}\n\n` +
-      `The rooms of the manor:\n${roomListOf(g)}\n\n🔍 Every living guest may search *one* room: \`${g.prefix} mm search <number|room>\`.`);
+      `The rooms of the manor:\n${roomListOf(g)}\n\n🔍 Every living guest may search *one* room: \`${g.prefix} mm search <number|room>\`.` +
+      (tracesUp ? `\n🌑 The night left things behind in the rooms - turn them over well.` : ''));
   }
 
   return beginDiscussion(sock, chatId);
@@ -1685,10 +1741,52 @@ async function submitSearch(ctx, raw) {
     return;
   }
 
-  // ---- empty room: an occasional stray find keeps every search interesting
-  // (one stray item per day, ~25% per search, never at the body's room) ----
-  if (!found && g.case && (!g.strayDay || g.strayDay !== g.night) && Math.random() < 0.25) {
+  // ---- room traces (owner 2026-10-12): every dawn seeds case-tied clues into
+  // the rooms - a blocked killer still leaves an interrupted scene, and even a
+  // quiet night moves the house. A search of a traced room always yields it. ----
+  const tr = g.nightTraces && g.nightTraces.night === g.night ? g.nightTraces : null;
+  const trIdx = tr ? (tr.items || []).findIndex((t) => !t.found && t.roomIdx === hit.idx) : -1;
+  if (tr && trIdx >= 0) {
+    const trace = tr.items[trIdx];
+    trace.found = true;
+    g.publicEvidence = g.publicEvidence || [];
+    g.publicEvidence.push({ night: g.night, victimName: null, room: hit.room.name, name: trace.name, tag: trace.tag || 'rumour', line: trace.line, linkedCharId: trace.linkedCharId || null });
+    persistGames();
+    let tOk = false;
+    try {
+      const tBuf = await cards.renderEvidenceCard({ itemName: trace.name, art: trace.art, tag: trace.tag || 'rumour', line: trace.line, roomName: hit.room.name, night: g.night, manorName: cases.MANOR_NAME });
+      if (tBuf) {
+        tOk = true;
+        await sendGroupImage(sock, searchChatId, tBuf, `🔎 ${nameOf(me)} turns up something in ${hit.room.name}… the night left it behind.`);
+      }
+    } catch (e) { /* text fallback */ }
+    if (!tOk) {
+      await sendGroup(sock, searchChatId, `🔎 ${nameOf(me)} turns up something in ${hit.room.name}: *${trace.name}* (circumstantial)\n_${trace.line}_`);
+    }
+    // the finder's sharper private detail - sometimes, never a guarantee
+    if (trace.linkedCharId && trace.finderLine && Math.random() < 0.4) {
+      const nn = normJid(senderJid);
+      g.privKnowledge = g.privKnowledge || {};
+      g.privKnowledge[nn] = g.privKnowledge[nn] || [];
+      g.privKnowledge[nn].push({ kind: 'finding', night: g.night, text: `Searching ${hit.room.name} you noticed: ${trace.finderLine}` });
+      persistGames();
+      try {
+        const fBuf = await cards.renderEvidenceCard({ itemName: 'a private observation', art: trace.art, tag: 'rumour', line: trace.finderLine, roomName: hit.room.name, night: g.night, manorName: cases.MANOR_NAME });
+        if (fBuf) await sendDMImage(sock, senderJid, fBuf, `🕯️ *YOU NOTICED WHAT OTHERS MISSED*\n\n_${trace.finderLine}_\n\nReveal it, twist it, or keep it.`);
+        else throw new Error('trace finder render null');
+      } catch (e) {
+        await sendDM(sock, senderJid, `🕯️ *YOU NOTICED WHAT OTHERS MISSED*\n\n_${trace.finderLine}_\n\nReveal it, twist it, or keep it.`);
+      }
+    }
+    return;
+  }
+
+  // ---- legacy stray draw: an occasional find keeps even a bare room
+  // interesting (up to two per day, ~35% per search, case rounds only) ----
+  const strayUsed = g.strayDay === g.night ? (g.strayCount || 0) : 0;
+  if (!found && g.case && strayUsed < 2 && Math.random() < 0.35) {
     g.strayDay = g.night;
+    g.strayCount = strayUsed + 1;
     const living = alivePlayers(g);
     if (living.length) {
       const owner = living[Math.floor(Math.random() * living.length)];
@@ -2374,6 +2472,67 @@ async function askCharacter(ctx, rawTarget) {
     `❓ *${nameOf(target).toUpperCase()} - ${target.char.name}, ${target.char.title}*\n\n_${account}_${obs ? `\n\nThey add, unprompted: _"${obs}"_` : ''}\n\nCompare it against the evidence: \`${g.prefix} mm evidence\`. Their answer may not match their alibi tomorrow.`);
 }
 
+// ---------- CHARACTER BACKSTORY (owner 2026-10-12 22:05Z: "Add a command
+// that allows players to instantly pull up anyone's character backstory or
+// description for cross-referencing clues") ----------
+// Public information only: the introduction line the house already heard +
+// the guest's standing public account. Never the secrets, never the personal
+// items (those are the evidence layers), never a role. Works for the dead -
+// their stories stay on the record.
+async function showBackstory(ctx, rawTarget) {
+  const { sock, chatId, senderJid, botMarker } = ctx;
+  const g = ctx.isGroup ? getGame(chatId) : findGameForPlayer(senderJid);
+  if (g) noteSock(g, sock);
+  if (!g) return sendGroup(sock, chatId, `${botMarker}📜 There is no case open. The manor keeps no other records.`);
+  if (!g.case) return sendGroup(sock, chatId, `${botMarker}📜 The introductions carry this round's stories - this case predates the record.`);
+  const alive = resolveRosterTarget(g, rawTarget);
+  if (alive) return deliverBackstory(ctx, g, alive);
+  // the fallen keep their stories - match the full roster by name
+  const q = String(rawTarget || '').trim().toLowerCase().replace(/^@/, '');
+  if (!q || /^\d+$/.test(q)) {
+    const roster = g.players.filter((p) => p.char).map((p, i) => `  ${i + 1}. ${nameOf(p)} - ${p.char.name}${p.alive ? '' : ' (deceased)'}`).join('\n');
+    return sendGroup(sock, chatId, `${botMarker}📜 Whose story do you want? Name a guest:\n\n${roster}\n\n\`${g.prefix} mm backstory <number|name>\``);
+  }
+  const target = g.players.find((p) => p.char && (
+    nameOf(p).toLowerCase().includes(q) ||
+    (p.char.name || '').toLowerCase().includes(q) ||
+    (p.char.title || '').toLowerCase().includes(q)));
+  if (!target) {
+    const roster = g.players.filter((p) => p.char).map((p) => `  ${nameOf(p)} - ${p.char.name}${p.alive ? '' : ' (deceased)'}`).join('\n');
+    return sendGroup(sock, chatId, `${botMarker}📜 No guest answers to that name. The register:\n\n${roster}\n\n\`${g.prefix} mm backstory <number|name>\``);
+  }
+  return deliverBackstory(ctx, g, target);
+}
+
+async function deliverBackstory(ctx, g, target) {
+  const { sock, chatId, botMarker, prefix } = ctx;
+  const st = caseGen.statementFor(g.case, target.char.id);
+  const introLine = caseGen.introCaptionFor(target.char.id, g.players.reduce((m, p) => { if (p.char) m[p.char.id] = p.char.name; return m; }, {}), g.case, target.char.title);
+  const account = st ? st.account : `${target.char.name} has never given the house an account of that evening.`;
+  const status = target.alive ? '' : `\n\n☠️ _The record notes: ${nameOf(target)} is dead._`;
+  const cap = `${introLine}\n\nTheir account stands: _${account}_${status}\n\nCross-reference it against the evidence: \`${prefix || g.prefix} mm evidence\` - accounts that cannot survive the evidence are the ones that matter.`;
+  let ok = false;
+  try {
+    const idx = g.players.indexOf(target) + 1;
+    const buf = await cards.renderCharacterIntroCard({ char: target.char, caption: introLine, index: idx, total: g.players.length, manorName: cases.MANOR_NAME });
+    if (buf) {
+      ok = true;
+      await sendGroupImage(sock, chatId, buf, cap);
+    }
+  } catch (e) { /* text fallback */ }
+  if (!ok) {
+    await sendGroup(sock, chatId, `${botMarker}📜 *${target.char.name} - ${target.char.title}*\n\n_${introLine}_\n\nTheir account stands: _${account}_${status}`);
+  }
+  // the house's record of who wanted whose story
+  const n = normJid(ctx.senderJid);
+  if (n) {
+    g.backstoryLog = g.backstoryLog || {};
+    g.backstoryLog[n] = g.backstoryLog[n] || [];
+    if (!g.backstoryLog[n].includes(target.char.id)) g.backstoryLog[n].push(target.char.id);
+    persistGames();
+  }
+}
+
 // ---------- PUBLIC ACCUSATION (MD §11, discussion layer) ----------
 async function submitAccuse(ctx, raw) {
   const { sock, chatId, senderJid, botMarker } = ctx;
@@ -2532,6 +2691,7 @@ function helpText(prefix) {
     `*In play (group):*\n` +
     `• \`${prefix} mm vote <n|name|skip>\` - cast your ballot (ballots are public)\n` +
     `• \`${prefix} mm ask <n|name>\` - question a guest before the house; their account is public, the sharper detail is yours alone (the killer lies)\n` +
+    `• \`${prefix} mm backstory <n|name>\` - any guest's story and standing account, on demand - cross-reference it against the evidence\n` +
     `• \`${prefix} mm whisper <message>\` - killer partners only, at night, in DMs: the bot relays it to your partner\n` +
     `• \`${prefix} mm accuse <n|name> <why>\` - level an accusation the whole house hears\n` +
     `• \`${prefix} mm evidence\` - your private case dossier (DMs): facts, evidence, statements, your notes\n` +
@@ -2674,6 +2834,11 @@ async function handleCommand(ctx) {
     case 'ask':
     case 'question':
       return askCharacter(ctx, ctx.rest);
+    case 'backstory':
+    case 'bio':
+    case 'background':
+    case 'whois':
+      return showBackstory(ctx, ctx.rest);
     case 'accuse':
     case 'accusation':
       return submitAccuse(ctx, ctx.rest);
