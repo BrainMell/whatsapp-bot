@@ -1027,7 +1027,7 @@ function roleCardCaption(p, g, partnerOf) {
   const prefix = g.prefix;
   const partner = partnerOf ? partnerOf(p) : null;
   if (p.role === 'KILLER') {
-    const partnerLine = partner ? `\nYour partner in the dark: *${nameOf(partner)}* - you know each other, and you share one kill per night. Either of you may strike; their choice stands.` : '';
+    const partnerLine = partner ? `\nYour partner in the dark: *${nameOf(partner)}* - you know each other, and you share one kill per night. Either of you may strike; their choice stands.\n(At night, in your DMs: \`${prefix} mm whisper <message>\` reaches your partner.)` : '';
     return `🔪 You are THE KILLER.${partnerLine}\nEach night, choose a guest to eliminate - then choose the room where the body lies.\nYour identity is secret - even from the dead.\n(At night, in this chat: \`${prefix} mm kill <n>\`, then \`${prefix} mm room <n>\`.)`;
   }
   if (p.role === 'INVESTIGATOR') {
@@ -1098,7 +1098,7 @@ async function beginNight(sock, chatId) {
       const roster = rosterLines(g, p.jid).join('\n');
       const partner = killerTeam.length > 1 ? nameOf(killerTeam.find((x) => normJid(x.jid) !== normJid(p.jid))) : null;
       await sendDM(sock, p.jid,
-        `🌙 *NIGHT ${g.night} - ${cases.MANOR_NAME}*\n\nYou are the *KILLER*.${partner ? `\nYour partner: *${partner}* - one kill per night between you. Either of you may choose; their choice stands.` : ''}\nChoose tonight's victim:\n\n${roster}\n\n` +
+        `🌙 *NIGHT ${g.night} - ${cases.MANOR_NAME}*\n\nYou are the *KILLER*.${partner ? `\nYour partner: *${partner}* - one kill per night between you. Either of you may choose; their choice stands.\nCoordinate in the dark: \`${g.prefix} mm whisper <message>\` - it reaches your partner's DMs through the bot.` : ''}\nChoose tonight's victim:\n\n${roster}\n\n` +
         `\`${g.prefix} mm kill <number>\` - or a name.\nAfter the kill you will choose the room where the body lies.\n⏱️ The night lasts *3 minutes*.`);
     } else if (p.role === 'INVESTIGATOR') {
       const roster = rosterLines(g, p.jid).join('\n');
@@ -2350,14 +2350,26 @@ async function askCharacter(ctx, rawTarget) {
   const n = normJid(senderJid);
   const st = caseGen.statementFor(g.case, target.char.id);
   const account = st ? st.account : `${target.char.name} declines to account for the evening in any detail.`;
-  const obs = st && st.observation ? `\n\nThey add, unprompted: _"${st.observation}"_` : '';
+  const obs = st && st.observation ? st.observation : null;
   g.askLog = g.askLog || {};
   g.askLog[n] = g.askLog[n] || [];
   if (!g.askLog[n].includes(target.char.id)) g.askLog[n].push(target.char.id);
   persistGames();
-  await sendGroup(sock, chatId, `${botMarker}❓ ${nameOf(me)} draws ${nameOf(target)} aside to question them. What was said stays between them - for now.`);
+  if (ctx.isGroup) {
+    // owner 2026-10-12 19:32Z: the ask (and the ACCOUNT) live in the group
+    // where discussion and voting happen - DMs are for the night. MD §8:
+    // every character has a PUBLIC account of events. The sharper
+    // observation stays the asker's private edge (MD §6 layering).
+    await sendGroup(sock, chatId,
+      `${botMarker}❓ ${nameOf(target)} - ${target.char.name}, ${target.char.title} - answers before the house:\n\n_${account}_`);
+    if (obs) {
+      await sendDM(sock, senderJid,
+        `❓ While the house heard the account, ${target.char.name} adds - to you alone:\n\n_${obs}_\n\nCompare accounts with the evidence: \`${g.prefix} mm evidence\`.`);
+    }
+    return;
+  }
   await sendDM(sock, senderJid,
-    `❓ *${nameOf(target).toUpperCase()} - ${target.char.name}, ${target.char.title}*\n\n_${account}_${obs}\n\nCompare it against the evidence: \`${g.prefix} mm evidence\`. Their answer may not match their alibi tomorrow.`);
+    `❓ *${nameOf(target).toUpperCase()} - ${target.char.name}, ${target.char.title}*\n\n_${account}_${obs ? `\n\nThey add, unprompted: _"${obs}"_` : ''}\n\nCompare it against the evidence: \`${g.prefix} mm evidence\`. Their answer may not match their alibi tomorrow.`);
 }
 
 // ---------- PUBLIC ACCUSATION (MD §11, discussion layer) ----------
@@ -2384,6 +2396,40 @@ async function submitAccuse(ctx, raw) {
   persistGames();
   await sendGroup(sock, chatId,
     `📣 *${nameOf(me)}* levels an accusation at *${nameOf(target)}* (${target.char.name}):${reason ? `\n> _"${reason}"_` : ''}\n\nThe record keeps it. The vote decides it.`);
+}
+
+// ---------- KILLER WHISPER (owner 2026-10-12 19:32Z: "if there are twin
+// killers... use a command that allow them to send a message to the bot and
+// it's received by the other killer in dms during the night phase") ----------
+// DM-only, NIGHT-only, killer partners only. The bot relays; nothing is kept
+// in the case log - the record never learns what the dark said.
+async function submitWhisper(ctx, raw) {
+  const { sock, chatId, senderJid, botMarker } = ctx;
+  const g = ctx.isGroup ? getGame(chatId) : findGameForPlayer(senderJid);
+  if (g) noteSock(g, sock);
+  if (!g) return sendGroup(sock, chatId, `${botMarker}🔪 No mystery hears you.`);
+  if (ctx.isGroup) {
+    return sendGroup(sock, chatId, `${botMarker}🔪 Whispers travel in DMs only - the walls of Blackvale have ears.`);
+  }
+  const me = getPlayer(g, senderJid);
+  if (!me) return sendGroup(sock, chatId, `${botMarker}🔪 You are not on the guest list.`);
+  if (!me.alive) return sendGroup(sock, chatId, `${botMarker}🔪 The dead whisper nothing.`);
+  if (me.role !== 'KILLER') {
+    return sendGroup(sock, chatId, `${botMarker}🔪 Whispers in the dark are not yours to send.`);
+  }
+  if (g.phase !== PHASE.NIGHT) {
+    return sendGroup(sock, chatId, `${botMarker}🔪 The whisper passes only in the dark - send it at night.`);
+  }
+  const partner = g.players.find((p) => p.role === 'KILLER' && p.alive && normJid(p.jid) !== normJid(senderJid));
+  if (!partner) {
+    return sendGroup(sock, chatId, `${botMarker}🔪 You hunt alone - there is no partner left to whisper to.`);
+  }
+  const msg = sanitizePlayerText(String(raw || '').trim(), WILL_MAX_LEN);
+  if (!msg) {
+    return sendGroup(sock, chatId, `${botMarker}🔪 Give the whisper words: \`${g.prefix} mm whisper <message>\``);
+  }
+  await sendDM(sock, partner.jid, `🔪 _A whisper reaches you through the dark - your partner:_\n\n> "${msg}"`);
+  await sendDM(sock, senderJid, `🔪 _Your whisper travels the halls: "${msg}"_`);
 }
 async function forceEnd(ctx) {
   const { sock, chatId, senderJid, botMarker } = ctx;
@@ -2483,7 +2529,8 @@ function helpText(prefix) {
     `• \`${prefix} mm will <text>\` (DM) - seal your last words; the house reads them aloud if you die.\n\n` +
     `*In play (group):*\n` +
     `• \`${prefix} mm vote <n|name|skip>\` - cast your ballot (ballots are public)\n` +
-    `• \`${prefix} mm ask <n|name>\` - question a guest; their account arrives in your DMs (the killer lies)\n` +
+    `• \`${prefix} mm ask <n|name>\` - question a guest before the house; their account is public, the sharper detail is yours alone (the killer lies)\n` +
+    `• \`${prefix} mm whisper <message>\` - killer partners only, at night, in DMs: the bot relays it to your partner\n` +
     `• \`${prefix} mm accuse <n|name> <why>\` - level an accusation the whole house hears\n` +
     `• \`${prefix} mm evidence\` - your private case dossier (DMs): facts, evidence, statements, your notes\n` +
     `• \`${prefix} mm status\` - the state of the case\n` +
@@ -2628,6 +2675,9 @@ async function handleCommand(ctx) {
     case 'accuse':
     case 'accusation':
       return submitAccuse(ctx, ctx.rest);
+    case 'whisper':
+    case 'wsp':
+      return submitWhisper(ctx, ctx.rest);
     case 'will':
     case 'lastwords':
       return submitWill(ctx, ctx.rest);

@@ -304,6 +304,11 @@ async function runPass(n) {
 
   // dawn: force resolution (skip extension path)
   g.extendedTonight = true;
+  // C13 window marker (2026-10-12): the owner's character-sheet rollout
+  // legitimately names every guest (web links, backstories) BEFORE the first
+  // dawn - the secrecy rule is that the DAWN must not name the victim until
+  // the body is found. Scan only messages from the dawn onward.
+  const dawnMark = sock.out.length;
   await mm._internal.onPhaseTimeout(CHAT, sock);
   await sleep(3200); // resolveNight debounces via maybeResolveNight timer too
   if (g.bodies.length !== 1) {
@@ -314,10 +319,10 @@ async function runPass(n) {
   ok(g.bodies[0].found === false, 'C11 body starts unfound');
   ok(groupText(sock, /DAWN - NIGHT 1/), 'C12 morning card sent');
   {
-    const leak2 = sock.out.find((m) => m.isGroup && new RegExp(`${victimPlan.name}`, 'i').test(m.text));
+    const leak2 = sock.out.slice(dawnMark).find((m) => m.isGroup && new RegExp(`${victimPlan.name}`, 'i').test(m.text));
     if (leak2) { const mm3 = new RegExp(`${victimPlan.name}`, 'i'); console.log('  [C13-LEAK] name=', victimPlan.name, 'match=', JSON.stringify((leak2.text.match(mm3) || [''])[0]), 'in:', JSON.stringify(leak2.text.slice(0, 60))); }
   }
-  ok(!groupText(sock, new RegExp(`${victimPlan.name}`, 'i')) || sock.out.filter((m) => m.isGroup && /has been found dead/.test(m.text)).length > 0, 'C13 victim not named before discovery');
+  ok(!sock.out.slice(dawnMark).some((m) => m.isGroup && new RegExp(`${victimPlan.name}`, 'i').test(m.text)) || sock.out.filter((m) => m.isGroup && /has been found dead/.test(m.text)).length > 0, 'C13 victim not named before discovery');
   ok(groupText(sock, /mm search/), 'C14 search instructions in morning/discussion');
   ok(mm.isSilenced(victimPlan.jid, CHAT), 'C15 victim silenced');
   ok(!mm.isSilenced(invest.jid, CHAT), 'C16 living not silenced');
