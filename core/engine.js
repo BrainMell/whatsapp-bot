@@ -21744,14 +21744,55 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         return;
                       }
 
-                      // .g rune list - all rune types
+                      // .g rune list [page] - paginated RUNE CODEX image card
+                      // (owner 2026-10-12: polished paginated card with real
+                      // rune data + tier art; text fallback preserved)
                       if (runeSub === 'list') {
-                        let msg = `💎 *Rune Types*\n\n`;
-                        for (const [id, rt] of Object.entries(runeSystem.RUNE_TYPES)) {
+                        const RUNES_PER_PAGE = 8;
+                        const allTypes = Object.entries(runeSystem.RUNE_TYPES);
+                        const totalPages = Math.max(1, Math.ceil(allTypes.length / RUNES_PER_PAGE));
+                        let pageNum = parseInt(runeArgs[2], 10);
+                        if (!Number.isFinite(pageNum) || pageNum < 1) pageNum = 1;
+                        let clamped = false;
+                        if (pageNum > totalPages) { pageNum = totalPages; clamped = true; }
+                        const slice = allTypes.slice((pageNum - 1) * RUNES_PER_PAGE, pageNum * RUNES_PER_PAGE);
+                        let cardBuf = null;
+                        try {
+                          const v3man = require('./rpg/skillAssets').v3Manifest();
+                          const runeRows = new Map((v3man.runes || []).map((r) => [(r.id || '').toUpperCase(), r]));
+                          const tiered = new Set((v3man.runes || []).filter((r) => r.tiered_art).map((r) => (r.id || '').toUpperCase()));
+                          cardBuf = await require('./rpg/abilityCards').renderRuneListCard({
+                            page: pageNum,
+                            totalPages,
+                            totalRunes: allTypes.length,
+                            runes: slice.map(([id, rt]) => ({
+                              type: id,
+                              name: rt.name,
+                              desc: rt.desc,
+                              category: (runeRows.get(id) || {}).category || 'status',
+                              tierArt: tiered.has(id),
+                            })),
+                          });
+                        } catch (e) {
+                          console.error('[rune list] card render failed:', e?.message || e);
+                          cardBuf = null;
+                        }
+                        if (cardBuf && cardBuf.length > 100) {
+                          const cap = getBotMarker() +
+                            `💎 *Rune Codex* — page ${pageNum}/${totalPages}` +
+                            (clamped ? ` (last page — \`${botConfig.getPrefix()} rune list\` starts over)` : '') +
+                            `\n_Socket with \`${botConfig.getPrefix()} rune socket <rune> <skillId>\` · inspect a skill with \`${botConfig.getPrefix()} abilities <skillId>\`_`;
+                          await sock.sendMessage(chatId, { image: cardBuf, caption: cap.length > 1000 ? cap.slice(0, 997) + '…' : cap, mimetype: 'image/jpeg' });
+                          return;
+                        }
+                        // legacy text fallback (unchanged)
+                        let msg = `💎 *Rune Types* (page ${pageNum}/${totalPages})\n\n`;
+                        for (const [id, rt] of slice) {
                           msg += `${rt.icon} *${rt.name}*\n  ${rt.desc}\n\n`;
                         }
                         msg += `*Tiers:* Lesser < Normal < Greater < Abyssal\n`;
-                        msg += `_Socket slots: T1=1, T2=2, T3=3, Ultimate=3_`;
+                        msg += `_Socket slots: T1=1, T2=2, T3=3, Ultimate=3_\n`;
+                        msg += `_More: \`${botConfig.getPrefix()} rune list ${Math.min(totalPages, pageNum + 1)}\`_`;
                         await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
                         return;
                       }

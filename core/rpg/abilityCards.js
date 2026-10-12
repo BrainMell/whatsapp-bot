@@ -1,14 +1,16 @@
 // ============================================
-// 💎 ABILITY INSPECTION + RUNE SOCKET CARDS (2026-10-11)
+// 💎 ABILITY INSPECTION + RUNE CODEX CARDS (2026-10-11, v2 redesign 2026-10-12)
 // ============================================
-// Owner brief (rune_sockets_ability_inspection_overhaul.md):
-//   * `.j abilities <num|id|name>`  -> stylised RPG skill-inspection card:
-//     dedicated skill artwork, name + level, evolution/tier, rune sockets
-//     (equipped runes render their art, unfilled sockets render empty),
-//     stats + effect text. Socket count follows the REAL slot rules
-//     (runeSystem.getSkillSlotCount: T1=1, T2=2, T3+=3).
-//   * `.j rune sockets`             -> board card listing the player's skills
-//     with their sockets (equipped art / empty slots).
+// Owner brief (rune_ability_asset_integration_v2.md):
+//   * `.j abilities <num|id|name>`  -> FULL redesign (not a re-skin): the
+//     skill's v3 artwork is the visual centerpiece on a riveted art plate,
+//     with a stat medallion rail (energy / cooldown / power), the real
+//     effect + description, the unlock requirement, and the skill's REAL
+//     rune sockets (runeSystem slot rules: T1=1, T2=2, T3+=3). Socketed
+//     runes render their TIER-specific v3 art.
+//   * `.j rune list [page]`         -> paginated RUNE CODEX image card:
+//     8 rune plates per page, tier-specific art, real names/desc/effects
+//     from runeSystem.RUNE_TYPES. Text fallback preserved on any failure.
 // Family look = the r5 RPG board set (dark walnut, double gold frame,
 // parchment text, Cinzel + IM Fell). Falls back to null on ANY failure -
 // callers keep their text paths.
@@ -131,6 +133,40 @@ function fitText(ctx, text, maxWidth, startSize, font) {
   return size;
 }
 
+function wrapText(ctx, text, maxw) {
+  const words = String(text || '').split(/\s+/);
+  const lines = []; let line = '';
+  for (const w of words) {
+    const cand = line ? `${line} ${w}` : w;
+    if (ctx.measureText(cand).width > maxw && line) { lines.push(line); line = w; }
+    else line = cand;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function rivet(ctx, x, y, r = 5) {
+  ctx.beginPath();
+  ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y);
+  ctx.closePath();
+  ctx.fillStyle = C.frame; ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.beginPath(); ctx.arc(x - 1.4, y - 1.4, r * 0.32, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255, 236, 190, 0.85)'; ctx.fill();
+}
+
+function divider(ctx, x0, x1, y, alpha = 0.4) {
+  const mid = (x0 + x1) / 2;
+  ctx.strokeStyle = `rgba(214, 170, 82, ${alpha})`;
+  ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(mid - 12, y); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(mid + 12, y); ctx.lineTo(x1, y); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(mid, y - 5); ctx.lineTo(mid + 5, y); ctx.lineTo(mid, y + 5); ctx.lineTo(mid - 5, y);
+  ctx.closePath();
+  ctx.fillStyle = `rgba(214, 170, 82, ${Math.min(1, alpha + 0.25)})`; ctx.fill();
+}
+
 /**
  * Draw artwork contain-fit inside a circle, pixel-crisp on upscale.
  */
@@ -154,12 +190,12 @@ function drawArtInCircle(ctx, img, cx, cy, r) {
   return true;
 }
 
-function drawArtInRect(ctx, img, x, y, w, h) {
+function drawArtInRect(ctx, img, x, y, w, h, pad = 0) {
   if (!img) return false;
   const iw = img.width || img.naturalWidth;
   const ih = img.height || img.naturalHeight;
   if (!iw || !ih) return false;
-  const scale = Math.min(w / iw, h / ih);
+  const scale = Math.min((w - pad * 2) / iw, (h - pad * 2) / ih);
   const dw = iw * scale, dh = ih * scale;
   ctx.save();
   roundRect(ctx, x, y, w, h, 8);
@@ -182,7 +218,8 @@ const TIER_RING = {
 };
 
 /**
- * One rune socket: filled (rune art + tier ring) or empty (engraved hole).
+ * One rune socket: filled (TIER-specific rune art + tier ring) or empty
+ * (engraved hole).
  */
 async function drawSocket(ctx, cx, cy, r, rune, assets) {
   ctx.save();
@@ -193,7 +230,7 @@ async function drawSocket(ctx, cx, cy, r, rune, assets) {
 
   let art = null;
   if (rune && assets) {
-    try { art = await assets.getRuneArt(rune.type); } catch (e) { art = null; }
+    try { art = await assets.getRuneArt(rune.type, rune.tier); } catch (e) { art = null; }
   }
   if (rune && art) {
     const ring = TIER_RING[rune.tier] || C.socketRing;
@@ -249,13 +286,15 @@ function levelPips(ctx, cx, cy, cur, max, accent) {
 const _rq = () => require('../utils/renderQueue');
 
 // ═══════════════════════════════════════════════════════════════
-//  CARD 1 — ABILITY INSPECTION  (720 x 1250)
+//  CARD 1 — ABILITY INSPECTION  (720 x 1120, v2 full redesign)
+//  Identity: riveted art plate centerpiece + stat medallion rail.
 // ═══════════════════════════════════════════════════════════════
 /**
  * payload = {
- *   nickname, className, rank,
+ *   nickname, className, classId, rank,
  *   skill: { id, name, tier, maxLevel, isUltimate, isAscended },
- *   level: <learned level>, effectText: <short line>,
+ *   level: <learned level>, desc: <tree flavor line>,
+ *   effectText: <short line>, requiresText: <unlock req or null>,
  *   energy, cooldown, damageLine,
  *   sockets: [ {type, tier, runeId} | null, ... ]  // length = slot count
  *   skillIdHint: <string shown in the footer>
@@ -266,7 +305,7 @@ async function renderAbilityInspectCard(payload) {
     const assets = require('./skillAssets');
     const canvas = getCanvas();
     ensureFonts();
-    const W = 720, H = 1250;
+    const W = 720, H = 1120;
     return await _rq().run('abilityInspect', async () => {
       const { createCanvas } = canvas;
       const cv = createCanvas(W, H);
@@ -276,137 +315,149 @@ async function renderAbilityInspectCard(payload) {
       const skill = payload.skill || {};
       const accent = tierAccent(skill.tier, { ascended: skill.isAscended, ultimate: skill.isUltimate });
 
-      // ── header ──
+      // ── header: owner line + name banner ──
       ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
       ctx.fillStyle = C.muted;
-      ctx.font = '16px Cinzel';
-      ctx.fillText('A B I L I T Y   I N S P E C T I O N', W / 2, 62);
-      ctx.fillStyle = C.gold;
       ctx.font = '15px Cinzel';
-      ctx.fillText(`${String(payload.nickname || 'Adventurer').slice(0, 24)}  ·  ${String(payload.className || '').toUpperCase()}${payload.rank ? `  ·  RANK ${String(payload.rank).toUpperCase()}` : ''}`, W / 2, 88);
+      ctx.fillText(`${String(payload.nickname || 'Adventurer').slice(0, 24)}  ·  ${String(payload.className || '').toUpperCase()}${payload.rank ? `  ·  RANK ${String(payload.rank).toUpperCase()}` : ''}`, W / 2, 62);
 
-      // ── art medallion ──
-      const mcx = W / 2, mcy = 300, mr = 148;
-      // aura glow
-      const grad = ctx.createRadialGradient(mcx, mcy, mr * 0.4, mcx, mcy, mr * 1.45);
-      grad.addColorStop(0, 'rgba(240, 217, 168, 0.16)');
+      const name = String(skill.name || 'Unknown Skill');
+      fitText(ctx, name, 560, 38, '"Cinzel Deco"');
+      ctx.fillStyle = C.goldBright;
+      ctx.fillText(name, W / 2, 106);
+
+      const tl = tierLabel(skill.tier, { ascended: skill.isAscended, ultimate: skill.isUltimate });
+      ctx.font = '16px Cinzel';
+      ctx.fillStyle = accent;
+      ctx.fillText(`◆ ${tl} ◆`, W / 2, 134);
+      divider(ctx, 120, W - 120, 152, 0.45);
+
+      // ── ART CENTERPIECE: riveted plate ──
+      const ax = 56, ay = 172, aw = W - 112, ah = 300;
+      // glow
+      const grad = ctx.createRadialGradient(W / 2, ay + ah / 2, 40, W / 2, ay + ah / 2, aw * 0.62);
+      grad.addColorStop(0, 'rgba(240, 217, 168, 0.14)');
       grad.addColorStop(1, 'rgba(240, 217, 168, 0)');
       ctx.fillStyle = grad;
-      ctx.fillRect(mcx - mr * 1.5, mcy - mr * 1.5, mr * 3, mr * 3);
+      ctx.fillRect(ax - 30, ay - 30, aw + 60, ah + 60);
       // housing
-      ctx.beginPath(); ctx.arc(mcx, mcy, mr + 8, 0, Math.PI * 2);
-      ctx.fillStyle = '#0f0a05'; ctx.fill();
-      ctx.strokeStyle = accent; ctx.lineWidth = 5; ctx.stroke();
-      ctx.beginPath(); ctx.arc(mcx, mcy, mr - 4, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1.5; ctx.stroke();
+      roundRect(ctx, ax, ay, aw, ah, 12);
+      ctx.fillStyle = '#0d0906'; ctx.fill();
+      ctx.strokeStyle = accent; ctx.lineWidth = 4; ctx.stroke();
+      roundRect(ctx, ax + 7, ay + 7, aw - 14, ah - 14, 9);
+      ctx.strokeStyle = 'rgba(214, 170, 82, 0.5)'; ctx.lineWidth = 1.6; ctx.stroke();
+      for (const [rx, ry] of [[ax + 4, ay + 4], [ax + aw - 4, ay + 4], [ax + 4, ay + ah - 4], [ax + aw - 4, ay + ah - 4]]) {
+        rivet(ctx, rx, ry, 5.5);
+      }
 
       let art = null;
-      try { art = await assets.getSkillArt(skill); } catch (e) { art = null; }
-      if (!drawArtInCircle(ctx, art, mcx, mcy, mr - 10)) {
+      try { art = await assets.getSkillArt(skill, payload.classId); } catch (e) { art = null; }
+      if (!drawArtInRect(ctx, art, ax + 4, ay + 4, aw - 8, ah - 8, 14)) {
         // fallback: initials medallion (Go SKILLUP family look)
         const initials = String(skill.name || '?')
           .split(/\s+/).map((w) => w[0]).join('').slice(0, 3).toUpperCase();
         ctx.fillStyle = C.goldBright;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.font = '84px "Cinzel Deco"';
-        ctx.fillText(initials, mcx, mcy - 6);
+        ctx.fillText(initials, W / 2, ay + ah / 2 - 6);
         ctx.textBaseline = 'alphabetic';
       }
 
-      // ── name + tier ──
-      ctx.textAlign = 'center';
-      const name = String(skill.name || 'Unknown Skill');
-      fitText(ctx, name, 560, 34, '"Cinzel Deco"');
-      ctx.fillStyle = C.goldBright;
-      ctx.fillText(name, W / 2, 512);
-
-      const tl = tierLabel(skill.tier, { ascended: skill.isAscended, ultimate: skill.isUltimate });
-      ctx.font = '17px Cinzel';
-      ctx.fillStyle = accent;
-      ctx.fillText(tl, W / 2, 542);
-
-      levelPips(ctx, W / 2, 578, payload.level || 0, skill.maxLevel || 1, accent);
+      // ── level pips + count ──
+      levelPips(ctx, W / 2, 506, payload.level || 0, skill.maxLevel || 1, accent);
       ctx.font = '14px Cinzel';
       ctx.fillStyle = C.muted;
-      ctx.fillText(`LEVEL ${payload.level || 0} / ${skill.maxLevel || 1}`, W / 2, 604);
+      ctx.fillText(`LEVEL ${payload.level || 0} / ${skill.maxLevel || 1}`, W / 2, 532);
 
-      // ── stats panel ──
+      // ── stat medallion rail: ENERGY / COOLDOWN / POWER ──
+      const stats = [
+        { label: 'ENERGY', value: String(payload.energy ?? '—'), glyph: '✦' },
+        { label: 'COOLDOWN', value: payload.cooldown ? `${payload.cooldown} TNT` : 'NONE', glyph: '◌' },
+        { label: 'POWER', value: String(payload.damageLine || '—'), glyph: '⚔' },
+      ];
+      const mw = 190, mh = 86, gap = 22;
+      const mx0 = (W - (mw * 3 + gap * 2)) / 2;
+      const my = 556;
+      stats.forEach((s, i) => {
+        const x = mx0 + i * (mw + gap);
+        roundRect(ctx, x, my, mw, mh, 10);
+        ctx.fillStyle = C.panel; ctx.fill();
+        ctx.strokeStyle = C.panelEdge; ctx.lineWidth = 2; ctx.stroke();
+        ctx.textAlign = 'center';
+        ctx.font = '13px Cinzel';
+        ctx.fillStyle = C.gold;
+        ctx.fillText(`${s.glyph} ${s.label}`, x + mw / 2, my + 26);
+        fitText(ctx, s.value, mw - 28, 26, '"Cinzel Deco B"');
+        ctx.fillStyle = C.text;
+        ctx.fillText(s.value, x + mw / 2, my + 62);
+      });
+
+      // ── effect + description panel ──
       const px = 46, pw = W - 92;
-      roundRect(ctx, px, 626, pw, 190, 10);
+      const py = 668, ph = 176;
+      roundRect(ctx, px, py, pw, ph, 10);
       ctx.fillStyle = C.panel; ctx.fill();
       ctx.strokeStyle = C.panelEdge; ctx.lineWidth = 2; ctx.stroke();
-
       ctx.textAlign = 'left';
-      const statY = 668;
-      const rowGap = 40;
-      ctx.font = '17px Cinzel';
+      ctx.font = '14px Cinzel';
       ctx.fillStyle = C.gold;
-      ctx.fillText('ENERGY', px + 26, statY);
-      ctx.fillText('COOLDOWN', px + 26, statY + rowGap);
-      ctx.fillText('POWER', px + 26, statY + rowGap * 2);
-      ctx.font = '19px "IM Fell"';
+      ctx.fillText('EFFECT', px + 24, py + 30);
+      ctx.font = '16px "IM Fell"';
       ctx.fillStyle = C.text;
-      ctx.fillText(String(payload.energy ?? '—'), px + 190, statY);
-      ctx.fillText(payload.cooldown ? `${payload.cooldown} turns` : 'None', px + 190, statY + rowGap);
-      ctx.fillText(String(payload.damageLine || '—'), px + 190, statY + rowGap * 2);
-
-      // divider + effect text
+      const effLines = wrapText(ctx, payload.effectText || '—', pw - 52).slice(0, 2);
+      effLines.forEach((l, i) => ctx.fillText(l, px + 24, py + 56 + i * 22));
       ctx.strokeStyle = 'rgba(214, 170, 82, 0.25)';
       ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(px + 18, statY + rowGap * 2 + 16); ctx.lineTo(px + pw - 18, statY + rowGap * 2 + 16); ctx.stroke();
-      ctx.font = '16px "IM Fell"';
+      ctx.beginPath(); ctx.moveTo(px + 18, py + effLines.length * 22 + 66); ctx.lineTo(px + pw - 18, py + effLines.length * 22 + 66); ctx.stroke();
+      ctx.font = '15px "IM Fell Italic"';
       ctx.fillStyle = C.muted;
-      const eff = String(payload.effectText || '');
-      // wrap to 2 lines
-      const wrap = (t, maxw) => {
-        const words = t.split(/\s+/); const lines = []; let line = '';
-        for (const w of words) {
-          const cand = line ? `${line} ${w}` : w;
-          if (ctx.measureText(cand).width > maxw && line) { lines.push(line); line = w; }
-          else line = cand;
-        }
-        if (line) lines.push(line);
-        return lines;
-      };
-      const lines = wrap(eff, pw - 52).slice(0, 2);
-      lines.forEach((l, i) => ctx.fillText(l, px + 26, statY + rowGap * 2 + 42 + i * 22));
+      const descLines = wrapText(ctx, payload.desc || '', pw - 52).slice(0, 2);
+      descLines.forEach((l, i) => ctx.fillText(l, px + 24, py + effLines.length * 22 + 92 + i * 21));
+
+      // ── unlock requirement ──
+      const reqY = py + ph + 34;
+      ctx.textAlign = 'center';
+      ctx.font = '15px Cinzel';
+      ctx.fillStyle = payload.requiresText ? C.goldBright : C.dim;
+      ctx.fillText(payload.requiresText ? `⛭ REQUIRES  ·  ${payload.requiresText}` : '⛭ REQUIREMENT  ·  NONE — INNATE', W / 2, reqY);
 
       // ── rune sockets panel ──
       const sockets = Array.isArray(payload.sockets) ? payload.sockets : [];
-      const sy = 848;
-      roundRect(ctx, px, sy, pw, 240, 10);
+      const sy = reqY + 16;
+      const sh = 212;
+      roundRect(ctx, px, sy, pw, sh, 10);
       ctx.fillStyle = C.panel; ctx.fill();
       ctx.strokeStyle = C.panelEdge; ctx.lineWidth = 2; ctx.stroke();
       ctx.textAlign = 'left';
-      ctx.font = '17px Cinzel';
+      ctx.font = '16px Cinzel';
       ctx.fillStyle = C.gold;
       const used = sockets.filter(Boolean).length;
-      ctx.fillText('RUNE SOCKETS', px + 26, sy + 38);
+      ctx.fillText('RUNE SOCKETS', px + 24, sy + 34);
       ctx.textAlign = 'right';
       ctx.fillStyle = used > 0 ? C.good : C.muted;
-      ctx.fillText(`${used} / ${sockets.length}`, px + pw - 26, sy + 38);
+      ctx.fillText(`${used} / ${sockets.length}`, px + pw - 24, sy + 34);
 
       const n = sockets.length;
-      const sr = n <= 2 ? 52 : n === 3 ? 46 : 38;
+      const sr = n <= 2 ? 50 : n === 3 ? 44 : 36;
       const sgap = sr * 2 + 34;
       const totalW = (n - 1) * sgap;
       const sx0 = W / 2 - totalW / 2;
       ctx.textAlign = 'center';
       for (let i = 0; i < n; i++) {
         const sx = sx0 + i * sgap;
-        await drawSocket(ctx, sx, sy + 128, sr, sockets[i], assets);
+        await drawSocket(ctx, sx, sy + 108, sr, sockets[i], assets);
         const rn = sockets[i];
         if (rn) {
           ctx.font = '13px Cinzel';
           ctx.fillStyle = C.text;
-          ctx.fillText(String(rn.type || '').replace(/_/g, ' '), sx, sy + 204);
+          ctx.fillText(String(rn.type || '').replace(/_/g, ' ').slice(0, 18), sx, sy + 178);
           ctx.font = '12px Cinzel';
           ctx.fillStyle = TIER_RING[rn.tier] || C.muted;
-          ctx.fillText(String(rn.tier || '').toUpperCase(), sx, sy + 222);
+          ctx.fillText(String(rn.tier || '').toUpperCase(), sx, sy + 196);
         } else {
           ctx.font = '12px Cinzel';
           ctx.fillStyle = C.dim;
-          ctx.fillText('EMPTY', sx, sy + 210);
+          ctx.fillText('EMPTY', sx, sy + 184);
         }
       }
 
@@ -417,12 +468,123 @@ async function renderAbilityInspectCard(payload) {
       const hint = payload.skillIdHint
         ? `socket a rune:  .j rune socket <rune> ${payload.skillIdHint}`
         : 'socket a rune:  .j rune socket <rune> <skillId>';
-      ctx.fillText(hint, W / 2, H - 46);
+      ctx.fillText(hint, W / 2, H - 40);
 
       return cv.toBuffer('image/jpeg', { quality: 0.92 });
     });
   } catch (e) {
     console.error('[abilityCards] inspect render failed:', e?.message || e);
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CARD 1b — RUNE CODEX  (paginated `.j rune list [page]`)
+//  8 rune plates per page (2 cols x 4 rows), tier art, real data.
+// ═══════════════════════════════════════════════════════════════
+/**
+ * payload = {
+ *   page, totalPages, totalRunes,
+ *   runes: [ { type, name, desc, category, tierArt } ]  // <= 8, real data
+ * }
+ */
+async function renderRuneListCard(payload) {
+  try {
+    const assets = require('./skillAssets');
+    const canvas = getCanvas();
+    ensureFonts();
+    const rows = Array.isArray(payload.runes) ? payload.runes.slice(0, 8) : [];
+    const W = 720;
+    const H = 236 + 4 * 178 + 92;
+    return await _rq().run('runeCodex', async () => {
+      const { createCanvas } = canvas;
+      const cv = createCanvas(W, H);
+      const ctx = cv.getContext('2d');
+      paintBoard(ctx, W, H);
+
+      // header
+      ctx.textAlign = 'center';
+      ctx.fillStyle = C.goldBright;
+      ctx.font = '32px "Cinzel Deco"';
+      ctx.fillText('RUNE CODEX', W / 2, 72);
+      ctx.font = '15px Cinzel';
+      ctx.fillStyle = C.muted;
+      ctx.fillText(`PAGE ${payload.page || 1} OF ${payload.totalPages || 1}  ·  ${payload.totalRunes || rows.length} RUNE TYPES`, W / 2, 98);
+      divider(ctx, 150, W - 150, 118, 0.4);
+
+      // plates: 2 cols x up to 4 rows
+      const cw = 312, ch = 162, gx = 20, gy = 16;
+      const x0 = (W - cw * 2 - gx) / 2;
+      const y0 = 140;
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        const col = i % 2, row = Math.floor(i / 2);
+        const x = x0 + col * (cw + gx);
+        const y = y0 + row * (ch + gy);
+        roundRect(ctx, x, y, cw, ch, 10);
+        ctx.fillStyle = C.panel; ctx.fill();
+        ctx.strokeStyle = C.panelEdge; ctx.lineWidth = 2; ctx.stroke();
+        rivet(ctx, x + 10, y + 10, 3.5);
+        rivet(ctx, x + cw - 10, y + 10, 3.5);
+
+        // art medallion (tier art)
+        const mr = 44, mcx = x + 58, mcy = y + ch / 2 + 4;
+        ctx.beginPath(); ctx.arc(mcx, mcy, mr + 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#0d0906'; ctx.fill();
+        ctx.strokeStyle = C.frameDim; ctx.lineWidth = 2; ctx.stroke();
+        let art = null;
+        try { art = await assets.getRuneArt(r.type, 'NORMAL'); } catch (e) { art = null; }
+        if (art) drawArtInCircle(ctx, art, mcx, mcy, mr);
+        else {
+          ctx.beginPath(); ctx.arc(mcx, mcy, mr, 0, Math.PI * 2);
+          ctx.fillStyle = '#1c130a'; ctx.fill();
+          ctx.fillStyle = C.goldBright;
+          ctx.font = '30px Cinzel';
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText('◆', mcx, mcy);
+          ctx.textBaseline = 'alphabetic';
+        }
+
+        // name + category
+        ctx.textAlign = 'left';
+        const nm = String(r.name || r.type || 'Rune').replace(/ Rune$/, '');
+        const fsNm = fitText(ctx, nm, cw - 108, 20, '"Cinzel Deco B"');
+        ctx.fillStyle = C.goldBright;
+        ctx.fillText(nm, x + 116, y + 32);
+        ctx.font = '11px Cinzel';
+        ctx.fillStyle = C.muted;
+        ctx.fillText(String(r.category || '').toUpperCase(), x + 116, y + 50);
+
+        // desc (real text)
+        ctx.font = '13px "IM Fell"';
+        ctx.fillStyle = C.text;
+        const dLines = wrapText(ctx, r.desc || '', cw - 132).slice(0, 3);
+        dLines.forEach((l, li) => ctx.fillText(l, x + 116, y + 74 + li * 17));
+
+        // tier chip
+        ctx.font = '11px Cinzel';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = r.tierArt ? C.good : C.dim;
+        ctx.fillText(r.tierArt ? '◆ 4 TIER ARTS' : '◆ SINGLE ART', x + 58, y + ch - 14);
+        ctx.textAlign = 'left';
+      }
+
+      // footer
+      ctx.textAlign = 'center';
+      ctx.font = '14px "IM Fell Italic"';
+      ctx.fillStyle = C.muted;
+      ctx.fillText(`Lesser ◆ Normal ◆ Greater ◆ Abyssal   —   socket: .j rune socket <rune> <skillId>`, W / 2, H - 44);
+      const nx = (payload.page || 1) < (payload.totalPages || 1) ? (payload.page || 1) + 1 : null;
+      if (nx) {
+        ctx.font = '14px Cinzel';
+        ctx.fillStyle = C.gold;
+        ctx.fillText(`next page:  .j rune list ${nx}`, W / 2, H - 66);
+      }
+
+      return cv.toBuffer('image/jpeg', { quality: 0.92 });
+    });
+  } catch (e) {
+    console.error('[abilityCards] rune codex render failed:', e?.message || e);
     return null;
   }
 }
@@ -481,8 +643,8 @@ async function renderRuneSocketsCard(payload) {
         ctx.fillStyle = '#0f0a05'; ctx.fill();
         ctx.strokeStyle = accent; ctx.lineWidth = 2; ctx.stroke();
         let art = null;
-        try { art = await assets.getSkillArt(skill); } catch (e) { art = null; }
-        if (!drawArtInRect(ctx, art, tx, ty, th, th)) {
+        try { art = await assets.getSkillArt(skill, payload.classId); } catch (e) { art = null; }
+        if (!drawArtInRect(ctx, art, tx, ty, th, th, 6)) {
           ctx.fillStyle = C.goldBright;
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
           ctx.font = '20px "Cinzel Deco"';
@@ -496,17 +658,8 @@ async function renderRuneSocketsCard(payload) {
         ctx.fillStyle = C.text;
         const nm = String(skill.name || 'Skill');
         const maxNm = 250;
-        let shown = nm;
-        if (ctx.measureText(nm).width > maxNm) {
-          while (nm.length > 4 && ctx.measureText(nm + '…').width > maxNm) {
-            // shrink via fit below
-            break;
-          }
-          shown = nm;
-        }
-        const fs2 = fitText(ctx, shown, maxNm, 19, '"Cinzel Deco B"');
-        ctx.fillStyle = C.text;
-        ctx.fillText(shown, tx + th + 14, ty + 24);
+        const fs2 = fitText(ctx, nm, maxNm, 19, '"Cinzel Deco B"');
+        ctx.fillText(nm, tx + th + 14, ty + 24);
         ctx.font = '13px Cinzel';
         ctx.fillStyle = C.muted;
         ctx.fillText(`Lv ${row.level || 0}/${skill.maxLevel || 1}  ·  ${tierLabel(skill.tier, { ascended: skill.isAscended, ultimate: skill.isUltimate })}`, tx + th + 14, ty + 44);
@@ -539,4 +692,4 @@ async function renderRuneSocketsCard(payload) {
   }
 }
 
-module.exports = { renderAbilityInspectCard, renderRuneSocketsCard, tierAccent, tierLabel };
+module.exports = { renderAbilityInspectCard, renderRuneListCard, renderRuneSocketsCard, tierAccent, tierLabel };

@@ -1098,6 +1098,15 @@ function formatMonsterGuide() {
     return msg;
 }
 
+// ── v3 kit icons (2026-10-12 asset pack): all 12 monster kits now have
+// dedicated art (owner sheet 4; the 5 summon-archetype kits reuse the
+// pack's kit_1..5 icons). Consumed via skillAssets.getKitArt(archetype).
+for (const [__k, __v] of Object.entries(MONSTER_ARCHETYPES)) {
+  if (__v && typeof __v === 'object' && !__v.kitIcon) {
+    __v.kitIcon = `monsters/kits/kit_${__k.toLowerCase()}.png`;
+  }
+}
+
 module.exports = {
     MONSTER_ARCHETYPES,
     getSkillsForMonster,

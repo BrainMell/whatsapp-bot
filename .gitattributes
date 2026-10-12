@@ -54,3 +54,8 @@ core/rpgasset/runes/*.png -filter -diff -merge -text
 core/rpgasset/skills/*.png -filter -diff -merge -text
 core/rpgasset/runes/manifest.json -filter -diff -merge -text
 core/rpgasset/skills/manifest.json -filter -diff -merge -text
+# v3 asset pack (pixel_assets_named + owner sheets 2026-10-12) — real bytes,
+# never LFS-stubbed on box reset --hard (same lesson as abyss backgrounds)
+core/rpgasset/v3/**/*.png -filter -diff -merge -text
+core/rpgasset/v3/manifest.json -filter -diff -merge -text
+core/rpgasset/v3/skill_index.json -filter -diff -merge -text

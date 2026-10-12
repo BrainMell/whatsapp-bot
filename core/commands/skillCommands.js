@@ -633,9 +633,34 @@ async function sendAbilityInspection(sock, chatId, senderJid, senderName, ctx0) 
         ? `${Math.round(Number(effect.multiplier) * 100)}% ${atkWord}`
         : (effect.value !== undefined && effect.value !== null ? `${effect.value}` : '—');
 
+    // 💡 v2 card (2026-10-12): unlock requirement from the REAL tree data
+    // (`requires: { <skillId>: <level> }`) + the skill's own flavor line.
+    let requiresText = null;
+    try {
+        const req = ability.requires || (ability.skill && ability.skill.requires);
+        if (req && typeof req === 'object' && Object.keys(req).length) {
+            const st = require('../rpg/skillTree');
+            const parts = [];
+            for (const [rsId, rsLvl] of Object.entries(req)) {
+                let nm = null;
+                for (const tree of Object.values(st.SKILL_TREES || {})) {
+                    let found = false;
+                    for (const br of Object.values(tree.trees || {})) {
+                        const s = (br.skills || {})[rsId];
+                        if (s) { nm = s.name; found = true; break; }
+                    }
+                    if (found) break;
+                }
+                parts.push(`${nm || rsId} Lv.${rsLvl}`);
+            }
+            if (parts.length) requiresText = parts.join(' + ');
+        }
+    } catch (e) { /* cosmetic field only */ }
+
     const buf = await _abilityCards().renderAbilityInspectCard({
         nickname: senderName,
         className: userClass ? userClass.name : '',
+        classId: userClass ? userClass.id : undefined,
         rank: user && user.adventurerRank,
         skill: {
             id: skillId,
@@ -646,10 +671,12 @@ async function sendAbilityInspection(sock, chatId, senderJid, senderName, ctx0) 
             isAscended: ability.isAscended === true,
         },
         level: ability.level || 0,
+        desc: ability.desc || '',
         effectText: abilityEffectText(effect),
         energy: ability.cost !== undefined ? ability.cost : (ability.cost !== undefined ? ability.cost : 0),
         cooldown: ability.cooldown || 0,
         damageLine,
+        requiresText,
         sockets,
         skillIdHint: skillId,
     });

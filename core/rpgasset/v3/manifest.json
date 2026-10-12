@@ -1,0 +1,4196 @@
+{
+ "runes": [
+  {
+   "id": "power",
+   "name": "Power Rune",
+   "emoji": "\u26a1",
+   "effect": "Increases skill damage at the cost of higher energy cost",
+   "category": "core",
+   "sprite": "runes/core/power.png",
+   "source": "runes/large_sheet/rune_r1c6.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/core/power_lesser.png",
+    "normal": "runes/core/power_normal.png",
+    "greater": "runes/core/power_greater.png",
+    "abyssal": "runes/core/power_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "efficiency",
+   "name": "Efficiency Rune",
+   "emoji": "\ud83d\udd35",
+   "effect": "Reduces energy cost at the cost of lower damage",
+   "category": "core",
+   "sprite": "runes/core/efficiency.png",
+   "source": "runes/large_sheet/rune_r6c5.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/core/efficiency_lesser.png",
+    "normal": "runes/core/efficiency_normal.png",
+    "greater": "runes/core/efficiency_greater.png",
+    "abyssal": "runes/core/efficiency_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "spread",
+   "name": "Spread Rune",
+   "emoji": "\ud83c\udf10",
+   "effect": "Increases AOE target count at the cost of per-target damage",
+   "category": "core",
+   "sprite": "runes/core/spread.png",
+   "source": "runes/large_sheet/rune_r6c3.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/core/spread_lesser.png",
+    "normal": "runes/core/spread_normal.png",
+    "greater": "runes/core/spread_greater.png",
+    "abyssal": "runes/core/spread_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "focus",
+   "name": "Focus Rune",
+   "emoji": "\ud83c\udfaf",
+   "effect": "Increases crit chance at the cost of lower base damage",
+   "category": "core",
+   "sprite": "runes/core/focus.png",
+   "source": "runes/large_sheet/rune_r3c4.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/core/focus_lesser.png",
+    "normal": "runes/core/focus_normal.png",
+    "greater": "runes/core/focus_greater.png",
+    "abyssal": "runes/core/focus_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "endurance",
+   "name": "Endurance Rune",
+   "emoji": "\ud83d\udee1\ufe0f",
+   "effect": "Skill ignores target DEF at the cost of lower damage",
+   "category": "core",
+   "sprite": "runes/core/endurance.png",
+   "source": "runes/large_sheet/rune_r4c7.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/core/endurance_lesser.png",
+    "normal": "runes/core/endurance_normal.png",
+    "greater": "runes/core/endurance_greater.png",
+    "abyssal": "runes/core/endurance_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "pierce",
+   "name": "Pierce Rune",
+   "emoji": "\u2694\ufe0f",
+   "effect": "Skill cannot be evaded, at the cost of lower damage",
+   "category": "core",
+   "sprite": "runes/core/pierce.png",
+   "source": "runes/large_sheet/rune_r3c6.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/core/pierce_lesser.png",
+    "normal": "runes/core/pierce_normal.png",
+    "greater": "runes/core/pierce_greater.png",
+    "abyssal": "runes/core/pierce_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "frost_conversion",
+   "name": "Frost Conversion Rune",
+   "emoji": "\u2744\ufe0f\ud83d\udd25",
+   "effect": "Converts any elemental skill to Frost. Burn effects become Freeze.",
+   "category": "conversion",
+   "sprite": "runes/conversion/frost_conversion.png",
+   "source": "runes/large_sheet/rune_r2c1.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/conversion/frost_conversion_lesser.png",
+    "normal": "runes/conversion/frost_conversion_normal.png",
+    "greater": "runes/conversion/frost_conversion_greater.png",
+    "abyssal": "runes/conversion/frost_conversion_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "shock_conversion",
+   "name": "Shock Conversion Rune",
+   "emoji": "\u26a1\ud83d\udd2e",
+   "effect": "Converts any skill to Lightning. Adds WET synergy priming.",
+   "category": "conversion",
+   "sprite": "runes/conversion/shock_conversion.png",
+   "source": "runes/large_sheet/rune_r2c2.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/conversion/shock_conversion_lesser.png",
+    "normal": "runes/conversion/shock_conversion_normal.png",
+    "greater": "runes/conversion/shock_conversion_greater.png",
+    "abyssal": "runes/conversion/shock_conversion_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "void_conversion",
+   "name": "Void Conversion Rune",
+   "emoji": "\ud83c\udf0c",
+   "effect": "Converts damage to TRUE, ignoring target DEF entirely.",
+   "category": "conversion",
+   "sprite": "runes/conversion/void_conversion.png",
+   "source": "runes/large_sheet/rune_r2c3.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/conversion/void_conversion_lesser.png",
+    "normal": "runes/conversion/void_conversion_normal.png",
+    "greater": "runes/conversion/void_conversion_greater.png",
+    "abyssal": "runes/conversion/void_conversion_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "multi_shot",
+   "name": "Multi-Shot Rune",
+   "emoji": "\ud83c\udff9\ud83c\udfaf",
+   "effect": "Single-target skill hits +2 additional targets.",
+   "category": "targeting",
+   "sprite": "runes/targeting/multi_shot.png",
+   "source": "runes/large_sheet/rune_r3c1.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/targeting/multi_shot_lesser.png",
+    "normal": "runes/targeting/multi_shot_normal.png",
+    "greater": "runes/targeting/multi_shot_greater.png",
+    "abyssal": "runes/targeting/multi_shot_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "chain_bounce",
+   "name": "Chain Bounce Rune",
+   "emoji": "\u26a1\ud83d\udd17",
+   "effect": "Skill arcs to additional targets. +1/2/3 bounces.",
+   "category": "targeting",
+   "sprite": "runes/targeting/chain_bounce.png",
+   "source": "runes/large_sheet/rune_r3c2.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/targeting/chain_bounce_lesser.png",
+    "normal": "runes/targeting/chain_bounce_normal.png",
+    "greater": "runes/targeting/chain_bounce_greater.png",
+    "abyssal": "runes/targeting/chain_bounce_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "spread_blast",
+   "name": "Spread Blast Rune",
+   "emoji": "\ud83d\udca5\ud83c\udf10",
+   "effect": "Upgrades single-target to AOE_LARGE.",
+   "category": "targeting",
+   "sprite": "runes/targeting/spread_blast.png",
+   "source": "runes/large_sheet/rune_r3c7.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/targeting/spread_blast_lesser.png",
+    "normal": "runes/targeting/spread_blast_normal.png",
+    "greater": "runes/targeting/spread_blast_greater.png",
+    "abyssal": "runes/targeting/spread_blast_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "precise_focus",
+   "name": "Precise Focus Rune",
+   "emoji": "\ud83c\udfaf",
+   "effect": "AOE skill becomes single-target with massive damage boost.",
+   "category": "targeting",
+   "sprite": "runes/targeting/precise_focus.png",
+   "source": "runes/large_sheet/rune_r6c8.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/targeting/precise_focus_lesser.png",
+    "normal": "runes/targeting/precise_focus_normal.png",
+    "greater": "runes/targeting/precise_focus_greater.png",
+    "abyssal": "runes/targeting/precise_focus_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "fragment",
+   "name": "Fragment Rune",
+   "emoji": "\ud83d\udc8e",
+   "effect": "Splits one hit into 3 weaker hits (0.4x each).",
+   "category": "split",
+   "sprite": "runes/split/fragment.png",
+   "source": "runes/large_sheet/rune_r3c3.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/split/fragment_lesser.png",
+    "normal": "runes/split/fragment_normal.png",
+    "greater": "runes/split/fragment_greater.png",
+    "abyssal": "runes/split/fragment_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "barrage",
+   "name": "Barrage Rune",
+   "emoji": "\ud83c\udff9",
+   "effect": "Splits one hit into 5 very weak hits (0.25x each). Great vs shields.",
+   "category": "split",
+   "sprite": "runes/split/barrage.png",
+   "source": "runes/large_sheet/rune_r5c1.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/split/barrage_lesser.png",
+    "normal": "runes/split/barrage_normal.png",
+    "greater": "runes/split/barrage_greater.png",
+    "abyssal": "runes/split/barrage_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "ground_fire",
+   "name": "Ground Fire Rune",
+   "emoji": "\ud83d\udd25",
+   "effect": "Leaves burning ground at target location. Burns enemies for 2 turns.",
+   "category": "ground",
+   "sprite": "runes/ground/ground_fire.png",
+   "source": "runes/large_sheet/rune_r4c1.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/ground/ground_fire_lesser.png",
+    "normal": "runes/ground/ground_fire_normal.png",
+    "greater": "runes/ground/ground_fire_greater.png",
+    "abyssal": "runes/ground/ground_fire_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "frost_patch",
+   "name": "Frost Patch Rune",
+   "emoji": "\u2744\ufe0f",
+   "effect": "Leaves a frost patch that slows all enemies for 2 turns.",
+   "category": "ground",
+   "sprite": "runes/ground/frost_patch.png",
+   "source": "runes/large_sheet/rune_r4c2.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/ground/frost_patch_lesser.png",
+    "normal": "runes/ground/frost_patch_normal.png",
+    "greater": "runes/ground/frost_patch_greater.png",
+    "abyssal": "runes/ground/frost_patch_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "poison_cloud",
+   "name": "Poison Cloud Rune",
+   "emoji": "\u2620\ufe0f",
+   "effect": "Leaves a poisonous cloud that damages enemies for 3 turns.",
+   "category": "ground",
+   "sprite": "runes/ground/poison_cloud.png",
+   "source": "runes/large_sheet/rune_r4c3.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/ground/poison_cloud_lesser.png",
+    "normal": "runes/ground/poison_cloud_normal.png",
+    "greater": "runes/ground/poison_cloud_greater.png",
+    "abyssal": "runes/ground/poison_cloud_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "poison_infusion",
+   "name": "Poison Infusion Rune",
+   "emoji": "\ud83e\uddea",
+   "effect": "Adds poison to any skill.",
+   "category": "infusion",
+   "sprite": "runes/infusion/poison_infusion.png",
+   "source": "runes/small_sheet/rune_r3c5.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/infusion/poison_infusion_lesser.png",
+    "normal": "runes/infusion/poison_infusion_normal.png",
+    "greater": "runes/infusion/poison_infusion_greater.png",
+    "abyssal": "runes/infusion/poison_infusion_abyssal.png"
+   },
+   "tier_sources": {
+    "lesser": "runes/small_sheet/rune_r3c3.png",
+    "normal": "runes/small_sheet/rune_r3c5.png",
+    "greater": "runes/small_sheet/rune_r3c6.png",
+    "abyssal": "runes/small_sheet/rune_r3c8.png"
+   }
+  },
+  {
+   "id": "bleed_infusion",
+   "name": "Bleed Infusion Rune",
+   "emoji": "\ud83e\ude78",
+   "effect": "Adds bleed to any skill.",
+   "category": "infusion",
+   "sprite": "runes/infusion/bleed_infusion.png",
+   "source": "runes/small_sheet/rune_r5c1.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/infusion/bleed_infusion_lesser.png",
+    "normal": "runes/infusion/bleed_infusion_normal.png",
+    "greater": "runes/infusion/bleed_infusion_greater.png",
+    "abyssal": "runes/infusion/bleed_infusion_abyssal.png"
+   },
+   "tier_sources": {
+    "lesser": "runes/small_sheet/rune_r4c7.png",
+    "normal": "runes/small_sheet/rune_r5c1.png",
+    "greater": "runes/small_sheet/rune_r5c2.png",
+    "abyssal": "runes/small_sheet/rune_r5c4.png"
+   }
+  },
+  {
+   "id": "burn_infusion",
+   "name": "Burn Infusion Rune",
+   "emoji": "\ud83d\udd25",
+   "effect": "Adds burn to any skill.",
+   "category": "infusion",
+   "sprite": "runes/infusion/burn_infusion.png",
+   "source": "runes/small_sheet/rune_r1c3.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/infusion/burn_infusion_lesser.png",
+    "normal": "runes/infusion/burn_infusion_normal.png",
+    "greater": "runes/infusion/burn_infusion_greater.png",
+    "abyssal": "runes/infusion/burn_infusion_abyssal.png"
+   },
+   "tier_sources": {
+    "lesser": "runes/small_sheet/rune_r1c1.png",
+    "normal": "runes/small_sheet/rune_r1c3.png",
+    "greater": "runes/small_sheet/rune_r1c4.png",
+    "abyssal": "runes/small_sheet/rune_r1c6.png"
+   }
+  },
+  {
+   "id": "freeze_infusion",
+   "name": "Freeze Infusion Rune",
+   "emoji": "\ud83e\uddca",
+   "effect": "Adds a chance to freeze the target.",
+   "category": "infusion",
+   "sprite": "runes/infusion/freeze_infusion.png",
+   "source": "runes/small_sheet/rune_r5c7.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/infusion/freeze_infusion_lesser.png",
+    "normal": "runes/infusion/freeze_infusion_normal.png",
+    "greater": "runes/infusion/freeze_infusion_greater.png",
+    "abyssal": "runes/infusion/freeze_infusion_abyssal.png"
+   },
+   "tier_sources": {
+    "lesser": "runes/small_sheet/rune_r5c5.png",
+    "normal": "runes/small_sheet/rune_r5c7.png",
+    "greater": "runes/small_sheet/rune_r5c8.png",
+    "abyssal": "runes/small_sheet/rune_r6c2.png"
+   }
+  },
+  {
+   "id": "shock_infusion",
+   "name": "Shock Infusion Rune",
+   "emoji": "\u26a1",
+   "effect": "Adds shock status. Combines with WET for automatic stun.",
+   "category": "infusion",
+   "sprite": "runes/infusion/shock_infusion.png",
+   "source": "runes/small_sheet/rune_r2c1.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/infusion/shock_infusion_lesser.png",
+    "normal": "runes/infusion/shock_infusion_normal.png",
+    "greater": "runes/infusion/shock_infusion_greater.png",
+    "abyssal": "runes/infusion/shock_infusion_abyssal.png"
+   },
+   "tier_sources": {
+    "lesser": "runes/small_sheet/rune_r1c7.png",
+    "normal": "runes/small_sheet/rune_r2c1.png",
+    "greater": "runes/small_sheet/rune_r2c2.png",
+    "abyssal": "runes/small_sheet/rune_r2c4.png"
+   }
+  },
+  {
+   "id": "stun_infusion",
+   "name": "Stun Infusion Rune",
+   "emoji": "\ud83d\udcab",
+   "effect": "Adds a chance to stun the target.",
+   "category": "infusion",
+   "sprite": "runes/infusion/stun_infusion.png",
+   "source": "runes/large_sheet/rune_r4c6.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/infusion/stun_infusion_lesser.png",
+    "normal": "runes/infusion/stun_infusion_normal.png",
+    "greater": "runes/infusion/stun_infusion_greater.png",
+    "abyssal": "runes/infusion/stun_infusion_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "silence_infusion",
+   "name": "Silence Infusion Rune",
+   "emoji": "\ud83e\udd10",
+   "effect": "Silences the target - cannot use abilities.",
+   "category": "infusion",
+   "sprite": "runes/infusion/silence_infusion.png",
+   "source": "runes/large_sheet/rune_r5c4.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/infusion/silence_infusion_lesser.png",
+    "normal": "runes/infusion/silence_infusion_normal.png",
+    "greater": "runes/infusion/silence_infusion_greater.png",
+    "abyssal": "runes/infusion/silence_infusion_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "blind_infusion",
+   "name": "Blind Infusion Rune",
+   "emoji": "\ud83d\udc41\ufe0f",
+   "effect": "Blinds the target - reduces accuracy.",
+   "category": "infusion",
+   "sprite": "runes/infusion/blind_infusion.png",
+   "source": "runes/large_sheet/rune_r6c6.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/infusion/blind_infusion_lesser.png",
+    "normal": "runes/infusion/blind_infusion_normal.png",
+    "greater": "runes/infusion/blind_infusion_greater.png",
+    "abyssal": "runes/infusion/blind_infusion_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "curse_infusion",
+   "name": "Curse Infusion Rune",
+   "emoji": "\ud83d\udc80",
+   "effect": "Curses the target - reduces all stats.",
+   "category": "infusion",
+   "sprite": "runes/infusion/curse_infusion.png",
+   "source": "runes/small_sheet/rune_r2c7.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/infusion/curse_infusion_lesser.png",
+    "normal": "runes/infusion/curse_infusion_normal.png",
+    "greater": "runes/infusion/curse_infusion_greater.png",
+    "abyssal": "runes/infusion/curse_infusion_abyssal.png"
+   },
+   "tier_sources": {
+    "lesser": "runes/small_sheet/rune_r2c5.png",
+    "normal": "runes/small_sheet/rune_r2c7.png",
+    "greater": "runes/small_sheet/rune_r2c8.png",
+    "abyssal": "runes/small_sheet/rune_r3c2.png"
+   }
+  },
+  {
+   "id": "fear_infusion",
+   "name": "Fear Infusion Rune",
+   "emoji": "\ud83d\ude31",
+   "effect": "Slows target and has a small chance to stun from terror.",
+   "category": "infusion",
+   "sprite": "runes/infusion/fear_infusion.png",
+   "source": "runes/large_sheet/rune_r4c8.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/infusion/fear_infusion_lesser.png",
+    "normal": "runes/infusion/fear_infusion_normal.png",
+    "greater": "runes/infusion/fear_infusion_greater.png",
+    "abyssal": "runes/infusion/fear_infusion_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "lifesteal",
+   "name": "Lifesteal Rune",
+   "emoji": "\ud83e\ude78\ud83d\udc9a",
+   "effect": "Heal for 25% of damage dealt.",
+   "category": "sustain",
+   "sprite": "runes/sustain/lifesteal.png",
+   "source": "runes/large_sheet/rune_r6c1.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/sustain/lifesteal_lesser.png",
+    "normal": "runes/sustain/lifesteal_normal.png",
+    "greater": "runes/sustain/lifesteal_greater.png",
+    "abyssal": "runes/sustain/lifesteal_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "mana_drain",
+   "name": "Mana Drain Rune",
+   "emoji": "\ud83d\udd35",
+   "effect": "Restore energy on hit.",
+   "category": "sustain",
+   "sprite": "runes/sustain/mana_drain.png",
+   "source": "runes/large_sheet/rune_r6c2.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/sustain/mana_drain_lesser.png",
+    "normal": "runes/sustain/mana_drain_normal.png",
+    "greater": "runes/sustain/mana_drain_greater.png",
+    "abyssal": "runes/sustain/mana_drain_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "soul_rip",
+   "name": "Soul Rip Rune",
+   "emoji": "\ud83d\udc80\ud83d\udc9a",
+   "effect": "Lifesteal 50% + executes targets below 20% HP (true damage).",
+   "category": "sustain",
+   "sprite": "runes/sustain/soul_rip.png",
+   "source": "runes/large_sheet/rune_r1c8.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/sustain/soul_rip_lesser.png",
+    "normal": "runes/sustain/soul_rip_normal.png",
+    "greater": "runes/sustain/soul_rip_greater.png",
+    "abyssal": "runes/sustain/soul_rip_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "knockback",
+   "name": "Knockback Rune",
+   "emoji": "\ud83d\udc4a",
+   "effect": "Knocks the target back, applying slow.",
+   "category": "control",
+   "sprite": "runes/control/knockback.png",
+   "source": "runes/large_sheet/rune_r5c3.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/control/knockback_lesser.png",
+    "normal": "runes/control/knockback_normal.png",
+    "greater": "runes/control/knockback_greater.png",
+    "abyssal": "runes/control/knockback_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "pull",
+   "name": "Pull Rune",
+   "emoji": "\ud83e\ude9d",
+   "effect": "Pulls the target, with a chance to root.",
+   "category": "control",
+   "sprite": "runes/control/pull.png",
+   "source": "runes/large_sheet/rune_r5c2.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/control/pull_lesser.png",
+    "normal": "runes/control/pull_normal.png",
+    "greater": "runes/control/pull_greater.png",
+    "abyssal": "runes/control/pull_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "taunt",
+   "name": "Taunt Rune",
+   "emoji": "\ud83d\ude20",
+   "effect": "Forces target to attack you next turn.",
+   "category": "control",
+   "sprite": "runes/control/taunt.png",
+   "source": "runes/large_sheet/rune_r5c6.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/control/taunt_lesser.png",
+    "normal": "runes/control/taunt_normal.png",
+    "greater": "runes/control/taunt_greater.png",
+    "abyssal": "runes/control/taunt_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "quick_cast",
+   "name": "Quick Cast Rune",
+   "emoji": "\u23e9",
+   "effect": "Cooldown -1 turn (min 0), but +25% energy cost.",
+   "category": "cast",
+   "sprite": "runes/cast/quick_cast.png",
+   "source": "runes/large_sheet/rune_r5c7.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/cast/quick_cast_lesser.png",
+    "normal": "runes/cast/quick_cast_normal.png",
+    "greater": "runes/cast/quick_cast_greater.png",
+    "abyssal": "runes/cast/quick_cast_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "efficient_cast",
+   "name": "Efficient Cast Rune",
+   "emoji": "\ud83d\udcab",
+   "effect": "Energy cost -40%, but -15% damage.",
+   "category": "cast",
+   "sprite": "runes/cast/efficient_cast.png",
+   "source": "runes/large_sheet/rune_r5c8.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/cast/efficient_cast_lesser.png",
+    "normal": "runes/cast/efficient_cast_normal.png",
+    "greater": "runes/cast/efficient_cast_greater.png",
+    "abyssal": "runes/cast/efficient_cast_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "cooldown",
+   "name": "Cooldown Rune",
+   "emoji": "\u23f1\ufe0f",
+   "effect": "Reduces skill cooldown. Higher tiers can halve or remove it entirely.",
+   "category": "cast",
+   "sprite": "runes/cast/cooldown.png",
+   "source": "runes/large_sheet/rune_r6c4.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/cast/cooldown_lesser.png",
+    "normal": "runes/cast/cooldown_normal.png",
+    "greater": "runes/cast/cooldown_greater.png",
+    "abyssal": "runes/cast/cooldown_abyssal.png"
+   },
+   "tier_note": "tier art completed 2026-10-12 (owner sheets 5-8)"
+  },
+  {
+   "id": "wet",
+   "name": "Wet Rune",
+   "emoji": "\ud83d\udca7",
+   "effect": "Applies WET to affected targets. Reduces movement stability, enables Shock/Frost/Burn synergies.",
+   "category": "status",
+   "sprite": "runes/status/wet.png",
+   "source": "runes/large_sheet/rune_r6c7.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/status/wet_lesser.png",
+    "normal": "runes/status/wet_normal.png",
+    "greater": "runes/status/wet_greater.png",
+    "abyssal": "runes/status/wet_abyssal.png"
+   },
+   "tier_sources": {
+    "lesser": "runes/small_sheet/rune_r6c3.png",
+    "normal": "runes/small_sheet/rune_r6c5.png",
+    "greater": "runes/small_sheet/rune_r6c6.png",
+    "abyssal": "runes/small_sheet/rune_r6c8.png"
+   }
+  },
+  {
+   "id": "star",
+   "name": "Star Rune",
+   "emoji": "\u2b50",
+   "effect": "Applies STELLAR to affected targets. Increases crit damage for user, chance to inflict BURN.",
+   "category": "status",
+   "sprite": "runes/status/star.png",
+   "source": "runes/small_sheet/rune_r4c3.png",
+   "tiered_art": true,
+   "tier_sprites": {
+    "lesser": "runes/status/star_lesser.png",
+    "normal": "runes/status/star_normal.png",
+    "greater": "runes/status/star_greater.png",
+    "abyssal": "runes/status/star_abyssal.png"
+   },
+   "tier_sources": {
+    "lesser": "runes/small_sheet/rune_r4c1.png",
+    "normal": "runes/small_sheet/rune_r4c3.png",
+    "greater": "runes/small_sheet/rune_r4c4.png",
+    "abyssal": "runes/small_sheet/rune_r4c6.png"
+   }
+  }
+ ],
+ "skills": [
+  {
+   "class": "FIGHTER",
+   "class_name": "Fighter",
+   "skill": "Power Slash",
+   "id": "power_slash",
+   "sprite": "skills/fighter/power_slash.png",
+   "source": "abilities/10_classes/fighter_01_power_slash.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "FIGHTER",
+   "class_name": "Fighter",
+   "skill": "Cleave",
+   "id": "cleave",
+   "sprite": "skills/fighter/cleave.png",
+   "source": "abilities/10_classes/fighter_02_cleave.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "FIGHTER",
+   "class_name": "Fighter",
+   "skill": "Execute",
+   "id": "execute",
+   "sprite": "skills/fighter/execute.png",
+   "source": "abilities/10_classes/fighter_03_execute.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "FIGHTER",
+   "class_name": "Fighter",
+   "skill": "Guard",
+   "id": "guard",
+   "sprite": "skills/fighter/guard.png",
+   "source": "abilities/10_classes/fighter_04_guard.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "FIGHTER",
+   "class_name": "Fighter",
+   "skill": "Shield Bash",
+   "id": "shield_bash",
+   "sprite": "skills/fighter/shield_bash.png",
+   "source": "abilities/10_classes/fighter_05_shield_bash.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "FIGHTER",
+   "class_name": "Fighter",
+   "skill": "Iron Wall",
+   "id": "iron_wall",
+   "sprite": "skills/fighter/iron_wall.png",
+   "source": "abilities/10_classes/fighter_06_iron_wall.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "FIGHTER",
+   "class_name": "Fighter",
+   "skill": "Rally",
+   "id": "rally",
+   "sprite": "skills/fighter/rally.png",
+   "source": "abilities/10_classes/fighter_07_rally.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "FIGHTER",
+   "class_name": "Fighter",
+   "skill": "War Stomp",
+   "id": "war_stomp",
+   "sprite": "skills/fighter/war_stomp.png",
+   "source": "abilities/10_classes/fighter_08_war_stomp.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "FIGHTER",
+   "class_name": "Fighter",
+   "skill": "Warrior's Resolve",
+   "id": "warriors_resolve",
+   "sprite": "skills/fighter/warriors_resolve.png",
+   "source": "abilities/10_classes/fighter_09_warriors_resolve.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "SCOUT",
+   "class_name": "Scout",
+   "skill": "Quick Strike",
+   "id": "quick_strike",
+   "sprite": "skills/scout/quick_strike.png",
+   "source": "abilities/10_classes/scout_01_quick_strike.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "SCOUT",
+   "class_name": "Scout",
+   "skill": "Backstab",
+   "id": "backstab",
+   "sprite": "skills/scout/backstab.png",
+   "source": "abilities/10_classes/scout_02_backstab.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "SCOUT",
+   "class_name": "Scout",
+   "skill": "Assassinate",
+   "id": "assassinate",
+   "sprite": "skills/scout/assassinate.png",
+   "source": "abilities/10_classes/scout_03_assassinate.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "SCOUT",
+   "class_name": "Scout",
+   "skill": "Evasive Maneuver",
+   "id": "evasive_maneuver",
+   "sprite": "skills/scout/evasive_maneuver.png",
+   "source": "abilities/10_classes/scout_04_evasive_maneuver.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "SCOUT",
+   "class_name": "Scout",
+   "skill": "Smoke Bomb",
+   "id": "smoke_bomb",
+   "sprite": "skills/scout/smoke_bomb.png",
+   "source": "abilities/10_classes/scout_05_smoke_bomb.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "SCOUT",
+   "class_name": "Scout",
+   "skill": "Shadow Step",
+   "id": "shadow_step",
+   "sprite": "skills/scout/shadow_step.png",
+   "source": "abilities/10_classes/scout_06_shadow_step.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "SCOUT",
+   "class_name": "Scout",
+   "skill": "Vital Strike",
+   "id": "vital_strike",
+   "sprite": "skills/scout/vital_strike.png",
+   "source": "abilities/10_classes/scout_07_vital_strike.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "SCOUT",
+   "class_name": "Scout",
+   "skill": "Marked for Death",
+   "id": "marked_for_death",
+   "sprite": "skills/scout/marked_for_death.png",
+   "source": "abilities/10_classes/scout_08_marked_for_death.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "SCOUT",
+   "class_name": "Scout",
+   "skill": "Deadly Precision",
+   "id": "deadly_precision",
+   "sprite": "skills/scout/deadly_precision.png",
+   "source": "abilities/10_classes/scout_09_deadly_precision.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "APPRENTICE",
+   "class_name": "Apprentice",
+   "skill": "Fire Bolt",
+   "id": "fire_bolt",
+   "sprite": "skills/apprentice/fire_bolt.png",
+   "source": "abilities/10_classes/apprentice_01_fire_bolt.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "APPRENTICE",
+   "class_name": "Apprentice",
+   "skill": "Fireball",
+   "id": "fireball",
+   "sprite": "skills/apprentice/fireball.png",
+   "source": "abilities/10_classes/apprentice_02_fireball.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "APPRENTICE",
+   "class_name": "Apprentice",
+   "skill": "Meteor Strike",
+   "id": "meteor_strike",
+   "sprite": "skills/apprentice/meteor_strike.png",
+   "source": "abilities/10_classes/apprentice_03_meteor_strike.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "APPRENTICE",
+   "class_name": "Apprentice",
+   "skill": "Frost Bolt",
+   "id": "frost_bolt",
+   "sprite": "skills/apprentice/frost_bolt.png",
+   "source": "abilities/10_classes/apprentice_04_frost_bolt.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "APPRENTICE",
+   "class_name": "Apprentice",
+   "skill": "Ice Shard",
+   "id": "ice_shard",
+   "sprite": "skills/apprentice/ice_shard.png",
+   "source": "abilities/10_classes/apprentice_05_ice_shard.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "APPRENTICE",
+   "class_name": "Apprentice",
+   "skill": "Blizzard",
+   "id": "blizzard",
+   "sprite": "skills/apprentice/blizzard.png",
+   "source": "abilities/10_classes/apprentice_06_blizzard.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "APPRENTICE",
+   "class_name": "Apprentice",
+   "skill": "Mana Shield",
+   "id": "mana_shield",
+   "sprite": "skills/apprentice/mana_shield.png",
+   "source": "abilities/10_classes/apprentice_07_mana_shield.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "APPRENTICE",
+   "class_name": "Apprentice",
+   "skill": "Arcane Missiles",
+   "id": "arcane_missiles",
+   "sprite": "skills/apprentice/arcane_missiles.png",
+   "source": "abilities/10_classes/apprentice_08_arcane_missiles.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "APPRENTICE",
+   "class_name": "Apprentice",
+   "skill": "Time Warp",
+   "id": "time_warp",
+   "sprite": "skills/apprentice/time_warp.png",
+   "source": "abilities/10_classes/apprentice_09_time_warp.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ACOLYTE",
+   "class_name": "Acolyte",
+   "skill": "Holy Smite",
+   "id": "holy_smite",
+   "sprite": "skills/acolyte/holy_smite.png",
+   "source": "abilities/10_classes/acolyte_01_holy_smite.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ACOLYTE",
+   "class_name": "Acolyte",
+   "skill": "Holy Fire",
+   "id": "holy_fire",
+   "sprite": "skills/acolyte/holy_fire.png",
+   "source": "abilities/10_classes/acolyte_02_holy_fire.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ACOLYTE",
+   "class_name": "Acolyte",
+   "skill": "Divine Judgment",
+   "id": "divine_judgment",
+   "sprite": "skills/acolyte/divine_judgment.png",
+   "source": "abilities/10_classes/acolyte_03_divine_judgment.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ACOLYTE",
+   "class_name": "Acolyte",
+   "skill": "Heal",
+   "id": "heal",
+   "sprite": "skills/acolyte/heal.png",
+   "source": "abilities/10_classes/acolyte_04_heal.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ACOLYTE",
+   "class_name": "Acolyte",
+   "skill": "Group Heal",
+   "id": "group_heal",
+   "sprite": "skills/acolyte/group_heal.png",
+   "source": "abilities/10_classes/acolyte_05_group_heal.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ACOLYTE",
+   "class_name": "Acolyte",
+   "skill": "Resurrection",
+   "id": "resurrection",
+   "sprite": "skills/acolyte/resurrection.png",
+   "source": "abilities/10_classes/acolyte_06_resurrection.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ACOLYTE",
+   "class_name": "Acolyte",
+   "skill": "Blessing",
+   "id": "blessing",
+   "sprite": "skills/acolyte/blessing.png",
+   "source": "abilities/10_classes/acolyte_07_blessing.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ACOLYTE",
+   "class_name": "Acolyte",
+   "skill": "Divine Shield",
+   "id": "divine_shield",
+   "sprite": "skills/acolyte/divine_shield.png",
+   "source": "abilities/10_classes/acolyte_08_divine_shield.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ACOLYTE",
+   "class_name": "Acolyte",
+   "skill": "Martyrdom",
+   "id": "martyrdom",
+   "sprite": "skills/acolyte/martyrdom.png",
+   "source": "abilities/10_classes/acolyte_09_martyrdom.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "WARRIOR",
+   "class_name": "Warrior",
+   "skill": "Shield Bash",
+   "id": "shield_bash",
+   "sprite": "skills/warrior/shield_bash.png",
+   "source": "abilities/10_classes/warrior_01_shield_bash.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "WARRIOR",
+   "class_name": "Warrior",
+   "skill": "Defensive Stance",
+   "id": "defensive_stance",
+   "sprite": "skills/warrior/defensive_stance.png",
+   "source": "abilities/10_classes/warrior_02_defensive_stance.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "WARRIOR",
+   "class_name": "Warrior",
+   "skill": "Cleave",
+   "id": "cleave",
+   "sprite": "skills/warrior/cleave.png",
+   "source": "abilities/10_classes/fighter_02_cleave.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "WARRIOR",
+   "class_name": "Warrior",
+   "skill": "Battle Cry",
+   "id": "battle_cry",
+   "sprite": "skills/warrior/battle_cry.png",
+   "source": "abilities/10_classes/warrior_03_battle_cry.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "WARRIOR",
+   "class_name": "Warrior",
+   "skill": "Whirlwind",
+   "id": "whirlwind",
+   "sprite": "skills/warrior/whirlwind.png",
+   "source": "abilities/10_classes/warrior_04_whirlwind.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "WARRIOR",
+   "class_name": "Warrior",
+   "skill": "Iron Will",
+   "id": "iron_will",
+   "sprite": "skills/warrior/iron_will.png",
+   "source": "abilities/10_classes/warrior_05_iron_will.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "WARRIOR",
+   "class_name": "Warrior",
+   "skill": "Execute",
+   "id": "execute",
+   "sprite": "skills/warrior/execute.png",
+   "source": "abilities/10_classes/fighter_03_execute.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "ROGUE",
+   "class_name": "Rogue",
+   "skill": "Backstab",
+   "id": "backstab",
+   "sprite": "skills/rogue/backstab.png",
+   "source": "abilities/10_classes/rogue_01_backstab.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ROGUE",
+   "class_name": "Rogue",
+   "skill": "Smoke Bomb",
+   "id": "smoke_bomb",
+   "sprite": "skills/rogue/smoke_bomb.png",
+   "source": "abilities/10_classes/rogue_02_smoke_bomb.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ROGUE",
+   "class_name": "Rogue",
+   "skill": "Shadow Step",
+   "id": "shadow_step",
+   "sprite": "skills/rogue/shadow_step.png",
+   "source": "abilities/10_classes/rogue_03_shadow_step.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ROGUE",
+   "class_name": "Rogue",
+   "skill": "Blade Flurry",
+   "id": "blade_flurry",
+   "sprite": "skills/rogue/blade_flurry.png",
+   "source": "abilities/10_classes/rogue_04_blade_flurry.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ROGUE",
+   "class_name": "Rogue",
+   "skill": "Vanish",
+   "id": "vanish",
+   "sprite": "skills/rogue/vanish.png",
+   "source": "abilities/10_classes/rogue_05_vanish.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ROGUE",
+   "class_name": "Rogue",
+   "skill": "Assassinate",
+   "id": "assassinate",
+   "sprite": "skills/rogue/assassinate.png",
+   "source": "abilities/10_classes/scout_03_assassinate.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "MAGE",
+   "class_name": "Mage",
+   "skill": "Fireball",
+   "id": "fireball",
+   "sprite": "skills/mage/fireball.png",
+   "source": "abilities/10_classes/mage_01_fireball.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "MAGE",
+   "class_name": "Mage",
+   "skill": "Frost Bolt",
+   "id": "frost_bolt",
+   "sprite": "skills/mage/frost_bolt.png",
+   "source": "abilities/10_classes/apprentice_04_frost_bolt.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "MAGE",
+   "class_name": "Mage",
+   "skill": "Lightning Bolt",
+   "id": "lightning_bolt",
+   "sprite": "skills/mage/lightning_bolt.png",
+   "source": "abilities/10_classes/mage_02_lightning_bolt.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "MAGE",
+   "class_name": "Mage",
+   "skill": "Arcane Missiles",
+   "id": "arcane_missiles",
+   "sprite": "skills/mage/arcane_missiles.png",
+   "source": "abilities/10_classes/apprentice_08_arcane_missiles.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "MAGE",
+   "class_name": "Mage",
+   "skill": "Blizzard",
+   "id": "blizzard",
+   "sprite": "skills/mage/blizzard.png",
+   "source": "abilities/10_classes/apprentice_06_blizzard.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "MAGE",
+   "class_name": "Mage",
+   "skill": "Meteor",
+   "id": "meteor",
+   "sprite": "skills/mage/meteor.png",
+   "source": "abilities/10_classes/apprentice_03_meteor_strike.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "MAGE",
+   "class_name": "Mage",
+   "skill": "Arcane Shield",
+   "id": "arcane_shield",
+   "sprite": "skills/mage/arcane_shield.png",
+   "source": "abilities/10_classes/apprentice_07_mana_shield.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "MAGE",
+   "class_name": "Mage",
+   "skill": "Mana Drain",
+   "id": "mana_drain",
+   "sprite": "skills/mage/mana_drain.png",
+   "source": "abilities/13_late_game/voidwalker_b_03_essence_drain.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "MAGE",
+   "class_name": "Mage",
+   "skill": "Prismatic Burst",
+   "id": "prismatic_burst",
+   "sprite": "skills/mage/prismatic_burst.png",
+   "source": "abilities/10_classes/mage_03_prismatic_burst.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "MAGE",
+   "class_name": "Mage",
+   "skill": "Mirror Image",
+   "id": "mirror_image",
+   "sprite": "skills/mage/mirror_image.png",
+   "source": "abilities/10_classes/mage_04_mirror_image.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "MAGE",
+   "class_name": "Mage",
+   "skill": "Gravity Well",
+   "id": "gravity_well",
+   "sprite": "skills/mage/gravity_well.png",
+   "source": "abilities/10_classes/mage_05_gravity_well.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "BERSERKER",
+   "class_name": "Berserker",
+   "skill": "Rage Strike",
+   "id": "rage_strike",
+   "sprite": "skills/berserker/rage_strike.png",
+   "source": "abilities/10_classes/berserker_01_rage_strike.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "BERSERKER",
+   "class_name": "Berserker",
+   "skill": "Blood Frenzy",
+   "id": "blood_frenzy",
+   "sprite": "skills/berserker/blood_frenzy.png",
+   "source": "abilities/13_new_classes/dragonslayer_b_01_ancient_blood.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "BERSERKER",
+   "class_name": "Berserker",
+   "skill": "Rampage",
+   "id": "rampage",
+   "sprite": "skills/berserker/rampage.png",
+   "source": "abilities/10_classes/berserker_02_rampage.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "BERSERKER",
+   "class_name": "Berserker",
+   "skill": "Warcry",
+   "id": "warcry",
+   "sprite": "skills/berserker/warcry.png",
+   "source": "abilities/10_classes/berserker_03_warcry.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "BERSERKER",
+   "class_name": "Berserker",
+   "skill": "Reckless Assault",
+   "id": "reckless_assault",
+   "sprite": "skills/berserker/reckless_assault.png",
+   "source": "abilities/10_classes/berserker_04_reckless_assault.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "BERSERKER",
+   "class_name": "Berserker",
+   "skill": "Dimensional Slash",
+   "id": "dimensional_slash",
+   "sprite": "skills/berserker/dimensional_slash.png",
+   "source": "abilities/10_classes/berserker_05_dimensional_slash.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "BERSERKER",
+   "class_name": "Berserker",
+   "skill": "Last Stand",
+   "id": "last_stand",
+   "sprite": "skills/berserker/last_stand.png",
+   "source": "abilities/10_classes/berserker_06_last_stand.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "PALADIN",
+   "class_name": "Paladin",
+   "skill": "Holy Strike",
+   "id": "holy_strike",
+   "sprite": "skills/paladin/holy_strike.png",
+   "source": "abilities/10_classes/paladin_01_holy_strike.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "PALADIN",
+   "class_name": "Paladin",
+   "skill": "Divine Shield",
+   "id": "divine_shield",
+   "sprite": "skills/paladin/divine_shield.png",
+   "source": "abilities/10_classes/paladin_02_divine_shield.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "PALADIN",
+   "class_name": "Paladin",
+   "skill": "Consecration",
+   "id": "consecration",
+   "sprite": "skills/paladin/consecration.png",
+   "source": "abilities/10_classes/paladin_03_consecration.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "PALADIN",
+   "class_name": "Paladin",
+   "skill": "Lay on Hands",
+   "id": "lay_on_hands",
+   "sprite": "skills/paladin/lay_on_hands.png",
+   "source": "abilities/10_classes/paladin_04_lay_on_hands.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "PALADIN",
+   "class_name": "Paladin",
+   "skill": "Avenging Wrath",
+   "id": "avenging_wrath",
+   "sprite": "skills/paladin/avenging_wrath.png",
+   "source": "abilities/10_classes/paladin_05_avenging_wrath.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "PALADIN",
+   "class_name": "Paladin",
+   "skill": "Divine Judgment",
+   "id": "divine_judgment",
+   "sprite": "skills/paladin/divine_judgment.png",
+   "source": "abilities/10_classes/paladin_06_divine_judgment.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "NECROMANCER",
+   "class_name": "Necromancer",
+   "skill": "Death Bolt",
+   "id": "death_bolt",
+   "sprite": "skills/necromancer/death_bolt.png",
+   "source": "abilities/10_classes/necromancer_01_death_bolt.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "NECROMANCER",
+   "class_name": "Necromancer",
+   "skill": "Drain Life",
+   "id": "drain_life",
+   "sprite": "skills/necromancer/drain_life.png",
+   "source": "abilities/10_classes/necromancer_02_drain_life.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "NECROMANCER",
+   "class_name": "Necromancer",
+   "skill": "Raise Skeleton",
+   "id": "raise_skeleton",
+   "sprite": "skills/necromancer/raise_skeleton.png",
+   "source": "abilities/10_classes/necromancer_03_raise_skeleton.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "NECROMANCER",
+   "class_name": "Necromancer",
+   "skill": "Corpse Explosion",
+   "id": "corpse_explosion",
+   "sprite": "skills/necromancer/corpse_explosion.png",
+   "source": "abilities/10_classes/necromancer_04_corpse_explosion.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "NECROMANCER",
+   "class_name": "Necromancer",
+   "skill": "Plague",
+   "id": "plague",
+   "sprite": "skills/necromancer/plague.png",
+   "source": "abilities/10_classes/necromancer_05_plague.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "NECROMANCER",
+   "class_name": "Necromancer",
+   "skill": "Army of the Dead",
+   "id": "army_of_the_dead",
+   "sprite": "skills/necromancer/army_of_the_dead.png",
+   "source": "abilities/10_classes/necromancer_06_army_of_the_dead.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "CHRONOMANCER",
+   "class_name": "Chronomancer",
+   "skill": "Time Bolt",
+   "id": "time_bolt",
+   "sprite": "skills/chronomancer/time_bolt.png",
+   "source": "abilities/13_new_classes/chronomancer_01_time_bolt.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "CHRONOMANCER",
+   "class_name": "Chronomancer",
+   "skill": "Haste",
+   "id": "haste",
+   "sprite": "skills/chronomancer/haste.png",
+   "source": "abilities/13_new_classes/chronomancer_02_haste.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "CHRONOMANCER",
+   "class_name": "Chronomancer",
+   "skill": "Time Warp",
+   "id": "time_warp",
+   "sprite": "skills/chronomancer/time_warp.png",
+   "source": "abilities/13_new_classes/chronomancer_03_time_warp.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "CHRONOMANCER",
+   "class_name": "Chronomancer",
+   "skill": "Temporal Rift",
+   "id": "temporal_rift",
+   "sprite": "skills/chronomancer/temporal_rift.png",
+   "source": "abilities/13_new_classes/chronomancer_04_temporal_rift.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "CHRONOMANCER",
+   "class_name": "Chronomancer",
+   "skill": "Rewind",
+   "id": "rewind",
+   "sprite": "skills/chronomancer/rewind.png",
+   "source": "abilities/13_new_classes/chronomancer_05_rewind.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "CHRONOMANCER",
+   "class_name": "Chronomancer",
+   "skill": "Time Stop",
+   "id": "time_stop",
+   "sprite": "skills/chronomancer/time_stop.png",
+   "source": "abilities/13_late_game/timelord_01_temporal_mastery.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "MERCHANT",
+   "class_name": "Merchant",
+   "skill": "Gold Throw",
+   "id": "gold_throw",
+   "sprite": "skills/merchant/gold_throw.png",
+   "source": "abilities/13_new_classes/merchant_01_gold_throw.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "MERCHANT",
+   "class_name": "Merchant",
+   "skill": "Bribe",
+   "id": "bribe",
+   "sprite": "skills/merchant/bribe.png",
+   "source": "abilities/13_new_classes/merchant_02_bribe.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "MERCHANT",
+   "class_name": "Merchant",
+   "skill": "Investment",
+   "id": "investment",
+   "sprite": "skills/merchant/investment.png",
+   "source": "abilities/13_new_classes/merchant_03_investment.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "MERCHANT",
+   "class_name": "Merchant",
+   "skill": "Hire Mercenary",
+   "id": "hire_mercenary",
+   "sprite": "skills/merchant/hire_mercenary.png",
+   "source": "abilities/13_new_classes/merchant_04_hire_mercenary.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "MERCHANT",
+   "class_name": "Merchant",
+   "skill": "Treasure Hunt",
+   "id": "treasure_hunt",
+   "sprite": "skills/merchant/treasure_hunt.png",
+   "source": "abilities/13_new_classes/merchant_05_treasure_hunt.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "MERCHANT",
+   "class_name": "Merchant",
+   "skill": "Money Rain",
+   "id": "money_rain",
+   "sprite": "skills/merchant/money_rain.png",
+   "source": "abilities/13_late_game/tycoon_01_infinite_wealth.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "CLERIC",
+   "class_name": "Cleric",
+   "skill": "Heal",
+   "id": "heal",
+   "sprite": "skills/cleric/heal.png",
+   "source": "abilities/13_new_classes/cleric_01_heal.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "CLERIC",
+   "class_name": "Cleric",
+   "skill": "Divine Wrath",
+   "id": "divine_wrath",
+   "sprite": "skills/cleric/divine_wrath.png",
+   "source": "abilities/13_new_classes/cleric_02_divine_wrath.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "CLERIC",
+   "class_name": "Cleric",
+   "skill": "Smite",
+   "id": "smite",
+   "sprite": "skills/cleric/smite.png",
+   "source": "abilities/13_new_classes/cleric_03_smite.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "CLERIC",
+   "class_name": "Cleric",
+   "skill": "Blessing",
+   "id": "blessing",
+   "sprite": "skills/cleric/blessing.png",
+   "source": "abilities/13_new_classes/cleric_04_blessing.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "CLERIC",
+   "class_name": "Cleric",
+   "skill": "Cleanse",
+   "id": "cleanse",
+   "sprite": "skills/cleric/cleanse.png",
+   "source": "abilities/13_new_classes/cleric_05_cleanse.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "NINJA",
+   "class_name": "Ninja",
+   "skill": "Shuriken",
+   "id": "shuriken",
+   "sprite": "skills/ninja/shuriken.png",
+   "source": "abilities/13_new_classes/ninja_01_shuriken.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "NINJA",
+   "class_name": "Ninja",
+   "skill": "Final Eclipse",
+   "id": "final_eclipse",
+   "sprite": "skills/ninja/final_eclipse.png",
+   "source": "abilities/13_new_classes/ninja_02_final_eclipse.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "NINJA",
+   "class_name": "Ninja",
+   "skill": "Shadow Clone Jutsu",
+   "id": "shadow_clone_jutsu",
+   "sprite": "skills/ninja/shadow_clone_jutsu.png",
+   "source": "abilities/13_new_classes/ninja_03_shadow_clone_jutsu.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "NINJA",
+   "class_name": "Ninja",
+   "skill": "Poison Kunai",
+   "id": "poison_kunai",
+   "sprite": "skills/ninja/poison_kunai.png",
+   "source": "abilities/13_new_classes/ninja_04_poison_kunai.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "NINJA",
+   "class_name": "Ninja",
+   "skill": "Kunai Storm",
+   "id": "kunai_storm",
+   "sprite": "skills/ninja/kunai_storm.png",
+   "source": "abilities/13_new_classes/ninja_05_kunai_storm.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "MONK",
+   "class_name": "Monk",
+   "skill": "Palm Strike",
+   "id": "palm_strike",
+   "sprite": "skills/monk/palm_strike.png",
+   "source": "abilities/13_new_classes/monk_01_palm_strike.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "MONK",
+   "class_name": "Monk",
+   "skill": "Enlightenment",
+   "id": "enlightenment",
+   "sprite": "skills/monk/enlightenment.png",
+   "source": "abilities/13_new_classes/monk_02_enlightenment.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "MONK",
+   "class_name": "Monk",
+   "skill": "Ki Blast",
+   "id": "ki_blast",
+   "sprite": "skills/monk/ki_blast.png",
+   "source": "abilities/13_new_classes/monk_03_ki_blast.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "MONK",
+   "class_name": "Monk",
+   "skill": "Whirlwind Kick",
+   "id": "whirlwind_kick",
+   "sprite": "skills/monk/whirlwind_kick.png",
+   "source": "abilities/13_new_classes/monk_04_whirlwind_kick.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "MONK",
+   "class_name": "Monk",
+   "skill": "Meditation",
+   "id": "meditation",
+   "sprite": "skills/monk/meditation.png",
+   "source": "abilities/13_new_classes/monk_05_meditation.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRAGONSLAYER",
+   "class_name": "Dragonslayer",
+   "skill": "Dragon Strike",
+   "id": "dragon_strike",
+   "sprite": "skills/dragonslayer/dragon_strike.png",
+   "source": "abilities/13_new_classes/dragonslayer_a_01_dragon_strike.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRAGONSLAYER",
+   "class_name": "Dragonslayer",
+   "skill": "Wing Clipper",
+   "id": "wing_clipper",
+   "sprite": "skills/dragonslayer/wing_clipper.png",
+   "source": "abilities/13_new_classes/dragonslayer_a_02_wing_clipper.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRAGONSLAYER",
+   "class_name": "Dragonslayer",
+   "skill": "Scale Breaker",
+   "id": "scale_breaker",
+   "sprite": "skills/dragonslayer/scale_breaker.png",
+   "source": "abilities/13_new_classes/dragonslayer_a_03_scale_breaker.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRAGONSLAYER",
+   "class_name": "Dragonslayer",
+   "skill": "Tail Cleaver",
+   "id": "tail_cleaver",
+   "sprite": "skills/dragonslayer/tail_cleaver.png",
+   "source": "abilities/13_new_classes/dragonslayer_a_04_tail_cleaver.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRAGONSLAYER",
+   "class_name": "Dragonslayer",
+   "skill": "Slayer's Focus",
+   "id": "slayers_focus",
+   "sprite": "skills/dragonslayer/slayers_focus.png",
+   "source": "abilities/13_new_classes/dragonslayer_a_05_slayers_focus.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRAGONSLAYER",
+   "class_name": "Dragonslayer",
+   "skill": "Dragonfall",
+   "id": "dragonfall",
+   "sprite": "skills/dragonslayer/dragonfall.png",
+   "source": "abilities/13_late_game/zenmaster_04_apocalypse_wing.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "DRAGONSLAYER",
+   "class_name": "Dragonslayer",
+   "skill": "Ancient Blood",
+   "id": "ancient_blood",
+   "sprite": "skills/dragonslayer/ancient_blood.png",
+   "source": "abilities/13_new_classes/dragonslayer_b_01_ancient_blood.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRAGONSLAYER",
+   "class_name": "Dragonslayer",
+   "skill": "Dragon Scale",
+   "id": "dragon_scale",
+   "sprite": "skills/dragonslayer/dragon_scale.png",
+   "source": "abilities/13_new_classes/dragonslayer_b_02_dragon_scale.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRAGONSLAYER",
+   "class_name": "Dragonslayer",
+   "skill": "Dragon Breath Res",
+   "id": "dragon_breath_res",
+   "sprite": "skills/dragonslayer/dragon_breath_res.png",
+   "source": "abilities/13_new_classes/dragonslayer_b_03_dragon_breath_res.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRAGONSLAYER",
+   "class_name": "Dragonslayer",
+   "skill": "Hunter's Roar",
+   "id": "hunters_roar",
+   "sprite": "skills/dragonslayer/hunters_roar.png",
+   "source": "abilities/13_new_classes/dragonslayer_b_04_hunters_roar.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRAGONSLAYER",
+   "class_name": "Dragonslayer",
+   "skill": "Piercing Shout",
+   "id": "piercing_shout",
+   "sprite": "skills/dragonslayer/piercing_shout.png",
+   "source": "abilities/13_new_classes/dragonslayer_b_05_piercing_shout.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ELEMENTALIST",
+   "class_name": "Elementalist",
+   "skill": "Elemental Bolt",
+   "id": "elemental_bolt",
+   "sprite": "skills/elementalist/elemental_bolt.png",
+   "source": "abilities/13_new_classes/elementalist_01_elemental_bolt.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ELEMENTALIST",
+   "class_name": "Elementalist",
+   "skill": "Elemental Cataclysm",
+   "id": "elemental_cataclysm",
+   "sprite": "skills/elementalist/elemental_cataclysm.png",
+   "source": "abilities/13_new_classes/elementalist_02_elemental_cataclysm.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ELEMENTALIST",
+   "class_name": "Elementalist",
+   "skill": "Flame Burst",
+   "id": "flame_burst",
+   "sprite": "skills/elementalist/flame_burst.png",
+   "source": "abilities/13_new_classes/elementalist_03_flame_burst.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ELEMENTALIST",
+   "class_name": "Elementalist",
+   "skill": "Frost Nova",
+   "id": "frost_nova",
+   "sprite": "skills/elementalist/frost_nova.png",
+   "source": "abilities/13_new_classes/elementalist_04_frost_nova.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ELEMENTALIST",
+   "class_name": "Elementalist",
+   "skill": "Chain Lightning",
+   "id": "chain_lightning",
+   "sprite": "skills/elementalist/chain_lightning.png",
+   "source": "abilities/13_new_classes/elementalist_05_chain_lightning.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "WARLORD",
+   "class_name": "Warlord",
+   "skill": "Tactical Strike",
+   "id": "tactical_strike",
+   "sprite": "skills/warlord/tactical_strike.png",
+   "source": "abilities/13_new_classes/warlord_01_tactical_strike.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "WARLORD",
+   "class_name": "Warlord",
+   "skill": "Phalanx Formation",
+   "id": "phalanx_formation",
+   "sprite": "skills/warlord/phalanx_formation.png",
+   "source": "abilities/13_new_classes/warlord_02_phalanx_formation.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "WARLORD",
+   "class_name": "Warlord",
+   "skill": "Rallying Cry",
+   "id": "rallying_cry",
+   "sprite": "skills/warlord/rallying_cry.png",
+   "source": "abilities/13_new_classes/warlord_03_rallying_cry.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "WARLORD",
+   "class_name": "Warlord",
+   "skill": "Strategic Maneuver",
+   "id": "strategic_maneuver",
+   "sprite": "skills/warlord/strategic_maneuver.png",
+   "source": "abilities/10_classes/scout_04_evasive_maneuver.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "WARLORD",
+   "class_name": "Warlord",
+   "skill": "Total War",
+   "id": "total_war",
+   "sprite": "skills/warlord/total_war.png",
+   "source": "abilities/13_new_classes/warlord_04_unlabeled.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "WARLORD",
+   "class_name": "Warlord",
+   "skill": "Wide Cleave",
+   "id": "wide_cleave",
+   "sprite": "skills/warlord/wide_cleave.png",
+   "source": "abilities/10_classes/fighter_02_cleave.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "WARLORD",
+   "class_name": "Warlord",
+   "skill": "Shield Bash",
+   "id": "shield_bash",
+   "sprite": "skills/warlord/shield_bash.png",
+   "source": "abilities/10_classes/warrior_01_shield_bash.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "WARLORD",
+   "class_name": "Warlord",
+   "skill": "Banner Charge",
+   "id": "banner_charge",
+   "sprite": "skills/warlord/banner_charge.png",
+   "source": "abilities/10_classes/fighter_07_rally.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "DOOMSLAYER",
+   "class_name": "Doomslayer",
+   "skill": "Rip and Tear",
+   "id": "rip_and_tear",
+   "sprite": "skills/doomslayer/rip_and_tear.png",
+   "source": "abilities/13_new_classes/doomslayer_01_rip_and_tear.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DOOMSLAYER",
+   "class_name": "Doomslayer",
+   "skill": "Eternal Rage",
+   "id": "eternal_rage",
+   "sprite": "skills/doomslayer/eternal_rage.png",
+   "source": "abilities/13_new_classes/doomslayer_02_eternal_rage.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DOOMSLAYER",
+   "class_name": "Doomslayer",
+   "skill": "Hellfire Blast",
+   "id": "hellfire_blast",
+   "sprite": "skills/doomslayer/hellfire_blast.png",
+   "source": "abilities/13_new_classes/doomslayer_03_hellfire_blast.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DOOMSLAYER",
+   "class_name": "Doomslayer",
+   "skill": "Blood Siphon",
+   "id": "blood_siphon",
+   "sprite": "skills/doomslayer/blood_siphon.png",
+   "source": "abilities/10_classes/necromancer_02_drain_life.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "DOOMSLAYER",
+   "class_name": "Doomslayer",
+   "skill": "Crucible",
+   "id": "crucible",
+   "sprite": "skills/doomslayer/crucible.png",
+   "source": "abilities/13_new_classes/warlock_06_hellfire.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "AVATAR",
+   "class_name": "Avatar",
+   "skill": "Elemental Avatar",
+   "id": "elemental_avatar",
+   "sprite": "skills/avatar/elemental_avatar.png",
+   "source": "abilities/13_new_classes/avatar_01_elemental_avatar.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "AVATAR",
+   "class_name": "Avatar",
+   "skill": "Primal Barrier",
+   "id": "primal_barrier",
+   "sprite": "skills/avatar/primal_barrier.png",
+   "source": "abilities/13_new_classes/avatar_02_primal_barrier.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "AVATAR",
+   "class_name": "Avatar",
+   "skill": "Elemental Nova",
+   "id": "elemental_nova",
+   "sprite": "skills/avatar/elemental_nova.png",
+   "source": "abilities/13_new_classes/elementalist_02_elemental_cataclysm.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "AVATAR",
+   "class_name": "Avatar",
+   "skill": "Universal Cataclysm",
+   "id": "universal_cataclysm",
+   "sprite": "skills/avatar/universal_cataclysm.png",
+   "source": "abilities/13_new_classes/avatar_03_universal_cataclysm.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "WARLOCK",
+   "class_name": "Warlock",
+   "skill": "Shadow Bolt",
+   "id": "shadow_bolt",
+   "sprite": "skills/warlock/shadow_bolt.png",
+   "source": "abilities/13_new_classes/warlock_01_shadow_bolt.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "WARLOCK",
+   "class_name": "Warlock",
+   "skill": "Soul Harvest",
+   "id": "soul_harvest",
+   "sprite": "skills/warlock/soul_harvest.png",
+   "source": "abilities/13_new_classes/warlock_02_soul_harvest.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "WARLOCK",
+   "class_name": "Warlock",
+   "skill": "Curse of Agony",
+   "id": "curse_of_agony",
+   "sprite": "skills/warlock/curse_of_agony.png",
+   "source": "abilities/13_new_classes/warlock_04_curse_of_agony.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "WARLOCK",
+   "class_name": "Warlock",
+   "skill": "Demon Armor",
+   "id": "demon_armor",
+   "sprite": "skills/warlock/demon_armor.png",
+   "source": "abilities/13_new_classes/warlock_05_demon_armor.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "WARLOCK",
+   "class_name": "Warlock",
+   "skill": "Hellfire",
+   "id": "hellfire",
+   "sprite": "skills/warlock/hellfire.png",
+   "source": "abilities/13_new_classes/warlock_06_hellfire.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRUID",
+   "class_name": "Druid",
+   "skill": "Nature's Wrath",
+   "id": "natures_wrath",
+   "sprite": "skills/druid/natures_wrath.png",
+   "source": "abilities/13_new_classes/druid_02_natures_wrath.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRUID",
+   "class_name": "Druid",
+   "skill": "Nature's Fury",
+   "id": "natures_fury",
+   "sprite": "skills/druid/natures_fury.png",
+   "source": "abilities/13_new_classes/druid_03_natures_fury.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRUID",
+   "class_name": "Druid",
+   "skill": "Entangle",
+   "id": "entangle",
+   "sprite": "skills/druid/entangle.png",
+   "source": "abilities/13_new_classes/druid_04_entangle.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRUID",
+   "class_name": "Druid",
+   "skill": "Healing Bloom",
+   "id": "healing_bloom",
+   "sprite": "skills/druid/healing_bloom.png",
+   "source": "abilities/13_new_classes/druid_05_healing_bloom.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRUID",
+   "class_name": "Druid",
+   "skill": "Thorn Surge",
+   "id": "thorn_surge",
+   "sprite": "skills/druid/thorn_surge.png",
+   "source": "abilities/13_new_classes/druid_06_thorn_surge.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ARTIFICER",
+   "class_name": "Artificer",
+   "skill": "Frag Grenade",
+   "id": "frag_grenade",
+   "sprite": "skills/artificer/frag_grenade.png",
+   "source": "abilities/13_new_classes/artificer_01_frag_grenade.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ARTIFICER",
+   "class_name": "Artificer",
+   "skill": "Deploy Turret",
+   "id": "deploy_turret",
+   "sprite": "skills/artificer/deploy_turret.png",
+   "source": "abilities/13_new_classes/artificer_02_deploy_turret.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ARTIFICER",
+   "class_name": "Artificer",
+   "skill": "Shield Generator",
+   "id": "shield_generator",
+   "sprite": "skills/artificer/shield_generator.png",
+   "source": "abilities/13_new_classes/artificer_03_shield_generator.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ARTIFICER",
+   "class_name": "Artificer",
+   "skill": "EMP Blast",
+   "id": "emp_blast",
+   "sprite": "skills/artificer/emp_blast.png",
+   "source": "abilities/13_new_classes/artificer_04_emp_blast.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ARTIFICER",
+   "class_name": "Artificer",
+   "skill": "Mech Suit",
+   "id": "mech_suit",
+   "sprite": "skills/artificer/mech_suit.png",
+   "source": "abilities/13_new_classes/artificer_05_mech_suit.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ARTIFICER",
+   "class_name": "Artificer",
+   "skill": "Omega Protocol",
+   "id": "omega_protocol",
+   "sprite": "skills/artificer/omega_protocol.png",
+   "source": "abilities/13_new_classes/artificer_06_omega_protocol.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "BARD",
+   "class_name": "Bard",
+   "skill": "Song of Courage",
+   "id": "song_of_courage",
+   "sprite": "skills/bard/song_of_courage.png",
+   "source": "abilities/13_late_game/bard_01_song_of_courage.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "BARD",
+   "class_name": "Bard",
+   "skill": "Lullaby",
+   "id": "lullaby",
+   "sprite": "skills/bard/lullaby.png",
+   "source": "abilities/13_late_game/bard_02_lullaby.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "BARD",
+   "class_name": "Bard",
+   "skill": "Battle Hymn",
+   "id": "battle_hymn",
+   "sprite": "skills/bard/battle_hymn.png",
+   "source": "abilities/13_late_game/bard_03_battle_hymn.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "BARD",
+   "class_name": "Bard",
+   "skill": "Mocking Tune",
+   "id": "mocking_tune",
+   "sprite": "skills/bard/mocking_tune.png",
+   "source": "abilities/13_late_game/bard_04_mocking_tune.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "BARD",
+   "class_name": "Bard",
+   "skill": "Grand Symphony",
+   "id": "grand_symphony",
+   "sprite": "skills/bard/grand_symphony.png",
+   "source": "abilities/13_late_game/bard_05_grand_symphony.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "BARD",
+   "class_name": "Bard",
+   "skill": "Crescendo of Chaos",
+   "id": "crescendo_of_chaos",
+   "sprite": "skills/bard/crescendo_of_chaos.png",
+   "source": "abilities/9_advanced/virtuoso_04_crescendo.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "SAMURAI",
+   "class_name": "Samurai",
+   "skill": "Iaido",
+   "id": "iaido",
+   "sprite": "skills/samurai/iaido.png",
+   "source": "abilities/13_late_game/samurai_01_iaido.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "SAMURAI",
+   "class_name": "Samurai",
+   "skill": "Seven Cuts of Heaven",
+   "id": "seven_cuts_of_heaven",
+   "sprite": "skills/samurai/seven_cuts_of_heaven.png",
+   "source": "abilities/13_late_game/samurai_02_seven_cuts_of_heaven.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "SAMURAI",
+   "class_name": "Samurai",
+   "skill": "Frontal Cut",
+   "id": "frontal_cut",
+   "sprite": "skills/samurai/frontal_cut.png",
+   "source": "abilities/13_late_game/samurai_03_frontal_cut.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "SAMURAI",
+   "class_name": "Samurai",
+   "skill": "Mindful Stance",
+   "id": "mindful_stance",
+   "sprite": "skills/samurai/mindful_stance.png",
+   "source": "abilities/13_late_game/samurai_04_mindful_stance.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "SAMURAI",
+   "class_name": "Samurai",
+   "skill": "Whirlwind Blade",
+   "id": "whirlwind_blade",
+   "sprite": "skills/samurai/whirlwind_blade.png",
+   "source": "abilities/13_late_game/samurai_05_whirlwind_blade.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "LICH",
+   "class_name": "Lich",
+   "skill": "Phylactery",
+   "id": "phylactery",
+   "sprite": "skills/lich/phylactery.png",
+   "source": "abilities/13_late_game/lich_01_phylactery.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "LICH",
+   "class_name": "Lich",
+   "skill": "Death Bolt",
+   "id": "death_bolt",
+   "sprite": "skills/lich/death_bolt.png",
+   "source": "abilities/13_late_game/lich_02_death_bolt.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "LICH",
+   "class_name": "Lich",
+   "skill": "Curse of Ages",
+   "id": "curse_of_ages",
+   "sprite": "skills/lich/curse_of_ages.png",
+   "source": "abilities/13_late_game/lich_03_curse_of_ages.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "LICH",
+   "class_name": "Lich",
+   "skill": "Spectral Shroud",
+   "id": "spectral_shroud",
+   "sprite": "skills/lich/spectral_shroud.png",
+   "source": "abilities/13_late_game/lich_04_spectral_shroud.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "LICH",
+   "class_name": "Lich",
+   "skill": "Soul Bind",
+   "id": "soul_bind",
+   "sprite": "skills/lich/soul_bind.png",
+   "source": "abilities/13_late_game/lich_05_soul_bind_chain.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "LICH",
+   "class_name": "Lich",
+   "skill": "Eternal Slumber",
+   "id": "eternal_slumber",
+   "sprite": "skills/lich/eternal_slumber.png",
+   "source": "abilities/13_late_game/bard_02_lullaby.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "LICH",
+   "class_name": "Lich",
+   "skill": "Apocalypse Nova",
+   "id": "apocalypse_nova",
+   "sprite": "skills/lich/apocalypse_nova.png",
+   "source": "abilities/13_new_classes/avatar_03_universal_cataclysm.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "TIMELORD",
+   "class_name": "Time Lord",
+   "skill": "Temporal Mastery",
+   "id": "temporal_mastery",
+   "sprite": "skills/timelord/temporal_mastery.png",
+   "source": "abilities/13_late_game/timelord_01_temporal_mastery.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "TIMELORD",
+   "class_name": "Time Lord",
+   "skill": "Chrono Strike",
+   "id": "chrono_strike",
+   "sprite": "skills/timelord/chrono_strike.png",
+   "source": "abilities/13_late_game/timelord_02_chrono_strike.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "TIMELORD",
+   "class_name": "Time Lord",
+   "skill": "Time Loop",
+   "id": "time_loop",
+   "sprite": "skills/timelord/time_loop.png",
+   "source": "abilities/13_late_game/timelord_03_time_loop.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "TIMELORD",
+   "class_name": "Time Lord",
+   "skill": "Temporal Shield",
+   "id": "temporal_shield",
+   "sprite": "skills/timelord/temporal_shield.png",
+   "source": "abilities/13_late_game/timelord_04_temporal_shield.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "TIMELORD",
+   "class_name": "Time Lord",
+   "skill": "Paradox Wave",
+   "id": "paradox_wave",
+   "sprite": "skills/timelord/paradox_wave.png",
+   "source": "abilities/13_late_game/timelord_05_paradox_wave.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "SAINT",
+   "class_name": "Saint",
+   "skill": "Sainthood",
+   "id": "sainthood",
+   "sprite": "skills/saint/sainthood.png",
+   "source": "abilities/13_late_game/saint_01_sainthood.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "SAINT",
+   "class_name": "Saint",
+   "skill": "Divine Light",
+   "id": "divine_light",
+   "sprite": "skills/saint/divine_light.png",
+   "source": "abilities/13_late_game/saint_02_divine_light.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "SAINT",
+   "class_name": "Saint",
+   "skill": "Holy Resurrection",
+   "id": "holy_resurrection",
+   "sprite": "skills/saint/holy_resurrection.png",
+   "source": "abilities/13_late_game/saint_03_holy_resurrection.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "SAINT",
+   "class_name": "Saint",
+   "skill": "Guardian Angel",
+   "id": "guardian_angel",
+   "sprite": "skills/saint/guardian_angel.png",
+   "source": "abilities/13_late_game/saint_04_guardian_angel.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "SAINT",
+   "class_name": "Saint",
+   "skill": "Heavenly Wrath",
+   "id": "heavenly_wrath",
+   "sprite": "skills/saint/heavenly_wrath.png",
+   "source": "abilities/13_late_game/saint_05_heavenly_wrath.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ARCHDRUID",
+   "class_name": "Archdruid",
+   "skill": "Nature's Wrath",
+   "id": "natures_wrath",
+   "sprite": "skills/archdruid/natures_wrath.png",
+   "source": "abilities/13_late_game/archdruid_01_natures_wrath.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ARCHDRUID",
+   "class_name": "Archdruid",
+   "skill": "Spirit Bond",
+   "id": "spirit_bond",
+   "sprite": "skills/archdruid/spirit_bond.png",
+   "source": "abilities/13_late_game/archdruid_02_spirit_bond.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ARCHDRUID",
+   "class_name": "Archdruid",
+   "skill": "Thorn Armor",
+   "id": "thorn_armor",
+   "sprite": "skills/archdruid/thorn_armor.png",
+   "source": "abilities/13_late_game/archdruid_03_thorn_armor.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ARCHDRUID",
+   "class_name": "Archdruid",
+   "skill": "Ancient Growth",
+   "id": "ancient_growth",
+   "sprite": "skills/archdruid/ancient_growth.png",
+   "source": "abilities/13_late_game/archdruid_04_ancient_growth.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ARCHDRUID",
+   "class_name": "Archdruid",
+   "skill": "Gaia's Judgment",
+   "id": "gaias_judgment",
+   "sprite": "skills/archdruid/gaias_judgment.png",
+   "source": "abilities/13_late_game/archdruid_05_gaias_judgment.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "TYCOON",
+   "class_name": "Tycoon",
+   "skill": "Infinite Wealth",
+   "id": "infinite_wealth",
+   "sprite": "skills/tycoon/infinite_wealth.png",
+   "source": "abilities/13_late_game/tycoon_01_infinite_wealth.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "TYCOON",
+   "class_name": "Tycoon",
+   "skill": "Golden Barrier",
+   "id": "golden_barrier",
+   "sprite": "skills/tycoon/golden_barrier.png",
+   "source": "abilities/13_late_game/tycoon_02_golden_barrier.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "TYCOON",
+   "class_name": "Tycoon",
+   "skill": "Bribe",
+   "id": "bribe",
+   "sprite": "skills/tycoon/bribe.png",
+   "source": "abilities/13_new_classes/merchant_02_bribe.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "TYCOON",
+   "class_name": "Tycoon",
+   "skill": "Market Crash",
+   "id": "market_crash",
+   "sprite": "skills/tycoon/market_crash.png",
+   "source": "abilities/13_late_game/tycoon_03_market_crash.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "TYCOON",
+   "class_name": "Tycoon",
+   "skill": "Zeni Storm",
+   "id": "zeni_storm",
+   "sprite": "skills/tycoon/zeni_storm.png",
+   "source": "abilities/13_new_classes/merchant_01_gold_throw.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "ARCHMAGE",
+   "class_name": "Archmage",
+   "skill": "Arcane Mastery",
+   "id": "arcane_mastery",
+   "sprite": "skills/archmage/arcane_mastery.png",
+   "source": "abilities/13_late_game/archmage_01_arcane_mastery.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ARCHMAGE",
+   "class_name": "Archmage",
+   "skill": "Time Dilation",
+   "id": "time_dilation",
+   "sprite": "skills/archmage/time_dilation.png",
+   "source": "abilities/13_late_game/archmage_02_time_dilation.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ARCHMAGE",
+   "class_name": "Archmage",
+   "skill": "Mana Shield",
+   "id": "mana_shield",
+   "sprite": "skills/archmage/mana_shield.png",
+   "source": "abilities/13_late_game/archmage_03_mana_shield.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ARCHMAGE",
+   "class_name": "Archmage",
+   "skill": "Reality Warp",
+   "id": "reality_warp",
+   "sprite": "skills/archmage/reality_warp.png",
+   "source": "abilities/10_classes/apprentice_09_time_warp.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "ARCHMAGE",
+   "class_name": "Archmage",
+   "skill": "Arcane Rain",
+   "id": "arcane_rain",
+   "sprite": "skills/archmage/arcane_rain.png",
+   "source": "abilities/13_late_game/archmage_04_arcane_rain.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ARCHMAGE",
+   "class_name": "Archmage",
+   "skill": "Mana Surge",
+   "id": "mana_surge",
+   "sprite": "skills/archmage/mana_surge.png",
+   "source": "abilities/10_classes/apprentice_08_arcane_missiles.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "ARCHMAGE",
+   "class_name": "Archmage",
+   "skill": "Singularity",
+   "id": "singularity",
+   "sprite": "skills/archmage/singularity.png",
+   "source": "abilities/13_late_game/archmage_05_singularity.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "VOIDWALKER",
+   "class_name": "Voidwalker",
+   "skill": "Void Bolt",
+   "id": "void_bolt",
+   "sprite": "skills/voidwalker/void_bolt.png",
+   "source": "abilities/13_late_game/voidwalker_b_01_void_bolt.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "VOIDWALKER",
+   "class_name": "Voidwalker",
+   "skill": "Void Barrier",
+   "id": "void_barrier",
+   "sprite": "skills/voidwalker/void_barrier.png",
+   "source": "abilities/13_late_game/voidwalker_b_02_void_barrier.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "VOIDWALKER",
+   "class_name": "Voidwalker",
+   "skill": "Essence Drain",
+   "id": "essence_drain",
+   "sprite": "skills/voidwalker/essence_drain.png",
+   "source": "abilities/13_late_game/voidwalker_b_03_essence_drain.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "VOIDWALKER",
+   "class_name": "Voidwalker",
+   "skill": "Dimensional Rift",
+   "id": "dimensional_rift",
+   "sprite": "skills/voidwalker/dimensional_rift.png",
+   "source": "abilities/13_late_game/voidwalker_b_04_dimensional_rift.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "VOIDWALKER",
+   "class_name": "Voidwalker",
+   "skill": "Abyssal Grasp",
+   "id": "abyssal_grasp",
+   "sprite": "skills/voidwalker/abyssal_grasp.png",
+   "source": "abilities/13_late_game/voidwalker_b_05_abyssal_grasp.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "VOIDWALKER",
+   "class_name": "Voidwalker",
+   "skill": "Entropy Wave",
+   "id": "entropy_wave",
+   "sprite": "skills/voidwalker/entropy_wave.png",
+   "source": "abilities/13_late_game/voidwalker_a_05_entropy_wave.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "VOIDWALKER",
+   "class_name": "Voidwalker",
+   "skill": "Oblivion",
+   "id": "oblivion",
+   "sprite": "skills/voidwalker/oblivion.png",
+   "source": "abilities/13_late_game/voidwalker_b_06_singularity.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "TEMPLAR",
+   "class_name": "Templar",
+   "skill": "Holy Protection",
+   "id": "holy_protection",
+   "sprite": "skills/templar/holy_protection.png",
+   "source": "abilities/13_late_game/templar_01_holy_protection.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "TEMPLAR",
+   "class_name": "Templar",
+   "skill": "Judgment Strike",
+   "id": "judgment_strike",
+   "sprite": "skills/templar/judgment_strike.png",
+   "source": "abilities/10_classes/acolyte_03_divine_judgment.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "TEMPLAR",
+   "class_name": "Templar",
+   "skill": "Divine Aura",
+   "id": "divine_aura",
+   "sprite": "skills/templar/divine_aura.png",
+   "source": "abilities/13_late_game/templar_02_divine_aura.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "TEMPLAR",
+   "class_name": "Templar",
+   "skill": "Retribution Aura",
+   "id": "retribution_aura",
+   "sprite": "skills/templar/retribution_aura.png",
+   "source": "abilities/13_late_game/templar_03_retribution_aura.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "TEMPLAR",
+   "class_name": "Templar",
+   "skill": "Sacred Ground",
+   "id": "sacred_ground",
+   "sprite": "skills/templar/sacred_ground.png",
+   "source": "abilities/10_classes/paladin_03_consecration.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "TEMPLAR",
+   "class_name": "Templar",
+   "skill": "Heavenly Sanctuary",
+   "id": "heavenly_sanctuary",
+   "sprite": "skills/templar/heavenly_sanctuary.png",
+   "source": "abilities/13_late_game/templar_04_heavenly_sanctuary.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "TEMPLAR",
+   "class_name": "Templar",
+   "skill": "Divine Intervention",
+   "id": "divine_intervention",
+   "sprite": "skills/templar/divine_intervention.png",
+   "source": "abilities/13_late_game/templar_05_divine_intervention.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "NIGHTBLADE",
+   "class_name": "Nightblade",
+   "skill": "Shadow Dance",
+   "id": "shadow_dance",
+   "sprite": "skills/nightblade/shadow_dance.png",
+   "source": "abilities/9_advanced/kage_02_phantom_step.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "NIGHTBLADE",
+   "class_name": "Nightblade",
+   "skill": "Deadly Toxins",
+   "id": "deadly_toxins",
+   "sprite": "skills/nightblade/deadly_toxins.png",
+   "source": "abilities/13_new_classes/ninja_04_poison_kunai.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "NIGHTBLADE",
+   "class_name": "Nightblade",
+   "skill": "Shadow Clone",
+   "id": "shadow_clone",
+   "sprite": "skills/nightblade/shadow_clone.png",
+   "source": "abilities/13_new_classes/ninja_03_shadow_clone_jutsu.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "NIGHTBLADE",
+   "class_name": "Nightblade",
+   "skill": "Eviscerate",
+   "id": "eviscerate",
+   "sprite": "skills/nightblade/eviscerate.png",
+   "source": "abilities/10_classes/scout_03_assassinate.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "NIGHTBLADE",
+   "class_name": "Nightblade",
+   "skill": "Eclipse",
+   "id": "eclipse",
+   "sprite": "skills/nightblade/eclipse.png",
+   "source": "abilities/13_new_classes/ninja_02_final_eclipse.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "ZENMASTER",
+   "class_name": "Zenmaster",
+   "skill": "Perfect Strike",
+   "id": "perfect_strike",
+   "sprite": "skills/zenmaster/perfect_strike.png",
+   "source": "abilities/13_new_classes/monk_01_palm_strike.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "ZENMASTER",
+   "class_name": "Zenmaster",
+   "skill": "Focused Meditation",
+   "id": "focused_meditation",
+   "sprite": "skills/zenmaster/focused_meditation.png",
+   "source": "abilities/13_new_classes/monk_05_meditation.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "ZENMASTER",
+   "class_name": "Zenmaster",
+   "skill": "Ethereal Dodge",
+   "id": "ethereal_dodge",
+   "sprite": "skills/zenmaster/ethereal_dodge.png",
+   "source": "abilities/13_late_game/zenmaster_02_ethereal_dodge.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "ZENMASTER",
+   "class_name": "Zenmaster",
+   "skill": "Serene Impact",
+   "id": "serene_impact",
+   "sprite": "skills/zenmaster/serene_impact.png",
+   "source": "abilities/9_advanced/divine_fist_a_03_iron_palm.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "ZENMASTER",
+   "class_name": "Zenmaster",
+   "skill": "One With Universe",
+   "id": "one_with_universe",
+   "sprite": "skills/zenmaster/one_with_universe.png",
+   "source": "abilities/13_late_game/zenmaster_05_one_with_universe.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRAGON_GOD",
+   "class_name": "Dragon God",
+   "skill": "Dragon Breath",
+   "id": "dragon_breath",
+   "sprite": "skills/dragon_god/dragon_breath.png",
+   "source": "abilities/13_late_game/zenmaster_01_perfect_focused_meditation.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRAGON_GOD",
+   "class_name": "Dragon God",
+   "skill": "Leviathan's Bane",
+   "id": "leviathans_bane",
+   "sprite": "skills/dragon_god/leviathans_bane.png",
+   "source": "abilities/13_new_classes/dragonslayer_a_01_dragon_strike.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "DRAGON_GOD",
+   "class_name": "Dragon God",
+   "skill": "Dragonform",
+   "id": "dragonform",
+   "sprite": "skills/dragon_god/dragonform.png",
+   "source": "abilities/13_late_game/zenmaster_03_dragonform.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRAGON_GOD",
+   "class_name": "Dragon God",
+   "skill": "Apocalypse Wing",
+   "id": "apocalypse_wing",
+   "sprite": "skills/dragon_god/apocalypse_wing.png",
+   "source": "abilities/13_late_game/zenmaster_04_apocalypse_wing.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRAGON_GOD",
+   "class_name": "Dragon God",
+   "skill": "Empyreal Ward",
+   "id": "empyreal_ward",
+   "sprite": "skills/dragon_god/empyreal_ward.png",
+   "source": "abilities/13_late_game/dragon_god_02_empyreal_ward.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRAGON_GOD",
+   "class_name": "Dragon God",
+   "skill": "Soul of the Deep",
+   "id": "soul_of_the_deep",
+   "sprite": "skills/dragon_god/soul_of_the_deep.png",
+   "source": "abilities/13_late_game/dragon_god_03_soul_of_the_deep.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRAGON_GOD",
+   "class_name": "Dragon God",
+   "skill": "Dragon God's Decree",
+   "id": "dragon_gods_decree",
+   "sprite": "skills/dragon_god/dragon_gods_decree.png",
+   "source": "abilities/13_late_game/dragon_god_04_dragon_gods_decree.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRAGON_LORD",
+   "class_name": "Dragon Lord",
+   "skill": "Wyrm Call",
+   "id": "wyrm_call",
+   "sprite": "skills/dragon_lord/wyrm_call.png",
+   "source": "abilities/9_advanced/dragon_lord_a_01_wyrmlord.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRAGON_LORD",
+   "class_name": "Dragon Lord",
+   "skill": "Scale Storm",
+   "id": "scale_storm",
+   "sprite": "skills/dragon_lord/scale_storm.png",
+   "source": "abilities/9_advanced/dragon_lord_a_02_wyrm_call_scale_storm.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRAGON_LORD",
+   "class_name": "Dragon Lord",
+   "skill": "Lord's Decree",
+   "id": "lords_decree",
+   "sprite": "skills/dragon_lord/lords_decree.png",
+   "source": "abilities/9_advanced/dragon_lord_a_03_lords_decree.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRAGON_LORD",
+   "class_name": "Dragon Lord",
+   "skill": "Flight of the Wyrms",
+   "id": "flight_of_the_wyrms",
+   "sprite": "skills/dragon_lord/flight_of_the_wyrms.png",
+   "source": "abilities/9_advanced/dragon_lord_a_04_flight_of_the_wyrms.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRAGON_LORD",
+   "class_name": "Dragon Lord",
+   "skill": "Draconic Vitality",
+   "id": "draconic_vitality",
+   "sprite": "skills/dragon_lord/draconic_vitality.png",
+   "source": "abilities/9_advanced/dragon_lord_b_02_draconic_vitality.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRAGON_LORD",
+   "class_name": "Dragon Lord",
+   "skill": "Empathic Scales",
+   "id": "empathic_scales",
+   "sprite": "skills/dragon_lord/empathic_scales.png",
+   "source": "abilities/9_advanced/dragon_lord_b_03_empathic_scales.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DRAGON_LORD",
+   "class_name": "Dragon Lord",
+   "skill": "Dragon Lord's Aegis",
+   "id": "dragon_lords_aegis",
+   "sprite": "skills/dragon_lord/dragon_lords_aegis.png",
+   "source": "abilities/9_advanced/dragon_lord_b_04_dragon_lords.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "SHOGUN",
+   "class_name": "Shogun",
+   "skill": "Shoguns Order",
+   "id": "shoguns_order",
+   "sprite": "skills/shogun/shoguns_order.png",
+   "source": "abilities/9_advanced/dragon_lord_a_05_shoguns_order.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "SHOGUN",
+   "class_name": "Shogun",
+   "skill": "Iaijutsu",
+   "id": "iaijutsu",
+   "sprite": "skills/shogun/iaijutsu.png",
+   "source": "abilities/9_advanced/grand_inventor_a_03_force_field.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "SHOGUN",
+   "class_name": "Shogun",
+   "skill": "Daimyo's Authority",
+   "id": "daimyos_authority",
+   "sprite": "skills/shogun/daimyos_authority.png",
+   "source": "abilities/9_advanced/grand_inventor_a_04_daimyos_authority.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "SHOGUN",
+   "class_name": "Shogun",
+   "skill": "Empire Strike",
+   "id": "empire_strike",
+   "sprite": "skills/shogun/empire_strike.png",
+   "source": "abilities/9_advanced/dragon_lord_b_05_empire_strike.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "KAGE",
+   "class_name": "Kage",
+   "skill": "Shadow Assassination",
+   "id": "shadow_assassination",
+   "sprite": "skills/kage/shadow_assassination.png",
+   "source": "abilities/9_advanced/kage_01_shadow_assassination.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "KAGE",
+   "class_name": "Kage",
+   "skill": "Phantom Step",
+   "id": "phantom_step",
+   "sprite": "skills/kage/phantom_step.png",
+   "source": "abilities/9_advanced/kage_02_phantom_step.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "KAGE",
+   "class_name": "Kage",
+   "skill": "Poison Needle",
+   "id": "poison_needle",
+   "sprite": "skills/kage/poison_needle.png",
+   "source": "abilities/9_advanced/kage_04_poison_needle.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "KAGE",
+   "class_name": "Kage",
+   "skill": "Thousand Shadows",
+   "id": "thousand_shadows",
+   "sprite": "skills/kage/thousand_shadows.png",
+   "source": "abilities/9_advanced/kage_05_thousand_shadows.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "VIRTUOSO",
+   "class_name": "Virtuoso",
+   "skill": "Heavenly Melody",
+   "id": "heavenly_melody",
+   "sprite": "skills/virtuoso/heavenly_melody.png",
+   "source": "abilities/9_advanced/virtuoso_01_heavenly_melody.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "VIRTUOSO",
+   "class_name": "Virtuoso",
+   "skill": "War March",
+   "id": "war_march",
+   "sprite": "skills/virtuoso/war_march.png",
+   "source": "abilities/9_advanced/virtuoso_02_war_march.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "VIRTUOSO",
+   "class_name": "Virtuoso",
+   "skill": "Serenade of Peace",
+   "id": "serenade_of_peace",
+   "sprite": "skills/virtuoso/serenade_of_peace.png",
+   "source": "abilities/9_advanced/virtuoso_03_serenade_of_peace.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "VIRTUOSO",
+   "class_name": "Virtuoso",
+   "skill": "Crescendo",
+   "id": "crescendo",
+   "sprite": "skills/virtuoso/crescendo.png",
+   "source": "abilities/9_advanced/virtuoso_04_crescendo.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "VIRTUOSO",
+   "class_name": "Virtuoso",
+   "skill": "Requiem of the Void",
+   "id": "requiem_of_the_void",
+   "sprite": "skills/virtuoso/requiem_of_the_void.png",
+   "source": "abilities/9_advanced/virtuoso_05_requiem_of_the_void.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "GRAND_INVENTOR",
+   "class_name": "Grand Inventor",
+   "skill": "Plasma Cannon",
+   "id": "plasma_cannon",
+   "sprite": "skills/grand_inventor/plasma_cannon.png",
+   "source": "abilities/9_advanced/grand_inventor_a_02_plasma_cannon.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "GRAND_INVENTOR",
+   "class_name": "Grand Inventor",
+   "skill": "Force Field",
+   "id": "force_field",
+   "sprite": "skills/grand_inventor/force_field.png",
+   "source": "abilities/9_advanced/grand_inventor_b_02_plasma_force_field.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "GRAND_INVENTOR",
+   "class_name": "Grand Inventor",
+   "skill": "Auto-Turret",
+   "id": "auto_turret",
+   "sprite": "skills/grand_inventor/auto_turret.png",
+   "source": "abilities/9_advanced/grand_inventor_b_03_auto_turret.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "GRAND_INVENTOR",
+   "class_name": "Grand Inventor",
+   "skill": "Overclock",
+   "id": "overclock",
+   "sprite": "skills/grand_inventor/overclock.png",
+   "source": "abilities/9_advanced/grand_inventor_b_04_overclock.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "GRAND_INVENTOR",
+   "class_name": "Grand Inventor",
+   "skill": "Orbital Strike",
+   "id": "orbital_strike",
+   "sprite": "skills/grand_inventor/orbital_strike.png",
+   "source": "abilities/9_advanced/grand_inventor_b_05_orbital_strike.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DIVINE_FIST",
+   "class_name": "Divine Fist",
+   "skill": "Star Shatterer",
+   "id": "star_shatterer",
+   "sprite": "skills/divine_fist/star_shatterer.png",
+   "source": "abilities/9_advanced/divine_fist_a_02_star_shatterer.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DIVINE_FIST",
+   "class_name": "Divine Fist",
+   "skill": "Iron Palm",
+   "id": "iron_palm",
+   "sprite": "skills/divine_fist/iron_palm.png",
+   "source": "abilities/9_advanced/divine_fist_a_03_iron_palm.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DIVINE_FIST",
+   "class_name": "Divine Fist",
+   "skill": "Heavenly Step",
+   "id": "heavenly_step",
+   "sprite": "skills/divine_fist/heavenly_step.png",
+   "source": "abilities/9_advanced/divine_fist_a_04_heavenly_step.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DIVINE_FIST",
+   "class_name": "Divine Fist",
+   "skill": "Eight Gates",
+   "id": "eight_gates",
+   "sprite": "skills/divine_fist/eight_gates.png",
+   "source": "abilities/9_advanced/divine_fist_a_05_eight_gates.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "REAPER",
+   "class_name": "Reaper",
+   "skill": "Soul Reap",
+   "id": "soul_reap",
+   "sprite": "skills/reaper/soul_reap.png",
+   "source": "abilities/9_advanced/reaper_01_soul_harvest.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "REAPER",
+   "class_name": "Reaper",
+   "skill": "Death Mark",
+   "id": "death_mark",
+   "sprite": "skills/reaper/death_mark.png",
+   "source": "abilities/9_advanced/reaper_02_death_mark.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "REAPER",
+   "class_name": "Reaper",
+   "skill": "Soul Shield",
+   "id": "soul_shield",
+   "sprite": "skills/reaper/soul_shield.png",
+   "source": "abilities/9_advanced/reaper_03_grim_reaping.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "REAPER",
+   "class_name": "Reaper",
+   "skill": "Grim Reaping",
+   "id": "grim_reaping",
+   "sprite": "skills/reaper/grim_reaping.png",
+   "source": "abilities/9_advanced/god_hand_b_02_soul_reaping.png",
+   "substitute": false,
+   "note": "dedicated art 2026-10-12 (owner sheet 1)"
+  },
+  {
+   "class": "GOD_HAND",
+   "class_name": "God Hand",
+   "skill": "Iron Fist",
+   "id": "iron_fist",
+   "sprite": "skills/god_hand/iron_fist.png",
+   "source": "abilities/9_advanced/god_hand_a_01_iron_fist.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "GOD_HAND",
+   "class_name": "God Hand",
+   "skill": "Pressure Point",
+   "id": "pressure_point",
+   "sprite": "skills/god_hand/pressure_point.png",
+   "source": "abilities/9_advanced/god_hand_a_02_pressure_point.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "GOD_HAND",
+   "class_name": "God Hand",
+   "skill": "Ki Blast",
+   "id": "ki_blast",
+   "sprite": "skills/god_hand/ki_blast.png",
+   "source": "abilities/9_advanced/god_hand_a_03_ki_blast.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "GOD_HAND",
+   "class_name": "God Hand",
+   "skill": "Meditation",
+   "id": "meditation",
+   "sprite": "skills/god_hand/meditation.png",
+   "source": "abilities/9_advanced/god_hand_a_04_soul_meditation.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DEATH_LORD",
+   "class_name": "Death Lord",
+   "skill": "Soul Reaping",
+   "id": "soul_reaping",
+   "sprite": "skills/death_lord/soul_reaping.png",
+   "source": "abilities/9_advanced/god_hand_b_02_soul_reaping.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DEATH_LORD",
+   "class_name": "Death Lord",
+   "skill": "Raise Dead",
+   "id": "raise_dead",
+   "sprite": "skills/death_lord/raise_dead.png",
+   "source": "abilities/9_advanced/god_hand_a_05_raise_dead.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DEATH_LORD",
+   "class_name": "Death Lord",
+   "skill": "Death Aura",
+   "id": "death_aura",
+   "sprite": "skills/death_lord/death_aura.png",
+   "source": "abilities/9_advanced/god_hand_b_04_death_aura.png",
+   "substitute": false,
+   "note": ""
+  },
+  {
+   "class": "DEATH_LORD",
+   "class_name": "Death Lord",
+   "skill": "Soul Tether",
+   "id": "soul_tether",
+   "sprite": "skills/death_lord/soul_tether.png",
+   "source": "abilities/9_advanced/god_hand_b_05_soul_tether.png",
+   "substitute": false,
+   "note": ""
+  }
+ ],
+ "combos": [
+  {
+   "id": "spell_blade",
+   "name": "Spell Blade",
+   "sprite": "combos/spell_blade.png"
+  },
+  {
+   "id": "dual_strike",
+   "name": "Dual Strike",
+   "sprite": "combos/dual_strike.png"
+  },
+  {
+   "id": "divine_intervention",
+   "name": "Divine Intervention",
+   "sprite": "combos/divine_intervention.png"
+  }
+ ],
+ "summons": [
+  {
+   "archetype": "TANK",
+   "path": "iron_wall",
+   "sprite": "summons/tank/iron_wall.png",
+   "kind": "path"
+  },
+  {
+   "archetype": "TANK",
+   "path": "guardian",
+   "sprite": "summons/tank/guardian.png",
+   "kind": "path"
+  },
+  {
+   "archetype": "TANK",
+   "path": "counter",
+   "sprite": "summons/tank/counter.png",
+   "kind": "path"
+  },
+  {
+   "archetype": "TANK",
+   "path": "archetype_icon",
+   "sprite": "summons/tank/archetype_icon.png",
+   "kind": "archetype"
+  },
+  {
+   "archetype": "BRUTE",
+   "path": "berserker",
+   "sprite": "summons/brute/berserker.png",
+   "kind": "path"
+  },
+  {
+   "archetype": "BRUTE",
+   "path": "executioner",
+   "sprite": "summons/brute/executioner.png",
+   "kind": "path"
+  },
+  {
+   "archetype": "BRUTE",
+   "path": "whirlwind",
+   "sprite": "summons/brute/whirlwind.png",
+   "kind": "path"
+  },
+  {
+   "archetype": "BRUTE",
+   "path": "archetype_icon",
+   "sprite": "summons/brute/archetype_icon.png",
+   "kind": "archetype"
+  },
+  {
+   "archetype": "MAGE",
+   "path": "elemental",
+   "sprite": "summons/mage/elemental.png",
+   "kind": "path"
+  },
+  {
+   "archetype": "MAGE",
+   "path": "arcane",
+   "sprite": "summons/mage/arcane.png",
+   "kind": "path"
+  },
+  {
+   "archetype": "MAGE",
+   "path": "temporal",
+   "sprite": "summons/mage/temporal.png",
+   "kind": "path"
+  },
+  {
+   "archetype": "MAGE",
+   "path": "archetype_icon",
+   "sprite": "summons/mage/archetype_icon.png",
+   "kind": "archetype"
+  },
+  {
+   "archetype": "STALKER",
+   "path": "shadow",
+   "sprite": "summons/stalker/shadow.png",
+   "kind": "path"
+  },
+  {
+   "archetype": "STALKER",
+   "path": "venom",
+   "sprite": "summons/stalker/venom.png",
+   "kind": "path"
+  },
+  {
+   "archetype": "STALKER",
+   "path": "evasion",
+   "sprite": "summons/stalker/evasion.png",
+   "kind": "path"
+  },
+  {
+   "archetype": "STALKER",
+   "path": "archetype_icon",
+   "sprite": "summons/stalker/archetype_icon.png",
+   "kind": "archetype"
+  },
+  {
+   "archetype": "SUPPORT",
+   "path": "healing",
+   "sprite": "summons/support/healing.png",
+   "kind": "path"
+  },
+  {
+   "archetype": "SUPPORT",
+   "path": "blessing",
+   "sprite": "summons/support/blessing.png",
+   "kind": "path"
+  },
+  {
+   "archetype": "SUPPORT",
+   "path": "nature",
+   "sprite": "summons/support/nature.png",
+   "kind": "path"
+  },
+  {
+   "archetype": "SUPPORT",
+   "path": "archetype_icon",
+   "sprite": "summons/support/archetype_icon.png",
+   "kind": "archetype"
+  },
+  {
+   "archetype": "TANK",
+   "path": "iron_wall_n1",
+   "sprite": "summons/tank/iron_wall_n1.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "TANK",
+   "path": "iron_wall_n2",
+   "sprite": "summons/tank/iron_wall_n2.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "TANK",
+   "path": "iron_wall_n3",
+   "sprite": "summons/tank/iron_wall_n3.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "TANK",
+   "path": "iron_wall_n4",
+   "sprite": "summons/tank/iron_wall_n4.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "TANK",
+   "path": "iron_wall_n5",
+   "sprite": "summons/tank/iron_wall_n5.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "TANK",
+   "path": "guardian_n1",
+   "sprite": "summons/tank/guardian_n1.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "TANK",
+   "path": "guardian_n2",
+   "sprite": "summons/tank/guardian_n2.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "TANK",
+   "path": "guardian_n3",
+   "sprite": "summons/tank/guardian_n3.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "TANK",
+   "path": "guardian_n4",
+   "sprite": "summons/tank/guardian_n4.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "TANK",
+   "path": "guardian_n5",
+   "sprite": "summons/tank/guardian_n5.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "TANK",
+   "path": "counter_n1",
+   "sprite": "summons/tank/counter_n1.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "TANK",
+   "path": "counter_n2",
+   "sprite": "summons/tank/counter_n2.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "TANK",
+   "path": "counter_n3",
+   "sprite": "summons/tank/counter_n3.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "TANK",
+   "path": "counter_n4",
+   "sprite": "summons/tank/counter_n4.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "TANK",
+   "path": "counter_n5",
+   "sprite": "summons/tank/counter_n5.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "BRUTE",
+   "path": "berserker_n1",
+   "sprite": "summons/brute/berserker_n1.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "BRUTE",
+   "path": "berserker_n2",
+   "sprite": "summons/brute/berserker_n2.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "BRUTE",
+   "path": "berserker_n3",
+   "sprite": "summons/brute/berserker_n3.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "BRUTE",
+   "path": "berserker_n4",
+   "sprite": "summons/brute/berserker_n4.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "BRUTE",
+   "path": "berserker_n5",
+   "sprite": "summons/brute/berserker_n5.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "BRUTE",
+   "path": "executioner_n1",
+   "sprite": "summons/brute/executioner_n1.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "BRUTE",
+   "path": "executioner_n2",
+   "sprite": "summons/brute/executioner_n2.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "BRUTE",
+   "path": "executioner_n3",
+   "sprite": "summons/brute/executioner_n3.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "BRUTE",
+   "path": "executioner_n4",
+   "sprite": "summons/brute/executioner_n4.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "BRUTE",
+   "path": "executioner_n5",
+   "sprite": "summons/brute/executioner_n5.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "BRUTE",
+   "path": "whirlwind_n1",
+   "sprite": "summons/brute/whirlwind_n1.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "BRUTE",
+   "path": "whirlwind_n2",
+   "sprite": "summons/brute/whirlwind_n2.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "BRUTE",
+   "path": "whirlwind_n3",
+   "sprite": "summons/brute/whirlwind_n3.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "BRUTE",
+   "path": "whirlwind_n4",
+   "sprite": "summons/brute/whirlwind_n4.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "BRUTE",
+   "path": "whirlwind_n5",
+   "sprite": "summons/brute/whirlwind_n5.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "MAGE",
+   "path": "elemental_n1",
+   "sprite": "summons/mage/elemental_n1.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "MAGE",
+   "path": "elemental_n2",
+   "sprite": "summons/mage/elemental_n2.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "MAGE",
+   "path": "elemental_n3",
+   "sprite": "summons/mage/elemental_n3.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "MAGE",
+   "path": "elemental_n4",
+   "sprite": "summons/mage/elemental_n4.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "MAGE",
+   "path": "elemental_n5",
+   "sprite": "summons/mage/elemental_n5.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "MAGE",
+   "path": "arcane_n1",
+   "sprite": "summons/mage/arcane_n1.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "MAGE",
+   "path": "arcane_n2",
+   "sprite": "summons/mage/arcane_n2.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "MAGE",
+   "path": "arcane_n3",
+   "sprite": "summons/mage/arcane_n3.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "MAGE",
+   "path": "arcane_n4",
+   "sprite": "summons/mage/arcane_n4.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "MAGE",
+   "path": "arcane_n5",
+   "sprite": "summons/mage/arcane_n5.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "MAGE",
+   "path": "temporal_n1",
+   "sprite": "summons/mage/temporal_n1.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "MAGE",
+   "path": "temporal_n2",
+   "sprite": "summons/mage/temporal_n2.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "MAGE",
+   "path": "temporal_n3",
+   "sprite": "summons/mage/temporal_n3.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "MAGE",
+   "path": "temporal_n4",
+   "sprite": "summons/mage/temporal_n4.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "MAGE",
+   "path": "temporal_n5",
+   "sprite": "summons/mage/temporal_n5.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "STALKER",
+   "path": "shadow_n1",
+   "sprite": "summons/stalker/shadow_n1.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "STALKER",
+   "path": "shadow_n2",
+   "sprite": "summons/stalker/shadow_n2.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "STALKER",
+   "path": "shadow_n3",
+   "sprite": "summons/stalker/shadow_n3.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "STALKER",
+   "path": "shadow_n4",
+   "sprite": "summons/stalker/shadow_n4.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "STALKER",
+   "path": "shadow_n5",
+   "sprite": "summons/stalker/shadow_n5.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "STALKER",
+   "path": "venom_n1",
+   "sprite": "summons/stalker/venom_n1.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "STALKER",
+   "path": "venom_n2",
+   "sprite": "summons/stalker/venom_n2.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "STALKER",
+   "path": "venom_n3",
+   "sprite": "summons/stalker/venom_n3.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "STALKER",
+   "path": "venom_n4",
+   "sprite": "summons/stalker/venom_n4.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "STALKER",
+   "path": "venom_n5",
+   "sprite": "summons/stalker/venom_n5.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "STALKER",
+   "path": "evasion_n1",
+   "sprite": "summons/stalker/evasion_n1.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "STALKER",
+   "path": "evasion_n2",
+   "sprite": "summons/stalker/evasion_n2.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "STALKER",
+   "path": "evasion_n3",
+   "sprite": "summons/stalker/evasion_n3.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "STALKER",
+   "path": "evasion_n4",
+   "sprite": "summons/stalker/evasion_n4.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "STALKER",
+   "path": "evasion_n5",
+   "sprite": "summons/stalker/evasion_n5.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "SUPPORT",
+   "path": "healing_n1",
+   "sprite": "summons/support/healing_n1.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "SUPPORT",
+   "path": "healing_n2",
+   "sprite": "summons/support/healing_n2.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "SUPPORT",
+   "path": "healing_n3",
+   "sprite": "summons/support/healing_n3.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "SUPPORT",
+   "path": "healing_n4",
+   "sprite": "summons/support/healing_n4.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "SUPPORT",
+   "path": "healing_n5",
+   "sprite": "summons/support/healing_n5.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "SUPPORT",
+   "path": "blessing_n1",
+   "sprite": "summons/support/blessing_n1.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "SUPPORT",
+   "path": "blessing_n2",
+   "sprite": "summons/support/blessing_n2.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "SUPPORT",
+   "path": "blessing_n3",
+   "sprite": "summons/support/blessing_n3.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "SUPPORT",
+   "path": "blessing_n4",
+   "sprite": "summons/support/blessing_n4.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "SUPPORT",
+   "path": "blessing_n5",
+   "sprite": "summons/support/blessing_n5.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "SUPPORT",
+   "path": "nature_n1",
+   "sprite": "summons/support/nature_n1.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "SUPPORT",
+   "path": "nature_n2",
+   "sprite": "summons/support/nature_n2.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "SUPPORT",
+   "path": "nature_n3",
+   "sprite": "summons/support/nature_n3.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "SUPPORT",
+   "path": "nature_n4",
+   "sprite": "summons/support/nature_n4.png",
+   "kind": "node"
+  },
+  {
+   "archetype": "SUPPORT",
+   "path": "nature_n5",
+   "sprite": "summons/support/nature_n5.png",
+   "kind": "node"
+  }
+ ],
+ "monsters": [
+  {
+   "id": "kit_1",
+   "sprite": "monsters/kit_1.png"
+  },
+  {
+   "id": "kit_2",
+   "sprite": "monsters/kit_2.png"
+  },
+  {
+   "id": "kit_3",
+   "sprite": "monsters/kit_3.png"
+  },
+  {
+   "id": "kit_4",
+   "sprite": "monsters/kit_4.png"
+  },
+  {
+   "id": "kit_5",
+   "sprite": "monsters/kit_5.png"
+  },
+  {
+   "id": "kit_boss",
+   "sprite": "monsters/kits/kit_boss.png",
+   "kind": "kit",
+   "note": "2026-10-12 (owner sheet 4)"
+  },
+  {
+   "id": "kit_spellbreaker",
+   "sprite": "monsters/kits/kit_spellbreaker.png",
+   "kind": "kit",
+   "note": "2026-10-12 (owner sheet 4)"
+  },
+  {
+   "id": "kit_phalanx",
+   "sprite": "monsters/kits/kit_phalanx.png",
+   "kind": "kit",
+   "note": "2026-10-12 (owner sheet 4)"
+  },
+  {
+   "id": "kit_nemesis",
+   "sprite": "monsters/kits/kit_nemesis.png",
+   "kind": "kit",
+   "note": "2026-10-12 (owner sheet 4)"
+  },
+  {
+   "id": "kit_berserker_mob",
+   "sprite": "monsters/kits/kit_berserker_mob.png",
+   "kind": "kit",
+   "note": "2026-10-12 (owner sheet 4)"
+  },
+  {
+   "id": "kit_void_walker",
+   "sprite": "monsters/kits/kit_void_walker.png",
+   "kind": "kit",
+   "note": "2026-10-12 (owner sheet 4)"
+  },
+  {
+   "id": "kit_colossus",
+   "sprite": "monsters/kits/kit_colossus.png",
+   "kind": "kit",
+   "note": "2026-10-12 (owner sheet 4)"
+  }
+ ],
+ "items": [
+  {
+   "id": "key",
+   "sprite": "items/key.png"
+  },
+  {
+   "id": "spellbook",
+   "sprite": "items/spellbook.png"
+  },
+  {
+   "id": "scroll",
+   "sprite": "items/scroll.png"
+  },
+  {
+   "id": "red_leaf",
+   "sprite": "items/red_leaf.png"
+  },
+  {
+   "id": "tech_core",
+   "sprite": "items/tech_core.png"
+  },
+  {
+   "id": "crystal",
+   "sprite": "items/crystal.png"
+  },
+  {
+   "id": "dragon_inventors_blueprint",
+   "sprite": "items/dragon_inventors_blueprint.png"
+  },
+  {
+   "id": "saintly_rosary",
+   "sprite": "items/saintly_rosary.png"
+  },
+  {
+   "id": "phylactery_relic",
+   "sprite": "items/phylactery_relic.png"
+  },
+  {
+   "id": "archmages_staff",
+   "sprite": "items/archmages_staff.png"
+  }
+ ],
+ "sockets": [
+  {
+   "id": "divine_scale_socket",
+   "sprite": "sockets/divine_scale_socket.png"
+  },
+  {
+   "id": "lich_phylactery_socket",
+   "sprite": "sockets/lich_phylactery_socket.png"
+  },
+  {
+   "id": "prismatic_rune_socket",
+   "sprite": "sockets/prismatic_rune_socket.png"
+  }
+ ],
+ "unassigned": [
+  "unassigned/abilities/13_late_game__dragon_god_01_one_with_universe.png",
+  "unassigned/abilities/13_late_game__inventory_01_phylactery_relic.png",
+  "unassigned/abilities/13_late_game__inventory_02_saintly_rosary.png",
+  "unassigned/abilities/13_late_game__voidwalker_a_01_void_bolt.png",
+  "unassigned/abilities/13_late_game__voidwalker_a_02_essence_drain.png",
+  "unassigned/abilities/13_late_game__voidwalker_a_03_dimensional_rift.png",
+  "unassigned/abilities/13_late_game__voidwalker_a_04_abyssal_grasp.png",
+  "unassigned/abilities/13_new_classes__druid_01_natur_charge.png",
+  "unassigned/abilities/13_new_classes__warlock_03_soul_have.png",
+  "unassigned/abilities/9_advanced__divine_fist_a_01_divine_might.png",
+  "unassigned/abilities/9_advanced__divine_fist_b_01_star_shatterer.png",
+  "unassigned/abilities/9_advanced__divine_fist_b_02_iron_palm.png",
+  "unassigned/abilities/9_advanced__divine_fist_b_03_heavenly_step.png",
+  "unassigned/abilities/9_advanced__dragon_lord_b_01_broodmother.png",
+  "unassigned/abilities/9_advanced__god_hand_b_01_divine_martial_arts.png",
+  "unassigned/abilities/9_advanced__god_hand_b_03_raise_dead.png",
+  "unassigned/abilities/9_advanced__grand_inventor_a_01_gragon_cannon.png",
+  "unassigned/abilities/9_advanced__grand_inventor_a_05_empire_strike.png",
+  "unassigned/abilities/9_advanced__grand_inventor_b_01_hyper_tech.png",
+  "unassigned/abilities/9_advanced__kage_03_grand_music.png",
+  "unassigned/runes/large_sheet__rune_r1c1.png",
+  "unassigned/runes/large_sheet__rune_r1c2.png",
+  "unassigned/runes/large_sheet__rune_r1c3.png",
+  "unassigned/runes/large_sheet__rune_r1c4.png",
+  "unassigned/runes/large_sheet__rune_r1c5.png",
+  "unassigned/runes/large_sheet__rune_r1c7.png",
+  "unassigned/runes/large_sheet__rune_r2c5.png",
+  "unassigned/runes/large_sheet__rune_r2c6.png",
+  "unassigned/runes/large_sheet__rune_r2c7.png",
+  "unassigned/runes/large_sheet__rune_r2c8.png",
+  "unassigned/runes/large_sheet__rune_r3c5.png",
+  "unassigned/runes/large_sheet__rune_r3c8.png",
+  "unassigned/runes/large_sheet__rune_r4c4.png",
+  "unassigned/runes/large_sheet__rune_r4c5.png",
+  "unassigned/runes/large_sheet__rune_r5c5.png",
+  "unassigned/runes/small_sheet__rune_r1c2.png",
+  "unassigned/runes/small_sheet__rune_r1c5.png",
+  "unassigned/runes/small_sheet__rune_r1c8.png",
+  "unassigned/runes/small_sheet__rune_r2c3.png",
+  "unassigned/runes/small_sheet__rune_r2c6.png",
+  "unassigned/runes/small_sheet__rune_r3c1.png",
+  "unassigned/runes/small_sheet__rune_r3c4.png",
+  "unassigned/runes/small_sheet__rune_r3c7.png",
+  "unassigned/runes/small_sheet__rune_r4c2.png",
+  "unassigned/runes/small_sheet__rune_r4c5.png",
+  "unassigned/runes/small_sheet__rune_r4c8.png",
+  "unassigned/runes/small_sheet__rune_r5c3.png",
+  "unassigned/runes/small_sheet__rune_r5c6.png",
+  "unassigned/runes/small_sheet__rune_r6c1.png",
+  "unassigned/runes/small_sheet__rune_r6c4.png",
+  "unassigned/runes/small_sheet__rune_r6c7.png",
+  "unassigned/extras/13_late_game__inv_key.png",
+  "unassigned/extras/13_late_game__inv_saintly_rosary.png",
+  "unassigned/extras/13_late_game__special_divine_scale_socket.png",
+  "unassigned/extras/13_late_game__special_lich_phylactery_socket.png",
+  "unassigned/extras/9_advanced__inv_key.png"
+ ]
+}

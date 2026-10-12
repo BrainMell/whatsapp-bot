@@ -395,6 +395,32 @@ function getActiveAbility(summon) {
   return bestActive;
 }
 
+// ── v3 node icons (2026-10-12 asset pack): every node gets its dedicated
+// sprite path from the v3 pack (owner sheets 2-4). N1 shares the path icon
+// (alias <path>_n1.png), N2-N5 have dedicated art. Consumed by renderers via
+// skillAssets.getSummonNodeArt(archetype, pathKey, nodeNumber).
+const __PATH_SLUGS = {
+  TANK: ['iron_wall', 'guardian', 'counter'],
+  BRUTE: ['berserker', 'executioner', 'whirlwind'],
+  MAGE: ['elemental', 'arcane', 'temporal'],
+  STALKER: ['shadow', 'venom', 'evasion'],
+  SUPPORT: ['healing', 'blessing', 'nature'],
+};
+for (const [__arch, __paths] of Object.entries(SUMMON_SKILL_TREES)) {
+  const __slugs = __PATH_SLUGS[__arch];
+  if (!__slugs) continue;
+  ['A', 'B', 'C'].forEach((__pk, __pi) => {
+    const __pd = __paths[__pk];
+    if (!__pd || !__pd.nodes) return;
+    for (let __n = 1; __n <= 5; __n++) {
+      const __nd = __pd.nodes[`${__pk}${__n}`];
+      if (__nd && !__nd.icon) {
+        __nd.icon = `summons/${__arch.toLowerCase()}/${__slugs[__pi]}_n${__n}.png`;
+      }
+    }
+  });
+}
+
 module.exports = {
   SUMMON_SKILL_TREES,
   getSkillTree,
