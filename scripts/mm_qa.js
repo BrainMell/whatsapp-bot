@@ -184,7 +184,7 @@ async function runPass(n) {
   QA_SOCK = sock;
 
   // ---- clean slate ----
-  await system.set(`murder_mm_games_v2_${BOT_ID === 'qa-bot' ? 'global' : BOT_ID}`, {});
+  await system.set(`murder_mm_games_v2_qa-bot`, {});
   await system.set('murder_mm_games_v1', {});
   mm._internal.games.clear();
   mm._internal.ensureRehydrated();
@@ -444,7 +444,7 @@ async function runPass(n) {
   ok(await waitFor(() => mm._internal.getGame(CHAT) === null, 12000), 'H2 game cleaned up after civ win');
   ok(!mm.isSilenced(invest.jid, CHAT) && !mm.isSilenced(victimPlan.jid, CHAT), 'H3 all silences released at case close');
   ok(groupText(sock, /MYSTERY SOLVED|was the Killer/) >= 1, 'H4 finale announced');
-  const archive = await system.get(`murder_mm_archive_v2_${BOT_ID === 'qa-bot' ? 'global' : BOT_ID}`, []);
+  const archive = await system.get(`murder_mm_archive_v2_qa-bot`, []);
   ok(Array.isArray(archive) && archive.length >= 1 && archive[0].winner === 'civ', 'H5 archive written (no case number in archive)');
 
   // ---------- I. KILLER PARITY WIN ----------
@@ -521,7 +521,7 @@ async function runPass(n) {
 
   // ---------- L. PERSISTENCE HYGIENE - no internal keys ever saved ----------
   mm._internal.persistGames();
-  const savedRaw = await system.get(`murder_mm_games_v2_${BOT_ID === 'qa-bot' ? 'global' : BOT_ID}`, {});
+  const savedRaw = await system.get(`murder_mm_games_v2_qa-bot`, {});
   const savedGame = savedRaw[CHAT];
   ok(savedGame && Object.keys(savedGame).every((k) => k[0] !== '_'), 'L1 no underscore/internal keys persisted (sock, flags, stamps)');
   ok(savedGame && typeof savedGame.votes === 'object' && Array.isArray(savedGame.players), 'L2 core state still persists');

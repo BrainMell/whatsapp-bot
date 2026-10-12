@@ -71,7 +71,9 @@ function makeSock() {
   return {
     out,
     async sendMessage(jid, content) {
-      out.push({ jid: String(jid), isGroup: String(jid).endsWith('@g.us'), image: !!(content && content.image), text: (content && content.text) || '' });
+      // record BOTH text and caption - image sends ride the caption field
+      // (on-box real canvas renders cards, so captions are the message text)
+      out.push({ jid: String(jid), isGroup: String(jid).endsWith('@g.us'), image: !!(content && content.image), text: (content && (content.text || content.caption)) || '' });
       return { key: { id: 'qa' + out.length } };
     },
   };

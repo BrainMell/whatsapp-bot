@@ -221,9 +221,9 @@ async function playToEnd(sock, g, mode) {
 // ---------- main ----------
 async function main() {
   // clean slate
-  await system.set('murder_mm_games_v2_global', {});
+  await system.set('murder_mm_games_v2_qa-bot', {});
   await system.set('murder_mm_stats_v1', {});
-  await system.set('murder_mm_archive_v2_global', []);
+  await system.set('murder_mm_archive_v2_qa-bot', []);
   mm._internal.games.clear();
   mm._internal.ensureRehydrated();
 
@@ -293,9 +293,9 @@ async function main() {
     ok(shares2.every((s) => s === share2 || s === share2 + 1), `2.11 every innocent paid ~${share2} (got ${shares2.join(',')})`);
     ok(shares2.reduce((a, b) => a + b, 0) === purse, `2.12 total paid equals the purse (${purse})`);
     ok(QA_BALANCES.get(killerP2.jid) === balBefore[killerP2.jid], '2.13 caught killer paid nothing');
-    const killer = (system.get('murder_mm_games_v2_global', {})[CHATS[2]] || null);
+    const killer = (system.get('murder_mm_games_v2_qa-bot', {})[CHATS[2]] || null);
     // ledger checks
-    const arch = system.get('murder_mm_archive_v2_global', [])[0];
+    const arch = system.get('murder_mm_archive_v2_qa-bot', [])[0];
     ok(arch && arch.winner === 'civ', '2.3 archive records the civ win');
     const killerName = arch.killer;
     const killerRow = Object.values(system.get(STATS_KEY, {})).find((r) => r.name === killerName);
@@ -325,7 +325,7 @@ async function main() {
     g = await playToEnd(sock, g, 'dumb');
     ok(!g || g.phase === 'ENDED', '3.1 game reaches ENDED');
     ok(groupText(sock, /THE KILLER WINS/), '3.2 killer win declared');
-    const arch = system.get('murder_mm_archive_v2_global', [])[0];
+    const arch = system.get('murder_mm_archive_v2_qa-bot', [])[0];
     ok(arch && arch.winner === 'killer', '3.3 archive records the killer win');
     const killerRow = Object.values(system.get(STATS_KEY, {})).find((r) => r.name === arch.killer);
     ok(killerRow && killerRow.wins === 1, '3.4 killer credited the win');
@@ -373,7 +373,7 @@ async function main() {
       const mode = i % 2 === 0 ? 'random' : (i % 4 === 1 ? 'smart' : 'dumb');
       g = await playToEnd(sock, g, mode);
       const ended = !g || g.phase === 'ENDED';
-      const arch = system.get('murder_mm_archive_v2_global', [])[0];
+      const arch = system.get('murder_mm_archive_v2_qa-bot', [])[0];
       const winnerOk = arch && (arch.winner === 'civ' || arch.winner === 'killer');
       results.push({ i, n, ended, winner: arch && arch.winner, nights: arch && arch.nights });
       ok(ended, `5.${i + 1}a loop ${i + 1} (${n}p, ${mode}) reaches ENDED`);
