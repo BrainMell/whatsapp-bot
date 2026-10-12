@@ -217,7 +217,7 @@ ok("all three parsers wired",
 ok("MIN_RESULTS gate used", engineSrc.includes("parsed.length >= aiOverview.MIN_RESULTS"));
 ok("relevance gate wired (anti-decoy)", engineSrc.includes("aiOverview.relevantEnough(query, parsed)"));
 ok("primary-backend retry on all-fail (decoys are per-request)", engineSrc.includes("gotResults = await runBackends([backends[0]]);"));
-ok("synthesis via groq + SMART model", /handleGoogleSearchCommand[\s\S]{0,6000}groq\.chat\.completions\.create\(\{[\s\S]{0,400}model: MODELS\.SMART/.test(engineSrc));
+ok("synthesis via groq + SMART model", /handleGoogleSearchCommand[\s\S]{0,6000}groq\.chat\.completions\.create\(\s*\{[\s\S]{0,400}model: MODELS\.SMART/.test(engineSrc));
 ok("synthesis failure → results-only fallback",
   engineSrc.includes("aiOverview.buildResultsOnlyMessage(query, results)") &&
   engineSrc.includes("aiOverview.buildOverviewMessage(query, answer, results)"));
@@ -282,6 +282,15 @@ console.log("\nI. collision guards");
 ok("'search' still aliased to anime search (not overridden)", /cmd:\s*'search',\s*desc:\s*'Alias for anime search\.'/.test(regSrc));
 ok("no stray google dispatch elsewhere (def + dispatch call only)", (engineSrc.match(/handleGoogleSearchCommand\(/g) || []).length === 2, "expect exactly 2: definition + dispatch");
 ok("quote with-args dispatch still intact", engineSrc.includes("lowerTxt.startsWith(\n                        `${botConfig.getPrefix().toLowerCase()} qoute `"));
+// ── J. synthesis call hygiene (live-observed Groq 400 at 13:08Z) ───────────
+console.log("\nJ. synthesis call hygiene");
+const synthAt = engineSrc.indexOf("buildSynthesisPrompt(query, results)");
+const synthWin = synthAt >= 0 ? engineSrc.slice(synthAt, synthAt + 900) : "";
+ok("synthesis call found in engine", synthWin.includes("groq.chat.completions.create"));
+const createBody = synthWin.slice(synthWin.indexOf("completions.create("), synthWin.indexOf("{ timeout: 25000 }"));
+ok("body does NOT leak 'timeout:' property (Groq 400: unsupported)", createBody.includes("completions.create(") && !createBody.includes("timeout:"));
+ok("timeout passed as per-request OPTIONS (2nd arg) instead", synthWin.includes("{ timeout: 25000 }"));
+ok("synthesis still grounded: temperature 0.2 + max_tokens 700 kept", synthWin.includes("temperature: 0.2") && synthWin.includes("max_tokens: 700"));
 
 console.log(`\n${"═".repeat(50)}\nRESULT: ${pass} pass, ${fail} fail ${fail === 0 ? "— ALL GREEN ✅" : "— FAILURES ❌"}`);
 process.exit(fail === 0 ? 0 : 1);

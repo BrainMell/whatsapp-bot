@@ -2494,16 +2494,21 @@ async function startBot(configInstance) {
         let answer = "";
         try {
           const { system, user } = aiOverview.buildSynthesisPrompt(query, results);
-          const res = await groq.chat.completions.create({
-            messages: [
-              { role: "system", content: system },
-              { role: "user", content: user },
-            ],
-            model: MODELS.SMART,
-            temperature: 0.2,
-            max_tokens: 700,
-            timeout: 25000,
-          });
+          const res = await groq.chat.completions.create(
+            {
+              messages: [
+                { role: "system", content: system },
+                { role: "user", content: user },
+              ],
+              model: MODELS.SMART,
+              temperature: 0.2,
+              max_tokens: 700,
+            },
+            // ⚠️ timeout must be the per-request OPTIONS param (2nd arg), NOT a
+            // body property — Groq API 400s with "property 'timeout' is
+            // unsupported" if it leaks into the body (live-observed 13:08Z).
+            { timeout: 25000 },
+          );
           answer = (res.choices?.[0]?.message?.content || "").trim();
         } catch (synthErr) {
           console.error("google synthesis error:", synthErr.message);
