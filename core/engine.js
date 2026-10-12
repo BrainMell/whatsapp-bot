@@ -56,6 +56,7 @@ const yts = require("yt-search");
 const ytdl = require("@distube/ytdl-core");
 const { Sticker, StickerTypes } = require("wa-sticker-formatter");
 const stickerPack = require("./utils/stickerPack"); // native WhatsApp sticker packs (.j s -p)
+const quoteCard = require("./utils/quoteCard"); // .j quote <text> → quote card image (2026-10-12)
 const { parseHTML } = require("linkedom");
 
 // ═══ 🤝 GC COEXISTENCE (owner 2026-10-07: "scrape the one-group-per-bot
@@ -2242,6 +2243,116 @@ async function startBot(configInstance) {
           text: BOT_MARKER + "⚠️ Search service busy.",
         });
       }
+    }
+
+    // 🖋️ QUOTE CARD — turn the user's text into a quote image over a photo
+    // whose keywords were pulled from the quote itself (owner 2026-10-12:
+    // "takes the text that follows and turns it into text over an
+    // appropriate image"). Rendering lives in utils/quoteCard.js; this
+    // handler only does search/download/send. If Pinterest finds nothing
+    // (or the download fails) the card still renders over a seeded
+    // gradient — the command never dies on the background.
+    // NOTE: senderJid is passed in from the dispatch site — this handler
+    // lives in the storage.run scope, where the message handler's
+    // senderJid is NOT visible (same reason sendImageSafe moved to module
+    // scope per the 💡 MEDIA PIPELINE note above).
+    async function handleQuoteImageCommand(sock, chatId, rawText, m, senderJid) {
+      await sock.sendMessage(chatId, { react: { text: "🖋️", key: m.key } });
+      try {
+        const { text: qText0, author } = quoteCard.parseQuoteInput(rawText);
+        const qText = qText0.trim();
+        if (!qText) {
+          return await sendUsage(
+            sock,
+            chatId,
+            BOT_MARKER,
+            "🖋️ QUOTE CARD",
+            "quote <text> [--by author]",
+            "quote The night is darkest before dawn --by Harvey Dent",
+            "Turn your text into a quote card image over a matching photo.",
+          );
+        }
+        if (qText.length > quoteCard.MAX_TEXT) {
+          return await sock.sendMessage(chatId, {
+            text:
+              BOT_MARKER +
+              `🖋️ that quote is too long for a card (${qText.length} characters — max ${quoteCard.MAX_TEXT}).`,
+          });
+        }
+
+        // Background: search Pinterest using the quote's own significant
+        // words ("appropriate image"), try up to 3 results, first valid
+        // download wins.
+        let bgBuffer = null;
+        try {
+          const query = quoteCard.pickBackgroundQuery(qText);
+          console.log(`🖋️ [quote] bg query: "${query}"`);
+          const urls = await searchPinterest(query, 3);
+          for (const u of urls) {
+            try {
+              const resp = await axios.get(u, {
+                responseType: "arraybuffer",
+                timeout: 12000,
+                maxContentLength: 10 * 1024 * 1024,
+                headers: { "User-Agent": "Mozilla/5.0" },
+              });
+              const b = Buffer.from(resp.data);
+              if (b.length > 3000) {
+                bgBuffer = b;
+                break;
+              }
+            } catch (dlErr) {
+              // try the next result
+            }
+          }
+        } catch (bgErr) {
+          console.log("[quote] bg search failed, gradient fallback:", bgErr.message);
+        }
+
+        const png = await quoteCard.renderQuoteCard({ text: qText, author, bgBuffer });
+        // 💡 Photo-background cards balloon to ~2.4MB as PNG (photo noise
+        // compresses terribly). JPEG q88 is 5-8× smaller → much faster
+        // WhatsApp upload, far fewer 15s upload-hang timeouts. Text stays
+        // crisp at q88. PNG fallback if sharp ever fails.
+        let sendBuf = png;
+        try {
+          sendBuf = await require("sharp")(png).jpeg({ quality: 88 }).toBuffer();
+        } catch (jErr) {
+          console.log("[quote] jpeg conversion failed, sending PNG:", jErr.message);
+        }
+        const thumb = await buildThumbnail(sendBuf);
+
+        // Same 15s upload-hang guard sendImageSafe uses.
+        const sendP = sock.sendMessage(
+          chatId,
+          {
+            image: sendBuf,
+            caption:
+              BOT_MARKER +
+              (author ? `🖋️ — _${author}_` : "🖋️"),
+            jpegThumbnail: thumb,
+          },
+          { quoted: m },
+        );
+        await Promise.race([
+          sendP,
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error("quote card upload timed out after 15000ms")),
+              15000,
+            ),
+          ),
+        ]);
+
+        await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+      } catch (err) {
+        console.error("Quote Card Error:", err.message);
+        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+        await sock.sendMessage(chatId, {
+          text: BOT_MARKER + `🖋️ couldn't render that quote: ${err.message?.slice(0, 120)}`,
+        });
+      }
+      await awardProgression(senderJid, chatId);
     }
 
     async function handleNsfwCommand(sock, chatId, query, m) {
@@ -25313,9 +25424,37 @@ Write ONE witty verdict line (max 90 chars) about their compatibility. Roast the
                       return;
                     }
 
+                    // 🖋️ Quote CARD — `.j quote <text> [--by <author>]`
+                    // Owner 2026-10-12: "Make a .j qoute that takes the text
+                    // that follows and turns it into text over an appropriate
+                    // image". With-args path renders a quote-card image (via
+                    // utils/quoteCard.js) and must be checked BEFORE the bare
+                    // random-quote block below. `qoute` is an accepted alias
+                    // (owner's own spelling). The quote text is taken from
+                    // cleanTxt (NOT lowerTxt/cmdArgs) to preserve the user's
+                    // capitalization and intentional line breaks.
+                    if (
+                      (primaryCmd === "quote" || primaryCmd === "qoute") &&
+                      cmdArgs.length > 1
+                    ) {
+                      const qRaw = cleanTxt
+                        .substring(currentPrefix.length)
+                        .trim()
+                        .replace(/^\S+\s*/, ""); // drop the command word, keep case + newlines
+                      await handleQuoteImageCommand(
+                        sock,
+                        chatId,
+                        qRaw,
+                        m,
+                        senderJid,
+                      );
+                      return;
+                    }
+
                     // Quote Command (NEW)
                     if (
-                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} quote`
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} quote` ||
+                      lowerTxt === `${botConfig.getPrefix().toLowerCase()} qoute`
                     ) {
                       await sock.sendMessage(chatId, {
                         react: { text: "📜", key: m.key },

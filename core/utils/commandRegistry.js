@@ -368,7 +368,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'motivate', desc: 'Get a motivational quote.', usage: 'motivate' },
     { cmd: 'meme', desc: 'Get a random meme from Reddit.', usage: 'meme' },
     { cmd: 'wyr', desc: 'Get a random \'Would You Rather\' question.', usage: 'wyr' },
-    { cmd: 'quote', desc: 'Get a random inspiring or famous quote.', usage: 'quote' },
+    { cmd: 'quote', desc: 'Random famous quote — or add your own text to turn it into a quote card image over a matching photo.', usage: 'quote [text] [--by author]' },
     { cmd: 'weather', desc: 'Check current weather conditions for any city.', usage: 'weather <city>' },
     { cmd: 'translate', desc: 'Translate text into a target language.', usage: 'translate [target_lang] <text>' },
     { cmd: 'crypto', desc: 'Get the current USD price and 24h change of any cryptocurrency.', usage: 'crypto <coin>' },
