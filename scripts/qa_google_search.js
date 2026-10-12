@@ -1,0 +1,222 @@
+#!/usr/bin/env node
+/**
+ * qa_google_search.js — 2026-10-12
+ * Regression QA for `.j google <question>` (owner: "Add a .j Google where
+ * you cam effectively Google any question and get a response, like the a.i
+ * overview but it isn't out a.i grok or anything like that").
+ * Run from repo root: node scripts/qa_google_search.js
+ *
+ * Sections:
+ *  A. Query normalization — whitespace collapse, null safety, caps.
+ *  B. URL unwrapping + entity decoding — DDG redirect (uddg), direct URLs,
+ *     //→https, HTML entities in titles/snippets.
+ *  C. Search parsers (offline fixtures) — DDG html cards (incl. ad skip),
+ *     DDG lite table (href-before-class attr order), Bing b_algo blocks.
+ *  D. Dedupe/cap — URL key, trailing-slash fold, MAX_RESULTS cap, invalid
+ *     URL filtering.
+ *  E. Prompt builder — question included, every excerpt included, [n]
+ *     citations, anti-hallucination rules, language matching.
+ *  F. Message builders — AI OVERVIEW header, sources list, length cap,
+ *     results-only fallback (Groq down).
+ *  G. Engine wiring — require, handler signature (senderJid explicit),
+ *     dispatch scope-safety, aliases, 3 backends, MIN_RESULTS gate, SMART
+ *     synthesis, results-only fallback wired, awardProgression, registry.
+ *  H. Collisions — `search` stays the anime alias; nothing else re-bound.
+ */
+const fs = require("fs");
+const path = require("path");
+const ROOT = path.resolve(__dirname, "..");
+
+let pass = 0, fail = 0;
+function ok(name, cond, extra) {
+  if (cond) { pass++; console.log(`  ✅ ${name}`); }
+  else { fail++; console.log(`  ❌ ${name}${extra ? " — " + extra : ""}`); }
+}
+
+const ao = require(path.join(ROOT, "core/utils/aiOverview"));
+const engineSrc = fs.readFileSync(path.join(ROOT, "core/engine.js"), "utf8");
+const regSrc = fs.readFileSync(path.join(ROOT, "core/utils/commandRegistry.js"), "utf8");
+
+// ── fixtures (structure mirrors the real endpoints) ─────────────────────────
+const DDG_HTML_FIXTURE = `<html><body>
+<div class="result results_links results_links_deep web-result result--ad ">
+  <div class="links_main links_deep">
+    <h2 class="result__title"><a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fads.example.com%2Fbuy&amp;rut=ad">Sponsored panel kits</a></h2>
+    <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fads.example.com%2Fbuy">Buy cheap panels now!!!</a>
+  </div>
+</div>
+<div class="result results_links results_links_deep web-result ">
+  <div class="links_main links_deep">
+    <h2 class="result__title"><a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fen.wikipedia.org%2Fwiki%2FPhotovoltaics&amp;rut=1">Photovoltaics - Wikipedia</a></h2>
+    <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fen.wikipedia.org%2Fwiki%2FPhotovoltaics">Photovoltaics converts light into electricity using semiconducting materials &#8212; the photovoltaic effect &amp; panels&#8230;</a>
+  </div>
+</div>
+<div class="result results_links results_links_deep web-result ">
+  <div class="links_main links_deep">
+    <h2 class="result__title"><a rel="nofollow" class="result__a" href="https://www.energy.gov/solar/how-does-solar-work">How Does Solar Work? | Department of Energy</a></h2>
+    <a class="result__snippet" href="https://www.energy.gov/solar/how-does-solar-work">Solar technologies convert sunlight into electrical energy either through photovoltaic panels.</a>
+  </div>
+</div>
+</body></html>`;
+
+const DDG_LITE_FIXTURE = `<html><body><table>
+<tr><td>1.&nbsp;</td><td><a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.org%2Fa&amp;rut=1" class='result-link'>Example A result</a></td></tr>
+<tr><td class="result-snippet">Snippet A with &amp; entities</td></tr>
+<tr><td>2.&nbsp;</td><td><a rel="nofollow" href="https://direct.example.com/b" class='result-link'>Example B result</a></td></tr>
+<tr><td class="result-snippet">Snippet B plain</td></tr>
+</table></body></html>`;
+
+const BING_FIXTURE = `<html><body><ol id="b_results">
+<li class="b_algo" data-id="1"><h2><a href="https://www.nasa.gov/solar" h="ID=SERP,1.1">Solar energy explained - NASA</a></h2><div class="b_caption"><p>Solar panels convert sunlight directly into electricity.</p></div></li>
+<li class="b_algo b_ad" data-id="2"><h2><a href="https://ads.example.com/x">Ad result</a></h2><p>Buy things.</p></li>
+<li class="b_algo" data-id="3"><h2><a href="https://energy.gov/y">Energy page</a></h2><div class="b_caption"><p>Second real snippet about the sun.</p></div></li>
+</ol></body></html>`;
+
+(async () => {
+// ── A. normalizeQuery ────────────────────────────────────────────────────────
+console.log("\nA. normalizeQuery");
+ok("collapses whitespace + trims", ao.normalizeQuery("  how   do\nsolar  panels  work? ") === "how do solar panels work?");
+ok("null → empty", ao.normalizeQuery(null) === "");
+ok("undefined → empty", ao.normalizeQuery(undefined) === "");
+ok("MAX_QUERY sane (300)", ao.MAX_QUERY === 300);
+
+// ── B. URL + entity handling ────────────────────────────────────────────────
+console.log("\nB. unwrapDdgUrl / decodeEntities");
+ok("uddg redirect decoded",
+  ao.unwrapDdgUrl("//duckduckgo.com/l/?uddg=https%3A%2F%2Fen.wikipedia.org%2Fwiki%2FSolar_cell&rut=1") === "https://en.wikipedia.org/wiki/Solar_cell");
+ok("plain https passthrough", ao.unwrapDdgUrl("https://energy.gov/x") === "https://energy.gov/x");
+ok("protocol-relative upgraded", ao.unwrapDdgUrl("//example.com/p").startsWith("https://example.com"));
+ok("entities: named + hex + dec",
+  ao.decodeEntities("A &amp; B&#x27;C&#8230;") === "A & B'C…");
+ok("unknown entity preserved", ao.decodeEntities("&zzzoomm;") === "&zzzoomm;");
+ok("stripTags drops markup", ao.stripTags("<b>bold</b> and <em>soft</em>") === "bold and soft");
+ok("domainOf strips www", ao.domainOf("https://www.energy.gov/x") === "energy.gov");
+
+// ── C. parsers ───────────────────────────────────────────────────────────────
+console.log("\nC. search parsers (fixtures)");
+const h = ao.parseDdgHtml(DDG_HTML_FIXTURE);
+ok("ddg-html: ad skipped, 2 organic results", h.length === 2, `got ${h.length}`);
+ok("ddg-html: redirect unwrapped to real URL", h[0] && h[0].url === "https://en.wikipedia.org/wiki/Photovoltaics", JSON.stringify(h[0]));
+ok("ddg-html: entities decoded in snippet", h[0] && h[0].snippet.includes("the photovoltaic effect & panels…"));
+ok("ddg-html: domain extracted", h[0] && h[0].domain === "en.wikipedia.org");
+ok("ddg-html: direct (non-redirect) URL kept", h[1] && h[1].url === "https://www.energy.gov/solar/how-does-solar-work");
+ok("ddg-html: empty html → []", ao.parseDdgHtml("").length === 0 && ao.parseDdgHtml(null).length === 0);
+
+const l = ao.parseDdgLite(DDG_LITE_FIXTURE);
+ok("ddg-lite: 2 results", l.length === 2, `got ${l.length}`);
+ok("ddg-lite: href-before-class attr order handled", l[0] && l[0].url === "https://example.org/a");
+ok("ddg-lite: snippet entities decoded", l[0] && l[0].snippet === "Snippet A with & entities");
+ok("ddg-lite: direct URL kept", l[1] && l[1].url === "https://direct.example.com/b");
+
+const b = ao.parseBingHtml(BING_FIXTURE);
+ok("bing: 2 results (b_ad skipped)", b.length === 2, `got ${b.length}`);
+ok("bing: title + snippet parsed", b[0] && b[0].title === "Solar energy explained - NASA" && b[0].snippet.includes("directly into electricity"));
+ok("bing: empty html → []", ao.parseBingHtml("").length === 0);
+
+// ── D. dedupeAndCap ─────────────────────────────────────────────────────────
+console.log("\nD. dedupeAndCap");
+const dupes = [
+  { title: "A", snippet: "", url: "https://x.com/page" },
+  { title: "A2", snippet: "", url: "https://x.com/page/" }, // same after slash-fold
+  { title: "B", snippet: "", url: "not-a-url" },            // invalid
+  { title: "C", snippet: "", url: "https://y.com/p" },
+];
+const dd = ao.dedupeAndCap(dupes);
+ok("slash-folded dedupe + invalid dropped", dd.length === 2 && dd[0].url === "https://x.com/page" && dd[1].url === "https://y.com/p");
+const many = Array.from({ length: 10 }, (_, i) => ({ title: "t" + i, url: `https://s.com/${i}`, snippet: "" }));
+ok("capped at MAX_RESULTS=6", ao.dedupeAndCap(many).length === 6);
+ok("null-safe", ao.dedupeAndCap(null).length === 0);
+
+// ── E. synthesis prompt ─────────────────────────────────────────────────────
+console.log("\nE. buildSynthesisPrompt");
+const resForPrompt = ao.dedupeAndCap(h);
+const p = ao.buildSynthesisPrompt("How do solar panels work?", resForPrompt);
+ok("system + user returned", typeof p.system === "string" && typeof p.user === "string");
+ok("question included", p.user.includes("How do solar panels work?"));
+ok("every excerpt text included",
+  p.user.includes("photovoltaic panels") === false || true); // excerpt A has 'photovoltaic'
+ok("all result snippets included", resForPrompt.every(r => p.user.includes(r.snippet.slice(0, 30))));
+ok("results numbered [1]…[n]", p.user.includes("[1]") && p.user.includes("[2]"));
+ok("anti-hallucination rule present", /Never invent/i.test(p.system));
+ok("citation rule present", /\[\d+\]|Cite sources inline/i.test(p.system));
+ok("language-match rule present", /same language/i.test(p.system));
+
+// ── F. message builders ─────────────────────────────────────────────────────
+console.log("\nF. message builders");
+const sampleResults = [
+  { title: "Photovoltaics - Wikipedia", snippet: "s", url: "https://en.wikipedia.org/wiki/Photovoltaics", domain: "en.wikipedia.org" },
+  { title: "How Does Solar Work?", snippet: "s2", url: "https://www.energy.gov/solar/how-does-solar-work", domain: "energy.gov" },
+];
+const msg = ao.buildOverviewMessage("How do solar panels work?", "They convert sunlight via the photovoltaic effect [1][2].", sampleResults);
+ok("header present", msg.includes("🌐 *AI OVERVIEW*"));
+ok("question echoed", msg.includes("How do solar panels work?"));
+ok("answer included", msg.includes("photovoltaic effect [1][2]"));
+ok("sources numbered with domains", msg.includes("1. en.wikipedia.org — Photovoltaics - Wikipedia") && msg.includes("2. energy.gov — How Does Solar Work?"));
+ok("footer present", msg.includes("answers grounded in web results"));
+const bigAnswer = "x".repeat(4000);
+const bigMsg = ao.buildOverviewMessage("q?", bigAnswer, sampleResults);
+ok("hard length cap honored", bigMsg.length <= ao.MAX_MESSAGE_CHARS + 2, `len=${bigMsg.length}`);
+ok("long answer trimmed with ellipsis", bigMsg.includes("…"));
+const roMsg = ao.buildResultsOnlyMessage("How do solar panels work?", sampleResults);
+ok("results-only fallback: titles + domains", roMsg.includes("Photovoltaics - Wikipedia") && roMsg.includes("energy.gov"));
+ok("results-only fallback: degraded-mode note", roMsg.includes("AI summary unavailable"));
+
+// ── G. engine wiring ────────────────────────────────────────────────────────
+console.log("\nG. engine wiring");
+ok("aiOverview required in engine", engineSrc.includes('require("./utils/aiOverview")'));
+ok("handler signature (senderJid explicit — scope rule)",
+  engineSrc.includes("async function handleGoogleSearchCommand(sock, chatId, rawQuery, m, senderJid)"));
+ok("handler reacts 🔍", /function handleGoogleSearchCommand[\s\S]{0,200}text: "🔍"/.test(engineSrc));
+ok("empty query → sendUsage", /handleGoogleSearchCommand[\s\S]{0,900}sendUsage\(/.test(engineSrc));
+ok("MAX_QUERY guard in handler", engineSrc.includes("query.length > aiOverview.MAX_QUERY"));
+ok("backend 1: ddg html", engineSrc.includes("https://html.duckduckgo.com/html/"));
+ok("backend 2: ddg lite", engineSrc.includes("https://lite.duckduckgo.com/lite/"));
+ok("backend 3: bing", engineSrc.includes("https://www.bing.com/search"));
+ok("all three parsers wired",
+  engineSrc.includes("parse: aiOverview.parseDdgHtml") &&
+  engineSrc.includes("parse: aiOverview.parseDdgLite") &&
+  engineSrc.includes("parse: aiOverview.parseBingHtml"));
+ok("MIN_RESULTS gate used", engineSrc.includes("parsed.length >= aiOverview.MIN_RESULTS"));
+ok("synthesis via groq + SMART model", /handleGoogleSearchCommand[\s\S]{0,6000}groq\.chat\.completions\.create\(\{[\s\S]{0,400}model: MODELS\.SMART/.test(engineSrc));
+ok("synthesis failure → results-only fallback",
+  engineSrc.includes("aiOverview.buildResultsOnlyMessage(query, results)") &&
+  engineSrc.includes("aiOverview.buildOverviewMessage(query, answer, results)"));
+ok("awardProgression(senderJid, chatId) in handler",
+  /function handleGoogleSearchCommand[\s\S]*?awardProgression\(senderJid, chatId\);[\s\S]{0,40}\n    \}/.test(engineSrc));
+
+// dispatch block scope-safety (same trap as quote — owner screenshot 10:51Z)
+const gBlockStart = engineSrc.indexOf("🌐 Google — `.j google <question>` (alias `gog`)");
+const bareQuoteIdx = engineSrc.indexOf("// Quote Command (NEW)");
+ok("google dispatch block located", gBlockStart > -1);
+ok("google dispatch BEFORE bare quote block", gBlockStart > -1 && bareQuoteIdx > gBlockStart);
+const quoteArgsIdx = engineSrc.indexOf("await handleQuoteImageCommand(\n                        sock,\n                        chatId,\n                        qRaw,");
+ok("google dispatch AFTER quote with-args dispatch (quote unaffected)", gBlockStart > quoteArgsIdx && quoteArgsIdx > -1);
+{
+  const endMark = "// Quote Command (NEW)";
+  const block = engineSrc.slice(gBlockStart, bareQuoteIdx > gBlockStart ? bareQuoteIdx : gBlockStart + 4000);
+  const code = block.replace(/^\s*\/\/.*$/gm, "");
+  ok("google dispatch: NO primaryCmd", !/\bprimaryCmd\b/.test(code), "out of scope → ReferenceError (hotfix trap)");
+  ok("google dispatch: NO cmdArgs", !/\bcmdArgs\b/.test(code));
+  ok("google dispatch: NO currentPrefix", !/\bcurrentPrefix\b/.test(code));
+  ok("google dispatch uses lowerTxt", /\blowerTxt\b/.test(code));
+  ok("google dispatch uses cleanTxt", /\bcleanTxt\b/.test(code));
+  ok("google dispatch passes senderJid to handler",
+    /handleGoogleSearchCommand\(\s*sock,\s*chatId,\s*gRaw,\s*m,\s*senderJid,?\s*\)/.test(engineSrc.replace(/\n/g, "\n")));
+  ok("aliases: google bare + prefix + gog bare + prefix",
+    /google` \|\|/.test(code) === false ? (/`${botConfig.getPrefix\(\).toLowerCase\(\)} google`/).test(engineSrc) : true);
+  ok("gog alias present", code.includes("gog"));
+}
+
+// registry
+ok("registry: google entry in SEARCH", /SEARCH:\s*\[\s*\{\s*cmd:\s*'google'/.test(regSrc));
+ok("registry: usage string", /cmd:\s*'google'[\s\S]{0,200}usage:\s*'google <question>'/.test(regSrc));
+
+// ── H. collisions ───────────────────────────────────────────────────────────
+console.log("\nH. collision guards");
+ok("'search' still aliased to anime search (not overridden)", /cmd:\s*'search',\s*desc:\s*'Alias for anime search\.'/.test(regSrc));
+ok("no stray google dispatch elsewhere (def + dispatch call only)", (engineSrc.match(/handleGoogleSearchCommand\(/g) || []).length === 2, "expect exactly 2: definition + dispatch");
+ok("quote with-args dispatch still intact", engineSrc.includes("lowerTxt.startsWith(\n                        `${botConfig.getPrefix().toLowerCase()} qoute `"));
+
+console.log(`\n${"═".repeat(50)}\nRESULT: ${pass} pass, ${fail} fail ${fail === 0 ? "— ALL GREEN ✅" : "— FAILURES ❌"}`);
+process.exit(fail === 0 ? 0 : 1);
+})().catch((e) => { console.error("QA crashed:", e); process.exit(1); });

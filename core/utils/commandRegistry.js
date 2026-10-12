@@ -18,6 +18,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'setauthor', desc: 'Set custom sticker creator/author name (Owner/Mod only).', usage: 'setauthor <name>' }
   ],
   SEARCH: [
+    { cmd: 'google', desc: 'Google any question — real web search synthesized into a cited, AI-overview style answer. (Alias: gog)', usage: 'google <question>' },
     { cmd: 'img', desc: 'Search for and download images.', usage: 'img <query>' },
     { cmd: 'audio', desc: 'Search for and download audio/music.', usage: 'audio <query>' },
     { cmd: 'anime search', desc: 'Search for any anime and get download links.', usage: 'anime search <name>' },

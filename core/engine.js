@@ -57,6 +57,7 @@ const ytdl = require("@distube/ytdl-core");
 const { Sticker, StickerTypes } = require("wa-sticker-formatter");
 const stickerPack = require("./utils/stickerPack"); // native WhatsApp sticker packs (.j s -p)
 const quoteCard = require("./utils/quoteCard"); // .j quote <text> → quote card image (2026-10-12)
+const aiOverview = require("./utils/aiOverview"); // .j google <question> → web-grounded AI-overview answer (2026-10-12)
 const { parseHTML } = require("linkedom");
 
 // ═══ 🤝 GC COEXISTENCE (owner 2026-10-07: "scrape the one-group-per-bot
@@ -2350,6 +2351,146 @@ async function startBot(configInstance) {
         await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
         await sock.sendMessage(chatId, {
           text: BOT_MARKER + `🖋️ couldn't render that quote: ${err.message?.slice(0, 120)}`,
+        });
+      }
+      await awardProgression(senderJid, chatId);
+    }
+
+    // 🌐 .j google <question> — web-grounded "AI overview" answer.
+    // Owner 2026-10-12: "Add a .j Google where you can effectively Google any
+    // question and get a response, like the AI overview but it isn't our AI
+    // grok or anything like that." Pipeline: real web search FIRST (DDG html
+    // → DDG lite → Bing, first backend yielding usable results wins), then a
+    // Groq synthesis that may ONLY use those excerpts and must cite them —
+    // grounded answers with visible sources, not a free-form chat reply.
+    // Parsing/formatting lives in utils/aiOverview.js (pure, QA-able).
+    async function handleGoogleSearchCommand(sock, chatId, rawQuery, m, senderJid) {
+      await sock.sendMessage(chatId, { react: { text: "🔍", key: m.key } });
+      try {
+        const query = aiOverview.normalizeQuery(rawQuery);
+        if (!query) {
+          return await sendUsage(
+            sock,
+            chatId,
+            BOT_MARKER,
+            "🌐 GOOGLE",
+            "google <question>",
+            "google how do solar panels work",
+            "Ask anything — searches the web and synthesizes a cited, AI-overview style answer with sources. (Alias: gog)",
+          );
+        }
+        if (query.length > aiOverview.MAX_QUERY) {
+          return await sock.sendMessage(chatId, {
+            text:
+              BOT_MARKER +
+              `🌐 that question is too long for a search (${query.length} characters — max ${aiOverview.MAX_QUERY}).`,
+          });
+        }
+
+        // 1) Search — try each backend until one returns ≥ MIN_RESULTS parses.
+        const UA =
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+        const backends = [
+          {
+            name: "ddg-html",
+            fn: () =>
+              axios.post(
+                "https://html.duckduckgo.com/html/",
+                new URLSearchParams({ q: query }).toString(),
+                {
+                  headers: {
+                    "User-Agent": UA,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  timeout: 9000,
+                  maxRedirects: 5,
+                },
+              ),
+            parse: aiOverview.parseDdgHtml,
+          },
+          {
+            name: "ddg-lite",
+            fn: () =>
+              axios.get("https://lite.duckduckgo.com/lite/", {
+                params: { q: query },
+                headers: { "User-Agent": UA },
+                timeout: 9000,
+                maxRedirects: 5,
+              }),
+            parse: aiOverview.parseDdgLite,
+          },
+          {
+            name: "bing",
+            fn: () =>
+              axios.get("https://www.bing.com/search", {
+                params: { q: query, count: 10 },
+                headers: { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9" },
+                timeout: 9000,
+                maxRedirects: 5,
+              }),
+            parse: aiOverview.parseBingHtml,
+          },
+        ];
+
+        let results = [];
+        let usedBackend = "none";
+        for (const b of backends) {
+          try {
+            const resp = await b.fn();
+            const parsed = aiOverview.dedupeAndCap(
+              b.parse(typeof resp.data === "string" ? resp.data : String(resp.data || "")),
+            );
+            console.log(`🌐 [google] ${b.name}: ${parsed.length} results for "${query.slice(0, 60)}"`);
+            if (parsed.length >= aiOverview.MIN_RESULTS) {
+              results = parsed;
+              usedBackend = b.name;
+              break;
+            }
+            if (parsed.length > results.length) results = parsed; // keep best partial
+          } catch (beErr) {
+            console.log(`🌐 [google] ${b.name} failed: ${beErr.message}`);
+          }
+        }
+
+        if (!results.length) {
+          return await sock.sendMessage(chatId, {
+            text:
+              BOT_MARKER +
+              "🌐 couldn't reach any search backend right now — try again in a moment.",
+          });
+        }
+
+        // 2) Synthesize — grounded in the excerpts ONLY, citations required.
+        let answer = "";
+        try {
+          const { system, user } = aiOverview.buildSynthesisPrompt(query, results);
+          const res = await groq.chat.completions.create({
+            messages: [
+              { role: "system", content: system },
+              { role: "user", content: user },
+            ],
+            model: MODELS.SMART,
+            temperature: 0.2,
+            max_tokens: 700,
+            timeout: 25000,
+          });
+          answer = (res.choices?.[0]?.message?.content || "").trim();
+        } catch (synthErr) {
+          console.error("google synthesis error:", synthErr.message);
+        }
+
+        const msg = answer
+          ? aiOverview.buildOverviewMessage(query, answer, results)
+          : aiOverview.buildResultsOnlyMessage(query, results);
+        console.log(`🌐 [google] backend=${usedBackend} results=${results.length} synthesized=${answer ? "yes" : "no (results-only)"}`);
+
+        await sock.sendMessage(chatId, { text: BOT_MARKER + msg }, { quoted: m });
+        await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+      } catch (err) {
+        console.error("Google Command Error:", err.message);
+        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+        await sock.sendMessage(chatId, {
+          text: BOT_MARKER + `🌐 search failed: ${err.message?.slice(0, 120)}`,
         });
       }
       await awardProgression(senderJid, chatId);
@@ -25501,6 +25642,45 @@ Write ONE witty verdict line (max 90 chars) about their compatibility. Roast the
                         sock,
                         chatId,
                         qRaw,
+                        m,
+                        senderJid,
+                      );
+                      return;
+                    }
+
+                    // 🌐 Google — `.j google <question>` (alias `gog`)
+                    // Owner 2026-10-12: "Add a .j Google where you can
+                    // effectively Google any question and get a response,
+                    // like the AI overview but it isn't our AI grok or
+                    // anything like that." Web-grounded pipeline (real search
+                    // → cited synthesis) in handleGoogleSearchCommand. Bare
+                    // `.j google` also routes here → usage card. The question
+                    // comes from cleanTxt (NOT lowerTxt) to preserve case.
+                    //
+                    // ⚠️ SCOPE (see quote note above): this region sits
+                    // OUTSIDE the block that defines primaryCmd/cmdArgs —
+                    // only lowerTxt / cleanTxt / m / sock / chatId /
+                    // senderJid / botConfig are legal here.
+                    if (
+                      lowerTxt ===
+                        `${botConfig.getPrefix().toLowerCase()} google` ||
+                      lowerTxt.startsWith(
+                        `${botConfig.getPrefix().toLowerCase()} google `,
+                      ) ||
+                      lowerTxt ===
+                        `${botConfig.getPrefix().toLowerCase()} gog` ||
+                      lowerTxt.startsWith(
+                        `${botConfig.getPrefix().toLowerCase()} gog `,
+                      )
+                    ) {
+                      const gRaw = cleanTxt
+                        .substring(botConfig.getPrefix().length)
+                        .trim()
+                        .replace(/^\S+\s*/, ""); // drop the command word, keep the question's case
+                      await handleGoogleSearchCommand(
+                        sock,
+                        chatId,
+                        gRaw,
                         m,
                         senderJid,
                       );
