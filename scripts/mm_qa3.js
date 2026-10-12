@@ -304,9 +304,13 @@ function roleCounts(g) {
     ok(sock.out.some((m) => m.isGroup && /Screenshots and images stay out/.test(m.text)), '5.4 throttle-window notice posted');
     // second image within throttle: deleted but no second notice
     const before = sock.out.filter((m) => /Screenshots and images stay out/.test(m.text)).length;
-    mm.gateGameMedia({ chatId: chat, m: { key: { id: 'fake3' }, message: { stickerMessage: {} } } });
+    mm.gateGameMedia({ chatId: chat, m: { key: { id: 'fake3' }, message: { imageMessage: { mimetype: 'image/jpeg' } } } });
     const after = sock.out.filter((m) => /Screenshots and images stay out/.test(m.text)).length;
     ok(after === before, '5.5 notice throttled (no spam)');
+    // owner 2026-10-12 20:26Z: stickers and docs pass through, view-once burns
+    ok(mm.gateGameMedia({ chatId: chat, m: { key: { id: 'fake4' }, message: { stickerMessage: {} } } }) === false, '5.7 stickers NOT gated');
+    ok(mm.gateGameMedia({ chatId: chat, m: { key: { id: 'fake5' }, message: { documentMessage: {} } } }) === false, '5.8 documents NOT gated');
+    ok(mm.gateGameMedia({ chatId: chat, m: { key: { id: 'fake6' }, message: { viewOnceMessageV2: { message: { imageMessage: { mimetype: 'image/jpeg' } } } } } }) === true, '5.9 view-once images gated');
     // lobby phase: no gating
     await mm.handleCommand(ctxOf(sock, chat, { sub: 'end', sender: roster[0].jid, name: roster[0].name }));
     const chat2 = '1203630888006@g.us';

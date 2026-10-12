@@ -310,18 +310,20 @@ async function handleParticipantLeave(chatId, participants, action) {
 // ---------- media gate (owner 2026-10-12: "automatically deleting images
 // when the game is running is kinda needed cus last game some players sent
 // screenshots from dms") ----------
-// While a case is live in a group, ANY player-posted image/sticker/document is
-// deleted and a throttled notice is posted instead. The bot's own cards are
+// While a case is live in a group, any player-posted IMAGE or VIEW-ONCE is
+// deleted and a throttled notice is posted instead. Stickers and documents
+// pass through untouched (owner 2026-10-12 20:26Z). The bot's own cards are
 // untouched (fromMe is filtered by the engine gate).
 function gateGameMedia({ chatId, m }) {
   const g = getGame(chatId);
   if (!g || g.phase === PHASE.LOBBY || g.phase === 'ENDED') return false;
   const msg = m && m.message;
   if (!msg || msg.protocolMessage || msg.reactionMessage) return false;
+  // owner 2026-10-12 20:26Z: "Don't auto delete stickers, only view once
+  // messages and images" - stickers and documents pass through; images and
+  // view-once media (the screenshot-leak vectors) still burn.
   const hasMedia = !!(
     msg.imageMessage ||
-    msg.stickerMessage ||
-    msg.documentMessage ||
     (msg.viewOnceMessageV2 && msg.viewOnceMessageV2.message &&
       (msg.viewOnceMessageV2.message.imageMessage || msg.viewOnceMessageV2.message.videoMessage)) ||
     (msg.viewOnceMessage && msg.viewOnceMessage.message && msg.viewOnceMessage.message.imageMessage) ||
@@ -2707,7 +2709,7 @@ module.exports = {
   isSilenced,
   // engine hooks (2026-10-12 expansion)
   handleParticipantLeave, // group-participants.update: leaver handling
-  gateGameMedia,          // in-case media gate: delete player images, throttled notice
+  gateGameMedia,          // in-case media gate: delete player images + view-once (stickers/docs pass, owner 20:26Z)
   // QA / introspection
   _internal: {
     getGame,
