@@ -51,8 +51,8 @@ const QA_CLOCK = !!process.env.MM_QA_CLOCK;
 const NIGHT_MS = QA_CLOCK ? 3000 : 180000;       // 3 minutes of darkness (real humans need to read + act)
 const NUDGE_BEFORE_MS = QA_CLOCK ? 800 : 45000;  // "the night is thinning" DM before dawn
 const DAWN_EXTEND_MS = QA_CLOCK ? 1500 : 60000;  // one extension while a required actor sleeps
-const DISCUSS_MS = QA_CLOCK ? 4000 : 300000;     // 5 minutes of accusations (and one search each)
-const VOTE_MS = QA_CLOCK ? 2500 : 90000;         // 90s on the ballot
+const DISCUSS_MS = QA_CLOCK ? 15000 : 300000;    // 5 minutes of accusations (and one search each)
+const VOTE_MS = QA_CLOCK ? 10000 : 90000;        // 90s on the ballot
 const LOBBY_TTL_MS = 30 * 60000;
 // --- zombie retirement (2026-10-06): an abandoned game cycles
 // night->dawn->discussion->vote forever (~9.5 min/round) and was found on
