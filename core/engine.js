@@ -2438,22 +2438,36 @@ async function startBot(configInstance) {
 
         let results = [];
         let usedBackend = "none";
-        for (const b of backends) {
-          try {
-            const resp = await b.fn();
-            const parsed = aiOverview.dedupeAndCap(
-              b.parse(typeof resp.data === "string" ? resp.data : String(resp.data || "")),
-            );
-            console.log(`🌐 [google] ${b.name}: ${parsed.length} results for "${query.slice(0, 60)}"`);
-            if (parsed.length >= aiOverview.MIN_RESULTS) {
-              results = parsed;
-              usedBackend = b.name;
-              break;
+        // Relevance gate: Bing intermittently serves anti-bot DECOY SERPs
+        // (structurally perfect, wrong topic — verified live 2026-10-12), so
+        // a result set must actually mention the question's significant
+        // words before we accept it (aiOverview.relevantEnough).
+        const runBackends = async (list) => {
+          for (const b of list) {
+            try {
+              const resp = await b.fn();
+              const parsed = aiOverview.dedupeAndCap(
+                b.parse(typeof resp.data === "string" ? resp.data : String(resp.data || "")),
+              );
+              const relevant = aiOverview.relevantEnough(query, parsed);
+              console.log(`🌐 [google] ${b.name}: ${parsed.length} results, relevant=${relevant} for "${query.slice(0, 60)}"`);
+              if (parsed.length >= aiOverview.MIN_RESULTS && relevant) {
+                results = parsed;
+                usedBackend = b.name;
+                return true;
+              }
+              if (parsed.length > results.length && relevant) results = parsed; // best usable partial
+            } catch (beErr) {
+              console.log(`🌐 [google] ${b.name} failed: ${beErr.message}`);
             }
-            if (parsed.length > results.length) results = parsed; // keep best partial
-          } catch (beErr) {
-            console.log(`🌐 [google] ${b.name} failed: ${beErr.message}`);
           }
+          return false;
+        };
+        let gotResults = await runBackends(backends);
+        if (!gotResults) {
+          // Decoy/challenge SERPs are per-request — ONE immediate retry of
+          // the primary backend before giving up.
+          gotResults = await runBackends([backends[0]]);
         }
 
         if (!results.length) {

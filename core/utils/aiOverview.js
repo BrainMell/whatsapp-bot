@@ -222,6 +222,55 @@ function dedupeAndCap(results, cap = MAX_RESULTS) {
   return out;
 }
 
+// ------------------------------------------------------- relevance gate
+// Verified live 2026-10-12 (Box2): Bing intermittently serves an anti-bot
+// DECOY SERP — structurally perfect (10 b_algo blocks, h2>a, snippets) but
+// about a completely different topic (emoji pages for a Harry Potter
+// question). A structural parser can't catch that; this cheap lexical gate
+// does: significant query words must appear across the result titles +
+// snippets. Decoys contain none of them → rejected → next backend/retry.
+
+const QUERY_STOPWORDS = new Set(
+  ("who what when where why how which whose whom is are was were be been being am " +
+    "the a an of to in on for do does did done with and or by at from that this it its " +
+    "as can could will would should shall may might must have has had not no nor so if " +
+    "i you we they he she him her them us me my your their our there here than then " +
+    "about into over under out up down off again once get got has his her their s")
+    .split(/\s+/),
+);
+
+function significantWords(query) {
+  const q = normalizeQuery(query).toLowerCase().replace(/[^a-z0-9\s]/g, " ");
+  return [
+    ...new Set(
+      q.split(/\s+/).filter((w) => w.length >= 3 && !QUERY_STOPWORDS.has(w)),
+    ),
+  ];
+}
+
+function relevantEnough(query, results, minFrac = 0.5) {
+  const words = significantWords(query);
+  if (!words.length || !results || !results.length) return true; // can't judge → don't block
+  const hay = results
+    .map((r) => `${r.title} ${r.snippet || ""}`)
+    .join(" ")
+    .toLowerCase();
+  let hits = 0;
+  for (const w of words) {
+    if (hay.includes(w)) {
+      hits++;
+      continue;
+    }
+    // morphological tolerance: 6+ char words may match by a 5-char stem,
+    // 5-char words by a 4-char stem ("cleaning"→"clean", "panels"→"panel";
+    // "wrote" vs "written" legitimately diverges — threshold absorbs it)
+    if (w.length >= 5 && hay.includes(w.slice(0, w.length >= 6 ? 5 : 4))) {
+      hits++;
+    }
+  }
+  return hits / words.length >= minFrac;
+}
+
 // ------------------------------------------------------------ prompt + text
 
 function buildSynthesisPrompt(question, results) {
@@ -317,6 +366,8 @@ module.exports = {
   parseDdgLite,
   parseBingHtml,
   dedupeAndCap,
+  significantWords,
+  relevantEnough,
   buildSynthesisPrompt,
   formatSourceList,
   buildOverviewMessage,

@@ -25,23 +25,23 @@ async function tryBackend(name, url, opts, parse) {
 }
 
 (async () => {
-  const r1 = await tryBackend("ddg-html", "https://html.duckduckgo.com/html/", {
-    method: "POST",
-    data: new URLSearchParams({ q: query }).toString(),
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-  }, ao.parseDdgHtml);
-  let results = r1;
-  if (results.length < ao.MIN_RESULTS) {
+  // bing-first (matches engine order — DDG anomaly-blocked on box egresses)
+  let results = await tryBackend("bing", "https://www.bing.com/search", {
+    method: "GET", params: { q: query, count: 10 }, headers: { "Accept-Language": "en-US,en;q=0.9" },
+  }, ao.parseBingHtml);
+  if (!(results.length >= ao.MIN_RESULTS && ao.relevantEnough(query, results))) {
+    results = await tryBackend("ddg-html", "https://html.duckduckgo.com/html/", {
+      method: "POST",
+      data: new URLSearchParams({ q: query }).toString(),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    }, ao.parseDdgHtml);
+  }
+  if (!(results.length >= ao.MIN_RESULTS && ao.relevantEnough(query, results))) {
     results = await tryBackend("ddg-lite", "https://lite.duckduckgo.com/lite/", {
       method: "GET", params: { q: query },
     }, ao.parseDdgLite);
   }
-  if (results.length < ao.MIN_RESULTS) {
-    results = await tryBackend("bing", "https://www.bing.com/search", {
-      method: "GET", params: { q: query, count: 10 }, headers: { "Accept-Language": "en-US,en;q=0.9" },
-    }, ao.parseBingHtml);
-  }
-  console.log("\nWINNER:", results.length, "results");
+  console.log("\nWINNER:", results.length, "results, relevant:", ao.relevantEnough(query, results));
   for (const r of results.slice(0, 6)) {
     console.log(` • [${r.domain}] ${r.title}\n   ${r.snippet.slice(0, 110)}`);
   }

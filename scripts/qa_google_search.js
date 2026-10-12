@@ -179,6 +179,8 @@ ok("all three parsers wired",
   engineSrc.includes("parse: aiOverview.parseDdgLite") &&
   engineSrc.includes("parse: aiOverview.parseBingHtml"));
 ok("MIN_RESULTS gate used", engineSrc.includes("parsed.length >= aiOverview.MIN_RESULTS"));
+ok("relevance gate wired (anti-decoy)", engineSrc.includes("aiOverview.relevantEnough(query, parsed)"));
+ok("primary-backend retry on all-fail (decoys are per-request)", engineSrc.includes("gotResults = await runBackends([backends[0]]);"));
 ok("synthesis via groq + SMART model", /handleGoogleSearchCommand[\s\S]{0,6000}groq\.chat\.completions\.create\(\{[\s\S]{0,400}model: MODELS\.SMART/.test(engineSrc));
 ok("synthesis failure → results-only fallback",
   engineSrc.includes("aiOverview.buildResultsOnlyMessage(query, results)") &&
@@ -213,8 +215,34 @@ ok("google dispatch AFTER quote with-args dispatch (quote unaffected)", gBlockSt
 ok("registry: google entry in SEARCH", /SEARCH:\s*\[\s*\{\s*cmd:\s*'google'/.test(regSrc));
 ok("registry: usage string", /cmd:\s*'google'[\s\S]{0,200}usage:\s*'google <question>'/.test(regSrc));
 
-// ── H. collisions ───────────────────────────────────────────────────────────
-console.log("\nH. collision guards");
+// ── H. relevance gate (anti-decoy) ──────────────────────────────────────────
+console.log("\nH. relevance gate (anti-decoy)");
+ok("significantWords drops stopwords", JSON.stringify(ao.significantWords("Who wrote the harry potter books?")) === JSON.stringify(["wrote", "harry", "potter", "books"]), JSON.stringify(ao.significantWords("Who wrote the harry potter books?")));
+const HP_DECOY = [
+  { title: "ALL Emojis ! - YouTube", snippet: "watch the emoji movie compilation", url: "https://x.com/1", domain: "x.com" },
+  { title: "Smiling Face Emoji | Meaning", snippet: "copy and paste all emojis", url: "https://x.com/2", domain: "x.com" },
+  { title: "GetEmoji - Copy & Paste", snippet: "emoji list with meanings", url: "https://x.com/3", domain: "x.com" },
+];
+ok("emoji DECOY for HP query rejected", ao.relevantEnough("who wrote the harry potter books", HP_DECOY) === false);
+const HP_REAL = [
+  { title: "Harry Potter - Wikipedia", snippet: "the seven-book series by J.K. Rowling", url: "https://x.com/4", domain: "x.com" },
+  { title: "Who wrote the Harry Potter books?", snippet: "J.K. Rowling authored all seven Harry Potter volumes", url: "https://x.com/5", domain: "x.com" },
+];
+ok("real HP results accepted (3/4 words hit ≥ 0.5)", ao.relevantEnough("who wrote the harry potter books", HP_REAL) === true);
+const SOLAR_REAL = [
+  { title: "How do solar panels work - EnergySage", snippet: "solar panels absorb sunlight via photovoltaic cells", url: "https://x.com/6", domain: "x.com" },
+  { title: "How Does Solar Work - DOE", snippet: "panels convert sunlight into electricity", url: "https://x.com/7", domain: "x.com" },
+];
+ok("solar results accepted", ao.relevantEnough("how do solar panels work", SOLAR_REAL) === true);
+ok("morphology: 'cleaning'→'clean', 'panel' stems hit", ao.relevantEnough("solar panel cleaning", [
+  { title: "Solar panel care guide", snippet: "keep your panels clean and efficient", url: "https://x.com/8", domain: "x.com" },
+]) === true);
+ok("no significant words → cannot judge → accept", ao.relevantEnough("who am i", HP_DECOY) === true);
+ok("empty results → cannot judge → accept", ao.relevantEnough("harry potter", []) === true);
+ok("strict minFrac=1 rejects partial topical overlap", ao.relevantEnough("harry potter books", HP_DECOY, 1) === false);
+
+// ── I. collisions ───────────────────────────────────────────────────────────
+console.log("\nI. collision guards");
 ok("'search' still aliased to anime search (not overridden)", /cmd:\s*'search',\s*desc:\s*'Alias for anime search\.'/.test(regSrc));
 ok("no stray google dispatch elsewhere (def + dispatch call only)", (engineSrc.match(/handleGoogleSearchCommand\(/g) || []).length === 2, "expect exactly 2: definition + dispatch");
 ok("quote with-args dispatch still intact", engineSrc.includes("lowerTxt.startsWith(\n                        `${botConfig.getPrefix().toLowerCase()} qoute `"));
