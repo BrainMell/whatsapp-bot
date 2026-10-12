@@ -16,6 +16,10 @@
  *     the bare random-quote block, `qoute` alias, case-preserving text
  *     source (cleanTxt), senderJid passed explicitly (scope fix), registry
  *     entry, bare random-quote path intact.
+ *  D2. Scope trap — the quote dispatch lives OUTSIDE the prefix-dispatch
+ *     block, so it must NEVER reference primaryCmd/cmdArgs/currentPrefix
+ *     (owner screenshot 10:51Z: "primaryCmd is not defined" broke every
+ *     command dispatched after the quote block).
  *  E. Scope guards — cooldown untouched for quote, sticker bypass matcher
  *     unchanged.
  */
@@ -110,9 +114,10 @@ ok("MAX_TEXT exported as 300", quoteCard.MAX_TEXT === 300);
 console.log("\nD. Engine wiring (source guards)");
 ok("quoteCard required in engine", engineSrc.includes('require("./utils/quoteCard")'));
 ok("handler defined", engineSrc.includes("async function handleQuoteImageCommand(sock, chatId, rawText, m, senderJid)"));
-ok("with-args dispatch matches quote + qoute", engineSrc.includes('(primaryCmd === "quote" || primaryCmd === "qoute") &&'));
-ok("with-args gate requires args", engineSrc.includes("cmdArgs.length > 1"));
-ok("text source is cleanTxt (case/newlines preserved)", /const qRaw = cleanTxt\s*\n\s*\.substring\(currentPrefix\.length\)/.test(engineSrc));
+ok("with-args dispatch via lowerTxt startsWith (quote)", /lowerTxt\.startsWith\(\s*`\$\{botConfig\.getPrefix\(\)\.toLowerCase\(\)\} quote `/.test(engineSrc));
+ok("with-args dispatch via lowerTxt startsWith (qoute)", /lowerTxt\.startsWith\(\s*`\$\{botConfig\.getPrefix\(\)\.toLowerCase\(\)\} qoute `/.test(engineSrc));
+ok("trailing-space startsWith implies args present", engineSrc.includes("} quote `,") || /} quote `/.test(engineSrc));
+ok("text source is cleanTxt (case/newlines preserved)", /const qRaw = cleanTxt\s*\n\s*\.substring\(botConfig\.getPrefix\(\)\.length\)/.test(engineSrc));
 ok("senderJid passed explicitly (storage.run scope fix)", /handleQuoteImageCommand\(\s*sock,\s*chatId,\s*qRaw,\s*m,\s*senderJid,?\s*\)/.test(engineSrc));
 
 // order: with-args dispatch must appear BEFORE the bare random-quote block
@@ -133,6 +138,25 @@ ok("JPEG conversion has PNG fallback", /jpeg conversion failed, sending PNG/.tes
 ok("15s upload-hang guard on quote card send", engineSrc.includes("quote card upload timed out after 15000ms"));
 ok("background search uses quote's own words (appropriate image)", engineSrc.includes("quoteCard.pickBackgroundQuery(qText)"));
 ok("bg failure falls back to gradient (never dead)", /bg search failed, gradient fallback/.test(engineSrc));
+
+// ── D2. Scope trap (owner screenshot 2026-10-12 10:51Z) ────────────────────
+console.log("\nD2. Scope trap: dispatch block must use ONLY storage.run-scope vars");
+{
+  const blockStart = engineSrc.indexOf("// 🖋️ Quote CARD —");
+  const blockEnd = engineSrc.indexOf("// Quote Command (NEW)");
+  ok("quote dispatch block located", blockStart > -1 && blockEnd > blockStart);
+  if (blockStart > -1 && blockEnd > blockStart) {
+    const block = engineSrc.slice(blockStart, blockEnd);
+    const code = block.replace(/^\s*\/\/.*$/gm, ""); // strip comments, keep code
+    ok("NO primaryCmd in dispatch code", !/\bprimaryCmd\b/.test(code), "out of scope here → ReferenceError");
+    ok("NO cmdArgs in dispatch code", !/\bcmdArgs\b/.test(code), "out of scope here → ReferenceError");
+    ok("NO currentPrefix in dispatch code", !/\bcurrentPrefix\b/.test(code), "not proven in scope — use botConfig.getPrefix()");
+    ok("dispatch uses lowerTxt (proven in scope)", /\blowerTxt\b/.test(code));
+    ok("dispatch uses cleanTxt (same scope as lowerTxt)", /\bcleanTxt\b/.test(code));
+    ok("handler still takes senderJid as param (not outer-scope lookup)",
+      engineSrc.includes("async function handleQuoteImageCommand(sock, chatId, rawText, m, senderJid)"));
+  }
+}
 
 // ── E. Scope guards ──────────────────────────────────────────────────────────
 console.log("\nE. Scope guards (cooldown / sticker bypass untouched)");

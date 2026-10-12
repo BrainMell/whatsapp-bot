@@ -25431,14 +25431,29 @@ Write ONE witty verdict line (max 90 chars) about their compatibility. Roast the
                     // utils/quoteCard.js) and must be checked BEFORE the bare
                     // random-quote block below. `qoute` is an accepted alias
                     // (owner's own spelling). The quote text is taken from
-                    // cleanTxt (NOT lowerTxt/cmdArgs) to preserve the user's
+                    // cleanTxt (NOT lowerTxt) to preserve the user's
                     // capitalization and intentional line breaks.
+                    //
+                    // ⚠️ SCOPE (hotfix 2026-10-12, owner screenshot): this
+                    // region sits OUTSIDE the `if (lowerTxt.startsWith(
+                    // currentPrefix))` block above that defines primaryCmd/
+                    // cmdArgs — referencing them here threw "primaryCmd is
+                    // not defined" on EVERY command dispatched after this
+                    // point (bare quote included). Only storage.run-callback
+                    // scope vars are legal here: lowerTxt / cleanTxt / m /
+                    // sock / chatId / senderJid / botConfig — the same set
+                    // the bare block below uses. The engine's own timeout
+                    // catch (~line 32016) documents this exact trap.
                     if (
-                      (primaryCmd === "quote" || primaryCmd === "qoute") &&
-                      cmdArgs.length > 1
+                      lowerTxt.startsWith(
+                        `${botConfig.getPrefix().toLowerCase()} quote `,
+                      ) ||
+                      lowerTxt.startsWith(
+                        `${botConfig.getPrefix().toLowerCase()} qoute `,
+                      )
                     ) {
                       const qRaw = cleanTxt
-                        .substring(currentPrefix.length)
+                        .substring(botConfig.getPrefix().length)
                         .trim()
                         .replace(/^\S+\s*/, ""); // drop the command word, keep case + newlines
                       await handleQuoteImageCommand(
