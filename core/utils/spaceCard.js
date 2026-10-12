@@ -179,20 +179,45 @@ function searchUrl(query, mediaType) {
 function assetUrl(nasaId) {
   return `${NASA_BASE}/asset/${encodeURIComponent(nasaId)}`;
 }
-/** Pick the best image item from a /search JSON (media_type=image). */
-function pickImageItem(searchJson, preferTerms = []) {
+/** Rank image items from a /search JSON (media_type=image). Curated-source
+ *  boost: PIA* ids are the Photo Journal press picks (visually reliable);
+ *  GSFC_* archive entries are frequently near-black IR plates. Telescope
+ *  mentions (Hubble/JWST/Spitzer) also boost. Returns ranked array. */
+function pickImageItems(searchJson, preferTerms = [], limit = 3) {
   const items = (searchJson?.collection?.items || []).filter((it) => it?.data?.[0]?.nasa_id);
-  if (!items.length) return null;
+  if (!items.length) return [];
   const score = (it) => {
     const d = it.data[0];
+    const id = String(d.nasa_id || "");
     const hay = `${d.title || ""} ${d.description || ""} ${(d.keywords || []).join(" ")}`.toLowerCase();
     let s = 0;
     for (const t of preferTerms) if (t && hay.includes(t.toLowerCase())) s += 2;
     if ((d.title || "").toLowerCase().includes(preferTerms[0]?.toLowerCase() || "")) s += 3;
     if (d.center && String(d.center).toUpperCase() !== "NONE") s += 1;
+    if (/^pia/i.test(id)) s += 4; // Photo Journal press images — curated, vivid
+    if (/hubble|jwst|webb|spitzer|telescope/.test(hay)) s += 2;
+    if (/^gsfc_.*archive/i.test(id)) s -= 3; // GSFC daily-archive: hit-or-miss exposure
     return s;
   };
-  return items.map((it) => ({ it, s: score(it) })).sort((a, b) => b.s - a.s)[0].it;
+  return items.map((it) => ({ it, s: score(it) })).sort((a, b) => b.s - a.s).slice(0, limit).map((x) => x.it);
+}
+function pickImageItem(searchJson, preferTerms = []) {
+  return pickImageItems(searchJson, preferTerms, 1)[0] || null;
+}
+/** Average luminance 0-255 of an image buffer (tiny 24×24 sample). Guards
+ *  against near-black archive plates reaching the card. */
+async function sampleLuma(imageBuf, { createCanvas, loadImage }) {
+  if (typeof createCanvas !== "function" || typeof loadImage !== "function") return 255;
+  try {
+    const img = await loadImage(imageBuf);
+    const c = createCanvas(24, 24);
+    const cx = c.getContext("2d");
+    cx.drawImage(img, 0, 0, 24, 24);
+    const d = cx.getImageData(0, 0, 24, 24).data;
+    let sum = 0;
+    for (let i = 0; i < d.length; i += 4) sum += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+    return sum / (d.length / 4);
+  } catch (e) { return 255; /* unreadable -> let the renderer decide */ }
 }
 /** From an /asset manifest, pick the best jpg href (large > orig > any). */
 function pickImageHref(assetJson) {
@@ -328,6 +353,6 @@ function _pill(ctx, x, y, w, h, r) {
 module.exports = {
   CATALOG, NASA_BASE, UA,
   normalize, resolveBody,
-  searchUrl, assetUrl, pickImageItem, pickImageHref, pickVideoHref, libraryLink,
+  searchUrl, assetUrl, pickImageItem, pickImageItems, sampleLuma, pickImageHref, pickVideoHref, libraryLink,
   buildSpaceText, renderSpaceCard,
 };

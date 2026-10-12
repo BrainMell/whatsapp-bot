@@ -2790,36 +2790,63 @@ async function startBot(configInstance) {
         const q = body ? body.q : query;
         const UA = spaceCard.UA;
 
-        // 1) imagery: search → asset manifest → download (thumb fallback)
+        // 1) imagery: ranked candidates → manifest → download → luma gate.
+        // Ranking prefers PIA Photo-Journal press images + telescope shots;
+        // near-black archive plates (luma < 14) are skipped while a next
+        // candidate exists — the last candidate is always accepted.
         const searchRes = await axios.get(spaceCard.searchUrl(q, "image"),
           { headers: { "User-Agent": UA }, timeout: 12000 });
-        const item = spaceCard.pickImageItem(searchRes.data, body ? [body.name, body.type] : [query]);
-        if (!item || !item?.data?.[0]?.nasa_id) {
+        const prefer = body ? [body.name, body.type] : [query];
+        const candidates = spaceCard.pickImageItems(searchRes.data, prefer, 3);
+        if (!candidates.length) {
           await sock.sendMessage(chatId, {
             text: BOT_MARKER + `🪐 nothing in the NASA archive for "${query.slice(0, 80)}" — try a planet, moon, nebula or mission name.`,
           }, { quoted: m });
           await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
           return;
         }
-        const nasaId = item.data[0].nasa_id;
-        const itemTitle = String(item.data[0].title || query).slice(0, 90);
-
-        let imageBuf = _spaceImgCache.get(nasaId) || null;
-        if (!imageBuf) {
+        const { createCanvas: _cc, loadImage: _li } = require("canvas");
+        let item = null, nasaId = null, itemTitle = null, imageBuf = null;
+        for (let ci = 0; ci < candidates.length; ci++) {
+          const cand = candidates[ci];
+          const cid = cand.data[0].nasa_id;
+          const cached = _spaceImgCache.get(cid);
+          if (cached) {
+            item = cand; nasaId = cid; imageBuf = cached;
+            itemTitle = String(cand.data[0].title || query).slice(0, 90);
+            break;
+          }
           try {
-            const manifest = (await axios.get(spaceCard.assetUrl(nasaId),
+            const manifest = (await axios.get(spaceCard.assetUrl(cid),
               { headers: { "User-Agent": UA }, timeout: 12000 })).data;
             let href = spaceCard.pickImageHref(manifest);
-            if (href) {
-              const url = /^https?:/i.test(href) ? href : "https://images-assets.nasa.gov" + href;
-              const r = await axios.get(url, {
-                responseType: "arraybuffer", headers: { "User-Agent": UA },
-                timeout: 25000, maxContentLength: 30 * 1024 * 1024,
-              });
-              if (r.status === 200) imageBuf = Buffer.from(r.data);
+            if (!href) continue;
+            const url = /^https?:/i.test(href) ? href : "https://images-assets.nasa.gov" + href;
+            const r = await axios.get(url, {
+              responseType: "arraybuffer", headers: { "User-Agent": UA },
+              timeout: 25000, maxContentLength: 30 * 1024 * 1024,
+            });
+            if (r.status !== 200) continue;
+            const buf = Buffer.from(r.data);
+            const luma = await spaceCard.sampleLuma(buf, { createCanvas: _cc, loadImage: _li });
+            if (luma < 14 && ci < candidates.length - 1) {
+              console.log(`🪐 [umap] candidate ${cid} too dark (luma ${luma.toFixed(1)}) — trying next`);
+              continue;
             }
-          } catch (e) { /* thumb fallback below */ }
-          if (!imageBuf && item.links?.[0]?.href) {
+            item = cand; nasaId = cid; imageBuf = buf;
+            itemTitle = String(cand.data[0].title || query).slice(0, 90);
+            if (_spaceImgCache.size > 40) _spaceImgCache.clear();
+            _spaceImgCache.set(nasaId, imageBuf);
+            break;
+          } catch (e) { continue; /* next candidate */ }
+        }
+        if (!item) {
+          // every candidate failed to download — fall back to candidate 0's
+          // search-thumb so the card still renders (starfield if even that fails)
+          item = candidates[0];
+          nasaId = item.data[0].nasa_id;
+          itemTitle = String(item.data[0].title || query).slice(0, 90);
+          if (item.links?.[0]?.href) {
             try {
               const tUrl = /^https?:/i.test(item.links[0].href) ? item.links[0].href : "https://images-assets.nasa.gov" + item.links[0].href;
               const r = await axios.get(tUrl, {
@@ -2828,10 +2855,6 @@ async function startBot(configInstance) {
               });
               if (r.status === 200) imageBuf = Buffer.from(r.data);
             } catch (e) { /* starfield placeholder in renderer */ }
-          }
-          if (imageBuf) {
-            if (_spaceImgCache.size > 40) _spaceImgCache.clear();
-            _spaceImgCache.set(nasaId, imageBuf);
           }
         }
 
