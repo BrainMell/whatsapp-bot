@@ -86,7 +86,10 @@ const CATALOG = [
     aliases: ["orion nebula", "m42", "orion"], stats: ["Stellar nursery, 1,344 ly away", "Visible to the naked eye in Orion's sword", "Hubble + JWST parade of protoplanetary disks"] },
   { id: "pillars", name: "Pillars of Creation", type: "nebula", emoji: "🗿", q: "Pillars of Creation Eagle Nebula",
     aliases: ["pillars of creation", "pillars", "eagle nebula", "m16"], stats: ["Eagle Nebula columns, 6,500 ly", "Light-years-tall gas towers", "JWST's infrared remake stunned 2022"] },
-  { id: "carina", name: "Carina Nebula", type: "nebula", emoji: "🌈", q: "Carina Nebula JWST",
+  // q fixes 2026-10-12: "Carina Nebula JWST" returned 0 results (suffix poisons
+  // the query) — plain term hits the PIA03515 Hubble panorama. Same for helix
+  // ("eye of god"), catseye (apostrophe %27 breaks the API) and sgra.
+  { id: "carina", name: "Carina Nebula", type: "nebula", emoji: "🌈", q: "Carina Nebula",
     aliases: ["carina nebula", "carina"], stats: ["Massive star factory, 8,500 ly", "Home of Eta Carinae, doomed hypergiant", "JWST 'Cosmic Cliffs' backdrop"] },
   { id: "crab", name: "Crab Nebula", type: "nebula", emoji: "💥", q: "Crab Nebula supernova remnant",
     aliases: ["crab nebula", "m1", "crab"], stats: ["Supernova seen from Earth in 1054 AD", "Pulsar spins 30× per second inside", "Still expanding at 1,500 km/s"] },
@@ -94,9 +97,9 @@ const CATALOG = [
     aliases: ["ring nebula", "m57", "ring"], stats: ["Dying sun-like star's shroud", "2,570 ly away in Lyra", "Preview of our Sun's far future"] },
   { id: "horsehead", name: "Horsehead Nebula", type: "nebula", emoji: "🐴", q: "Horsehead Nebula",
     aliases: ["horsehead nebula", "horsehead", "barnard 33"], stats: ["Dark dust silhouette in Orion", "Backlit by glowing hydrogen", "1,375 ly away, stellar nursery edge"] },
-  { id: "helix", name: "Helix Nebula", type: "nebula", emoji: "👁️", q: "Helix Nebula eye of god",
+  { id: "helix", name: "Helix Nebula", type: "nebula", emoji: "👁️", q: "Helix Nebula",
     aliases: ["helix nebula", "helix", "eye of god"], stats: ["The 'Eye of God' planetary nebula", "695 ly — closest bright one", "Central white dwarf at ~120,000 K"] },
-  { id: "catseye", name: "Cat's Eye Nebula", type: "nebula", emoji: "🐱", q: "Cat's Eye Nebula",
+  { id: "catseye", name: "Cat's Eye Nebula", type: "nebula", emoji: "🐱", q: "NGC 6543",
     aliases: ["cat's eye nebula", "cats eye nebula", "ngc 6543", "cat eye"], stats: ["Nested shells, knots and jets", "Hubble's most complex planetary nebula", "3,262 ly away in Draco"] },
   { id: "lagoon", name: "Lagoon Nebula", type: "nebula", emoji: "🌊", q: "Lagoon Nebula",
     aliases: ["lagoon nebula", "m8", "lagoon"], stats: ["4,100 ly, naked-eye in Sagittarius", "Hourglass core carved by radiation", "Hubble 28th anniversary subject"] },
@@ -112,7 +115,7 @@ const CATALOG = [
   { id: "magellanic", name: "Magellanic Clouds", type: "galaxy", emoji: "☁️", q: "Magellanic Clouds",
     aliases: ["magellanic clouds", "large magellanic cloud", "lmc", "smc"], stats: ["Two satellite dwarf galaxies", "163,000 / 200,000 ly away", "SN 1987A exploded in the LMC"] },
   // black holes
-  { id: "sgra", name: "Sagittarius A*", type: "black hole", emoji: "🕳️", q: "Sagittarius A black hole Event Horizon",
+  { id: "sgra", name: "Sagittarius A*", type: "black hole", emoji: "🕳️", q: "Sagittarius A",
     aliases: ["sagittarius a", "sagittarius a*", "sgr a", "sgra", "black hole"], stats: ["Milky Way's central black hole", "4.3 million solar masses", "EHT imaged it, 12 May 2022"] },
   { id: "m87", name: "M87*", type: "black hole", emoji: "🕳️", q: "M87 black hole first image",
     aliases: ["m87", "m87*", "messier 87"], stats: ["First-ever black hole photo", "6.5 billion solar masses", "Relativistic jet 5,000 ly long"] },
