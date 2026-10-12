@@ -8353,6 +8353,18 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               }
             } catch (_actLogErr) { /* logging must never break participant handling */ }
 
+            // 🔪 MURDER MYSTERY LEAVER HOOK (2026-10-12): a guest who leaves or is
+            // removed mid-case used to stay on the roster acting from outside via
+            // DMs. Lobby: off the guest list. In play: they flee (= death), the
+            // case stays loophole-free. Never breaks participant handling.
+            try {
+              if ((action === 'leave' || action === 'remove') && typeof murderMystery.handleParticipantLeave === 'function') {
+                await murderMystery.handleParticipantLeave(id, participants, action);
+              }
+            } catch (_mmLeaveErr) {
+              console.log('🔪 [MurderMystery] leaver hook error (non-fatal):', _mmLeaveErr.message);
+            }
+
             // AUTO-UNDO MANUAL ACTIONS
             if (author && typeof author === 'string' && (action === "promote" || action === "demote" || action === "remove")) {
               const authorNormalized = jidNormalizedUser(author);
@@ -8970,6 +8982,15 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     try { await sock.sendMessage(chatId, { delete: m.key }); } catch (e) {}
                     try { console.log(`🔪 [MurderMystery] deleted message from the dead: ${senderJid} in ${chatId}`); } catch (e) {}
                     return; // the dead do not speak in the manor
+                  }
+
+                  // 🔪 MURDER MYSTERY MEDIA GATE (owner 2026-10-12: last game some
+                  // players posted fake DM screenshots as "evidence"): while a case
+                  // is live in this group, player-posted images/stickers/documents
+                  // are deleted and a throttled notice is posted instead. The
+                  // manor's own cards are untouched (fromMe filtered above).
+                  if (isGroupChat && !m.key.fromMe && !m.message?.protocolMessage && murderMystery.gateGameMedia({ chatId, m })) {
+                    return; // the manor burns player images on sight
                   }
 
                   // ============================================

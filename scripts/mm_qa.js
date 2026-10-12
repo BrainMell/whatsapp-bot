@@ -54,6 +54,14 @@ QA_BALANCES.set('100000000000009@s.whatsapp.net', 1000000);
 QA_BALANCES.set('100000000000010@s.whatsapp.net', 1000000);
 QA_BALANCES.set('100000000000011@s.whatsapp.net', 1000000);
 
+// ---- botConfig stub: QA keys must NEVER collide with the real bot's System
+// keys (botIdSafe() reads this) - QA games live under murder_mm_*_qa-bot ----
+const botConfigPath = require.resolve(path.join(__dirname, '..', 'botConfig.js'));
+require.cache[botConfigPath] = {
+  id: botConfigPath, filename: botConfigPath, loaded: true,
+  exports: { getBotId: () => 'qa-bot', getPrefix: () => '.j', get: () => null },
+};
+
 const mm = require(path.join(__dirname, '..', 'core', 'games', 'murdermystery', 'index.js'));
 const system = require(path.join(__dirname, '..', 'core', 'utils', 'system.js'));
 const characters = require(path.join(__dirname, '..', 'core', 'games', 'murdermystery', 'characters.js'));
@@ -221,7 +229,10 @@ async function runPass(n) {
   const t0 = Date.now();
   await mm.handleCommand(ctxOf(sock, { sub: 'start' }));
   const g = mm._internal.getGame(CHAT);
-  ok(g && g.phase === 'NIGHT', 'B2 game reaches NIGHT after deal');
+  // 2026-10-12: startGame now schedules the 30s cast-introduction chain and
+  // returns during STARTING; night 1 begins after the last introduction
+  // (MM_QA_FAST=1 shrinks the chain to 250ms/step in QA)
+  ok(await waitFor(() => g && g.phase === 'NIGHT', 30000), 'B2 game reaches NIGHT after deal (+intro chain)');
   const roles = g.players.map((p) => p.role).sort();
   ok(roles.filter((r) => r === 'KILLER').length === 1, 'B3 exactly one killer');
   ok(roles.filter((r) => r === 'INVESTIGATOR').length === 1, 'B4 exactly one investigator');
@@ -444,7 +455,7 @@ async function runPass(n) {
   const sockCountBefore = sock.out.length;
   await mm.handleCommand(ctxOf(sock, { sub: 'start' }));
   const g3 = mm._internal.getGame(CHAT);
-  ok(g3 && g3.phase === 'NIGHT', 'I1 second game started');
+  ok(await waitFor(() => g3 && g3.phase === 'NIGHT', 30000), 'I1 second game started (intro chain)');
   // shortcut: parity reached by marking deaths (win-check exercised via beginVoting)
   for (const p of g3.players.filter((x) => x.role !== 'KILLER').slice(0, 3)) { // K+1 left = parity
     p.alive = false;
@@ -480,7 +491,7 @@ async function runPass(n) {
   }
   await mm.handleCommand(ctxOf(sock, { sub: 'start' }));
   const g4 = mm._internal.getGame(CHAT);
-  ok(g4 && g4.phase === 'NIGHT', 'K1 game running for watchdog test');
+  ok(await waitFor(() => g4 && g4.phase === 'NIGHT', 30000), 'K1 game running for watchdog test (intro chain)');
   ok(g4._sock === sock, 'K1b game captured the live sock from commands');
   ok(mm._internal.sockForGame(g4) === sock, 'K1c sockForGame prefers the game sock');
   const savedSock = g4._sock; g4._sock = null;

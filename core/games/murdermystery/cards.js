@@ -1620,10 +1620,232 @@ async function renderWillCard({ playerChar, playerName, will, cause, night, mano
   });
 }
 
+// ============================================
+// EXPANDED-CASE RENDERERS (2026-10-12 owner expansion: case generator,
+// evidence assets, dossier, case report). Clue item art lives in
+// assets/clues/*.jpg — real bytes, NOT LFS (jpg is outside the *.png rule).
+// ============================================
+const CLUE_DIR = path.join(ASSETS, 'clues');
+
+async function loadClue(art) {
+  if (!art) return null;
+  const p = path.join(CLUE_DIR, art);
+  if (!fs.existsSync(p)) return null;
+  try { return await loadImageFile(p); } catch (e) { return null; }
+}
+
+// Character introduction (MD §7): portrait card + backstory caption,
+// delivered one per 30s after the doors lock
+async function renderCharacterIntroCard({ char, caption, index, total, manorName }) {
+  return renderCard(PORT_W, PORT_H, async (ctx) => {
+    const bg = await loadBg('gallery');
+    drawCover(ctx, bg, 0, 0, PORT_W, PORT_H);
+    atmosphere(ctx, PORT_W, PORT_H, { dark: 0.74 });
+
+    await drawSprite(ctx, char.id, PORT_W / 2 + 60, 1120, 760);
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = '30px EB-Semi';
+    ctx.fillStyle = C.amber;
+    spaced(ctx, `GUEST ${roman(index)} OF ${roman(total)}`, PORT_W / 2, 140, 8);
+
+    const nm = String(char.name || 'A Guest').toUpperCase();
+    fitFont(ctx, nm, 'PF-Black', 84, 700);
+    ctx.fillStyle = C.ivory;
+    ctx.shadowColor = 'rgba(0,0,0,0.85)';
+    ctx.shadowBlur = 16;
+    ctx.fillText(nm, PORT_W / 2, 240);
+    ctx.shadowColor = 'transparent';
+
+    ctx.font = 'italic 38px PF-MedIt';
+    ctx.fillStyle = C.amberHi;
+    ctx.fillText(String(char.title || ''), PORT_W / 2, 300);
+
+    ornament(ctx, PORT_W / 2, 352, 420);
+
+    ctx.textAlign = 'left';
+    ctx.font = '31px EB-Reg';
+    ctx.fillStyle = C.ivory;
+    wrap(ctx, String(caption || ''), 130, 1150, 640, 46, 4);
+
+    footer(ctx, PORT_W, PORT_H, manorName);
+  });
+}
+
+// Evidence find (MD §6): item art inset + confirmed/rumour tag + line
+async function renderEvidenceCard({ itemName, art, tag, line, roomName, night, manorName }) {
+  return renderCard(LAND_W, LAND_H, async (ctx) => {
+    const bg = await loadBg('hallway_a');
+    drawCover(ctx, bg, 0, 0, LAND_W, LAND_H);
+    atmosphere(ctx, LAND_W, LAND_H, { dark: 0.82 });
+
+    ctx.textAlign = 'center';
+    ctx.font = '28px EB-Semi';
+    ctx.fillStyle = C.amber;
+    spaced(ctx, `A SEARCH OF ${String(roomName || 'the manor').toUpperCase()}`, LAND_W / 2, 150, 6);
+
+    const label = String(itemName || 'Evidence').toUpperCase();
+    fitFont(ctx, label, 'PF-Black', 74, 1150);
+    ctx.fillStyle = C.ivory;
+    ctx.shadowColor = 'rgba(0,0,0,0.85)';
+    ctx.shadowBlur = 14;
+    ctx.fillText(label, LAND_W / 2, 240);
+    ctx.shadowColor = 'transparent';
+
+    // framed item art
+    const img = await loadClue(art);
+    const boxW = 560, boxH = 380, boxX = (LAND_W - boxW) / 2, boxY = 300;
+    if (img) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(boxX, boxY, boxW, boxH);
+      ctx.clip();
+      drawCover(ctx, img, boxX, boxY, boxW, boxH);
+      ctx.restore();
+      ctx.strokeStyle = 'rgba(236,226,200,0.55)';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(boxX, boxY, boxW, boxH);
+    }
+
+    ctx.font = '34px Type';
+    if (String(tag) === 'confirmed') {
+      ctx.fillStyle = C.crimsonHi;
+      spaced(ctx, '\u00b7 CONFIRMED \u00b7', LAND_W / 2, boxY + boxH + 84, 8);
+    } else {
+      ctx.fillStyle = C.fog;
+      spaced(ctx, '\u00b7 RUMOUR - CIRCUMSTANTIAL \u00b7', LAND_W / 2, boxY + boxH + 84, 8);
+    }
+
+    ctx.font = 'italic 36px PF-MedIt';
+    ctx.fillStyle = C.ivory;
+    ctx.textAlign = 'center';
+    wrap(ctx, `\u201C${String(line || '')}\u201D`, 240, boxY + boxH + 156, 1120, 50, 3);
+
+    ctx.font = '26px EB-Reg';
+    ctx.fillStyle = C.ivoryDim;
+    ctx.fillText(`night ${night} \u00b7 noted by the house`, LAND_W / 2, LAND_H - 148);
+
+    footer(ctx, LAND_W, LAND_H, manorName);
+  });
+}
+
+// Private dossier (MD §9): the player's own knowledge, rendered as notes
+async function renderDossierCard({ playerName, sections, manorName }) {
+  return renderCard(PORT_W, PORT_H, async (ctx) => {
+    const bg = await loadBg('library');
+    drawCover(ctx, bg, 0, 0, PORT_W, PORT_H);
+    atmosphere(ctx, PORT_W, PORT_H, { dark: 0.84 });
+
+    ctx.textAlign = 'center';
+    ctx.font = '32px EB-Semi';
+    ctx.fillStyle = C.amber;
+    spaced(ctx, 'PRIVATE CASE DOSSIER', PORT_W / 2, 150, 8);
+
+    const head = `${String(playerName || 'Guest').toUpperCase()}\u2019S NOTES`;
+    fitFont(ctx, head, 'PF-Black', 54, 720);
+    ctx.fillStyle = C.ivory;
+    ctx.fillText(head, PORT_W / 2, 224);
+    ornament(ctx, PORT_W / 2, 272, 420);
+
+    let y = 344;
+    ctx.textAlign = 'left';
+    for (const s of sections || []) {
+      if (!s || !s.lines || !s.lines.length) continue;
+      ctx.font = '26px EB-Semi';
+      ctx.fillStyle = C.amberHi;
+      spaced(ctx, String(s.title || '').toUpperCase(), 120, y, 5, 'left');
+      y += 44;
+      ctx.font = '28px EB-Reg';
+      ctx.fillStyle = C.ivory;
+      for (const ln of s.lines.slice(0, 4)) {
+        y = wrap(ctx, `\u2022 ${ln}`, 130, y, 660, 38, 2) + 8;
+      }
+      y += 14;
+      if (y > PORT_H - 200) break;
+    }
+
+    ctx.textAlign = 'center';
+    ctx.font = '24px Type';
+    ctx.fillStyle = 'rgba(236,226,200,0.72)';
+    ctx.fillText('seen by you alone', PORT_W / 2, PORT_H - 132);
+
+    footer(ctx, PORT_W, PORT_H, manorName);
+  });
+}
+
+// Post-game case report (MD §12): the truth, revealed
+async function renderCaseReportCard({ manorName, winner, motiveTitle, motiveDetail, webFrames, truthLines, killerNames }) {
+  return renderCard(LAND_W, LAND_H, async (ctx) => {
+    const bg = await loadBg('manor');
+    drawCover(ctx, bg, 0, 0, LAND_W, LAND_H);
+    atmosphere(ctx, LAND_W, LAND_H, { dark: 0.8 });
+
+    ctx.textAlign = 'center';
+    ctx.font = '30px EB-Semi';
+    ctx.fillStyle = C.amber;
+    spaced(ctx, 'THE CASE, EXPLAINED', LAND_W / 2, 150, 8);
+
+    const headline = winner === 'civ' ? 'MYSTERY SOLVED' : 'THE KILLER WINS';
+    fitFont(ctx, headline, 'PF-Black', 88, 1240);
+    ctx.fillStyle = winner === 'civ' ? C.ivory : C.crimsonHi;
+    ctx.shadowColor = 'rgba(0,0,0,0.85)';
+    ctx.shadowBlur = 16;
+    ctx.fillText(headline, LAND_W / 2, 244);
+    ctx.shadowColor = 'transparent';
+
+    ctx.font = '30px EB-Reg';
+    ctx.fillStyle = C.ivoryDim;
+    ctx.fillText(`The killer${(killerNames || []).length > 1 ? 's were' : ' was'}: ${(killerNames || []).join(' & ')}`, LAND_W / 2, 304);
+    ornament(ctx, LAND_W / 2, 354, 480);
+
+    ctx.textAlign = 'left';
+    let y = 434;
+    ctx.font = '27px EB-Semi';
+    ctx.fillStyle = C.amberHi;
+    spaced(ctx, `MOTIVE - ${String(motiveTitle || '').toUpperCase()}`, 120, y, 5, 'left');
+    y += 42;
+    ctx.font = '29px EB-Reg';
+    ctx.fillStyle = C.ivory;
+    y = wrap(ctx, String(motiveDetail || ''), 130, y, 1340, 40, 2) + 18;
+
+    if (webFrames && webFrames.length) {
+      ctx.font = '27px EB-Semi';
+      ctx.fillStyle = C.amberHi;
+      spaced(ctx, 'THE TIES THAT BOUND THEM', 120, y, 5, 'left');
+      y += 42;
+      ctx.font = '28px EB-Reg';
+      ctx.fillStyle = C.ivory;
+      for (const f of webFrames.slice(0, 3)) {
+        y = wrap(ctx, `\u2022 ${f}`, 130, y, 1340, 38, 1) + 8;
+      }
+      y += 10;
+    }
+    if (truthLines && truthLines.length) {
+      ctx.font = '27px EB-Semi';
+      ctx.fillStyle = C.amberHi;
+      spaced(ctx, 'WHAT THE EVIDENCE MEANT', 120, y, 5, 'left');
+      y += 42;
+      ctx.font = '28px EB-Reg';
+      ctx.fillStyle = C.ivory;
+      for (const t of truthLines.slice(0, 4)) {
+        y = wrap(ctx, `\u2022 ${t}`, 130, y, 1340, 38, 1) + 8;
+      }
+    }
+    footer(ctx, LAND_W, LAND_H, manorName);
+  });
+}
+
 module.exports = {
   C,
   cv,
   registerFonts,
+  CLUE_DIR,
+  loadClue,
+  renderCharacterIntroCard,
+  renderEvidenceCard,
+  renderDossierCard,
+  renderCaseReportCard,
   loadBg,
   loadSprite,
   roman,

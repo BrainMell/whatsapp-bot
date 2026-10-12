@@ -48,6 +48,14 @@ require.cache[economyPath] = {
   },
 };
 
+// ---- botConfig stub: QA keys must NEVER collide with the real bot's System
+// keys (botIdSafe() reads this) - QA games live under murder_mm_*_qa-bot ----
+const botConfigPath = require.resolve(path.join(__dirname, '..', 'botConfig.js'));
+require.cache[botConfigPath] = {
+  id: botConfigPath, filename: botConfigPath, loaded: true,
+  exports: { getBotId: () => 'qa-bot', getPrefix: () => '.j', get: () => null },
+};
+
 const mm = require(path.join(__dirname, '..', 'core', 'games', 'murdermystery', 'index.js'));
 const system = require(path.join(__dirname, '..', 'core', 'utils', 'system.js'));
 const cards = require(path.join(__dirname, '..', 'core', 'games', 'murdermystery', 'cards.js'));
@@ -123,6 +131,15 @@ function aliveIdxOf(g, target, excludeSelfJid = null, includeSelf = false) {
 }
 
 async function nightActions(sock, g, opts = {}) {
+  // 2026-10-12: the cast-introduction chain means start resolves into NIGHT
+  // asynchronously - callers wait for NIGHT before driving night actions
+  const t0 = Date.now();
+  while (Date.now() - t0 < 30000) {
+    const cur = mm._internal.getGame(g.chatId);
+    if (cur && cur.phase === 'NIGHT') break;
+    await sleep(250);
+  }
+  g = mm._internal.getGame(g.chatId) || g;
   const killer = roleOf(g, 'KILLER');
   const invest = roleOf(g, 'INVESTIGATOR');
   const guard = roleOf(g, 'GUARDIAN');
@@ -167,7 +184,9 @@ async function voteAll(sock, g, choose) {
 // play one game to the end. mode: 'smart' (vote killer), 'dumb' (vote innocents), 'random'
 async function playToEnd(sock, g, mode) {
   let guard = 0;
-  while (g && g.phase !== 'ENDED' && guard++ < 12) {
+  // guard raised 12 -> 60: the intro chain polls STARTING for a few ticks and
+  // real games run several phase cycles; 12 could exhaust before ENDED
+  while (g && g.phase !== 'ENDED' && guard++ < 60) {
     if (g.phase === 'STARTING') { await sleep(300); g = mm._internal.getGame(g.chatId); continue; }
     if (g.phase === 'NIGHT') {
       g.extendedTonight = true;
