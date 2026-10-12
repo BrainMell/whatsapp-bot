@@ -5,10 +5,12 @@
 // grok or anything like that." — i.e. answers must come from REAL search
 // results (with visible sources), not free-form chat.
 //
-// Design (mirrors quoteCard.js): ZERO network calls here. The engine fetches
-// the search pages (DuckDuckGo html → DuckDuckGo lite → Bing) and calls
-// Groq; every function in this module is pure so QA can run offline against
-// fixture HTML.
+// Design: ZERO network calls here. The engine fetches the search pages and
+// calls Groq; every parser/formatter in this module is pure so QA can run
+// offline against fixture HTML. The ONLY state is the small result cache +
+// 429 breaker below — added after the 2026-10-12 13:49Z incident where Brave
+// rate-limited BOTH box IPs mid-burst and retries kept hammering the dead
+// backend (see cacheGet/noteBackend429).
 
 const MAX_QUERY = 300; // sanity cap for questions
 const MAX_RESULTS = 6; // sources shown to the user
@@ -265,6 +267,31 @@ function parseBraveHtml(html) {
   return out;
 }
 
+// bing.com/search?q=...&format=rss — keyless structured RSS. Verified live
+// 2026-10-12 (Box2): serves REAL organic items (fandom/YouTube/etc.) and, at
+// 13:49-13:53Z, kept working while the HTML SERP flipped to anti-bot decoys
+// and Brave 429'd — the RSS endpoint is a different code path at Bing's edge
+// and historically does not serve the decoy SERP treatment.
+function parseBingRss(xml) {
+  const out = [];
+  if (!xml) return out;
+  const items = String(xml).match(/<item>[\s\S]*?<\/item>/g) || [];
+  for (const item of items) {
+    const tM = item.match(/<title>([\s\S]*?)<\/title>/);
+    const lM = item.match(/<link>([\s\S]*?)<\/link>/);
+    if (!tM || !lM) continue;
+    const url = stripTags(lM[1]).trim();
+    // channel-level / nav links point back at bing itself — not results
+    if (!validUrl(url) || /(^|\.)bing\.com/i.test(domainOf(url))) continue;
+    const title = stripTags(tM[1]);
+    if (!title) continue;
+    const dM = item.match(/<description>([\s\S]*?)<\/description>/);
+    const snippet = dM ? stripTags(dM[1]) : "";
+    out.push({ title, snippet, url, domain: domainOf(url) });
+  }
+  return out;
+}
+
 function dedupeAndCap(results, cap = MAX_RESULTS) {
   const seen = new Set();
   const out = [];
@@ -277,6 +304,71 @@ function dedupeAndCap(results, cap = MAX_RESULTS) {
     if (out.length >= cap) break;
   }
   return out;
+}
+
+// ------------------------------------------- result cache + 429 breaker
+// Incident 2026-10-12 13:49-13:53Z (joker): Brave answered 429 to BOTH box
+// IPs mid-burst; DDG is anomaly-blocked on those IPs; Bing intermittently
+// serves decoy SERPs → the (correct) failure message fired 3× for retries of
+// the SAME query. Two cheap guards:
+//   • result cache — a query answered once is answered from memory for 10 min
+//     (retries cost zero backend hits, and re-asks of hot queries don't
+//     contribute to rate-limit pressure);
+//   • per-backend 429 breaker — a backend that just answered 429 is skipped
+//     for 8 min (half-open after) instead of being re-hit every attempt, so
+//     it can actually cool down. State is per-process (per bot), harmless.
+const CACHE_TTL_MS = 10 * 60 * 1000;
+const CACHE_MAX = 60;
+const BREAKER_MS = 8 * 60 * 1000;
+const _searchCache = new Map(); // normQuery → {results, backend, ts}
+const _breakerUntil = new Map(); // backend name → skip-until ts
+
+function cacheKeyOf(query) {
+  return normalizeQuery(query).toLowerCase();
+}
+
+function cacheGet(query, nowMs = Date.now()) {
+  const hit = _searchCache.get(cacheKeyOf(query));
+  if (!hit) return null;
+  if (nowMs - hit.ts > CACHE_TTL_MS) {
+    _searchCache.delete(cacheKeyOf(query));
+    return null;
+  }
+  return hit;
+}
+
+function cacheSet(query, results, backend, nowMs = Date.now()) {
+  if (!results || !results.length) return;
+  if (!_searchCache.has(cacheKeyOf(query)) && _searchCache.size >= CACHE_MAX) {
+    // evict oldest entry (insertion-ordered Map → first key is oldest)
+    const oldest = _searchCache.keys().next().value;
+    if (oldest !== undefined) _searchCache.delete(oldest);
+  }
+  _searchCache.set(cacheKeyOf(query), {
+    results: results.slice(0, MAX_RESULTS),
+    backend: String(backend || "unknown"),
+    ts: nowMs,
+  });
+}
+
+function noteBackend429(name, nowMs = Date.now()) {
+  _breakerUntil.set(String(name || ""), nowMs + BREAKER_MS);
+}
+
+function isBackendSkip(name, nowMs = Date.now()) {
+  const key = String(name || "");
+  const until = _breakerUntil.get(key);
+  if (!until) return false;
+  if (nowMs >= until) {
+    _breakerUntil.delete(key); // half-open: backend gets another chance
+    return false;
+  }
+  return true;
+}
+
+function resetSearchState() {
+  _searchCache.clear();
+  _breakerUntil.clear();
 }
 
 // ------------------------------------------------------- relevance gate
@@ -423,7 +515,13 @@ module.exports = {
   parseDdgLite,
   parseBingHtml,
   parseBraveHtml,
+  parseBingRss,
   dedupeAndCap,
+  cacheGet,
+  cacheSet,
+  noteBackend429,
+  isBackendSkip,
+  resetSearchState,
   significantWords,
   relevantEnough,
   buildSynthesisPrompt,

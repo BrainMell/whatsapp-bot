@@ -22,6 +22,12 @@
  *     dispatch scope-safety, aliases, 3 backends, MIN_RESULTS gate, SMART
  *     synthesis, results-only fallback wired, awardProgression, registry.
  *  H. Collisions — `search` stays the anime alias; nothing else re-bound.
+ *  K. 429 resilience — bing-rss parser (decoy-resistant keyless endpoint),
+ *     result cache (TTL/miss/eviction), per-backend 429 breaker (trip,
+ *     half-open, isolation), engine wiring pins (cache-first flow, eligible
+ *     retry pass, backend order incl. bing-rss). Born from the 2026-10-12
+ *     13:49Z incident: Brave 429'd BOTH box IPs, retries hammered the dead
+ *     backend, every fallback failed → "couldn't reach any search backend".
  */
 const fs = require("fs");
 const path = require("path");
@@ -216,8 +222,8 @@ ok("all three parsers wired",
   engineSrc.includes("parse: aiOverview.parseBingHtml"));
 ok("MIN_RESULTS gate used", engineSrc.includes("parsed.length >= aiOverview.MIN_RESULTS"));
 ok("relevance gate wired (anti-decoy)", engineSrc.includes("aiOverview.relevantEnough(query, parsed)"));
-ok("primary-backend retry on all-fail (decoys are per-request)", engineSrc.includes("gotResults = await runBackends([backends[0]]);"));
-ok("synthesis via groq + SMART model", /handleGoogleSearchCommand[\s\S]{0,6000}groq\.chat\.completions\.create\(\s*\{[\s\S]{0,400}model: MODELS\.SMART/.test(engineSrc));
+ok("one immediate retry after all-fail — first ALIVE backend (decoys are per-request; 429-dead ones are never re-hit)", engineSrc.includes("gotResults = await runBackends([firstAlive]);") && /if \(firstAlive\) gotResults = await runBackends\(\[firstAlive\]\);/.test(engineSrc));
+ok("synthesis via groq + SMART model", /handleGoogleSearchCommand[\s\S]{0,9000}groq\.chat\.completions\.create\(\s*\{[\s\S]{0,400}model: MODELS\.SMART/.test(engineSrc));
 ok("synthesis failure → results-only fallback",
   engineSrc.includes("aiOverview.buildResultsOnlyMessage(query, results)") &&
   engineSrc.includes("aiOverview.buildOverviewMessage(query, answer, results)"));
@@ -291,6 +297,41 @@ const createBody = synthWin.slice(synthWin.indexOf("completions.create("), synth
 ok("body does NOT leak 'timeout:' property (Groq 400: unsupported)", createBody.includes("completions.create(") && !createBody.includes("timeout:"));
 ok("timeout passed as per-request OPTIONS (2nd arg) instead", synthWin.includes("{ timeout: 25000 }"));
 ok("synthesis still grounded: temperature 0.2 + max_tokens 700 kept", synthWin.includes("temperature: 0.2") && synthWin.includes("max_tokens: 700"));
+
+// ── K. 429 resilience (bing-rss + cache + breaker; 2026-10-12 13:49Z) ──────
+console.log("\nK. 429 resilience (bing-rss, cache, breaker)");
+ok("aiOverview exports the resilience surface", ["parseBingRss","cacheGet","cacheSet","noteBackend429","isBackendSkip","resetSearchState"].every((k) => typeof ao[k] === "function"));
+const BING_RSS_FIXTURE = `<?xml version="1.0" encoding="utf-8" ?><rss version="2.0"><channel><title>Bing: goku vs saitama</title><link>http://www.bing.com:80/search?q=goku+vs+saitama</link><description>Search results</description><item><title>Goku | Dragon Ball Wiki | Fandom</title><link>https://dragonball.fandom.com/wiki/Goku</link><description>Son Goku is the main protagonist of the Dragon Ball series &amp;#8212; a saiyan raised on Earth.</description></item><item><title>Goku All Forms And Transformations [Remastered HD]</title><link>https://www.youtube.com/watch?v=4ZBm6fHp2Mw</link><description>Every goku transformation ranked.</description></item><item><title>Bing nav helper</title><link>http://www.bing.com/search?q=other</link><description>internal bing link — not a result</description></item></channel></rss>`;
+ao.resetSearchState();
+const rssParsed = ao.parseBingRss(BING_RSS_FIXTURE);
+ok("parseBingRss extracts real items", rssParsed.length === 2, `got ${rssParsed.length}`);
+ok("parseBingRss skips bing-internal links", rssParsed.every((r) => !/bing\.com/i.test(r.domain)));
+ok("parseBingRss title+url+domain shape", rssParsed[0] && rssParsed[0].title === "Goku | Dragon Ball Wiki | Fandom" && rssParsed[0].url === "https://dragonball.fandom.com/wiki/Goku" && rssParsed[0].domain === "dragonball.fandom.com");
+ok("parseBingRss decodes entities in snippets", /— a saiyan raised on Earth/.test(rssParsed[0]?.snippet || ""), rssParsed[0]?.snippet);
+ok("parseBingRss empty/null safe", ao.parseBingRss("").length === 0 && ao.parseBingRss(null).length === 0);
+// cache behavior
+ao.cacheSet("Goku  VS Saitama!", rssParsed, "bing-rss", 1000);
+ok("cache hit is case/whitespace-insensitive", (ao.cacheGet("goku vs saitama!", 2000) || {}).backend === "bing-rss");
+ok("cache miss for different query", ao.cacheGet("one punch man", 2000) === null);
+ok("cache TTL expiry (10min)", ao.cacheGet("goku vs saitama!", 1000 + 10 * 60 * 1000 + 1) === null);
+ao.cacheSet("saitama vs goku", [], "bing-rss", 1000);
+ok("cache refuses empty result sets", ao.cacheGet("saitama vs goku", 2000) === null);
+// breaker behavior
+ao.noteBackend429("brave", 1000);
+ok("429 → backend skipped inside window", ao.isBackendSkip("brave", 2000) === true);
+ok("breaker isolated per backend", ao.isBackendSkip("bing-rss", 2000) === false && ao.isBackendSkip("bing", 2000) === false);
+ok("breaker half-open after 8min", ao.isBackendSkip("brave", 1000 + 8 * 60 * 1000) === false);
+ao.resetSearchState();
+ok("resetSearchState clears cache+breakers", ao.cacheGet("goku vs saitama!") === null && ao.isBackendSkip("brave") === false);
+// engine wiring pins
+const gIdx = (s) => engineSrc.indexOf(s);
+ok("engine wires bing-rss backend with parseBingRss", /name:\s*"bing-rss"/.test(engineSrc) && /parse:\s*aiOverview\.parseBingRss/.test(engineSrc));
+ok("backend order brave → bing → bing-rss → ddg-html → ddg-lite", ["brave", "bing", "bing-rss", "ddg-html", "ddg-lite"].every((n, i, a) => i === 0 || gIdx(`name: "${n}"`) > gIdx(`name: "${a[i - 1]}"`)));
+ok("cache lookup happens before backends run", gIdx("aiOverview.cacheGet(query)") >= 0 && gIdx("aiOverview.cacheGet(query)") < gIdx("const runBackends"));
+ok("cache hit short-circuits backend loop", /if \(!cached\) \{\s*\n\s*let gotResults = await runBackends\(eligible\(\)\);/.test(engineSrc));
+ok("429 trips the per-backend breaker", engineSrc.includes("aiOverview.noteBackend429(b.name)") && /beErr\?\.response\?\.status === 429/.test(engineSrc));
+ok("retry pass targets first ALIVE backend (not blind backends[0])", /const firstAlive = eligible\(\)\[0\];/.test(engineSrc) && !/runBackends\(\[backends\[0\]\]\)/.test(engineSrc));
+ok("results cached after success for retries", /if \(!cached\) aiOverview\.cacheSet\(query, results, usedBackend\);/.test(engineSrc));
 
 console.log(`\n${"═".repeat(50)}\nRESULT: ${pass} pass, ${fail} fail ${fail === 0 ? "— ALL GREEN ✅" : "— FAILURES ❌"}`);
 process.exit(fail === 0 ? 0 : 1);

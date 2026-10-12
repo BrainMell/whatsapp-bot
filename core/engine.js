@@ -2388,12 +2388,29 @@ async function startBot(configInstance) {
           });
         }
 
-        // 1) Search — try each backend until one returns ≥ MIN_RESULTS parses
-        // AND passes the relevance gate. Order (verified live 2026-10-12
-        // from both box egresses): BRAVE first — serves REAL organic results
-        // to the box IPs; Bing intermittently serves anti-bot DECOY SERPs
-        // (structurally perfect, wrong topic); DDG answers anomaly/202 on
-        // both box IPs; Google wants JS, Startpage runs an Anubis PoW wall.
+        // 1) Cache — a query answered in the last 10 min is answered from
+        // memory (zero backend hits). Added after the 2026-10-12 13:49Z
+        // Brave-429 incident: retries of the same query kept hammering
+        // rate-limited backends with identical requests and kept failing.
+        let results = [];
+        let usedBackend = "none";
+        const cached = aiOverview.cacheGet(query);
+        if (cached) {
+          results = cached.results;
+          usedBackend = `cache(${cached.backend})`;
+          console.log(`🌐 [google] cache hit (${cached.backend}) for "${query.slice(0, 60)}"`);
+        }
+
+        // 2) Search — try each backend until one returns ≥ MIN_RESULTS parses
+        // AND passes the relevance gate. Order (verified live 2026-10-12 from
+        // both box egresses): BRAVE serves REAL organic results but rate-
+        // limits the box-IP class under burst (429'd BOTH boxes at 13:49Z);
+        // Bing HTML intermittently serves anti-bot DECOY SERPs (structurally
+        // perfect, wrong topic — the gate rejects them) while BING-RSS (the
+        // keyless structured endpoint) kept serving real items through that
+        // exact window; DDG answers anomaly/202 on both box IPs; Google wants
+        // JS, Startpage runs an Anubis PoW wall, Mojeek/Yep/Ecosia/Qwant
+        // captcha or 403 datacenter IPs (probed same day).
         const UA =
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
         const backends = [
@@ -2418,6 +2435,17 @@ async function startBot(configInstance) {
                 maxRedirects: 5,
               }),
             parse: aiOverview.parseBingHtml,
+          },
+          {
+            name: "bing-rss",
+            fn: () =>
+              axios.get("https://www.bing.com/search", {
+                params: { q: query, format: "rss", count: 10 },
+                headers: { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9" },
+                timeout: 9000,
+                maxRedirects: 5,
+              }),
+            parse: aiOverview.parseBingRss,
           },
           {
             name: "ddg-html",
@@ -2449,12 +2477,12 @@ async function startBot(configInstance) {
           },
         ];
 
-        let results = [];
-        let usedBackend = "none";
-        // Relevance gate: Bing intermittently serves anti-bot DECOY SERPs
+        // Relevance gate: Bing HTML intermittently serves anti-bot DECOY SERPs
         // (structurally perfect, wrong topic — verified live 2026-10-12), so
         // a result set must actually mention the question's significant
         // words before we accept it (aiOverview.relevantEnough).
+        const eligible = () =>
+          backends.filter((b) => !aiOverview.isBackendSkip(b.name));
         const runBackends = async (list) => {
           for (const b of list) {
             try {
@@ -2472,15 +2500,26 @@ async function startBot(configInstance) {
               if (parsed.length > results.length && relevant) results = parsed; // best usable partial
             } catch (beErr) {
               console.log(`🌐 [google] ${b.name} failed: ${beErr.message}`);
+              // 429 → open the per-backend breaker so the endpoint cools
+              // down instead of being re-hit on every attempt/retry pass.
+              if (beErr?.response?.status === 429) {
+                aiOverview.noteBackend429(b.name);
+                console.log(`🌐 [google] ${b.name} rate-limited — breaker open 8min`);
+              }
             }
           }
           return false;
         };
-        let gotResults = await runBackends(backends);
-        if (!gotResults) {
-          // Decoy/challenge SERPs are per-request — ONE immediate retry of
-          // the primary backend before giving up.
-          gotResults = await runBackends([backends[0]]);
+        if (!cached) {
+          let gotResults = await runBackends(eligible());
+          if (!gotResults) {
+            // Decoy/challenge SERPs are per-request — ONE immediate retry of
+            // the first backend still alive. Never blindly backends[0]:
+            // re-hitting a 429-cooling backend (old behavior) fed Brave more
+            // requests during the 13:49Z incident and prolonged the block.
+            const firstAlive = eligible()[0];
+            if (firstAlive) gotResults = await runBackends([firstAlive]);
+          }
         }
 
         if (!results.length) {
@@ -2490,6 +2529,9 @@ async function startBot(configInstance) {
               "🌐 couldn't reach any search backend right now — try again in a moment.",
           });
         }
+
+        // remember for 10 min — retries/re-asks of this query cost zero hits
+        if (!cached) aiOverview.cacheSet(query, results, usedBackend);
 
         // 2) Synthesize — grounded in the excerpts ONLY, citations required.
         let answer = "";
