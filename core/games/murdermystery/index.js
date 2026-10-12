@@ -3,7 +3,7 @@
 // A turn-based social deduction game for WhatsApp.
 //
 // Loop: lobby → secret roles (DM image cards) → cast introductions (30s apart)
-//       → night (kill + room / investigate / protect) → dawn
+//       → night (kill + room / compare / protect) → dawn
 //       → search phase → body discovery → ghost clues + case evidence
 //       → discussion (ask guests, dossier) → voting → elimination → repeat.
 //
@@ -51,6 +51,8 @@ const QA_CLOCK = !!process.env.MM_QA_CLOCK;
 const NIGHT_MS = QA_CLOCK ? 3000 : 180000;       // 3 minutes of darkness (real humans need to read + act)
 const NUDGE_BEFORE_MS = QA_CLOCK ? 800 : 45000;  // "the night is thinning" DM before dawn
 const DAWN_EXTEND_MS = QA_CLOCK ? 1500 : 60000;  // one extension while a required actor sleeps
+// discussion/vote windows must outlast REAL on-box card-render latency
+// (~1-2s per card) or the harness acts after the phase has rolled over
 const DISCUSS_MS = QA_CLOCK ? 15000 : 300000;    // 5 minutes of accusations (and one search each)
 const VOTE_MS = QA_CLOCK ? 10000 : 90000;        // 90s on the ballot
 const LOBBY_TTL_MS = 30 * 60000;
@@ -199,6 +201,10 @@ function adoptGame(chatId, g, now) {
       if (ga) g.nightActs[normJid(ga.jid)] = { type: 'protect', targetJid: g.protectTargetJid };
     }
   }
+  // compare-era migration: in-flight investigators get the pairing budget
+  for (const p of (g.players || [])) {
+    if (p.role === 'INVESTIGATOR' && p.compLeft == null) p.compLeft = COMPARE_BUDGET;
+  }
   games.set(chatId, { ...g, _resolving: false, _resolving2: false });
   // rebuild dead-player silences (they live in memory only)
   for (const p of (g.players || [])) {
@@ -318,6 +324,22 @@ async function handleParticipantLeave(chatId, participants, action) {
 // deleted and a throttled notice is posted instead. Stickers and documents
 // pass through untouched (owner 2026-10-12 20:26Z). The bot's own cards are
 // untouched (fromMe is filtered by the engine gate).
+// every wrapper generation WhatsApp has shipped for once-mode media, plus the
+// ephemeral disappearing wrapper (which may nest a view-once inside itself)
+const VO_WRAP_KEYS = ['viewOnceMessage', 'viewOnceMessageV2', 'viewOnceMessageV2Extension'];
+function leakVector(node, inOnce, depth) {
+  if (!node || typeof node !== 'object' || depth > 4) return false;
+  if (node.imageMessage) return true; // images burn at any depth - the screenshot vector
+  if (inOnce && (node.videoMessage || node.audioMessage || node.pttMessage)) return true; // once-mode media
+  for (const k of VO_WRAP_KEYS) {
+    const c = node[k];
+    if (c && c.message && leakVector(c.message, true, depth + 1)) return true;
+  }
+  const eph = node.ephemeralMessage; // disappearing wrapper - transparent, not once-mode
+  if (eph && eph.message && leakVector(eph.message, inOnce, depth + 1)) return true;
+  return false;
+}
+
 function gateGameMedia({ chatId, m }) {
   const g = getGame(chatId);
   if (!g || g.phase === PHASE.LOBBY || g.phase === 'ENDED') return false;
@@ -326,13 +348,12 @@ function gateGameMedia({ chatId, m }) {
   // owner 2026-10-12 20:26Z: "Don't auto delete stickers, only view once
   // messages and images" - stickers and documents pass through; images and
   // view-once media (the screenshot-leak vectors) still burn.
-  const hasMedia = !!(
-    msg.imageMessage ||
-    (msg.viewOnceMessageV2 && msg.viewOnceMessageV2.message &&
-      (msg.viewOnceMessageV2.message.imageMessage || msg.viewOnceMessageV2.message.videoMessage)) ||
-    (msg.viewOnceMessage && msg.viewOnceMessage.message && msg.viewOnceMessage.message.imageMessage) ||
-    (msg.ephemeralMessage && msg.ephemeralMessage.message && msg.ephemeralMessage.message.imageMessage)
-  );
+  // 2026-10-12 22:40Z, owner: "people can still send view once messages fix
+  // that" - the flat shape-list missed the newer wrappers. Walk the container
+  // tree instead: images burn wherever they hide (any depth), while video and
+  // audio only burn inside a view-once wrapper (a plain video or a normal
+  // ephemeral voice note is not a screenshot vector).
+  const hasMedia = leakVector(msg, false, 0);
   if (!hasMedia) return false;
   const sock = sockForGame(g);
   try { if (sock && m.key) sock.sendMessage(chatId, { delete: m.key }).catch(() => {}); } catch (e) {}
@@ -391,6 +412,15 @@ function livingInvestigator(game) {
 
 function livingInvestigators(game) {
   return alivePlayers(game).filter((p) => p.role === 'INVESTIGATOR');
+}
+
+// has this living investigator satisfied the night? 'investigate' acts belong
+// to in-flight pre-nerf games; an investigator out of pairings no longer
+// holds the night hostage (owner 2026-10-12: 3 pairwise weighings per case)
+function invActedTonight(g, inv) {
+  const a = g.nightActs && g.nightActs[normJid(inv.jid)];
+  if (a && (a.type === 'compare' || a.type === 'investigate')) return true;
+  return inv.compLeft != null && inv.compLeft <= 0;
 }
 
 function livingKillers(game) {
@@ -595,9 +625,8 @@ async function sendNightNudges(chatId) {
     }
   }
   for (const inv of livingInvestigators(g)) {
-    const acted = g.nightActs && g.nightActs[normJid(inv.jid)] && g.nightActs[normJid(inv.jid)].type === 'investigate';
-    if (!acted) {
-      await sendDM(sock, inv.jid, `🌙 The night thins - ${left}s of dark remain.\n\`${g.prefix} mm investigate <number>\` before dawn takes the chance from you.`);
+    if (!invActedTonight(g, inv)) {
+      await sendDM(sock, inv.jid, `🌙 The night thins - ${left}s of dark remain.\n\`${g.prefix} mm compare <number> <number>\` - lay two guests on the scales before dawn.`);
     }
   }
   const ga = livingGuardian(g);
@@ -610,10 +639,8 @@ async function sendNightNudges(chatId) {
 function nightNeedsExtension(g) {
   if (!g || g.extendedTonight) return false;
   if (livingKillers(g).length && !g.killerTargetJid) return true;
-  const invs = livingInvestigators(g);
-  for (const inv of invs) {
-    const acted = g.nightActs && g.nightActs[normJid(inv.jid)] && g.nightActs[normJid(inv.jid)].type === 'investigate';
-    if (!acted) return true;
+  for (const inv of livingInvestigators(g)) {
+    if (!invActedTonight(g, inv)) return true;
   }
   return false;
 }
@@ -917,6 +944,7 @@ async function startGame(ctx) {
     p.char = cast[i];
     p.role = killerIdxs.includes(i) ? 'KILLER' : investIdxs.includes(i) ? 'INVESTIGATOR' : i === guardianIdx ? 'GUARDIAN' : 'CIVILIAN';
     p.alive = true;
+    if (p.role === 'INVESTIGATOR') p.compLeft = COMPARE_BUDGET; // owner nerf 2026-10-12: 3 pairwise weighings per case
   });
   g.v2 = true;
   g.nightActs = {}; // per-player night action ledger (supports 2 inv / 2 killers)
@@ -1051,7 +1079,7 @@ function roleCardCaption(p, g, partnerOf) {
     return `🔪 You are THE KILLER.${partnerLine}\nEach night, choose a guest to eliminate - then choose the room where the body lies.\nYour identity is secret - even from the dead.\n(At night, in this chat: \`${prefix} mm kill <n>\`, then \`${prefix} mm room <n>\`.)`;
   }
   if (p.role === 'INVESTIGATOR') {
-    return `🕵️ You are AN INVESTIGATOR.\nEach night you may study one guest.\nThe result arrives here, by candlelight.\n(At night, in this chat: \`${prefix} mm investigate <n>\`.)`;
+    return `🕵️ You are AN INVESTIGATOR.\nEach night you may lay two guests on the scales - and learn which one unsettles the house more. A lean, never a verdict.\nThree weighings per case - spend them well.\n(At night, in this chat: \`${prefix} mm compare <n> <n>\`.)`;
   }
   if (p.role === 'GUARDIAN') {
     return `👼 You are THE GUARDIAN.\nEach night you may watch over one guest - or yourself. If the knife comes for them, it will be turned away, and no one will know why.\n(At night, in this chat: \`${prefix} mm protect <n|me>\`.)`;
@@ -1067,7 +1095,7 @@ function textRoleCard(p, g, partnerOf) {
     return `🔪 *${head}*YOU ARE THE KILLER.*${partnerLine}\nEliminate the guests night after night - and choose where each body lies. Survive the discussion. Dodge the vote.\n\nYour identity is secret. Tell no one.`;
   }
   if (p.role === 'INVESTIGATOR') {
-    return `🕵️ *${head}*YOU ARE AN INVESTIGATOR.*\nEach night you may investigate one living guest. The result is yours alone.\n\nKeep it secret. Spend it wisely.`;
+    return `🕵️ *${head}*YOU ARE AN INVESTIGATOR.*\nEach night you may weigh two guests against each other - and learn which one the house finds more suspicious. A lean, never a verdict.\nThree weighings per case. The result is yours alone.\n\nKeep it secret. Spend it wisely.`;
   }
   if (p.role === 'GUARDIAN') {
     return `👼 *${head}*YOU ARE THE GUARDIAN.*\nEach night, watch over one guest - or yourself. If the killer comes for them, you turn the knife away. Nobody will know.\n\nStay secret. Stay watchful.`;
@@ -1123,8 +1151,8 @@ async function beginNight(sock, chatId) {
     } else if (p.role === 'INVESTIGATOR') {
       const roster = rosterLines(g, p.jid).join('\n');
       await sendDM(sock, p.jid,
-        `🌙 *NIGHT ${g.night} - ${cases.MANOR_NAME}*\n\nYou are the *INVESTIGATOR*.\nChoose someone to investigate:\n\n${roster}\n\n` +
-        `\`${g.prefix} mm investigate <number>\` - or a name.\nYou cannot investigate yourself.\nThe result will find you here, by candlelight.\n⏱️ The night lasts *3 minutes* - do not let dawn take your chance.`);
+        `🌙 *NIGHT ${g.night} - ${cases.MANOR_NAME}*\n\nYou are the *INVESTIGATOR*.\nLay two guests on the scales:\n\n${roster}\n\n` +
+        `\`${g.prefix} mm compare <number> <number>\` - two different guests, never you.\nThe scales tell you which one unsettles the house more - a lean, never a verdict.\nWeighings left this case: *${p.compLeft == null ? COMPARE_BUDGET : p.compLeft}*.\n⏱️ The night lasts *3 minutes* - do not let dawn take your chance.`);
     } else if (p.role === 'GUARDIAN') {
       const roster = rosterLines(g, null, p.jid).join('\n');
       await sendDM(sock, p.jid,
@@ -1224,63 +1252,124 @@ function killerChose(g, p) {
   return !!(a && (a.type === 'kill' || a.type === 'room'));
 }
 
-async function submitInvestigate(ctx, rawTarget) {
+// legacy habit - the single-target study was removed (owner 2026-10-12:
+// "let's nerf investigator... they can compare 2 characters and see if one
+// is more likely to be the killer than another"). The old command stays
+// alive as an in-world rule-change notice so muscle memory is not punished
+// with silence.
+async function submitInvestigate(ctx, _rawTarget) {
+  const { sock, chatId, senderJid, botMarker } = ctx;
+  const g = findGameForPlayer(senderJid);
+  const prefix = (g && g.prefix) || ctx.prefix || '.j';
+  return sendGroup(sock, chatId, `${botMarker}🕯️ The house changed the rules of the candle: you no longer point at a single guest. Lay *two* side by side instead - \`${prefix} mm compare <number> <number>\` - and the scales tell you which one unsettles the house more.`);
+}
+
+// ---------- investigator: the scales (pairwise weighings) ----------
+// The old study was a deterministic KILLER/CLEAN read - one question a night
+// that nearly solved the case for the table. The replacement is directional
+// only: two guests on the scales, the house's unease between them. Scores are
+// derived from the case truth (motive web, secrets) and memoized per game so
+// re-weighing the same pair never flips its answer. Never a role, never proof.
+const COMPARE_BUDGET = 3;        // pairings per investigator per case
+const COMPARE_STRONG_GAP = 26;   // gap >= this: a clear lean
+const COMPARE_SOFT_GAP = 12;     // gap >= this: a hunch; below: too close to call
+const COMPARE_FLAVOR = [
+  'The candle holds its breath.',
+  'The scales swing once, then settle.',
+  'The manor keeps its arithmetic to itself.',
+  'Whatever the truth is, it is not ready to be spoken.',
+];
+
+function ensureSusScores(g) {
+  if (g.susScores && Object.keys(g.susScores).length) return g.susScores;
+  const kase = g.case || {};
+  const webCount = {};
+  for (const w of (kase.web || [])) {
+    webCount[w.a] = (webCount[w.a] || 0) + 1;
+    webCount[w.b] = (webCount[w.b] || 0) + 1;
+  }
+  const killerIds = new Set(g.players.filter((p) => p.role === 'KILLER').map((p) => p.char && p.char.id));
+  const scores = {};
+  for (const p of g.players) {
+    const id = p.char && p.char.id;
+    if (!id) continue;
+    let s;
+    if (killerIds.has(id)) {
+      s = 54 + (webCount[id] ? 6 : 0) + Math.floor(Math.random() * 15); // 54-74: top of the table, never announced
+    } else {
+      s = 12 + (webCount[id] ? 8 : 0) + (kase.secrets && kase.secrets[id] ? 9 : 0) + Math.floor(Math.random() * 17); // 12-45: suspicious, still innocent
+    }
+    scores[id] = Math.max(5, Math.min(84, s));
+  }
+  g.susScores = scores;
+  return scores;
+}
+
+async function submitCompare(ctx, rawTarget) {
   const { sock, chatId, senderJid, botMarker } = ctx;
   if (ctx.isGroup) return sendGroup(sock, chatId, `${botMarker}🕯️ That command belongs in a DM with the bot.`);
   const g = findGameForPlayer(senderJid);
   if (g) noteSock(g, sock);
   const phaseOk = g && g.phase === PHASE.NIGHT;
-  console.log(`🔪 [MurderMystery] mm investigate try jid=${normJid(senderJid)} hasGame=${!!g} phase=${g ? g.phase : '-'} accepted=${!!phaseOk}`);
-  if (!phaseOk) return sendGroup(sock, chatId, `${botMarker}🌙 There is no open night to act in.${g && (g.phase === PHASE.DISCUSSION || g.phase === PHASE.VOTING) ? ' Dawn already broke - your next chance comes with the next night (3 minutes long). Act early.' : ''}`);
+  console.log(`🔪 [MurderMystery] mm compare try jid=${normJid(senderJid)} hasGame=${!!g} phase=${g ? g.phase : '-'} accepted=${!!phaseOk}`);
+  if (!phaseOk) return sendGroup(sock, chatId, `${botMarker}🌙 There is no open night to weigh guests in.${g && (g.phase === PHASE.DISCUSSION || g.phase === PHASE.VOTING) ? ' Dawn already broke - your next chance comes with the next night (3 minutes long). Act early.' : ''}`);
   const me = getPlayer(g, senderJid);
   if (!me) return sendGroup(sock, chatId, `${botMarker}🌙 You are not part of this mystery.`);
-  if (!me.alive) return sendGroup(sock, chatId, `${botMarker}🌙 The dead investigate nothing. Rest.`);
-  if (me.role !== 'INVESTIGATOR') return sendGroup(sock, chatId, `${botMarker}🌙 You have no badge, no candle, and no right to snoop.`);
-  // per-investigator ledger (2026-10-12 role scaling): each investigator owns
-  // their own nightly action - two investigators may even study the same guest
+  if (!me.alive) return sendGroup(sock, chatId, `${botMarker}🌙 The dead weigh nothing. Rest.`);
+  if (me.role !== 'INVESTIGATOR') return sendGroup(sock, chatId, `${botMarker}🌙 You have no badge, no candle, and no scales to carry.`);
+  if ((me.compLeft == null ? COMPARE_BUDGET : me.compLeft) <= 0) {
+    return sendGroup(sock, chatId, `${botMarker}🌙 You have laid every pairing you can bear on the scales. The house grants an investigator *three* weighings per case - they are spent.`);
+  }
+  // per-investigator ledger: one weighing per night (legacy 'investigate'
+  // acts belong to in-flight pre-nerf games and count as tonight's action)
   g.nightActs = g.nightActs || {};
   const myAct = g.nightActs[normJid(senderJid)];
-  if (myAct && myAct.type === 'investigate') return sendGroup(sock, chatId, `${botMarker}🌙 You have already spent tonight's investigation.`);
+  if (myAct && (myAct.type === 'compare' || myAct.type === 'investigate')) return sendGroup(sock, chatId, `${botMarker}🌙 You have already spent tonight's weighing.`);
 
-  const target = resolveRosterTarget(g, rawTarget, senderJid);
-  if (!target) {
+  const tokens = String(rawTarget || '').split(/[\s,;]+/).map((t) => t.trim()).filter(Boolean);
+  const a = tokens.length >= 1 ? resolveRosterTarget(g, tokens[0], senderJid) : null;
+  const b = tokens.length >= 2 ? resolveRosterTarget(g, tokens[1], senderJid) : null;
+  if (!a || !b || normJid(a.jid) === normJid(b.jid)) {
     const roster = rosterLines(g, senderJid).join('\n');
-    return sendGroup(sock, chatId, `${botMarker}🌙 Choose a *living* guest who is not you:\n\n${roster}\n\n\`${g.prefix} mm investigate <number>\``);
+    return sendGroup(sock, chatId,
+      `${botMarker}🌙 Lay *two different living* guests on the scales:\n\n${roster}\n\n\`${g.prefix} mm compare <number> <number>\` - two numbers from this list.`);
   }
 
-  g.investTargetJid = g.investTargetJid || target.jid; // legacy single-slot view (status/compat)
-  g.nightActs[normJid(senderJid)] = { type: 'investigate', targetJid: target.jid };
-  g.investResults.push({ night: g.night, subject: nameOf(target), subjectJid: target.jid, verdict: target.role === 'KILLER' ? 'KILLER' : 'CLEAN', by: nameOf(me) });
+  me.compLeft = (me.compLeft == null ? COMPARE_BUDGET : me.compLeft) - 1;
+  g.nightActs[normJid(senderJid)] = { type: 'compare', aJid: a.jid, bJid: b.jid };
+
+  const scores = ensureSusScores(g);
+  const sa = scores[a.char.id] != null ? scores[a.char.id] : 30;
+  const sb = scores[b.char.id] != null ? scores[b.char.id] : 30;
+  const gap = Math.abs(sa - sb);
+  const leanP = sa >= sb ? a : b;
+  const otherP = sa >= sb ? b : a;
+  const nameA = nameOf(a);
+  const nameB = nameOf(b);
+  let verdictShort;
+  let resultLine;
+  if (gap >= COMPARE_STRONG_GAP) {
+    verdictShort = `leans hard toward ${nameOf(leanP)}`;
+    resultLine = `🕯️ Everything about *${nameOf(leanP)}* itches. Set against *${nameOf(otherP)}*, it is ${nameOf(leanP)} the house should watch.`;
+  } else if (gap >= COMPARE_SOFT_GAP) {
+    verdictShort = `leans toward ${nameOf(leanP)}`;
+    resultLine = `🌙 If the candle must be bet on one, it flickers toward *${nameOf(leanP)}* over *${nameOf(otherP)}* - a hunch, not a verdict.`;
+  } else {
+    verdictShort = 'too close to call';
+    resultLine = `🌫️ Too close to call - nothing in tonight's dark separates *${nameA}* from *${nameB}*. The scales refuse to tip.`;
+  }
+
+  g.investResults.push({ night: g.night, subject: `${nameA} vs ${nameB}`, verdict: verdictShort, by: nameOf(me) });
   // the investigator's private knowledge ledger (feeds .j mm evidence)
   g.privKnowledge = g.privKnowledge || {};
   g.privKnowledge[normJid(senderJid)] = g.privKnowledge[normJid(senderJid)] || [];
-  g.privKnowledge[normJid(senderJid)].push({ kind: 'investigation', night: g.night, text: `You studied ${nameOf(target)} (${target.char.name}): ${target.role === 'KILLER' ? 'THE KILLER.' : 'not the killer.'}` });
+  g.privKnowledge[normJid(senderJid)].push({ kind: 'comparison', night: g.night, text: `You weighed ${nameA} against ${nameB}: ${verdictShort}. (${me.compLeft} weighing${me.compLeft === 1 ? '' : 's'} left)` });
   persistGames();
-  console.log(`🔪 [MurderMystery] investigate accepted night=${g.night} subject=${normJid(target.jid)} verdict=${target.role === 'KILLER' ? 'KILLER' : 'CLEAN'}`);
+  console.log(`🔪 [MurderMystery] compare accepted night=${g.night} a=${normJid(a.jid)} b=${normJid(b.jid)} gap=${gap} left=${me.compLeft}`);
 
-  // private result, delivered immediately
-  const isKiller = target.role === 'KILLER';
-  const flavor = cases.pick(isKiller ? cases.INVEST_GUILTY : cases.INVEST_CLEAN);
-  let sent = false;
-  try {
-    const buf = await cards.renderInvestigationCard({
-      subjectChar: target.char,
-      subjectName: nameOf(target),
-      isKiller,
-      flavor,
-      night: g.night,
-      manorName: cases.MANOR_NAME,
-    });
-    if (buf) {
-      sent = await sendDMImage(sock, senderJid, buf,
-        `🕵️ *INVESTIGATION RESULT - NIGHT ${g.night}*\n\nYou studied: *${nameOf(target)}*\n\n${isKiller ? '🔴 *THE KILLER.*' : '🟢 *NOT THE KILLER.*'}\n\nKeep this information secret.`);
-    }
-  } catch (e) { /* text fallback */ }
-  if (!sent) {
-    await sendDM(sock, senderJid,
-      `🕵️ *INVESTIGATION RESULT - NIGHT ${g.night}*\n\nYou investigated:\n*${nameOf(target)}* (${target.char.name})\n\n` +
-      `${isKiller ? '🔴 *THE KILLER*' : '🟢 *NOT THE KILLER*'}\n\n_${flavor}_\n\nKeep this information secret.`);
-  }
+  const flavor = cases.pick(COMPARE_FLAVOR);
+  await sendDM(sock, senderJid,
+    `🕵️ *THE SCALES - NIGHT ${g.night}*\n\n*${nameA}* (${a.char.name})\n— against —\n*${nameB}* (${b.char.name})\n\n${resultLine}\n\n_${flavor}_\n\nPairings left this case: *${me.compLeft}*. Keep it secret.`);
   maybeResolveNight(sock || getSockSafe(), gameChatIdOf(g));
 }
 
@@ -1321,10 +1410,7 @@ function maybeResolveNight(sock, chatId) {
   if (!g || g.phase !== PHASE.NIGHT || g._resolving) return;
   const killerDone = !!g.killerTargetJid && g.killerRoomIdx != null;
   const invs = livingInvestigators(g);
-  const investDone = invs.length === 0 || invs.every((inv) => {
-    const a = g.nightActs && g.nightActs[normJid(inv.jid)];
-    return a && a.type === 'investigate';
-  });
+  const investDone = invs.length === 0 || invs.every((inv) => invActedTonight(g, inv));
   if (killerDone && investDone) {
     g._resolving = true;
     g._resolvingAt = Date.now();
@@ -2408,7 +2494,7 @@ async function showDossier(ctx) {
     { title: 'House evidence', lines: confirmed.length ? confirmed : ['Nothing confirmed yet - search rooms.'] },
     { title: 'Circumstantial', lines: rumours.slice(0, 4) },
     { title: 'Your private notes', lines: mineLines.length ? mineLines.slice(-4) : ['You hold nothing privately. Yet.'] },
-    { title: 'Your investigations', lines: myInvest.length ? myInvest.slice(-3) : (me.role === 'INVESTIGATOR' ? ['Use mm investigate at night.'] : ['You have no badge - rely on your eyes.']) },
+    { title: 'Your weighings', lines: myInvest.length ? myInvest.slice(-3) : (me.role === 'INVESTIGATOR' ? ['Use mm compare <a> <b> at night.'] : ['You have no badge - rely on your eyes.']) },
     { title: 'Statements heard', lines: heardLines.length ? heardLines.slice(-3) : ['You have questioned no one yet: mm ask <name>'] },
   ];
   const openCount = unfound ? `${unfound} body${unfound === 1 ? ' lies' : 'ies lie'} unfound.` : 'Every body has been found.';
@@ -2637,8 +2723,11 @@ async function showStatus(ctx) {
       if (me.role === 'KILLER') actionLine = g.killerTargetJid ? `\nTonight: knife chosen${g.killerRoomIdx != null ? ', body placed' : ' - now \`' + g.prefix + ' mm room <n>\`'}.`
         : `\nTonight: \`${g.prefix} mm kill <n>\`, then \`${g.prefix} mm room <n>\`.`;
       if (me.role === 'INVESTIGATOR') {
-        const acted = g.nightActs && g.nightActs[normJid(senderJid)] && g.nightActs[normJid(senderJid)].type === 'investigate';
-        actionLine = acted ? '\nTonight: your investigation is spent.' : `\nTonight: \`${g.prefix} mm investigate <n>\`.`;
+        const left = me.compLeft == null ? COMPARE_BUDGET : me.compLeft;
+        const acted = invActedTonight(g, me);
+        actionLine = acted
+          ? (left <= 0 ? '\nTonight: the scales rest - no weighings left this case.' : '\nTonight: your weighing is spent.')
+          : (left <= 0 ? '\nTonight: no weighings left this case - the scales rest.' : `\nTonight: \`${g.prefix} mm compare <n> <n>\` (${left} left).`);
       }
       if (me.role === 'GUARDIAN') actionLine = g.protectTargetJid ? '\nTonight: your watch is set.' : `\nTonight: \`${g.prefix} mm protect <n|me>\`.`;
     }
@@ -2700,7 +2789,7 @@ function helpText(prefix) {
     `• \`${prefix} mm end\` - host/mod closes the case (no prize is paid if the case never closes)\n\n` +
     `*At night (in your DM with the bot - 3 minutes):*\n` +
     `• \`${prefix} mm kill <n|name>\` - killer only, then \`${prefix} mm room <n>\` to hide the body\n` +
-    `• \`${prefix} mm investigate <n|name>\` - investigator only\n` +
+    `• \`${prefix} mm compare <a> <b>\` - investigator only: lay two guests on the scales, learn which one the house trusts less (3 weighings per case)\n` +
     `• \`${prefix} mm protect <n|me>\` - guardian only (games of 5+)\n\n` +
     `*If you dare (DM):*\n` +
     `• \`${prefix} mm taunt <message>\` - whisper into the discussion, unsigned. The manor will say if it is not yours to give.\n\n` +
@@ -2744,6 +2833,7 @@ const SUB_FIXES = {
   stat: 'status', stats: 'status',
   serch: 'search', serach: 'search', sarch: 'search', seach: 'search',
   investigat: 'investigate', investgiate: 'investigate', ivestigate: 'investigate',
+  comapre: 'compare', compair: 'compare', compaer: 'compare',
   protekt: 'protect', porotect: 'protect',
   vtoe: 'vote', vot: 'vote',
   strart: 'start', strat: 'start',
@@ -2811,10 +2901,17 @@ async function handleCommand(ctx) {
     case 'hide':
     case 'dump':
       return submitRoom(ctx, ctx.rest);
+    case 'compare':
+    case 'cmp':
+    case 'weigh':
+    case 'weighing':
+    case 'vs':
+    case 'versus':
+      return submitCompare(ctx, ctx.rest);
     case 'investigate':
     case 'inv':
     case 'study':
-      return submitInvestigate(ctx, ctx.rest);
+      return submitInvestigate(ctx, ctx.rest); // legacy habit -> rule-change notice
     case 'protect':
     case 'guard':
     case 'watch':

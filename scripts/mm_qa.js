@@ -265,15 +265,18 @@ async function runPass(n) {
   const victimPlan = civs[0];
   const others = g.players.filter((p) => p.role !== 'KILLER');
 
-  // ---------- C. NIGHT 1 - kill + room + investigate + protect ----------
+  // ---------- C. NIGHT 1 - kill + room + compare + protect ----------
   await mm.handleCommand(ctxOf(sock, { group: false, chatId: killer.jid, sender: killer.jid, name: killer.name, sub: 'kill', rest: '99' }));
   ok(dmTexts(sock, killer.jid, /Choose a \*living\* guest/) === 1, 'C1 invalid kill target rejected');
 
-  await mm.handleCommand(ctxOf(sock, { group: true, sub: 'investigate', rest: '1', sender: invest.jid, name: invest.name }));
-  ok(groupText(sock, /belongs in a DM/), 'C2 investigate in group told to DM');
+  await mm.handleCommand(ctxOf(sock, { group: true, sub: 'compare', rest: '1 2', sender: invest.jid, name: invest.name }));
+  ok(groupText(sock, /belongs in a DM/), 'C2 compare in group told to DM');
+
+  await mm.handleCommand(ctxOf(sock, { group: false, chatId: invest.jid, sender: invest.jid, name: invest.name, sub: 'compare', rest: '0' }));
+  ok(dmTexts(sock, invest.jid, /no open night|Lay \*two different living\*/) === 1, 'C3 investigator bad target handled');
 
   await mm.handleCommand(ctxOf(sock, { group: false, chatId: invest.jid, sender: invest.jid, name: invest.name, sub: 'investigate', rest: '0' }));
-  ok(dmTexts(sock, invest.jid, /no open night|Choose a \*living\*/) === 1, 'C3 investigator bad target handled');
+  ok(dmTexts(sock, invest.jid, /changed the rules/) === 1, 'C3b legacy investigate gets the rule-change notice');
 
   // killer kills the planned victim (roster number = index in alive-list minus self)
   const rosterForKiller = g.players.filter((p) => p.alive && mm._internal.normJid(p.jid) !== mm._internal.normJid(killer.jid));
@@ -287,13 +290,14 @@ async function runPass(n) {
   ok(!groupText(sock, new RegExp(`${victimPlan.name}.*dead|dead.*${victimPlan.name}`, 'i')), 'C5 victim not publicly named at kill time');
   ok(dmTexts(sock, killer.jid, /Where does the body lie|Choose the room|where the body lies/) >= 1, 'C6 room-choice DM sent to killer');
 
-  // investigator acts (on the guardian - never a self-target)
+  // investigator weighs two guests (on the guardian + one other - never self)
   const rosterForInv = g.players.filter((p) => p.alive && mm._internal.normJid(p.jid) !== mm._internal.normJid(invest.jid));
   const invSubject = playerByRole(g, 'GUARDIAN');
   const iIdx = rosterForInv.findIndex((p) => mm._internal.normJid(p.jid) === mm._internal.normJid(invSubject.jid)) + 1;
-  await mm.handleCommand(ctxOf(sock, { group: false, chatId: invest.jid, sender: invest.jid, name: invest.name, sub: 'investigate', rest: String(iIdx) }));
-  ok(dmTexts(sock, invest.jid, /INVESTIGATION RESULT|THE KILLER|NOT THE KILLER/i) >= 1, 'C7 investigation result DM sent');
-  ok(g.investResults.length === 1, 'C8 investigation recorded');
+  const jIdx = rosterForInv.findIndex((p) => mm._internal.normJid(p.jid) !== mm._internal.normJid(invSubject.jid)) + 1;
+  await mm.handleCommand(ctxOf(sock, { group: false, chatId: invest.jid, sender: invest.jid, name: invest.name, sub: 'compare', rest: `${iIdx} ${jIdx}` }));
+  ok(dmTexts(sock, invest.jid, /THE SCALES|too close to call|flickers toward|the house should watch/i) >= 1, 'C7 scales result DM sent');
+  ok(g.investResults.length === 1, 'C8 weighing recorded');
 
   // guardian watches someone who is NOT tonight's victim
   // (GA roster = full living list incl. self - number against THAT, like the module does)

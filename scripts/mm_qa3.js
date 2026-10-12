@@ -193,14 +193,16 @@ function roleCounts(g) {
     const k2Idx = k2Pool.findIndex((p) => normJid(p.jid) === normJid(t2.jid)) + 1;
     await mm.handleCommand(ctxOf(sock, k2.jid, { group: false, chatId: k2.jid, sub: 'kill', rest: String(k2Idx), sender: k2.jid, name: k2.name }));
     ok(sock.out.filter((x) => !x.isGroup && x.jid === k2.jid && /already been chosen/.test(x.text)).length >= 1, '2.4 second killer rejected after partner chose');
-    // both investigators investigate the SAME target (allowed, independent results)
+    // both investigators weigh the SAME pair (allowed, independent results)
     const tgt = g.players.find((p) => p.role === 'CIVILIAN' && p.alive && normJid(p.jid) !== normJid(civ.jid));
+    const tgt2 = g.players.find((p) => p.role === 'CIVILIAN' && p.alive && normJid(p.jid) !== normJid(civ.jid) && normJid(p.jid) !== normJid(tgt.jid));
     for (const inv of invs) {
       const pool = g.players.filter((p) => p.alive && normJid(p.jid) !== normJid(inv.jid));
       const idx = pool.findIndex((p) => normJid(p.jid) === normJid(tgt.jid)) + 1;
-      await mm.handleCommand(ctxOf(sock, inv.jid, { group: false, chatId: inv.jid, sub: 'investigate', rest: String(idx), sender: inv.jid, name: inv.name }));
+      const idx2 = pool.findIndex((p) => normJid(p.jid) === normJid(tgt2.jid)) + 1;
+      await mm.handleCommand(ctxOf(sock, inv.jid, { group: false, chatId: inv.jid, sub: 'compare', rest: `${idx} ${idx2}`, sender: inv.jid, name: inv.name }));
     }
-    ok(g.investResults.filter((r) => r.subject === tgt.name).length === 2, '2.5 both investigators studied the same guest (2 results)');
+    ok(g.investResults.filter((r) => / vs /.test(r.subject || '') && (r.subject || '').includes(tgt.name)).length === 2, '2.5 both investigators weighed the same pair (2 results)');
     ok(g.nightActs[normJid(invs[0].jid)] && g.nightActs[normJid(invs[1].jid)], '2.6 per-player ledger holds both actions');
     ok(await waitFor(() => g.phase === 'DISCUSSION', 15000), '2.7 night resolved once killers+both investigators acted');
     await mm.handleCommand(ctxOf(sock, chatId, { sub: 'end', sender: roster[0].jid, name: roster[0].name }));
@@ -227,7 +229,7 @@ function roleCounts(g) {
     const inv = g.players.find((p) => p.role === 'INVESTIGATOR');
     if (inv) {
       const pool = g.players.filter((p) => p.alive && normJid(p.jid) !== normJid(inv.jid));
-      await mm.handleCommand(ctxOf(sock, inv.jid, { group: false, chatId: inv.jid, sub: 'investigate', rest: '1', sender: inv.jid, name: inv.name }));
+      await mm.handleCommand(ctxOf(sock, inv.jid, { group: false, chatId: inv.jid, sub: 'compare', rest: '1 2', sender: inv.jid, name: inv.name }));
     }
     ok(await waitFor(() => g.phase === 'DISCUSSION', 15000), '3.3 dawn comes');
     ok((g.bodies || []).length === 1, '3.4 one body');
@@ -320,6 +322,15 @@ function roleCounts(g) {
     ok(mm.gateGameMedia({ chatId: chat, m: { key: { id: 'fake4' }, message: { stickerMessage: {} } } }) === false, '5.7 stickers NOT gated');
     ok(mm.gateGameMedia({ chatId: chat, m: { key: { id: 'fake5' }, message: { documentMessage: {} } } }) === false, '5.8 documents NOT gated');
     ok(mm.gateGameMedia({ chatId: chat, m: { key: { id: 'fake6' }, message: { viewOnceMessageV2: { message: { imageMessage: { mimetype: 'image/jpeg' } } } } } }) === true, '5.9 view-once images gated');
+    // 2026-10-12 22:40Z, owner: "people can still send view once messages fix that"
+    // - the newer wrapper generations + nesting must burn too
+    ok(mm.gateGameMedia({ chatId: chat, m: { key: { id: 'fake7' }, message: { viewOnceMessageV2Extension: { message: { imageMessage: { mimetype: 'image/jpeg' } } } } } }) === true, '5.10 v2-extension view-once image gated');
+    ok(mm.gateGameMedia({ chatId: chat, m: { key: { id: 'fake8' }, message: { ephemeralMessage: { message: { viewOnceMessageV2: { message: { imageMessage: {} } } } } } } }) === true, '5.11 ephemeral-wrapped view-once image gated');
+    ok(mm.gateGameMedia({ chatId: chat, m: { key: { id: 'fake9' }, message: { viewOnceMessage: { message: { videoMessage: {} } } } } }) === true, '5.12 view-once video gated');
+    ok(mm.gateGameMedia({ chatId: chat, m: { key: { id: 'fake10' }, message: { videoMessage: {} } } }) === false, '5.13 plain video NOT gated');
+    ok(mm.gateGameMedia({ chatId: chat, m: { key: { id: 'fake11' }, message: { ephemeralMessage: { message: { audioMessage: {} } } } } }) === false, '5.14 plain ephemeral voice note NOT gated');
+    ok(mm.gateGameMedia({ chatId: chat, m: { key: { id: 'fake12' }, message: { viewOnceMessageV2Extension: { message: { audioMessage: {} } } } } }) === true, '5.15 listen-once voice note gated');
+    ok(mm.gateGameMedia({ chatId: chat, m: { key: { id: 'fake13' }, message: { viewOnceMessageV2Extension: { message: { videoMessage: {} } } } } }) === true, '5.16 v2-extension view-once video gated');
     // lobby phase: no gating
     await mm.handleCommand(ctxOf(sock, chat, { sub: 'end', sender: roster[0].jid, name: roster[0].name }));
     const chat2 = '1203630888006@g.us';

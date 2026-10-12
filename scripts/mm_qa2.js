@@ -164,8 +164,10 @@ async function nightActions(sock, g, opts = {}) {
   if (invest && invest.alive) {
     const pool = g.players.filter((p) => p.alive && mm._internal.normJid(p.jid) !== mm._internal.normJid(invest.jid));
     const t = opts.investKiller && killer.alive ? killer : pool[0];
+    const t2 = pool.find((p) => mm._internal.normJid(p.jid) !== mm._internal.normJid(t.jid)) || pool[0];
     const iIdx = aliveIdxOf(g, t, invest.jid);
-    await mm.handleCommand(ctxOf(sock, invest.jid, { group: false, sub: 'investigate', rest: String(iIdx), sender: invest.jid, name: invest.name }));
+    const iIdx2 = aliveIdxOf(g, t2, invest.jid);
+    await mm.handleCommand(ctxOf(sock, invest.jid, { group: false, sub: 'compare', rest: `${iIdx} ${iIdx2}`, sender: invest.jid, name: invest.name }));
   }
   if (guard && guard.alive) {
     const pool = g.players.filter((p) => p.alive);
