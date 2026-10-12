@@ -305,7 +305,7 @@ async function renderAbilityInspectCard(payload) {
     const assets = require('./skillAssets');
     const canvas = getCanvas();
     ensureFonts();
-    const W = 720, H = 1120;
+    const W = 720, H = 1172;
     return await _rq().run('abilityInspect', async () => {
       const { createCanvas } = canvas;
       const cv = createCanvas(W, H);
@@ -372,7 +372,7 @@ async function renderAbilityInspectCard(payload) {
       // ── stat medallion rail: ENERGY / COOLDOWN / POWER ──
       const stats = [
         { label: 'ENERGY', value: String(payload.energy ?? '—'), glyph: '✦' },
-        { label: 'COOLDOWN', value: payload.cooldown ? `${payload.cooldown} TNT` : 'NONE', glyph: '◌' },
+        { label: 'COOLDOWN', value: payload.cooldown ? `${payload.cooldown} TURNS` : 'NONE', glyph: '◌' },
         { label: 'POWER', value: String(payload.damageLine || '—'), glyph: '⚔' },
       ];
       const mw = 190, mh = 86, gap = 22;
@@ -450,14 +450,14 @@ async function renderAbilityInspectCard(payload) {
         if (rn) {
           ctx.font = '13px Cinzel';
           ctx.fillStyle = C.text;
-          ctx.fillText(String(rn.type || '').replace(/_/g, ' ').slice(0, 18), sx, sy + 178);
+          ctx.fillText(String(rn.type || '').replace(/_/g, ' ').slice(0, 18), sx, sy + 174);
           ctx.font = '12px Cinzel';
           ctx.fillStyle = TIER_RING[rn.tier] || C.muted;
-          ctx.fillText(String(rn.tier || '').toUpperCase(), sx, sy + 196);
+          ctx.fillText(String(rn.tier || '').toUpperCase(), sx, sy + 192);
         } else {
           ctx.font = '12px Cinzel';
           ctx.fillStyle = C.dim;
-          ctx.fillText('EMPTY', sx, sy + 184);
+          ctx.fillText('EMPTY', sx, sy + 180);
         }
       }
 
