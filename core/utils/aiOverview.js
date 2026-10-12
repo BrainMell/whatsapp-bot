@@ -77,7 +77,12 @@ function decodeEntities(s) {
 }
 
 function stripTags(s) {
-  return decodeEntities(String(s || "").replace(/<[^>]*>/g, " "))
+  // ⚠️ decode BEFORE stripping: Bing snippets embed entity-encoded markup
+  // (e.g. &lt;span class=&#39;…&#39;&gt;) — stripping first would let the
+  // tags survive as literal text once entities decode. Final decode catches
+  // double-encoded fragments (&amp;lt; → &lt; → text).
+  const once = decodeEntities(String(s || ""));
+  return decodeEntities(once.replace(/<[^>]*>/g, " "))
     .replace(/\s+/g, " ")
     .trim();
 }

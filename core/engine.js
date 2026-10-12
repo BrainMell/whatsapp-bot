@@ -2388,9 +2388,24 @@ async function startBot(configInstance) {
         }
 
         // 1) Search — try each backend until one returns ≥ MIN_RESULTS parses.
+        // Order (verified live 2026-10-12): Bing FIRST — both box egresses
+        // get proper geo results from it in <1s; DuckDuckGo serves an
+        // anomaly/challenge page (HTTP 202) to both box IPs, so it stays as
+        // fallback only (in case Bing ever starts challenging us).
         const UA =
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
         const backends = [
+          {
+            name: "bing",
+            fn: () =>
+              axios.get("https://www.bing.com/search", {
+                params: { q: query, count: 10 },
+                headers: { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9" },
+                timeout: 9000,
+                maxRedirects: 5,
+              }),
+            parse: aiOverview.parseBingHtml,
+          },
           {
             name: "ddg-html",
             fn: () =>
@@ -2418,17 +2433,6 @@ async function startBot(configInstance) {
                 maxRedirects: 5,
               }),
             parse: aiOverview.parseDdgLite,
-          },
-          {
-            name: "bing",
-            fn: () =>
-              axios.get("https://www.bing.com/search", {
-                params: { q: query, count: 10 },
-                headers: { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9" },
-                timeout: 9000,
-                maxRedirects: 5,
-              }),
-            parse: aiOverview.parseBingHtml,
           },
         ];
 

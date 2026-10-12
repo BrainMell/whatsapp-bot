@@ -67,7 +67,7 @@ const DDG_LITE_FIXTURE = `<html><body><table>
 </table></body></html>`;
 
 const BING_FIXTURE = `<html><body><ol id="b_results">
-<li class="b_algo" data-id="1"><h2><a href="https://www.nasa.gov/solar" h="ID=SERP,1.1">Solar energy explained - NASA</a></h2><div class="b_caption"><p>Solar panels convert sunlight directly into electricity.</p></div></li>
+<li class="b_algo" data-id="1"><h2><a href="https://www.nasa.gov/solar" h="ID=SERP,1.1">Solar energy explained - NASA</a></h2><div class="b_caption"><p>Solar panels convert sunlight &lt;span class=&#39;mwtparahw&#39;&gt;directly&lt;/span&gt; into electricity.</p></div></li>
 <li class="b_algo b_ad" data-id="2"><h2><a href="https://ads.example.com/x">Ad result</a></h2><p>Buy things.</p></li>
 <li class="b_algo" data-id="3"><h2><a href="https://energy.gov/y">Energy page</a></h2><div class="b_caption"><p>Second real snippet about the sun.</p></div></li>
 </ol></body></html>`;
@@ -111,6 +111,8 @@ ok("ddg-lite: direct URL kept", l[1] && l[1].url === "https://direct.example.com
 const b = ao.parseBingHtml(BING_FIXTURE);
 ok("bing: 2 results (b_ad skipped)", b.length === 2, `got ${b.length}`);
 ok("bing: title + snippet parsed", b[0] && b[0].title === "Solar energy explained - NASA" && b[0].snippet.includes("directly into electricity"));
+ok("bing: entity-encoded markup stripped (real-world Bing artifact)",
+  b[0] && b[0].snippet === "Solar panels convert sunlight directly into electricity.", JSON.stringify(b[0] && b[0].snippet));
 ok("bing: empty html → []", ao.parseBingHtml("").length === 0);
 
 // ── D. dedupeAndCap ─────────────────────────────────────────────────────────
