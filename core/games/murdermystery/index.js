@@ -590,6 +590,13 @@ async function sendGroupCritical(g, chatId, text, extra = {}) {
 function schedulePhaseTimer(chatId) {
   const g = getGame(chatId);
   if (!g || !g.deadline) return;
+  // MM_QA_NOTIMER (mm_qa.js only, never set in production): the qa1
+  // discussion/voting chains render 10-20 real cards, and a timer armed at
+  // phase start rolls the machine mid-chain - a deadline-field freeze cannot
+  // retract an armed setTimeout. qa1 drives discussion/voting via forced
+  // onPhaseTimeout, so those two phases simply do not arm; nights keep their
+  // (scaled) timer for the quiet-night cycles.
+  if (process.env.MM_QA_NOTIMER && (g.phase === PHASE.DISCUSSION || g.phase === PHASE.VOTING)) return;
   const t = setTimeout(() => {
     timers.delete(chatId);
     onPhaseTimeout(chatId).catch((e) => console.error('🔪 [MurderMystery] phase timeout error:', e.message));

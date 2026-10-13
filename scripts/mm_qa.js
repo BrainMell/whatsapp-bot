@@ -12,6 +12,11 @@
 // and MM_QA_CLOCK scales the phase clocks (night 3s / discussion 15s / vote 10s)
 process.env.MM_QA_FAST = '1';
 process.env.MM_QA_CLOCK = '1';
+// no armed phase timers for DISCUSSION/VOTING (engine gate, qa1-only): this
+// suite's C/D + F/G chains render 10-20 real cards per stretch - an armed
+// timer rolls the machine mid-chain no matter what the harness does to
+// g.deadline. qa1 forces every discussion/voting transition itself.
+process.env.MM_QA_NOTIMER = '1';
 
 const path = require('path');
 
