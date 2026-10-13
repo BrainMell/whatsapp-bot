@@ -24,7 +24,11 @@
 const path = require('path');
 
 // QA_CLOCK scales the phase clocks (night 3s, dawn-extension 1.5s, discussion
-// 4s, vote 2.5s) so a quiet night's full timeout cycle runs in seconds
+// 15s, vote 10s — 56ddf4b widened discuss/vote for real on-box render latency)
+// so a quiet night's full timeout cycle runs in seconds; MM_QA_FAST (added
+// 2026-10-13) collapses the intro chain to 250ms/card — without it the 8p+
+// intro chain is 4s + n*30s and lands NIGHT far outside the wait budgets
+process.env.MM_QA_FAST = '1';
 process.env.MM_QA_CLOCK = '1';
 
 // ---- engine stub (same pattern as mm_qa.js) ----

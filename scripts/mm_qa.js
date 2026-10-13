@@ -6,6 +6,13 @@
 // Exits non-zero on any failed assertion.
 // ============================================
 
+// self-contained on-box runs (2026-10-13): the sandbox runner used to export
+// these in the shell; without them the real-canvas box never lands NIGHT inside
+// the budgets - MM_QA_FAST collapses the intro chain (4s + n*30s -> 250ms/card)
+// and MM_QA_CLOCK scales the phase clocks (night 3s / discussion 15s / vote 10s)
+process.env.MM_QA_FAST = '1';
+process.env.MM_QA_CLOCK = '1';
+
 const path = require('path');
 
 // ---- engine stub: getSockSafe() must never boot the real engine inside QA ----
@@ -92,15 +99,9 @@ function ok(cond, label) {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function waitFor(fn, ms = 9000) {
-  const t0 = Date.now();
-  while (Date.now() - t0 < ms) {
-    try { if (fn()) return true; } catch (e) {}
-    await sleep(250);
-  }
-  return !!fn();
-}
-async function waitFor(fn, ms = 9000) {
+// (2026-10-13: was a duplicated byte-identical pair; default 9s -> 20s so
+// vote/dawn resolve pipelines survive real on-box card renders ~1-2s each)
+async function waitFor(fn, ms = 20000) {
   const t0 = Date.now();
   while (Date.now() - t0 < ms) {
     try { if (fn()) return true; } catch (e) {}
@@ -244,7 +245,7 @@ async function runPass(n) {
   // 2026-10-12: startGame now schedules the 30s cast-introduction chain and
   // returns during STARTING; night 1 begins after the last introduction
   // (MM_QA_FAST=1 shrinks the chain to 250ms/step in QA)
-  ok(await waitFor(() => g && g.phase === 'NIGHT', 30000), 'B2 game reaches NIGHT after deal (+intro chain)');
+  ok(await waitFor(() => g && g.phase === 'NIGHT', 60000), 'B2 game reaches NIGHT after deal (+intro chain)');
   const roles = g.players.map((p) => p.role).sort();
   ok(roles.filter((r) => r === 'KILLER').length === 1, 'B3 exactly one killer');
   ok(roles.filter((r) => r === 'INVESTIGATOR').length === 1, 'B4 exactly one investigator');

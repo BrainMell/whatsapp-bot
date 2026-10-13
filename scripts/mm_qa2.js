@@ -8,6 +8,12 @@
 // Exits non-zero on any failed assertion.
 // ============================================
 
+// self-contained on-box runs (2026-10-13): fast intro cadence + scaled phase
+// clocks — without MM_QA_FAST the STARTING chain alone is 4s + n*30s and the
+// driver polls through it while real-canvas renders stack behind it
+process.env.MM_QA_FAST = '1';
+process.env.MM_QA_CLOCK = '1';
+
 const path = require('path');
 const fs = require('fs');
 
@@ -175,7 +181,7 @@ async function nightActions(sock, g, opts = {}) {
     const gIdx = aliveIdxOf(g, ward, null, true);
     await mm.handleCommand(ctxOf(sock, guard.jid, { group: false, sub: 'protect', rest: String(gIdx), sender: guard.jid, name: guard.name }));
   }
-  await sleep(6200); // resolveNight pipeline: 2600 debounce + 800 + 1200 pacing + card renders
+  await sleep(12000); // resolveNight pipeline: 2600 debounce + 800 + 1200 pacing + REAL-canvas card renders (~1-2s each, dawn draws several) — was 6200, sandbox-mock calibrated
   return mm._internal.getGame(g.chatId);
 }
 
@@ -191,7 +197,7 @@ async function voteAll(sock, g, choose) {
     const target = choose(p, g);
     await mm.handleCommand(ctxOf(sock, g.chatId, { sub: 'vote', rest: target, sender: p.jid, name: p.name }));
   }
-  await sleep(5200); // vote resolve: 1500 debounce + will/morning pacing + card renders
+  await sleep(10000); // vote resolve: 1500 debounce + will/morning pacing + REAL-canvas card renders — was 5200, sandbox-mock calibrated
   return mm._internal.getGame(g.chatId);
 }
 
