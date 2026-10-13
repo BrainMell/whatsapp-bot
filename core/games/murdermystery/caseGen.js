@@ -489,6 +489,58 @@ function seedNightTraces({ kase, cast, livingCharIds, killerCharIds, rooms, outc
   return items.filter(Boolean);
 }
 
+// ---------- the manor's letters (Wave 2b, owner 2026-10-13 09:59Z) ----------
+// "during night time, everyone gets the chance to search different rooms for
+// rewards and letters that more or less explain the context of why everyone
+// is there that night" - a per-case thread of numbered fragments, woven from
+// the SAME case truth (motive, web, secrets, timeline, rooms) so the letters
+// corroborate the evidence instead of decorating it. Never names the killer.
+function buildLetterPool({ kase, cast, rooms }) {
+  const out = [];
+  try {
+    if (!kase || !Array.isArray(rooms) || !rooms.length) return out;
+    const names = (cast || []).map((c) => c && c.name).filter(Boolean);
+    const nm = (i) => names[i % Math.max(1, names.length)] || 'a guest';
+    const room = (i) => rooms[i % rooms.length].name;
+    const beats = Array.isArray(kase.timeline) ? kase.timeline.slice() : [];
+    const webPairs = Array.isArray(kase.web) ? kase.web.slice() : [];
+    const secretTexts = (cast || []).map((c) => (kase.secrets && kase.secrets[c.id] || {}).text).filter(Boolean);
+
+    // 1 - the invitation
+    out.push('You were invited. So was everyone else at this table. Funny thing - nobody remembers writing the reply.');
+    // 2 - the reason the manor gathers you (the case's own motive, no name attached)
+    if (kase.motive && kase.motive.detail) {
+      out.push(`So the invitations said, in the host's own hand: "${kase.motive.detail}" Every word of it was true. That is the trouble with this house.`);
+    }
+    // 3 - the host
+    out.push('The host never came down. The staff swear the chair at the head of the table has stood empty for years. Then who poured the wine?');
+    // 4-5 - two drawn timeline beats, pinned to rooms
+    if (beats.length) {
+      const b1 = beats[0];
+      out.push(`${b1.hour} - ${b1.text}. Remember that hour. Somebody's story will need it.`);
+    }
+    if (beats.length > 1) {
+      const b2 = beats[1];
+      out.push(`${b2.hour} - ${b2.text}. I watched from the landing. Two faces were missing from the room where they should have been.`);
+    }
+    // 6 - one web pair (public texture, drawn from the case truth)
+    if (webPairs.length) {
+      const w = webPairs[Math.floor(Math.random() * webPairs.length)];
+      out.push(`${w.frame || `${w.aName || nm(0)} and ${w.bName || nm(1)} are bound to each other somehow.`} The house has watched it strain for years.`);
+    }
+    // 7 - a secret tease (never attributed)
+    if (secretTexts.length) {
+      const s = secretTexts[Math.floor(Math.random() * secretTexts.length)];
+      out.push(`Someone under this roof ${s}. Count the liars before you count the corpses.`);
+    }
+    // 8 - the rooms keep the rest
+    out.push(`The ${room(1)} was locked from the inside for twenty years. Yesterday the key was found in the ${room(2)}. The manor is tidying up. So should you.`);
+    // 9 - the closer
+    out.push('Why are YOU here? Everyone at this table was chosen. Ask yourself what for - then ask who did the choosing.');
+  } catch (e) { /* letters must never break a case */ }
+  return out;
+}
+
 // statement lookup for `.j mm ask`
 function statementFor(kase, charId) {
   if (!kase || !kase.statements || !kase.statements[charId]) return null;
@@ -506,6 +558,7 @@ module.exports = {
   generateCase,
   validateCase,
   bindEvidence,
+  buildLetterPool,
   seedNightTraces,
   statementFor,
   introCaptionFor,
