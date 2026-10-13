@@ -299,7 +299,7 @@ async function main() {
     g = mm._internal.getGame(CHATS[3]);
     ok(g && g.night >= mm._internal.BUTLER_REVEAL_NIGHT, `2.2 game reached night ${mm._internal.BUTLER_REVEAL_NIGHT}+ alive (at night ${g ? g.night : '?'}, phase ${g ? g.phase : 'gone'})`);
     ok(dmTexts(sock, butler0.jid, new RegExp(`the name behind the knife: \\*${esc(killer0.name)}\\*`, 'i')) >= 1, `2.3 butler's night-3 DM names the killer (${killer0.name})`);
-    ok(sock.out.some((m) => !m.isGroup && m.jid === butler0.jid && m.image && /THE NAME BEHIND/.test(m.text)) ||
+    ok(sock.out.some((m) => !m.isGroup && m.jid === butler0.jid && m.image && /the name behind the knife/i.test(m.text)) ||
        dmTexts(sock, butler0.jid, /third night the manor pays its debts/i) >= 1, '2.4 butler reveal arrives as a card (or text fallback)');
     // the butler's other night DMs must NOT leak the name before night 3
     const earlyLeak = sock.out.some((m) => !m.isGroup && m.jid === butler0.jid && /name behind the knife/i.test(m.text) === false && new RegExp(esc(killer0.name)).test(m.text) && /NIGHT 1 -/.test(m.text));
