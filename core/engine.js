@@ -10886,6 +10886,49 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
+                    // 🎯 .j questcap — mod-editable daily quest/dungeon cap
+                    // (owner 2026-10-13 23:18Z: "Add a mod command to edit the
+                    // dungeon limit"). View or set 1-999; persists to the shared
+                    // System collection so sibling instances converge <=60s.
+                    if (primaryCmd === "questcap" || primaryCmd === "dungeoncap") {
+                      const isModUserQc = isOwner || isGlobalMod(senderJid) || isRpgMod(senderJid) || overrideUsers.has(senderJid);
+                      if (!isModUserQc) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ This command is for moderators and above only.' });
+                        return;
+                      }
+                      const qcArg = (cmdArgs.slice(1)[0] || '').trim();
+                      if (!qcArg) {
+                        try { await economy.loadDailyQuestCapOverride(); } catch (e) {}
+                        const cur = economy.getDailyQuestCap();
+                        await sock.sendMessage(chatId, { text: BOT_MARKER +
+                          `🎯 *DAILY QUEST CAP*\n\n` +
+                          `📊 Current cap: *${cur}* quests/raids per day\n` +
+                          `🔄 Resets at UTC midnight\n\n` +
+                          `_Set with:_ \`${botConfig.getPrefix()} questcap <1-999>\`` });
+                        return;
+                      }
+                      const qcNum = Number(qcArg);
+                      if (!Number.isFinite(qcNum) || !Number.isInteger(qcNum) || qcNum < 1 || qcNum > 999) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Invalid cap. Use a whole number 1-999.\n\n_Example:_ \`${botConfig.getPrefix()} questcap 25\`` });
+                        return;
+                      }
+                      const qcPrev = economy.getDailyQuestCap();
+                      try {
+                        await economy.persistDailyQuestCap(qcNum);
+                        economy.setDailyQuestCapOverride(qcNum);
+                      } catch (e) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed to persist cap: ${e.message}` });
+                        return;
+                      }
+                      console.log(`🎯 [QuestCap] ${senderJid} set daily quest cap ${qcPrev} -> ${qcNum}`);
+                      await sock.sendMessage(chatId, { text: BOT_MARKER +
+                        `✅ *DAILY QUEST CAP UPDATED*\n\n` +
+                        `📊 ${qcPrev} → *${qcNum}* quests/raids per day\n` +
+                        `🔄 Cap resets at UTC midnight\n\n` +
+                        `_Applies immediately on this instance; sibling instances pick it up within ~60s._` });
+                      return;
+                    }
+
                     // .j blacksmith
                     if (primaryCmd === "blacksmith") {
                       await repairCommands.displayBlacksmith(sock, chatId, senderJid);

@@ -36,6 +36,7 @@ const MOD_MENU = {
     emoji: "🧬",
     tier: "rpg",
     commands: [
+      { cmd: "questcap", usage: "questcap [1-999]", desc: "View or set the daily quest/raid (dungeon) cap. No arg = view.", note: "Standalone: .j questcap" },
       { cmd: "setlevel", usage: "mod setlevel [@user] <1-100>", desc: "Set a player's level, instant + cache flushed.", console: true },
       { cmd: "setstat", usage: "mod setstat [@user] <stat> <value>", desc: "Set any player stat (str, mag, def, agi...).", console: true },
       { cmd: "setwallet", usage: "mod setwallet [@user] <amount>", desc: "Set a player's wallet to an exact amount.", console: true },

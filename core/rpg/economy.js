@@ -38,24 +38,60 @@ function getTodayKey() {
 // 💡 P4 Item 5 (2026-08-16): Daily quest cap - was 5, raised to 8 per owner request (2026-09-12),
 // then to 17 per owner request (2026-10-04).
 // Enforced server-side at quest entry. Resets at UTC midnight.
-const DAILY_QUEST_CAP = 17;
+const DAILY_QUEST_CAP = 17; // default; runtime override via .j questcap (owner 2026-10-13 23:18Z "Add a mod command to edit the dungeon limit")
+// 💡 2026-10-13: mod-editable cap. Override persists in the shared System
+// collection (key rpg_daily_quest_cap) so both instances converge; the hot
+// quest-entry path stays DB-free via a 60s lazy re-read.
+const QUEST_CAP_SYSTEM_KEY = 'rpg_daily_quest_cap';
+let _questCapOverride = null;
+let _questCapCheckedAt = 0;
+function getDailyQuestCap() {
+  return (Number.isFinite(_questCapOverride) && _questCapOverride >= 1) ? _questCapOverride : DAILY_QUEST_CAP;
+}
+function setDailyQuestCapOverride(n) {
+  const v = Number(n);
+  if (Number.isFinite(v) && v >= 1) { _questCapOverride = Math.floor(v); _questCapCheckedAt = Date.now(); }
+  return getDailyQuestCap();
+}
+async function loadDailyQuestCapOverride() {
+  try {
+    const System = require('../models/System');
+    const doc = await System.findOne({ key: QUEST_CAP_SYSTEM_KEY }).lean();
+    const v = doc ? Number(doc.value) : NaN;
+    _questCapOverride = (Number.isFinite(v) && v >= 1) ? Math.floor(v) : null;
+  } catch (e) { /* DB hiccup -> keep current value */ }
+  _questCapCheckedAt = Date.now();
+  return getDailyQuestCap();
+}
+async function persistDailyQuestCap(n) {
+  const System = require('../models/System');
+  await System.updateOne({ key: QUEST_CAP_SYSTEM_KEY }, { $set: { value: Math.floor(Number(n)) } }, { upsert: true });
+}
+function refreshDailyQuestCapLazy() {
+  if (Date.now() - _questCapCheckedAt > 60000) {
+    _questCapCheckedAt = Date.now();
+    loadDailyQuestCapOverride().catch(function () {});
+  }
+}
 function checkDailyQuestCap(userId) {
   const user = getUser(userId);
   if (!user) return { allowed: true }; // fail open if user not loaded yet
 
+  refreshDailyQuestCapLazy();
+  const cap = getDailyQuestCap();
   const today = getTodayKey();
   if (!user.dailyQuests || user.dailyQuests.date !== today) {
     user.dailyQuests = { date: today, count: 0 };
   }
-  if (user.dailyQuests.count >= DAILY_QUEST_CAP) {
+  if (user.dailyQuests.count >= cap) {
     return {
       allowed: false,
       count: user.dailyQuests.count,
-      cap: DAILY_QUEST_CAP,
-      message: `❌ *DAILY QUEST CAP REACHED*\n\nYou've completed ${DAILY_QUEST_CAP} quests/raids today.\n📊 Cap resets at UTC midnight.\n\n💡 Come back tomorrow or play other game modes (PvP, Abyss, Cards).`
+      cap: cap,
+      message: `❌ *DAILY QUEST CAP REACHED*\n\nYou've completed ${user.dailyQuests.count} quests/raids today (cap: ${cap}).\n📊 Cap resets at UTC midnight.\n\n💡 Come back tomorrow or play other game modes (PvP, Abyss, Cards).`
     };
   }
-  return { allowed: true, count: user.dailyQuests.count, cap: DAILY_QUEST_CAP };
+  return { allowed: true, count: user.dailyQuests.count, cap: cap };
 }
 
 function incrementDailyQuestCount(userId) {
@@ -2825,6 +2861,10 @@ module.exports = {
   recordSettlement,
   checkDailyQuestCap,
   incrementDailyQuestCount,
+  getDailyQuestCap,
+  setDailyQuestCapOverride,
+  loadDailyQuestCapOverride,
+  persistDailyQuestCap,
   DAILY_QUEST_CAP,
   getMarketCap,
   setMarketCap,
