@@ -3,6 +3,8 @@
 ## 1. Description
 The Stickers module provides a full suite of sticker creation and media conversion capabilities. It allows users to convert images/videos to static or animated stickers (`s`) with complex filters (e.g. crop-center, circle masks, blurred background overlay, and slow spin animation). It also allows stickers to be converted back into standard images (`toimg`) or videos (`tovid`), and supports customized metadata naming (`setpack`, `setauthor`).
 
+**QUOTE STICKER (2026-10-13):** `.j s` replying to a **text** message renders that message as a WhatsApp-style quote sticker — white rounded bubble, author name in the WhatsApp member-color palette, round profile picture on the left (initial-letter fallback avatar), message text, transparent 512×512 background. `.j s -dark` switches to the dark bubble. Renderer: `core/utils/quoteSticker.js` (node-canvas with bundled DejaVu fonts; emoji overlaid as cached twemoji PNGs because node-canvas 3.2.3 cannot rasterize color emoji). When the quoted author is unknown to the bot, the name falls back to the JID digits, then the requester's pushname.
+
 ---
 
 ## 2. Hierarchical Execution Tree

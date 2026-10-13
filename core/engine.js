@@ -14351,12 +14351,91 @@ Usage: ${newUsage}/5${warningText}`;
                     const isFlip = flagPart === "-r4"; // flip horizontal
                     const isSpin = flagPart === "-spin"; // animated slow spin 🌀
 
-                    // ── Usage (no media attached) ─────────────────────────────────────────
+                    // ── No media attached ─────────────────────────────────────────────────
                     if (!hasImage && !hasVideo) {
+                      // 💡 QUOTE STICKER (2026-10-13): `.j s` replying to a TEXT message
+                      // renders it as a WhatsApp-style quote sticker (bubble + author
+                      // name + pfp). Renderer: core/utils/quoteSticker.js (node-canvas,
+                      // bundled fonts, twemoji overlay — see module header for why).
+                      const quotedText = isReply
+                        ? (
+                            quotedMsg.conversation ||
+                            quotedMsg.extendedTextMessage?.text ||
+                            ""
+                          ).trim()
+                        : "";
+                      if (isReply && quotedText) {
+                        try {
+                          await sock.sendMessage(chatId, {
+                            react: { text: "⏳", key: m.key },
+                          });
+                          // Author identity from the quote context
+                          const qCtx =
+                            m.message?.extendedTextMessage?.contextInfo || {};
+                          let quotedJid = null;
+                          try {
+                            if (qCtx.participant)
+                              quotedJid = jidNormalizedUser(qCtx.participant);
+                          } catch {}
+                          // Display name: bot-known nickname / real WhatsApp name,
+                          // then jid digits, then the requester's own pushname.
+                          let qName = null;
+                          try {
+                            const qUser = economy.getUser(quotedJid);
+                            qName =
+                              (qUser?.nickname &&
+                                qUser.nickname !== "Adventurer" &&
+                                qUser.nickname) ||
+                              qUser?.profile?.whatsappName ||
+                              null;
+                          } catch {}
+                          if (!qName && quotedJid) qName = quotedJid.split("@")[0];
+                          if (!qName) qName = m.pushName || "User";
+
+                          const { renderQuoteSticker } = require("./utils/quoteSticker");
+                          const pngBuffer = await renderQuoteSticker({
+                            text: quotedText,
+                            name: qName,
+                            jid: quotedJid,
+                            sock,
+                            dark: flagPart === "-dark" || flagPart === "-d",
+                          });
+
+                          const qPack = system.get(`sticker_pack_name_${BOT_ID}`);
+                          const qAuthor = system.get(`sticker_author_name_${BOT_ID}`);
+                          const qSticker = new Sticker(pngBuffer, {
+                            pack: qPack || `${botConfig.getBotName()} Pack 🃏`,
+                            author:
+                              qAuthor ||
+                              m.pushName ||
+                              `${botConfig.getBotName()} User`,
+                            type: StickerTypes.DEFAULT,
+                            quality: 80,
+                          });
+                          await sock.sendMessage(
+                            chatId,
+                            await qSticker.toMessage(),
+                            { quoted: m },
+                          );
+                          await sock.sendMessage(chatId, {
+                            react: { text: "✅", key: m.key },
+                          });
+                        } catch (qsErr) {
+                          console.error("Quote sticker error:", qsErr.message);
+                          await sock.sendMessage(chatId, {
+                            react: { text: "❌", key: m.key },
+                          });
+                        }
+                        return;
+                      }
+
                       const p = botConfig.getPrefix();
                       const usage =
                         GET_BANNER(`🎨 STICKER`) +
                         `\n\n` +
+                        `*Reply to any message with:*\n\n` +
+                        `▸ \`${p} s\`      Text message → quote sticker 🗨️\n` +
+                        `▸ \`${p} s -dark\`  Same, dark theme 🌙\n\n` +
                         `*Reply to any image or video, then send a flag:*\n\n` +
                         `*── Resize ──*\n` +
                         `▸ \`${p} s\`      Original dimensions _(default)_\n` +

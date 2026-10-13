@@ -11,7 +11,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'decline', desc: 'Decline any pending invitations.', usage: 'decline' }
   ],
   STICKERS: [
-    { cmd: 's', desc: 'Create a sticker from an image/video (use -c to auto-crop) OR search for images to stickerize.', usage: 's [-c] OR s [count] [query]' },
+    { cmd: 's', desc: 'Reply to a text message → quote sticker (name+pfp). Reply to image/video → sticker (-c auto-crop). Or search images to stickerize.', usage: 's (reply to text|media, -dark for dark bubble) OR s [count] [query]' },
     { cmd: 'toimg', desc: 'Convert a sticker back into an image.', usage: 'toimg (reply to sticker)' },
     { cmd: 'tovid', desc: 'Convert an animated sticker back into a video.', usage: 'tovid (reply to sticker)' },
     { cmd: 'setpack', desc: 'Set custom sticker pack name (Owner/Mod only).', usage: 'setpack <name>' },
