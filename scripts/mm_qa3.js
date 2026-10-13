@@ -124,8 +124,8 @@ async function openAndFill(sock, chatId, roster) {
   return mm._internal.getGame(chatId);
 }
 function roleCounts(g) {
-  const c = { KILLER: 0, INVESTIGATOR: 0, GUARDIAN: 0, CIVILIAN: 0 };
-  for (const p of g.players) c[p.role]++;
+  const c = { KILLER: 0, INVESTIGATOR: 0, GUARDIAN: 0, MEDIUM: 0, BUTLER: 0, ACCOMPLICE: 0, CIVILIAN: 0 };
+  for (const p of g.players) c[p.role] = (c[p.role] || 0) + 1;
   return c;
 }
 
@@ -137,9 +137,9 @@ function roleCounts(g) {
   // ---------- 1. ROLE SCALING MATRIX ----------
   console.log('\n===== 1. ROLE SCALING =====');
   const matrix = [
-    { n: 4, K: 1, I: 1, G: 0 }, { n: 5, K: 1, I: 1, G: 1 },
-    { n: 7, K: 1, I: 1, G: 1 }, { n: 8, K: 1, I: 2, G: 1 },
-    { n: 10, K: 2, I: 2, G: 1 }, { n: 11, K: 2, I: 2, G: 1 },
+    { n: 4, K: 1, I: 1, G: 0, M: 0, B: 0, A: 0 }, { n: 5, K: 1, I: 1, G: 1, M: 0, B: 0, A: 0 },
+    { n: 7, K: 1, I: 1, G: 1, M: 0, B: 0, A: 0 }, { n: 8, K: 1, I: 2, G: 1, M: 1, B: 0, A: 0 },
+    { n: 10, K: 2, I: 2, G: 1, M: 1, B: 1, A: 1 }, { n: 11, K: 2, I: 2, G: 1, M: 1, B: 1, A: 1 },
   ];
   {
     const sock = makeSock(); QA_SOCK = sock;
@@ -153,6 +153,8 @@ function roleCounts(g) {
       const rc = roleCounts(g);
       ok(rc.KILLER === m.K && rc.INVESTIGATOR === m.I && rc.GUARDIAN === m.G,
         `1.${m.n}p deal = K${m.K}/I${m.I}/G${m.G} (got K${rc.KILLER}/I${rc.INVESTIGATOR}/G${rc.GUARDIAN})`);
+      ok((rc.MEDIUM || 0) === m.M && (rc.BUTLER || 0) === m.B && (rc.ACCOMPLICE || 0) === m.A,
+        `1.${m.n}p wave2a = M${m.M}/B${m.B}/A${m.A} (got M${rc.MEDIUM || 0}/B${rc.BUTLER || 0}/A${rc.ACCOMPLICE || 0})`);
       ok(!!g.case, `1.${m.n}p case generated`);
       if (g.case) ok(caseGen.validateCase(g.case, g.players.map((p) => p.char), g.rooms), `1.${m.n}p case validates`);
       if (m.K === 2) {
@@ -198,8 +200,10 @@ function roleCounts(g) {
     await mm.handleCommand(ctxOf(sock, k2.jid, { group: false, chatId: k2.jid, sub: 'kill', rest: String(k2Idx), sender: k2.jid, name: k2.name }));
     ok(sock.out.filter((x) => !x.isGroup && x.jid === k2.jid && /already been chosen/.test(x.text)).length >= 1, '2.4 second killer rejected after partner chose');
     // both investigators weigh the SAME pair (allowed, independent results)
-    const tgt = g.players.find((p) => p.role === 'CIVILIAN' && p.alive && normJid(p.jid) !== normJid(civ.jid));
-    const tgt2 = g.players.find((p) => p.role === 'CIVILIAN' && p.alive && normJid(p.jid) !== normJid(civ.jid) && normJid(p.jid) !== normJid(tgt.jid));
+    // (wave 2a: 9p tables have only one CIVILIAN - the scales accept any two living guests)
+    const aliveNonInv = g.players.filter((p) => p.alive && normJid(p.jid) !== normJid(invs[0].jid) && normJid(p.jid) !== normJid(invs[1].jid));
+    const tgt = aliveNonInv[0];
+    const tgt2 = aliveNonInv.find((p) => normJid(p.jid) !== normJid(tgt.jid));
     for (const inv of invs) {
       const pool = g.players.filter((p) => p.alive && normJid(p.jid) !== normJid(inv.jid));
       const idx = pool.findIndex((p) => normJid(p.jid) === normJid(tgt.jid)) + 1;

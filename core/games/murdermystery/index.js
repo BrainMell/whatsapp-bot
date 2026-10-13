@@ -77,6 +77,14 @@ const INTRO_INTERVAL_MS = process.env.MM_QA_FAST ? 250 : 30000; // one card ever
 const INTRO_FIRST_MS = process.env.MM_QA_FAST ? 250 : 4000;
 const TWO_INV_MIN_PLAYERS = 8;        // 2nd investigator joins at this size
 const TWO_KILLER_MIN_PLAYERS = 9;     // 2nd killer (partner) joins at this size
+// --- Wave 2a roles (owner 2026-10-13 09:44Z, "New role amd some other stuff") ---
+const MEDIUM_MIN_PLAYERS = 8;         // the Medium (veil) joins at this size
+const BUTLER_MIN_PLAYERS = 9;         // the Butler (night-3 name drop) joins at this size
+const ACCOMPLICE_MIN_PLAYERS = 9;     // the Accomplice (killer-side sleeper) joins at this size
+const BUTLER_REVEAL_NIGHT = 3;        // the night the butler learns the killer's name
+const SEANCE_BUDGET = 2;              // veil openings per medium per case
+const SEANCE_MAX_LEN = 300;           // words the veil will carry per whisper
+const SEANCE_COOLDOWN_MS = 2500;      // anti-spam between words through the veil
 const IMG_NOTICE_THROTTLE_MS = 10 * 60000; // media-gate notice: at most once per 10 min per chat
 const TAUNT_MAX_LEN = 160;
 const WILL_MAX_LEN = 200;
@@ -204,6 +212,7 @@ function adoptGame(chatId, g, now) {
   // compare-era migration: in-flight investigators get the pairing budget
   for (const p of (g.players || [])) {
     if (p.role === 'INVESTIGATOR' && p.compLeft == null) p.compLeft = COMPARE_BUDGET;
+    if (p.role === 'MEDIUM' && p.seanceLeft == null) p.seanceLeft = SEANCE_BUDGET; // Wave 2a migration
   }
   games.set(chatId, { ...g, _resolving: false, _resolving2: false });
   // rebuild dead-player silences (they live in memory only)
@@ -944,14 +953,28 @@ async function startGame(ctx) {
   const killerCount = nP >= TWO_KILLER_MIN_PLAYERS ? 2 : 1;
   const investCount = nP >= TWO_INV_MIN_PLAYERS ? 2 : 1;
   const guardianCount = nP >= 5 ? 1 : 0;
+  const mediumCount = nP >= MEDIUM_MIN_PLAYERS ? 1 : 0;
+  const butlerCount = nP >= BUTLER_MIN_PLAYERS ? 1 : 0;
+  const accompliceCount = nP >= ACCOMPLICE_MIN_PLAYERS ? 1 : 0;
   const killerIdxs = order.slice(0, killerCount);
   const investIdxs = order.slice(killerCount, killerCount + investCount);
-  const guardianIdx = guardianCount ? order[killerCount + investCount] : -1;
+  let roleCursor = killerCount + investCount;
+  const guardianIdx = guardianCount ? order[roleCursor++] : -1;
+  const mediumIdx = mediumCount ? order[roleCursor++] : -1;
+  const butlerIdx = butlerCount ? order[roleCursor++] : -1;
+  const accompliceIdx = accompliceCount ? order[roleCursor] : -1;
   g.players.forEach((p, i) => {
     p.char = cast[i];
-    p.role = killerIdxs.includes(i) ? 'KILLER' : investIdxs.includes(i) ? 'INVESTIGATOR' : i === guardianIdx ? 'GUARDIAN' : 'CIVILIAN';
+    p.role = killerIdxs.includes(i) ? 'KILLER'
+      : investIdxs.includes(i) ? 'INVESTIGATOR'
+      : i === guardianIdx ? 'GUARDIAN'
+      : i === mediumIdx ? 'MEDIUM'
+      : i === butlerIdx ? 'BUTLER'
+      : i === accompliceIdx ? 'ACCOMPLICE'
+      : 'CIVILIAN';
     p.alive = true;
     if (p.role === 'INVESTIGATOR') p.compLeft = COMPARE_BUDGET; // owner nerf 2026-10-12: 3 pairwise weighings per case
+    if (p.role === 'MEDIUM') p.seanceLeft = SEANCE_BUDGET;      // owner 2026-10-13: 2 veil openings per case
   });
   g.v2 = true;
   g.nightActs = {}; // per-player night action ledger (supports 2 inv / 2 killers)
@@ -976,7 +999,7 @@ async function startGame(ctx) {
   }
   g.phase = 'STARTING';
   persistGames();
-  console.log(`🔪 [MurderMystery] game started in ${chatId} - ${nP} players (killers=${killerCount} investigators=${investCount} guardian=${guardianCount})`);
+  console.log(`🔪 [MurderMystery] game started in ${chatId} - ${nP} players (killers=${killerCount} investigators=${investCount} guardian=${guardianCount} medium=${mediumCount} butler=${butlerCount} accomplice=${accompliceCount})`);
 
   await sendGroup(sock, chatId, `${botMarker}🕯️ The doors are locked${purse > 0 ? ` - the manor posts a purse of *${fmtZeni(purse)} Zeni* for the winning side` : ''}. Character envelopes are being sealed and delivered to every guest's DM…`);
 
@@ -1003,7 +1026,7 @@ async function startGame(ctx) {
   }
 
   // group introduction card
-  const roleHeadline = `${nP} guests. ${killerCount === 2 ? 'Two of them share a knife.' : 'One killer.'} ${investCount === 2 ? 'Two investigators hunt them.' : 'One detective hunts them.'}${guardianCount ? ' One guardian watches.' : ''}`;
+  const roleHeadline = `${nP} guests. ${killerCount === 2 ? 'Two of them share a knife.' : 'One killer.'} ${investCount === 2 ? 'Two investigators hunt them.' : 'One detective hunts them.'}${guardianCount ? ' One guardian watches.' : ''}${mediumCount ? ' A medium can wake the dead.' : ''}${butlerCount ? ' The butler serves every side.' : ''}${accompliceCount ? ' Someone hidden roots for the knife.' : ''}`;
   try {
     const buf = await cards.renderIntro({
       playerCount: nP,
@@ -1078,18 +1101,38 @@ function scheduleIntros(sock, chatId, cast) {
   step(0);
 }
 
+function butlerOf(g) {
+  return g.players.find((p) => p.role === 'BUTLER') || null;
+}
+
+// the killer's butler line (owner 2026-10-13: the killer knows the butler from the start)
+function killerButlerLine(g, prefix) {
+  const b = butlerOf(g);
+  if (!b) return '';
+  return `\nThe house's butler: *${nameOf(b)}* - know their face from the first night. The keys serve every side.`;
+}
+
 function roleCardCaption(p, g, partnerOf) {
   const prefix = g.prefix;
   const partner = partnerOf ? partnerOf(p) : null;
   if (p.role === 'KILLER') {
     const partnerLine = partner ? `\nYour partner in the dark: *${nameOf(partner)}* - you know each other, and you share one kill per night. Either of you may strike; their choice stands.\n(At night, in your DMs: \`${prefix} mm whisper <message>\` reaches your partner.)` : '';
-    return `🔪 You are THE KILLER.${partnerLine}\nEach night, choose a guest to eliminate - then choose the room where the body lies.\nYour identity is secret - even from the dead.\n(At night, in this chat: \`${prefix} mm kill <n>\`, then \`${prefix} mm room <n>\`.)`;
+    return `🔪 You are THE KILLER.${partnerLine}${killerButlerLine(g, prefix)}\nEach night, choose a guest to eliminate - then choose the room where the body lies.\nYour identity is secret - even from the dead.\n(At night, in this chat: \`${prefix} mm kill <n>\`, then \`${prefix} mm room <n>\`.)`;
   }
   if (p.role === 'INVESTIGATOR') {
     return `🕵️ You are AN INVESTIGATOR.\nEach night you may lay two guests on the scales - and learn which one unsettles the house more. A lean, never a verdict.\nThree weighings per case - spend them well.\n(At night, in this chat: \`${prefix} mm compare <n> <n>\`.)`;
   }
   if (p.role === 'GUARDIAN') {
     return `👼 You are THE GUARDIAN.\nEach night you may watch over one guest - or yourself. If the knife comes for them, it will be turned away, and no one will know why.\n(At night, in this chat: \`${prefix} mm protect <n|me>\`.)`;
+  }
+  if (p.role === 'MEDIUM') {
+    return `🕯️ You are THE MEDIUM.\nTwice this case you may part the veil - \`${prefix} mm seance\` in the group - and the dead may speak again. Their words reach your DMs alone; the house hears only what you choose to repeat.\nChoose your moments. The dead do not forget who let them talk.`;
+  }
+  if (p.role === 'BUTLER') {
+    return `🗝️ You are THE BUTLER.\nYou know every corridor of this house - and on the third night, the manor will tell you the name behind the knife.\nBut the killer learned YOUR name the day you arrived. Survive long enough to use what you learn.`;
+  }
+  if (p.role === 'ACCOMPLICE') {
+    return `🎭 You are THE ACCOMPLICE.\nYou cannot kill, and you carry no clue. But if the killer wins, you win with them - the manor pays you beside the knife.\nNobody knows your heart. Not even the killer. Steer the vote. Defend the wrong people.`;
   }
   return `👤 You are A CIVILIAN.\nYou have no special ability - only your wits.\nDiscuss. Search. Accuse. Vote. Survive.`;
 }
@@ -1099,13 +1142,22 @@ function textRoleCard(p, g, partnerOf) {
   const partner = partnerOf ? partnerOf(p) : null;
   if (p.role === 'KILLER') {
     const partnerLine = partner ? `\nYour partner: *${nameOf(partner)}*. You share one kill per night - either of you may choose the victim.` : '';
-    return `🔪 *${head}*YOU ARE THE KILLER.*${partnerLine}\nEliminate the guests night after night - and choose where each body lies. Survive the discussion. Dodge the vote.\n\nYour identity is secret. Tell no one.`;
+    return `🔪 *${head}*YOU ARE THE KILLER.*${partnerLine}${killerButlerLine(g)}\nEliminate the guests night after night - and choose where each body lies. Survive the discussion. Dodge the vote.\n\nYour identity is secret. Tell no one.`;
   }
   if (p.role === 'INVESTIGATOR') {
     return `🕵️ *${head}*YOU ARE AN INVESTIGATOR.*\nEach night you may weigh two guests against each other - and learn which one the house finds more suspicious. A lean, never a verdict.\nThree weighings per case. The result is yours alone.\n\nKeep it secret. Spend it wisely.`;
   }
   if (p.role === 'GUARDIAN') {
     return `👼 *${head}*YOU ARE THE GUARDIAN.*\nEach night, watch over one guest - or yourself. If the killer comes for them, you turn the knife away. Nobody will know.\n\nStay secret. Stay watchful.`;
+  }
+  if (p.role === 'MEDIUM') {
+    return `🕯️ *${head}*YOU ARE THE MEDIUM.*\nTwice this case you may part the veil (\`${g.prefix} mm seance\` in the group) and let the dead speak. Their words cross the dark and land in your DMs alone.\n\nThe house hears only what you choose to repeat.`;
+  }
+  if (p.role === 'BUTLER') {
+    return `🗝️ *${head}*YOU ARE THE BUTLER.*\nYou know every corridor of this house. On the third night the manor will whisper the killer's name in your ear.\n\nBut the killer already knows your face. Survive.`;
+  }
+  if (p.role === 'ACCOMPLICE') {
+    return `🎭 *${head}*YOU ARE THE ACCOMPLICE.*\nYou cannot kill and you carry no clue - but if the killer wins, you win with them.\n\nNobody knows your heart, not even the killer. Steer the house astray.`;
   }
   return `👤 *${head}*YOU ARE A CIVILIAN.*\nYou have no special ability.\nFind the killer through discussion, searching and voting.`;
 }
@@ -1148,12 +1200,13 @@ async function beginNight(sock, chatId) {
 
   // private night instructions - priority actors first, so their window is as long as possible
   const killerTeam = alivePlayers(g).filter((p) => p.role === 'KILLER');
+  const butlerKnown = butlerOf(g);
   for (const p of alivePlayers(g)) {
     if (p.role === 'KILLER') {
       const roster = rosterLines(g, p.jid).join('\n');
       const partner = killerTeam.length > 1 ? nameOf(killerTeam.find((x) => normJid(x.jid) !== normJid(p.jid))) : null;
       await sendDM(sock, p.jid,
-        `🌙 *NIGHT ${g.night} - ${cases.MANOR_NAME}*\n\nYou are the *KILLER*.${partner ? `\nYour partner: *${partner}* - one kill per night between you. Either of you may choose; their choice stands.\nCoordinate in the dark: \`${g.prefix} mm whisper <message>\` - it reaches your partner's DMs through the bot.` : ''}\nChoose tonight's victim:\n\n${roster}\n\n` +
+        `🌙 *NIGHT ${g.night} - ${cases.MANOR_NAME}*\n\nYou are the *KILLER*.${partner ? `\nYour partner: *${partner}* - one kill per night between you. Either of you may choose; their choice stands.\nCoordinate in the dark: \`${g.prefix} mm whisper <message>\` - it reaches your partner's DMs through the bot.` : ''}${butlerKnown ? `\nThe butler, *${nameOf(butlerKnown)}*, already serves your secrets - their face was yours to know from the first night.` : ''}\nChoose tonight's victim:\n\n${roster}\n\n` +
         `\`${g.prefix} mm kill <number>\` - or a name.\nAfter the kill you will choose the room where the body lies.\n⏱️ The night lasts *3 minutes*.`);
     } else if (p.role === 'INVESTIGATOR') {
       const roster = rosterLines(g, p.jid).join('\n');
@@ -1165,11 +1218,55 @@ async function beginNight(sock, chatId) {
       await sendDM(sock, p.jid,
         `🌙 *NIGHT ${g.night} - ${cases.MANOR_NAME}*\n\nYou are the *GUARDIAN*.\nChoose one guest to watch over - or yourself:\n\n${roster}\n\n` +
         `\`${g.prefix} mm protect <number|me>\`\nIf the knife comes for them tonight, it will be turned away.\n⏱️ The night lasts *3 minutes*.`);
+    } else if (p.role === 'BUTLER') {
+      const hintLine = g.night < BUTLER_REVEAL_NIGHT
+        ? `The manor keeps its secrets - for now. On the *third night*, it will tell you the name behind the knife.`
+        : `The name was given to you on the third night. Spend it carefully - the house is listening to every seat.`;
+      await sendDM(sock, p.jid,
+        `🌙 *NIGHT ${g.night} - ${cases.MANOR_NAME}*\n\nYou are the *BUTLER*. You have no action in the dark.\n${hintLine}\nLock up. Polish the silver. Survive.`);
+    } else if (p.role === 'MEDIUM') {
+      const veilLine = (p.seanceLeft == null ? SEANCE_BUDGET : p.seanceLeft) > 0
+        ? `No action in the dark - but when the house wakes, you may part the veil: \`${g.prefix} mm seance\` in the group (${p.seanceLeft == null ? SEANCE_BUDGET : p.seanceLeft} left this case).`
+        : `No action in the dark. The veil has spent itself for this case - the dead sleep, and so do you.`;
+      await sendDM(sock, p.jid,
+        `🌙 *NIGHT ${g.night} - ${cases.MANOR_NAME}*\n\nYou are the *MEDIUM*.\n${veilLine}`);
+    } else if (p.role === 'ACCOMPLICE') {
+      await sendDM(sock, p.jid,
+        `🌙 *NIGHT ${g.night} - ${cases.MANOR_NAME}*\n\nYou are the *ACCOMPLICE*. You have no action, no clue, no knife.\nYour work happens in daylight: steer the vote, defend the wrong people, look as innocent as you feel.\nIf the killer wins - so do you.`);
     } else {
       await sendDM(sock, p.jid,
         `🌙 *NIGHT ${g.night} - ${cases.MANOR_NAME}*\n\nYou have no action tonight.\nLock your door. Wait for morning.`);
     }
     await sleep(400);
+  }
+
+  // ---- butler's third-night confidence (owner 2026-10-13: "the butler learns
+  // the name of the killer automatically on the third night BUT the killer
+  // knows who the butler is from the start") - one name, even with twin killers ----
+  if (g.night === BUTLER_REVEAL_NIGHT) {
+    const butler = butlerOf(g);
+    const mark = (g.players.find((p) => p.role === 'KILLER') || null);
+    if (butler && butler.alive && mark) {
+      await sleep(600);
+      let sent = false;
+      try {
+        const buf = await cards.renderButlerRevealCard({
+          butlerChar: butler.char,
+          killerChar: mark.char,
+          killerName: nameOf(mark),
+          night: g.night,
+          manorName: cases.MANOR_NAME,
+        });
+        if (buf) {
+          sent = await sendDMImage(sock, butler.jid, buf,
+            `🗝️ *NIGHT ${g.night} - the third night.*\n\nThe manor keeps its books, and tonight they balanced. The name behind the knife: *${nameOf(mark)}* - ${mark.char.name}, ${mark.char.title}.\n\nThe killer has known YOUR name since the doors locked. Spend this one carefully.`);
+        } else throw new Error('butler reveal render null');
+      } catch (e) {
+        await sendDM(sock, butler.jid,
+          `🗝️ *NIGHT ${g.night} - ${cases.MANOR_NAME}*\n\nOn the third night the manor pays its debts. The name behind the knife: *${nameOf(mark)}* - ${mark.char.name}, ${mark.char.title}.\n\nThe killer has known your face since the doors locked. Spend this carefully.`);
+      }
+      console.log(`🔪 [MurderMystery] NIGHT ${g.night}: butler reveal sent to ${normJid(butler.jid)} (killer=${normJid(mark.jid)})`);
+    }
   }
 }
 
@@ -2167,11 +2264,20 @@ function ballotText(g) {
 }
 
 // ---------- WIN CONDITIONS ----------
+// owner 2026-10-13: the ACCOMPLICE is the killer team's fifth column - their
+// seat counts toward parity (the vote they cast is a real ballot), and they
+// win beside the killers. All killers dead = the team is broken; the
+// accomplice wins nothing alone (they cannot kill).
+function killerTeamAlive(g) {
+  return alivePlayers(g).filter((p) => p.role === 'KILLER' || p.role === 'ACCOMPLICE');
+}
+
 function checkWin(g) {
   const killers = aliveKillers(g).length;
-  const others = aliveNonKillers(g).length;
+  const team = killerTeamAlive(g).length;
+  const others = alivePlayers(g).length - team;
   if (killers === 0) return 'civ';
-  if (killers >= others) return 'killer'; // parity: the killer can no longer be outvoted
+  if (team >= others) return 'killer'; // parity: the killer can no longer be outvoted
   return null;
 }
 
@@ -2300,8 +2406,8 @@ async function payPrize(sock, chatId, g, winner, killers) {
   }
 
   const winners = winner === 'killer'
-    ? (killers || []).filter((k) => k && k.alive) // living killers share the purse
-    : g.players.filter((p) => p.role !== 'KILLER');
+    ? g.players.filter((p) => (p.role === 'KILLER' || p.role === 'ACCOMPLICE') && p.alive) // living killer team shares the purse (owner 2026-10-13: the accomplice wins beside the knife)
+    : g.players.filter((p) => p.role !== 'KILLER' && p.role !== 'ACCOMPLICE');
   if (!winners.length) return;
 
   const share = Math.floor(purse / winners.length);
@@ -2377,7 +2483,8 @@ function recordMatchStats(g, winner) {
       if (!n) continue;
       const row = stats[n] || { games: 0, wins: 0, losses: 0, survived: 0, murdered: 0, condemned: 0, kills: 0, saves: 0, bodiesFound: 0, correctVotes: 0, killerGames: 0, score: 0 };
       const isKiller = p.role === 'KILLER';
-      const won = (winner === 'civ' && !isKiller) || (winner === 'killer' && isKiller);
+      const isKillerSide = p.role === 'KILLER' || p.role === 'ACCOMPLICE';
+      const won = (winner === 'civ' && !isKillerSide) || (winner === 'killer' && isKillerSide);
       row.games += 1;
       if (won) row.wins += 1; else row.losses += 1;
       if (p.alive) row.survived += 1;
@@ -2674,16 +2781,102 @@ async function submitWhisper(ctx, raw) {
   if (g.phase !== PHASE.NIGHT) {
     return sendGroup(sock, chatId, `${botMarker}🔪 The whisper passes only in the dark - send it at night.`);
   }
-  const partner = g.players.find((p) => p.role === 'KILLER' && p.alive && normJid(p.jid) !== normJid(senderJid));
-  if (!partner) {
-    return sendGroup(sock, chatId, `${botMarker}🔪 You hunt alone - there is no partner left to whisper to.`);
-  }
   const msg = sanitizePlayerText(String(raw || '').trim(), WILL_MAX_LEN);
   if (!msg) {
     return sendGroup(sock, chatId, `${botMarker}🔪 Give the whisper words: \`${g.prefix} mm whisper <message>\``);
   }
-  await sendDM(sock, partner.jid, `🔪 _A whisper reaches you through the dark - your partner:_\n\n> "${msg}"`);
+  // owner 2026-10-13: killers coordinate through the night - the relay now
+  // carries to every LIVING partner, not just the first one found
+  const partners = g.players.filter((p) => p.role === 'KILLER' && p.alive && normJid(p.jid) !== normJid(senderJid));
+  if (!partners.length) {
+    return sendGroup(sock, chatId, `${botMarker}🔪 You hunt alone - there is no partner left to whisper to.`);
+  }
+  for (const partner of partners) {
+    await sendDM(sock, partner.jid, `🔪 _A whisper reaches you through the dark - your partner:_\n\n> "${msg}"`);
+  }
   await sendDM(sock, senderJid, `🔪 _Your whisper travels the halls: "${msg}"_`);
+}
+
+// ---------- THE SEANCE (owner 2026-10-13 09:44Z: the Medium parts the veil) ----------
+// The medium runs `mm seance` in the GROUP - the house sees the candles.
+// Every dead player gets a DM from the bot: reply here (free text, no
+// command) and the words cross the veil into the MEDIUM's DMs alone. The
+// medium chooses what, if anything, reaches the living. Budget: 2 openings
+// per case; a veil stays open until the phase rolls over.
+async function submitSeance(ctx) {
+  const { sock, chatId, senderJid, botMarker } = ctx;
+  if (!ctx.isGroup) {
+    return sendGroup(sock, chatId, `${botMarker}🕯️ The veil is parted from the group where the manor stands - the house must see the candles.`);
+  }
+  const g = getGame(chatId);
+  if (!g || g.phase === PHASE.LOBBY || g.phase === 'STARTING' || g.phase === 'ENDED') {
+    return sendGroup(sock, chatId, `${botMarker}🕯️ There is no case in play for the veil to open into.`);
+  }
+  const me = getPlayer(g, senderJid);
+  if (!me || me.role !== 'MEDIUM') {
+    return sendGroup(sock, chatId, `${botMarker}🕯️ The veil answers only to the Medium. And you are - presumably - not them.`);
+  }
+  if (!me.alive) {
+    return sendGroup(sock, chatId, `${botMarker}🕯️ The Medium is on the wrong side of the veil now. The dead do not summon themselves.`);
+  }
+  if (g.phase !== PHASE.DISCUSSION && g.phase !== PHASE.NIGHT) {
+    return sendGroup(sock, chatId, `${botMarker}🕯️ Not while the count is running - the veil is parted between dawn and the ballot, or in the dark.`);
+  }
+  const left = me.seanceLeft == null ? SEANCE_BUDGET : me.seanceLeft;
+  if (left <= 0) {
+    return sendGroup(sock, chatId, `${botMarker}🕯️ The veil has spent itself for this case. The dead keep the rest of their words.`);
+  }
+  if (g.seance && g.seance.open && g.seance.phase === g.phase) {
+    return sendGroup(sock, chatId, `${botMarker}🕯️ The veil is already open - the dead may speak. Send your words to the bot in your DMs.`);
+  }
+  me.seanceLeft = left - 1;
+  g.seance = { open: true, phase: g.phase, night: g.night, openedAt: Date.now() };
+  persistGames();
+  const dead = g.players.filter((p) => p.alive === false);
+  console.log(`🔪 [MurderMystery] seance opened in ${chatId} by ${normJid(senderJid)} (phase=${g.phase}, left=${me.seanceLeft}, dead=${dead.length})`);
+  await sendGroup(sock, chatId,
+    `${botMarker}🕯️ *${nameOf(me)}* (${me.char.name}, ${me.char.title}) lights the candles and parts the veil.\n\nThe air in ${cases.MANOR_NAME} goes cold. The dead may speak again - through the Medium alone.\n\n_What the dead say reaches ${nameOf(me)} privately. What reaches YOU is whatever they choose to repeat._`);
+  for (const d of dead) {
+    await sendDM(sock, d.jid,
+      `👻 *THE VEIL IS OPEN - ${cases.MANOR_NAME}*\n\n${nameOf(me)} has parted the veil. Reply to THIS chat - just write, no command - and your words are carried to the Medium's ear alone.\n\nYou may speak freely until this phase ends. The Medium decides what the living ever hear.`);
+    await sleep(200);
+  }
+}
+
+// engine hook (DM free-text): a dead player's plain words while the veil is
+// open are relayed verbatim to the medium's DMs. Returns true when consumed.
+async function seanceRelay(sock, senderJid, chatId, txt, botMarker) {
+  const g = findGameForPlayer(senderJid);
+  if (!g || g.phase === 'ENDED' || g.phase === 'STARTING' || g.phase === PHASE.LOBBY) return false;
+  const me = getPlayer(g, senderJid);
+  if (!me || me.alive !== false) return false; // the living have mouths in the group
+  const veil = g.seance;
+  if (!veil || !veil.open || veil.phase !== g.phase) return false;
+  const medium = g.players.find((p) => p.role === 'MEDIUM' && p.alive);
+  if (!medium) {
+    g.seance = { open: false, phase: veil.phase, night: veil.night, closed: 'medium dead' };
+    persistGames();
+    await sendGroup(sock, chatId, `${botMarker}👻 The veil falls silent - the Medium is gone, and the dead go with them.`);
+    return true;
+  }
+  const raw = String(txt || '').trim();
+  if (!raw) return false;
+  // anti-spam: the veil carries only so many words so fast
+  const now = Date.now();
+  if (veil._lastBy && veil._lastBy[normJid(senderJid)] && now - veil._lastBy[normJid(senderJid)] < SEANCE_COOLDOWN_MS) {
+    await sendGroup(sock, chatId, `${botMarker}👻 The veil carries only so many words so fast. Wait a breath, then speak.`);
+    return true;
+  }
+  veil._lastBy = veil._lastBy || {};
+  veil._lastBy[normJid(senderJid)] = now;
+  const msg = sanitizePlayerText(raw, SEANCE_MAX_LEN);
+  if (!msg) return false;
+  persistGames();
+  console.log(`🔪 [MurderMystery] seance relay ${normJid(senderJid)} -> medium ${normJid(medium.jid)} (${msg.length} chars, phase=${g.phase})`);
+  await sendDM(sock, medium.jid,
+    `👻 *A voice through the veil* - ${nameOf(me)} (${me.char.name}), dead on night ${me.deathNight || '?'}:\n\n> "${msg}"\n\n_The house hears nothing - unless you say it aloud._`);
+  await sendGroup(sock, chatId, `${botMarker}👻 _Your words cross the veil._`);
+  return true;
 }
 async function forceEnd(ctx) {
   const { sock, chatId, senderJid, botMarker } = ctx;
@@ -2721,7 +2914,7 @@ async function showStatus(ctx) {
     const me = getPlayer(g, senderJid);
     const secs = Math.max(0, Math.ceil((g.deadline - Date.now()) / 1000));
     const aliveList = alivePlayers(g).map((p, i) => `  ${i + 1}. ${nameOf(p)} - ${p.char.name}`).join('\n');
-    const roleWord = me.role === 'KILLER' ? '🔪 the *KILLER*' : me.role === 'INVESTIGATOR' ? '🕵️ the *INVESTIGATOR*' : me.role === 'GUARDIAN' ? '👼 the *GUARDIAN*' : '👤 a *CIVILIAN*';
+    const roleWord = me.role === 'KILLER' ? '🔪 the *KILLER*' : me.role === 'INVESTIGATOR' ? '🕵️ the *INVESTIGATOR*' : me.role === 'GUARDIAN' ? '👼 the *GUARDIAN*' : me.role === 'MEDIUM' ? '🕯️ the *MEDIUM*' : me.role === 'BUTLER' ? '🗝️ the *BUTLER*' : me.role === 'ACCOMPLICE' ? '🎭 the *ACCOMPLICE*' : '👤 a *CIVILIAN*';
     const roleLine = me.alive
       ? `You are *${me.char.name}, ${me.char.title}* - ${roleWord}.`
       : `You are dead - *${me.char.name}*, taken on night ${me.deathNight || '?'}. You watch now.`;
@@ -2737,6 +2930,19 @@ async function showStatus(ctx) {
           : (left <= 0 ? '\nTonight: no weighings left this case - the scales rest.' : `\nTonight: \`${g.prefix} mm compare <n> <n>\` (${left} left).`);
       }
       if (me.role === 'GUARDIAN') actionLine = g.protectTargetJid ? '\nTonight: your watch is set.' : `\nTonight: \`${g.prefix} mm protect <n|me>\`.`;
+      if (me.role === 'MEDIUM') {
+        const left = me.seanceLeft == null ? SEANCE_BUDGET : me.seanceLeft;
+        const veilOpen = g.seance && g.seance.open && g.seance.phase === g.phase;
+        actionLine = veilOpen ? '\nTonight: the veil is OPEN - the dead may speak.'
+          : left > 0 ? `\nTonight: no action in the dark - part the veil at dawn (\`${g.prefix} mm seance\`, ${left} left).`
+          : '\nTonight: the veil has spent itself for this case.';
+      }
+      if (me.role === 'BUTLER') {
+        actionLine = g.night < BUTLER_REVEAL_NIGHT
+          ? `\nTonight: no action. The manor pays its debt on night *${BUTLER_REVEAL_NIGHT}*.`
+          : '\nTonight: no action. The name you were given is yours to spend.';
+      }
+      if (me.role === 'ACCOMPLICE') actionLine = '\nTonight: no action - your work is the daylight vote.';
     }
     let searchLine = '';
     if (me.alive && g.phase === PHASE.DISCUSSION) {
@@ -2788,7 +2994,8 @@ function helpText(prefix) {
     `• \`${prefix} mm vote <n|name|skip>\` - cast your ballot (ballots are public)\n` +
     `• \`${prefix} mm ask <n|name>\` - question a guest before the house; their account is public, the sharper detail is yours alone (the killer lies)\n` +
     `• \`${prefix} mm backstory <n|name>\` - any guest's story and standing account, on demand - cross-reference it against the evidence\n` +
-    `• \`${prefix} mm whisper <message>\` - killer partners only, at night, in DMs: the bot relays it to your partner\n` +
+    `• \`${prefix} mm whisper <message>\` - killer partners only, at night, in DMs: the bot relays it to every living partner\n` +
+    `• \`${prefix} mm seance\` - medium only (8+ player games): part the veil in the group - the dead reply to the bot and their words reach your DMs alone (2 openings per case)\n` +
     `• \`${prefix} mm accuse <n|name> <why>\` - level an accusation the whole house hears\n` +
     `• \`${prefix} mm evidence\` - your private case dossier (DMs): facts, evidence, statements, your notes\n` +
     `• \`${prefix} mm status\` - the state of the case\n` +
@@ -2802,7 +3009,8 @@ function helpText(prefix) {
     `• \`${prefix} mm taunt <message>\` - whisper into the discussion, unsigned. The manor will say if it is not yours to give.\n\n` +
     `*How it flows:* roles are dealt in secret. At night the killer kills and hides the body; by day the house searches - the finder of the body inherits the ghost's clue about the killer's character. Bad votes let the killer kill again. Dead guests are silenced until the case closes.\n\n` +
     `*The prize:* the manor posts a purse (10k-25k Zeni, rolled when the lobby opens) - no entry fee, ever. If the innocents solve the case they split the purse; if the killer outlives the manor, the killer takes all of it. Wins, kills, saves, finds and sharp votes are written into the Hall of Shadows: \`${prefix} mm lb\`.\n\n` +
-    `Roles scale with the table: 4 guests = 1 Killer + 1 Investigator · 5-7 = + Guardian · 8+ = + a 2nd Investigator · 9+ = a 2nd Killer (partners). The rest are Civilians.\n` +
+    `Roles scale with the table: 4 guests = 1 Killer + 1 Investigator · 5-7 = + Guardian · 8+ = + a 2nd Investigator + the Medium · 9+ = a 2nd Killer (partners) + the Butler + the Accomplice. The rest are Civilians.\n` +
+    `The Butler learns the killer's name on the third night - but the killer knows the Butler from the first. The Accomplice wins beside the knife and is known to nobody. The dead stay silenced until the case closes - unless the Medium lets them speak.\n` +
     `Every case now carries a truth: a motive, ties between the guests, alibis and evidence. The introductions will tell you who is who - the evidence will tell you who is lying.\n` +
     `You receive a sealed role card in your DMs. Tell no one.\n` +
     `Player images are deleted from the case room while a game runs - screenshots are not evidence.`
@@ -2842,6 +3050,7 @@ const SUB_FIXES = {
   investigat: 'investigate', investgiate: 'investigate', ivestigate: 'investigate',
   comapre: 'compare', compair: 'compare', compaer: 'compare',
   protekt: 'protect', porotect: 'protect',
+  sance: 'seance', seaance: 'seance', seanse: 'seance', seence: 'seance', seenje: 'seance', saynce: 'seance',
   vtoe: 'vote', vot: 'vote',
   strart: 'start', strat: 'start',
   leaderbored: 'leaderboard', ladderboard: 'leaderboard', leadboard: 'leaderboard',
@@ -2949,6 +3158,10 @@ async function handleCommand(ctx) {
     case 'whisper':
     case 'wsp':
       return submitWhisper(ctx, ctx.rest);
+    case 'seance':
+    case 'veil':
+    case 'summon':
+      return submitSeance(ctx);
     case 'will':
     case 'lastwords':
       return submitWill(ctx, ctx.rest);
@@ -2979,6 +3192,7 @@ module.exports = {
   // engine hooks (2026-10-12 expansion)
   handleParticipantLeave, // group-participants.update: leaver handling
   gateGameMedia,          // in-case media gate: delete player images + view-once (stickers/docs pass, owner 20:26Z)
+  seanceRelay,            // DM free-text hook (2026-10-13): the Medium's open veil carries the dead's words
   // QA / introspection
   _internal: {
     getGame,
@@ -3012,5 +3226,9 @@ module.exports = {
     caseGen,             // QA
     PHASE,
     normJid,
+    submitSeance,        // QA (Wave 2a)
+    seanceRelay,         // QA (Wave 2a)
+    BUTLER_REVEAL_NIGHT, // QA (Wave 2a)
+    SEANCE_BUDGET,       // QA (Wave 2a)
   },
 };

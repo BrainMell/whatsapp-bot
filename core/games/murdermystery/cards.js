@@ -425,6 +425,116 @@ const Icons = {
     ctx.fill();
     ctx.restore();
   },
+  // Wave 2a role icons (owner 2026-10-13)
+  candle(ctx, cx, cy, s) {
+    // veiled candle: wax column + flame + halo of smoke
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.strokeStyle = 'rgba(236,226,200,0.95)';
+    ctx.fillStyle = 'rgba(236,226,200,0.95)';
+    // wax column
+    ctx.fillRect(-s * 0.28, -s * 0.1, s * 0.56, s * 0.95);
+    // drips
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.28, -s * 0.1);
+    ctx.quadraticCurveTo(-s * 0.44, s * 0.15, -s * 0.34, s * 0.3);
+    ctx.quadraticCurveTo(-s * 0.24, s * 0.12, -s * 0.28, -s * 0.1);
+    ctx.fill();
+    // wick
+    ctx.lineWidth = s * 0.07;
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 0.1);
+    ctx.lineTo(0, -s * 0.3);
+    ctx.stroke();
+    // flame
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 0.75);
+    ctx.quadraticCurveTo(s * 0.28, -s * 0.42, 0, -s * 0.26);
+    ctx.quadraticCurveTo(-s * 0.28, -s * 0.42, 0, -s * 0.75);
+    ctx.fill();
+    // smoke wisps
+    ctx.lineWidth = s * 0.06;
+    ctx.beginPath();
+    ctx.moveTo(s * 0.5, s * 0.7);
+    ctx.quadraticCurveTo(s * 0.2, s * 0.45, s * 0.42, s * 0.25);
+    ctx.stroke();
+    ctx.restore();
+  },
+  tray(ctx, cx, cy, s) {
+    // silver salver: ellipse + pedestal + key resting on top
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.strokeStyle = 'rgba(236,226,200,0.95)';
+    ctx.fillStyle = 'rgba(236,226,200,0.95)';
+    ctx.lineWidth = s * 0.1;
+    // salver
+    ctx.beginPath();
+    ctx.ellipse(0, s * 0.25, s * 0.95, s * 0.34, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(0, s * 0.2, s * 0.95, s * 0.34, 0, Math.PI, Math.PI * 2);
+    ctx.fill();
+    // pedestal
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.3, s * 0.6);
+    ctx.lineTo(s * 0.3, s * 0.6);
+    ctx.moveTo(-s * 0.18, s * 0.9);
+    ctx.lineTo(s * 0.18, s * 0.9);
+    ctx.moveTo(0, s * 0.55);
+    ctx.lineTo(0, s * 0.9);
+    ctx.stroke();
+    // key across the tray
+    ctx.lineWidth = s * 0.14;
+    ctx.beginPath();
+    ctx.arc(-s * 0.42, -s * 0.05, s * 0.16, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.27, 0);
+    ctx.lineTo(s * 0.45, 0);
+    ctx.moveTo(s * 0.45, 0);
+    ctx.lineTo(s * 0.45, s * 0.16);
+    ctx.moveTo(s * 0.3, 0);
+    ctx.lineTo(s * 0.3, s * 0.16);
+    ctx.stroke();
+    ctx.restore();
+  },
+  masks(ctx, cx, cy, s) {
+    // twin theatre masks: one smiling, one grieving, overlapping
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.strokeStyle = 'rgba(236,226,200,0.95)';
+    ctx.lineWidth = s * 0.1;
+    const mask = (ox, oy, flip) => {
+      ctx.save();
+      ctx.translate(ox, oy);
+      if (flip) ctx.scale(-1, 1);
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.42, -s * 0.5);
+      ctx.quadraticCurveTo(s * 0.46, -s * 0.56, s * 0.42, s * 0.1);
+      ctx.quadraticCurveTo(s * 0.36, s * 0.62, 0, s * 0.78);
+      ctx.quadraticCurveTo(-s * 0.36, s * 0.62, -s * 0.42, s * 0.1);
+      ctx.quadraticCurveTo(-s * 0.46, -s * 0.56, -s * 0.42, -s * 0.5);
+      ctx.closePath();
+      ctx.stroke();
+      // eyes
+      ctx.fillStyle = 'rgba(236,226,200,0.95)';
+      ctx.beginPath();
+      ctx.arc(-s * 0.18, -s * 0.14, s * 0.08, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(s * 0.18, -s * 0.14, s * 0.08, 0, Math.PI * 2);
+      ctx.fill();
+      // mouth (arc flips between smile and grief)
+      ctx.lineWidth = s * 0.09;
+      ctx.beginPath();
+      ctx.arc(0, s * 0.3, s * 0.2, flip ? Math.PI * 1.15 : Math.PI * 0.85, flip ? Math.PI * 1.85 : Math.PI * 0.15);
+      ctx.stroke();
+      ctx.restore();
+    };
+    mask(s * 0.26, s * 0.1, true);   // grieving, behind-right
+    mask(-s * 0.24, -s * 0.06, false); // smiling, front-left
+    ctx.restore();
+  },
 };
 
 // rotated stamp (rubber-stamp look) - optional dark plate for legibility
@@ -626,13 +736,19 @@ const ROLE_STYLE = {
   KILLER: { color: C.crimsonHi, word: 'THE KILLER', icon: 'dagger', sealColor: C.crimsonDeep },
   INVESTIGATOR: { color: C.amberHi, word: 'THE INVESTIGATOR', icon: 'magnifier', sealColor: '#8a6d24' },
   GUARDIAN: { color: C.ghostHi, word: 'THE GUARDIAN', icon: 'halo', sealColor: '#3c5a52' },
+  MEDIUM: { color: '#b9a7e0', word: 'THE MEDIUM', icon: 'candle', sealColor: '#4a3b63' },
+  BUTLER: { color: C.ivory, word: 'THE BUTLER', icon: 'tray', sealColor: '#2f3a4a' },
+  ACCOMPLICE: { color: '#c99a8a', word: 'THE ACCOMPLICE', icon: 'masks', sealColor: '#5a3030' },
   CIVILIAN: { color: C.ivory, word: 'A CIVILIAN', icon: 'eye', sealColor: '#3f3b47' },
 };
 
 const ROLE_INSTRUCTIONS = {
   KILLER: 'Each night, choose a guest to eliminate - and choose the room where their body will lie. Survive the discussions. Dodge the vote.',
-  INVESTIGATOR: 'Each night you may study one guest, and the manor will tell you if their hands are clean. Use it. Carefully.',
+  INVESTIGATOR: 'Each night you may lay two guests on the scales and learn which one unsettles the house more. A lean, never a verdict. Three weighings per case.',
   GUARDIAN: 'Each night you may watch over one guest - or yourself. If the knife comes for them, you will turn it away. No one will ever know.',
+  MEDIUM: 'Twice this case you may part the veil and let the dead speak. Their words reach your ear alone - the house hears only what you choose to repeat.',
+  BUTLER: 'You know every corridor of this house. On the third night the manor will tell you the name behind the knife - and the killer already knows your face.',
+  ACCOMPLICE: 'You cannot kill, and you carry no clue. But if the killer wins, you win with them. Nobody knows your heart - not even the killer. Steer the house astray.',
   CIVILIAN: 'You have no gift except your wits. Watch. Question. Search. Vote. Find the killer before the manor runs out of guests.',
 };
 
@@ -736,7 +852,7 @@ async function renderRoleCard({ character, playerName, role, manorName }) {
     ctx.fillStyle = C.amber;
     spaced(ctx, 'YOU ARE', 70, 500, 8, 'left');
 
-    fitFont(ctx, style.word, 'PF-Black', role === 'INVESTIGATOR' ? 74 : 88, 560, 44);
+    fitFont(ctx, style.word, 'PF-Black', (role === 'INVESTIGATOR' || role === 'ACCOMPLICE') ? 74 : 88, 560, 44);
     ctx.fillStyle = style.color;
     ctx.shadowColor = 'rgba(0,0,0,0.85)';
     ctx.shadowBlur = 16;
@@ -768,6 +884,68 @@ async function renderRoleCard({ character, playerName, role, manorName }) {
     ctx.fillStyle = role === 'KILLER' ? C.crimsonHi : 'rgba(236,226,200,0.75)';
     ctx.textAlign = 'center';
     ctx.fillText('Your identity is secret. Tell no one.', PORT_W / 2 + 80, 1312);
+
+    footer(ctx, PORT_W, PORT_H, manorName);
+  });
+}
+
+// Butler's third-night confidence (Wave 2a, owner 2026-10-13) - private DM card
+async function renderButlerRevealCard({ butlerChar, killerChar, killerName, night, manorName }) {
+  return renderCard(PORT_W, PORT_H, async (ctx) => {
+    const bg = await loadBg('library');
+    drawCover(ctx, bg, 0, 0, PORT_W, PORT_H);
+    atmosphere(ctx, PORT_W, PORT_H, { dark: 0.74 });
+
+    // killer sprite, right anchored (the name behind the knife)
+    await drawSprite(ctx, killerChar.id, 620, 1240, 860);
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+
+    ctx.font = '26px EB-Semi';
+    ctx.fillStyle = C.ivoryDim;
+    spaced(ctx, `${manorName} - NIGHT ${night}`, 70, 128, 6, 'left');
+    ctx.strokeStyle = 'rgba(236,226,200,0.35)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(70, 152);
+    ctx.lineTo(560, 152);
+    ctx.stroke();
+
+    ctx.font = '26px EB-Semi';
+    ctx.fillStyle = C.amber;
+    spaced(ctx, 'THE MANOR PAYS ITS DEBTS', 70, 240, 5, 'left');
+
+    fitFont(ctx, 'THE NAME BEHIND', 'PF-Black', 64, 560, 40);
+    ctx.fillStyle = C.ivory;
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur = 14;
+    ctx.fillText('THE NAME', 70, 330);
+    ctx.fillText('BEHIND', 70, 402);
+    fitFont(ctx, 'THE KNIFE', 'PF-Black', 84, 560, 44);
+    ctx.fillStyle = C.crimsonHi;
+    ctx.fillText('THE KNIFE', 70, 500);
+    ctx.shadowColor = 'transparent';
+
+    ornament(ctx, 240, 560, 380);
+
+    ctx.font = 'italic 38px PF-MedIt';
+    ctx.fillStyle = C.ivory;
+    ctx.fillText(killerName, 70, 648);
+    ctx.font = '28px EB-Reg';
+    ctx.fillStyle = C.ivoryDim;
+    ctx.fillText(`${killerChar.name}, ${killerChar.title}`, 70, 692);
+
+    ctx.font = '27px EB-Reg';
+    ctx.fillStyle = C.ivory;
+    wrap(ctx, 'The butler holds the name the house kept from you. But the killer has known YOUR name since the doors locked - spend this one carefully.', 70, 760, 480, 42, 6);
+
+    seal(ctx, 150, 1180, 78, '#2f3a4a', Icons.tray);
+
+    ctx.font = '26px Type';
+    ctx.fillStyle = 'rgba(236,226,200,0.75)';
+    ctx.textAlign = 'center';
+    ctx.fillText('A whisper between you and the dark.', PORT_W / 2 + 80, 1312);
 
     footer(ctx, PORT_W, PORT_H, manorName);
   });
@@ -1875,6 +2053,7 @@ module.exports = {
   renderMorningCard,
   renderBodyFoundCard,
   renderGhostClueCard,
+  renderButlerRevealCard,
   renderSearchCard,
   renderLobbyCard,
   renderLeaderboardCard,

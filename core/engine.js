@@ -10134,6 +10134,19 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                     } catch (e) {
                       console.error("[Tutorial] DM router error:", e.message);
                     }
+                    // 🔪 MURDER MYSTERY séance relay (owner 2026-10-13): while a
+                    // Medium holds the veil open, a dead player's plain DM words
+                    // are carried to the Medium's DMs alone. Consumes the message
+                    // ONLY when the sender is a dead guest with the veil open -
+                    // every other DM falls through untouched.
+                    try {
+                      const consumed = await murderMystery.seanceRelay(
+                        sock, senderJid, chatId, txt, BOT_MARKER,
+                      );
+                      if (consumed) return;
+                    } catch (e) {
+                      console.error("[MurderMystery] seance relay error:", e.message);
+                    }
                   }
 
                   const handlePendingNameReply = async () => {
