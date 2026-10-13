@@ -332,6 +332,11 @@ async function runPass(n) {
   ok(mm.isSilenced(victimPlan.jid, CHAT), 'C15 victim silenced');
   ok(!mm.isSilenced(invest.jid, CHAT), 'C16 living not silenced');
   ok(g.phase === 'DISCUSSION', 'C17 discussion began');
+  // freeze the real discussion window: the C/D rows render ~10-20 real cards
+  // and can outlast the CLOCK-scaled DISCUSS_MS, letting the engine's own
+  // machine roll discussion -> voting -> (empty vote) -> night 2 BEFORE the
+  // harness forces its E-section transition (nondeterministic green/red passes)
+  g.deadline = Date.now() + 10 * 60000;
 
   // ---------- C-extra. KILLER TAUNT (anonymous, once per game) ----------
   // NOTE: civs[0] is the murder victim by now - use the living investigator for the non-killer case
@@ -438,6 +443,8 @@ async function runPass(n) {
   ok(dmTexts(sock, victim2.jid, /SHOULD BE DEAD|meant to die|should have died/i) >= 1, 'F8 saved player got private dream DM');
   ok(dmTexts(sock, killer.jid, /stopped mid-air|barred by something/i) >= 1, 'F9 killer learned the kill failed');
   ok(g.phase === 'DISCUSSION', 'F10 discussion 2 began');
+  // same freeze as C17: F+G render their own card chain past DISCUSS_MS
+  g.deadline = Date.now() + 10 * 60000;
   ok(g.searches.night === g.night && Object.keys(g.searches.used).length === 0, 'F11 fresh search round each day');
 
   // ---------- G. PERSISTENCE ROUND-TRIP ----------
