@@ -8726,6 +8726,16 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               // ✅ Real message - reset zombie silence timer
               recordUpsert(BOT_ID);
 
+              // ⚖️ MM poll ballots (owner 2026-10-13 17:45Z): WhatsApp poll taps
+              // become murdermystery day-vote ballots. baileys rc14 ships the
+              // vote decryption but never calls it - the game module invokes
+              // its own decryptPollVote. Fire-and-forget: never blocks the
+              // command pipeline, never throws into it.
+              if (m.message && m.message.pollUpdateMessage) {
+                try { murderMystery.handlePollVoteMessage(m, sock, BOT_MARKER).catch(() => {}); }
+                catch (_pollErr) { /* never block the pipeline */ }
+              }
+
               // 💡 FIX 2026-07-26 (INVESTIGATION.md):
               // GLOBAL COMMAND TIMEOUT - 90 seconds.
               //

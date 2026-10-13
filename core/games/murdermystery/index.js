@@ -32,6 +32,12 @@ const characters = require('./characters');
 const cases = require('./cases');
 const caseGen = require('./caseGen');
 const cards = require('./cards');
+const crypto = require('crypto');
+// baileys 7 rc14 ships poll-vote decryption but never calls it (the block in
+// Utils/process-message.js is commented out with a TODO), so we invoke its own
+// decryptPollVote ourselves - zero dependency changes (owner 2026-10-13 17:45Z:
+// "check if we could use WhatsApp polls for the voting part ... if yes implement")
+const { decryptPollVote, jidNormalizedUser } = require('@whiskeysockets/baileys');
 
 // RPG economy (Zeni) - used for the manor's PRIZE (owner rule 2026-09-14:
 // "it should have a money prize, not need money to play" - the cast fee is
@@ -2528,6 +2534,7 @@ async function beginVoting(sock, chatId) {
   g.deadline = Date.now() + VOTE_MS;
   g._resolving = false;
   g._resolving2 = false;
+  g._poll = null; // fresh ballot UI every round - a stale poll must never survive into the next vote
   persistGames();
   schedulePhaseTimer(chatId);
   scheduleReminder(chatId, Math.max(3000, VOTE_MS - VOTE_REMIND_BEFORE_MS), 'vote');
@@ -2539,8 +2546,12 @@ async function beginVoting(sock, chatId) {
   // critical: this is the message the user said never arrived - retry with fallback sock
   await sendGroupCritical(g, chatId,
     `⚖️ *VOTING*\n\nWho do you believe is the Killer?\n\n${roster}\n\n` +
-    `Cast your vote: \`${g.prefix} mm vote <number>\` - or a name - or \`skip\`.\n` +
+    `Cast your vote: \`${g.prefix} mm vote <number>\` - or a name - or \`skip\` - or just tap the poll.\n` +
     `Living players only. One ballot each. You may change it until the count. Ballots are public.\n⏱️ *90 seconds.*`);
+
+  // owner 2026-10-13 17:45Z: the ballot gets a native WhatsApp poll - tap to vote,
+  // every vote and every change announces itself, the tally takes the poll down.
+  await createVotePoll(sock, chatId, g, alive);
 }
 
 async function castVote(ctx, rawTarget) {
@@ -2578,16 +2589,21 @@ async function castVoteInGame(ctx, g, rawTarget) {
     if (!target) return sendGroup(sock, chatId, `${botMarker}⚖️ That is not a living guest. Use \`${g.prefix} mm vote <number>\`, a name, or \`skip\`.`);
     choice = target.jid;
   }
-  const already = Object.prototype.hasOwnProperty.call(g.votes, normJid(senderJid));
-  g.votes[normJid(senderJid)] = choice;
+  const voterNorm = normJid(senderJid);
+  const already = Object.prototype.hasOwnProperty.call(g.votes, voterNorm);
+  const prevChoice = already ? g.votes[voterNorm] : undefined;
+  g.votes[voterNorm] = choice;
   persistGames();
 
   const aliveCount = alivePlayers(g).length;
   const castCount = Object.keys(g.votes).length;
   if (!already && choice !== 'skip') {
-    await sendGroup(sock, chatId, `${botMarker}⚖️ @${normJid(senderJid)} casts a ballot. (${castCount}/${aliveCount} in)`, { contextInfo: { mentionedJid: [senderJid] } });
+    await sendGroup(sock, chatId, `${botMarker}⚖️ @${voterNorm} casts a ballot. (${castCount}/${aliveCount} in)`, { contextInfo: { mentionedJid: [senderJid] } });
   } else if (!already) {
     await sendGroup(sock, chatId, `${botMarker}⚖️ ${nameOf(me)} abstains. (${castCount}/${aliveCount} in)`);
+  } else if (prevChoice !== choice) {
+    // owner 2026-10-13: changing your vote announces itself too - poll taps and text alike
+    await sendGroup(sock, chatId, `${botMarker}⚖️ @${voterNorm} changes their ballot. (${castCount}/${aliveCount} in)`, { contextInfo: { mentionedJid: [senderJid] } });
   }
   if (castCount >= aliveCount) {
     g._resolving = true;
@@ -2661,6 +2677,16 @@ async function resolveVote(sock, chatId, _reason) {
       `⚖️ *VOTE RESULT*\n\n${tallyText || 'No ballots were cast.'}\n\n${eliminated ? `*${nameOf(eliminated)} has been eliminated.*` : 'No one was condemned.'}\n\n🗳️ ${ballotText(g)}`);
   }
 
+  // owner 2026-10-13: votes sounded, tally announced - the poll has served its
+  // purpose and comes down with the result (bot may delete its own messages)
+  if (g._poll && g._poll.key) {
+    const pollKey = g._poll.key;
+    g._poll = null;
+    persistGames();
+    try { await sock.sendMessage(chatId, { delete: pollKey }); }
+    catch (e) { console.log(`🔪 [MurderMystery] poll delete failed (non-fatal): ${e.message}`); }
+  }
+
   if (eliminated) {
     // the condemned read their last words aloud (new: wills)
     if (eliminated.will) {
@@ -2691,6 +2717,90 @@ function ballotText(g) {
     }
   }
   return parts.length ? `Ballots: ${parts.join(' · ')}` : 'No ballots were cast.';
+}
+
+// ---------- POLL BALLOTS (owner 2026-10-13 17:45Z "use WhatsApp polls for the voting part") ----------
+// Tapping a poll option IS a ballot: it lands in the same g.votes map, gets the
+// same "casts a ballot / changes their ballot" announcement, and is tallied by
+// the exact same resolveVote. baileys 7 rc14 ships poll-vote DECRYPTION but
+// never invokes it (commented out in Utils/process-message.js), so we call its
+// own decryptPollVote here - the poll secret we generated at creation time is
+// the decryption key WhatsApp's clients encrypt every vote against.
+const POLL_NAME = '⚖️ Who is the Killer?';
+const POLL_OPTION_MAX = 12; // WhatsApp polls cap at 12 options: a full 12-guest roster + Skip = 13 -> text ballots only
+
+function pollOptionName(idx, p) {
+  return `${idx + 1}. ${nameOf(p)}`;
+}
+
+function pollOptionHash(optionName) {
+  // same digest getAggregateVotesInPollMessage keys options by - sha256 hex of the option text
+  return crypto.createHash('sha256').update(Buffer.from(optionName, 'utf8')).digest('hex');
+}
+
+async function createVotePoll(sock, chatId, g, alive) {
+  if (alive.length + 1 > POLL_OPTION_MAX) {
+    console.log(`🔪 [MurderMystery] roster too large for one poll (${alive.length + 1} options > ${POLL_OPTION_MAX}) - text ballots only`);
+    return;
+  }
+  try {
+    const optionNames = alive.map((p, i) => pollOptionName(i, p)).concat(['Skip']);
+    const hashes = {};
+    for (const opt of optionNames) hashes[pollOptionHash(opt)] = opt;
+    const secret = crypto.randomBytes(32);
+    const sent = await sock.sendMessage(chatId, {
+      poll: { name: POLL_NAME, values: optionNames, selectableCount: 1 },
+      messageSecret: secret, // rides into messageContextInfo - voters' clients encrypt their ballots against it
+    });
+    if (sent && sent.key) {
+      g._poll = { key: sent.key, secret, hashes };
+      persistGames(); // underscore key - stripped from persistence, the poll is session-only UI
+      console.log(`🔪 [MurderMystery] vote poll live (${optionNames.length} options) in ${chatId}`);
+    }
+  } catch (e) {
+    g._poll = null;
+    console.log(`🔪 [MurderMystery] poll creation failed - text ballots still work: ${e.message}`);
+  }
+}
+
+// engine messages.upsert hook: a poll tap becomes a ballot. botMarker comes from
+// the engine dispatch (same zero-width marker every other mm message carries).
+async function handlePollVoteMessage(m, sock, botMarker) {
+  try {
+    const content = m.message && m.message.pollUpdateMessage;
+    if (!content || !content.vote) return;
+    const creationKey = content.pollCreationMessageKey;
+    if (!creationKey || !creationKey.id) return;
+    const chatId = m.key && m.key.remoteJid;
+    const g = chatId ? getGame(chatId) : null;
+    if (!g || g.phase !== PHASE.VOTING || !g._poll || !g._poll.key || g._poll.key.id !== creationKey.id) return;
+    if (g._resolving || g._resolving2) return; // the count is underway - same rule as text ballots
+    const meIdNorm = jidNormalizedUser((sock && sock.user && sock.user.id) || '');
+    const keyAuthor = (key) => jidNormalizedUser(key && key.fromMe ? meIdNorm : ((key && (key.participant || key.remoteJid)) || ''));
+    const voterJid = keyAuthor(m.key);
+    const voteMsg = decryptPollVote(
+      { encPayload: content.vote.encPayload, encIv: content.vote.encIv },
+      { pollEncKey: g._poll.secret, pollCreatorJid: keyAuthor(creationKey), pollMsgId: g._poll.key.id, voterJid }
+    );
+    const optionName = ((voteMsg && voteMsg.selectedOptions) || [])
+      .map((o) => Buffer.from(o).toString('hex'))
+      .map((hex) => g._poll.hashes[hex])
+      .find(Boolean);
+    if (!optionName) return; // deselection or unknown option - the current ballot stands
+    const me = getPlayer(g, voterJid);
+    if (!me || !me.alive) {
+      if (me) console.log(`🔪 [MurderMystery] poll tap from a dead guest ignored in ${chatId}`);
+      else console.log(`🔪 [MurderMystery] poll tap from an unknown jid (${String(voterJid || '').slice(-8)}) ignored in ${chatId}`);
+      return; // onlookers and the dead tap silently - text commands answer them
+    }
+    const ctx = { sock, chatId, senderJid: voterJid, botMarker: botMarker || '', isGroup: true, viaPoll: true };
+    if (optionName === 'Skip') return castVoteInGame(ctx, g, 'skip');
+    const num = optionName.match(/^(\d+)\./);
+    if (!num) return;
+    return castVoteInGame(ctx, g, num[1]); // roster number - the exact resolution the printed prompt promises
+  } catch (e) {
+    console.log(`🔪 [MurderMystery] poll vote handling failed (non-fatal): ${e.message}`);
+  }
 }
 
 // ---------- WIN CONDITIONS ----------
@@ -3666,6 +3776,7 @@ module.exports = {
   handleParticipantLeave, // group-participants.update: leaver handling
   gateGameMedia,          // in-case media gate: delete player images + view-once (stickers/docs pass, owner 20:26Z)
   seanceRelay,            // DM free-text hook (2026-10-13): the Medium's open veil carries the dead's words
+  handlePollVoteMessage,  // messages.upsert hook (2026-10-13): WhatsApp poll taps become ballots
   // QA / introspection
   _internal: {
     getGame,
