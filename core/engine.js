@@ -14392,15 +14392,59 @@ Usage: ${newUsage}/5${warningText}`;
                           } catch {}
                           // Display name: bot-known nickname / real WhatsApp name,
                           // then jid digits, then the requester's own pushname.
+                          // 💡 FIX (2026-10-13 "name doesn't show sometimes"):
+                          //  1. economy.getUser() returns NULL for users with
+                          //     registered !== true — quoted strangers usually
+                          //     never .reg'd, so names degraded to raw digits
+                          //     (live case: Eve🌸 → "20525682270384"). Read the
+                          //     economy cache directly instead (no gate).
+                          //  2. contextInfo.participant often arrives as @lid
+                          //     while profiles are keyed under either id space
+                          //     — bridge BOTH via lidResolver and try every
+                          //     candidate form (incl. device-suffix-stripped)
+                          //     before falling back.
                           let qName = null;
                           try {
-                            const qUser = economy.getUser(quotedJid);
-                            qName =
-                              (qUser?.nickname &&
-                                qUser.nickname !== "Adventurer" &&
-                                qUser.nickname) ||
-                              qUser?.profile?.whatsappName ||
-                              null;
+                            const cands = [];
+                            const pushCand = (v) => {
+                              if (v && typeof v === "string" && !cands.includes(v))
+                                cands.push(v);
+                            };
+                            pushCand(quotedJid);
+                            try {
+                              const lidResolver = require("./utils/lidResolver");
+                              if (quotedJid) {
+                                const { lid, phone } =
+                                  lidResolver.getMapping(quotedJid);
+                                if (lid) pushCand(`${lid}@lid`);
+                                if (phone) pushCand(`${phone}@s.whatsapp.net`);
+                                pushCand(lidResolver.resolveJid(quotedJid));
+                              }
+                            } catch {}
+                            // device-suffix variants (…:1@… → stripped)
+                            for (const c of [...cands]) {
+                              const at = c.indexOf("@");
+                              const colon = c.indexOf(":");
+                              if (at > 0 && colon > 0 && colon < at)
+                                pushCand(`${c.slice(0, colon)}${c.slice(at)}`);
+                            }
+                            for (const cand of cands) {
+                              try {
+                                const u =
+                                  economy.economyData &&
+                                  economy.economyData.get(cand);
+                                const n =
+                                  (u?.nickname &&
+                                    u.nickname !== "Adventurer" &&
+                                    u.nickname) ||
+                                  u?.profile?.whatsappName ||
+                                  null;
+                                if (n) {
+                                  qName = n;
+                                  break;
+                                }
+                              } catch {}
+                            }
                           } catch {}
                           if (!qName && quotedJid) qName = quotedJid.split("@")[0];
                           if (!qName) qName = m.pushName || "User";
