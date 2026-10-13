@@ -43,7 +43,7 @@ try { economy = require('../../rpg/economy'); } catch (e) { economy = null; }
 
 // ---------- tunables ----------
 const MIN_PLAYERS = 4;
-const MAX_PLAYERS = 11;        // character pool size
+const MAX_PLAYERS = 12;        // Wave 2c cast expansion: pool grew 11 -> 17 (owner 16:34Z); card layouts hold 12
 // MM_QA_CLOCK=1 scales the phase clocks so harnesses can exercise full night
 // cycles (including a quiet night's one dawn extension) in seconds; without
 // the env these are the production values, untouched.

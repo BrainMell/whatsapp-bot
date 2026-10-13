@@ -19,6 +19,15 @@ const CHARACTERS = [
   { id: 'maid1',         sprite: 'maid1.png',         name: 'Gwen',          title: 'the Parlour Maid' },
   { id: 'nurse1',        sprite: 'nurse1.png',        name: 'Sister Agnes',  title: 'the Nurse' },
   { id: 'chef',          sprite: 'chef.png',          name: 'Antoine',       title: 'the Chef' },
+  // --- Wave 2c cast expansion (owner 2026-10-13 16:34Z "do what's left";
+  //     existing roster sprites as base models, new names/titles, simplistic).
+  //     Two guests may share a face across cases - they are different people.
+  { id: 'widow',         sprite: 'girl1.png',         name: 'Lady Aveline',  title: 'the Widow' },
+  { id: 'stable',        sprite: 'boy.png',           name: 'Tobias',        title: 'the Stable Boy' },
+  { id: 'magistrate',    sprite: 'investigator.png',  name: 'Inspector Hale', title: 'the Magistrate' },
+  { id: 'valet',         sprite: 'butler2.png',       name: 'Mr. Pemberton', title: 'the Valet' },
+  { id: 'sommelier',     sprite: 'chef.png',          name: 'Henri',         title: 'the Sommelier' },
+  { id: 'scullery',      sprite: 'maid1.png',         name: 'Peg',           title: 'the Scullery Maid' },
 ];
 
 // ============================================
@@ -96,6 +105,43 @@ const CLUES = {
     'The ghost smells rich sauces and something scorched. Temper, maybe.',
     'Heavy footsteps in the pantry. A cleaver test-swung. Twice.',
     'They carved the roast at dinner with hands that never shook. The Chef\u2019s knives are always sharp.',
+  ],
+  // --- Wave 2c cast expansion: ghost clues for the six new faces ---
+  widow: [
+    'The ghost tasted mourning - the good kind, the expensive kind.',
+    'Black lace, never creased. Grief worn like it was tailored.',
+    'Three rings on one gloved hand. The ghost swears one of them was new.',
+    'Lady Aveline. The Widow. Every husband richer dead than alive - and now someone else is too.',
+  ],
+  stable: [
+    'Hay and liniment. The ghost smelled the stable on them.',
+    'Boots that rise before the sun - and know every back door in the house.',
+    'A saddle-soap tin, lid popped, sitting where a candle should be.',
+    'Tobias. The Stable Boy. The horses went quiet when he passed - they always do.',
+  ],
+  magistrate: [
+    'The ghost felt judged. Measured against old paper and found wanting.',
+    'Fountain-pen ink dried on a careful thumb. Half-written notes.',
+    'A warrant card, flashed once - too fast to read the name.',
+    'Inspector Hale. The Magistrate keeps his ledgers balanced - with whoever is owed.',
+  ],
+  valet: [
+    'The ghost was dressed for bed by hands it did not know.',
+    'Cedar and pressed wool. A wardrobe\u2019s worth of other people\u2019s secrets.',
+    'Lint on one cuff. Only a Valet would be shamed by that.',
+    'Mr. Pemberton. The Valet knows what you keep in your drawers - all of it.',
+  ],
+  sommelier: [
+    'The ghost smelled the cellar: stone, dust, and something older, opened.',
+    'A cork, ground to powder between careful fingers.',
+    'One bottle in the cellar stands backwards. The ghost noticed. The ghost notices.',
+    'Henri. The Sommelier tasted everything that night. So did you.',
+  ],
+  scullery: [
+    'Ash and lye. The ghost keeps tasting ash and lye.',
+    'The back-door bolt was oiled that day. Nobody oils that bolt.',
+    'Grey water on clean floors - a path only a scullery walks.',
+    'Peg. The Scullery Maid hears everything the house pours away.',
   ],
 };
 

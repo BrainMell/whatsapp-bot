@@ -35,6 +35,15 @@ const MOTIVES = [
   { id: 'madness', title: 'the old promise', detail: 'The killer made a vow at a graveside long ago. The manor\u2019s gathering was the appointed hour.' },
   { id: 'jealousy', title: 'the green-eyed hour', detail: 'The killer loved, was refused, and watched the refusal toast and laugh at this very table.' },
   { id: 'crime', title: 'the cover-up', detail: 'The killer\u2019s fortune rests on one awful night years ago. A guest has begun asking the right questions.' },
+  // --- Wave 2c web expansion (owner 2026-10-13 16:34Z "expand the Web by alot") ---
+  { id: 'vengeance', title: 'the turned-out family', detail: 'Twenty years ago the manor\u2019s gates closed on the killer\u2019s family for good. Tonight the house pays the toll - with interest.' },
+  { id: 'will', title: 'the second will', detail: 'Two wills exist in this house and only one is real. The killer needs the other one read aloud before anyone thinks to check it.' },
+  { id: 'policy', title: 'the insured life', detail: 'A policy signed last spring makes one death at Blackvale worth more than the killer has earned in a lifetime.' },
+  { id: 'household', title: 'the other household', detail: 'The killer keeps a family no paper will admit to. Someone at this table can prove they exist - and has begun to enjoy proving it.' },
+  { id: 'powders', title: 'the chemist\u2019s bag', detail: 'The killer\u2019s quiet comes from one guest\u2019s chemist bag - and the price has just changed to something the killer cannot pay.' },
+  { id: 'landing', title: 'the landing route', detail: 'For years something has come ashore at Blackvale\u2019s old quay. One guest has been making the ledgers honest, and honesty is dangerous cargo.' },
+  { id: 'duel', title: 'the ten paces', detail: 'A duel was fought on this lawn when the guests were young. One shot was never accounted for, and the wound it bought has finally turned.' },
+  { id: 'testimony', title: 'the transported brother', detail: 'The killer\u2019s brother was transported for poaching the estate\u2019s land, on the word of one witness. That witness is pouring wine at this table.' },
 ];
 
 // Relationship web types (MD §5) - public framing + tension line used in
@@ -47,6 +56,14 @@ const RELATIONSHIPS = [
   { id: 'friends', label: 'former friends', frame: (a, b) => `${a} and ${b} were the closest of friends until one unforgivable autumn came between them.` },
   { id: 'secret', label: 'a shared secret', frame: (a, b) => `${a} and ${b} share a secret so heavy that they barely speak - and watch each other constantly.` },
   { id: 'accounts', label: 'conflicting accounts', frame: (a, b) => `${a} and ${b} tell irreconcilable versions of the same night years ago. Only one of them is lying.` },
+  // --- Wave 2c web expansion: each entry MUST have a matching REL_SHORT ---
+  { id: 'masterservant', label: 'master and servant', frame: (a, b) => `${a} has kept ${b} in service for years - a kindness at first, then an arrangement, then a grudge with wages.` },
+  { id: 'godparent', label: 'a christening bond', frame: (a, b) => `${a} stands godparent to ${b}, and holds ${b}\u2019s inheritance in trust - a trust nobody has audited.` },
+  { id: 'creditor', label: 'creditor and debtor', frame: (a, b) => `${a} holds ${b}\u2019s paper - a debt old enough that the interest has outgrown the principal.` },
+  { id: 'neighbours', label: 'feuding neighbours', frame: (a, b) => `${a} and ${b} own adjoining land and half a lifetime of boundary disputes.` },
+  { id: 'betrothed', label: 'the broken betrothal', frame: (a, b) => `${a} and ${b} were betrothed once; the match was broken by letter, and the letter was never explained.` },
+  { id: 'war', label: 'the shared war', frame: (a, b) => `${a} and ${b} survived the same campaign - one of them came home with the other\u2019s discharge papers packed away.` },
+  { id: 'tutor', label: 'teacher and pupil', frame: (a, b) => `${a} taught ${b} everything - and has watched ${b} take the credit for all of it.` },
 ];
 
 // Innocent secrets (MD §12 "unrelated secrets"): reasons innocents lie,
@@ -64,6 +81,19 @@ const SECRETS = [
   { id: 'theft', text: 'once stole from the very family whose portrait gallery lines this hallway' },
   { id: 'letters', text: 'keeps a bundle of love letters that would detonate two engagements' },
   { id: 'witness', text: 'saw something in the corridor on the first night and has told absolutely no one' },
+  // --- Wave 2c web expansion ---
+  { id: 'closetmarriage', text: 'is hiding a marriage that was never legal, to a person nobody at this table has ever met' },
+  { id: 'wrongman', text: 'served two years for a crime someone else confessed to, and the pardon was never properly signed' },
+  { id: 'laudanum', text: 'keeps a bottle of laudanum in their luggage and lies about how quickly it empties' },
+  { id: 'deadsign', text: 'signed a dead man\u2019s name to a document once, and the dead man\u2019s family has started asking questions' },
+  { id: 'gamebook', text: 'appears in the gamekeeper\u2019s private ledger far more often than any honest dinner guest should' },
+  { id: 'accent', text: 'speaks with the accent of a class they were not born into - and one person here finds it amusing' },
+  { id: 'stipend', text: 'receives money every quarter from an account nobody will name, and the sums have doubled this year' },
+  { id: 'churchyard', text: 'was seen in the churchyard at midnight last week, standing at one particular grave for an hour' },
+  { id: 'portrait', text: 'paid to have a portrait removed from the gallery last year, and paid again to have it forgotten' },
+  { id: 'deathbed', text: 'sat with the old master through his dying and heard things the will would have wanted said aloud' },
+  { id: 'cardnight', text: 'lost the family savings in one night of cards and let a servant take the blame for the theft' },
+  { id: 'keyring', text: 'has kept copies of every key in this house since the first winter they stayed - all of them, still working' },
 ];
 
 // Personal items: each cast member is assigned one distinct item. It becomes
@@ -101,6 +131,13 @@ const TIMELINE_BEATS = [
   { hour: 'midnight', text: 'the candles were trimmed; the west wing was locked, supposedly' },
   { hour: '1 am', text: 'the dogs barked once in the yard and then went silent' },
   { hour: '2 am', text: 'the night staff made one last circuit and saw no one in the halls' },
+  // --- Wave 2c web expansion ---
+  { hour: '7:30 pm', text: 'sherry was taken in the Morning Room before dinner; the rain kept everyone indoors' },
+  { hour: '9:30 pm', text: 'the gun case in the Hall was checked and locked - the gamekeeper counts by habit' },
+  { hour: '10:30 pm', text: 'one game of billiards was played alone, and badly, the marker says' },
+  { hour: '11:30 pm', text: 'a light was seen moving in the cellar passage, though the cellar was locked' },
+  { hour: '2:30 am', text: 'the scullery fire was found still burning, and was raked out quietly' },
+  { hour: '3:30 am', text: 'the night watchman changed shifts and found the side gate unbolted' },
 ];
 
 // ---------- helpers ----------
@@ -198,6 +235,13 @@ const REL_SHORT = {
   friends: (me, other) => `${me} and ${other} were inseparable once. One unforgivable autumn ended that.`,
   secret: (me, other) => `${me} and ${other} share a history neither will discuss - and both keep watch over.`,
   accounts: (me, other) => `${me} and ${other} still argue over what really happened that night years ago.`,
+  masterservant: (me, other) => `${me} and ${other} are bound in service - one keeps the keys, the other keeps the accounts, and neither trusts the other\u2019s ledger.`,
+  godparent: (me, other) => `${me} and ${other} were bound at a christening long ago - an inheritance sits in trust between them, unaudited.`,
+  creditor: (me, other) => `${me} and ${other} both know the true size of a certain debt - and count it very differently.`,
+  neighbours: (me, other) => `${me} has spent half a lifetime fighting ${other} over a fence line, a stream, and one particular tree.`,
+  betrothed: (me, other) => `${me} and ${other} were promised to each other once; the unmaking arrived by letter, unsigned.`,
+  war: (me, other) => `${me} and ${other} walked out of the same war - and only one of them walked out clean.`,
+  tutor: (me, other) => `${me} and ${other} share a teacher\u2019s debt - everything one of them knows was learned from the other, and the credit never settled.`,
 };
 
 // ---------- generation ----------
