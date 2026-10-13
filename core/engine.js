@@ -2395,6 +2395,13 @@ async function startBot(configInstance) {
         // rate-limited backends with identical requests and kept failing.
         let results = [];
         let usedBackend = "none";
+        // 2026-10-13 06:48Z incident: every backend PARSED fine but the
+        // anti-decoy gate rejected them all ("so generally how big is…"
+        // follow-up phrasing) → the old code showed a fake "couldn't reach
+        // any search backend". Keep the largest gate-rejected set around and
+        // surface it as an honestly-labeled best-effort answer instead.
+        let bestIrrelevant = { results: [], backend: "" };
+        let degraded = false;
         const cached = aiOverview.cacheGet(query);
         if (cached) {
           results = cached.results;
@@ -2514,6 +2521,168 @@ async function startBot(configInstance) {
               }),
             parse: aiOverview.parseDdgLite,
           },
+          // ─── 2026-10-13: +10 keyless fallback backends (owner: "add like
+          // 10 fall backs and alternatives other than brave that actually
+          // work"). EVERY entry below was probed live from both box egresses
+          // the same morning; candidates that wall datacenter IPs were
+          // REJECTED and are listed in the dead-pool note under the array.
+          // Diversity strategy: mix general scrapes (yacy), structured
+          // keyless APIs (wikidata/fandom/SE/HN/ddg-api) and RSS endpoints
+          // (gnews/bing-news) so one IP-class ban cannot take them all out.
+          {
+            // YaCy P2P web index — no captcha, DC-IP friendly (585K hits
+            // on the 06:48Z acceptance query; the only general full-web
+            // engine that answered from these boxes that morning).
+            name: "yacy",
+            fn: () =>
+              axios.get("https://yacy.searchlab.eu/solr/select", {
+                params: { q: query, wt: "json", rows: 8 },
+                headers: { "User-Agent": UA },
+                timeout: 9000,
+              }),
+            parse: aiOverview.parseYacyJson,
+          },
+          {
+            // Google News RSS — keyless, policy-open (real XML for any
+            // news-shaped query; HTML engines wall the box IPs).
+            name: "google-news",
+            fn: () =>
+              axios.get("https://news.google.com/rss/search", {
+                params: { q: query, hl: "en-US", gl: "US", ceid: "US:en" },
+                headers: { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9" },
+                timeout: 9000,
+              }),
+            parse: aiOverview.parseGoogleNewsRss,
+          },
+          {
+            // Bing News RSS — keyless structured endpoint, separate code
+            // path from the decoy-prone HTML SERP (13:49Z lesson).
+            name: "bing-news",
+            fn: async () => {
+              const cookie = await bingCookies();
+              return axios.get("https://www.bing.com/news/search", {
+                params: { q: query, format: "RSS" },
+                headers: {
+                  "User-Agent": UA,
+                  "Accept-Language": "en-US,en;q=0.9",
+                  ...(cookie ? { Cookie: cookie } : {}),
+                },
+                timeout: 9000,
+                maxRedirects: 5,
+              });
+            },
+            parse: aiOverview.parseBingRss,
+          },
+          {
+            // Fandom DC Database — policy-open MediaWiki API. The audience
+            // skews pop-culture (comics/anime/games) and this is THE source
+            // for lore: answered the 06:48Z query the web engines gated out.
+            name: "fandom-dc",
+            fn: () =>
+              axios.get("https://dc.fandom.com/api.php", {
+                params: {
+                  action: "query",
+                  list: "search",
+                  srsearch: query,
+                  srlimit: 6,
+                  format: "json",
+                },
+                headers: { "User-Agent": UA, Accept: "application/json" },
+                timeout: 9000,
+              }),
+            parse: aiOverview.parseFandomDcJson,
+          },
+          {
+            // Wikidata entity search — keyless, policy-open, real labels +
+            // descriptions for any entity-shaped question.
+            name: "wikidata",
+            fn: () =>
+              axios.get("https://www.wikidata.org/w/api.php", {
+                params: {
+                  action: "wbsearchentities",
+                  search: query,
+                  language: "en",
+                  limit: 6,
+                  format: "json",
+                },
+                headers: { "User-Agent": UA, Accept: "application/json" },
+                timeout: 9000,
+              }),
+            parse: aiOverview.parseWikidataJson,
+          },
+          {
+            // DDG instant-answer API — sparse but keyless and harmless when
+            // empty; catches entity/"what is X" queries.
+            name: "ddg-api",
+            fn: () =>
+              axios.get("https://api.duckduckgo.com/", {
+                params: { q: query, format: "json", no_html: 1, skip_disambig: 1 },
+                headers: { "User-Agent": UA },
+                timeout: 9000,
+              }),
+            parse: aiOverview.parseDdgApiJson,
+          },
+          {
+            // Stack Exchange excerpts — keyless tech Q&A (300/day shared
+            // quota; the 429 breaker absorbs exhaustion).
+            name: "stackexchange",
+            fn: () =>
+              axios.get("https://api.stackexchange.com/2.3/search/excerpts", {
+                params: {
+                  order: "desc",
+                  sort: "relevance",
+                  q: query,
+                  site: "stackoverflow",
+                },
+                headers: { "User-Agent": UA, Accept: "application/json" },
+                timeout: 9000,
+              }),
+            parse: aiOverview.parseStackExchangeJson,
+          },
+          {
+            // Hacker News (Algolia) — keyless tech/news discussions.
+            name: "hn",
+            fn: () =>
+              axios.get("https://hn.algolia.com/api/v1/search", {
+                params: { query, hitsPerPage: 8 },
+                headers: { "User-Agent": UA, Accept: "application/json" },
+                timeout: 9000,
+              }),
+            parse: aiOverview.parseHnAlgoliaJson,
+          },
+          {
+            // Wiby — tiny indie-web index, plain JSON; often empty → cheap
+            // skip, occasionally the only hit for niche pages.
+            name: "wiby",
+            fn: () =>
+              axios.get("https://wiby.me/json/", {
+                params: { q: query },
+                headers: { "User-Agent": UA },
+                timeout: 9000,
+              }),
+            parse: aiOverview.parseWibyJson,
+          },
+          {
+            // Marginalia (old interface) — indie-web index, plain-HTML SERP
+            // (the new tailwind UI serves curl a results-less shell).
+            name: "marginalia",
+            fn: () =>
+              axios.get("https://old-search.marginalia.nu/search", {
+                params: { query },
+                headers: { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9" },
+                timeout: 9000,
+              }),
+            parse: aiOverview.parseMarginaliaHtml,
+          },
+          // Dead pool (probed 2026-10-13 from both box egresses — do NOT
+          // bother re-adding without re-probing): mojeek 403, ecosia
+          // firewall, qwant JS-wall, startpage Anubis PoW, reddit HTML wall,
+          // 4get shell-only, rightdao shell-only, gibiru JS-rendered,
+          // metager JS-priced, stract SPA, gdelt 1req/5s throttle, google
+          // books 429 shared-quota, searx JSON off/PoW/429/dead on every
+          // public instance probed (be/priv.au/inetol/opnxng/tiekoetter/
+          // paulgo/hbubli/smnz/ononoki/juancord/zhaocloud/dresden),
+          // marginalia API host dead, teclis turnstile, mwmbl redirect loop.
           // tier-2 reference backend — policy-open MediaWiki search API;
           // honest, always-up content when every full-web engine is
           // rate-limiting/challenging the box IPs (see parseWikipediaJson).
@@ -2542,8 +2711,16 @@ async function startBot(configInstance) {
         // words before we accept it (aiOverview.relevantEnough).
         const eligible = () =>
           backends.filter((b) => !aiOverview.isBackendSkip(b.name));
+        // Hard wall-clock budget per pass: 16 backends × 9s timeouts would
+        // otherwise stack into a multi-minute silent stall before the error.
+        const SEARCH_BUDGET_MS = 35000;
         const runBackends = async (list) => {
+          const passStart = Date.now();
           for (const b of list) {
+            if (Date.now() - passStart > SEARCH_BUDGET_MS) {
+              console.log(`🌐 [google] search budget (${SEARCH_BUDGET_MS}ms) exhausted — stopping at "${b.name}"`);
+              break;
+            }
             try {
               const resp = await b.fn();
               const parsed = aiOverview.dedupeAndCap(
@@ -2557,6 +2734,12 @@ async function startBot(configInstance) {
                 return true;
               }
               if (parsed.length > results.length && relevant) results = parsed; // best usable partial
+              if (
+                !relevant &&
+                parsed.length > bestIrrelevant.results.length
+              ) {
+                bestIrrelevant = { results: parsed, backend: b.name };
+              }
             } catch (beErr) {
               console.log(`🌐 [google] ${b.name} failed: ${beErr.message}`);
               // 429 → open the per-backend breaker so the endpoint cools
@@ -2584,6 +2767,13 @@ async function startBot(configInstance) {
           }
         }
 
+        if (!results.length && bestIrrelevant.results.length >= aiOverview.MIN_RESULTS) {
+          results = bestIrrelevant.results;
+          usedBackend = bestIrrelevant.backend;
+          degraded = true;
+          console.log(`🌐 [google] all backends parsed but gate rejected them — degraded best-effort via ${usedBackend} (${results.length} results)`);
+        }
+
         if (!results.length) {
           return await sock.sendMessage(chatId, {
             text:
@@ -2593,7 +2783,9 @@ async function startBot(configInstance) {
         }
 
         // remember for 10 min — retries/re-asks of this query cost zero hits
-        if (!cached) aiOverview.cacheSet(query, results, usedBackend);
+        // (degraded sets are NOT cached: a literal retry re-runs the chain and
+        // may land a relevant backend)
+        if (!cached && !degraded) aiOverview.cacheSet(query, results, usedBackend);
 
         // 2) Synthesize — grounded in the excerpts ONLY, citations required.
         let answer = "";
@@ -2620,8 +2812,8 @@ async function startBot(configInstance) {
         }
 
         const msg = answer
-          ? aiOverview.buildOverviewMessage(query, answer, results)
-          : aiOverview.buildResultsOnlyMessage(query, results);
+          ? aiOverview.buildOverviewMessage(query, answer, results, degraded)
+          : aiOverview.buildResultsOnlyMessage(query, results, degraded);
         console.log(`🌐 [google] backend=${usedBackend} results=${results.length} synthesized=${answer ? "yes" : "no (results-only)"}`);
 
         await sock.sendMessage(chatId, { text: BOT_MARKER + msg }, { quoted: m });

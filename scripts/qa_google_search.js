@@ -223,10 +223,10 @@ ok("all three parsers wired",
 ok("MIN_RESULTS gate used", engineSrc.includes("parsed.length >= aiOverview.MIN_RESULTS"));
 ok("relevance gate wired (anti-decoy)", engineSrc.includes("aiOverview.relevantEnough(query, parsed)"));
 ok("one immediate retry after all-fail — first ALIVE backend (decoys are per-request; 429-dead ones are never re-hit)", engineSrc.includes("gotResults = await runBackends([firstAlive]);") && /if \(firstAlive\) gotResults = await runBackends\(\[firstAlive\]\);/.test(engineSrc));
-ok("synthesis via groq + SMART model", /handleGoogleSearchCommand[\s\S]{0,14000}groq\.chat\.completions\.create\(\s*\{[\s\S]{0,400}model: MODELS\.SMART/.test(engineSrc));
+ok("synthesis via groq + SMART model", /handleGoogleSearchCommand[\s\S]{0,26000}groq\.chat\.completions\.create\(\s*\{[\s\S]{0,400}model: MODELS\.SMART/.test(engineSrc));
 ok("synthesis failure → results-only fallback",
-  engineSrc.includes("aiOverview.buildResultsOnlyMessage(query, results)") &&
-  engineSrc.includes("aiOverview.buildOverviewMessage(query, answer, results)"));
+  engineSrc.includes("aiOverview.buildResultsOnlyMessage(query, results, degraded)") &&
+  engineSrc.includes("aiOverview.buildOverviewMessage(query, answer, results, degraded)"));
 ok("awardProgression(senderJid, chatId) in handler",
   /function handleGoogleSearchCommand[\s\S]*?awardProgression\(senderJid, chatId\);[\s\S]{0,40}\n    \}/.test(engineSrc));
 
@@ -327,12 +327,12 @@ ok("resetSearchState clears cache+breakers", ao.cacheGet("goku vs saitama!") ===
 const gIdx = (s) => engineSrc.indexOf(s);
 ok("engine wires bing-rss backend with parseBingRss", /name:\s*"bing-rss"/.test(engineSrc) && /parse:\s*aiOverview\.parseBingRss/.test(engineSrc));
 ok("engine wires tier-2 wikipedia backend with parseWikipediaJson", /name:\s*"wikipedia"/.test(engineSrc) && /parse:\s*aiOverview\.parseWikipediaJson/.test(engineSrc) && engineSrc.includes("en.wikipedia.org/w/api.php"));
-ok("backend order brave → bing → bing-rss → ddg-html → ddg-lite → wikipedia", ["brave", "bing", "bing-rss", "ddg-html", "ddg-lite", "wikipedia"].every((n, i, a) => i === 0 || gIdx(`name: "${n}"`) > gIdx(`name: "${a[i - 1]}"`)));
+ok("backend order brave → bing → bing-rss → ddg-html → ddg-lite → yacy → google-news → bing-news → fandom-dc → wikidata → ddg-api → stackexchange → hn → wiby → marginalia → wikipedia", ["brave", "bing", "bing-rss", "ddg-html", "ddg-lite", "yacy", "google-news", "bing-news", "fandom-dc", "wikidata", "ddg-api", "stackexchange", "hn", "wiby", "marginalia", "wikipedia"].every((n, i, a) => i === 0 || gIdx(`name: "${n}"`) > gIdx(`name: "${a[i - 1]}"`)));
 ok("cache lookup happens before backends run", gIdx("aiOverview.cacheGet(query)") >= 0 && gIdx("aiOverview.cacheGet(query)") < gIdx("const runBackends"));
 ok("cache hit short-circuits backend loop", /if \(!cached\) \{\s*\n\s*let gotResults = await runBackends\(eligible\(\)\);/.test(engineSrc));
 ok("429 trips the per-backend breaker", engineSrc.includes("aiOverview.noteBackend429(b.name)") && /beErr\?\.response\?\.status === 429/.test(engineSrc));
 ok("retry pass targets first ALIVE backend (not blind backends[0])", /const firstAlive = eligible\(\)\[0\];/.test(engineSrc) && !/runBackends\(\[backends\[0\]\]\)/.test(engineSrc));
-ok("results cached after success for retries", /if \(!cached\) aiOverview\.cacheSet\(query, results, usedBackend\);/.test(engineSrc));
+ok("results cached after success for retries (degraded sets NOT cached — retry re-runs the chain)", /if \(!cached && !degraded\) aiOverview\.cacheSet\(query, results, usedBackend\);/.test(engineSrc));
 ok("bing backends reuse a warm cookie jar (decoy-mode guard)", (engineSrc.match(/await bingCookies\(\)/g) || []).length >= 2 && engineSrc.includes("let _bingCookieJar = null"));
 ok("jar force-refreshed before the retry pass", /await bingCookies\(true\);[\s\S]{0,200}const firstAlive = eligible\(\)\[0\];/.test(engineSrc));
 ok("parse receives raw resp.data (JSON APIs need the object)", engineSrc.includes("b.parse(resp.data)"));
@@ -347,6 +347,180 @@ ok("parseWikipediaJson builds wiki URLs", wikiParsed[1].url === "https://en.wiki
 ok("parseWikipediaJson strips HTML from snippets", wikiParsed[0].snippet === "the strongest character in two series");
 ok("parseWikipediaJson accepts object form (axios auto-parse)", ao.parseWikipediaJson(JSON.parse(WIKI_FIXTURE)).length === 2);
 ok("parseWikipediaJson garbage/empty safe", ao.parseWikipediaJson("not json").length === 0 && ao.parseWikipediaJson("{}").length === 0 && ao.parseWikipediaJson(null).length === 0);
+
+// ── L. +10 fallback backends + degraded mode (2026-10-13) ─────────────────
+// Owner: "add like 10 fall backs and alternatives other than brave that
+// actually work if this repeats". Live-probed 2026-10-13 from both box
+// egresses; the 06:48Z incident showed the OTHER failure mode (all backends
+// parsed fine, the gate rejected everything → fake "couldn't reach" error),
+// so this section also pins the degraded best-effort path.
+console.log("\nL. +10 fallback backends + degraded best-effort (06:48Z incident)");
+
+// L1. parser surface exported
+ok("all new parsers exported",
+  ["parseGoogleNewsRss","parseFandomDcJson","parseYacyJson","parseWikidataJson","parseDdgApiJson","parseStackExchangeJson","parseHnAlgoliaJson","parseWibyJson","parseMarginaliaHtml"].every((k) => typeof ao[k] === "function"));
+
+// L2. gnews RSS (real shape: link = google redirect, publisher href in description)
+const GNEWS_FIXTURE = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><rss version="2.0"><channel><title>"sector 2814" - Google News</title><link>https://news.google.com/search?q=sector+2814</link><item><title>Sector 2814 - DC Database</title><link>https://news.google.com/rss/articles/CBMiMGh0dHBzOi8vZGMuZmFuZG9tLmNvbT9zY2FtPTE?oc=5</link><pubDate>Sun, 12 Oct 2026 10:00:00 GMT</pubDate><description>&lt;a href=&quot;https://dc.fandom.com/wiki/Sector_2814&quot;&gt;Sector 2814&lt;/a&gt;&amp;nbsp;&amp;nbsp;&lt;cite&gt;DC Database&lt;/cite&gt;</description><source url="https://dc.fandom.com">DC Database</source></item><item><title>Green Lantern lore explainer</title><link>https://news.google.com/rss/articles/CBMiJ2h0dHBzOi8vd3d3LmdhbWVydGFudC5jb20vZ2xvcmU?oc=5</link><pubDate>Sat, 11 Oct 2026 08:00:00 GMT</pubDate><description>Plain-text teaser with no embedded publisher anchor</description><source url="https://www.gamerant.com">GameRant</source></item></channel></rss>`;
+const gn = ao.parseGoogleNewsRss(GNEWS_FIXTURE);
+ok("gnews: 2 items parsed", gn.length === 2, `got ${gn.length}`);
+ok("gnews: publisher URL lifted from description anchor", gn[0] && gn[0].url === "https://dc.fandom.com/wiki/Sector_2814", JSON.stringify(gn[0]?.url));
+ok("gnews: falls back to redirect link when description lacks anchor", gn[1] && gn[1].url.startsWith("https://news.google.com/rss/articles/"), JSON.stringify(gn[1]?.url));
+ok("gnews: title kept intact", gn[0] && gn[0].title === "Sector 2814 - DC Database");
+ok("gnews: empty/null safe", ao.parseGoogleNewsRss("").length === 0 && ao.parseGoogleNewsRss(null).length === 0);
+
+// L3. yacy (Solr arrays + sku url)
+const YACY_FIXTURE = JSON.stringify({ response: { numFound: 585458, start: 0, docs: [
+  { sku: "https://www.dc.com/comics", title: ["Comics | DC"], description_txt: ["Official site for DC comics — Superman, Batman, GREEN LANTERN and more."], host_s: "www.dc.com" },
+  { sku: "https://en.wikipedia.org/wiki/Green_Lantern", title: ["Green Lantern - Wikipedia"], description_txt: [], host_s: "en.wikipedia.org" },
+] } });
+const yc = ao.parseYacyJson(YACY_FIXTURE);
+ok("yacy: docs mapped (2 results)", yc.length === 2, `got ${yc.length}`);
+ok("yacy: sku becomes url, array fields unwrapped", yc[0] && yc[0].url === "https://www.dc.com/comics" && yc[0].title === "Comics | DC");
+ok("yacy: missing description tolerated", yc[1] && yc[1].snippet === "");
+ok("yacy: garbage/empty safe", ao.parseYacyJson("nope").length === 0 && ao.parseYacyJson(null).length === 0 && ao.parseYacyJson({}).length === 0);
+
+// L4. fandom-dc (shared MediaWiki mapper, dc base)
+const FANDOM_FIXTURE = JSON.stringify({ batchcomplete: "", query: { search: [
+  { ns: 0, title: "Sector 2814", pageid: 11140, snippet: "" },
+  { ns: 0, title: "Green Lantern Corps of Earth", pageid: 146938, snippet: "" },
+] } });
+const fd = ao.parseFandomDcJson(FANDOM_FIXTURE);
+ok("fandom-dc: hits mapped (2 results)", fd.length === 2 && fd[0].title === "Sector 2814");
+ok("fandom-dc: dc.fandom.com wiki URLs + domain", fd[0].url === "https://dc.fandom.com/wiki/Sector_2814" && fd[0].domain === "dc.fandom.com");
+ok("fandom-dc: empty snippet tolerated (titles only)", fd[0].snippet === "");
+ok("fandom-dc: garbage safe", ao.parseFandomDcJson("garbage").length === 0);
+
+// L5. wikidata
+const WD_FIXTURE = JSON.stringify({ searchinfo: { search: "green lantern corps" }, search: [
+  { id: "Q2422891", title: "Q2422891", concepturi: "http://www.wikidata.org/entity/Q2422891", label: { value: "Green Lantern Corps" }, description: "fictional cosmic police force" },
+  { id: "Q809", title: "Q809", label: { value: "Ultramarines" } }, // no concepturi, no description
+] });
+const wd = ao.parseWikidataJson(WD_FIXTURE);
+ok("wikidata: labels as titles (2 results)", wd.length === 2 && wd[0].title === "Green Lantern Corps");
+ok("wikidata: concepturi normalized to https", wd[0].url === "https://www.wikidata.org/entity/Q2422891");
+ok("wikidata: Q-id fallback URL when concepturi missing", wd[1].url === "https://www.wikidata.org/wiki/Q809");
+ok("wikidata: missing description tolerated", wd[1].snippet === "");
+ok("wikidata: garbage safe", ao.parseWikidataJson("x").length === 0);
+
+// L6. ddg-api (RelatedTopics with one nesting level + Results)
+const DDGAPI_FIXTURE = JSON.stringify({ Heading: "Green Lantern", Abstract: "", Results: [
+  { FirstURL: "https://en.wikipedia.org/wiki/Green_Lantern", Text: "Green Lantern — DC Comics superhero" },
+], RelatedTopics: [
+  { FirstURL: "https://en.wikipedia.org/wiki/Green_Lantern_Corps", Text: "Green Lantern Corps — fictional intergalactic police force" },
+  { Topics: [ { FirstURL: "https://en.wikipedia.org/wiki/Hal_Jordan", Text: "Hal Jordan — the second Green Lantern" } ] },
+  { FirstURL: "not-a-url", Text: "junk row dropped" },
+] });
+const da = ao.parseDdgApiJson(DDGAPI_FIXTURE);
+ok("ddg-api: Results + flat + nested topics merged (3 valid)", da.length === 3, `got ${da.length}`);
+ok("ddg-api: invalid URL row dropped", da.every((r) => r.url.startsWith("https://")));
+ok("ddg-api: text doubles as title+snippet", da[0].snippet === da[0].title || da[0].snippet.startsWith(da[0].title.slice(0, 50)));
+ok("ddg-api: garbage safe", ao.parseDdgApiJson(null).length === 0);
+
+// L7. stackexchange
+const SE_FIXTURE = JSON.stringify({ items: [
+  { question_id: 123456, title: "How to <b>resize</b> images in node?", excerpt: "Use &lt;sharp&gt; or jimp to resize buffers" },
+  { question_id: 78901, title: "Axios timeout not working", excerpt: "pass timeout as the 2nd arg" },
+], has_more: false });
+const se = ao.parseStackExchangeJson(SE_FIXTURE);
+ok("stackexchange: items mapped to /q/ URLs", se.length === 2 && se[0].url === "https://stackoverflow.com/q/123456");
+ok("stackexchange: HTML stripped from title+excerpt", se[0].title === "How to resize images in node?" && se[0].snippet.includes("Use or jimp to resize buffers"));
+ok("stackexchange: missing question_id skipped", ao.parseStackExchangeJson(JSON.stringify({ items: [{ title: "no id" }] })).length === 0);
+
+// L8. hn algolia
+const HN_FIXTURE = JSON.stringify({ hits: [
+  { objectID: "38100123", url: "https://example.dev/post", title: "Show HN: my search engine", story_text: null, comment_text: "<p>relevant discussion</p>" },
+  { objectID: "38100999", url: null, title: "Ask HN: keyless search backends?", story_title: null },
+  { objectID: "38101111", url: "https://x.dev", title: "" }, // no title → dropped
+] });
+const hnParsed = ao.parseHnAlgoliaJson(HN_FIXTURE);
+ok("hn: hits mapped (2 valid)", hnParsed.length === 2, `got ${hnParsed.length}`);
+ok("hn: direct url kept", hnParsed[0].url === "https://example.dev/post");
+ok("hn: url-less hit falls back to HN thread link", hnParsed[1].url === "https://news.ycombinator.com/item?id=38100999");
+ok("hn: HTML in comment_text stripped", hnParsed[0].snippet === "relevant discussion");
+
+// L9. wiby (field-spelling tolerance)
+const WIBY_FIXTURE = JSON.stringify([
+  { href: "https://example.org/neat", title: "Neat indie page", snippet: "hand-made html" },
+  { URL: "https://example2.org/old", Title: "Old-style caps fields", Snippet: "caps variant" },
+  { url: "https://example3.org/x", title: "lowercase url field", description: "desc field" },
+]);
+const wb = ao.parseWibyJson(WIBY_FIXTURE);
+ok("wiby: 3 rows mapped across field spellings", wb.length === 3, `got ${wb.length}`);
+ok("wiby: caps/lower variants all resolve", wb[1].url === "https://example2.org/old" && wb[2].url === "https://example3.org/x");
+ok("wiby: empty array input → []", ao.parseWibyJson("[]").length === 0);
+
+// L10. marginalia old-UI (real observed markup)
+const MARG_FIXTURE = `<html><body>
+<a href="/">Marginalia</a>
+<div class="result">
+<a tabindex="-1" class="title" rel="nofollow external" href="https://raspex.exton.se/">RaspEX for Raspberry Pi 5, Pi 4, Pi 3 and Pi 2</a>
+<a rel="nofollow external" href="https://raspex.exton.se/">https://raspex.exton.se/</a>
+</div>
+<div class="result">
+<a tabindex="-1" class="title" rel="nofollow external" href="https://www.crowdsupply.com/raspberry-pi/compute-module-4">Raspberry Pi Compute Module 4 | Crowd Supply</a>
+</div>
+</body></html>`;
+const mg = ao.parseMarginaliaHtml(MARG_FIXTURE);
+ok("marginalia: title-class anchors → results (bare-url twin anchors deduped later)", mg.length === 2, `got ${mg.length}`);
+ok("marginalia: external href captured, internal / skipped", mg.every((r) => !r.url.includes("marginalia")) && mg[0].url === "https://raspex.exton.se/");
+ok("marginalia: title text extracted", mg[1].title === "Raspberry Pi Compute Module 4 | Crowd Supply");
+ok("marginalia: garbage safe", ao.parseMarginaliaHtml("").length === 0 && ao.parseMarginaliaHtml(null).length === 0);
+
+// L11. engine wiring for the 10 new backends
+ok("engine wires yacy backend", /name:\s*"yacy"/.test(engineSrc) && engineSrc.includes("https://yacy.searchlab.eu/solr/select") && /parse:\s*aiOverview\.parseYacyJson/.test(engineSrc));
+ok("engine wires google-news backend", /name:\s*"google-news"/.test(engineSrc) && engineSrc.includes("https://news.google.com/rss/search") && /parse:\s*aiOverview\.parseGoogleNewsRss/.test(engineSrc));
+ok("engine wires bing-news backend (reuses parseBingRss)", /name:\s*"bing-news"/.test(engineSrc) && engineSrc.includes("https://www.bing.com/news/search") && /parse:\s*aiOverview\.parseBingRss/.test(engineSrc));
+ok("engine wires fandom-dc backend", /name:\s*"fandom-dc"/.test(engineSrc) && engineSrc.includes("https://dc.fandom.com/api.php") && /parse:\s*aiOverview\.parseFandomDcJson/.test(engineSrc));
+ok("engine wires wikidata backend", /name:\s*"wikidata"/.test(engineSrc) && engineSrc.includes("https://www.wikidata.org/w/api.php") && /parse:\s*aiOverview\.parseWikidataJson/.test(engineSrc));
+ok("engine wires ddg-api backend", /name:\s*"ddg-api"/.test(engineSrc) && engineSrc.includes("https://api.duckduckgo.com/") && /parse:\s*aiOverview\.parseDdgApiJson/.test(engineSrc));
+ok("engine wires stackexchange backend", /name:\s*"stackexchange"/.test(engineSrc) && engineSrc.includes("https://api.stackexchange.com/2.3/search/excerpts") && /parse:\s*aiOverview\.parseStackExchangeJson/.test(engineSrc));
+ok("engine wires hn backend", /name:\s*"hn"/.test(engineSrc) && engineSrc.includes("https://hn.algolia.com/api/v1/search") && /parse:\s*aiOverview\.parseHnAlgoliaJson/.test(engineSrc));
+ok("engine wires wiby backend", /name:\s*"wiby"/.test(engineSrc) && engineSrc.includes("https://wiby.me/json/") && /parse:\s*aiOverview\.parseWibyJson/.test(engineSrc));
+ok("engine wires marginalia backend", /name:\s*"marginalia"/.test(engineSrc) && engineSrc.includes("https://old-search.marginalia.nu/search") && /parse:\s*aiOverview\.parseMarginaliaHtml/.test(engineSrc));
+ok("16 backends total (6 original + 10 new)", (engineSrc.match(/parse: aiOverview\.parse[A-Z][a-zA-Z]*,/g) || []).length === 16, `got ${(engineSrc.match(/parse: aiOverview\.parse[A-Z][a-zA-Z]*,/g) || []).length}`);
+
+// L12. degraded best-effort path (06:48Z: gate rejected everything → fake network error)
+ok("bestIrrelevant tracked alongside results", engineSrc.includes("let bestIrrelevant = { results: [], backend: \"\" };"));
+ok("gate-rejected sets feed bestIrrelevant", engineSrc.includes("bestIrrelevant = { results: parsed, backend: b.name }"));
+ok("degraded fallback fires BEFORE the hard error", gIdx("bestIrrelevant.results.length >= aiOverview.MIN_RESULTS") > -1 && gIdx("bestIrrelevant.results.length >= aiOverview.MIN_RESULTS") < gIdx("couldn't reach any search backend"));
+ok("degraded flag set + logged", engineSrc.includes("degraded = true;") && engineSrc.includes("degraded best-effort via"));
+ok("hard error kept for true-zero parses", engineSrc.includes("couldn't reach any search backend right now"));
+ok("degraded sets bypass the cache", /if \(!cached && !degraded\) aiOverview\.cacheSet/.test(engineSrc));
+ok("builders carry the degraded flag (warn note, not a fake outage)", /buildOverviewMessage\(query, answer, results, degraded\)/.test(engineSrc) && /buildResultsOnlyMessage\(query, results, degraded\)/.test(engineSrc));
+
+// L13. degraded message note rendering
+const degradedMsg = ao.buildOverviewMessage("q?", "answer [1]", sampleResults, true);
+ok("degraded overview includes warn note", degradedMsg.includes("results looked off-topic") && degradedMsg.includes("best effort"));
+ok("clean overview has NO warn note", !ao.buildOverviewMessage("q?", "answer [1]", sampleResults, false).includes("off-topic"));
+ok("degraded results-only note", ao.buildResultsOnlyMessage("q?", sampleResults, true).includes("results looked off-topic"));
+ok("degraded overview stays within hard cap", degradedMsg.length <= ao.MAX_MESSAGE_CHARS + 2);
+
+// L14. search budget guard (16 backends × 9s must not stack into minutes)
+ok("per-pass wall-clock budget present", engineSrc.includes("const SEARCH_BUDGET_MS = 35000;"));
+ok("budget check inside the backend loop", /const passStart = Date\.now\(\);[\s\S]{0,400}Date\.now\(\) - passStart > SEARCH_BUDGET_MS/.test(engineSrc));
+ok("budget exhaustion logged before break", engineSrc.includes("search budget (") && engineSrc.includes("stopping at"));
+
+// L15. numeric-entity anchor in the gate (06:48Z ROOT cure — live-probed:
+// fandom-dc returned the PERFECT Sector 2814 set and the gate still rejected
+// it because conversational phrasing diluted the word-hit ratio to 2/8)
+console.log("\nL15. numeric-entity anchor (gate refinement)");
+const SECTOR_RESULTS = [
+  { title: "Sector 2814", snippet: "", url: "https://dc.fandom.com/wiki/Sector_2814", domain: "dc.fandom.com" },
+  { title: "Green Lantern Corps of Earth", snippet: "", url: "https://x.com/gl", domain: "x.com" },
+];
+ok("numeric anchor: conversational sector-2814 query now ACCEPTED",
+  ao.relevantEnough("so generally how big is sector 2814 and is it relatively small compared to the others", SECTOR_RESULTS) === true);
+ok("numeric anchor: wrong number still rejected (decoy-safe)",
+  ao.relevantEnough("how big is sector 2814", [
+    { title: "Sector 2813 overview", snippet: "neighboring sector glossary", url: "https://x.com/n", domain: "x.com" },
+  ]) === false);
+ok("numeric anchor: needs >=2 significant word hits too",
+  ao.relevantEnough("who runs sector 2814", [
+    { title: "2814 is a number", snippet: "", url: "https://x.com/num", domain: "x.com" },
+  ]) === false);
+ok("numeric anchor: ratio path still wins for normal queries",
+  ao.relevantEnough("who wrote the harry potter books", HP_REAL) === true);
 
 console.log(`\n${"═".repeat(50)}\nRESULT: ${pass} pass, ${fail} fail ${fail === 0 ? "— ALL GREEN ✅" : "— FAILURES ❌"}`);
 process.exit(fail === 0 ? 0 : 1);

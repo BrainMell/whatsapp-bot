@@ -292,15 +292,10 @@ function parseBingRss(xml) {
   return out;
 }
 
-// en.wikipedia.org/w/api.php?action=query&list=search — tier-2 reference
-// backend. Every full-web engine (brave/bing/ddg/mojeek/…) is hostile to
-// datacenter IPs at least sometimes (verified live 2026-10-12: brave 429s
-// both box IPs, bing flips to fabricated decoys, ddg anomaly-202, mojeek
-// captcha) — the MediaWiki search API, by contrast, is policy-open and
-// honest. Not full-web coverage, but real sourced content beats a hard
-// failure when everything else is rate-limiting. Accepts object (axios
-// auto-parse) or string.
-function parseWikipediaJson(raw) {
+// Shared MediaWiki list=search mapper (wikipedia tier-2 + fandom wikis —
+// same contract, different base URL). Accepts object (axios auto-parse) or
+// string. Fandom often omits snippets (title-only) — titles carry the signal.
+function parseMediaWikiSearch(raw, wikiBase, domainLabel) {
   const out = [];
   if (!raw) return out;
   let data;
@@ -314,11 +309,236 @@ function parseWikipediaJson(raw) {
     : [];
   for (const h of hits) {
     if (!h || !h.title) continue;
-    const url = `https://en.wikipedia.org/wiki/${encodeURIComponent(
+    const url = `${wikiBase}${encodeURIComponent(
       String(h.title).replace(/ /g, "_"),
     )}`;
     const snippet = stripTags(h.snippet || "");
-    out.push({ title: String(h.title), snippet, url, domain: "en.wikipedia.org" });
+    out.push({ title: String(h.title), snippet, url, domain: domainLabel });
+  }
+  return out;
+}
+
+// en.wikipedia.org/w/api.php?action=query&list=search — tier-2 reference
+// backend. Every full-web engine (brave/bing/ddg/mojeek/…) is hostile to
+// datacenter IPs at least sometimes (verified live 2026-10-12: brave 429s
+// both box IPs, bing flips to fabricated decoys, ddg anomaly-202, mojeek
+// captcha) — the MediaWiki search API, by contrast, is policy-open and
+// honest. Not full-web coverage, but real sourced content beats a hard
+// failure when everything else is rate-limiting.
+function parseWikipediaJson(raw) {
+  return parseMediaWikiSearch(raw, "https://en.wikipedia.org/wiki/", "en.wikipedia.org");
+}
+
+// dc.fandom.com/w/api.php — Fandom DC Database (policy-open MediaWiki).
+// Verified live 2026-10-13 (Box2): answers pop-culture lore the general
+// engines gate out — "sector 2814 dc comics" → Sector 2814, Green Lantern
+// Corps of Earth, Sector 2812… Snippets often empty; titles only.
+function parseFandomDcJson(raw) {
+  return parseMediaWikiSearch(raw, "https://dc.fandom.com/wiki/", "dc.fandom.com");
+}
+
+// news.google.com/rss/search?q=… — keyless news RSS (verified live 2026-10-13
+// from Box2: real XML items where every HTML engine walls the datacenter IP).
+// The <link> is a news.google.com redirect; the REAL publisher URL hides in
+// the entity-encoded description anchor — prefer it when present, keep the
+// redirect link otherwise. Shares the RSS-item walker with parseBingRss.
+function rssItemResults(xml, skipDomainRe) {
+  const out = [];
+  if (!xml) return out;
+  const items = String(xml).match(/<item>[\s\S]*?<\/item>/g) || [];
+  for (const item of items) {
+    const tM = item.match(/<title>([\s\S]*?)<\/title>/);
+    const lM = item.match(/<link>([\s\S]*?)<\/link>/);
+    if (!tM || !lM) continue;
+    let url = stripTags(lM[1]).trim();
+    if (!validUrl(url)) continue;
+    const dM = item.match(/<description>([\s\S]*?)<\/description>/);
+    let snippet = dM ? stripTags(dM[1]) : "";
+    if (skipDomainRe && skipDomainRe.test(domainOf(url))) continue;
+    // prefer the real publisher URL embedded in the description anchor
+    if (dM) {
+      const hrefM = dM[1].match(/href=&quot;?(https?:\/\/[^&"']+)/i)
+        || dM[1].match(/href="(https?:\/\/[^"']+)"/i);
+      if (hrefM && validUrl(hrefM[1]) && !(skipDomainRe && skipDomainRe.test(domainOf(hrefM[1])))) {
+        url = hrefM[1];
+      }
+    }
+    const title = stripTags(tM[1]);
+    if (!title) continue;
+    out.push({ title, snippet, url, domain: domainOf(url) });
+  }
+  return out;
+}
+
+function parseGoogleNewsRss(xml) {
+  // keep news.google.com redirect links when no publisher URL is embedded
+  return rssItemResults(xml, null);
+}
+
+// yacy.searchlab.eu/solr/select (YaCy P2P — no captcha, datacenter-friendly,
+// verified live 2026-10-13: 585K hits for the niche acceptance query). Solr
+// wraps fields in arrays — "title":["…"], "description_txt":["…"] — and the
+// page URL lives in "sku".
+function parseYacyJson(raw) {
+  const out = [];
+  if (!raw) return out;
+  let data;
+  try {
+    data = typeof raw === "string" ? JSON.parse(raw) : raw;
+  } catch {
+    return out;
+  }
+  const docs = data && data.response && Array.isArray(data.response.docs)
+    ? data.response.docs
+    : [];
+  const first = (v) => (Array.isArray(v) ? v[0] : v);
+  for (const d of docs) {
+    const url = String(first(d.sku) || first(d.url) || "");
+    if (!validUrl(url)) continue;
+    const title = stripTags(String(first(d.title) || ""));
+    if (!title) continue;
+    const snippet = stripTags(String(first(d.description_txt) || ""));
+    out.push({ title, snippet, url, domain: domainOf(url) });
+  }
+  return out;
+}
+
+// www.wikidata.org/w/api.php?action=wbsearchentities — keyless entity search
+// (verified live 2026-10-13: "green lantern corps" → Q2422891 with label +
+// description). concepturi may arrive as http:// — normalize to https.
+function parseWikidataJson(raw) {
+  const out = [];
+  if (!raw) return out;
+  let data;
+  try {
+    data = typeof raw === "string" ? JSON.parse(raw) : raw;
+  } catch {
+    return out;
+  }
+  const hits = data && Array.isArray(data.search) ? data.search : [];
+  for (const h of hits) {
+    const label = h && h.label && h.label.value;
+    if (!label) continue;
+    let url = String(h.concepturi || "");
+    if (!validUrl(url) && h.title) url = `https://www.wikidata.org/wiki/${encodeURIComponent(h.title)}`;
+    if (!validUrl(url)) continue;
+    url = url.replace(/^http:/, "https:");
+    out.push({ title: String(label), snippet: String(h.description || ""), url, domain: "wikidata.org" });
+  }
+  return out;
+}
+
+// api.duckduckgo.com/?format=json — instant answers (verified live 2026-10-13,
+// keyless). Sparse by design: Results[] (external links) + RelatedTopics[]
+// (may nest one level of .Topics). Empty for most queries → skipped cheaply.
+function parseDdgApiJson(raw) {
+  const out = [];
+  if (!raw) return out;
+  let data;
+  try {
+    data = typeof raw === "string" ? JSON.parse(raw) : raw;
+  } catch {
+    return out;
+  }
+  const flat = [];
+  for (const t of (data && data.RelatedTopics) || []) {
+    if (t && Array.isArray(t.Topics)) flat.push(...t.Topics);
+    else if (t) flat.push(t);
+  }
+  for (const r of (data && data.Results) || []) flat.push(r);
+  for (const t of flat) {
+    const url = String((t && t.FirstURL) || "");
+    const text = String((t && t.Text) || "");
+    if (!validUrl(url) || !text) continue;
+    out.push({ title: text.slice(0, 140), snippet: text, url, domain: domainOf(url) });
+  }
+  return out;
+}
+
+// api.stackexchange.com/2.3/search/excerpts — keyless tech-Q&A fallback
+// (verified live 2026-10-13; 300 req/day/IP shared quota → breaker handles
+// exhaustion). question_id builds the canonical /q/ URL.
+function parseStackExchangeJson(raw) {
+  const out = [];
+  if (!raw) return out;
+  let data;
+  try {
+    data = typeof raw === "string" ? JSON.parse(raw) : raw;
+  } catch {
+    return out;
+  }
+  const items = data && Array.isArray(data.items) ? data.items : [];
+  for (const it of items) {
+    if (!it || !it.title || !it.question_id) continue;
+    const url = `https://stackoverflow.com/q/${it.question_id}`;
+    out.push({ title: stripTags(it.title), snippet: stripTags(it.excerpt || ""), url, domain: "stackoverflow.com" });
+  }
+  return out;
+}
+
+// hn.algolia.com/api/v1/search — keyless HN search (verified live 2026-10-13).
+// Ask-HN/Story hits may lack url → link the HN thread itself.
+function parseHnAlgoliaJson(raw) {
+  const out = [];
+  if (!raw) return out;
+  let data;
+  try {
+    data = typeof raw === "string" ? JSON.parse(raw) : raw;
+  } catch {
+    return out;
+  }
+  const hits = data && Array.isArray(data.hits) ? data.hits : [];
+  for (const hit of hits) {
+    if (!hit) continue;
+    const title = stripTags(String(hit.title || hit.story_title || ""));
+    if (!title) continue;
+    let url = String(hit.url || "");
+    if (!validUrl(url) && hit.objectID) url = `https://news.ycombinator.com/item?id=${hit.objectID}`;
+    if (!validUrl(url)) continue;
+    const snippet = stripTags(String(hit.story_text || hit.comment_text || "")).slice(0, 300);
+    out.push({ title, snippet, url, domain: domainOf(url) });
+  }
+  return out;
+}
+
+// wiby.me/json — tiny indie-web index (verified live 2026-10-13; often empty
+// for mainstream queries → cheap skip). Field spellings observed vary, so
+// normalize href/URL/url + title/Title + snippet/Snippet/description.
+function parseWibyJson(raw) {
+  const out = [];
+  if (!raw) return out;
+  let data;
+  try {
+    data = typeof raw === "string" ? JSON.parse(raw) : raw;
+  } catch {
+    return out;
+  }
+  const rows = Array.isArray(data) ? data : [];
+  for (const r of rows) {
+    if (!r) continue;
+    const url = String(r.href || r.URL || r.url || "");
+    if (!validUrl(url)) continue;
+    const title = stripTags(String(r.title || r.Title || ""));
+    if (!title) continue;
+    const snippet = stripTags(String(r.snippet || r.Snippet || r.description || ""));
+    out.push({ title, snippet, url, domain: domainOf(url) });
+  }
+  return out;
+}
+
+// old-search.marginalia.nu/search?query=… — plain-HTML indie-web SERP
+// (verified live 2026-10-13: "raspberry pi" → 51 external anchors; the new
+// tailwind UI serves a no-results shell to curl). Result anchors carry
+// class="title" rel="nofollow external"; findAnchors handles attr order.
+function parseMarginaliaHtml(html) {
+  const out = [];
+  if (!html) return out;
+  for (const a of findAnchors(String(html), "title")) {
+    const url = unwrapDdgUrl(a.href);
+    if (!validUrl(url)) continue;
+    const title = stripTags(a.raw);
+    if (!title) continue;
+    out.push({ title, snippet: "", url, domain: domainOf(url) });
   }
   return out;
 }
@@ -448,7 +668,20 @@ function relevantEnough(query, results, minFrac = 0.5) {
       hits++;
     }
   }
-  return hits / words.length >= minFrac;
+  if (hits / words.length >= minFrac) return true;
+  // Numeric-entity anchor (2026-10-13 06:48Z lesson): lore queries live on
+  // numbered identifiers ("sector 2814", "earth 616", "chapter 1050") — the
+  // number is the query's identity token, yet conversational phrasing
+  // ("so generally how big is it…") dilutes the word-hit ratio below the
+  // threshold and every backend's PERFECT results got gated out. If every
+  // number in the query appears in the results and at least 2 significant
+  // words also hit, accept. Decoy SERPs serve unrelated topics — they do
+  // not contain the query's exact numbers, so the anti-decoy role holds.
+  const nums = words.filter((w) => /\d/.test(w));
+  if (nums.length && hits >= 2 && nums.every((n) => hay.includes(n))) {
+    return true;
+  }
+  return false;
 }
 
 // ------------------------------------------------------------ prompt + text
@@ -479,15 +712,22 @@ function formatSourceList(results) {
     .join("\n");
 }
 
-function buildOverviewMessage(question, answer, results) {
+function buildOverviewMessage(question, answer, results, degraded = false) {
   const q = normalizeQuery(question);
   const a = String(answer || "").trim();
   const src = formatSourceList(results);
+  // 2026-10-13 06:48Z incident: every backend parsed fine but the anti-decoy
+  // gate rejected them all (conversational follow-up phrasing) — surface the
+  // best-effort set honestly instead of faking a network error.
+  const degradedNote = degraded
+    ? "\n⚠️ _results looked off-topic for this question — best effort; try rephrasing._\n"
+    : "";
   let body = [
     "🌐 *AI OVERVIEW* 🔍",
     `_${q}_`,
     "",
     a.length > MAX_ANSWER_CHARS ? a.slice(0, MAX_ANSWER_CHARS - 1) + "…" : a,
+    degradedNote,
     "",
     "*Sources:*",
     src,
@@ -502,6 +742,7 @@ function buildOverviewMessage(question, answer, results) {
       `_${q}_`,
       "",
       trimmed,
+      degradedNote,
       "",
       "*Sources:*",
       src,
@@ -512,7 +753,7 @@ function buildOverviewMessage(question, answer, results) {
 }
 
 // Groq down / synthesis empty → still useful: clean result digest.
-function buildResultsOnlyMessage(question, results) {
+function buildResultsOnlyMessage(question, results, degraded = false) {
   const q = normalizeQuery(question);
   const src = results
     .slice(0, 4)
@@ -526,6 +767,7 @@ function buildResultsOnlyMessage(question, results) {
     `_${q}_`,
     "",
     src || "No result excerpts available.",
+    degraded ? "\n⚠️ _results looked off-topic for this question — best effort; try rephrasing._" : "",
     "",
     "_AI summary unavailable right now — showing the raw results._",
   ].join("\n");
@@ -547,7 +789,16 @@ module.exports = {
   parseBingHtml,
   parseBraveHtml,
   parseBingRss,
+  parseGoogleNewsRss,
   parseWikipediaJson,
+  parseFandomDcJson,
+  parseYacyJson,
+  parseWikidataJson,
+  parseDdgApiJson,
+  parseStackExchangeJson,
+  parseHnAlgoliaJson,
+  parseWibyJson,
+  parseMarginaliaHtml,
   dedupeAndCap,
   cacheGet,
   cacheSet,
