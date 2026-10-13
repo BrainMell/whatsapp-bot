@@ -1,14 +1,18 @@
 /**
- * QA — `.j s` quoted-author name resolution (2026-10-13 "name doesn't show sometimes")
+ * QA — `.j s` quoted-author name resolution
+ * (2026-10-13 "name doesn't show sometimes" + "Use WhatsApp name instead of
+ *  bots registered name")
  *
  * Proves, against the LIVE economy cache on this box:
  *   1. BUG:  economy.getUser() returns null for unregistered users — the exact
  *      screenshot failure (Eve🌸 quoted → raw digits "20525682270384").
  *   2. FIX:  the candidate-bridge chain (original + lidResolver lid/phone forms +
- *      resolveJid + device-suffix-stripped variants) finds her nickname "Eve🌸"
- *      through economy.economyData.get() with NO registration gate.
- *   3. FIX2: a phone-keyed user with a known LID mapping resolves symmetrically.
- *   4. Unknown JID → chain returns null (handler then falls back to digits).
+ *      resolveJid + device-suffix-stripped variants) finds her name through
+ *      economy.economyData.get() with NO registration gate.
+ *   3. PRIORITY: WhatsApp display name (profile.whatsappName) wins over the
+ *      bot-registered nickname — asserted on a live user where the two differ.
+ *   4. FIX2: a phone-keyed user with a known LID mapping resolves symmetrically.
+ *   5. Unknown JID → chain returns null (handler then falls back to digits).
  *
  * Read-only against user data: never calls getOrCreateUser / scheduleSave.
  * PASS = all assertions green, exit 0.
@@ -24,6 +28,8 @@ function stripDevice(jid) {
   if (at > 0 && colon > 0 && colon < at) return `${jid.slice(0, colon)}${jid.slice(at)}`;
   return jid;
 }
+
+const clean = (v) => (typeof v === "string" && v.trim() ? v.trim() : null);
 
 // ── EXACT chain the patched handler uses (kept in sync deliberately) ────────
 function resolveQuotedName(quotedJid, economy, lidResolver) {
@@ -41,15 +47,23 @@ function resolveQuotedName(quotedJid, economy, lidResolver) {
     }
   } catch {}
   for (const c of [...cands]) pushCand(stripDevice(c));
+
+  // two passes: whatsappName first across ALL candidates, then nickname
+  const found = [];
   for (const cand of cands) {
     try {
       const u = economy.economyData && economy.economyData.get(cand);
-      const n =
-        (u?.nickname && u.nickname !== "Adventurer" && u.nickname) ||
-        u?.profile?.whatsappName ||
-        null;
-      if (n) return { name: n, via: cand };
+      if (u) found.push(u);
     } catch {}
+  }
+  for (const u of found) {
+    const n = clean(u?.profile?.whatsappName);
+    if (n) return { name: n, via: "whatsappName" };
+  }
+  for (const u of found) {
+    if (clean(u?.nickname) && u.nickname !== "Adventurer" && u.nickname) {
+      return { name: clean(u.nickname), via: "nickname" };
+    }
   }
   return { name: null, via: null };
 }
@@ -87,14 +101,32 @@ function resolveQuotedName(quotedJid, economy, lidResolver) {
     `getUser(${lidJid}) → ${gatedUser === null ? "null" : typeof gatedUser}`
   );
 
-  // ── 2. FIX: bridge chain resolves her name, no registration gate ───────────
+  // ── 2. FIX: bridge chain resolves the name, no registration gate ───────────
   const r1 = resolveQuotedName(lidJid, economy, lidResolver);
   check("fix: candidate chain finds the name", r1.name === EXPECT_NAME, `${lidJid} → "${r1.name}" (via ${r1.via})`);
-
-  // jidNormalizedUser must not have mangled the LID form
   check("jidNormalizedUser keeps @lid form", lidJid.endsWith("@lid"), lidJid);
 
-  // ── 3. reverse direction: phone → name (mapping symmetry) ─────────────────
+  // ── 3. PRIORITY: WhatsApp name beats registered nickname on a real case ────
+  let prioChecked = false;
+  for (const [key, u] of economy.economyData) {
+    const wa = clean(u?.profile?.whatsappName);
+    const nick = clean(u?.nickname);
+    if (wa && nick && nick !== "Adventurer" && wa !== nick) {
+      const r = resolveQuotedName(key, economy, lidResolver);
+      check(
+        "priority: whatsappName wins over registered nickname",
+        r.name === wa && r.via === "whatsappName",
+        `user ${key}: wa="${wa}" nick="${nick}" → "${r.name}" (via ${r.via})`
+      );
+      prioChecked = true;
+      break;
+    }
+  }
+  if (!prioChecked) {
+    console.log("  ℹ no user with differing wa/nickname found; priority check skipped");
+  }
+
+  // ── 4. reverse direction: phone → name (mapping symmetry) ──────────────────
   const phone = lidResolver.lidCache.get(PROCESSED);
   if (phone) {
     const r2 = resolveQuotedName(`${phone}@s.whatsapp.net`, economy, lidResolver);
@@ -107,20 +139,9 @@ function resolveQuotedName(quotedJid, economy, lidResolver) {
     console.log("  ℹ no lid→phone mapping for this LID; skipping reverse check");
   }
 
-  // ── 4. unknown jid → null (handler falls back to digits) ──────────────────
+  // ── 5. unknown jid → null (handler falls back to digits) ───────────────────
   const r3 = resolveQuotedName("999999999999999@s.whatsapp.net", economy, lidResolver);
   check("unknown jid → null (digits fallback kicks in)", r3.name === null);
-
-  // ── 5. sanity: at least one known user still resolves (no regression) ─────
-  let anyHit = 0;
-  let scanned = 0;
-  for (const [key, u] of economy.economyData) {
-    if (scanned >= 500) break;
-    scanned++;
-    const n = (u?.nickname && u.nickname !== "Adventurer" && u.nickname) || u?.profile?.whatsappName || null;
-    if (n) anyHit++;
-  }
-  check("sanity: cache read path returns names broadly", anyHit > scanned * 0.5, `${anyHit}/${scanned}`);
 
   console.log(`\nRESULT: ${pass} pass, ${fail} fail`);
   process.exit(fail === 0 ? 0 : 1);

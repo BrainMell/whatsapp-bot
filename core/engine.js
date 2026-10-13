@@ -14428,22 +14428,42 @@ Usage: ${newUsage}/5${warningText}`;
                               if (at > 0 && colon > 0 && colon < at)
                                 pushCand(`${c.slice(0, colon)}${c.slice(at)}`);
                             }
+                            // Collect every candidate's user object first, then
+                            // resolve in TWO PASSES so the real WhatsApp display
+                            // name wins over the bot-registered nickname even
+                            // when the two live under different JID forms.
+                            // (Owner 2026-10-13: "Use WhatsApp name instead of
+                            // bots registered name" — matches the AI-flow
+                            // getDisplayName philosophy: pushName > nickname.)
+                            const found = [];
                             for (const cand of cands) {
                               try {
                                 const u =
                                   economy.economyData &&
                                   economy.economyData.get(cand);
+                                if (u) found.push(u);
+                              } catch {}
+                            }
+                            const clean = (v) =>
+                              typeof v === "string" && v.trim() ? v.trim() : null;
+                            for (const u of found) {
+                              const n = clean(u?.profile?.whatsappName);
+                              if (n) {
+                                qName = n;
+                                break;
+                              }
+                            }
+                            if (!qName) {
+                              for (const u of found) {
                                 const n =
-                                  (u?.nickname &&
-                                    u.nickname !== "Adventurer" &&
-                                    u.nickname) ||
-                                  u?.profile?.whatsappName ||
-                                  null;
+                                  clean(u?.nickname) &&
+                                  u.nickname !== "Adventurer" &&
+                                  u.nickname;
                                 if (n) {
-                                  qName = n;
+                                  qName = clean(n);
                                   break;
                                 }
-                              } catch {}
+                              }
                             }
                           } catch {}
                           if (!qName && quotedJid) qName = quotedJid.split("@")[0];
