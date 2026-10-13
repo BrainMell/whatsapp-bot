@@ -8726,6 +8726,15 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               // ✅ Real message - reset zombie silence timer
               recordUpsert(BOT_ID);
 
+              // 🧪 FX .was capture (owner research 2026-10-14): fire-and-forget
+              // sniff for incoming lottie/.was stickers. Passive by default —
+              // only acts while the flag file fx_captures/.catch_on exists;
+              // fully try/catch-wrapped inside, can never throw into the
+              // command pipeline.
+              try {
+                require("./utils/fx").fxSniff(m, sock).catch(() => {});
+              } catch (_fxSniffErr) { /* never block the pipeline */ }
+
               // ⚖️ MM poll ballots (owner 2026-10-13 17:45Z): WhatsApp poll taps
               // become murdermystery day-vote ballots. baileys rc14 ships the
               // vote decryption but never calls it - the game module invokes
@@ -11114,6 +11123,20 @@ _💡 Reply with another number from your search list!_`.trim();
                       } else {
                         return reply(BOT_MARKER + '❌ GM admin subcommands require RPG Mod or higher.');
                       }
+                    }
+
+                    // 🧪 .fx — WhatsApp feature experiments (owner research
+                    // 2026-10-14: confetti reactions, ptt/ptv lifecycles, .was
+                    // lottie stickers via tag-74/tag-26, invisible-message
+                    // probes). Owner-gated: zero surface for players, no
+                    // gameplay path ever calls into it.
+                    if (primaryCmd === "fx") {
+                      if (!isOwner) {
+                        return reply(BOT_MARKER + "❌ owner only.");
+                      }
+                      const fx = require("./utils/fx");
+                      await fx.handleCommand(sock, chatId, m, cmdArgs.slice(1), BOT_MARKER, reply);
+                      return;
                     }
 
                     // 💡 .g instances - cross-instance health check
