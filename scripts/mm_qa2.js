@@ -13,6 +13,15 @@
 // driver polls through it while real-canvas renders stack behind it
 process.env.MM_QA_FAST = '1';
 process.env.MM_QA_CLOCK = '1';
+// MM_QA_NOTIMER (same gate mm_qa.js uses): the qa2 full-loop chains render
+// real search/ghost/morning cards, and a vote timer armed at phase start can
+// roll the machine mid-chain - on real canvas the 10s QA vote window expired
+// BEFORE the harness cast a ballot ("resolving vote (0 ballots)" -> the
+// killer killed again -> row 2.5 expected 1 kill, got 2). With the gate on,
+// discussion/voting never arm deadline timers; qa2 drives both phases via its
+// explicit onPhaseTimeout + the every-ballot-in resolve. Nights keep their
+// (scaled) timers. QA-only env - never set in production.
+process.env.MM_QA_NOTIMER = '1';
 
 const path = require('path');
 const fs = require('fs');
