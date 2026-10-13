@@ -89,6 +89,9 @@ const SEANCE_COOLDOWN_MS = 2500;      // anti-spam between words through the vei
 const LOOT_STOCK = { talisman: 1, candle: 2, coin: 2 }; // per-case keepsake stock (coin sleeps until the 2c puzzles)
 const VISIT_LOOT_CHANCE = 0.3;        // a visit may also surface a keepsake
 const LETTERS_PER_CASE = 8;           // the manor's letter thread per case (hint text only - pool length wins)
+// --- Wave 2c: the house's seals (owner 2026-10-13 "Go" on the seals pitch) ---
+const SEAL_MAX_TRIES = 2;             // wrong answers per night, then the mechanism jams until the next night
+const SEAL_COIN_WORDS = ['coin', 'old coin', 'skeleton key', 'use coin', 'coin key']; // `mm unlock coin` = skeleton key
 const IMG_NOTICE_THROTTLE_MS = 10 * 60000; // media-gate notice: at most once per 10 min per chat
 const TAUNT_MAX_LEN = 160;
 const WILL_MAX_LEN = 200;
@@ -224,6 +227,11 @@ function adoptGame(chatId, g, now) {
   if (!g.visits || typeof g.visits !== 'object') g.visits = { night: 0, picks: {} };
   if (!g.lootPool || typeof g.lootPool !== 'object') g.lootPool = { ...LOOT_STOCK };
   if (!Array.isArray(g.letterPool)) g.letterPool = [];
+  // Wave 2c migration: mid-case games predate the seals
+  if (!g.seals || !Array.isArray(g.seals.active)) {
+    try { g.seals = cases.sealsForRooms(g.rooms || []); } catch (e) { g.seals = { active: [] }; }
+  }
+  if (!Array.isArray(g.sealDawn)) g.sealDawn = [];
   games.set(chatId, { ...g, _resolving: false, _resolving2: false });
   // rebuild dead-player silences (they live in memory only)
   for (const p of (g.players || [])) {
@@ -1019,6 +1027,15 @@ async function startGame(ctx) {
   }
   g.lootPool = { ...LOOT_STOCK };
   console.log(`🔪 [MurderMystery] wave 2b: letterPool=${g.letterPool.length} lootPool=talisman:${g.lootPool.talisman}/candle:${g.lootPool.candle}/coin:${g.lootPool.coin}`);
+  // Wave 2c: the house's seals - 3 of the drawn rooms carry one (one per tier when the draw allows)
+  try {
+    g.seals = cases.sealsForRooms(g.rooms);
+  } catch (e) {
+    g.seals = { active: [] };
+    console.error('🔪 [MurderMystery] seal draw failed:', e.message);
+  }
+  g.sealDawn = []; // dawn flavor lines waiting for the next morning card
+  console.log(`🔪 [MurderMystery] wave 2c: seals active=${g.seals.active.map((s) => `t${s.tier}@room${s.roomIdx + 1}`).join(' ') || 'none'}`);
   g.phase = 'STARTING';
   persistGames();
   console.log(`🔪 [MurderMystery] game started in ${chatId} - ${nP} players (killers=${killerCount} investigators=${investCount} guardian=${guardianCount} medium=${mediumCount} butler=${butlerCount} accomplice=${accompliceCount})`);
@@ -1201,6 +1218,8 @@ async function beginNight(sock, chatId) {
   g.votes = {};
   g.extendedTonight = false;
   g.visits = { night: g.night, picks: {} }; // Wave 2b: fresh wander ledger each night
+  // Wave 2c: jammed mechanisms forgive with the new night
+  for (const s of (g.seals && g.seals.active) || []) s.attempts = 0;
   g.deadline = Date.now() + NIGHT_MS;
   g._resolving = false;
   g._resolving2 = false;
@@ -1559,10 +1578,19 @@ async function resolveNight(sock, chatId, _reason) {
   // dawn (AFK = they still wandered somewhere). Random placements get no
   // pings and no letters - they exist so every alibi conversation starts
   // from the same map without punishing the idle.
+  // Wave 2c: AFK wanderers CAN stumble into a seal (owner pitch: "AFK randoms
+  // can stumble into them too") - the riddle DM follows over breakfast.
   if (!g.visits || g.visits.night !== g.night) g.visits = { night: g.night, picks: {} };
+  const sealStumbles = [];
   for (const p of alivePlayers(g)) {
     const nj = normJid(p.jid);
-    if (g.visits.picks[nj] == null) g.visits.picks[nj] = Math.floor(Math.random() * Math.max(1, (g.rooms || []).length));
+    if (g.visits.picks[nj] == null) {
+      g.visits.picks[nj] = Math.floor(Math.random() * Math.max(1, (g.rooms || []).length));
+      try {
+        const met = meetSeal(g, p, g.visits.picks[nj], nj);
+        if (met && met.wasNew) sealStumbles.push({ p, met });
+      } catch (e) { /* seals never break dawn */ }
+    }
   }
   persistGames();
 
@@ -1740,6 +1768,11 @@ async function resolveNight(sock, chatId, _reason) {
   }
   const tracesUp = (g.nightTraces && g.nightTraces.night === g.night && g.nightTraces.items.length) || 0;
 
+  // Wave 2c: one dawn flavor line per seal opened since the last dawn -
+  // atmosphere, zero info leaked (never a name, never a room)
+  const sealDawnLine = Array.isArray(g.sealDawn) && g.sealDawn.length ? `\n🔓 ${g.sealDawn.join(' ')}` : '';
+  g.sealDawn = [];
+
   // ---- public morning card (never names the victim - the body must be found) ----
   await sleep(1200);
   try {
@@ -1754,14 +1787,35 @@ async function resolveNight(sock, chatId, _reason) {
       await sendGroupImage(sock, chatId, buf,
         `☀️ *DAWN - NIGHT ${g.night}*\n\n${outcome === 'murder' ? 'A murder was committed in the night. The body has *not* been found.' : outcome === 'saved' ? 'Someone almost died last night. No one did.' : 'No one died last night.'}\n\n` +
         `🔍 Every living guest may search *one* room before the vote: \`${g.prefix} mm search <number|room>\` - in the group or in your DMs.` +
-        (tracesUp ? `\n🌑 The night left things behind in the rooms - turn them over well.` : ''));
+        (tracesUp ? `\n🌑 The night left things behind in the rooms - turn them over well.` : '') + sealDawnLine);
     } else throw new Error('morning render null');
   } catch (e) {
     await sendGroup(sock, chatId,
       `☀️ *DAWN - NIGHT ${g.night}*\n\n${morningLine}\n\n` +
       `${outcome === 'murder' ? 'A murder was committed in the night. The body has *not* been found.' : outcome === 'saved' ? 'Someone almost died last night. No one did.' : 'No one died last night.'}\n\n` +
       `The rooms of the manor:\n${roomListOf(g)}\n\n🔍 Every living guest may search *one* room: \`${g.prefix} mm search <number|room>\`.` +
-      (tracesUp ? `\n🌑 The night left things behind in the rooms - turn them over well.` : ''));
+      (tracesUp ? `\n🌑 The night left things behind in the rooms - turn them over well.` : '') + sealDawnLine);
+  }
+
+  // Wave 2c: AFK wanderers who stumbled into a seal meet it over breakfast
+  for (const { p, met } of sealStumbles) {
+    try {
+      await sleep(600);
+      const pay = (cases.SEAL_PAY && cases.SEAL_PAY[met.entry.tier]) || 30;
+      const cap = sealFindCaption(g, met, pay);
+      let sent = false;
+      try {
+        const buf = await cards.renderSealCard({
+          seal: met.def,
+          room: g.rooms[met.entry.roomIdx],
+          night: g.night,
+          manorName: cases.MANOR_NAME,
+        });
+        if (buf) sent = await sendDMImage(sock, p.jid, buf, cap);
+      } catch (e) { /* text fallback below */ }
+      if (!sent) await sendDM(sock, p.jid, cap);
+      console.log(`🔪 [MurderMystery] NIGHT ${g.night}: AFK stumble into seal ${met.entry.sealId} by ${normJid(p.jid)}`);
+    } catch (e) { /* seals never break dawn */ }
   }
 
   return beginDiscussion(sock, chatId);
@@ -1857,6 +1911,19 @@ async function submitVisit(ctx, raw) {
     }
   }
 
+  // ---- the house's seals (Wave 2c): first meeting marks the riddle found ----
+  let sealLine = '';
+  let sealCard = null;
+  try {
+    const met = meetSeal(g, me, hit.idx, n);
+    if (met && met.wasNew) {
+      sealCard = met;
+      sealLine = `\n\n🔒 You nearly miss it in the dark: *${capWord(met.def.name)}* - ${met.def.find}. It will not open for hands. It wants an answer.`;
+    } else if (met) {
+      sealLine = `\n\n🔒 The ${met.def.name} still waits here, sealed. \`${g.prefix} mm unlock <answer>\` when you have it.`;
+    }
+  } catch (e) { /* seals never break a visit */ }
+
   // ---- the letter thread (sequential per player, one shared story) ----
   let letterLine = '';
   const pool = Array.isArray(g.letterPool) ? g.letterPool : [];
@@ -1879,18 +1946,37 @@ async function submitVisit(ctx, raw) {
       me.items.push(item);
       if (item === 'talisman') lootLine = `\n\n🧲 *Keepsake found:* an iron talisman, cold as a confession. If the knife comes for you, it breaks instead of you. Once.`;
       else if (item === 'candle') lootLine = `\n\n🕯️ *Keepsake found:* a candle stub. Next time you walk into a room that is not empty, its light will name the faces. Once.`;
-      else lootLine = `\n\n🪙 *Keepsake found:* an old coin, worn smooth. The manor's puzzles will want these, when the manor is ready. Keep it.`;
+      else lootLine = `\n\n🪙 *Keepsake found:* an old coin, worn smooth. The house's seals answer to it - one seal opens to the coin, no question asked. Spend it with \`${g.prefix} mm unlock coin\`.`;
     }
   } catch (e) { /* loot must never break a visit */ }
 
   persistGames();
-  console.log(`🔪 [MurderMystery] visit night=${g.night} by=${n} room=${hit.room.id}${coVisitors.length ? ` collision=${coVisitors.length}` : ''}${letterLine ? ' +letter' : ''}${lootLine ? ' +loot' : ''}`);
+  console.log(`🔪 [MurderMystery] visit night=${g.night} by=${n} room=${hit.room.id}${coVisitors.length ? ` collision=${coVisitors.length}` : ''}${letterLine ? ' +letter' : ''}${sealCard ? ' +seal' : ''}${lootLine ? ' +loot' : ''}`);
 
   await sendDM(sock, senderJid,
     `🚪 *NIGHT ${g.night} - the ${hit.room.name}*\n\n` +
     `You slip away from the candles and let the dark take the corridors. The ${hit.room.name} closes behind you.` +
-    `${collisionLine}${candleLine}${letterLine}${lootLine}\n\n_What happened in that room is yours to tell - or to hide._`);
+    `${collisionLine}${candleLine}${sealLine}${letterLine}${lootLine}\n\n_What happened in that room is yours to tell - or to hide._`);
   if (ctx.isGroup) await sendGroup(sock, chatId, `${botMarker}🚪 The dark takes you. Check your DMs.`);
+
+  // Wave 2c: the seal's find-card follows the visit DM (locked safe + riddle)
+  if (sealCard) {
+    try {
+      const pay = (cases.SEAL_PAY && cases.SEAL_PAY[sealCard.entry.tier]) || 30;
+      const cap = sealFindCaption(g, sealCard, pay);
+      let sent = false;
+      try {
+        const buf = await cards.renderSealCard({
+          seal: sealCard.def,
+          room: hit.room,
+          night: g.night,
+          manorName: cases.MANOR_NAME,
+        });
+        if (buf) sent = await sendDMImage(sock, senderJid, buf, cap);
+      } catch (e) { /* text fallback below */ }
+      if (!sent) await sendDM(sock, senderJid, cap);
+    } catch (e) { /* seals never break a visit */ }
+  }
 }
 
 async function submitLetters(ctx) {
@@ -1911,6 +1997,170 @@ async function submitLetters(ctx) {
   await sendDM(sock, senderJid,
     `📜 *THE MANOR'S LETTERS - ${have} of ${pool.length} fragments*\n\n${bodyTxt}\n\n_The missing pages are still hiding in the rooms._`);
   if (ctx.isGroup) await sendGroup(sock, chatId, `${botMarker}📜 The manor's letters are a private matter - sent to your DMs.`);
+}
+
+// ---------- THE HOUSE'S SEALS (Wave 2c, owner 2026-10-13 "Go" on the seals pitch) ----------
+// Every room owns one seal; each case wakes 3 of the drawn rooms' seals (one
+// per tier when the draw allows). You MEET a seal on a night visit (the riddle
+// DM + find-card are private); you ANSWER it with `mm unlock <answer>` - two
+// wrong answers jam the mechanism until the next night. Solves pay Zeni by
+// tier and are DM-private - no social signal, nobody gets murdered for being
+// clever. Answers are house lore and never case truth (puzzles pay, they
+// never testify). The old coin keepsake is a skeleton key: it opens one seal
+// outright, no guess. AFK wanderers can stumble into seals at dawn too.
+function capWord(s) {
+  s = String(s || '');
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
+function sealDefOf(entry) {
+  return (cases.SEALS || []).find((s) => s.id === entry.sealId) || null;
+}
+
+// first meeting: mark found, retarget the guest's last seal. Re-visits
+// silently re-target (re-read the riddle, re-aim your answer) without
+// re-sending the card. Returns { def, entry, wasNew } or null.
+function meetSeal(g, me, roomIdx, njid) {
+  const list = (g.seals && Array.isArray(g.seals.active)) ? g.seals.active : [];
+  const entry = list.find((s) => s.roomIdx === roomIdx && !s.solved);
+  if (!entry) return null;
+  if (!Array.isArray(entry.foundBy)) entry.foundBy = [];
+  const wasNew = !entry.foundBy.includes(njid);
+  if (wasNew) {
+    entry.foundBy.push(njid);
+    entry.found = true;
+  }
+  me.lastSeal = roomIdx; // the last seal you stood before is the one you answer
+  const def = sealDefOf(entry);
+  return def ? { def, entry, wasNew } : null;
+}
+
+function queueSealDawn(g, def) {
+  if (!Array.isArray(g.sealDawn)) g.sealDawn = [];
+  g.sealDawn.push(def.dawn);
+}
+
+// the house always pays its debts - an economy failure never un-opens a seal
+async function paySealZeni(jid, tier) {
+  const pay = (cases.SEAL_PAY && cases.SEAL_PAY[tier]) || 30;
+  if (!economy) return { pay, ok: true, note: '' };
+  let ok = false;
+  try { ok = !!economy.addMoney(jid, pay, 'Murder Mystery - house seal solved'); } catch (e) { ok = false; }
+  return { pay, ok, note: ok ? '' : ' ⚠️ (payment failed - ping a mod)' };
+}
+
+async function openSeal(g, me, entry, def, byCoin) {
+  entry.solved = true;
+  entry.solvedBy = normJid(me.jid);
+  entry.byCoin = !!byCoin;
+  entry.solvedNight = g.night;
+  queueSealDawn(g, def);
+  const res = await paySealZeni(me.jid, entry.tier);
+  console.log(`🔪 [MurderMystery] seal ${entry.sealId} OPENED by ${normJid(me.jid)} (tier ${entry.tier}${byCoin ? ', by coin' : ''}, night ${g.night}, paid=${res.ok})`);
+  persistGames();
+  return res;
+}
+
+function sealFindCaption(g, met, pay) {
+  const room = g.rooms[met.entry.roomIdx];
+  return `🔒 *${capWord(met.def.name)}* keeps ${room ? room.name : 'its room'}. It wants an answer, not a key.\n\n_${met.def.riddle}_\n\n\`${g.prefix} mm unlock <answer>\` - two tries a night, then the mechanism jams until the next. The house pays *${fmtZeni(pay)} Zeni* for a solve - privately.`;
+}
+
+async function submitUnlock(ctx, raw) {
+  const { sock, chatId, senderJid, botMarker } = ctx;
+  const g = ctx.isGroup ? getGame(chatId) : findGameForPlayer(senderJid);
+  if (g) noteSock(g, sock);
+  // every reply lands in DMs - attempts, wrongs, jams and solves never touch
+  // the group (nobody learns you even tried: solves carry no social signal)
+  const reply = (text) => sendDM(sock, senderJid, text);
+  if (!g) return reply(`${botMarker}🔒 No house stands here to answer to.`);
+  if (g.phase !== PHASE.NIGHT && g.phase !== PHASE.DISCUSSION) {
+    return reply(`${botMarker}🔒 The seals keep their own hours - answer them by night, or by daylight before the vote.`);
+  }
+  const me = getPlayer(g, senderJid);
+  if (!me) return reply(`${botMarker}🔒 You are not on the guest list.`);
+  if (!me.alive) return reply(`${botMarker}🔒 The dead keep their answers.`);
+  const answer = String(raw || '').trim();
+  if (!answer) {
+    return reply(`${botMarker}🔒 Answer what, exactly? \`${g.prefix} mm unlock <answer>\` - the riddle you met in the dark. \`${g.prefix} mm seals\` re-reads it.`);
+  }
+  const list = (g.seals && Array.isArray(g.seals.active)) ? g.seals.active : [];
+  const entry = me.lastSeal != null ? list.find((s) => s.roomIdx === me.lastSeal) : null;
+  if (!entry) {
+    return reply(`${botMarker}🔒 You have met no seal yet. Wander a room at night - \`${g.prefix} mm visit <n|room>\` - and the house may show you one.`);
+  }
+  const def = sealDefOf(entry);
+  if (!def) return reply(`${botMarker}🔒 The house has forgotten what that seal was. Move along.`);
+  if (entry.solved) {
+    return reply(`${botMarker}🔓 ${capWord(def.name)} already stands open. Its riddle is spent.`);
+  }
+  if (entry.jammedNight === g.night) {
+    return reply(`${botMarker}⛓️ The mechanism is jammed until tomorrow night - ${SEAL_MAX_TRIES} wrong answers did that. Sleep on it.`);
+  }
+
+  const q = cases.normSealAnswer(answer);
+  const coinWant = SEAL_COIN_WORDS.some((w) => cases.normSealAnswer(w) === q);
+
+  if (coinWant) {
+    // ---- the coin wakes: skeleton key, one seal, no guess ----
+    if (!(me.items || []).includes('coin')) {
+      return reply(`${botMarker}🪙 You hold no coin. The old coins hide in the rooms - \`${g.prefix} mm visit\` may find you one.`);
+    }
+    me.items = me.items.filter((it) => it !== 'coin');
+    const { pay, note } = await openSeal(g, me, entry, def, true);
+    console.log(`🔪 [MurderMystery] unlock(coin) night=${g.night} by=${normJid(senderJid)} seal=${entry.sealId}`);
+    return reply(`🔓 *THE SEAL OPENS* - night ${g.night}\n\n${capWord(def.name)} yields to the old coin - no answer required. The house pays *${fmtZeni(pay)} Zeni*${note}, privately.\n\n_${def.dawn}_`);
+  }
+
+  if (q === cases.normSealAnswer(def.answer) || (def.aliases || []).some((a) => cases.normSealAnswer(a) === q)) {
+    // ---- solved: DM-private, paid by tier ----
+    const { pay, note } = await openSeal(g, me, entry, def, false);
+    console.log(`🔪 [MurderMystery] unlock night=${g.night} by=${normJid(senderJid)} seal=${entry.sealId} (solve)`);
+    return reply(`🔓 *THE SEAL OPENS* - night ${g.night}\n\nYou answer the ${def.name}, and it believes you. The house pays *${fmtZeni(pay)} Zeni*${note}, privately.\n\n_${def.dawn}_`);
+  }
+
+  // ---- wrong: two tries a night, then the mechanism jams ----
+  entry.attempts = (entry.attempts || 0) + 1;
+  if (entry.attempts >= SEAL_MAX_TRIES) {
+    entry.jammedNight = g.night;
+    persistGames();
+    console.log(`🔪 [MurderMystery] seal ${entry.sealId} JAMMED by ${normJid(me.jid)} (night ${g.night})`);
+    return reply(`${botMarker}🔒 *Wrong - and the mechanism seizes.* The ${def.name} jams until tomorrow night. Whatever you said, the house did not like it twice.`);
+  }
+  persistGames();
+  return reply(`${botMarker}🔒 *Wrong.* The ${def.name} does not move.${SEAL_MAX_TRIES - entry.attempts === 1 ? ' One try left this night.' : ' Try again.'}`);
+}
+
+async function submitSeals(ctx) {
+  const { sock, chatId, senderJid, botMarker } = ctx;
+  const g = ctx.isGroup ? getGame(chatId) : findGameForPlayer(senderJid);
+  if (g) noteSock(g, sock);
+  if (!g) return sendGroup(sock, chatId, `${botMarker}🔒 No mystery is unfolding here.`);
+  const me = getPlayer(g, senderJid);
+  if (!me) return sendGroup(sock, chatId, `${botMarker}🔒 You are not on the guest list.`);
+  const list = (g.seals && Array.isArray(g.seals.active)) ? g.seals.active : [];
+  const mine = list.filter((s) => Array.isArray(s.foundBy) && s.foundBy.includes(normJid(senderJid)));
+  if (!mine.length) {
+    await sendDM(sock, senderJid,
+      `🔒 *THE HOUSE'S SEALS*\n\nYou have met none yet. Wander a room at night - \`${g.prefix} mm visit <n|room>\` - and the house may show you what it locks away. Three seals wake each case; the house pays for every one that opens.`);
+    if (ctx.isGroup) await sendGroup(sock, chatId, `${botMarker}🔒 Your seals are a private matter - sent to your DMs.`);
+    return;
+  }
+  const rows = mine.map((s) => {
+    const def = sealDefOf(s);
+    if (!def) return null;
+    const room = g.rooms[s.roomIdx];
+    const status = s.solved
+      ? '🔓 open'
+      : s.jammedNight === g.night
+        ? '⛓️ jammed until the next night'
+        : `🔒 sealed · ${Math.max(0, SEAL_MAX_TRIES - (s.attempts || 0))} wrong answer(s) left this night`;
+    return `*${capWord(def.name)}* - ${room ? room.name : 'a room'} · tier ${s.tier} · ${fmtZeni((cases.SEAL_PAY && cases.SEAL_PAY[s.tier]) || 30)} Zeni\n_${def.riddle}_\n${status}${s.solved && s.byCoin ? ' · opened by coin' : ''}`;
+  }).filter(Boolean).join('\n\n');
+  const solvedCount = list.filter((s) => s.solved).length;
+  await sendDM(sock, senderJid,
+    `🔒 *THE HOUSE'S SEALS - ${mine.length} met · ${solvedCount} of ${list.length} open house-wide*\n\n${rows}\n\n_Answer with \`${g.prefix} mm unlock <answer>\`. Two wrong answers jam a seal until the next night. The old coin opens one seal outright: \`${g.prefix} mm unlock coin\`._`);
+  if (ctx.isGroup) await sendGroup(sock, chatId, `${botMarker}🔒 Your seals are a private matter - sent to your DMs.`);
 }
 
 async function submitSearch(ctx, raw) {
@@ -3143,6 +3393,13 @@ async function showStatus(ctx) {
         const vr = g.rooms[g.visits.picks[normJid(senderJid)]];
         itemLine += `\nTonight's wander: the ${vr ? vr.name : 'manor'}.`;
       }
+      // Wave 2c: the house's seals - private progress line
+      const sList = (g.seals && Array.isArray(g.seals.active)) ? g.seals.active : [];
+      if (sList.length) {
+        const sMet = sList.filter((s) => Array.isArray(s.foundBy) && s.foundBy.includes(normJid(senderJid))).length;
+        const sOpen = sList.filter((s) => s.solved).length;
+        itemLine += `\nSeals: ${sMet} met · ${sOpen} of ${sList.length} open house-wide${me.lastSeal != null ? ' · your answer awaits at ' + ((g.rooms[me.lastSeal] || {}).name || 'the room') : ''}.`;
+      }
     }
     const unfound = (g.bodies || []).filter((b) => !b.found).length;
     const bodyLine = unfound ? `\n\nUnfound bodies in the manor: *${unfound}*.` : '';
@@ -3198,13 +3455,15 @@ function helpText(prefix) {
     `• \`${prefix} mm end\` - host/mod closes the case (no prize is paid if the case never closes)\n\n` +
     `*At night (in your DM with the bot - four minutes):*\n` +
     `• \`${prefix} mm visit <n|room>\` - slip away to one room before dawn: letters from the manor's past, keepsakes, and whoever else is hiding there (you are told someone is present - never who)\n` +
+    `• \`${prefix} mm unlock <answer>\` - the house's seals want answers, not keys: three wake per case, two tries a night, then the mechanism jams. Solves pay Zeni - privately\n` +
+    `• \`${prefix} mm seals\` - re-read the riddles you have met\n` +
     `• \`${prefix} mm letters\` - re-read every letter fragment you have collected\n` +
     `• \`${prefix} mm kill <n|name>\` - killer only, then \`${prefix} mm room <n>\` to hide the body\n` +
     `• \`${prefix} mm compare <a> <b>\` - investigator only: lay two guests on the scales, learn which one the house trusts less (3 weighings per case)\n` +
     `• \`${prefix} mm protect <n|me>\` - guardian only (games of 5+)\n\n` +
     `*If you dare (DM):*\n` +
     `• \`${prefix} mm taunt <message>\` - whisper into the discussion, unsigned. The manor will say if it is not yours to give.\n\n` +
-    `*How it flows:* roles are dealt in secret. At night the killer kills and hides the body, and every living guest may slip away to one room - the manor's letters explain why you were all invited, and some rooms hide keepsakes: an iron talisman turns one knife, a candle stub names the faces in your room, an old coin will buy into the manor's puzzles. By day the house searches - the finder of the body inherits the ghost's clue about the killer's character, and the ghost adds where the killer passed that night. Bad votes let the killer kill again. Dead guests are silenced until the case closes.\n\n` +
+    `*How it flows:* roles are dealt in secret. At night the killer kills and hides the body, and every living guest may slip away to one room - the manor's letters explain why you were all invited, and some rooms hide keepsakes: an iron talisman turns one knife, a candle stub names the faces in your room, an old coin opens one of the house's seals outright. Three seals wake each case - a stopped clock, a veiled mirror, a music box wound too tight - and each one pays Zeni for the answer, privately: 30 / 70 / 150 by tier. Their answers are house lore; they never testify. By day the house searches - the finder of the body inherits the ghost's clue about the killer's character, and the ghost adds where the killer passed that night. Bad votes let the killer kill again. Dead guests are silenced until the case closes.\n\n` +
     `*The prize:* the manor posts a purse (10k-25k Zeni, rolled when the lobby opens) - no entry fee, ever. If the innocents solve the case they split the purse; if the killer outlives the manor, the killer takes all of it. Wins, kills, saves, finds and sharp votes are written into the Hall of Shadows: \`${prefix} mm lb\`.\n\n` +
     `Roles scale with the table: 4 guests = 1 Killer + 1 Investigator · 5-7 = + Guardian · 8+ = + a 2nd Investigator + the Medium · 9+ = a 2nd Killer (partners) + the Butler + the Accomplice. The rest are Civilians.\n` +
     `The Butler learns the killer's name on the third night - but the killer knows the Butler from the first. The Accomplice wins beside the knife and is known to nobody. The dead stay silenced until the case closes - unless the Medium lets them speak.\n` +
@@ -3343,6 +3602,13 @@ async function handleCommand(ctx) {
     case 'letter':
     case 'fragments':
       return submitLetters(ctx);
+    case 'unlock':
+    case 'open':
+    case 'answer':
+      return submitUnlock(ctx, ctx.rest);
+    case 'seals':
+    case 'seal':
+      return submitSeals(ctx);
     case 'taunt':
     case 'taun':
     case 'tunt':
@@ -3437,5 +3703,11 @@ module.exports = {
     seanceRelay,         // QA (Wave 2a)
     BUTLER_REVEAL_NIGHT, // QA (Wave 2a)
     SEANCE_BUDGET,       // QA (Wave 2a)
+    // Wave 2c - the house's seals
+    submitUnlock,        // QA
+    submitSeals,         // QA
+    meetSeal,            // QA (AFK stumble)
+    openSeal,            // QA
+    SEAL_MAX_TRIES,      // QA
   },
 };

@@ -1173,6 +1173,224 @@ async function renderGhostClueCard({ clue, tier, victimName, room, night, manorN
   });
 }
 
+// ============================================
+// WAVE 2c - THE HOUSE'S SEALS (owner 2026-10-13 "Go" on the seals pitch)
+// Private find-card for a seal met on a night visit. The strongbox is drawn
+// with primitives (no sprite art exists for seals); the wax seal carries the
+// tier numeral. The riddle is ON the card so a screenshot alone can carry the
+// puzzle. Same house language: room backdrop, atmosphere, hairline frame,
+// Playfair/EB Garamond, film grain. Mellow's ask: "image cards ... locked
+// safes or something".
+// ============================================
+function rrectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// a locked iron strongbox: body, door plate, rivets, dial, keyhole,
+// padlock on a hasp, and the tier's wax seal
+function drawLockedSafe(ctx, cx, cy, w, h, tier) {
+  ctx.save();
+  // ambient glow behind the box
+  const glow = ctx.createRadialGradient(cx, cy, 20, cx, cy, w * 0.95);
+  glow.addColorStop(0, 'rgba(201,161,59,0.15)');
+  glow.addColorStop(1, 'rgba(201,161,59,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(cx - w * 1.1, cy - h * 1.1, w * 2.2, h * 2.2);
+
+  const x = cx - w / 2, y = cy - h / 2;
+
+  // body - iron gradient
+  const body = ctx.createLinearGradient(x, y, x + w, y + h);
+  body.addColorStop(0, '#2a2433');
+  body.addColorStop(0.5, '#171320');
+  body.addColorStop(1, '#0d0a11');
+  rrectPath(ctx, x, y, w, h, 16);
+  ctx.fillStyle = body;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(236,226,200,0.28)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // inner door plate
+  const dx = x + 24, dy = y + 24, dw = w - 48, dh = h - 48;
+  const door = ctx.createLinearGradient(dx, dy, dx + dw, dy + dh);
+  door.addColorStop(0, '#1d1826');
+  door.addColorStop(1, '#120e18');
+  rrectPath(ctx, dx, dy, dw, dh, 10);
+  ctx.fillStyle = door;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(236,226,200,0.16)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // corner rivets
+  ctx.fillStyle = 'rgba(201,161,59,0.55)';
+  for (const [rx, ry] of [[x + 12, y + 12], [x + w - 12, y + 12], [x + 12, y + h - 12], [x + w - 12, y + h - 12]]) {
+    ctx.beginPath();
+    ctx.arc(rx, ry, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // hinges (left edge)
+  ctx.fillStyle = 'rgba(201,161,59,0.4)';
+  for (const hy of [y + h * 0.26, y + h * 0.74]) {
+    rrectPath(ctx, x - 5, hy - 14, 14, 28, 4);
+    ctx.fill();
+  }
+
+  // dial (right of centre)
+  const dxc = x + w * 0.68, dyc = y + h * 0.42, dr = h * 0.19;
+  ctx.beginPath();
+  ctx.arc(dxc, dyc, dr, 0, Math.PI * 2);
+  ctx.fillStyle = '#0b0910';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(201,161,59,0.75)';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  // tick marks
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 8; i++) {
+    const ang = (i / 8) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(dxc + Math.cos(ang) * (dr - 7), dyc + Math.sin(ang) * (dr - 7));
+    ctx.lineTo(dxc + Math.cos(ang) * (dr - 2), dyc + Math.sin(ang) * (dr - 2));
+    ctx.stroke();
+  }
+  // three spokes + hub
+  for (let i = 0; i < 3; i++) {
+    const ang = (i / 3) * Math.PI * 2 + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(dxc, dyc);
+    ctx.lineTo(dxc + Math.cos(ang) * (dr - 9), dyc + Math.sin(ang) * (dr - 9));
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.arc(dxc, dyc, 6, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(224,189,92,0.9)';
+  ctx.fill();
+
+  // keyhole plate (below dial)
+  const kx = dxc, ky = y + h * 0.74;
+  rrectPath(ctx, kx - 20, ky - 22, 40, 44, 6);
+  ctx.fillStyle = 'rgba(201,161,59,0.25)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(201,161,59,0.5)';
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(13,10,16,0.95)';
+  ctx.beginPath();
+  ctx.arc(kx, ky - 6, 7, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(kx - 4, ky - 3);
+  ctx.lineTo(kx + 4, ky - 3);
+  ctx.lineTo(kx + 2, ky + 13);
+  ctx.lineTo(kx - 2, ky + 13);
+  ctx.closePath();
+  ctx.fill();
+
+  // tier numeral engraved, top-left of the door
+  ctx.font = '30px EB-Semi';
+  ctx.fillStyle = 'rgba(201,161,59,0.6)';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(roman(tier), x + w * 0.24, y + h * 0.3);
+  ctx.font = '16px Type';
+  ctx.fillStyle = 'rgba(236,226,200,0.4)';
+  ctx.fillText('SEAL', x + w * 0.24, y + h * 0.3 - 30);
+  ctx.textBaseline = 'alphabetic';
+
+  // padlock hanging off a hasp, bottom-centre of the door
+  const px = cx, py = y + h - 6;
+  ctx.strokeStyle = 'rgba(201,161,59,0.65)';
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.arc(px, py - 26, 13, Math.PI, 0); // shackle
+  ctx.stroke();
+  rrectPath(ctx, px - 21, py - 26, 42, 34, 6);
+  const lock = ctx.createLinearGradient(px - 21, py - 26, px + 21, py + 8);
+  lock.addColorStop(0, '#3a3040');
+  lock.addColorStop(1, '#191420');
+  ctx.fillStyle = lock;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(236,226,200,0.3)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(224,189,92,0.85)';
+  ctx.beginPath();
+  ctx.arc(px, py - 12, 4.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(px - 3, py - 10);
+  ctx.lineTo(px + 3, py - 10);
+  ctx.lineTo(px + 1.5, py - 1);
+  ctx.lineTo(px - 1.5, py - 1);
+  ctx.closePath();
+  ctx.fill();
+
+  // the house's wax seal, bottom-right corner of the door
+  seal(ctx, x + w - 52, y + h - 46, 30, 'rgba(160,31,49,0.95)', (c2, x2, y2, s2) => {
+    c2.fillStyle = 'rgba(236,226,200,0.92)';
+    c2.font = `bold ${Math.round(s2 * 1.15)}px EB-Semi`;
+    c2.textAlign = 'center';
+    c2.textBaseline = 'middle';
+    c2.fillText(roman(tier), x2, y2 + 1);
+  });
+
+  ctx.restore();
+}
+
+async function renderSealCard({ seal, room, night, manorName }) {
+  let pay = 30;
+  try { pay = require('./cases').SEAL_PAY[seal.tier] || 30; } catch (e) { /* display only */ }
+  return renderCard(PORT_W, PORT_H, async (ctx) => {
+    const bg = await loadBg(room.id);
+    drawCover(ctx, bg, 0, 0, PORT_W, PORT_H);
+    atmosphere(ctx, PORT_W, PORT_H, { dark: 0.84 });
+    fogField(ctx, PORT_W, PORT_H, '201,161,59', 0.09);
+
+    ctx.textAlign = 'center';
+    ctx.font = '40px Type';
+    ctx.fillStyle = C.amberHi;
+    spaced(ctx, 'THE HOUSE\u2019S SEALS', PORT_W / 2, 150, 9);
+
+    ctx.font = '54px PF-Black';
+    ctx.fillStyle = C.ivory;
+    ctx.fillText(String(seal.name).toUpperCase(), PORT_W / 2, 226);
+
+    ctx.font = '27px EB-Reg';
+    ctx.fillStyle = C.ivoryDim;
+    ctx.fillText(`found in ${room.name} \u00B7 night ${night}`, PORT_W / 2, 274);
+
+    ornament(ctx, PORT_W / 2, 318, 300);
+
+    // the locked strongbox
+    drawLockedSafe(ctx, PORT_W / 2, 560, 430, 330, seal.tier);
+
+    // the riddle
+    ctx.textAlign = 'left';
+    ctx.font = 'italic 37px PF-MedIt';
+    ctx.fillStyle = C.ivory;
+    const after = wrap(ctx, `\u201C${seal.riddle}\u201D`, 140, 820, 620, 54, 5);
+
+    ctx.textAlign = 'center';
+    ctx.font = '27px EB-Semi';
+    ctx.fillStyle = C.amber;
+    ctx.fillText(`SEAL ${roman(seal.tier)} \u00B7 THE HOUSE PAYS ${pay} ZENI`, PORT_W / 2, Math.max(after + 72, 1180));
+
+    ctx.font = '25px EB-Reg';
+    ctx.fillStyle = C.ivoryFaint;
+    ctx.fillText('answer with mm unlock - the manor alone will know', PORT_W / 2, Math.max(after + 114, 1222));
+
+    footer(ctx, PORT_W, PORT_H, manorName);
+  });
+}
+
 // Public search card - posted to the GROUP. Everyone sees who searched
 // which room, and what they found (the user asked for open searches).
 async function renderSearchCard({ playerChar, playerName, room, found, flavor, night, manorName }) {
@@ -2053,6 +2271,7 @@ module.exports = {
   renderMorningCard,
   renderBodyFoundCard,
   renderGhostClueCard,
+  renderSealCard,
   renderButlerRevealCard,
   renderSearchCard,
   renderLobbyCard,
