@@ -7810,6 +7810,28 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               });
               console.log(`✅ [${BOT_ID}] WhatsApp connected (open).`);
               isRekeying = false; // BOT IS STABLE
+
+              // 💡 AUTO-CONTINUE (2026-10-14, owner: "if the bot restarts the game
+              // should automatically continue even if the command isn't sent - it's
+              // usually for solo but make it for group quests too"): ~25s after the
+              // socket opens, sweep BOTH combat-snapshot collections for fights this
+              // bot owned when the process died and continue every one of them on
+              // its own — solo AND group party fights, no command needed. Once per
+              // process (reconnects keep their in-memory states; only a fresh boot
+              // needs the sweep). Lazy-required: immune to any local shadowing.
+              try {
+                setTimeout(() => {
+                  try {
+                    require('./rpg/guildAdventure')
+                      .autoResumeAfterRestart(sock)
+                      .catch((e) => console.error("[AutoResume] boot sweep failed:", e?.message));
+                  } catch (e) {
+                    console.error("[AutoResume] boot sweep threw:", e?.message);
+                  }
+                }, 25 * 1000);
+              } catch (e) {
+                console.error("[AutoResume] schedule failed:", e?.message);
+              }
               // 💡 FIX-PASS-2 (2026-10-03): removed `ignoreBroadcasts = false` -
               // assigned here but read NOWHERE (dead implicit-global write; the
               // reader it once served was removed in an earlier refactor).
@@ -11658,11 +11680,14 @@ _💡 Reply with another number from your search list!_`.trim();
                       // solo fight that was cut by a restart from the
                       // SoloCombatSnapshot doc (saved at fight start + every action).
                       if (cmdArgs[1] === "resume" || cmdArgs[1] === "continue") {
-                        const _resumeResult = await guildAdventure.resumeSoloCombat(
-                          sock,
-                          chatId,
-                          senderJid,
-                        );
+                        // 💡 GROUP RESUME (2026-10-14, owner: "Add a continue command
+                        // for group quests"): .j solo resume keeps the solo contract;
+                        // .j quest resume / .j adventure resume (+ "continue") now
+                        // rebuild the GROUP party fight from GroupCombatSnapshot
+                        // (whole party + enemies restored exactly as they stood).
+                        const _resumeResult = (primaryCmd === "solo")
+                          ? await guildAdventure.resumeSoloCombat(sock, chatId, senderJid)
+                          : await guildAdventure.resumeGroupCombat(sock, chatId, senderJid);
                         return sock.sendMessage(chatId, {
                           text: BOT_MARKER + (_resumeResult?.message || "❌ Could not resume."),
                         });

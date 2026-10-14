@@ -4743,11 +4743,12 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   // beat (4s) gives players a moment to read the scene without feeling
   // like the enemy went AFK.
   const startDelay = state.solo ? 0 : 4000;
-  // 💡 SOLO RESUME: snapshot the fight the moment it starts so a restart
+  // 💡 COMBAT RESUME (2026-10-14: group + auto extension of the 2026-10-11
+  // solo contract): snapshot the fight the moment it starts so a restart
   // mid-first-turn still leaves a resume point (refreshed every action below).
-  if (_soloSnapshotEligible(state)) {
-    saveSoloSnapshot(sessionKey).catch(() => {});
-  }
+  // saveCombatSnapshot routes SOLO fights to SoloCombatSnapshot and GROUP
+  // party fights to GroupCombatSnapshot (dispatchers near resumeGroupCombat).
+  saveCombatSnapshot(sessionKey).catch(() => {});
   state.timers.combatStart = setTimeout(async () => {
     try {
       if (!state.inCombat) return; // Safety check
@@ -6043,8 +6044,9 @@ async function performAction(sock, player, action, sessionKey) {
     // a restart mid-fight always restores the CURRENT turn state. Skipped when
     // the action ended the fight (endAdventure already cleared the snapshot and
     // inCombat is false by then).
-    if (state && state.inCombat && _soloSnapshotEligible(state)) {
-      saveSoloSnapshot(sessionKey).catch(() => {});
+    if (state && state.inCombat) {
+      // 💡 COMBAT RESUME: solo -> SoloCombatSnapshot, group -> GroupCombatSnapshot
+      saveCombatSnapshot(sessionKey).catch(() => {});
     }
   }
 }
@@ -7614,6 +7616,405 @@ async function resumeSoloCombat(sock, chatId, senderJid) {
   await startCombat(sock, null, { enemies: restoredEnemies, type: snap.currentEncounterType || 'COMBAT', background: snap.backgroundPath || undefined }, sessionKey);
 
   return { success: true, message: `⚔️ *SOLO FIGHT RESUMED* — round ${snap.combatRound || 0}, ${restoredEnemies.filter((e) => !e.isDead).length} enemy(ies) still standing.` };
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// 🤝 GROUP COMBAT RESUME + BOOT AUTO-CONTINUE (2026-10-14, owner: "Add a
+// continue command for group quests. In fact if the bot restarts the game
+// should automatically continue even if the command isn't sent - it's
+// usually for solo but make it for group quests too")
+// The solo contract above (2026-10-11) only covered state.solo===true, so a
+// restart mid-GROUP-quest (`.j quest <rank>`, solo:false, state under the
+// GROUP chat key) killed the party fight with no way back. This block gives
+// group quests the same contract AND the owner's auto-continue:
+//   • _groupSnapshotEligible / saveGroupSnapshot — group twin of the solo
+//     snapshot: WHOLE party (hp/energy/dead flags/statuses/xp tally) + full
+//     enemy roster + quest context, one doc per group chat, upserted at
+//     fight start + after every completed action, deleted at quest end/stop.
+//   • resumeGroupCombat — `.j quest resume` / `.j quest continue` rebuilds
+//     the party fight exactly as it stood (whole party + enemies restored).
+//   • saveCombatSnapshot / clearCombatSnapshot — dispatchers wired into the
+//     SAME 4 hook points the solo snapshot uses (fight start, after every
+//     completed action, quest stop, quest end); they route solo vs group by
+//     state. clearCombatSnapshot takes the STATE object — it clears via the
+//     bare player jid / chat id, which also fixes the pre-existing solo
+//     clear bug where a bot-scoped "bot|chat_jid" key hit the '@' shortcut
+//     branch and silently deleted NOTHING (stopped/finished solo quests
+//     left a resurrectable snapshot behind).
+//   • autoResumeAfterRestart — engine calls this ~25s after WhatsApp
+//     connects; it sweeps BOTH collections for this botId and continues
+//     every interrupted fight (solo AND group) ON ITS OWN, no command.
+// Abyss runs keep their own AbyssRun resume; tutorials / ruins rooms keep
+// their live-shared-state exclusions (same rules as solo eligibility).
+// ═══════════════════════════════════════════════════════════════════════
+const GROUP_SNAPSHOT_STALE_MS = 2 * 60 * 60 * 1000; // 2h — same grading as solo
+const AUTO_RESUME_STALE_MS = SOLO_SNAPSHOT_STALE_MS; // boot sweep shares the 2h cut
+const AUTO_RESUME_MAX = 6; // boot sweep batch cap — paced, memory-friendly
+
+function _groupSnapshotEligible(state) {
+  return !!(
+    state &&
+    state.solo === false &&
+    !state.isAbyss &&
+    state.mode !== 'TUTORIAL' &&
+    state.mode !== 'TUTORIAL_GROUP' &&
+    state.mode !== 'TUTORIAL_QUEST' &&
+    state.mode !== 'RUINS' &&
+    Array.isArray(state.enemies) && state.enemies.length > 0 &&
+    Array.isArray(state.players) && state.players.length > 0 &&
+    typeof state.sessionKey === 'string'
+  );
+}
+
+async function saveGroupSnapshot(sessionKey) {
+  try {
+    const state = gameStates.get(sessionKey);
+    if (!_groupSnapshotEligible(state) || !state.inCombat) return;
+    const GroupCombatSnapshot = require('../models/GroupCombatSnapshot');
+    let botId = null;
+    try { botId = botScope(); } catch (e) {}
+    await GroupCombatSnapshot.findOneAndUpdate(
+      { chatId: state.chatId },
+      {
+        chatId: state.chatId,
+        botId,
+        sessionKey: unscopeKey(state.sessionKey),
+        mode: state.mode || 'QUEST',
+        dungeonRank: state.dungeonRank ?? 0,
+        difficulty: state.difficulty || 0,
+        encounter: state.encounter || 1,
+        maxEncounters: state.maxEncounters || 1,
+        currentEncounterType: state.currentEncounterType || 'COMBAT',
+        backgroundPath: state.backgroundPath || '',
+        combatRound: state.combatRound || 0,
+        enemies: state.enemies.map((e) => ({
+          id: e.id, name: e.name, icon: e.icon || '👾', isEnemy: true,
+          isBoss: !!e.isBoss, level: e.level || 1, spriteIndex: e.spriteIndex || 0,
+          bossId: e.bossId || '', archetype: e.archetype || 'BRUTE',
+          humanoid: !!e.humanoid, isWildSummon: !!e.isWildSummon,
+          abilities: e.abilities || [], rank: e.rank || state.dungeonRank,
+          stats: {
+            hp: e.stats?.hp, maxHp: e.stats?.maxHp, atk: e.stats?.atk,
+            def: e.stats?.def, spd: e.stats?.spd, mag: e.stats?.mag,
+          },
+          currentHP: e.currentHP ?? e.stats?.hp, maxHP: e.maxHP ?? e.stats?.maxHp,
+          xpReward: e.xpReward || 0, goldReward: e.goldReward || 0,
+          isDead: !!e.isDead, statusEffects: e.statusEffects || [],
+        })),
+        players: state.players.map((p) => ({
+          jid: p.jid,
+          name: p.name || 'Hero',
+          class: p.class || null,
+          level: p.level || 1,
+          adventurerRank: p.adventurerRank || 'F',
+          isDead: !!p.isDead,
+          stats: {
+            hp: p.stats?.hp, maxHp: p.stats?.maxHp, atk: p.stats?.atk,
+            def: p.stats?.def, mag: p.stats?.mag, spd: p.stats?.spd,
+            luck: p.stats?.luck, crit: p.stats?.crit,
+            dmgReduction: p.stats?.dmgReduction || 0,
+            evasion: p.stats?.evasion || 0,
+            energy: p.stats?.energy || 0, maxEnergy: p.stats?.maxEnergy || 100,
+          },
+          currentHP: p.currentHP ?? p.stats?.hp,
+          equipment: p.equipment || {},
+          statusEffects: p.statusEffects || [],
+          xpEarned: p.xpEarned || 0,
+          goldEarned: p.goldEarned || 0,
+          combatStats: p.combatStats || {},
+        })),
+        playerJids: state.players.map((p) => p.jid).filter(Boolean),
+      },
+      { upsert: true, setDefaultsOnInsert: true },
+    );
+  } catch (e) {
+    // Snapshot failures must NEVER break the live fight
+    console.error('[GroupResume] save failed:', e.message);
+  }
+}
+
+async function clearGroupSnapshot(sessionKeyOrChatId) {
+  try {
+    const GroupCombatSnapshot = require('../models/GroupCombatSnapshot');
+    let chatId = sessionKeyOrChatId;
+    if (typeof chatId !== 'string' || !chatId.includes('@')) {
+      // Accept a (possibly bot-scoped) session key: "bot|chatId" / "chatId"
+      chatId = unscopeKey(String(sessionKeyOrChatId));
+    }
+    await GroupCombatSnapshot.deleteOne({ chatId });
+  } catch (e) {
+    console.error('[GroupResume] clear failed:', e.message);
+  }
+}
+
+// 💡 Dispatchers: the shared hook points (fight start, after every completed
+// action, quest stop, quest end) call THESE — one call site covers solo AND
+// group fights with zero duplicated wiring.
+async function saveCombatSnapshot(sessionKey) {
+  const state = gameStates.get(sessionKey);
+  if (!state) return;
+  if (_soloSnapshotEligible(state)) return saveSoloSnapshot(sessionKey);
+  if (_groupSnapshotEligible(state)) return saveGroupSnapshot(sessionKey);
+}
+
+async function clearCombatSnapshot(stateOrKey) {
+  try {
+    if (stateOrKey && typeof stateOrKey === 'object') {
+      // STATE form (preferred): clear via the exact ids the docs are keyed by.
+      const state = stateOrKey;
+      if (_soloSnapshotEligible(state)) {
+        const jid = state.players?.[0]?.jid;
+        if (jid) { await clearSoloSnapshot(jid).catch(() => {}); }
+        return;
+      }
+      if (_groupSnapshotEligible(state)) {
+        await clearGroupSnapshot(state.chatId || unscopeKey(state.sessionKey)).catch(() => {});
+        return;
+      }
+      return;
+    }
+    // KEY form (best effort): clear both stores for this key.
+    await Promise.all([
+      clearSoloSnapshot(stateOrKey).catch(() => {}),
+      clearGroupSnapshot(stateOrKey).catch(() => {}),
+    ]);
+  } catch (e) {}
+}
+
+async function resumeGroupCombat(sock, chatId, senderJid) {
+  const GroupCombatSnapshot = require('../models/GroupCombatSnapshot');
+  const sessionKey = scopedKey(chatId);
+
+  if (gameStates.has(sessionKey)) {
+    const existing = gameStates.get(sessionKey);
+    if (existing.inCombat) {
+      return { success: false, message: '⚔️ The party is already in combat! Use the fight commands.' };
+    }
+  }
+
+  let snap;
+  try {
+    snap = await GroupCombatSnapshot.findOne({ chatId }).sort({ updatedAt: -1 });
+  } catch (e) {
+    return { success: false, message: '❌ Failed to look up the last party fight: ' + e.message };
+  }
+  if (!snap) {
+    return { success: false, message: `❌ No interrupted group fight found in this chat.\n_Only fights cut by a restart leave a resume point. Solo fights resume with \`.j solo resume\`._` };
+  }
+  if (snap.botId && snap.botId !== botScope()) {
+    return { success: false, message: `❌ That interrupted fight belongs to another bot (${snap.botId}). Resume it there.` };
+  }
+  const age = Date.now() - new Date(snap.updatedAt).getTime();
+  if (age > GROUP_SNAPSHOT_STALE_MS) {
+    await clearGroupSnapshot(chatId);
+    return { success: false, message: '⌛ That fight is too old to resume (over 2 hours stale). Start a fresh quest with `.j quest <rank>`.' };
+  }
+  if (!Array.isArray(snap.players) || snap.players.length === 0) {
+    await clearGroupSnapshot(chatId);
+    return { success: false, message: '❌ The saved fight has no party members left — start a fresh quest.' };
+  }
+
+  // Rebuild the WHOLE party exactly as it stood (hp/energy/dead flags/statuses
+  // restored; class/equipment fall back to live reads if the snapshot lacks them).
+  const restoredPlayers = (snap.players || []).map((p) => {
+    let cls = p.class || null;
+    if (!cls) { try { cls = economy.getUserClass(p.jid) || null; } catch (e) { cls = null; } }
+    if (!cls) cls = { id: 'FIGHTER', name: 'Fighter', icon: '⚔️' };
+    let eq = (p.equipment && Object.keys(p.equipment).length) ? p.equipment : null;
+    if (!eq) { try { eq = inventorySystem.getEquipment(p.jid) || {}; } catch (e) { eq = {}; } }
+    const dead = !!p.isDead;
+    const hp = Math.max(0, Number(p.stats?.hp) || 0);
+    return {
+      jid: p.jid,
+      id: `player_${p.jid}`,
+      name: p.name || 'Hero',
+      class: cls,
+      isDead: dead,
+      adventurerRank: p.adventurerRank || 'F',
+      level: p.level || 1,
+      stats: {
+        hp: dead ? 0 : Math.max(1, hp),
+        maxHp: Number(p.stats?.maxHp) || Math.max(1, hp) || 100,
+        atk: Number(p.stats?.atk) || 10,
+        def: Number(p.stats?.def) || 10,
+        mag: Number(p.stats?.mag) || 10,
+        spd: Number(p.stats?.spd) || 10,
+        luck: Number(p.stats?.luck) || 10,
+        crit: Number(p.stats?.crit) || 5,
+        dmgReduction: Number(p.stats?.dmgReduction) || 0,
+        evasion: Number(p.stats?.evasion) || 0,
+        energy: Math.max(0, Number(p.stats?.energy) || 0),
+        maxEnergy: Number(p.stats?.maxEnergy) || 100,
+      },
+      equipment: eq,
+      inventory: [],
+      currentHP: dead ? 0 : Math.max(1, Number(p.currentHP) || hp),
+      mana: 100,
+      maxMana: 100,
+      xpEarned: Number(p.xpEarned) || 0,
+      goldEarned: Number(p.goldEarned) || 0,
+      combatStats: p.combatStats || { damageDealt: 0, damageTaken: 0, healed: 0, kills: 0 },
+      pendingActions: {},
+      buffs: [],
+      statusEffects: Array.isArray(p.statusEffects) ? p.statusEffects : [],
+      actionGauge: 0,
+    };
+  });
+
+  // Rebuild enemies EXACTLY as they were (current HP, dead flags, statuses).
+  const restoredEnemies = (snap.enemies || []).map((e, idx) => ({
+    id: e.id || `resumed_${idx}`,
+    name: e.name || 'Enemy',
+    icon: e.icon || '👾',
+    isEnemy: true,
+    isBoss: !!e.isBoss,
+    level: e.level || 1,
+    spriteIndex: Math.max(0, Math.floor(Number(e.spriteIndex) || 0)),
+    bossId: e.bossId || '',
+    humanoid: !!e.humanoid,
+    isWildSummon: !!e.isWildSummon,
+    archetype: e.archetype || 'BRUTE',
+    abilities: e.abilities || [],
+    rank: e.rank || snap.dungeonRank,
+    stats: {
+      hp: e.stats?.hp ?? e.currentHP ?? 1,
+      maxHp: e.stats?.maxHp ?? e.maxHP ?? 1,
+      atk: e.stats?.atk ?? 10,
+      def: e.stats?.def ?? 5,
+      spd: e.stats?.spd ?? 5,
+      mag: e.stats?.mag ?? 10,
+    },
+    currentHP: e.currentHP ?? e.stats?.hp ?? 1,
+    maxHP: e.maxHP ?? e.stats?.maxHp ?? 1,
+    mana: 100,
+    maxMana: 100,
+    statusEffects: e.statusEffects || [],
+    cooldowns: {},
+    actionGauge: 0,
+    xpReward: e.xpReward || 0,
+    goldReward: e.goldReward || 0,
+    isDead: !!e.isDead,
+    justDied: false,
+  }));
+  if (restoredEnemies.length === 0) {
+    await clearGroupSnapshot(chatId);
+    return { success: false, message: '❌ The saved fight has no enemies left — start a fresh quest.' };
+  }
+
+  const state = {
+    chatId,
+    players: restoredPlayers,
+    enemies: restoredEnemies,
+    summons: [],
+    captureWindows: {},
+    turnOrder: [],
+    currentTurn: 0,
+    inCombat: false,
+    combatProcessing: false,
+    active: true,
+    phase: 'COMBAT',
+    solo: false,
+    mode: snap.mode || 'QUEST',
+    dungeonRank: snap.dungeonRank ?? 0,
+    difficulty: snap.difficulty || 0,
+    encounter: snap.encounter || 1,
+    maxEncounters: snap.maxEncounters || 1,
+    currentEncounterType: snap.currentEncounterType || 'COMBAT',
+    combatRound: snap.combatRound || 0,
+    turnCount: 0,
+    pendingActions: {},
+    combatHistory: [],
+    votes: {},
+    backgroundPath: snap.backgroundPath || '',
+    stats: { monstersKilled: 0, bossesDefeated: 0, treasuresFound: 0, trapsTriggered: 0, playersRevived: 0 },
+    roundLog: [],
+    timers: {},
+    groq: null,
+    sock_ref: sock,
+    isProcessing: false,
+    isEndingCombat: false,
+    // 💡 flag the rebuild so the start scene says RESUMED, not BATTLE COMMENCES
+    _resumedFromSnapshot: true,
+  };
+  state.botId = botScope();
+  state.sessionKey = sessionKey;
+  gameStates.set(sessionKey, state);
+
+  await startCombat(sock, null, { enemies: restoredEnemies, type: snap.currentEncounterType || 'COMBAT', background: snap.backgroundPath || undefined }, sessionKey);
+
+  const alive = restoredPlayers.filter((p) => !p.isDead).length;
+  return { success: true, message: `⚔️ *GROUP FIGHT RESUMED* — round ${snap.combatRound || 0}, ${restoredEnemies.filter((e) => !e.isDead).length} enemy(ies) still standing, ${alive}/${restoredPlayers.length} party members up.` };
+}
+
+// 💡 BOOT AUTO-CONTINUE: called by engine.js ~25s after the WhatsApp socket
+// opens. Sweeps BOTH snapshot collections for fights THIS bot owned when the
+// process died and continues every one of them in its original chat — solo
+// and group party fights — without anyone typing a command. Once per process
+// (a reconnect keeps its in-memory states; only a fresh boot needs a sweep).
+let _autoResumeDone = false;
+async function autoResumeAfterRestart(sock) {
+  if (_autoResumeDone) return { skipped: true };
+  _autoResumeDone = true;
+  const out = { solo: 0, group: 0, failed: 0, staleCleared: 0 };
+  try {
+    const SoloCombatSnapshot = require('../models/SoloCombatSnapshot');
+    const GroupCombatSnapshot = require('../models/GroupCombatSnapshot');
+    let botId = null;
+    try { botId = botScope(); } catch (e) {}
+    const cutoff = new Date(Date.now() - AUTO_RESUME_STALE_MS);
+
+    // Housekeeping: snapshots older than 2h are dead fights — drop them so
+    // they never block a future resume.
+    try {
+      const sr = await SoloCombatSnapshot.deleteMany({ botId, updatedAt: { $lt: cutoff } });
+      const gr = await GroupCombatSnapshot.deleteMany({ botId, updatedAt: { $lt: cutoff } });
+      out.staleCleared = (sr.deletedCount || 0) + (gr.deletedCount || 0);
+      if (out.staleCleared > 0) console.log(`[AutoResume] cleared ${out.staleCleared} stale snapshot(s)`);
+    } catch (e) {}
+
+    const [soloSnaps, groupSnaps] = await Promise.all([
+      SoloCombatSnapshot.find({ botId }).sort({ updatedAt: 1 }).limit(12).lean(),
+      GroupCombatSnapshot.find({ botId }).sort({ updatedAt: 1 }).limit(12).lean(),
+    ]);
+    const batch = [
+      ...soloSnaps.map((s) => ({ kind: 'solo', snap: s })),
+      ...groupSnaps.map((g) => ({ kind: 'group', snap: g })),
+    ].slice(0, AUTO_RESUME_MAX);
+
+    for (const item of batch) {
+      try {
+        if (item.kind === 'solo') {
+          const r = await resumeSoloCombat(sock, item.snap.chatId, item.snap.userId);
+          if (r?.success) {
+            out.solo++;
+            console.log(`[AutoResume] solo fight continued in ${item.snap.chatId}`);
+          } else {
+            console.log(`[AutoResume] solo skip (${item.snap.chatId}): ${r?.message || 'no detail'}`);
+          }
+        } else {
+          const jid = (Array.isArray(item.snap.playerJids) && item.snap.playerJids[0]) ||
+            (Array.isArray(item.snap.players) && item.snap.players[0]?.jid);
+          const r = await resumeGroupCombat(sock, item.snap.chatId, jid);
+          if (r?.success) {
+            out.group++;
+            console.log(`[AutoResume] group fight continued in ${item.snap.chatId}`);
+          } else {
+            console.log(`[AutoResume] group skip (${item.snap.chatId}): ${r?.message || 'no detail'}`);
+          }
+        }
+      } catch (e) {
+        out.failed++;
+        console.error('[AutoResume] resume failed:', e?.message);
+      }
+      await new Promise((r) => setTimeout(r, 8000)); // pace the render/DB burst
+    }
+    console.log(`[AutoResume] boot sweep done: ${out.solo} solo + ${out.group} group continued, ${out.failed} failed`);
+    return out;
+  } catch (e) {
+    console.error('[AutoResume] sweep error:', e?.message);
+    return out;
+  }
 }
 
 /**
@@ -9212,8 +9613,10 @@ const stopQuest = (chatId, senderJid = null, isAdmin = false) => {
         wasSolo = state.solo;
         state.active = false;
         state.phase = "IDLE";
-        // 💡 SOLO RESUME: a stopped quest drops its resume point
-        if (_soloSnapshotEligible(state)) clearSoloSnapshot(state.sessionKey || key).catch(() => {});
+        // 💡 COMBAT RESUME: a stopped quest drops its resume point (solo + group).
+        // State-object form — also fixes the old bug where the bot-scoped
+        // "bot|chat_jid" key hit clearSoloSnapshot's '@' shortcut and deleted nothing.
+        clearCombatSnapshot(state).catch(() => {});
         if (state.timers) {
           Object.values(state.timers).forEach((timer) => {
             if (timer) clearTimeout(timer);
@@ -9243,6 +9646,11 @@ const stopQuest = (chatId, senderJid = null, isAdmin = false) => {
       if (timer) clearTimeout(timer);
     });
   }
+
+  // 💡 COMBAT RESUME (2026-10-14): a stopped quest drops its resume point —
+  // this player-initiated path never cleared the solo snapshot before, which
+  // could let a restart auto-continue a quest the player CANCELLED.
+  try { clearCombatSnapshot(state).catch(() => {}); } catch (e) {}
 
   deleteGameState(chatId, senderJid);
 
@@ -10144,11 +10552,11 @@ async function processVotes(sock, encounter, sessionKey) {
 async function endAdventure(sock, sessionKey, victory = true) {
   const state = gameStates.get(sessionKey);
   if (!state) { END_DEBUG(`endAdventure ABORT: no state for ${sessionKey}`); return; }
-  // 💡 SOLO RESUME: the quest is over (any ending) — drop the resume point so
-  // `.j solo resume` can't resurrect a finished fight.
-  if (_soloSnapshotEligible(state)) {
-    clearSoloSnapshot(state.sessionKey || sessionKey).catch(() => {});
-  }
+  // 💡 COMBAT RESUME: the quest is over (any ending) — drop the resume point
+  // so resume can't resurrect a finished fight (solo + group, 2026-10-14).
+  // State-object form: keys the delete by the bare player jid / chat id —
+  // the old scoped-key call silently matched nothing (see clearCombatSnapshot).
+  clearCombatSnapshot(state).catch(() => {});
   const __endT0 = Date.now();
   END_DEBUG(`endAdventure ENTER key=${sessionKey} victory=${victory} mode=${state.mode} rank=${state.dungeonRank} players=${state.players?.length} abyss=${!!state.isAbyss}`);
 
@@ -12804,6 +13212,15 @@ module.exports = {
   saveSoloSnapshot,
   resumeSoloCombat,
   clearSoloSnapshot,
+  // 💡 GROUP RESUME + BOOT AUTO-CONTINUE (2026-10-14): group twin of the solo
+  // snapshot contract, plus the boot sweep that continues interrupted fights
+  // (solo AND group) without anyone typing a command.
+  saveGroupSnapshot,
+  clearGroupSnapshot,
+  resumeGroupCombat,
+  saveCombatSnapshot,
+  clearCombatSnapshot,
+  autoResumeAfterRestart,
   // exported for qa_quest_flow.js (registration-window expiry simulation)
   startJourney,
   getDungeonMenu,

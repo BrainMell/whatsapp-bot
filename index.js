@@ -446,7 +446,7 @@ app.post('/notify-deploy', async (req, res) => {
         const gcs = system.get(`gw_rpg_gcs_${botId}`, []) || [];
         const message = (req.body && typeof req.body.message === 'string' && req.body.message.trim())
             ? req.body.message.trim()
-            : "⚠️ *UPDATE INCOMING* 🛠️\n\nA bot update is being pushed right now — any active game (solo quests, Abyss runs, Guild Wars) may be interrupted in the next minute or two.\n\nAfter the update: solo fights → `.j solo resume` · Abyss fights → `.j abyss resume`\n\nSorry for the bump!";
+            : "⚠️ *UPDATE INCOMING* 🛠️\n\nA bot update is being pushed right now — any active game (solo quests, Abyss runs, Guild Wars) may be interrupted in the next minute or two.\n\nAfter the update: interrupted quest fights (solo + group) auto-continue on their own within ~30s · Abyss fights → `.j abyss resume`\n\nSorry for the bump!";
         let sent = 0;
         const failed = [];
         for (const gc of gcs) {
