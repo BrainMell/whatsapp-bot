@@ -49,7 +49,7 @@ function ok(cond, label) {
         [f0, await renderer.renderFrame(state, 5, {}), await renderer.renderFrame(state, 9, {})],
     );
     ok(mp4 && mp4.length > 20000, `mp4 encodes (${(mp4.length / 1024).toFixed(0)}KB)`);
-    fs.writeFileSync('/home/z/my-project/basebuilder/assets_out/qa_room.mp4', mp4);
+    fs.writeFileSync('/tmp/homestead_qa_qa_room.mp4', mp4);
     const card = await renderer.renderCatalogPage(0, 5, { balance: 9999 });
     ok(card && card.length > 50000, `catalog card renders (${(card.length / 1024).toFixed(0)}KB)`);
     const img2 = await renderer.renderRoomImage(state, {});
