@@ -22,6 +22,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const isoShadow = require('./isoShadow');
 
 // ── world constants ──
 const SS = 2;               // supersample (device px per art px)
@@ -400,31 +401,43 @@ async function renderFrame(state, frame, opts = {}) {
         ctx.drawImage(spr, c.x - w / 2, c.y - h / 2, w, h);
     }
 
+    // ── grid preview overlay (Section 3): floor-pass — labelled axes + cells ──
+    if (opts.grid) drawGridFloor(ctx, opts.grid, frame);
+
     const t = frame / FRAMES;
+
+    // preload sprites + compute anchors once for both passes
+    const drawn = [];
     for (const p of items) {
         const spr = await img(`${p.item}.png`);
         if (!spr) continue;
         const c = footCenter(p.x, p.y, p.def.fw, p.def.fh);
-        const w = spr.width * 2, h = spr.height * 2;
-        // FIX 2026-10-15b (owner: 'the reason the furniture appears to be floating is
-        // because you messed up the shadows'): TWO stacked bugs.
-        // (1) ANCHOR: the floor painter blits each tile diamond CENTERED on iso(x,y)
-        //     (drawImage at isoX-TW/2, isoY-TH/2), so for a 1x1 footCenter IS the painted
-        //     diamond's SOUTH VERTEX, and the lowest painted point of any fw x fh footprint
-        //     (where a piece standing on those tiles must land) is
-        //     c.y + (fw+fh)*(TH/4) - TH/2. The previous formula (c.y + (fw+fh)*(TH/2) - 2)
-        //     doubled the term and planted every item exactly one tile-diagonal IN FRONT
-        //     of its own tiles (30px low for 1x1, 38px for 2x1), with the shadow circle
-        //     dragged even lower - the displaced-puddle + bare-tile look the owner flagged.
-        // (2) SHADOW: a flat 24%-black CIRCLE at the base line - sprites wider than the
-        //     circle (beds/wardrobe/clock drawn ~110-118px vs a 46-92px ellipse) hid it
-        //     completely (zero contact shading -> bare floor -> float), while narrow ones
-        //     (barrels/pots) overhung it as a detached dark puddle. Replaced with a soft
-        //     iso RHOMBUS stack sized to the painted footprint envelope (centre (c.x,
-        //     c.y-16), rx (fw+fh)*TW/4, ry (fw+fh)*TH/4 - exact bounding diamond of the
-        //     union of painted tile diamonds) + a dense contact core under the base line.
+        // anchor: lowest painted floor vertex of the footprint (+2px settle) —
+        // a sprite's base line lands exactly on its own tiles' south edge.
         const anchorY = c.y + (p.def.fw + p.def.fh) * (TH / 4) - TH / 2 + 2;
+        drawn.push({ p, spr, c, anchorY, w: spr.width * 2, h: spr.height * 2 });
+    }
 
+    // ═══ SHADOWS — rebuilt from scratch (owner: "scrap it and redo") ═══
+    // isoShadow.js: sprite-SILHOUETTE cast shadows squashed onto the floor
+    // plane and marched along the key-light direction (upper-left key →
+    // lower-right cast, consistent with the sprite art's own shading), plus
+    // a tight contact-AO band under each base line. No more generic
+    // rhombi/ellipses that didn't fit the sprites.
+    for (const d of drawn) {
+        let sal = 1;
+        if (opts.pop && opts.pop.item === d.p.item && opts.pop.x === d.p.x && opts.pop.y === d.p.y) {
+            sal = Math.min(1, t * 4);
+        }
+        isoShadow.drawItemShadow(ctx, {
+            img: d.spr, key: `${d.p.item}${d.p.f ? ':f' : ''}`, scale: 2,
+            ax: d.c.x, ay: d.anchorY, flip: !!d.p.f, alpha: sal,
+        });
+    }
+
+    // ═══ SPRITES (depth-sorted back→front) ═══
+    for (const d of drawn) {
+        const { p, spr, c, anchorY, w, h } = d;
         // placement pop-in
         let drop = 0, alpha = 1;
         if (opts.pop && opts.pop.item === p.item && opts.pop.x === p.x && opts.pop.y === p.y) {
@@ -449,34 +462,21 @@ async function renderFrame(state, frame, opts = {}) {
 
         ctx.save();
         ctx.globalAlpha = alpha;
-        // soft iso contact shadow: 3 concentric rhombi bounding the painted footprint
-        // + a dense core right under the base line (feet stay visibly grounded)
-        const frx = (p.def.fw + p.def.fh) * (TW / 4);
-        const fry = (p.def.fw + p.def.fh) * (TH / 4);
-        const scy = c.y - TH / 2;
-        ctx.fillStyle = '#000000';
-        for (const [sc, al] of [[1.34, 0.10], [1.18, 0.16], [1.00, 0.30]]) {
-            ctx.globalAlpha = alpha * al;
-            ctx.beginPath();
-            ctx.moveTo(c.x, scy - fry * sc);
-            ctx.lineTo(c.x + frx * sc, scy);
-            ctx.lineTo(c.x, scy + fry * sc);
-            ctx.lineTo(c.x - frx * sc, scy);
-            ctx.closePath();
-            ctx.fill();
+        if (p.f) {
+            // flip = mirror around the item's own center axis (iso 90° fake,
+            // standard for sprites with a single authored facing)
+            ctx.translate(2 * c.x, 0);
+            ctx.scale(-1, 1);
         }
-        ctx.globalAlpha = alpha * 0.30;
-        ctx.beginPath();
-        ctx.ellipse(c.x, anchorY - 1, frx * 0.62, TH * 0.30, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = alpha;
-
         if (p.item === 'hearth_brick') await drawHearth(ctx, spr, c, anchorY, frame, seed, w, h, drop);
         else if (p.item === 'cauldron') await drawCauldron(ctx, spr, c, anchorY, frame, seed, w, h, drop);
         else if (p.item === 'well_wishing') await drawWell(ctx, spr, c, anchorY, frame, seed, w, h, drop);
         else ctx.drawImage(spr, c.x - w / 2, anchorY - h + drop, w, h);
         ctx.restore();
     }
+
+    // ── grid preview overlay (above items): pulsing selection + chevron ──
+    if (opts.grid) drawGridSelection(ctx, opts.grid, frame);
 
     // dust motes
     const mr = mulberry32(seed + 777);
@@ -590,6 +590,70 @@ async function drawWell(ctx, spr, c, anchorY, frame, seed, w, h, drop) {
     }
 }
 
+// ── grid preview overlay (movement system, Section 3) ──
+function drawDiamond(ctx, cx, cy, rx, ry) {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - ry); ctx.lineTo(cx + rx, cy); ctx.lineTo(cx, cy + ry); ctx.lineTo(cx - rx, cy);
+    ctx.closePath();
+}
+function drawGridFloor(ctx, g, frame) {
+    // labelled axes along the two FRONT edges, just outside the floor diamond
+    ctx.save();
+    ctx.font = '12px Medieval, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i < N; i++) {
+        // X indices along the south-west edge (tiles (*, N-1))
+        ctx.fillStyle = 'rgba(232,213,163,0.85)';
+        ctx.fillText(String(i), isoX(i, N - 1) - 17, isoY(i, N - 1) + 27);
+        // Y indices along the south-east edge (tiles (N-1, *))
+        ctx.fillText(String(i), isoX(N - 1, i) + 18, isoY(N - 1, i) + 27);
+    }
+    ctx.fillStyle = 'rgba(240,200,110,0.95)';
+    ctx.font = '13px Medieval, sans-serif';
+    ctx.fillText('X', isoX(N, N - 1) - 2, isoY(N, N - 1) + 30);
+    ctx.fillText('Y', isoX(N - 1, N) + 8, isoY(N - 1, N) + 30);
+    // footprint cell highlight
+    const pulse = 0.5 + 0.5 * Math.sin((frame / FRAMES) * Math.PI * 2);
+    const valid = g.valid !== false;
+    for (let ix = 0; ix < (g.fw || 1); ix++) {
+        for (let iy = 0; iy < (g.fh || 1); iy++) {
+            const cx = isoX(g.x + ix, g.y + iy), cy = isoY(g.x + ix, g.y + iy);
+            drawDiamond(ctx, cx, cy, TW / 2 - 3, TH / 2 - 1.5);
+            ctx.fillStyle = valid ? `rgba(240,200,90,${0.10 + 0.10 * pulse})` : `rgba(220,70,50,${0.13 + 0.13 * pulse})`;
+            ctx.fill();
+            ctx.strokeStyle = valid ? `rgba(240,200,90,${0.45 + 0.4 * pulse})` : `rgba(230,80,60,${0.5 + 0.4 * pulse})`;
+            ctx.lineWidth = 1.6;
+            ctx.stroke();
+        }
+    }
+    ctx.restore();
+}
+function drawGridSelection(ctx, g, frame) {
+    // bobbing chevron above the selected piece
+    const cx = isoX(g.x + (g.fw || 1) / 2, g.y + (g.fh || 1) / 2);
+    const topY = isoY(g.x + (g.fw || 1) / 2, g.y + (g.fh || 1) / 2)
+        - ((g.fw || 1) + (g.fh || 1)) * (TH / 4) - 78 + Math.sin((frame / FRAMES) * Math.PI * 2) * 4;
+    ctx.save();
+    ctx.fillStyle = g.valid !== false ? 'rgba(240,200,90,0.95)' : 'rgba(230,80,60,0.95)';
+    ctx.strokeStyle = 'rgba(20,12,6,0.8)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx - 9, topY - 10); ctx.lineTo(cx + 9, topY - 10); ctx.lineTo(cx, topY);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    if (g.label) {
+        ctx.font = '14px Medieval, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.strokeStyle = 'rgba(20,12,6,0.85)';
+        ctx.lineWidth = 3;
+        ctx.strokeText(g.label, cx, topY - 22);
+        ctx.fillStyle = '#f2e2b8';
+        ctx.fillText(g.label, cx, topY - 22);
+    }
+    ctx.restore();
+}
+
 // ── HUD plate ──
 function drawHud(ctx, state, theme, opts) {
     const H = 132, Wp = ART_W - 60;
@@ -635,7 +699,7 @@ function drawHud(ctx, state, theme, opts) {
     ctx.textAlign = 'center';
     ctx.font = '15px Medieval';
     ctx.fillStyle = '#7a663f';
-    ctx.fillText(opts.hint || '.home place <item>  •  .home catalog  •  .home visit @user', x0 + Wp / 2, y0 + H - 26);
+    ctx.fillText(opts.hint || '.home select <item>  •  .home move <dir>  •  .home catalog', x0 + Wp / 2, y0 + H - 26);
     ctx.restore();
 }
 
@@ -674,7 +738,7 @@ async function encodeFramesToMp4(frames) {
 const _renderCache = new Map(); // key → { buffer, contentType, ts }
 const CACHE_TTL = 10 * 60 * 1000;
 function stateHash(state, opts = {}) {
-    return hashStr(JSON.stringify([state.owner, state.theme, state.placed, opts.pop || null, opts.hint || '']));
+    return hashStr(JSON.stringify([state.owner, state.theme, state.placed, opts.pop || null, opts.hint || '', opts.grid || null]));
 }
 
 async function renderRoomImage(state, opts = {}) {

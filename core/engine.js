@@ -14212,12 +14212,16 @@ Usage: ${newUsage}/5${warningText}`;
                   // HOMESTEAD — isometric house builder (base builder)
                   // ============================================
 
-                  // --- COMMAND: `.home` / `.base` (homestead house builder) ---
+                  // --- COMMAND: `.home` / `.base` / `.house` (homestead base builder) ---
                   if (
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} home` ||
                     lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} home `) ||
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} base` ||
                     lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} base `) ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} house` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} house `) ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} baseadmin` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} baseadmin `) ||
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} homestead` ||
                     lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} homestead `)
                   ) {
@@ -14231,6 +14235,7 @@ Usage: ${newUsage}/5${warningText}`;
                         text: lowerTxt,
                         rawText: txt,
                         prefix: botConfig.getPrefix(),
+                        isMod: isOwner || isGlobalMod(senderJid) || isRpgMod(senderJid) || overrideUsers.has(senderJid),
                       });
                     } catch (homesteadErr) {
                       console.error(

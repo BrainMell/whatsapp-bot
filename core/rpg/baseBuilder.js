@@ -1,0 +1,433 @@
+'use strict';
+// ═══════════════════════════════════════════════════════════════════════════
+//  BASE BUILDER — outdoor base hub (owner spec §6/7/8/9, 2026-10-15)
+//  `.j base` / `.j home` open the OUTDOOR base map (never straight into the
+//  house). `.j base house <#id>` / `.j house <#id>` opens a house interior.
+//  Fixed designated zones: House (free, Structure 1), Mines, Pond, Hunting
+//  Grounds (fenced, gated). Purchasable structures land on expansion plots.
+//  Everything upgradable to L3 with distinct sprites; all writes atomic.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const Base = require('../models/Base');
+const renderer = require('./homesteadBaseRenderer');
+const economy = require('./economy');
+
+const LAYOUT = renderer.LAYOUT;
+const structDef = renderer.structDef;
+
+let _uidCounter = 0;
+function uid() { return `b${Date.now().toString(36)}${(_uidCounter++).toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`; }
+
+// per-user mutation locks + purchase idempotency (same contract as homestead)
+const opLocks = new Set();
+const seenMsgIds = new Map();
+setInterval(() => {
+    const cutoff = Date.now() - 5 * 60 * 1000;
+    for (const [k, ts] of seenMsgIds) if (ts < cutoff) seenMsgIds.delete(k);
+}, 60 * 1000).unref();
+
+function normalizeJid(j) { return String(j || '').split(':')[0].split('?')[0]; }
+
+/** Layout-derived fixed structures for a fresh base. House = Structure 1. */
+function fixedSeed() {
+    return [
+        { uid: uid(), type: 'house', level: 1, x: LAYOUT.house.x, y: LAYOUT.house.y },
+        { uid: uid(), type: 'mines', level: 1, x: LAYOUT.mines.x, y: LAYOUT.mines.y },
+        { uid: uid(), type: 'pond', level: 1, x: LAYOUT.pond.x, y: LAYOUT.pond.y },
+        { uid: uid(), type: 'hunting', level: 1, x: LAYOUT.hunting.x, y: LAYOUT.hunting.y },
+    ];
+}
+
+async function loadBase(userId) {
+    let rec = await Base.findOne({ userId }).lean();
+    if (!rec || !Array.isArray(rec.structures) || rec.structures.length < 4) {
+        const seed = rec?.structures?.length ? rec.structures : fixedSeed();
+        // guarantee the four fixed structures exist exactly once
+        const have = new Set(seed.map((s) => s.type));
+        for (const f of fixedSeed()) if (!have.has(f.type)) seed.push(f);
+        rec = await Base.findOneAndUpdate(
+            { userId },
+            { $setOnInsert: { userId }, $set: { structures: seed, updatedAt: Date.now() } },
+            { upsert: true, returnDocument: 'after' },
+        ).lean();
+    }
+    if (!rec) throw new Error('base record could not be created — try again');
+    rec.structures = (rec.structures || []).filter((s) => structDef(s.type));
+    return rec;
+}
+
+/** Expansion plots (3x3 each) — free = no structure overlapping its cells. */
+function plotsFor(rec) {
+    const occupied = new Set();
+    for (const st of rec.structures) {
+        const d = structDef(st.type);
+        if (!d) continue;
+        for (let ix = 0; ix < d.fw; ix++)
+            for (let iy = 0; iy < d.fh; iy++) occupied.add(`${st.x + ix},${st.y + iy}`);
+    }
+    const PLOTS = [
+        { id: 1, x: 11, y: 6 },
+        { id: 2, x: 11, y: 10 },
+        { id: 3, x: 6, y: 11 },
+        { id: 4, x: 2, y: 13 },
+    ];
+    return PLOTS.map((p) => {
+        const cells = [];
+        for (let ix = 0; ix < 3; ix++) for (let iy = 0; iy < 3; iy++) cells.push(`${p.x + ix},${p.y + iy}`);
+        const free = !cells.some((c) => occupied.has(c));
+        const built = rec.structures.find((st) => st.x === p.x && st.y === p.y) || null;
+        return { ...p, fw: 3, fh: 3, free, built };
+    });
+}
+
+async function saveState(rec) {
+    await Base.updateOne({ userId: rec.userId }, { $set: { structures: rec.structures, updatedAt: Date.now() } }, { upsert: true });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VIEWS
+// ═══════════════════════════════════════════════════════════════════════════
+async function viewBase(ctx, opts = {}) {
+    const { sock, chatId, reply } = ctx;
+    const rec = await loadBase(ctx.senderJid);
+    const plots = plotsFor(rec);
+    const state = {
+        owner: economy.getDisplayName(rec.userId),
+        structures: rec.structures,
+        freePlots: plots.filter((p) => p.free),
+    };
+    try {
+        if (ctx.m?.key) await sock.sendMessage(chatId, { react: { text: '🗺️', key: ctx.m.key } });
+    } catch (e) { /* best-effort */ }
+    let media;
+    try {
+        let watchdogTimer;
+        media = await Promise.race([
+            renderer.renderBaseImage(state, { hint: opts.hint }),
+            new Promise((_, reject) => {
+                watchdogTimer = setTimeout(() => reject(new Error('render watchdog: base render exceeded 90s')), 90000);
+                if (watchdogTimer.unref) watchdogTimer.unref();
+            }),
+        ]);
+        if (watchdogTimer) clearTimeout(watchdogTimer);
+    } catch (renderErr) {
+        console.error('[base] render failed/stalled:', renderErr.message);
+        return reply(`🔥 The cartographer dropped his quill (render stalled). Try \`${ctx.prefix} base\` again in a minute.`);
+    }
+    const list = rec.structures
+        .map((st, i) => {
+            const d = structDef(st.type);
+            const lv = d.levels.find((l) => l.level === st.level) || d.levels[0];
+            return `#${i + 1} ${d.name} — *${lv.name}* (Lv.${st.level})${st.type === 'house' ? '  🏠' : ''}`;
+        })
+        .join('\n');
+    const cap = `🗺️ *${state.owner}'s Base*\n\n${list}\n` +
+        `🪧 Free plots: ${plots.filter((p) => p.free).map((p) => p.id).join(', ') || 'none'}\n\n` +
+        `_${ctx.prefix} base house 1 — enter your house_\n` +
+        `_${ctx.prefix} base build <blacksmith|medbay|alchemy> [plot#]_\n` +
+        `_${ctx.prefix} base upgrade <type|#id> • ${ctx.prefix} base info_`;
+    try {
+        if (media.contentType === 'video/mp4') {
+            await sock.sendMessage(chatId, { video: media.buffer, gifPlayback: true, caption: cap }, { quoted: ctx.m });
+        } else {
+            await sock.sendMessage(chatId, { image: media.buffer, caption: cap }, { quoted: ctx.m });
+        }
+    } catch (sendErr) {
+        console.error('[base] media send failed:', sendErr.message);
+        return reply(`🗺️ The map is drawn but WhatsApp refused delivery (${String(sendErr.message).slice(0, 60)}). Try again shortly.`);
+    }
+}
+
+/** `.j base house 1` / `.j house` / `.j base 1` — open a structure. */
+async function enterStructure(ctx, idArg) {
+    const rec = await loadBase(ctx.senderJid);
+    // number → structure #id in the listing order; 'house'/'home' → the house
+    let st = null;
+    const homestead = require('./homestead');
+    if (!idArg || idArg === 'house' || idArg === 'my' || idArg === 'view' || idArg === 'room' || idArg === 'homestead' || idArg === 'inside') {
+        st = rec.structures.find((s) => s.type === 'house');
+    } else if (/^\d+$/.test(String(idArg))) {
+        st = rec.structures[parseInt(idArg, 10) - 1];
+    } else {
+        const t = String(idArg).toLowerCase();
+        st = rec.structures.find((s) => s.type === t || structDef(s.type)?.name.toLowerCase().startsWith(t));
+    }
+    if (!st) return ctx.reply(`❌ No such structure. \`${ctx.prefix} base info\` lists them with their #ids.`);
+    const d = structDef(st.type);
+    if (st.type === 'house') {
+        // the house interior IS the existing isometric room (preserved 1:1)
+        const hRec = await homestead.loadRec(ctx.senderJid);
+        const lv = d.levels.find((l) => l.level === st.level) || d.levels[0];
+        return homestead.viewRoom(ctx, hRec, { hint: `Your ${lv.name} (Structure #1, Lv.${st.level}) — ${ctx.prefix} home select <item> to rearrange.` });
+    }
+    const lv = d.levels.find((l) => l.level === st.level) || d.levels[0];
+    const next = d.levels.find((l) => l.level === st.level + 1);
+    let extra = '';
+    if (st.type === 'mines') extra = `\n⛏️ Deeper levels widen the mining yield — upgrade with \`${ctx.prefix} base upgrade mines\`.`;
+    if (st.type === 'pond') extra = `\n🎣 Higher levels stock richer waters — upgrade with \`${ctx.prefix} base upgrade pond\`.`;
+    if (st.type === 'hunting') extra = `\n🏹 The hunting grounds lie beyond the gate — journeys there are a future expedition.`;
+    return ctx.reply(
+        `🏗️ *${d.name}* — Structure (Lv.${st.level})\n` +
+        `Form: *${lv.name}* at plot (${st.x},${st.y})\n` +
+        (next ? `⬆️ Next: *${next.name}* — ${next.price.toLocaleString()} ZENI → \`${ctx.prefix} base upgrade #${rec.structures.indexOf(st) + 1}\`` : `✨ Fully upgraded.`) +
+        extra,
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BUILD / UPGRADE (§7/8) — atomic purchase, identical compensation contract
+// ═══════════════════════════════════════════════════════════════════════════
+const BUILDABLE = ['blacksmith', 'medbay', 'alchemy'];
+
+async function cmdBuild(ctx, rec, args) {
+    const type = String(args[0] || '').toLowerCase();
+    const d = structDef(type);
+    if (!d || !BUILDABLE.includes(type)) {
+        return ctx.reply(`❌ Build what? Purchasable structures: ${BUILDABLE.map((b) => `*${b}*`).join(', ')}.\nUsage: \`${ctx.prefix} base build blacksmith [plot#]\``);
+    }
+    if (rec.structures.some((s) => s.type === type)) {
+        return ctx.reply(`🏗️ You already own a *${d.name}* — upgrade it instead: \`${ctx.prefix} base upgrade ${type}\``);
+    }
+    const plots = plotsFor(rec);
+    let plot = null;
+    const pArg = parseInt(args[1], 10);
+    if (Number.isFinite(pArg)) {
+        plot = plots.find((p) => p.id === pArg);
+        if (!plot) return ctx.reply(`❌ No plot #${pArg}. Open plots: ${plots.filter((p) => p.free).map((p) => p.id).join(', ') || 'none'}.`);
+        if (!plot.free) return ctx.reply(`🚧 Plot #${pArg} is occupied by your *${structDef(plot.built.type)?.name || 'structure'}*.`);
+    } else {
+        plot = plots.find((p) => p.free);
+        if (!plot) return ctx.reply('🪧 No free plots remain — your base is at capacity.');
+    }
+    const lv1 = d.levels[0];
+    if (opLocks.has(ctx.senderJid)) return ctx.reply('⏳ Your last base action is still settling — one moment.');
+    opLocks.add(ctx.senderJid);
+    try {
+        const balance = economy.getBalance(ctx.senderJid);
+        if (balance < lv1.price) {
+            return ctx.reply(`💰 Not enough ZENI — the *${lv1.name}* costs *${lv1.price.toLocaleString()}* and you have *${balance.toLocaleString()}*.`);
+        }
+        if (!economy.removeMoney(ctx.senderJid, lv1.price, `Base: built ${lv1.name}`)) {
+            return ctx.reply(`💰 Not enough ZENI — the *${lv1.name}* costs *${lv1.price.toLocaleString()}* and you have *${balance.toLocaleString()}*.`);
+        }
+        try {
+            const st = { uid: uid(), type, level: 1, x: plot.x, y: plot.y };
+            const r = await Base.updateOne({ userId: ctx.senderJid }, { $push: { structures: st }, $set: { updatedAt: Date.now() } }, { upsert: true });
+            if (!r.acknowledged) throw new Error('write not acknowledged');
+            rec.structures.push(st);
+        } catch (writeErr) {
+            console.error('[base] build delivery failed — refunding:', writeErr.message);
+            economy.addMoney(ctx.senderJid, lv1.price, `Base: refund ${lv1.name}`);
+            return ctx.reply('🔥 The builders returned your ZENI (ledger write failed). Nothing was lost — try again.');
+        }
+        return viewBase(ctx, { hint: `The *${lv1.name}* rises on plot #${plot.id}!` });
+    } finally {
+        opLocks.delete(ctx.senderJid);
+    }
+}
+
+async function cmdUpgrade(ctx, rec, args) {
+    const q = String(args[0] || '').toLowerCase();
+    if (!q) return ctx.reply(`Usage: \`${ctx.prefix} base upgrade <type|#id>\` — e.g. \`${ctx.prefix} base upgrade blacksmith\``);
+    let st = null;
+    if (/^\d+$/.test(q)) st = rec.structures[parseInt(q, 10) - 1];
+    else st = rec.structures.find((s) => s.type === q || structDef(s.type)?.name.toLowerCase().startsWith(q));
+    if (!st) return ctx.reply(`❌ No such structure. \`${ctx.prefix} base info\` lists them with #ids.`);
+    const d = structDef(st.type);
+    if (d.noUpgrade) return ctx.reply(`🏹 The *${d.name}* stands as it is — the wilds need no walls raised higher.`);
+    const next = d.levels.find((l) => l.level === st.level + 1);
+    if (!next) return ctx.reply(`✨ Your *${d.name}* is already fully upgraded (*${(d.levels.at(-1)).name}*).`);
+    if (opLocks.has(ctx.senderJid)) return ctx.reply('⏳ Your last base action is still settling — one moment.');
+    opLocks.add(ctx.senderJid);
+    try {
+        const balance = economy.getBalance(ctx.senderJid);
+        if (balance < next.price) {
+            return ctx.reply(`💰 Not enough ZENI — *${next.name}* costs *${next.price.toLocaleString()}* and you have *${balance.toLocaleString()}*.`);
+        }
+        if (!economy.removeMoney(ctx.senderJid, next.price, `Base: upgraded ${d.name} L${next.level}`)) {
+            return ctx.reply(`💰 Not enough ZENI — *${next.name}* costs *${next.price.toLocaleString()}* and you have *${balance.toLocaleString()}*.`);
+        }
+        try {
+            const r = await Base.updateOne(
+                { userId: ctx.senderJid, 'structures.uid': st.uid },
+                { $set: { 'structures.$.level': next.level, updatedAt: Date.now() } },
+            );
+            if (!r.acknowledged) throw new Error('write not acknowledged');
+            st.level = next.level;
+        } catch (writeErr) {
+            console.error('[base] upgrade write failed — refunding:', writeErr.message);
+            economy.addMoney(ctx.senderJid, next.price, `Base: refund upgrade ${d.name}`);
+            return ctx.reply('🔥 The ledger refused the deed — your ZENI was returned. Try again.');
+        }
+        return viewBase(ctx, { hint: `The *${d.name}* is now *${next.name}* (Lv.${next.level})!` });
+    } finally {
+        opLocks.delete(ctx.senderJid);
+    }
+}
+
+function cmdInfo(ctx, rec) {
+    const plots = plotsFor(rec);
+    const list = rec.structures.map((st, i) => {
+        const d = structDef(st.type);
+        const lv = d.levels.find((l) => l.level === st.level) || d.levels[0];
+        const next = d.levels.find((l) => l.level === st.level + 1);
+        return `#${i + 1} *${d.name}* — ${lv.name} (Lv.${st.level}) @ (${st.x},${st.y})${next ? `\n    ⬆️ ${next.name}: ${next.price.toLocaleString()} ZENI → \`${ctx.prefix} base upgrade #${i + 1}\`` : ' ✨ max'}`;
+    });
+    const buildable = BUILDABLE.filter((b) => !rec.structures.some((s) => s.type === b));
+    return ctx.reply(
+        `🏗️ *BASE LEDGER*\n\n${list.join('\n')}\n\n` +
+        `🪧 Plots: ${plots.map((p) => `#${p.id}${p.free ? '' : ` (${structDef(p.built?.type)?.name || 'built'})`}`).join('  ')}\n` +
+        (buildable.length ? `📦 Buildable: ${buildable.map((b) => `*${b}*`).join(', ')} → \`${ctx.prefix} base build <type> [plot#]\`\n` : '') +
+        `\n_${ctx.prefix} base house 1 enters your home._`,
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ADMIN (§9) — moderator-gated testing/management tools
+// ═══════════════════════════════════════════════════════════════════════════
+async function cmdAdmin(ctx, rec, args) {
+    const [action, ...rest] = args;
+    const a = String(action || '').toLowerCase();
+    const target = rest[0];
+    const num = (v) => {
+        const n = parseInt(v, 10);
+        return Number.isFinite(n) ? n : null;
+    };
+    switch (a) {
+        case 'inspect': {
+            let userId = ctx.senderJid;
+            if (target && /^\d{6,20}@/.test(target)) userId = normalizeJid(target);
+            else if (target) {
+                const m = ctx.rawText?.match(/@?(\d{6,20})/);
+                if (m) userId = `${m[1]}@s.whatsapp.net`;
+            }
+            const tRec = await loadBase(userId);
+            return ctx.reply(`🔍 *BASE INSPECT*\nuserId: ${userId}\n` +
+                tRec.structures.map((st, i) => `#${i + 1} ${st.type} L${st.level} (${st.x},${st.y}) uid=${st.uid}`).join('\n'));
+        }
+        case 'add': {
+            const type = String(rest[0] || '').toLowerCase();
+            const x = num(rest[1]), y = num(rest[2]);
+            const d = structDef(type);
+            if (!d || x == null || y == null) return ctx.reply(`Usage: ${ctx.prefix} baseadmin add <type> <x> <y> [level]`);
+            const st = { uid: uid(), type, level: Math.min(num(rest[3]) || 1, d.levels.length), x, y };
+            await Base.updateOne({ userId: ctx.senderJid }, { $push: { structures: st }, $set: { updatedAt: Date.now() } }, { upsert: true });
+            return ctx.reply(`✅ Added ${type} L${st.level} at (${x},${y}).`);
+        }
+        case 'remove': {
+            const idx = num(target);
+            if (!idx) return ctx.reply(`Usage: ${ctx.prefix} baseadmin remove <#id>`);
+            const st = rec.structures[idx - 1];
+            if (!st) return ctx.reply('❌ No such #id.');
+            if (st.type === 'house') return ctx.reply('🚫 The house (Structure 1) cannot be removed — every adventurer needs a roof.');
+            await Base.updateOne({ userId: ctx.senderJid }, { $pull: { structures: { uid: st.uid } }, $set: { updatedAt: Date.now() } });
+            return ctx.reply(`✅ Removed ${st.type} (uid ${st.uid}).`);
+        }
+        case 'level': {
+            const idx = num(target), lv = num(rest[1]);
+            if (!idx || !lv) return ctx.reply(`Usage: ${ctx.prefix} baseadmin level <#id> <1-3>`);
+            const st = rec.structures[idx - 1];
+            const d = st && structDef(st.type);
+            if (!st || !d.levels.some((l) => l.level === lv)) return ctx.reply('❌ Bad #id or level.');
+            await Base.updateOne({ userId: ctx.senderJid, 'structures.uid': st.uid }, { $set: { 'structures.$.level': lv, updatedAt: Date.now() } });
+            return ctx.reply(`✅ ${st.type} → L${lv}.`);
+        }
+        case 'move': {
+            const idx = num(target), x = num(rest[1]), y = num(rest[2]);
+            if (!idx || x == null || y == null) return ctx.reply(`Usage: ${ctx.prefix} baseadmin move <#id> <x> <y>`);
+            const st = rec.structures[idx - 1];
+            if (!st) return ctx.reply('❌ No such #id.');
+            if (['house', 'mines', 'pond', 'hunting'].includes(st.type)) {
+                return ctx.reply(`🚫 *${structDef(st.type).name}* sits in its designated position and cannot be moved (spec §6).`);
+            }
+            await Base.updateOne({ userId: ctx.senderJid, 'structures.uid': st.uid }, { $set: { 'structures.$.x': x, 'structures.$.y': y, updatedAt: Date.now() } });
+            return ctx.reply(`✅ ${st.type} → (${x},${y}).`);
+        }
+        case 'reset': {
+            const seed = fixedSeed();
+            await Base.updateOne({ userId: ctx.senderJid }, { $set: { structures: seed, updatedAt: Date.now() } }, { upsert: true });
+            return ctx.reply('✅ Base reset to the fresh layout (fixed structures only).');
+        }
+        default:
+            return ctx.reply(
+                `🛠️ *BASE ADMIN*\n` +
+                `• \`${ctx.prefix} baseadmin inspect [jid]\`\n` +
+                `• \`${ctx.prefix} baseadmin add <type> <x> <y> [lv]\`\n` +
+                `• \`${ctx.prefix} baseadmin remove <#id>\`\n` +
+                `• \`${ctx.prefix} baseadmin level <#id> <lv>\`\n` +
+                `• \`${ctx.prefix} baseadmin move <#id> <x> <y>\` (movable types only)\n` +
+                `• \`${ctx.prefix} baseadmin reset\``,
+            );
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ENTRY — homestead.handleCommand routes base/house views here; engine can
+// also dispatch `.j base ...` straight here.
+// ctx gains isMod (set by engine) for the admin gate.
+// ═══════════════════════════════════════════════════════════════════════════
+async function handleBaseCommand(ctx) {
+    // same normalizer as homestead.handleCommand — command word extraction
+    let tokens = String(ctx.text || '').trim().split(/\s+/).filter(Boolean);
+    let cmdWord = '';
+    if (tokens.length) {
+        const first = tokens[0].replace(/^[.!/?#]+/, '').replace(/[.]+$/, '');
+        if (/^(home|base|house|homestead|baseadmin)$/i.test(first)) {
+            cmdWord = first.toLowerCase();
+            tokens = tokens.slice(1);
+        } else if (/^[.!/?#]/.test(tokens[0])) {
+            tokens = tokens.slice(1);
+            if (tokens.length && /^(home|base|house|homestead|baseadmin)\.?$/i.test(tokens[0])) {
+                cmdWord = tokens[0].toLowerCase().replace(/[^a-z]/g, '');
+                tokens = tokens.slice(1);
+            }
+        }
+    }
+    let sub = (tokens[0] || '').toLowerCase();
+    let args = tokens.slice(1);
+    // `.j baseadmin <action> ...` — the word itself carries the admin intent
+    if (cmdWord === 'baseadmin') {
+        args = [sub, ...args];
+        sub = 'baseadmin';
+    }
+
+    if (!economy.isRegistered(ctx.senderJid)) {
+        return ctx.reply(`❌ You need to register first!\n\nType: \`${ctx.prefix} register <nickname>\``);
+    }
+    try {
+        switch (sub) {
+            case '': case 'map': case 'view':
+                return viewBase(ctx, {});
+            case 'house': case 'inside': {
+                return enterStructure(ctx, args[0] || 'house');
+            }
+            case 'build': case 'construct':
+                return cmdBuild(ctx, await loadBase(ctx.senderJid), args);
+            case 'upgrade': case 'up':
+                return cmdUpgrade(ctx, await loadBase(ctx.senderJid), args);
+            case 'info': case 'structures': case 'ledger': case 'list':
+                return cmdInfo(ctx, await loadBase(ctx.senderJid));
+            case 'admin': case 'baseadmin':
+                if (!ctx.isMod) return ctx.reply('❌ This command is for moderators and above only.');
+                return cmdAdmin(ctx, await loadBase(ctx.senderJid), args);
+            case 'help': default:
+                if (sub && sub !== 'help') {
+                    return ctx.reply(`❌ Unknown base command \`${sub}\`.\n\nUse \`${ctx.prefix} base info\` or \`${ctx.prefix} base help\`.`);
+                }
+                return ctx.reply(
+                    `🗺️ *THE BASE*\n` +
+                    `• \`${ctx.prefix} base\` — outdoor base map\n` +
+                    `• \`${ctx.prefix} base house [#id]\` — enter a structure\n` +
+                    `• \`${ctx.prefix} base build <type> [plot#]\` — construct\n` +
+                    `• \`${ctx.prefix} base upgrade <type|#id>\` — upgrade\n` +
+                    `• \`${ctx.prefix} base info\` — ledger + plots\n` +
+                    `• \`${ctx.prefix} home ...\` — furniture inside the house`,
+                );
+        }
+    } catch (e) {
+        console.error('[base] command error:', e.message);
+        return ctx.reply(`🔥 The base ledger hiccuped... try again shortly. (${e.message.slice(0, 80)})`);
+    }
+}
+
+module.exports = { handleBaseCommand, viewBase, enterStructure, loadBase, plotsFor };

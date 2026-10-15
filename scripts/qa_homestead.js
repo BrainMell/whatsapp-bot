@@ -68,11 +68,23 @@ function ok(cond, label) {
     const economy = require(path.join(repo, 'core/rpg/economy'));
     const UID = '15559990001@s.whatsapp.net';
     economy.registerUser(UID, 'QAUser');
-    economy.addMoney(UID, 50000, 'qa seed');
+    // deterministic slate: wipe prior QA docs (owned is now INSTANCE objects)
+    await HomesteadWipe();
+    const curBal = economy.getBalance(UID);
+    if (curBal > 0) economy.removeMoney(UID, curBal, 'qa reset');
+    economy.addMoney(UID, 51000, 'qa seed');
     ok(economy.isRegistered(UID), 'QA user registered');
     ok(economy.getBalance(UID) >= 50000, `QA wallet seeded (${economy.getBalance(UID)})`);
 
+    async function HomesteadWipe() {
+        const H = require(path.join(repo, 'core/models/Homestead'));
+        const B = require(path.join(repo, 'core/models/Base'));
+        await H.deleteMany({ userId: UID });
+        await B.deleteMany({ userId: UID });
+    }
+
     const sent = [];
+    let seq = 0;
     const ctx = {
         sock: { sendMessage: async (id, content, opts) => { sent.push(content); return { key: { id: 'k' } }; } },
         chatId: UID,
@@ -83,11 +95,20 @@ function ok(cond, label) {
         rawText: '.home',
         prefix: '.',
     };
+    // purchase idempotency (§4) keys on the WhatsApp message id — give every
+    // harness invocation a fresh id so redelivery-dedupe never eats a step
+    const rawHandle = homestead.handleCommand.bind(homestead);
+    homestead.handleCommand = async (c) => {
+        c.m = c.m || { key: {}, message: {} };
+        c.m.key = { id: `legacy-${++seq}` };
+        return rawHandle(c);
+    };
 
-    // view (first open seeds starter room)
+    // view (first open seeds starter room) — bare .home now opens the OUTDOOR
+    // base map (spec §6), so this asserts media of either kind arrives
     sent.length = 0;
     ctx.text = '.home'; await homestead.handleCommand(ctx);
-    ok(sent.some(s => s.video || s.image), `.home renders media (${sent[0]?.video ? 'mp4-gif' : sent[0]?.image ? 'png' : '???'})`);
+    ok(sent.some(s => s.video || s.image), `.home renders media (${sent.map(s => s.video ? 'mp4-gif' : s.image ? 'png' : null).filter(Boolean).join('+') || '???'})`);
 
     // 💡 REGRESSION (owner "home commands don't work"): the engine passes the
     // FULL command text with joker's TWO-TOKEN prefix (".j home ..."). The
@@ -171,7 +192,7 @@ function ok(cond, label) {
     sent.length = 0;
     ctx.text = `.home store ${chest.x} ${chest.y}`; await homestead.handleCommand(ctx);
     rec = await Homestead.findOne({ userId: UID }).lean();
-    ok(!rec.placed.some(p => p.item === 'chest_ruby') && rec.owned.includes('chest_ruby'), 'store returns item to owned');
+    ok(!rec.placed.some(p => p.item === 'chest_ruby') && rec.owned.some(o => o.id === 'chest_ruby'), 'store returns item to owned');
 
     // visit (no target → usage)
     sent.length = 0;

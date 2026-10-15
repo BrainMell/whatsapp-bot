@@ -23,7 +23,9 @@ const HomesteadSchema = new mongoose.Schema(
     // themes purchased (one-time unlocks)
     themesOwned: { type: Array, default: ['oakhaven'] },
 
-    // furniture instances not currently placed: ["bed_noble", "chair_wood", ...]
+    // furniture instances not currently placed: [{ id, uid }, ...]
+    // (§4: instances carry stable uids so writes are uid-precise $pull/$push;
+    // legacy string entries are backfilled on load by homestead.migrateRec)
     owned: { type: Array, default: [] },
 
     // furniture instances currently in the room
@@ -33,6 +35,8 @@ const HomesteadSchema = new mongoose.Schema(
           item: { type: String, required: true },
           x: { type: Number, required: true },
           y: { type: Number, required: true },
+          uid: { type: String, default: '' },   // instance identity (atomic ops)
+          f: { type: Boolean, default: false }, // flipped facing (rotate)
           _id: false,
         },
       ],

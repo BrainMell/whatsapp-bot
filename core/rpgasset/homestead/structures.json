@@ -1,0 +1,181 @@
+{
+ "structures": [
+  {
+   "id": "house",
+   "name": "House",
+   "fixed": true,
+   "free": true,
+   "fw": 3,
+   "fh": 3,
+   "interior": true,
+   "levels": [
+    {
+     "level": 1,
+     "sprite": "base_house_l1",
+     "price": 0,
+     "name": "Hovel"
+    },
+    {
+     "level": 2,
+     "sprite": "base_house_l2",
+     "price": 8000,
+     "name": "Cottage"
+    },
+    {
+     "level": 3,
+     "sprite": "base_house_l3",
+     "price": 16000,
+     "name": "Manor"
+    }
+   ]
+  },
+  {
+   "id": "blacksmith",
+   "name": "Blacksmith",
+   "fw": 3,
+   "fh": 3,
+   "levels": [
+    {
+     "level": 1,
+     "sprite": "base_smithy_l1",
+     "price": 12000,
+     "name": "Forge Shed"
+    },
+    {
+     "level": 2,
+     "sprite": "base_smithy_l2",
+     "price": 20000,
+     "name": "Stone Forge"
+    },
+    {
+     "level": 3,
+     "sprite": "base_smithy_l3",
+     "price": 35000,
+     "name": "Great Forge"
+    }
+   ]
+  },
+  {
+   "id": "medbay",
+   "name": "Med Bay",
+   "fw": 3,
+   "fh": 3,
+   "levels": [
+    {
+     "level": 1,
+     "sprite": "base_medbay_l1",
+     "price": 10000,
+     "name": "Medic Tent"
+    },
+    {
+     "level": 2,
+     "sprite": "base_medbay_l2",
+     "price": 18000,
+     "name": "Infirmary"
+    },
+    {
+     "level": 3,
+     "sprite": "base_medbay_l3",
+     "price": 30000,
+     "name": "Sanatorium"
+    }
+   ]
+  },
+  {
+   "id": "alchemy",
+   "name": "Alchemy Centre",
+   "fw": 3,
+   "fh": 3,
+   "levels": [
+    {
+     "level": 1,
+     "sprite": "base_alchemy_l1",
+     "price": 15000,
+     "name": "Brew Hut"
+    },
+    {
+     "level": 2,
+     "sprite": "base_alchemy_l2",
+     "price": 25000,
+     "name": "Glasshouse"
+    },
+    {
+     "level": 3,
+     "sprite": "base_alchemy_l3",
+     "price": 40000,
+     "name": "Observatory"
+    }
+   ]
+  },
+  {
+   "id": "mines",
+   "name": "Mines",
+   "fixed": true,
+   "fw": 2,
+   "fh": 2,
+   "levels": [
+    {
+     "level": 1,
+     "sprite": "base_mines_l1",
+     "price": 0,
+     "name": "Cave Mouth"
+    },
+    {
+     "level": 2,
+     "sprite": "base_mines_l2",
+     "price": 6000,
+     "name": "Timber Mine"
+    },
+    {
+     "level": 3,
+     "sprite": "base_mines_l3",
+     "price": 10000,
+     "name": "Deep Mine"
+    }
+   ]
+  },
+  {
+   "id": "pond",
+   "name": "Pond",
+   "fixed": true,
+   "fw": 2,
+   "fh": 2,
+   "levels": [
+    {
+     "level": 1,
+     "sprite": "base_pond_l1",
+     "price": 0,
+     "name": "Lily Pond"
+    },
+    {
+     "level": 2,
+     "sprite": "base_pond_l2",
+     "price": 5000,
+     "name": "Fishing Dock"
+    },
+    {
+     "level": 3,
+     "sprite": "base_pond_l3",
+     "price": 9000,
+     "name": "Crystal Spring"
+    }
+   ]
+  },
+  {
+   "id": "hunting",
+   "name": "Hunting Grounds",
+   "fixed": true,
+   "fw": 2,
+   "fh": 2,
+   "noUpgrade": true,
+   "levels": [
+    {
+     "level": 1,
+     "sprite": "base_hunting_gate",
+     "price": 0,
+     "name": "Hunting Gate"
+    }
+   ]
+  }
+ ]
+}
