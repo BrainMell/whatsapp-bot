@@ -37,6 +37,22 @@ echo "=== smart deploy: branch=$BRANCH  $(date -u +%FT%TZ) ==="
 git fetch origin || exit 1
 TARGET="$BRANCH"
 
+# ---- protected-fix gate (2026-10-15; keep in sync with /home/ubuntu/git_guard.conf
+#      on BOTH boxes). Refuses to deploy an origin head that lacks the
+#      owner-ordered fixes, so no relay (GitHub Action / Box2 cron / external)
+#      can wipe them via a stale origin. See AGENTS.md. ----
+GATE_FAIL=0
+git show "origin/$TARGET:core/rpg/progression.js" 2>/dev/null | grep -q "POST50_LEVEL_START" \
+  || { echo "GATE REFUSAL: origin/$TARGET lacks XP-wall fix (POST50_LEVEL_START)"; GATE_FAIL=1; }
+git show "origin/$TARGET:core/rpg/economy.js" 2>/dev/null | grep -q "flattenLeaves" \
+  || { echo "GATE REFUSAL: origin/$TARGET lacks leaf-merge fix (flattenLeaves)"; GATE_FAIL=1; }
+if [ "$GATE_FAIL" != "0" ]; then
+  echo "deploy REFUSED: sync the protected fixes to origin first (see AGENTS.md)."
+  exit 1
+fi
+# ---- end protected-fix gate ----
+
+
 # ── 0. idempotency gate (2026-10-03 incident fix) ──────────────────────
 # THREE deploy relays watch this branch (GitHub Action, Box2 cron relay,
 # an external polling relay). Before tonight, ONE push triggered up to
