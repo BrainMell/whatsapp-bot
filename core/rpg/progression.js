@@ -205,25 +205,53 @@ function getUser(userId) {
 // 📊 XP CALCULATIONS
 // ==========================================
 
+// 💡 POST-50 WALL (2026-10-15, owner order: "make the progression level wise
+// the same, but we make it harder after level 50" — after a player hit Lv100
+// still at rank B with skills locked): levels 1-50 keep the EXACT 240×L² curve
+// (L50 = 600,000, untouched). From 51 onward each level's cost is the normal
+// 240×(2L−1) increment multiplied by a compounding POST50_RAMP^(L−50), so the
+// late game stops outrunning adventurer ranks and rank-gated skills (rank A
+// sits at L50 in classSystem.ADVENTURER_RANKS and tier-4/ascended skills need
+// rank A in skillCommands.js — an XP rusher could blitz to Lv100 at rank B).
+// Exact totals (cumulative XP to reach the level):
+//   L50:    600,000     (same as before, 1.00×)
+//   L60:    972,062     (was 864,000,    1.13×)
+//   L75:  2,426,435     (was 1,350,000,  1.80×)
+//   L90:  6,674,328     (was 1,944,000,  3.43×)
+//   L100: 13,260,407    (was 2,400,000,  5.53×)
+// Per-level: L51→52 27,776 (was 24,720) … L99→100 879,747 (was 47,760).
+// History of the base curve: 2026-08-16 80×L² → 2026-09-14 400×L² →
+// 2026-09-15 200×L² (owner: ×5 felt too heavy) → 2026-09-21 240×L² (exact
+// +20% on the 200 baseline) → 2026-10-15 post-50 compounding wall (this).
+// Single insertion point by design: EVERY source (quests, completion, raids,
+// abyss, PvP, trivia) and every display derives from this one function, so
+// the wall cannot double-stack with any modifier. Existing players above 50
+// are protected by the LEGACY XP FIX in getUser() (topped up to their current
+// level floor, never de-leveled) — same mechanism as the 2026-09-21 rebalance.
+const POST50_LEVEL_START = 50;
+const POST50_RAMP = 1.06;
+const XP_CURVE_TABLE = (() => {
+    const t = new Array(301).fill(0); // L2..300 precomputed; 300 stays far inside safe-integer range
+    for (let L = 2; L <= 300; L++) {
+        t[L] = L <= POST50_LEVEL_START
+            ? Math.floor(240 * L * L)
+            : t[L - 1] + Math.ceil(240 * (2 * L - 1) * Math.pow(POST50_RAMP, L - POST50_LEVEL_START));
+    }
+    return t;
+})();
+
 function getXPForLevel(level) {
     if (level <= 1) return 0;
-
-    // 💡 REBALANCE (2026-09-21, ticket #b508e7 - owner order: "Increase
-    // leveling difficulty by 20%"): cumulative requirement raised ×1.2 to
-    // floor(240 × L²). History: 2026-08-16 80×L² → 2026-09-14 400×L² →
-    // 2026-09-15 200×L² (owner: ×5 felt too heavy) → now 240×L² (exact +20%
-    // on the 200 baseline). Per-level cost is 240×(2L+1) XP:
-    //   L10:  24,000   L25: 150,000   L50: 600,000
-    //   L75:  1,350,000   L90: 1,944,000   L100: 2,400,000
-    // (L1→2: 720 XP … L99→100: 47,760 XP).
-    // Single insertion point by design: EVERY source (quests, completion,
-    // raids, abyss, PvP, trivia) and every display derives from this one
-    // function, so the increase cannot double-stack with any modifier. The
-    // Scout Pathfinder solo XP bonus (#b5087a) is a GAIN-side offset and
-    // deliberately separate from this requirement-side change.
-    return Math.floor(240 * level * level);
+    const lv = Math.floor(level);
+    if (lv < XP_CURVE_TABLE.length) return XP_CURVE_TABLE[lv];
+    // Defensive extension beyond the table (unreachable via MAX_LEVEL=100 paths,
+    // setlevel clamps 1-100): keep accumulating the same post-50 ramp formula.
+    let total = XP_CURVE_TABLE[XP_CURVE_TABLE.length - 1];
+    for (let L = XP_CURVE_TABLE.length; L <= lv; L++) {
+        total += Math.ceil(240 * (2 * L - 1) * Math.pow(POST50_RAMP, L - POST50_LEVEL_START));
+    }
+    return total;
 }
-
 function getXPForNextLevel(userId) {
     const user = getUser(userId);
     if (!user) return 100;
