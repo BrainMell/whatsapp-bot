@@ -154,12 +154,19 @@ async function viewRoom(ctx, rec, opts = {}) {
     }
     renderLocks.add(rec.userId);
     try {
+        // immediate feedback — first render can take ~15-20s on box hardware
+        try {
+            if (ctx.m?.key) await sock.sendMessage(chatId, { react: { text: '🎨', key: ctx.m.key } });
+        } catch (e) { /* react is best-effort */ }
         const state = {
             owner: opts.ownerName || economy.getDisplayName(rec.userId),
             theme: rec.theme,
             placed: rec.placed,
         };
         const media = await renderer.renderRoomImage(state, { pop: opts.pop || null, hint: opts.hint });
+        try {
+            if (ctx.m?.key) await sock.sendMessage(chatId, { react: { text: '✅', key: ctx.m.key } });
+        } catch (e) { /* best-effort */ }
         const comfort = rec.placed.reduce((s, p) => s + ((renderer.itemDef(p.item) || {}).comfort || 0), 0);
         const theme = renderer.THEMES[rec.theme] || renderer.THEMES.oakhaven;
         const cap = `🏠 *${state.owner}'s Homestead* — ${theme.name}\n\n` +
