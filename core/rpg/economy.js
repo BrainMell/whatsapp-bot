@@ -326,6 +326,18 @@ function leafDiff(ours, base) {
         const hasParent = parent === '' || Object.keys(flatP).some(k => k === parent || k.startsWith(parent + '.'));
         if (hasParent) unsetSet[path] = "";
     }
+    // mongo rejects a single update that touches a path AND its ancestor
+    // (e.g. $set skillSpend:{} + $unset skillSpend.final_eclipse => "would
+    // create a conflict" => EVERY save for that user fails until restart).
+    // Keep only the shortest path per family: a parent write supersedes
+    // descendant unsets (the parent write replaces the whole subtree, so the
+    // unsets are redundant), and a descendant write supersedes an ancestor
+    // unset (best effort for rare scalar->object shape drift).
+    for (const w of Object.keys(writeSet)) {
+        for (const u of Object.keys(unsetSet)) {
+            if (u.startsWith(w + '.') || w.startsWith(u + '.')) delete unsetSet[u];
+        }
+    }
     return { writeSet, unsetSet };
 }
 
