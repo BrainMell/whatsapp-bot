@@ -12,7 +12,9 @@
 //    .home catalog [page]           outfitter card pages
 //    .home buy <name>               buy furniture / theme with ZENI (atomic)
 //    .home place <name> [x y]       place owned furniture (auto-spot / auto-relocate)
-//    .home select <name>            select a placed piece → grid preview GIF
+//    .home select                  owned-furniture NAMES card (placed vs storage)
+//    .home select <name>           select placed piece → grid preview (image);
+//                                  owned-in-storage piece → placement mode (grid)
 //    .home move <l|r|u|d> [n]       nudge the selection (screen directions)
 //    .home moveto <x> <y>           send the selection to a coordinate
 //    .home rotate                   turn the selection to its other facing
@@ -59,6 +61,8 @@ setInterval(() => {
 }, 60 * 1000).unref();
 // ── selection state (session-scoped): jid → placed uid ──
 const selection = new Map();
+// ── placement mode (§5 inventory flow): jid → owned item id awaiting placement ──
+const pendingPlace = new Map();
 
 // ── helpers ──
 let _uidCounter = 0;
@@ -248,7 +252,7 @@ async function viewRoom(ctx, rec, opts = {}) {
         try {
             let watchdogTimer;
             media = await Promise.race([
-                renderer.renderRoomImage(state, { pop: opts.pop || null, hint: opts.hint, grid: opts.grid || null }),
+                renderer.renderRoomImage(state, { pop: opts.pop || null, hint: opts.hint, grid: opts.grid || null, static: !opts.pop }),
                 new Promise((_, reject) => {
                     watchdogTimer = setTimeout(() => reject(new Error('render watchdog: room render exceeded 90s')), 90000);
                     if (watchdogTimer.unref) watchdogTimer.unref();
@@ -392,6 +396,7 @@ async function cmdPlace(ctx, rec, args) {
     );
     rec.owned = rec.owned.filter((o) => o.uid !== inst.uid);
     rec.placed = [...rec.placed, placedInst];
+    if (pendingPlace.get(ctx.senderJid) === it.id) pendingPlace.delete(ctx.senderJid); // §5 placement mode satisfied
     const opts = { pop: { item: it.id, x, y } };
     if (relocated) opts.hint = `(${args[1]},${args[2]}) was blocked — the *${it.name}* slid to (${x},${y}) instead.`;
     await viewRoom(ctx, { ...rec }, opts);
@@ -401,21 +406,59 @@ async function cmdSelect(ctx, rec, args) {
     const query = args.join(' ');
     if (!query) {
         const sel = selection.get(ctx.senderJid);
-        if (!sel) return ctx.reply(`Usage: \`${ctx.prefix} home select <name>\` — or tap coordinates after a preview.`);
-        const p = rec.placed.find((q) => q.uid === sel);
-        if (!p) { selection.delete(ctx.senderJid); return ctx.reply('🕯️ That selection is gone — pick another piece.'); }
-        return viewRoom(ctx, rec, gridOptsFor(p, renderer.itemDef(p.item)));
+        if (sel) {
+            const p = rec.placed.find((q) => q.uid === sel);
+            if (!p) { selection.delete(ctx.senderJid); return ctx.reply('🕯️ That selection is gone — pick another piece.'); }
+            return viewRoom(ctx, rec, gridOptsFor(p, renderer.itemDef(p.item)));
+        }
+        // §5 placement mode still armed? → show the grid for the pending piece
+        const pendId = pendingPlace.get(ctx.senderJid);
+        if (pendId) {
+            const pd = renderer.itemDef(pendId);
+            if (pd) {
+                const spot = findFreeSpot(rec, pd);
+                const grid = spot ? { x: spot.x, y: spot.y, fw: pd.fw, fh: pd.fh, valid: true, label: `${pd.name} → (${spot.x},${spot.y})` } : null;
+                return viewRoom(ctx, rec, { grid, hint: `Placement mode — *${pd.name}*. Confirm: \`${ctx.prefix} home place ${pd.id} <x> <y>\` (or bare \`${ctx.prefix} home place ${pd.id}\`). Cancel: \`${ctx.prefix} home deselect\`.` });
+            }
+            pendingPlace.delete(ctx.senderJid);
+        }
+        // §5 (redesign): no selection → NAMES CARD of every furniture item owned
+        return cmdInventory(ctx, rec);
     }
+    // §5: a bare page number pages the inventory card
+    if (/^\d+$/.test(query) && !resolveItem(query)) return cmdInventory(ctx, rec, parseInt(query, 10));
     const it = resolveItem(query);
-    if (!it) return ctx.reply(`❌ Nothing called *${query}*. Select a piece that is PLACED in the room.`);
+    if (!it) return ctx.reply(`❌ Nothing called *${query}*. Browse every piece you own: \`${ctx.prefix} home select\`.`);
     const cand = rec.placed.filter((p) => p.item === it.id && (renderer.itemDef(p.item) || {}).layer !== 'wall');
     if (!cand.length) {
-        if (rec.owned.some((o) => o.id === it.id)) return ctx.reply(`📦 Your *${it.name}* is in storage — place it first: \`${ctx.prefix} home place ${it.id}\``);
-        return ctx.reply(`❌ No *${it.name}* stands in your room. Place one first.`);
+        if (rec.owned.some((o) => o.id === it.id)) {
+            // §5: owned-but-unplaced → PLACEMENT MODE (grid preview + suggested spot)
+            pendingPlace.set(ctx.senderJid, it.id);
+            selection.delete(ctx.senderJid);
+            const spot = findFreeSpot(rec, it);
+            const grid = spot ? { x: spot.x, y: spot.y, fw: it.fw, fh: it.fh, valid: true, label: `${it.name} → (${spot.x},${spot.y})` } : null;
+            return viewRoom(ctx, rec, { grid, hint: `Placement mode — *${it.name}* (in storage). Confirm: \`${ctx.prefix} home place ${it.id} <x> <y>\`${spot ? ` (suggested spot ${spot.x},${spot.y})` : ''} • Cancel: \`${ctx.prefix} home deselect\`.` });
+        }
+        return ctx.reply(`❌ You don't own a *${it.name}*. Your furniture: \`${ctx.prefix} home select\` • Shop: \`${ctx.prefix} home catalog\`.`);
     }
     const p = cand[0];
     selection.set(ctx.senderJid, p.uid);
+    pendingPlace.delete(ctx.senderJid);
     await viewRoom(ctx, rec, { ...gridOptsFor(p, it), hint: `Selected the *${it.name}*. Move it with \`${ctx.prefix} home move <left|right|up|down>\`` });
+}
+
+// §5: readable names card — every owned piece, placed vs storage (pagination)
+async function cmdInventory(ctx, rec, page) {
+    if (!rec.owned.length && !rec.placed.length) {
+        return ctx.reply(`📦 You own no furniture yet.\nBrowse: \`${ctx.prefix} home catalog\` — then \`${ctx.prefix} home buy <name>\`.`);
+    }
+    const buf = await renderer.renderInventoryCard(rec, { prefix: ctx.prefix, page });
+    const cap = `🪑 *Your Furniture* — 📍 ${rec.placed.length} placed • 📦 ${rec.owned.length} in storage\n\n` +
+        `_${ctx.prefix} home select <name> — select a placed piece, or arm a storage piece for placement_\n` +
+        `_${ctx.prefix} home place <name> [x y] — place a storage piece_\n` +
+        `_${ctx.prefix} home store [x y] — pick a placed piece up_` +
+        (page ? `\n_${ctx.prefix} home select ${page + 1} — next page_` : '');
+    await ctx.sock.sendMessage(ctx.chatId, { image: buf, caption: cap }, { quoted: ctx.m });
 }
 
 /** Screen-direction nudge for the selection (§3): right/left = ±X, up/down = ∓Y. */
@@ -571,7 +614,8 @@ function cmdHelp(ctx) {
         `• \`${p} home catalog\` — furniture outfitter\n` +
         `• \`${p} home buy <name>\` — buy with ZENI\n` +
         `• \`${p} home place <name> [x y]\` — place furniture\n` +
-        `• \`${p} home select <name>\` — select a piece (grid preview)\n` +
+        `• \`${p} home select\` — YOUR FURNITURE LIST (names card)\n` +
+        `• \`${p} home select <name>\` — select a piece (grid preview / placement mode)\n` +
         `• \`${p} home move <left|right|up|down> [n]\` — nudge it\n` +
         `• \`${p} home moveto <x> <y>\` — send it to coordinates\n` +
         `• \`${p} home rotate\` — turn it around\n` +
@@ -665,6 +709,7 @@ async function handleCommand(ctx) {
                 return cmdRotate(ctx, rec);
             case 'deselect': case 'unselect':
                 selection.delete(ctx.senderJid);
+                pendingPlace.delete(ctx.senderJid);
                 return ctx.reply('✋ Selection cleared.');
             case 'store': case 'remove': case 'pick':
                 return cmdStore(ctx, rec, args);

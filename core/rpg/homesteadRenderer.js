@@ -738,21 +738,27 @@ async function encodeFramesToMp4(frames) {
 const _renderCache = new Map(); // key → { buffer, contentType, ts }
 const CACHE_TTL = 10 * 60 * 1000;
 function stateHash(state, opts = {}) {
-    return hashStr(JSON.stringify([state.owner, state.theme, state.placed, opts.pop || null, opts.hint || '', opts.grid || null]));
+    return hashStr(JSON.stringify([state.owner, state.theme, state.placed, opts.pop || null, opts.hint || '', opts.grid || null, opts.static ? 1 : 0]));
 }
 
+// Media matrix (owner 2026-10-15 "rpg_base_building_redesign.md" §6):
+//   viewing / browsing / grids  → STATIC image card (opts.static, frame 0)
+//   successful placement (pop)  → ANIMATED GIF (full frames + mp4)
 async function renderRoomImage(state, opts = {}) {
     const key = stateHash(state, opts);
     const hit = _renderCache.get(key);
     if (hit && (Date.now() - hit.ts) < CACHE_TTL) return hit;
     const frames = [];
-    for (let f = 0; f < FRAMES; f++) frames.push(await renderFrame(state, f, opts));
+    const frameCount = opts.static ? 1 : FRAMES;
+    for (let f = 0; f < frameCount; f++) frames.push(await renderFrame(state, f, opts));
     let out = { buffer: frames[0], contentType: 'image/png' };
-    try {
-        const mp4 = await encodeFramesToMp4(frames);
-        if (mp4 && mp4.length > 1000) out = { buffer: mp4, contentType: 'video/mp4' };
-    } catch (e) {
-        console.error('[homesteadRenderer] mp4 encode failed, PNG fallback:', e.message);
+    if (!opts.static) {
+        try {
+            const mp4 = await encodeFramesToMp4(frames);
+            if (mp4 && mp4.length > 1000) out = { buffer: mp4, contentType: 'video/mp4' };
+        } catch (e) {
+            console.error('[homesteadRenderer] mp4 encode failed, PNG fallback:', e.message);
+        }
     }
     if (_renderCache.size > 120) _renderCache.clear();
     _renderCache.set(key, { ...out, ts: Date.now() });
@@ -877,6 +883,129 @@ async function renderCatalogPage(page, pages, opts = {}) {
     return canvas.toBuffer('image/png');
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// PUBLIC: owned-furniture names card ("rpg_base_building_redesign.md" §5 —
+// ".j home select shows an image card listing the NAMES of all furniture
+//  items available to them" + §5 inventory: placed vs storage at a glance)
+// ═══════════════════════════════════════════════════════════════════════════
+const STAR = { common: '⚪', uncommon: '🟢', rare: '🔵', epic: '🟣', legendary: '🟠' };
+const ROWS_PER_PAGE = 14;
+
+async function renderInventoryCard(rec, opts = {}) {
+    ensureFonts();
+    // rows: placed pieces first (room order), then storage
+    const placedRows = (rec.placed || []).map((p) => {
+        const d = itemDef(p.item) || {};
+        return { d, status: d.layer === 'wall' ? `wall ${p.x}` : `(${p.x},${p.y})`, placed: true };
+    });
+    const storedRows = (rec.owned || []).map((o) => ({ d: itemDef(o.id) || {}, status: 'storage', placed: false }));
+    const rows = [...placedRows, ...storedRows];
+    const pages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
+    let page = parseInt(opts.page, 10);
+    if (!Number.isFinite(page) || page < 1) page = 1;
+    if (page > pages) page = pages;
+
+    const W = 1080, H = 1350;
+    const canvas = require('canvas').createCanvas(W * SS, H * SS);
+    const ctx = canvas.getContext('2d');
+    ctx.scale(SS, SS);
+    ctx.imageSmoothingEnabled = false;
+
+    ctx.fillStyle = '#161009';
+    ctx.fillRect(0, 0, W, H);
+    const bg = ctx.createRadialGradient(W / 2, 300, 100, W / 2, 675, 900);
+    bg.addColorStop(0, '#2a1e10');
+    bg.addColorStop(1, '#120c06');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#e8d5a3';
+    ctx.font = '44px "Cinzel Deco", Cinzel';
+    ctx.fillText('YOUR FURNITURE', W / 2, 84);
+    ctx.font = '20px Medieval';
+    ctx.fillStyle = '#9c8455';
+    ctx.fillText(pages > 1 ? `— page ${page} of ${pages} —` : '— every piece you own —', W / 2, 128);
+    ctx.strokeStyle = '#a67c2e';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(120, 158); ctx.lineTo(W - 120, 158); ctx.stroke();
+
+    const comfort = (rec.placed || []).reduce((s, p) => s + ((itemDef(p.item) || {}).comfort || 0), 0);
+    ctx.font = '22px Cinzel';
+    ctx.fillStyle = '#7ec8a0';
+    ctx.fillText(`♥ ${comfort} comfort   •   📍 ${placedRows.length} placed   •   📦 ${storedRows.length} storage`, W / 2, 196);
+
+    const slice = rows.slice((page - 1) * ROWS_PER_PAGE, page * ROWS_PER_PAGE);
+    const y0 = 236, rh = 64;
+    let lastPlaced = null;
+    for (let i = 0; i < slice.length; i++) {
+        const row = slice[i];
+        const y = y0 + i * rh;
+        const R = RARITY[row.d.rarity] || RARITY.common;
+        // section divider
+        if (row.placed !== lastPlaced) {
+            lastPlaced = row.placed;
+            ctx.font = '17px Medieval';
+            ctx.fillStyle = '#c9a25e';
+            ctx.textAlign = 'center';
+            ctx.fillText(row.placed ? '— 📍 PLACED IN YOUR ROOM —' : '— 📦 IN STORAGE —', W / 2, y + 10);
+        }
+        const rowY = y + 34;
+        // row plate
+        ctx.fillStyle = 'rgba(32,24,14,0.72)';
+        roundRect(ctx, 70, rowY - 21, W - 140, 44, 9);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(166,124,46,0.35)';
+        ctx.lineWidth = 1;
+        roundRect(ctx, 70, rowY - 21, W - 140, 44, 9);
+        ctx.stroke();
+        // sprite thumbnail
+        const spr = row.d.id ? await img(`${row.d.id}.png`) : null;
+        if (spr) {
+            const maxH = 36, maxW = 56;
+            let s = Math.min(maxH / spr.height, maxW / spr.width, 2);
+            ctx.drawImage(spr, 100 - (spr.width * s) / 2, rowY - (spr.height * s) / 2, spr.width * s, spr.height * s);
+        }
+        // name + star
+        ctx.textAlign = 'left';
+        ctx.font = '22px Medieval';
+        ctx.fillStyle = R.col;
+        let nm = `${STAR[row.d.rarity] || '⚪'} ${row.d.name || row.d.id}`;
+        const maxNm = W - 140 - 220 - 130;
+        while (ctx.measureText(nm).width > maxNm && nm.length > 4) nm = nm.slice(0, -2);
+        if (nm !== `${STAR[row.d.rarity] || '⚪'} ${row.d.name || row.d.id}`) nm += '…';
+        ctx.fillText(nm, 140, rowY);
+        // comfort chips
+        if (row.d.comfort > 0) {
+            ctx.font = '15px Medieval';
+            ctx.fillStyle = '#7ec8a0';
+            ctx.fillText('♥'.repeat(Math.min(row.d.comfort, 5)), 140 + ctx.measureText(nm).width + 18, rowY + 1);
+        }
+        // status (right-aligned)
+        ctx.textAlign = 'right';
+        ctx.font = '20px Medieval';
+        ctx.fillStyle = row.placed ? '#e8d5a3' : '#9c8455';
+        ctx.fillText(row.placed ? `📍 ${row.status}` : '📦 storage', W - 100, rowY);
+    }
+    if (!slice.length) {
+        ctx.font = '24px Medieval';
+        ctx.fillStyle = '#9c8455';
+        ctx.textAlign = 'center';
+        ctx.fillText('An empty homestead — visit the outfitter!', W / 2, 400);
+    }
+
+    ctx.textAlign = 'center';
+    ctx.font = '20px Medieval';
+    ctx.fillStyle = '#9c8455';
+    ctx.fillText(`${opts.prefix || '.'}home select <name>   •   ${opts.prefix || '.'}home place <name> [x y]   •   ${opts.prefix || '.'}home store [x y]`, W / 2, H - 46);
+    ctx.strokeStyle = 'rgba(166,124,46,0.5)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(120, H - 78); ctx.lineTo(W - 120, H - 78); ctx.stroke();
+
+    return canvas.toBuffer('image/png');
+}
+
 module.exports = {
     THEMES,
     RARITY,
@@ -885,6 +1014,7 @@ module.exports = {
     renderFrame,
     renderRoomImage,
     renderCatalogPage,
+    renderInventoryCard,
     encodeFramesToMp4,
     itemDef,
     catalog,

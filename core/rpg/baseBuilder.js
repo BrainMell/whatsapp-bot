@@ -103,7 +103,7 @@ async function viewBase(ctx, opts = {}) {
     try {
         let watchdogTimer;
         media = await Promise.race([
-            renderer.renderBaseImage(state, { hint: opts.hint }),
+            renderer.renderBaseImage(state, { hint: opts.hint, static: !opts.celebrate }),
             new Promise((_, reject) => {
                 watchdogTimer = setTimeout(() => reject(new Error('render watchdog: base render exceeded 90s')), 90000);
                 if (watchdogTimer.unref) watchdogTimer.unref();
@@ -220,7 +220,7 @@ async function cmdBuild(ctx, rec, args) {
             economy.addMoney(ctx.senderJid, lv1.price, `Base: refund ${lv1.name}`);
             return ctx.reply('🔥 The builders returned your ZENI (ledger write failed). Nothing was lost — try again.');
         }
-        return viewBase(ctx, { hint: `The *${lv1.name}* rises on plot #${plot.id}!` });
+        return viewBase(ctx, { celebrate: true, hint: `The *${lv1.name}* rises on plot #${plot.id}!` });
     } finally {
         opLocks.delete(ctx.senderJid);
     }
@@ -259,7 +259,7 @@ async function cmdUpgrade(ctx, rec, args) {
             economy.addMoney(ctx.senderJid, next.price, `Base: refund upgrade ${d.name}`);
             return ctx.reply('🔥 The ledger refused the deed — your ZENI was returned. Try again.');
         }
-        return viewBase(ctx, { hint: `The *${d.name}* is now *${next.name}* (Lv.${next.level})!` });
+        return viewBase(ctx, { celebrate: true, hint: `The *${d.name}* is now *${next.name}* (Lv.${next.level})!` });
     } finally {
         opLocks.delete(ctx.senderJid);
     }

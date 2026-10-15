@@ -441,21 +441,26 @@ async function encodeFramesToMp4(frames) {
 const _renderCache = new Map();
 const CACHE_TTL = 10 * 60 * 1000;
 function stateHash(state, opts = {}) {
-    return hashStr(JSON.stringify([state.owner, state.structures, state.freePlots, opts.hint || '']));
+    return hashStr(JSON.stringify([state.owner, state.structures, state.freePlots, opts.hint || '', opts.static ? 1 : 0]));
 }
 
+// Media matrix (owner "rpg_base_building_redesign.md" §6): base VIEW → static
+// image card; build/upgrade transformation → ANIMATED GIF (opts.celebrate).
 async function renderBaseImage(state, opts = {}) {
     const key = stateHash(state, opts);
     const hit = _renderCache.get(key);
     if (hit && (Date.now() - hit.ts) < CACHE_TTL) return hit;
     const frames = [];
-    for (let f = 0; f < FRAMES; f++) frames.push(await renderFrame(state, f, opts));
+    const frameCount = opts.static ? 1 : FRAMES;
+    for (let f = 0; f < frameCount; f++) frames.push(await renderFrame(state, f, opts));
     let out = { buffer: frames[0], contentType: 'image/png' };
-    try {
-        const mp4 = await encodeFramesToMp4(frames);
-        if (mp4 && mp4.length > 1000) out = { buffer: mp4, contentType: 'video/mp4' };
-    } catch (e) {
-        console.error('[baseRenderer] mp4 encode failed, PNG fallback:', e.message);
+    if (!opts.static) {
+        try {
+            const mp4 = await encodeFramesToMp4(frames);
+            if (mp4 && mp4.length > 1000) out = { buffer: mp4, contentType: 'video/mp4' };
+        } catch (e) {
+            console.error('[baseRenderer] mp4 encode failed, PNG fallback:', e.message);
+        }
     }
     if (_renderCache.size > 120) _renderCache.clear();
     _renderCache.set(key, { ...out, ts: Date.now() });
