@@ -89,6 +89,24 @@ function ok(cond, label) {
     ctx.text = '.home'; await homestead.handleCommand(ctx);
     ok(sent.some(s => s.video || s.image), `.home renders media (${sent[0]?.video ? 'mp4-gif' : sent[0]?.image ? 'png' : '???'})`);
 
+    // 💡 REGRESSION (owner "home commands don't work"): the engine passes the
+    // FULL command text with joker's TWO-TOKEN prefix (".j home ..."). The
+    // old tokenizer read tokens[1] ('home') as the SUBcommand, so every live
+    // invocation fell into the unknown-command reply and the renderer never
+    // ran. Pin all dispatch forms here — especially the ".j " prefixed ones.
+    const dispatchForms = ['.j home', '.j homestead', '.j house', '.j base'];
+    for (const form of dispatchForms) {
+        sent.length = 0;
+        ctx.text = form; await homestead.handleCommand(ctx);
+        ok(sent.some(s => s.video || s.image), `dispatch form ${JSON.stringify(form)} reaches the renderer`);
+    }
+    sent.length = 0;
+    ctx.text = '.j home catalog'; await homestead.handleCommand(ctx);
+    ok(sent.some(s => s.image), 'dispatch form ".j home catalog" reaches the catalog');
+    sent.length = 0;
+    ctx.text = '.j home nosuchsub'; await homestead.handleCommand(ctx);
+    ok(sent.some(s => String(s.text || '').includes('Unknown homestead command')), 'genuinely unknown sub still rejects');
+
     // catalog
     sent.length = 0;
     ctx.text = '.home catalog'; await homestead.handleCommand(ctx);
