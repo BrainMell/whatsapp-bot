@@ -406,13 +406,24 @@ async function renderFrame(state, frame, opts = {}) {
         if (!spr) continue;
         const c = footCenter(p.x, p.y, p.def.fw, p.def.fh);
         const w = spr.width * 2, h = spr.height * 2;
-        // FIX 2026-10-15 (owner: 'some of the furniture appears to be floating'): the old
-        // anchor (footprint south-edge midpoint + 14) ignores footprint size, so every item
-        // hovered (fw+fh)*16-14px above its own tile diamond - 18px for 1x1 props (masked by
-        // the fat contact shadow) and 34px+ for beds/tables/wardrobes (obvious float).
-        // Anchor the sprite base to the footprint's SOUTH VERTEX instead: the iso diamond's
-        // lowest painted point, where a piece standing on those tiles actually lands.
-        const anchorY = c.y + (p.def.fw + p.def.fh) * (TH / 2) - 2;
+        // FIX 2026-10-15b (owner: 'the reason the furniture appears to be floating is
+        // because you messed up the shadows'): TWO stacked bugs.
+        // (1) ANCHOR: the floor painter blits each tile diamond CENTERED on iso(x,y)
+        //     (drawImage at isoX-TW/2, isoY-TH/2), so for a 1x1 footCenter IS the painted
+        //     diamond's SOUTH VERTEX, and the lowest painted point of any fw x fh footprint
+        //     (where a piece standing on those tiles must land) is
+        //     c.y + (fw+fh)*(TH/4) - TH/2. The previous formula (c.y + (fw+fh)*(TH/2) - 2)
+        //     doubled the term and planted every item exactly one tile-diagonal IN FRONT
+        //     of its own tiles (30px low for 1x1, 38px for 2x1), with the shadow circle
+        //     dragged even lower - the displaced-puddle + bare-tile look the owner flagged.
+        // (2) SHADOW: a flat 24%-black CIRCLE at the base line - sprites wider than the
+        //     circle (beds/wardrobe/clock drawn ~110-118px vs a 46-92px ellipse) hid it
+        //     completely (zero contact shading -> bare floor -> float), while narrow ones
+        //     (barrels/pots) overhung it as a detached dark puddle. Replaced with a soft
+        //     iso RHOMBUS stack sized to the painted footprint envelope (centre (c.x,
+        //     c.y-16), rx (fw+fh)*TW/4, ry (fw+fh)*TH/4 - exact bounding diamond of the
+        //     union of painted tile diamonds) + a dense contact core under the base line.
+        const anchorY = c.y + (p.def.fw + p.def.fh) * (TH / 4) - TH / 2 + 2;
 
         // placement pop-in
         let drop = 0, alpha = 1;
@@ -438,10 +449,27 @@ async function renderFrame(state, frame, opts = {}) {
 
         ctx.save();
         ctx.globalAlpha = alpha;
-        ctx.fillStyle = 'rgba(0,0,0,0.24)';
+        // soft iso contact shadow: 3 concentric rhombi bounding the painted footprint
+        // + a dense core right under the base line (feet stay visibly grounded)
+        const frx = (p.def.fw + p.def.fh) * (TW / 4);
+        const fry = (p.def.fw + p.def.fh) * (TH / 4);
+        const scy = c.y - TH / 2;
+        ctx.fillStyle = '#000000';
+        for (const [sc, al] of [[1.34, 0.10], [1.18, 0.16], [1.00, 0.30]]) {
+            ctx.globalAlpha = alpha * al;
+            ctx.beginPath();
+            ctx.moveTo(c.x, scy - fry * sc);
+            ctx.lineTo(c.x + frx * sc, scy);
+            ctx.lineTo(c.x, scy + fry * sc);
+            ctx.lineTo(c.x - frx * sc, scy);
+            ctx.closePath();
+            ctx.fill();
+        }
+        ctx.globalAlpha = alpha * 0.30;
         ctx.beginPath();
-        ctx.ellipse(c.x, anchorY + 2, (p.def.fw * TW * 0.36), (p.def.fw * TW * 0.17), 0, 0, Math.PI * 2);
+        ctx.ellipse(c.x, anchorY - 1, frx * 0.62, TH * 0.30, 0, 0, Math.PI * 2);
         ctx.fill();
+        ctx.globalAlpha = alpha;
 
         if (p.item === 'hearth_brick') await drawHearth(ctx, spr, c, anchorY, frame, seed, w, h, drop);
         else if (p.item === 'cauldron') await drawCauldron(ctx, spr, c, anchorY, frame, seed, w, h, drop);
