@@ -10,7 +10,7 @@ const path = require('path');
 const fs = require('fs');
 
 process.env.QA_MODE = '1';
-const repo = '/home/z/my-project/repo';
+const repo = process.env.QA_REPO || path.join(__dirname, '..');
 
 let pass = 0, fail = 0;
 function ok(cond, label) {
