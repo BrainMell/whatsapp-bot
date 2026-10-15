@@ -14209,6 +14209,42 @@ Usage: ${newUsage}/5${warningText}`;
                   }
 
                   // ============================================
+                  // HOMESTEAD — isometric house builder (base builder)
+                  // ============================================
+
+                  // --- COMMAND: `.home` / `.base` (homestead house builder) ---
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} home` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} home `) ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} base` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} base `)
+                  ) {
+                    try {
+                      await require("./rpg/homestead").handleCommand({
+                        sock,
+                        chatId,
+                        senderJid,
+                        m,
+                        reply,
+                        text: lowerTxt,
+                        rawText: txt,
+                        prefix: botConfig.getPrefix(),
+                      });
+                    } catch (homesteadErr) {
+                      console.error(
+                        "[homestead] dispatch error:",
+                        homesteadErr.message,
+                      );
+                      try {
+                        await reply(
+                          "🔥 The homestead module stumbled — try again shortly.",
+                        );
+                      } catch (e2) {}
+                    }
+                    return;
+                  }
+
+                  // ============================================
                   // STICKER CONVERSION COMMANDS
                   // ============================================
 
