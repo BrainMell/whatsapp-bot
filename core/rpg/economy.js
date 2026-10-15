@@ -224,22 +224,109 @@ function jsonNorm(v) {
     if (v === undefined) return null;
     try { return JSON.parse(JSON.stringify(v)); } catch (e) { return String(v); }
 }
+
+// ── LEAF-LEVEL MERGE (2026-10-15, owner: "crafted items keeps going backwards") ──
+// The 10-05 guard merged at TOP-LEVEL field granularity and the 10-11 fix
+// diffed writes at TOP-LEVEL too. That still let a sibling's whole `stats`
+// object (mutated every 60s regen tick / hospital bookkeeping) overwrite
+// ANOTHER instance's mission-counter increments inside the same object:
+// thefirstloser's itemsCrafted snapped back to 5 on every craft while
+// jake/subaru ping-ponged whole-doc stats with joker (merge logs 11:11 /
+// 11:25 / 11:30 overlay: [.. stats]). Fix: merge + diff PLAIN-OBJECT fields
+// at LEAF (dot-path) granularity — each side's changed leaves coexist.
+// Scalars / arrays / Dates / Maps / Buffer / ObjectId stay WHOLE-FIELD
+// leaves exactly as before (a changed Map still overlays wholesale).
+function isMergeLeaf(v) {
+    return v === null || typeof v !== 'object' || Array.isArray(v)
+        || v instanceof Date || v instanceof Map || typeof Buffer !== 'undefined' && v instanceof Buffer
+        || (v && typeof v === 'object' && typeof v._bsontype === 'string');
+}
+function isPlainEmpty(v) {
+    return v !== null && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Date)
+        && !(v instanceof Map) && Object.getPrototypeOf(v) === Object.prototype && Object.keys(v).length === 0;
+}
+// flatten a plain-object tree into dot-path leaves; arrays/Dates/Maps/etc
+// become single leaves at their own path; an EMPTY plain object becomes an
+// explicit leaf ({} so "we cleared this object" survives the merge)
+function flattenLeaves(v, prefix, out) {
+    if (isMergeLeaf(v)) { if (prefix) out[prefix] = v; return out; }
+    const keys = Object.keys(v);
+    if (!keys.length) { if (prefix) out[prefix] = {}; return out; }
+    for (const k of keys) flattenLeaves(v[k], prefix ? prefix + '.' + k : k, out);
+    return out;
+}
+// rebuild a nested doc from dot-path leaves; deeper paths win over shallower
+// scalars (shape-drift guard) by applying shallow paths first
+function unflattenLeaves(flat) {
+    const root = {};
+    const paths = Object.keys(flat).sort((a, b) => a.split('.').length - b.split('.').length);
+    for (const path of paths) {
+        const segs = path.split('.');
+        let cur = root;
+        for (let i = 0; i < segs.length - 1; i++) {
+            const nxt = cur[segs[i]];
+            if (nxt === null || typeof nxt !== 'object' || Array.isArray(nxt) || nxt instanceof Date) cur[segs[i]] = {};
+            cur = cur[segs[i]];
+        }
+        cur[segs[segs.length - 1]] = flat[path];
+    }
+    return root;
+}
 // theirs (live DB doc) is the base — it holds the newest data by
-// definition; overlay only what WE changed since the shared sync point.
+// definition; overlay only the LEAVES we changed since the shared sync point.
 function threeWayMerge(ours, base, theirs) {
-    const merged = {};
-    for (const k of Object.keys(theirs)) {
-        if (META_STRIP.includes(k)) continue;
-        merged[k] = theirs[k];
-    }
-    for (const k of Object.keys(ours)) {
-        if (META_STRIP.includes(k)) continue;
-        if (!Object.prototype.hasOwnProperty.call(base, k)) { merged[k] = ours[k]; continue; }
+    const flatT = flattenLeaves(stripMeta(theirs), '', {});
+    const flatB = flattenLeaves(stripMeta(base), '', {});
+    const flatO = flattenLeaves(stripMeta(ours), '', {});
+    const mergedFlat = { ...flatT };
+    for (const path of Object.keys(flatO)) {
+        if (!Object.prototype.hasOwnProperty.call(flatB, path)) { mergedFlat[path] = flatO[path]; continue; }
         let same = false;
-        try { same = isDeepStrictEqual(jsonNorm(ours[k]), base[k] === undefined ? null : base[k]); } catch (e) { same = false; }
-        if (!same) merged[k] = ours[k]; // genuinely changed by us → ours wins
+        try { same = isDeepStrictEqual(jsonNorm(flatO[path]), jsonNorm(flatB[path])); } catch (e) { same = false; }
+        if (!same) mergedFlat[path] = flatO[path]; // genuinely changed by us → ours wins
     }
-    return merged;
+    // empty-object clears by us: ours.p = {} wipes theirs' p.* leaves
+    for (const path of Object.keys(flatO)) {
+        if (isPlainEmpty(flatO[path])) {
+            for (const tp of Object.keys(mergedFlat)) if (tp.startsWith(path + '.')) delete mergedFlat[tp];
+            mergedFlat[path] = {};
+        }
+    }
+    // subfield deletions by us: leaf known to base, gone from ours, while the
+    // parent object still exists in ours (a real delete, not a "sibling added
+    // this after our sync" — the latter never appears in base). After flattening,
+    // intermediate objects only appear as keys when EMPTY, so "parent still
+    // present" = any flatO key equal to the parent or nested under it.
+    for (const path of Object.keys(flatB)) {
+        if (path in flatO) continue;
+        const idx = path.lastIndexOf('.');
+        const parent = idx === -1 ? '' : path.slice(0, idx);
+        const hasParent = parent === '' || Object.keys(flatO).some(k => k === parent || k.startsWith(parent + '.'));
+        if (hasParent) delete mergedFlat[path];
+    }
+    return unflattenLeaves(mergedFlat);
+}
+// leaf diff of OUR payload vs OUR baseline → dot-path $set / $unset for a
+// minimal, sibling-safe write (extends the 2026-10-11 top-level diff)
+function leafDiff(ours, base) {
+    const flatP = flattenLeaves(stripMeta(ours), '', {});
+    const flatB = flattenLeaves(stripMeta(base), '', {});
+    const writeSet = {};
+    for (const path of Object.keys(flatP)) {
+        if (!Object.prototype.hasOwnProperty.call(flatB, path)) { writeSet[path] = flatP[path]; continue; }
+        let same = false;
+        try { same = isDeepStrictEqual(jsonNorm(flatP[path]), jsonNorm(flatB[path])); } catch (e) { same = false; }
+        if (!same) writeSet[path] = flatP[path];
+    }
+    const unsetSet = {};
+    for (const path of Object.keys(flatB)) {
+        if (path in flatP) continue;
+        const idx = path.lastIndexOf('.');
+        const parent = idx === -1 ? '' : path.slice(0, idx);
+        const hasParent = parent === '' || Object.keys(flatP).some(k => k === parent || k.startsWith(parent + '.'));
+        if (hasParent) unsetSet[path] = "";
+    }
+    return { writeSet, unsetSet };
 }
 
 // NEW: Save specific user to MongoDB (Background Sync)
@@ -284,8 +371,13 @@ async function saveUser(userId) {
                 try { base = JSON.parse(meta.baseJson || '{}'); } catch (e) { base = {}; }
                 payload = threeWayMerge(payload, base, live);
                 merged = true;
-                const oursKept = Object.keys(payload).filter((k) => !(k in live) || !isDeepStrictEqual(jsonNorm(live[k] === undefined ? null : live[k]), payload[k] === undefined ? null : payload[k]));
-                console.log(`🔀 [economy] stale-guard merge for ${canonicalId}: sibling wrote newer doc (${live.updatedAt.toISOString()} > sync ${meta.syncedAt.toISOString()}) — DB kept as base, our changed fields overlay: [${oursKept.slice(0, 12).join(', ')}${oursKept.length > 12 ? ', …' : ''}]`);
+                // 2026-10-15: log at LEAF granularity so the forensic trail
+                // shows exactly which dot-paths our side kept (was top-level
+                // fields like "stats" — hid sibling-clobber damage)
+                const flatLive = flattenLeaves(stripMeta(live), '', {});
+                const flatPayload = flattenLeaves(stripMeta(payload), '', {});
+                const oursKept = Object.keys(flatPayload).filter((k) => !(k in flatLive) || !isDeepStrictEqual(jsonNorm(flatLive[k] === undefined ? null : flatLive[k]), jsonNorm(flatPayload[k] === undefined ? null : flatPayload[k])));
+                console.log(`🔀 [economy] stale-guard merge for ${canonicalId}: sibling wrote newer doc (${live.updatedAt.toISOString()} > sync ${meta.syncedAt.toISOString()}) — DB kept as base, our changed leaves overlay: [${oursKept.slice(0, 12).join(', ')}${oursKept.length > 12 ? ', …' : ''}]`);
             }
         }
 
@@ -313,19 +405,14 @@ async function saveUser(userId) {
         let base = {};
         if (meta) {
             try { base = JSON.parse(meta.baseJson || '{}'); } catch (e) { base = {}; }
-            writeSet = {};
-            for (const k of Object.keys(payload)) {
-                if (!Object.prototype.hasOwnProperty.call(base, k)) {
-                    writeSet[k] = payload[k]; // added by us
-                    continue;
-                }
-                let same = false;
-                try { same = isDeepStrictEqual(jsonNorm(payload[k]), base[k] === undefined ? null : base[k]); } catch (e) { same = false; }
-                if (!same) writeSet[k] = payload[k]; // genuinely changed by us
-            }
-            for (const k of Object.keys(base)) {
-                if (!Object.prototype.hasOwnProperty.call(payload, k)) unsetSet[k] = "";
-            }
+            // 2026-10-15: leaf-level diff — write ONLY the dot-paths this
+            // process actually changed since its baseline. A stale cache now
+            // writes an EMPTY diff for untouched fields even INSIDE shared
+            // objects like stats/progression, so it can never revert a leaf
+            // it didn't modify (the itemsCrafted snap-back class).
+            const ld = leafDiff(payload, base);
+            writeSet = ld.writeSet;
+            unsetSet = ld.unsetSet;
         } else {
             // no baseline (runtime-created user / unserializable snapshot):
             // behave exactly as before (whole doc). New users have no
@@ -2834,6 +2921,12 @@ function clearDebt(userId) {
 //========================================
 
 module.exports = {
+  // 💡 2026-10-15: leaf-level merge/diff helpers exported for the stale-guard
+  // QA harness (scripts/qa_leaf_merge.js) — pure functions, no side effects
+  threeWayMerge,
+  leafDiff,
+  flattenLeaves,
+  unflattenLeaves,
   getZENI,
   STARTING_BALANCE,
   getPlaceholderPFP,
