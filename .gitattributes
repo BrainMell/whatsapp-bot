@@ -59,3 +59,8 @@ core/rpgasset/skills/manifest.json -filter -diff -merge -text
 core/rpgasset/v3/**/*.png -filter -diff -merge -text
 core/rpgasset/v3/manifest.json -filter -diff -merge -text
 core/rpgasset/v3/skill_index.json -filter -diff -merge -text
+# base builder (`.j base`): every asset must be real pixels — the renderer
+# composites these on demand and the boxes deploy via fetch + reset --hard
+core/rpgasset/base/*.png -filter -diff -merge -text
+core/rpgasset/base/*.jpg -filter -diff -merge -text
+core/rpgasset/base/*.ttf -filter -diff -merge -text
