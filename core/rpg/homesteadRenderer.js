@@ -406,7 +406,13 @@ async function renderFrame(state, frame, opts = {}) {
         if (!spr) continue;
         const c = footCenter(p.x, p.y, p.def.fw, p.def.fh);
         const w = spr.width * 2, h = spr.height * 2;
-        const anchorY = c.y + TH / 2 - 2;
+        // FIX 2026-10-15 (owner: 'some of the furniture appears to be floating'): the old
+        // anchor (footprint south-edge midpoint + 14) ignores footprint size, so every item
+        // hovered (fw+fh)*16-14px above its own tile diamond - 18px for 1x1 props (masked by
+        // the fat contact shadow) and 34px+ for beds/tables/wardrobes (obvious float).
+        // Anchor the sprite base to the footprint's SOUTH VERTEX instead: the iso diamond's
+        // lowest painted point, where a piece standing on those tiles actually lands.
+        const anchorY = c.y + (p.def.fw + p.def.fh) * (TH / 2) - 2;
 
         // placement pop-in
         let drop = 0, alpha = 1;
