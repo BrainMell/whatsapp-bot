@@ -14217,7 +14217,9 @@ Usage: ${newUsage}/5${warningText}`;
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} home` ||
                     lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} home `) ||
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} base` ||
-                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} base `)
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} base `) ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} homestead` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} homestead `)
                   ) {
                     try {
                       await require("./rpg/homestead").handleCommand({

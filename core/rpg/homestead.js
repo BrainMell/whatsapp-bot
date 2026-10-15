@@ -118,13 +118,21 @@ async function loadRec(userId) {
     let rec = await Homestead.findOne({ userId }).lean();
     if (!rec) {
         // first open: seed the starter homestead
-        const doc = await Homestead.findOneAndUpdate(
+        // 💡 mongoose 9: `new: true` is deprecated (warning + future removal) —
+        // returnDocument: 'after' is the correct API. Belt-and-braces: if the
+        // returned doc is ever null/empty (driver quirk), re-read by userId so
+        // the caller can NEVER see a null rec (that used to crash viewRoom).
+        let doc = await Homestead.findOneAndUpdate(
             { userId },
             { $setOnInsert: { userId, theme: 'oakhaven', themesOwned: ['oakhaven'], owned: [...STARTER_OWNED], placed: [...STARTER_PLACED] } },
-            { new: true, upsert: true },
+            { upsert: true, returnDocument: 'after' },
         ).lean();
+        if (!doc || !doc.placed) {
+            doc = await Homestead.findOne({ userId }).lean();
+        }
         rec = doc;
     }
+    if (!rec) throw new Error('homestead record could not be created — try again');
     rec.placed = (rec.placed || []).filter((p) => renderer.itemDef(p.item));
     rec.owned = (rec.owned || []).filter((id) => renderer.itemDef(id));
     rec.themesOwned = (rec.themesOwned || []).filter((t) => renderer.THEMES[t]);
@@ -150,9 +158,11 @@ function itemName(it) { return `${RARITY_STAR[it.rarity] || '⚪'} *${it.name}*`
 async function viewRoom(ctx, rec, opts = {}) {
     const { sock, chatId, reply } = ctx;
     if (renderLocks.has(rec.userId)) {
+        console.log(`[homestead] render lock held for ${rec.userId} — replying ⏳`);
         return reply('⏳ Your homestead portrait is still being painted — one moment, try again in a few seconds.');
     }
     renderLocks.add(rec.userId);
+    console.log(`[homestead] render start for ${rec.userId} (${rec.placed.length} placed, theme=${rec.theme})`);
     try {
         // immediate feedback — first render can take ~15-20s on box hardware
         try {
@@ -163,7 +173,26 @@ async function viewRoom(ctx, rec, opts = {}) {
             theme: rec.theme,
             placed: rec.placed,
         };
-        const media = await renderer.renderRoomImage(state, { pop: opts.pop || null, hint: opts.hint });
+        // 💡 RENDER WATCHDOG: a hung render used to swallow the command
+        // silently (no reply, lock stuck, every retry told "still painting").
+        // Race the render against 90s; on stall release the lock, log loudly
+        // and tell the user instead of ghosting.
+        let media;
+        try {
+            let watchdogTimer;
+            media = await Promise.race([
+                renderer.renderRoomImage(state, { pop: opts.pop || null, hint: opts.hint }),
+                new Promise((_, reject) => {
+                    watchdogTimer = setTimeout(() => reject(new Error('render watchdog: room render exceeded 90s')), 90000);
+                    if (watchdogTimer.unref) watchdogTimer.unref();
+                }),
+            ]);
+            if (watchdogTimer) clearTimeout(watchdogTimer);
+        } catch (renderErr) {
+            console.error('[homestead] render failed/stalled:', renderErr.message);
+            return reply(`🔥 The painter fell asleep at the easel (render stalled). Try \`${ctx.prefix} home\` once more in a minute.`);
+        }
+        console.log(`[homestead] render done (${media.contentType}, ${media.buffer ? media.buffer.length : 0} bytes) — sending`);
         try {
             if (ctx.m?.key) await sock.sendMessage(chatId, { react: { text: '✅', key: ctx.m.key } });
         } catch (e) { /* best-effort */ }
@@ -173,13 +202,19 @@ async function viewRoom(ctx, rec, opts = {}) {
             `♥ Comfort *${comfort}*  •  🪑 ${rec.placed.length} pieces placed  •  📦 ${rec.owned.length} in storage\n` +
             (opts.pop ? `✨ The *${(renderer.itemDef(opts.pop.item) || {}).name}* was placed!\n` : '') +
             `\n_${opts.hint || '.home place <item> • .home catalog • .home help'}_`;
-        if (media.contentType === 'video/mp4') {
-            await sock.sendMessage(chatId, { video: media.buffer, gifPlayback: true, caption: cap }, { quoted: ctx.m });
-        } else {
-            await sock.sendMessage(chatId, { image: media.buffer, caption: cap }, { quoted: ctx.m });
+        try {
+            if (media.contentType === 'video/mp4') {
+                await sock.sendMessage(chatId, { video: media.buffer, gifPlayback: true, caption: cap }, { quoted: ctx.m });
+            } else {
+                await sock.sendMessage(chatId, { image: media.buffer, caption: cap }, { quoted: ctx.m });
+            }
+        } catch (sendErr) {
+            console.error('[homestead] media send failed:', sendErr.message);
+            return reply(`🏠 The portrait is painted but WhatsApp refused delivery (${String(sendErr.message).slice(0, 60)}). Try again shortly.`);
         }
     } finally {
         renderLocks.delete(rec.userId);
+        console.log(`[homestead] render lock released for ${rec.userId}`);
     }
 }
 
@@ -354,10 +389,23 @@ function cmdHelp(ctx) {
 //   text = full lowercased command text (".home place bed 3 4")
 // ═══════════════════════════════════════════════════════════════════════════
 async function handleCommand(ctx) {
-    const tokens = String(ctx.text || '').trim().split(/\s+/).filter(Boolean);
-    // tokens[0] = ".home" / ".base" / "home"/"base" (prefix-stripped variants)
-    const sub = (tokens[1] || '').toLowerCase();
-    const args = tokens.slice(2);
+    // 💡 FIX (owner "home commands don't work"): the engine passes the FULL
+    // lowercased text (".j home place bed") while this module was tokenized
+    // for prefix-stripped forms (".home place bed" / "home place bed").
+    // With joker's two-token prefix, tokens[1] was the command WORD itself
+    // ('home'), so every invocation fell into the unknown-command reply and
+    // viewRoom/catalog/buy never ran. Normalize here: strip a leading
+    // prefix-token ('.j', '.jk', '!' ...) and then the command word
+    // ('home'/'base'), whichever forms are present.
+    let tokens = String(ctx.text || '').trim().split(/\s+/).filter(Boolean);
+    if (tokens.length && /^[.!/?#]/.test(tokens[0]) && !/^(home|base)\b/i.test(tokens[0])) {
+        tokens = tokens.slice(1);
+    }
+    if (tokens.length && /^(home|base)\.?$/i.test(tokens[0])) {
+        tokens = tokens.slice(1);
+    }
+    const sub = (tokens[0] || '').toLowerCase();
+    const args = tokens.slice(1);
 
     if (!economy.isRegistered(ctx.senderJid)) {
         return ctx.reply(`❌ You need to register first!\n\nType: \`${ctx.prefix} register <nickname>\``);
@@ -367,7 +415,7 @@ async function handleCommand(ctx) {
 
     try {
         switch (sub) {
-            case '': case 'view': case 'room': case 'my':
+            case '': case 'view': case 'room': case 'my': case 'homestead': case 'house':
                 return viewRoom(ctx, rec, {});
             case 'catalog': case 'shop': case 'furni':
                 return cmdCatalog(ctx, rec, args);
