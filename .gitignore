@@ -78,3 +78,6 @@ core/data/quiz_audio_cache/
 
 # preleaf-conflict backup artifacts (2026-10-16): deliberate .before-style backups, never tracked
 *.preleafconflict-*
+
+# baked render media disk cache (2026-10-16): runtime-generated mp4/png per stateHash, survives deploys as untracked, never tracked
+media_cache/

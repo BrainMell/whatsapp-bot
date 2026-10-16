@@ -14,6 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const isoShadow = require('./isoShadow');
+const mediaCache = require('./mediaCache');
 
 const SS = 2;
 const TW = 64, TH = 32;
@@ -576,18 +577,21 @@ async function renderGuildBaseImage(state, opts = {}) {
     const key = stateHash(state, opts);
     const hit = _renderCache.get(key);
     if (hit && (Date.now() - hit.ts) < CACHE_TTL) return hit;
-    const frames = [];
-    const frameCount = opts.static === false ? FRAMES : 1;
-    for (let f = 0; f < frameCount; f++) frames.push(await renderFrame(state, f, opts));
-    let out = { buffer: frames[0], contentType: 'image/png' };
-    if (frameCount > 1) {
-        try {
-            const mp4 = await encodeFramesToMp4(frames);
-            if (mp4 && mp4.length > 1000) out = { buffer: mp4, contentType: 'video/mp4' };
-        } catch (e) {
-            console.error('[guildBaseRenderer] mp4 encode failed, PNG fallback:', e.message);
+    const out = await mediaCache.cached('guildbase', key, async () => {
+        const frames = [];
+        const frameCount = opts.static === false ? FRAMES : 1;
+        for (let f = 0; f < frameCount; f++) frames.push(await renderFrame(state, f, opts));
+        let out = { buffer: frames[0], contentType: 'image/png' };
+        if (frameCount > 1) {
+            try {
+                const mp4 = await encodeFramesToMp4(frames);
+                if (mp4 && mp4.length > 1000) out = { buffer: mp4, contentType: 'video/mp4' };
+            } catch (e) {
+                console.error('[guildBaseRenderer] mp4 encode failed, PNG fallback:', e.message);
+            }
         }
-    }
+        return out;
+    });
     if (_renderCache.size > 120) _renderCache.clear();
     _renderCache.set(key, { ...out, ts: Date.now() });
     return out;

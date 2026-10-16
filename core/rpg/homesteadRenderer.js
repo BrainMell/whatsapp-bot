@@ -23,6 +23,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const isoShadow = require('./isoShadow');
+const mediaCache = require('./mediaCache');
 
 // ── world constants ──
 const SS = 2;               // supersample (device px per art px)
@@ -741,25 +742,32 @@ function stateHash(state, opts = {}) {
     return hashStr(JSON.stringify([state.owner, state.theme, state.placed, opts.pop || null, opts.hint || '', opts.grid || null, opts.static ? 1 : 0]));
 }
 
-// Media matrix (owner 2026-10-15 "rpg_base_building_redesign.md" §6):
-//   viewing / browsing / grids  → STATIC image card (opts.static, frame 0)
-//   successful placement (pop)  → ANIMATED GIF (full frames + mp4)
+// Media matrix (owner 2026-10-16 10:09Z "bring gifs back and make the
+// generation faster" — restores the agreed law, supersedes the 10-15 static
+// matrix): the ROOM VIEW is an ANIMATED GIF again (hearth/cauldron/torches
+// idle); placement grids (select/move/rotate) stay STATIC 1-frame cards for
+// snappy placement feedback; successful placement (pop) → ANIMATED GIF.
+// Speed: the bake is disk-cached per stateHash (mediaCache.js) — first view
+// renders, every repeat is an instant disk read even across restarts.
 async function renderRoomImage(state, opts = {}) {
     const key = stateHash(state, opts);
     const hit = _renderCache.get(key);
     if (hit && (Date.now() - hit.ts) < CACHE_TTL) return hit;
-    const frames = [];
-    const frameCount = opts.static ? 1 : FRAMES;
-    for (let f = 0; f < frameCount; f++) frames.push(await renderFrame(state, f, opts));
-    let out = { buffer: frames[0], contentType: 'image/png' };
-    if (!opts.static) {
-        try {
-            const mp4 = await encodeFramesToMp4(frames);
-            if (mp4 && mp4.length > 1000) out = { buffer: mp4, contentType: 'video/mp4' };
-        } catch (e) {
-            console.error('[homesteadRenderer] mp4 encode failed, PNG fallback:', e.message);
+    const out = await mediaCache.cached('room', key, async () => {
+        const frames = [];
+        const frameCount = opts.static ? 1 : FRAMES;
+        for (let f = 0; f < frameCount; f++) frames.push(await renderFrame(state, f, opts));
+        let out = { buffer: frames[0], contentType: 'image/png' };
+        if (!opts.static) {
+            try {
+                const mp4 = await encodeFramesToMp4(frames);
+                if (mp4 && mp4.length > 1000) out = { buffer: mp4, contentType: 'video/mp4' };
+            } catch (e) {
+                console.error('[homesteadRenderer] mp4 encode failed, PNG fallback:', e.message);
+            }
         }
-    }
+        return out;
+    });
     if (_renderCache.size > 120) _renderCache.clear();
     _renderCache.set(key, { ...out, ts: Date.now() });
     return out;

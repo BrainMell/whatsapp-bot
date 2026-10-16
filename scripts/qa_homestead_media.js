@@ -4,7 +4,10 @@
 // "rpg_base_building_redesign.md" §5/§6, DM: "the main issue with the
 // interior view of the house is just the name of furniture thing the gif
 // image card alteration thing")
-//   §6 matrix: view/select/move/rotate/theme → STATIC image card
+//   §6 matrix (owner 2026-10-16 10:09Z "bring gifs back and make the
+//              generation faster"): base map view + house interior view →
+//              ANIMATED GIF again (house idle / home = GIF); placement
+//              grids (select/move/rotate) stay STATIC for snappy feedback;
 //              successful placement / build / upgrade → ANIMATED GIF
 //   §5: .home select (bare) → NAMES card of owned furniture (placed/storage)
 //       .home select <storage piece> → placement-mode grid + suggested spot
@@ -75,16 +78,16 @@ function ok(cond, label) {
     ok(last((s) => (s.caption || '')).includes('Your Furniture'), 'names card caption present');
     ok(!sent.some(isGif), 'names card is NOT an animated gif');
 
-    console.log('\n══ 2. §6 STATIC matrix — interior views ══');
-    // seed the base first, then enter the house interior: view → static
+    console.log('\n══ 2. §6 GIF matrix — base idle + house interior views ══');
+    // seed the base first, then enter the house interior: view → ANIMATED
     sent.length = 0;
     ctx.text = '.j base'; await homestead.handleCommand(ctx);
-    ok(sent.some(isStaticImage), 'base map view = static image card');
-    ok(!sent.some(isGif), 'base map view is NOT animated');
+    ok(sent.some(isGif), 'base map view = ANIMATED gif (house idle)');
+    ok(!sent.some(isStaticImage), 'base map view is NOT a static card');
     sent.length = 0;
     ctx.text = '.j house 1'; await homestead.handleCommand(ctx);
-    ok(sent.some(isStaticImage), 'house interior view = static image card');
-    ok(!sent.some(isGif), 'house interior view is NOT animated');
+    ok(sent.some(isGif), 'house interior view = ANIMATED gif (home idle)');
+    ok(!sent.some(isStaticImage), 'house interior view is NOT a static card');
     // select a placed piece → grid preview static
     sent.length = 0;
     ctx.text = '.home select bed_bedroll'; await homestead.handleCommand(ctx);

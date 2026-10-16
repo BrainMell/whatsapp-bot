@@ -103,7 +103,7 @@ async function viewBase(ctx, opts = {}) {
     try {
         let watchdogTimer;
         media = await Promise.race([
-            renderer.renderBaseImage(state, { hint: opts.hint, static: !opts.celebrate }),
+            renderer.renderBaseImage(state, { hint: opts.hint, static: false }),
             new Promise((_, reject) => {
                 watchdogTimer = setTimeout(() => reject(new Error('render watchdog: base render exceeded 90s')), 90000);
                 if (watchdogTimer.unref) watchdogTimer.unref();

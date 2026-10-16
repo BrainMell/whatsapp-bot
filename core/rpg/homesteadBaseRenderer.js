@@ -12,6 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const isoShadow = require('./isoShadow');
+const mediaCache = require('./mediaCache');
 
 const SS = 2;
 const TW = 64, TH = 32;
@@ -444,24 +445,30 @@ function stateHash(state, opts = {}) {
     return hashStr(JSON.stringify([state.owner, state.structures, state.freePlots, opts.hint || '', opts.static ? 1 : 0]));
 }
 
-// Media matrix (owner "rpg_base_building_redesign.md" §6): base VIEW → static
-// image card; build/upgrade transformation → ANIMATED GIF (opts.celebrate).
+// Media matrix (owner 2026-10-16 10:09Z "bring gifs back and make the
+// generation faster"): the BASE VIEW ("house idle") is an ANIMATED GIF again
+// — water shimmer, forge/chimney smoke, gate torch, fireflies; build/upgrade
+// transformation stays ANIMATED (opts.celebrate). Speed: bake is disk-cached
+// per stateHash (mediaCache.js) — first view renders, repeats are instant.
 async function renderBaseImage(state, opts = {}) {
     const key = stateHash(state, opts);
     const hit = _renderCache.get(key);
     if (hit && (Date.now() - hit.ts) < CACHE_TTL) return hit;
-    const frames = [];
-    const frameCount = opts.static ? 1 : FRAMES;
-    for (let f = 0; f < frameCount; f++) frames.push(await renderFrame(state, f, opts));
-    let out = { buffer: frames[0], contentType: 'image/png' };
-    if (!opts.static) {
-        try {
-            const mp4 = await encodeFramesToMp4(frames);
-            if (mp4 && mp4.length > 1000) out = { buffer: mp4, contentType: 'video/mp4' };
-        } catch (e) {
-            console.error('[baseRenderer] mp4 encode failed, PNG fallback:', e.message);
+    const out = await mediaCache.cached('base', key, async () => {
+        const frames = [];
+        const frameCount = opts.static ? 1 : FRAMES;
+        for (let f = 0; f < frameCount; f++) frames.push(await renderFrame(state, f, opts));
+        let out = { buffer: frames[0], contentType: 'image/png' };
+        if (!opts.static) {
+            try {
+                const mp4 = await encodeFramesToMp4(frames);
+                if (mp4 && mp4.length > 1000) out = { buffer: mp4, contentType: 'video/mp4' };
+            } catch (e) {
+                console.error('[baseRenderer] mp4 encode failed, PNG fallback:', e.message);
+            }
         }
-    }
+        return out;
+    });
     if (_renderCache.size > 120) _renderCache.clear();
     _renderCache.set(key, { ...out, ts: Date.now() });
     return out;
