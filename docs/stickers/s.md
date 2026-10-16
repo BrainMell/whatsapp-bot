@@ -112,16 +112,21 @@ fs.writeFileSync(inputPath, buffer);
 ```javascript
 const customPack = system.get(`sticker_pack_name_${BOT_ID}`);
 const customAuthor = system.get(`sticker_author_name_${BOT_ID}`);
+// 2026-10-16: author prefers the stored profile name — media messages
+// frequently arrive with an empty pushName, which used to produce "… User".
+const stickerProfile = getUserProfile(senderJid);
 
 const sticker = new Sticker(buffer, {
   pack: customPack || `${botConfig.getBotName()} Pack 🃏`,
-  author: customAuthor || m.pushName || `${botConfig.getBotName()} User`,
+  author: customAuthor || stickerProfile?.whatsappName || m.pushName || `${botConfig.getBotName()} User`,
   type: StickerTypes.DEFAULT,
   quality: 70,
 });
 
 await sock.sendMessage(chatId, await sticker.toMessage(), { quoted: m });
 ```
+
+**Author resolution chain (2026-10-16):** `setauthor` override → `profile.whatsappName` → live `m.pushName` → `"<Bot> User"`. The same chain applies to the Pinterest search path (`.j s [count] <query>`), where the profile is resolved once per batch before the download loop. `profile.whatsappName` is kept in sync with the sender's WhatsApp display name on every message upstream, so it is stable even when the triggering media message carries no pushName.
 
 ---
 

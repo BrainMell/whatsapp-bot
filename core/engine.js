@@ -14849,9 +14849,23 @@ Usage: ${newUsage}/5${warningText}`;
                       const customPack = system.get(`sticker_pack_name_${BOT_ID}`);
                       const customAuthor = system.get(`sticker_author_name_${BOT_ID}`);
 
+                      // 💡 2026-10-16 owner ticket: sticker author prefers the
+                      // stored profile.whatsappName. Media messages often arrive
+                      // with an EMPTY pushName (reply-to-media, forwarded, some
+                      // clients) which used to fall through to "… User". The
+                      // profile field is kept in sync per-message upstream, so it
+                      // is both fresher than a missing pushName and stable across
+                      // device quirks. Chain: custom override > profile > live
+                      // pushName > bot default.
+                      const stickerProfile = getUserProfile(senderJid);
+
                       const sticker = new Sticker(buffer, {
                         pack: customPack || `${botConfig.getBotName()} Pack 🃏`,
-                        author: customAuthor || m.pushName || `${botConfig.getBotName()} User`,
+                        author:
+                          customAuthor ||
+                          stickerProfile?.whatsappName ||
+                          m.pushName ||
+                          `${botConfig.getBotName()} User`,
                         type: StickerTypes.DEFAULT, // FFmpeg already handled all geometry
                         quality: 70,
                       });
@@ -14943,6 +14957,9 @@ Usage: ${newUsage}/5${warningText}`;
                       const packName = `${searchTerm.charAt(0).toUpperCase() + searchTerm.slice(1)} Pack 🃏`;
                       const customPack = system.get(`sticker_pack_name_${BOT_ID}`);
                       const customAuthor = system.get(`sticker_author_name_${BOT_ID}`);
+                      // 💡 2026-10-16 owner ticket: resolve once per batch —
+                      // profile.whatsappName beats a missing pushName (see direct .j s path).
+                      const stickerProfile = getUserProfile(senderJid);
 
                       let successCount = 0;
                       let skippedTooBig = 0;
@@ -14992,10 +15009,16 @@ Usage: ${newUsage}/5${warningText}`;
                           const buffer = Buffer.from(response.data);
 
                           // Convert to sticker with CROPPED type
+                          // 💡 2026-10-16 owner ticket: same author chain as the
+                          // direct .j s path — profile.whatsappName beats a
+                          // possibly-missing pushName.
                           const sticker = new Sticker(buffer, {
                             pack: customPack || packName,
                             author:
-                              customAuthor || m.pushName || `${botConfig.getBotName()} User`,
+                              customAuthor ||
+                              stickerProfile?.whatsappName ||
+                              m.pushName ||
+                              `${botConfig.getBotName()} User`,
                             type: StickerTypes.CROPPED, // ✅ CHANGED FROM FULL TO CROPPED
                             quality: 70,
                           });
