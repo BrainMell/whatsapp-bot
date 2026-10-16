@@ -71,3 +71,10 @@ fx_captures/poll_votes.json
 fx_captures/poll_registry.json
 fx_captures/tap_state.json
 fx_captures/.catch_on
+
+# quiz runtime caches (2026-10-16): generated at runtime, phantom-diff noise (942 untracked on box1)
+data/quiz_cache/
+core/data/quiz_audio_cache/
+
+# preleaf-conflict backup artifacts (2026-10-16): deliberate .before-style backups, never tracked
+*.preleafconflict-*
