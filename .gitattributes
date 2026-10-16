@@ -63,3 +63,8 @@ core/rpgasset/v3/skill_index.json -filter -diff -merge -text
 # homestead sprites are stored RAW (offline bundle transport; LFS server unreachable) - fixes phantom-modified churn
 Core/rpgasset/homestead/*.png -filter -diff -merge -text
 core/rpgasset/homestead/*.png -filter -diff -merge -text
+
+# pixel forest set must be real bytes on both boxes (renderer reads them
+# raw; LFS pointers would blank every tree on a reset --hard deploy)
+core/rpgasset/homestead/px_*.png -filter -diff -merge -text
+core/rpgasset/homestead/px_*.png -text

@@ -22,17 +22,24 @@ const path = require('path');
 
 const ASSETS = path.join(__dirname, '..', 'rpgasset', 'homestead');
 
-// tree pool for the ring — [file, weight] (weight = relative pick chance)
+// tree pool for the ring — PIXEL SET (owner 2026-10-16 20:20Z: "could we
+// make the trees something else?? a different set of trees more pixel arty")
+// — chunky pixel sprites that match the pixel moss tiles. [file, weight]
 const RING_TREES = [
-    ['base_tree_pine.png', 3], ['forest_tree_pine2.png', 3], ['forest_tree_pine3.png', 2.5],
-    ['base_tree_oak.png', 3], ['forest_tree_oak2.png', 3], ['forest_tree_oak3.png', 2],
-    ['forest_tree_twisted.png', 0.8], ['forest_tree_dead.png', 0.7],
+    ['px_pine_a.png', 3], ['px_pine_b.png', 2.5], ['px_pine_c.png', 2],
+    ['px_oak_a.png', 3], ['px_oak_b.png', 2.5],
+    ['px_birch.png', 1.6], ['px_dead.png', 0.7], ['px_stump.png', 0.4],
 ];
-// understory pool — small ground clutter
+// understory pool — small ground clutter (pixel set)
 const UNDERSTORY = [
-    ['forest_fern.png', 4], ['forest_grass_tuft.png', 5], ['forest_mushroom.png', 2],
-    ['forest_mushroom2.png', 1.5], ['forest_bush2.png', 2.5], ['base_bush.png', 2],
-    ['forest_plant.png', 1.5], ['forest_rock2.png', 1.2], ['base_boulder.png', 0.8],
+    ['px_fern.png', 4], ['px_tuft.png', 5], ['px_shroom.png', 2],
+    ['px_bush_a.png', 2.5], ['px_bush_b.png', 2],
+    ['px_rock.png', 1.4], ['px_boulder.png', 0.9],
+];
+// deep-margin conifers — far ring outside the wall + backdrop treelines
+const FAR_TREES = [
+    ['px_conifer_a.png', 3], ['px_conifer_b.png', 2.2],
+    ['px_pine_a.png', 1.2], ['px_pine_b.png', 1.0],
 ];
 
 function mulberry32(seed) {
@@ -122,7 +129,7 @@ async function paintBackdrop(ctx, W, H, frame, FRAMES, horizonY, islandBottomY) 
     const drift = (frame / FRAMES) * 6; // ultra-slow sway illusion via offset per row
     for (let ri = 0; ri < rows.length; ri++) {
         const row = rows[ri];
-        const files = ['base_tree_pine.png', 'forest_tree_pine2.png', 'base_tree_oak.png', 'forest_tree_oak2.png', 'forest_tree_pine3.png', 'forest_tree_oak3.png'];
+        const files = FAR_TREES.map(([f]) => f);
         const rnd = mulberry32(101 + ri * 7);
         const rowW = W + 120;
         for (let x = -60 + drift * (ri + 1) * 0.4; x < rowW; x += row.step * (0.8 + rnd() * 0.5)) {
@@ -203,19 +210,26 @@ function islandForest(opts) {
     // the dense tree wall plants OUTSIDE the playable ring (cells -1 and N),
     // and the former in-map border ring drops to mid density so playable
     // cells stop being eaten by trees.
-    const lo = margin ? -1 : 0, hi = margin ? N : N - 1;
+    const lo = margin ? -2 : 0, hi = margin ? N + 1 : N - 1;
     for (let x = lo; x <= hi; x++) {
         for (let y = lo; y <= hi; y++) {
             const key = `${x},${y}`;
             const outside = x < 0 || y < 0 || x >= N || y >= N;
             if (outside && !margin) continue;
+            const far = x <= -2 || y <= -2 || x >= N + 1 || y >= N + 1;
             const inMapBorder = (x === 0 || y === 0 || x === N - 1 || y === N - 1);
             const border = outside || (!margin && inMapBorder);
-            const mid = !border && (x === 1 || y === 1 || x === N - 2 || y === N - 2 || (margin && inMapBorder));
+            const mid = !border && !far && (x === 1 || y === 1 || x === N - 2 || y === N - 2 || (margin && inMapBorder));
             if (blocked.has(key)) continue;
             const px = isoX(x + 0.5, y + 0.5);
             const py = isoY(x + 0.5, y + 0.5);
-            if (border) {
+            if (far) {
+                // far wilderness ring (owner 20:20Z: "improve the
+                // environmental ones outside the tree wall") — dark conifers
+                // fading toward the backdrop, scattered wild clutter
+                if (rnd() < 0.55) out.push({ file: pickWeighted(rnd, FAR_TREES), x: px + jitter(56), y: py + jitter(18) + 6, sc: 0.4 + rnd() * 0.16 });
+                if (rnd() < 0.10) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(40), y: py + jitter(14) + 8, sc: 0.85 });
+            } else if (border) {
                 if (outside) {
                     // margin wall — reads as forest EDGE, not a suffocating
                     // donut: 1 tree/tile + 45% second, scaled 0.58-0.78 so the
@@ -236,9 +250,11 @@ function islandForest(opts) {
                 if (rnd() < rate) out.push({ file: pickWeighted(rnd, RING_TREES), x: px + jitter(26), y: py + jitter(10) + 6 });
                 if (rnd() < 0.30) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(26), y: py + 8 });
             } else if (hotSet.has(key)) {
-                // clearing around the house — big trees standing right by it
-                if (rnd() < 0.5) out.push({ file: pickWeighted(rnd, RING_TREES), x: px + jitter(24), y: py + jitter(10) + 6 });
-                if (rnd() < 0.45) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(28), y: py + 8 });
+                // clearing around the house — trees beside it, never crowding
+                // the walls (owner 20:20Z: "houses seem to be on top of the
+                // trees") — lower rate, tighter outward jitter
+                if (rnd() < 0.42) out.push({ file: pickWeighted(rnd, RING_TREES), x: px + jitter(16), y: py + jitter(8) + 4, sc: 0.88 + rnd() * 0.14 });
+                if (rnd() < 0.40) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(24), y: py + 6 });
             } else {
                 if (rnd() < 0.17) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(28), y: py + 8 });
             }
@@ -247,4 +263,4 @@ function islandForest(opts) {
     return out;
 }
 
-module.exports = { paintBackdrop, islandForest, RING_TREES, UNDERSTORY, loadImg };
+module.exports = { paintBackdrop, islandForest, RING_TREES, UNDERSTORY, FAR_TREES, loadImg };

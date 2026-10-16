@@ -251,7 +251,7 @@ async function renderFrame(state, frame, opts = {}) {
                 if (mRnd() > 0.10) continue;
                 const px = isoX(x + 0.5, y + 0.5), py = isoY(x + 0.5, y + 0.5);
                 if (px < 0 || px > ART_W || py < 0 || py > ART_H) continue;
-                const f = mRnd() < 0.5 ? 'forest_fern.png' : (mRnd() < 0.75 ? 'forest_grass_tuft.png' : 'forest_mushroom.png');
+                const f = mRnd() < 0.34 ? 'px_fern.png' : (mRnd() < 0.55 ? 'px_tuft.png' : mRnd() < 0.70 ? 'px_shroom.png' : mRnd() < 0.82 ? 'px_rock.png' : mRnd() < 0.92 ? 'px_bush_b.png' : 'px_stump.png');
                 forestProps.push({ file: f, x: px, y: py });
             }
         }
@@ -277,11 +277,11 @@ async function renderFrame(state, frame, opts = {}) {
         const garnish = [];
         for (let i = 0; i < 6; i++) {
             const gx = mz.x + Math.floor(gRnd() * mz.fw), gy = mz.y + Math.floor(gRnd() * mz.fh);
-            if (zoneFree(gx, gy)) garnish.push({ file: gRnd() < 0.6 ? 'base_boulder.png' : 'forest_rock2.png', x: isoX(gx + 0.5, gy + 0.5) + (gRnd() - 0.5) * 30, y: isoY(gx + 0.5, gy + 0.5) + (gRnd() - 0.5) * 14 });
+            if (zoneFree(gx, gy)) garnish.push({ file: gRnd() < 0.6 ? 'px_boulder.png' : 'px_rock.png', x: isoX(gx + 0.5, gy + 0.5) + (gRnd() - 0.5) * 30, y: isoY(gx + 0.5, gy + 0.5) + (gRnd() - 0.5) * 14 });
         }
         for (let i = 0; i < 5; i++) {
             const gx = pz.x + Math.floor(gRnd() * pz.fw), gy = pz.y + Math.floor(gRnd() * pz.fh);
-            if (zoneFree(gx, gy)) garnish.push({ file: gRnd() < 0.55 ? 'forest_plant.png' : 'base_bush.png', x: isoX(gx + 0.5, gy + 0.5) + (gRnd() - 0.5) * 30, y: isoY(gx + 0.5, gy + 0.5) + (gRnd() - 0.5) * 14 });
+            if (zoneFree(gx, gy)) garnish.push({ file: gRnd() < 0.55 ? 'px_fern.png' : 'px_bush_a.png', x: isoX(gx + 0.5, gy + 0.5) + (gRnd() - 0.5) * 30, y: isoY(gx + 0.5, gy + 0.5) + (gRnd() - 0.5) * 14 });
         }
         for (const g of garnish) {
             const im = await img(g.file);
@@ -323,11 +323,18 @@ async function renderFrame(state, frame, opts = {}) {
         drawn.push({ st, spr, cx, ay, w: spr.width * sc, h: spr.height * sc, sc, lv });
     }
 
-    // props behind structures merge into the same depth pass (props have no footprint)
+    // props behind structures merge into the same depth pass.
+    // DEPTH LAW (fixes owner 20:20Z "houses seem to be on top of the trees"):
+    // a struct's depth is its footprint's SOUTH CORNER (the max x+y vertex —
+    // the point nearest the camera); a prop's depth is its anchor tile.
+    // +2 bias makes ties at the south corner resolve prop-in-front, so a
+    // tree's canopy may overlap a house base, never the reverse. The old
+    // sort compared structs' UNDEFINED .y -> NaN comparator -> arbitrary
+    // draw order, which let houses paint over trees standing in front.
     const drawables = [
-        ...props.map((p) => ({ kind: 'prop', x: p.x, y: p.y, img: p.img })),
-        ...drawn.map((d) => ({ kind: 'struct', ...d })),
-    ].sort((a, b) => (a.y) - (b.y));
+        ...props.map((p) => ({ kind: 'prop', depth: p.y, x: p.x, y: p.y, img: p.img, sc: p.sc || 1 })),
+        ...drawn.map((d) => ({ kind: 'struct', depth: isoY(d.st.x + d.st.def.fw, d.st.y + d.st.def.fh) + 2, ...d })),
+    ].sort((a, b) => a.depth - b.depth);
 
     // shadows first (floor level)
     for (const d of drawables) {
@@ -342,11 +349,11 @@ async function renderFrame(state, frame, opts = {}) {
             ax: d.cx, ay: d.ay, alpha: 1,
         });
     }
-    // sprites
+    // sprites (pixel-snap prop draw — keeps the chunky look crisp)
     for (const d of drawables) {
         if (d.kind === 'prop') {
             const pw = d.img.width * (d.sc || 1), ph = d.img.height * (d.sc || 1);
-            ctx.drawImage(d.img, d.x - pw / 2, d.y - ph, pw, ph);
+            ctx.drawImage(d.img, (d.x - pw / 2) | 0, (d.y - ph) | 0, pw | 0, ph | 0);
             continue;
         }
         ctx.drawImage(d.spr, d.cx - d.w / 2, d.ay - d.h, d.w, d.h);
