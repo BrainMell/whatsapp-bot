@@ -26,6 +26,24 @@ const ROOT = process.env.QA_MODE
 const CAP = 300; // per kind (mp4s ~260KB, png cards <1MB → ≤ ~300MB worst case)
 const MIN_SIZE = 500; // smaller than this is a broken render — never cache
 
+// CODE-VERSIONED CACHE KEY — 2026-10-16 incident: this disk cache survives
+// deploys BY DESIGN (untracked dir), and the ALL-FOREST art deploy (80d496cb)
+// landed while every repeat view kept serving bakes baked by the OLD code —
+// the owner's .j base kept showing the pre-forest island for hours (stale
+// mp4 from 11:50Z, deploy restart at 12:44Z). stateHash only hashes game
+// state, never the rendering code. Mixing the running code's git short-HEAD
+// into the key makes every code deploy invalidate every cached render
+// automatically — art changes can never again be masked by disk hits.
+// Non-git runtimes fall back to a bumped literal that can never collide with
+// the pre-fix key namespace.
+let CODE_VER = 'v2';
+try {
+    CODE_VER = `g${require('child_process').execSync('git rev-parse --short HEAD', {
+        cwd: repoRoot,
+        stdio: ['ignore', 'pipe', 'ignore'],
+    }).toString().trim()}`;
+} catch (e) { /* non-git runtime keeps 'v2' */ }
+
 function pathsFor(kind, key) {
     return {
         dir: path.join(ROOT, kind),
@@ -62,6 +80,7 @@ async function trim(kind) {
  *   miss: runs produce() once, stores the result, returns it unchanged.
  */
 async function cached(kind, key, produce) {
+    key = `${CODE_VER}_${key}`; // code-version prefix — see CODE-VERSIONED note above
     const { dir, data, meta } = pathsFor(kind, key);
     try {
         const [metaRaw, buf] = await Promise.all([
