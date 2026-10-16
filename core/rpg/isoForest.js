@@ -226,6 +226,13 @@ function islandForest(opts) {
     const rnd = mulberry32(hashStr(seed ^ 0x6d2b79f5));
     const out = [];
     const jitter = (m) => (rnd() - 0.5) * m;
+    // HAZE LAW (owner pre-restart promise: "everything behind [the fence] =
+    // dense hazed forest"): wild props outside the playable ring carry a tint
+    // the renderer applies via tinted() — deeper ring = darker, so the wilds
+    // recede behind the pixel fence line.
+    const haze = !!opts.haze;
+    const FAR_TINT = '#263d17';
+    const WALL_TINT = '#31491d';
 
     // margin mode (owner 2026-10-16: ground/world continues past the borders):
     // the dense tree wall plants OUTSIDE the playable ring (cells -1 and N),
@@ -248,16 +255,16 @@ function islandForest(opts) {
                 // far wilderness ring (owner 20:20Z: "improve the
                 // environmental ones outside the tree wall") — dark conifers
                 // fading toward the backdrop, scattered wild clutter
-                if (rnd() < 0.62) out.push({ file: pickWeighted(rnd, FAR_TREES), x: px + jitter(44), y: py + jitter(18) + 6, sc: 0.4 + rnd() * 0.16 });
-                if (rnd() < 0.12) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(40), y: py + jitter(14) + 8, sc: 0.85 });
+                if (rnd() < 0.62) out.push({ file: pickWeighted(rnd, FAR_TREES), x: px + jitter(44), y: py + jitter(18) + 6, sc: 0.4 + rnd() * 0.16, ...(haze ? { tint: FAR_TINT } : {}) });
+                if (rnd() < 0.12) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(40), y: py + jitter(14) + 8, sc: 0.85, ...(haze ? { tint: FAR_TINT } : {}) });
             } else if (border) {
                 if (outside) {
                     // margin wall — reads as forest EDGE, not a suffocating
                     // donut: 1 tree/tile + 45% second, scaled 0.58-0.78 so the
                     // playable map stays readable behind it
-                    out.push({ file: pickWeighted(rnd, RING_TREES), x: px + jitter(46), y: py + jitter(16) + 6, sc: 0.58 + rnd() * 0.2 });
-                    if (rnd() < 0.45) out.push({ file: pickWeighted(rnd, RING_TREES), x: px + jitter(46), y: py + jitter(16) + 6, sc: 0.58 + rnd() * 0.2 });
-                    if (rnd() < 0.30) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(34), y: py + jitter(12) + 8 });
+                    out.push({ file: pickWeighted(rnd, RING_TREES), x: px + jitter(46), y: py + jitter(16) + 6, sc: 0.58 + rnd() * 0.2, ...(haze ? { tint: WALL_TINT } : {}) });
+                    if (rnd() < 0.45) out.push({ file: pickWeighted(rnd, RING_TREES), x: px + jitter(46), y: py + jitter(16) + 6, sc: 0.58 + rnd() * 0.2, ...(haze ? { tint: WALL_TINT } : {}) });
+                    if (rnd() < 0.30) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(34), y: py + jitter(12) + 8, ...(haze ? { tint: WALL_TINT } : {}) });
                 } else {
                     // dense wall — 2 staggered trees per border tile
                     for (let k = 0; k < 2; k++) {
@@ -287,4 +294,28 @@ function islandForest(opts) {
     return out;
 }
 
-module.exports = { paintBackdrop, islandForest, RING_TREES, UNDERSTORY, FAR_TREES, loadImg };
+module.exports = { paintBackdrop, islandForest, fenceRing, RING_TREES, UNDERSTORY, FAR_TREES, loadImg, tinted };
+
+// ═══════════════════════════════════════════════════════════════════════
+// FENCE RING — pixel palisade placements around the playable diamond
+// (owner pre-restart promise: "tree wall comes out, pixel fence ring goes
+// in"). Two directional runs connect along the iso diagonals: px_fence_a
+// (north/south edges, along +x), px_fence_b (east/west edges, along +y).
+// Each placement is bottom-anchored ON the boundary line (y=0 / y=N /
+// x=0 / x=N), depth = anchor y so the depth sort slots fences naturally
+// between the map content and the wild margin behind them.
+// gates: [[x,y]...] BORDER TILE cells whose outward fence segment is left
+// open (the walk exits there) — base gate (5,15), guild gate (7,15).
+function fenceRing(N, isoX, isoY, gates = []) {
+    const out = [];
+    const gateSet = new Set(gates.map(([x, y]) => `${x},${y}`));
+    for (let x = 0; x < N; x++) {
+        if (!gateSet.has(`${x},0`)) out.push({ file: 'px_fence_a.png', x: isoX(x + 0.5, 0), y: isoY(x + 0.5, 0) + 4 });
+        if (!gateSet.has(`${x},${N - 1}`)) out.push({ file: 'px_fence_a.png', x: isoX(x + 0.5, N), y: isoY(x + 0.5, N) + 4 });
+    }
+    for (let y = 0; y < N; y++) {
+        if (!gateSet.has(`0,${y}`)) out.push({ file: 'px_fence_b.png', x: isoX(0, y + 0.5), y: isoY(0, y + 0.5) + 4 });
+        if (!gateSet.has(`${N - 1},${y}`)) out.push({ file: 'px_fence_b.png', x: isoX(N, y + 0.5), y: isoY(N, y + 0.5) + 4 });
+    }
+    return out;
+}

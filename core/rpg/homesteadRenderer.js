@@ -459,7 +459,11 @@ async function renderFrame(state, frame, opts = {}) {
             const fc = footCenter(opts.pop.from.x, opts.pop.from.y, d.p.def.fw, d.p.def.fh);
             const e = Math.min(1, t * 1.5);
             const k = 1 - Math.pow(1 - e, 3); // easeOutCubic
-            const hop = Math.sin(k * Math.PI) * 9; // little lift mid-slide
+            // owner 2026-10-16 21:23Z "if the destination is close ... it should
+            // just slide in from its last position": the lift mid-slide scales
+            // with distance — a close move is a FLAT glide, only long hauls hop
+            const slideDist = Math.hypot(d.c.x - fc.x, d.c.y - fc.y);
+            const hop = Math.sin(k * Math.PI) * Math.min(9, slideDist * 0.12);
             d.c = { x: fc.x + (d.c.x - fc.x) * k, y: fc.y + (d.c.y - fc.y) * k };
             d.anchorY = d.c.y + (d.p.def.fw + d.p.def.fh) * (TH / 4) - TH / 2 + 2 - hop;
             if (k < 1) {
@@ -487,7 +491,9 @@ async function renderFrame(state, frame, opts = {}) {
     // rhombi/ellipses that didn't fit the sprites.
     for (const d of drawn) {
         let sal = 1;
-        if (opts.pop && opts.pop.item === d.p.item && opts.pop.x === d.p.x && opts.pop.y === d.p.y) {
+        if (opts.pop && !opts.pop.from && opts.pop.item === d.p.item && opts.pop.x === d.p.x && opts.pop.y === d.p.y) {
+            // placement fades its shadow in; a SLIDE keeps its shadow riding
+            // along under the piece for the whole glide
             sal = Math.min(1, t * 4);
         }
         isoShadow.drawItemShadow(ctx, {
@@ -499,9 +505,11 @@ async function renderFrame(state, frame, opts = {}) {
     // ═══ SPRITES (depth-sorted back→front) ═══
     for (const d of drawn) {
         const { p, spr, c, anchorY, w, h } = d;
-        // placement pop-in
+        // placement pop-in — ONLY for real placements (no `from`): a slide
+        // must never also drop from above (owner 2026-10-16 21:23Z close-move
+        // law). rotate passes pop without `from` and keeps its turn-bounce.
         let drop = 0, alpha = 1;
-        if (opts.pop && opts.pop.item === p.item && opts.pop.x === p.x && opts.pop.y === p.y) {
+        if (opts.pop && !opts.pop.from && opts.pop.item === p.item && opts.pop.x === p.x && opts.pop.y === p.y) {
             const pt = Math.min(1, t * 2.2);
             const bounce = pt < 1 ? Math.abs(Math.cos(pt * Math.PI * 1.6)) * Math.pow(1 - pt, 1.6) : 0;
             drop = -(1 - pt) * 90 - bounce * 26;

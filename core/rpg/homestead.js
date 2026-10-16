@@ -375,11 +375,17 @@ async function cmdPlace(ctx, rec, args) {
         y = side.startsWith('r') ? 1 : 0;
         if (!canPlace(rec, x, y, it)) return ctx.reply('🚧 That banner slot is taken. Pick another wall index (1-10).');
     } else if (Number.isFinite(parseInt(args[1], 10)) && Number.isFinite(parseInt(args[2], 10))) {
-        x = parseInt(args[1], 10); y = parseInt(args[2], 10);
+        let rx = parseInt(args[1], 10); let ry = parseInt(args[2], 10);
+        // OFF-GRID CLAMP LAW (owner 2026-10-16 21:23Z "if the player goes off
+        // the grid"): snap the request into room bounds BEFORE the nearest-free
+        // spiral — an off-map coordinate settles flush at the nearest edge, and
+        // an overhanging 2x2 pulls inboard to sit flush, never an error.
+        const clx = Math.max(0, Math.min(N - it.fw, rx));
+        const cly = Math.max(0, Math.min(N - it.fh, ry));
         // §2: requested spot blocked → nearest fitting spot around it, never a rejection
-        const spot = findFreeNear(rec, it, x, y);
+        const spot = findFreeNear(rec, it, clx, cly);
         if (!spot) return ctx.reply('🏠 Nowhere in the room fits that piece right now — store something first: `.home store <x> <y>`');
-        if (spot.x !== x || spot.y !== y) relocated = spot;
+        if (spot.x !== rx || spot.y !== ry) relocated = spot;
         x = spot.x; y = spot.y;
     } else {
         const spot = findFreeSpot(rec, it);
@@ -398,7 +404,7 @@ async function cmdPlace(ctx, rec, args) {
     rec.placed = [...rec.placed, placedInst];
     if (pendingPlace.get(ctx.senderJid) === it.id) pendingPlace.delete(ctx.senderJid); // §5 placement mode satisfied
     const opts = { pop: { item: it.id, x, y } };
-    if (relocated) opts.hint = `(${args[1]},${args[2]}) was blocked — the *${it.name}* slid to (${x},${y}) instead.`;
+    if (relocated) opts.hint = `(${args[1]},${args[2]}) was blocked or off the grid — the *${it.name}* settled at (${x},${y}) instead.`;
     await viewRoom(ctx, { ...rec }, opts);
 }
 
@@ -512,7 +518,16 @@ async function cmdMoveTo(ctx, rec, args) {
     if (!Number.isFinite(tx) || !Number.isFinite(ty)) {
         return ctx.reply(`Usage: \`${ctx.prefix} home moveto <x> <y>\` — e.g. \`${ctx.prefix} home moveto 5 7\``);
     }
-    const spot = findFreeNear(rec, d, tx, ty, p.uid);
+    // OFF-GRID CLAMP LAW (owner 2026-10-16 21:23Z "if the player goes off the
+    // grid"): a request past the bounds snaps to the nearest legal cell INSIDE
+    // the grid before the free-spot spiral — moveto 99 99 parks the piece at
+    // the south edge, moveto -3 5 at the west edge, and a double-grid piece
+    // pulled flush instead of overhanging. The spiral then only has to dodge
+    // occupied tiles, so it can never dead-end off the map.
+    const clx = Math.max(0, Math.min(N - d.fw, tx));
+    const cly = Math.max(0, Math.min(N - d.fh, ty));
+    const clamped = (clx !== tx || cly !== ty);
+    const spot = findFreeNear(rec, d, clx, cly, p.uid);
     if (!spot) return ctx.reply('🏠 Nowhere in the room fits it right now — free some space first.');
     const fx0 = p.x, fy0 = p.y;
     await Homestead.updateOne(
@@ -520,9 +535,9 @@ async function cmdMoveTo(ctx, rec, args) {
         { $set: { 'placed.$.x': spot.x, 'placed.$.y': spot.y, updatedAt: Date.now() } },
     );
     p.x = spot.x; p.y = spot.y;
-    const hint = (spot.x !== tx || spot.y !== ty)
-        ? `(${tx},${ty}) was blocked or out of bounds — *${d.name}* settled at (${spot.x},${spot.y}).`
-        : null;
+    const hint = clamped
+        ? `(${tx},${ty}) is off the grid — *${d.name}* settled at the nearest legal spot (${spot.x},${spot.y}).`
+        : ((spot.x !== clx || spot.y !== cly) ? `(${tx},${ty}) was blocked — *${d.name}* settled at (${spot.x},${spot.y}).` : null);
     await viewRoom(ctx, rec, { ...gridOptsFor(p, d), pop: { item: p.item, x: spot.x, y: spot.y, from: { x: fx0, y: fy0 } }, hint });
 }
 

@@ -186,6 +186,27 @@ async function renderFrame(state, frame, opts = {}) {
     ctx.lineTo(isoX(N, 0), isoY(N, 0));
     ctx.stroke();
 
+    // ── wild haze floor wash (owner pre-restart promise: "everything behind
+    // [the fence] = dense hazed forest") — translucent forest-green over
+    // everything OUTSIDE the playable diamond, painted before props so only
+    // the ground recedes; the wild props carry their own deeper tint.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(-8, -8, ART_W + 16, ART_H + 16);
+    ctx.moveTo(isoX(0, 0), isoY(0, 0));
+    ctx.lineTo(isoX(N, 0), isoY(N, 0));
+    ctx.lineTo(isoX(N, N), isoY(N, N));
+    ctx.lineTo(isoX(0, N), isoY(0, N));
+    ctx.closePath();
+    ctx.clip('evenodd');
+    const hz = ctx.createLinearGradient(0, isoY(0, 0) - 60, 0, isoY(N, N) + 30);
+    hz.addColorStop(0, 'rgba(18,28,14,0.38)');
+    hz.addColorStop(0.5, 'rgba(24,36,16,0.26)');
+    hz.addColorStop(1, 'rgba(12,20,10,0.44)');
+    ctx.fillStyle = hz;
+    ctx.fillRect(0, 0, ART_W, ART_H);
+    ctx.restore();
+
     // ── hunting grounds fence (east boundary, gate gap) ──
     const fenceImg = await img('base_fence.png');
     if (fenceImg) {
@@ -240,6 +261,7 @@ async function renderFrame(state, frame, opts = {}) {
         paths: LAYOUT.paths || [],
         hot, plotCells,
         margin: true, // tree wall relocated OUTSIDE the playable ring
+        haze: true, // wild props recede behind the fence (tinted draws)
         structFoots: (state.structures || [])
             .map((st) => { const d = structDef(st.type); return d ? [st.x, st.y, d.fw, d.fh] : null; })
             .filter(Boolean),
@@ -255,13 +277,21 @@ async function renderFrame(state, frame, opts = {}) {
                 const px = isoX(x + 0.5, y + 0.5), py = isoY(x + 0.5, y + 0.5);
                 if (px < 0 || px > ART_W || py < 0 || py > ART_H) continue;
                 const f = mRnd() < 0.34 ? 'px_fern.png' : (mRnd() < 0.55 ? 'px_tuft.png' : mRnd() < 0.70 ? 'px_shroom.png' : mRnd() < 0.82 ? 'px_rock.png' : mRnd() < 0.92 ? 'px_bush_b.png' : 'px_stump.png');
-                forestProps.push({ file: f, x: px, y: py });
+                forestProps.push({ file: f, x: px, y: py, tint: '#263d17' });
             }
         }
     }
     for (const f of forestProps) {
-        const im = await img(f.file);
-        if (im) props.push({ img: im, x: f.x, y: f.y, sc: f.sc || 1 });
+        // hazed wilds: tinted variants are pre-scaled canvases (draw at sc 1)
+        const im = f.tint ? await isoForest.tinted(f.file, f.tint, f.sc || 1) : await img(f.file);
+        if (im) props.push({ img: im, x: f.x, y: f.y, sc: f.tint ? 1 : (f.sc || 1) });
+    }
+    // ── pixel fence ring around the playable diamond (owner pre-restart
+    // promise: "tree wall comes out, pixel fence ring goes in") — gate gap
+    // where the south walk leaves the compound (5,15)
+    for (const seg of isoForest.fenceRing(N, isoX, isoY, [[5, 15]])) {
+        const fim = await img(seg.file);
+        if (fim) props.push({ img: fim, x: seg.x, y: seg.y, sc: 1 });
     }
     // zone garnish (owner: "the pond and mines and everything else? Doesn't
     // exist") — boulders ringing the mines zone, reeds/bushes by the pond so

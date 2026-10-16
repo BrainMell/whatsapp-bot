@@ -68,3 +68,8 @@ core/rpgasset/homestead/*.png -filter -diff -merge -text
 # raw; LFS pointers would blank every tree on a reset --hard deploy)
 core/rpgasset/homestead/px_*.png -filter -diff -merge -text
 core/rpgasset/homestead/px_*.png -text
+
+# pixel castle set must be real bytes on both boxes (same lesson as the
+# forest set - reset --hard deploys would otherwise serve LFS pointers)
+core/rpgasset/guildbase/px_*.png -filter -diff -merge -text
+core/rpgasset/guildbase/px_*.png -text
