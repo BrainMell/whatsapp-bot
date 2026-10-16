@@ -12,7 +12,7 @@ const path = require('path');
 const fs = require('fs');
 const { createCanvas, registerFont } = require('canvas');
 
-const FONTS = path.join(__dirname, 'core', 'rpgasset', 'fonts');
+const FONTS = path.join(__dirname, '..', 'core', 'rpgasset', 'fonts'); // lives in scripts/ now — resolve repo root via __dirname
 function reg(file, family) {
   const p = path.join(FONTS, file);
   if (fs.existsSync(p)) registerFont(p, { family });
