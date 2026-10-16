@@ -64,3 +64,10 @@ scripts/_memmongo.pid
 # Baileys runtime auth (2026-10-03): never tracked in git again.
 # Deploys resolve auth via deploy_on_box.sh precedence (disk wins over git).
 instances/*/auth/
+
+# fx lab runtime state (2026-10-16): mutates in production, would phantom-diff forever
+fx_captures/fx.log
+fx_captures/poll_votes.json
+fx_captures/poll_registry.json
+fx_captures/tap_state.json
+fx_captures/.catch_on
