@@ -12,6 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const isoShadow = require('./isoShadow');
+const isoForest = require('./isoForest');
 const mediaCache = require('./mediaCache');
 
 const SS = 2;
@@ -124,51 +125,28 @@ async function renderFrame(state, frame, opts = {}) {
 
     const seed = hashStr(state.owner || 'base');
 
-    // ── sky + soft sun glow (daytime outdoor) ──
-    const sky = ctx.createLinearGradient(0, 0, 0, ART_H);
-    sky.addColorStop(0, '#8fb8d9');
-    sky.addColorStop(0.45, '#b8d4e4');
-    sky.addColorStop(1, '#57452e');
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, ART_W, ART_H);
-    const sun = ctx.createRadialGradient(180, 90, 10, 180, 90, 260);
-    sun.addColorStop(0, 'rgba(255,238,190,0.85)');
-    sun.addColorStop(1, 'rgba(255,238,190,0)');
-    ctx.fillStyle = sun;
-    ctx.fillRect(0, 0, ART_W, 420);
+    // ── FOREST LAW (owner 2026-10-16 11:57Z): the whole thing is a forest —
+    // no sky, deep canopy wall + treelines + god rays behind the island ──
+    await isoForest.paintBackdrop(ctx, ART_W, ART_H, frame, FRAMES, isoY(0, 0) - 16, isoY(N - 1, N - 1) + 16);
 
-    // clouds (drifting, frame-driven)
-    ctx.save();
-    ctx.fillStyle = 'rgba(255,255,255,0.75)';
-    const cd = (frame / FRAMES) * 40;
-    for (const [bx, by, s] of [[220, 90, 1.2], [760, 60, 0.9], [1040, 130, 1.05]]) {
-        const cx2 = ((bx + cd * s) % (ART_W + 260)) - 130;
-        ctx.beginPath();
-        ctx.ellipse(cx2, by, 60 * s, 16 * s, 0, 0, Math.PI * 2);
-        ctx.ellipse(cx2 + 34 * s, by - 8 * s, 36 * s, 13 * s, 0, 0, Math.PI * 2);
-        ctx.ellipse(cx2 - 30 * s, by - 4 * s, 30 * s, 11 * s, 0, 0, Math.PI * 2);
-        ctx.fill();
-    }
-    ctx.restore();
-
-    // ── terrain ──
-    const grass = ['base_grass_a.png', 'base_grass_b.png', 'base_grass_c.png'];
-    const waterF = frame % 4 < 2 ? 'base_water_0.png' : 'base_water_1.png';
+    // ── terrain — mossy forest floor (tiles redesigned 2026-10-16) ──
+    const grass = ['forest_moss_a.png', 'forest_moss_b.png', 'forest_moss_c.png'];
+    const waterF = frame % 4 < 2 ? 'forest_water_0.png' : 'forest_water_1.png';
     for (let sum = 0; sum <= 2 * (N - 1); sum++) {
         for (let x = Math.max(0, sum - N + 1); x <= Math.min(N - 1, sum); x++) {
             const y = sum - x;
             const r = mulberry32(seed + x * 131 + y * 17)();
             let tile;
-            if (inZone(LAYOUT.mines.zone, x, y)) tile = r < 0.85 ? 'base_rock.png' : 'base_grass_c.png';
-            else if (inZone(LAYOUT.pond.zone, x, y)) tile = r < 0.92 ? waterF : 'base_grass_c.png';
-            else if ((LAYOUT.paths || []).some(([px, py]) => px === x && py === y)) tile = 'base_path.png';
-            else tile = r < 0.06 ? 'base_grass_flowers.png' : grass[Math.floor(r * 3) % 3];
+            if (inZone(LAYOUT.mines.zone, x, y)) tile = r < 0.85 ? 'forest_rock_tile.png' : 'forest_moss_c.png';
+            else if (inZone(LAYOUT.pond.zone, x, y)) tile = r < 0.92 ? waterF : 'forest_moss_c.png';
+            else if ((LAYOUT.paths || []).some(([px, py]) => px === x && py === y)) tile = 'forest_trail.png';
+            else tile = r < 0.07 ? 'forest_moss_shrooms.png' : grass[Math.floor(r * 3) % 3];
             const timg = await img(tile);
             if (timg) ctx.drawImage(timg, isoX(x, y) - TW / 2, isoY(x, y) - TH / 2);
         }
     }
-    // map edge rim
-    ctx.strokeStyle = 'rgba(40,28,14,0.4)';
+    // map edge rim — deep mossy earth edge
+    ctx.strokeStyle = 'rgba(24,32,14,0.55)';
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(isoX(0, N), isoY(0, N));
@@ -189,11 +167,9 @@ async function renderFrame(state, frame, opts = {}) {
             ctx.drawImage(fenceImg, isoX(xx + 0.5, z.zone.y) - 33, isoY(xx + 0.5, z.zone.y) - 30);
         }
     }
-    // trees + props inside hunting zone and scattered (avoid used cells)
-    const treeImg = await img('base_tree_oak.png');
-    const pineImg = await img('base_tree_pine.png');
-    const bushImg = await img('base_bush.png');
-    const boulderImg = await img('base_boulder.png');
+    // ── FOREST PROP LAW — dense tree wall on the border ring, clearing
+    // trees around the player house, understory everywhere else. Plots,
+    // structures, paths and the fenced hunting meadow stay walkable.
     const props = [];
     const used = new Set();
     for (const st of state.structures || []) {
@@ -201,21 +177,40 @@ async function renderFrame(state, frame, opts = {}) {
         if (!d) continue;
         for (let ix = 0; ix < d.fw; ix++) for (let iy = 0; iy < d.fh; iy++) used.add(`${st.x + ix},${st.y + iy}`);
     }
-    for (let yy = LAYOUT.hunting.zone.y; yy < LAYOUT.hunting.zone.y + LAYOUT.hunting.zone.fh; yy++) {
+    // keep a 1-tile clearing around every structure so buildings stay readable
+    const usedMargin = new Set(used);
+    for (const key of used) {
+        const [sx, sy] = key.split(',').map(Number);
+        for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) usedMargin.add(`${sx + dx},${sy + dy}`);
+    }
+    const plotCells = new Set();
+    for (const plot of state.freePlots || []) {
+        for (let ix = -1; ix < 4; ix++) for (let iy = -1; iy < 4; iy++) plotCells.add(`${plot.x + ix},${plot.y + iy}`);
+    }
+    // hot cells: ring around the house footprint (trees right by the house)
+    const hot = [];
+    {
+        const h = LAYOUT.house;
+        for (let xx = h.x - 1; xx <= h.x + h.fw; xx++) {
+            for (let yy = h.y - 1; yy <= h.y + h.fh; yy++) {
+                if (xx >= h.x && xx < h.x + h.fw && yy >= h.y && yy < h.y + h.fh) continue;
+                hot.push([xx, yy]);
+            }
+        }
+        // the hunting woods stay wooded
         for (let xx = LAYOUT.hunting.zone.x; xx < LAYOUT.hunting.zone.x + LAYOUT.hunting.zone.fw; xx++) {
-            if (used.has(`${xx},${yy}`)) continue;
-            const r = mulberry32(seed + xx * 31 + yy * 7)();
-            if (r < 0.30) props.push({ img: r < 0.12 ? treeImg : pineImg, x: isoX(xx + 0.3 + r, yy + 0.5), y: isoY(xx + 0.3 + r, yy + 0.5) + 10 });
-            else if (r < 0.42 && bushImg) props.push({ img: bushImg, x: isoX(xx + 0.5, yy + 0.5), y: isoY(xx + 0.5, yy + 0.5) + 8 });
+            for (let yy = LAYOUT.hunting.zone.y; yy < LAYOUT.hunting.zone.y + LAYOUT.hunting.zone.fh; yy++) hot.push([xx, yy]);
         }
     }
-    for (let i = 0; i < 7; i++) {
-        const r1 = mulberry32(seed + 500 + i)(), r2 = mulberry32(seed + 900 + i)();
-        const xx = 5 + Math.floor(r1 * 10), yy = 4 + Math.floor(r2 * 11);
-        if (used.has(`${xx},${yy}`)) continue;
-        if ((LAYOUT.paths || []).some(([px, py]) => px === xx && py === yy)) continue;
-        if (r1 < 0.5 && bushImg) props.push({ img: bushImg, x: isoX(xx + 0.5, yy + 0.5), y: isoY(xx + 0.5, yy + 0.5) + 8 });
-        else if (boulderImg && r1 > 0.8) props.push({ img: boulderImg, x: isoX(xx + 0.5, yy + 0.5), y: isoY(xx + 0.5, yy + 0.5) + 8 });
+    const forestProps = isoForest.islandForest({
+        seed, N, isoX, isoY,
+        occupied: usedMargin,
+        paths: LAYOUT.paths || [],
+        hot, plotCells,
+    });
+    for (const f of forestProps) {
+        const im = await img(f.file);
+        if (im) props.push({ img: im, x: f.x, y: f.y });
     }
 
     // ── plot markers for free expansion plots ──

@@ -36,14 +36,17 @@ const OY = 64 + WALL_H;     // top corner of the floor diamond
 
 const FRAMES = 14, FRAME_MS = 100;
 
-// ── themes: floor tiles + procedural wall brick palette ──
+// ── themes: megakit floor tiles + plaster-and-timber wall palette ──
+// (interior restyle 2026-10-16: floors are MVM-rendered diamonds, walls
+// painted in the same plaster+timber law as the new village buildings;
+// palette = [plaster, plasterShade, timber, timberDark], frame = beam style)
 const THEMES = {
-    oakhaven:    { name: 'Oakhaven',    floor: ['floor_wood', 'floor_wood2'], wall: ['#8a5a33', '#7a4d2a', '#9a6a3e', '#5e3a1f'], mortar: '#4a2d17', price: 0 },
-    stonehearth: { name: 'Stonehearth', floor: ['floor_stone'],               wall: ['#7d8287', '#6e7378', '#8d9297', '#565a5e'], mortar: '#474b4f', price: 5000 },
-    sunspire:    { name: 'Sunspire',    floor: ['floor_sand'],                wall: ['#c2a061', '#b3915a', '#d0b070', '#96793f'], mortar: '#7a6232', price: 9000 },
-    tidecourt:   { name: 'Tidecourt',   floor: ['floor_pale'],                wall: ['#3e7f8c', '#356f7b', '#4a909d', '#285660'], mortar: '#1f434b', price: 14000 },
-    arcaneum:    { name: 'Arcaneum',    floor: ['floor_slate'],               wall: ['#7c3f74', '#6d3566', '#8d4a85', '#532548'], mortar: '#3d1a35', price: 20000 },
-    blackvault:  { name: 'Blackvault',  floor: ['floor_grass'],               wall: ['#4a4d52', '#3f4247', '#5a5e64', '#303236'], mortar: '#232527', price: 26000 },
+    oakhaven:    { name: 'Oakhaven',    floor: ['floor_mvm_wooddark'],    wall: ['#e6d9bd', '#d6c6a4', '#6b4a2a', '#4a3118'], mortar: '#4a2d17', frame: 'grid',  price: 0 },
+    stonehearth: { name: 'Stonehearth', floor: ['floor_mvm_brick'],       wall: ['#d9d4cc', '#c4beb4', '#5a5e62', '#3d4044'], mortar: '#474b4f', frame: 'post',  price: 5000 },
+    sunspire:    { name: 'Sunspire',    floor: ['floor_mvm_woodlight'],   wall: ['#efe0b8', '#e0cd9c', '#8a6a3e', '#5e4626'], mortar: '#7a6232', frame: 'brace', price: 9000 },
+    tidecourt:   { name: 'Tidecourt',   floor: ['floor_mvm_redbrick'],    wall: ['#cfe0dc', '#b8cdc8', '#3e6a72', '#27454c'], mortar: '#1f434b', frame: 'post',  price: 14000 },
+    arcaneum:    { name: 'Arcaneum',    floor: ['floor_mvm_wooddark'],    wall: ['#ddd2e0', '#c8bacb', '#5a3a66', '#38203f'], mortar: '#3d1a35', frame: 'grid',  price: 20000 },
+    blackvault:  { name: 'Blackvault',  floor: ['floor_mvm_unevenbrick'], wall: ['#c9c9c9', '#b0b0b0', '#3a3d42', '#232527'], mortar: '#232527', frame: 'post',  price: 26000 },
 };
 
 // ── rarity chrome for cards ──
@@ -152,18 +155,19 @@ function roundRect(ctx, x, y, w, h, r) {
     ctx.closePath();
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// WALLS — procedural brick quads following the iso floor edge
-// ═══════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════
+// WALLS — plaster + timber frame (matches the MVM village exterior);
+// same sloped-run geometry law as before (N segments along the iso edge)
+// ══════════════════════════════════════════════════════════════════════════
 function drawWallRun(ctx, x0, y0, x1, y1, theme, seedBase, frame) {
     const segs = N;
     const dx = (x1 - x0) / segs, dy = (y1 - y0) / segs;
     const rng = mulberry32(seedBase);
-    const BH = 14;
-    const rows = Math.ceil(WALL_H / BH);
-    const lightSide = x1 > x0 ? 1.06 : 0.86;   // right wall catches more light
+    const plaster = theme.wall[0], plasterD = theme.wall[1];
+    const timber = theme.wall[2], timberD = theme.wall[3];
+    const lightSide = x1 > x0 ? 1.06 : 0.86;
 
-    // backing fill
+    // plaster backing (per-segment tone variation)
     for (let s = 0; s < segs; s++) {
         const bx0 = x0 + dx * s, by0 = y0 + dy * s;
         const bx1 = x0 + dx * (s + 1), by1 = y0 + dy * (s + 1);
@@ -171,34 +175,61 @@ function drawWallRun(ctx, x0, y0, x1, y1, theme, seedBase, frame) {
         ctx.moveTo(bx0, by0); ctx.lineTo(bx1, by1);
         ctx.lineTo(bx1, by1 - WALL_H); ctx.lineTo(bx0, by0 - WALL_H);
         ctx.closePath();
-        ctx.fillStyle = shade(theme.wall[3], lightSide);
+        ctx.fillStyle = shade(rng() < 0.5 ? plaster : plasterD, lightSide * (0.94 + rng() * 0.12));
         ctx.fill();
     }
-    // bricks
-    for (let r = 0; r < rows; r++) {
-        const h0 = r * BH, h1 = Math.min(WALL_H, (r + 1) * BH);
-        const mortar = 2;
-        const offset = (r % 2) * 0.5;
-        const perSeg = 2;
+    // soft plaster shading (light above, AO below)
+    const gsh = ctx.createLinearGradient(0, y0 - WALL_H, 0, y0);
+    gsh.addColorStop(0, 'rgba(255,240,210,0.10)');
+    gsh.addColorStop(0.72, 'rgba(0,0,0,0)');
+    gsh.addColorStop(1, 'rgba(0,0,0,0.16)');
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x0, y0); ctx.lineTo(x1, y1);
+    ctx.lineTo(x1, y1 - WALL_H); ctx.lineTo(x0, y0 - WALL_H);
+    ctx.closePath();
+    ctx.fillStyle = gsh; ctx.fill();
+    ctx.restore();
+
+    // timber frame — horizontal beams
+    for (const [hh, col, lw] of [[0, timber, 7], [WALL_H - 7, timberD, 7], [WALL_H * 0.52, timber, 4]]) {
+        ctx.strokeStyle = shade(col, lightSide);
+        ctx.lineWidth = lw;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0 - hh); ctx.lineTo(x1, y1 - hh);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,235,190,0.14)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0 - hh - lw / 2); ctx.lineTo(x1, y1 - hh - lw / 2);
+        ctx.stroke();
+    }
+    // vertical posts at every segment boundary
+    for (let s = 0; s <= segs; s++) {
+        const px = x0 + dx * s, py = y0 + dy * s;
+        ctx.strokeStyle = shade(s % 2 ? timber : timberD, lightSide);
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(px, py); ctx.lineTo(px, py - WALL_H);
+        ctx.stroke();
+    }
+    // braces between posts
+    if (theme.frame === 'grid') {
+        ctx.strokeStyle = shade(timberD, lightSide);
+        ctx.lineWidth = 3.5;
         for (let s = 0; s < segs; s++) {
-            for (let b = 0; b < perSeg; b++) {
-                const u0 = (b + offset) / perSeg;
-                const u1 = (b + 1 + offset) / perSeg;
-                if (u1 <= 0 || u0 >= 1) continue;
-                const ax = x0 + dx * (s + Math.max(0, u0)), ay = y0 + dy * (s + Math.max(0, u0));
-                const bx = x0 + dx * (s + Math.min(1, u1)), by = y0 + dy * (s + Math.min(1, u1));
-                const jitter = rng();
-                const tone = theme.wall[(r + s + b) % 3];
-                const f = lightSide * (0.92 + jitter * 0.16) * (1 - (h0 / WALL_H) * 0.18);
-                ctx.beginPath();
-                ctx.moveTo(ax, ay - h0 - mortar / 2);
-                ctx.lineTo(bx, by - h0 - mortar / 2);
-                ctx.lineTo(bx, by - h1 + mortar / 2);
-                ctx.lineTo(ax, ay - h1 + mortar / 2);
-                ctx.closePath();
-                ctx.fillStyle = shade(tone, f);
-                ctx.fill();
-            }
+            const ax = x0 + dx * s, ay = y0 + dy * s;
+            const bx = x0 + dx * (s + 1), by = y0 + dy * (s + 1);
+            ctx.beginPath(); ctx.moveTo(ax + dx * 0.12, ay - 6); ctx.lineTo(bx - dx * 0.12, by - WALL_H + 6); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(bx - dx * 0.12, by - 6); ctx.lineTo(ax + dx * 0.12, ay - WALL_H + 6); ctx.stroke();
+        }
+    } else if (theme.frame === 'brace') {
+        ctx.strokeStyle = shade(timberD, lightSide);
+        ctx.lineWidth = 4;
+        for (let s = 0; s < segs; s += 2) {
+            const ax = x0 + dx * s, ay = y0 + dy * s;
+            const bx = x0 + dx * (s + 1), by = y0 + dy * (s + 1);
+            ctx.beginPath(); ctx.moveTo(ax + dx * 0.1, ay - WALL_H + 8); ctx.lineTo(bx - dx * 0.1, by - 10); ctx.stroke();
         }
     }
     // top cap — extends "back" (away from viewer)

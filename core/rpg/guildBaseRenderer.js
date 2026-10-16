@@ -14,6 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const isoShadow = require('./isoShadow');
+const isoForest = require('./isoForest');
 const mediaCache = require('./mediaCache');
 
 const SS = 2;
@@ -237,47 +238,23 @@ async function renderFrame(state, frame, opts = {}) {
     const flagCol = (state.emblemColor && /^#[0-9a-fA-F]{3,8}$/.test(state.emblemColor)) ? state.emblemColor : archCol.flag;
     const flagD = archCol.flagD;
 
-    // ── sky + sun (same law as base renderer) ──
-    const sky = ctx.createLinearGradient(0, 0, 0, ART_H);
-    sky.addColorStop(0, '#8fb8d9');
-    sky.addColorStop(0.45, '#b8d4e4');
-    sky.addColorStop(1, '#57452e');
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, ART_W, ART_H);
-    const sun = ctx.createRadialGradient(180, 90, 10, 180, 90, 260);
-    sun.addColorStop(0, 'rgba(255,238,190,0.85)');
-    sun.addColorStop(1, 'rgba(255,238,190,0)');
-    ctx.fillStyle = sun;
-    ctx.fillRect(0, 0, ART_W, 420);
+    // ── FOREST LAW (owner 2026-10-16 11:57Z): no sky — deep forest wall ──
+    await isoForest.paintBackdrop(ctx, ART_W, ART_H, frame, FRAMES, isoY(0, 0) - 16, isoY(N - 1, N - 1) + 16);
 
-    // clouds
-    ctx.save();
-    ctx.fillStyle = 'rgba(255,255,255,0.75)';
-    const cd = (frame / FRAMES) * 40;
-    for (const [bx, by, s] of [[220, 90, 1.2], [760, 60, 0.9], [1040, 130, 1.05]]) {
-        const cx2 = ((bx + cd * s) % (ART_W + 260)) - 130;
-        ctx.beginPath();
-        ctx.ellipse(cx2, by, 60 * s, 16 * s, 0, 0, Math.PI * 2);
-        ctx.ellipse(cx2 + 34 * s, by - 8 * s, 36 * s, 13 * s, 0, 0, Math.PI * 2);
-        ctx.ellipse(cx2 - 30 * s, by - 4 * s, 30 * s, 11 * s, 0, 0, Math.PI * 2);
-        ctx.fill();
-    }
-    ctx.restore();
-
-    // ── terrain ──
-    const grass = ['base_grass_a.png', 'base_grass_b.png', 'base_grass_c.png'];
+    // ── terrain — mossy forest floor (tiles redesigned 2026-10-16) ──
+    const grass = ['forest_moss_a.png', 'forest_moss_b.png', 'forest_moss_c.png'];
     for (let sum = 0; sum <= 2 * (N - 1); sum++) {
         for (let x = Math.max(0, sum - N + 1); x <= Math.min(N - 1, sum); x++) {
             const y = sum - x;
             const r = mulberry32(seed + x * 131 + y * 17)();
             const tile = (PATHS || []).some(([px, py]) => px === x && py === y)
-                ? 'base_path.png'
-                : (r < 0.06 ? 'base_grass_flowers.png' : grass[Math.floor(r * 3) % 3]);
+                ? 'forest_trail.png'
+                : (r < 0.07 ? 'forest_moss_shrooms.png' : grass[Math.floor(r * 3) % 3]);
             const timg = await hsImg(tile);
             if (timg) ctx.drawImage(timg, isoX(x, y) - TW / 2, isoY(x, y) - TH / 2);
         }
     }
-    ctx.strokeStyle = 'rgba(40,28,14,0.4)';
+    ctx.strokeStyle = 'rgba(24,32,14,0.55)';
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(isoX(0, N), isoY(0, N));
@@ -285,29 +262,38 @@ async function renderFrame(state, frame, opts = {}) {
     ctx.lineTo(isoX(N, 0), isoY(N, 0));
     ctx.stroke();
 
-    // scattered vegetation (avoid structure cells + paths)
-    const treeImg = await hsImg('base_tree_oak.png');
-    const pineImg = await hsImg('base_tree_pine.png');
-    const bushImg = await hsImg('base_bush.png');
-    const boulderImg = await hsImg('base_boulder.png');
+    // scattered vegetation — FOREST LAW: border tree wall + clearing + understory
     const occupied = new Set();
     for (const st of Object.values(GUILD_STRUCTS)) {
-        for (let ix = -1; ix <= st.fw; ix++) for (let iy = -1; iy <= st.fh; iy++) occupied.add(`${st.x + ix},${st.y + iy}`);
+        // 2-tile clearing margin so hall/training/treasury stay readable in the woods
+        for (let ix = -2; ix <= st.fw + 1; ix++) for (let iy = -2; iy <= st.fh + 1; iy++) occupied.add(`${st.x + ix},${st.y + iy}`);
     }
     for (const [px, py] of PATHS) occupied.add(`${px},${py}`);
     for (const [px, py] of COTTAGE_SLOTS) { occupied.add(`${px},${py}`); occupied.add(`${px},${py - 1}`); }
+    // archetype-prop meadow stays clear of the tree wall
+    for (let ax = 9; ax <= 12; ax++) for (let ay = 8; ay <= 10; ay++) occupied.add(`${ax},${ay}`);
     const props = [];
-    for (let i = 0; i < 26; i++) {
-        const r1 = mulberry32(seed + 700 + i)(), r2 = mulberry32(seed + 1400 + i)();
-        const xx = Math.floor(r1 * N), yy = Math.floor(r2 * N);
-        if (occupied.has(`${xx},${yy}`)) continue;
-        if (yy < 2 && xx > 5) continue; // keep the north approach open
-        if (xx >= 9 && xx <= 12 && yy >= 8 && yy <= 10) continue; // archetype-prop meadow stays clear
-        const rr = mulberry32(seed + 2100 + i)();
-        const pxc = isoX(xx + 0.5, yy + 0.5), pyC = isoY(xx + 0.5, yy + 0.5);
-        if (rr < 0.34 && treeImg) props.push({ img: rr < 0.14 ? pineImg : treeImg, x: pxc, y: pyC + 10 });
-        else if (rr < 0.55 && bushImg) props.push({ img: bushImg, x: pxc, y: pyC + 8 });
-        else if (rr > 0.86 && boulderImg) props.push({ img: boulderImg, x: pxc, y: pyC + 8 });
+    {
+        // hot = ring around the guild hall (trees standing right by the hall)
+        const hall = GUILD_STRUCTS.hall;
+        const hot = [];
+        for (let hx = hall.x - 1; hx <= hall.x + hall.fw; hx++) {
+            for (let hy = hall.y - 1; hy <= hall.y + hall.fh; hy++) {
+                if (hx >= hall.x && hx < hall.x + hall.fw && hy >= hall.y && hy < hall.y + hall.fh) continue;
+                hot.push([hx, hy]);
+            }
+        }
+        const forestProps = isoForest.islandForest({
+            seed, N, isoX, isoY,
+            occupied,
+            paths: PATHS || [],
+            hot,
+            plotCells: new Set(),
+        });
+        for (const f of forestProps) {
+            const im = await hsImg(f.file);
+            if (im) props.push({ img: im, x: f.x, y: f.y });
+        }
     }
 
     // ── guild structures (hall / training / treasury; L0 = plot) ──
