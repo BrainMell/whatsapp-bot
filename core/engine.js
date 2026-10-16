@@ -22141,8 +22141,16 @@ Admins can:
                     // command" - GUILDINFO charter card (800x800) is now the
                     // primary response; the text layout below stays as the
                     // fallback when the Go render fails.
+                    // 🏰 2026-10-16: `.j guild` / `.j guild info` / `.j guild status`
+                    // / `.j guild base` / `.j guild hq` — the guild's ISO BASE
+                    // GROUNDS render is the primary visual; caption carries ALL
+                    // stats players could already see. Charter card + legacy text
+                    // remain as fallbacks (renderer never crashes the command).
                     if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild info` ||
-                        lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild status`) {
+                        lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild status` ||
+                        lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild` ||
+                        lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild base` ||
+                        lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild hq`) {
                       try {
                         const userGuild = guilds.getUserGuild(senderJid);
                         if (!userGuild) {
@@ -22156,10 +22164,66 @@ Admins can:
                         const memberCap = guildPerks.getMemberCap(guild);
                         const interestRate = guildPerks.getBankInterestRate(guild);
 
-                        // ── charter card (primary) ──
+                        // ── charter card (fallback when grounds render unavailable) ──
                         const guildLevel = guild.level || 1;
                         const guildPoints = guild.points || 0;
                         const guildXpNeed = guildLevel * 1000;
+
+                        // ── guild base grounds (primary visual) ──
+                        let baseMedia = null;
+                        try {
+                          const gbr = require('./rpg/guildBaseRenderer');
+                          baseMedia = await gbr.renderGuildBaseImage({
+                            name: userGuild,
+                            level: guildLevel,
+                            archetype: String(guild.type || 'ADVENTURER').toUpperCase(),
+                            buildings: {
+                              hall: (guild.buildings?.hall?.level) || 0,
+                              training: (guild.buildings?.training?.level) || 0,
+                              treasury: (guild.buildings?.treasury?.level) || 0,
+                            },
+                            memberCount: (guild.members || []).length,
+                            memberCap,
+                            emblemColor: guild.emblem?.color || '',
+                            emblemIcon: guild.emblem?.icon || '',
+                            motto: guild.motto || '',
+                          }, { hint: `${botConfig.getPrefix()} guild upgrade hall • ${botConfig.getPrefix()} guild donate • ${botConfig.getPrefix()} guild perks` });
+                        } catch (e) {
+                          console.error('[guild] base grounds render failed:', e?.message || e);
+                        }
+
+                        if (baseMedia && baseMedia.buffer && baseMedia.buffer.length > 100) {
+                          const hallLvlB = (guild.buildings?.hall?.level) || 0;
+                          const trainLvlB = (guild.buildings?.training?.level) || 0;
+                          const treasLvlB = (guild.buildings?.treasury?.level) || 0;
+                          const capB = BOT_MARKER +
+                            `🏰 *${userGuild}* — Lv ${guildLevel} · XP ${guildPoints.toLocaleString()}/${guildXpNeed.toLocaleString()}\n` +
+                            `🏷️ Archetype: ${String(guild.type || 'ADVENTURER').toUpperCase()}\n` +
+                            `👤 Leader: ${guild.owner ? '@' + guild.owner.split('@')[0] : 'unknown'}\n` +
+                            `👥 Members: ${(guild.members || []).length}/${memberCap}\n` +
+                            `💰 Bank: ${(guild.balance || 0).toLocaleString()} Zeni\n` +
+                            (guild.emblem && guild.emblem.icon ? `🎨 Emblem: ${guild.emblem.icon}\n` : '') +
+                            `\n🏗️ *Buildings:*\n` +
+                            `• Guild Hall: L${hallLvlB} (+${hallLvlB * 5} member cap)\n` +
+                            `• Training: L${trainLvlB} (+${trainLvlB * 5}% XP)\n` +
+                            `• Treasury: L${treasLvlB} (+${treasLvlB * 10}% gold` +
+                            ((interestRate > 0) ? `, ${(interestRate * 100).toFixed(2)}% daily interest` : '') + `)\n` +
+                            (guild.motto ? `\n💬 _"${guild.motto}"_\n` : '') +
+                            `\n_Use ${botConfig.getPrefix()} guild perks for full perk breakdown._`;
+                          const infoMentionsB = [];
+                          if (guild.owner && guild.owner.includes('@')) infoMentionsB.push(guild.owner);
+                          try {
+                            if (baseMedia.contentType === 'video/mp4') {
+                              await sock.sendMessage(chatId, { video: baseMedia.buffer, gifPlayback: true, caption: capB, mentions: infoMentionsB }, { quoted: m });
+                            } else {
+                              await sock.sendMessage(chatId, { image: baseMedia.buffer, caption: capB, mentions: infoMentionsB }, { quoted: m });
+                            }
+                            return;
+                          } catch (sendErr) {
+                            console.error('[guild] base image send failed — falling back to charter card:', sendErr?.message || sendErr);
+                          }
+                        }
+
                         let cardBuf = null;
                         try {
                           const goService = require('./utils/goImageService');
