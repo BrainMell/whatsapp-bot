@@ -216,14 +216,24 @@ function islandForest(opts) {
             const px = isoX(x + 0.5, y + 0.5);
             const py = isoY(x + 0.5, y + 0.5);
             if (border) {
-                // dense wall — 2-3 staggered trees per tile
-                const nTrees = outside ? 3 : 2;
-                for (let k = 0; k < nTrees; k++) {
-                    out.push({ file: pickWeighted(rnd, RING_TREES), x: px + jitter(30), y: py + jitter(12) + 6 });
+                if (outside) {
+                    // margin wall — reads as forest EDGE, not a suffocating
+                    // donut: 1 tree/tile + 45% second, scaled 0.58-0.78 so the
+                    // playable map stays readable behind it
+                    out.push({ file: pickWeighted(rnd, RING_TREES), x: px + jitter(46), y: py + jitter(16) + 6, sc: 0.58 + rnd() * 0.2 });
+                    if (rnd() < 0.45) out.push({ file: pickWeighted(rnd, RING_TREES), x: px + jitter(46), y: py + jitter(16) + 6, sc: 0.58 + rnd() * 0.2 });
+                    if (rnd() < 0.30) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(34), y: py + jitter(12) + 8 });
+                } else {
+                    // dense wall — 2 staggered trees per border tile
+                    for (let k = 0; k < 2; k++) {
+                        out.push({ file: pickWeighted(rnd, RING_TREES), x: px + jitter(30), y: py + jitter(12) + 6 });
+                    }
+                    if (rnd() < 0.35) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(26), y: py + jitter(10) + 8 });
                 }
-                if (rnd() < 0.35) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(26), y: py + jitter(10) + 8 });
             } else if (mid) {
-                if (rnd() < 0.45) out.push({ file: pickWeighted(rnd, RING_TREES), x: px + jitter(26), y: py + jitter(10) + 6 });
+                // margin mode calms the mid ring so zones/paths stay visible
+                const rate = margin ? 0.22 : 0.45;
+                if (rnd() < rate) out.push({ file: pickWeighted(rnd, RING_TREES), x: px + jitter(26), y: py + jitter(10) + 6 });
                 if (rnd() < 0.30) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(26), y: py + 8 });
             } else if (hotSet.has(key)) {
                 // clearing around the house — big trees standing right by it

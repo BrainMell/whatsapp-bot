@@ -158,7 +158,7 @@ async function renderFrame(state, frame, opts = {}) {
     // so there is no floating-island void anywhere.
     const grass = ['forest_moss_a.png', 'forest_moss_b.png', 'forest_moss_c.png'];
     const waterF = frame % 4 < 2 ? 'forest_water_0.png' : 'forest_water_1.png';
-    const M = 7;
+    const M = 12; // full coverage to the card corners (owner: ground past borders)
     for (let x = -M; x < N + M; x++) {
         for (let y = -M; y < N + M; y++) {
             const px = isoX(x, y), py = isoY(x, y);
@@ -258,7 +258,35 @@ async function renderFrame(state, frame, opts = {}) {
     }
     for (const f of forestProps) {
         const im = await img(f.file);
-        if (im) props.push({ img: im, x: f.x, y: f.y });
+        if (im) props.push({ img: im, x: f.x, y: f.y, sc: f.sc || 1 });
+    }
+    // zone garnish (owner: "the pond and mines and everything else? Doesn't
+    // exist") — boulders ringing the mines zone, reeds/bushes by the pond so
+    // both read instantly as landmarks
+    {
+        const gRnd = mulberry32(seed + 4711);
+        const zoneFree = (x, y) => {
+            for (const st of state.structures || []) {
+                const d = structDef(st.type);
+                if (!d) continue;
+                if (x >= st.x - 1 && x < st.x + d.fw + 1 && y >= st.y - 1 && y < st.y + d.fh + 1) return false;
+            }
+            return !(LAYOUT.paths || []).some(([px2, py2]) => px2 === x && py2 === y);
+        };
+        const mz = LAYOUT.mines.zone, pz = LAYOUT.pond.zone;
+        const garnish = [];
+        for (let i = 0; i < 6; i++) {
+            const gx = mz.x + Math.floor(gRnd() * mz.fw), gy = mz.y + Math.floor(gRnd() * mz.fh);
+            if (zoneFree(gx, gy)) garnish.push({ file: gRnd() < 0.6 ? 'base_boulder.png' : 'forest_rock2.png', x: isoX(gx + 0.5, gy + 0.5) + (gRnd() - 0.5) * 30, y: isoY(gx + 0.5, gy + 0.5) + (gRnd() - 0.5) * 14 });
+        }
+        for (let i = 0; i < 5; i++) {
+            const gx = pz.x + Math.floor(gRnd() * pz.fw), gy = pz.y + Math.floor(gRnd() * pz.fh);
+            if (zoneFree(gx, gy)) garnish.push({ file: gRnd() < 0.55 ? 'forest_plant.png' : 'base_bush.png', x: isoX(gx + 0.5, gy + 0.5) + (gRnd() - 0.5) * 30, y: isoY(gx + 0.5, gy + 0.5) + (gRnd() - 0.5) * 14 });
+        }
+        for (const g of garnish) {
+            const im = await img(g.file);
+            if (im) props.push({ img: im, x: g.x, y: g.y, sc: 1 });
+        }
     }
 
     // ── plot markers for free expansion plots ──
@@ -304,8 +332,8 @@ async function renderFrame(state, frame, opts = {}) {
     // shadows first (floor level)
     for (const d of drawables) {
         if (d.kind === 'prop') {
-            if (d.img && d.img.height > 26) {
-                isoShadow.drawItemShadow(ctx, { img: d.img, key: `prop${d.x}|${d.y}`, scale: 1, ax: d.x, ay: d.y + 2, alpha: 0.8 });
+            if (d.img && d.img.height * (d.sc || 1) > 26) {
+                isoShadow.drawItemShadow(ctx, { img: d.img, key: `prop${d.x}|${d.y}`, scale: d.sc || 1, ax: d.x, ay: d.y + 2, alpha: 0.8 });
             }
             continue;
         }
@@ -317,7 +345,8 @@ async function renderFrame(state, frame, opts = {}) {
     // sprites
     for (const d of drawables) {
         if (d.kind === 'prop') {
-            ctx.drawImage(d.img, d.x - d.img.width / 2, d.y - d.img.height);
+            const pw = d.img.width * (d.sc || 1), ph = d.img.height * (d.sc || 1);
+            ctx.drawImage(d.img, d.x - pw / 2, d.y - ph, pw, ph);
             continue;
         }
         ctx.drawImage(d.spr, d.cx - d.w / 2, d.ay - d.h, d.w, d.h);
