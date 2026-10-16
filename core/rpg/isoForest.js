@@ -190,18 +190,39 @@ async function paintBackdrop(ctx, W, H, frame, FRAMES, horizonY, islandBottomY) 
 // ═══════════════════════════════════════════════════════════════════════════
 // ISLAND FOREST — placement law for the trees ON the island.
 //   opts: { seed, N, isoX, isoY, occupied:Set("x,y"), paths:[[x,y]...],
-//           hot:[[x,y]...], plotCells:Set("x,y") }
+//           hot:[[x,y]...], plotCells:Set("x,y"), margin:bool,
+//           structFoots:[[x,y,fw,fh]...] }
 // Returns [{ file, x, y }] art-px placements (bottom-anchored draw law):
-//   - border ring (x/y on 0 or N-1): 2 trees per tile, dense wall
-//   - second ring: 1 tree @ 45%
-//   - hot cells (around the player house): clearing trees @ 55%
-//   - every other free tile: understory clutter @ 24%
+//   - margin mode: wall lives OUTSIDE (cells -1/N, sc 0.58-0.78), far
+//     wilderness conifer ring at cells -2/N+1, in-map border = mid density
+//   - hot cells (around the player house): clearing trees @ 42% — and NO
+//     tall trees in the 2-tile front-shadow band of any structure
+//   - every other free tile: understory clutter @ 17% (8% in shadow)
 // ═══════════════════════════════════════════════════════════════════════════
 function islandForest(opts) {
-    const { seed, N, isoX, isoY, occupied, paths = [], hot = [], plotCells, margin } = opts;
+    const { seed, N, isoX, isoY, occupied, paths = [], hot = [], plotCells, margin, structFoots } = opts;
     const pathSet = new Set(paths.map(([x, y]) => `${x},${y}`));
     const hotSet = new Set(hot.map(([x, y]) => `${x},${y}`));
     const blocked = new Set([...(occupied || []), ...pathSet, ...(plotCells || [])]);
+    // FRONT-SHADOW LAW (owner 20:20Z "houses seem to be on top of the trees"):
+    // cells in the 2-tile south-easterly band of a structure get NO tall
+    // trees — a tree there draws in front of the building and buries its
+    // front face. Understory (ferns/rocks) still allowed at half rate, and
+    // trees BEHIND (north-west of) buildings stay — canopies peeking over
+    // roofs is the cozy look we want.
+    const frontShadow = new Set();
+    for (const foot of structFoots || []) {
+        const [fx, fy, fw, fh] = foot;
+        for (let ix = 0; ix < fw; ix++) {
+            for (let iy = 0; iy < fh; iy++) {
+                for (let dx = -1; dx <= 2; dx++) {
+                    for (let dy = -1; dy <= 2; dy++) {
+                        if (dx + dy >= 2) frontShadow.add(`${fx + ix + dx},${fy + iy + dy}`);
+                    }
+                }
+            }
+        }
+    }
     const rnd = mulberry32(hashStr(seed ^ 0x6d2b79f5));
     const out = [];
     const jitter = (m) => (rnd() - 0.5) * m;
@@ -227,8 +248,8 @@ function islandForest(opts) {
                 // far wilderness ring (owner 20:20Z: "improve the
                 // environmental ones outside the tree wall") — dark conifers
                 // fading toward the backdrop, scattered wild clutter
-                if (rnd() < 0.55) out.push({ file: pickWeighted(rnd, FAR_TREES), x: px + jitter(56), y: py + jitter(18) + 6, sc: 0.4 + rnd() * 0.16 });
-                if (rnd() < 0.10) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(40), y: py + jitter(14) + 8, sc: 0.85 });
+                if (rnd() < 0.62) out.push({ file: pickWeighted(rnd, FAR_TREES), x: px + jitter(44), y: py + jitter(18) + 6, sc: 0.4 + rnd() * 0.16 });
+                if (rnd() < 0.12) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(40), y: py + jitter(14) + 8, sc: 0.85 });
             } else if (border) {
                 if (outside) {
                     // margin wall — reads as forest EDGE, not a suffocating
@@ -247,16 +268,19 @@ function islandForest(opts) {
             } else if (mid) {
                 // margin mode calms the mid ring so zones/paths stay visible
                 const rate = margin ? 0.22 : 0.45;
-                if (rnd() < rate) out.push({ file: pickWeighted(rnd, RING_TREES), x: px + jitter(26), y: py + jitter(10) + 6 });
-                if (rnd() < 0.30) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(26), y: py + 8 });
+                const sh = frontShadow.has(key);
+                if (!sh && rnd() < rate) out.push({ file: pickWeighted(rnd, RING_TREES), x: px + jitter(26), y: py + jitter(10) + 6 });
+                if (rnd() < (sh ? 0.15 : 0.30)) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(26), y: py + 8 });
             } else if (hotSet.has(key)) {
                 // clearing around the house — trees beside it, never crowding
                 // the walls (owner 20:20Z: "houses seem to be on top of the
                 // trees") — lower rate, tighter outward jitter
-                if (rnd() < 0.42) out.push({ file: pickWeighted(rnd, RING_TREES), x: px + jitter(16), y: py + jitter(8) + 4, sc: 0.88 + rnd() * 0.14 });
-                if (rnd() < 0.40) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(24), y: py + 6 });
+                const sh = frontShadow.has(key);
+                if (!sh && rnd() < 0.42) out.push({ file: pickWeighted(rnd, RING_TREES), x: px + jitter(16), y: py + jitter(8) + 4, sc: 0.88 + rnd() * 0.14 });
+                if (rnd() < (sh ? 0.20 : 0.40)) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(24), y: py + 6 });
             } else {
-                if (rnd() < 0.17) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(28), y: py + 8 });
+                const sh = frontShadow.has(key);
+                if (rnd() < (sh ? 0.08 : 0.17)) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(28), y: py + 8 });
             }
         }
     }

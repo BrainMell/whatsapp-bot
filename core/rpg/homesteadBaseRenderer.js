@@ -240,6 +240,9 @@ async function renderFrame(state, frame, opts = {}) {
         paths: LAYOUT.paths || [],
         hot, plotCells,
         margin: true, // tree wall relocated OUTSIDE the playable ring
+        structFoots: (state.structures || [])
+            .map((st) => { const d = structDef(st.type); return d ? [st.x, st.y, d.fw, d.fh] : null; })
+            .filter(Boolean),
     });
     // wild understory scattered through the outer margin (world continuity)
     {
@@ -248,7 +251,7 @@ async function renderFrame(state, frame, opts = {}) {
             for (let y = -M; y < N + M; y++) {
                 const inside = x >= -1 && y >= -1 && x <= N && y <= N;
                 if (inside) continue;
-                if (mRnd() > 0.10) continue;
+                if (mRnd() > 0.16) continue;
                 const px = isoX(x + 0.5, y + 0.5), py = isoY(x + 0.5, y + 0.5);
                 if (px < 0 || px > ART_W || py < 0 || py > ART_H) continue;
                 const f = mRnd() < 0.34 ? 'px_fern.png' : (mRnd() < 0.55 ? 'px_tuft.png' : mRnd() < 0.70 ? 'px_shroom.png' : mRnd() < 0.82 ? 'px_rock.png' : mRnd() < 0.92 ? 'px_bush_b.png' : 'px_stump.png');
