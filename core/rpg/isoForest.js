@@ -191,7 +191,7 @@ async function paintBackdrop(ctx, W, H, frame, FRAMES, horizonY, islandBottomY) 
 //   - every other free tile: understory clutter @ 24%
 // ═══════════════════════════════════════════════════════════════════════════
 function islandForest(opts) {
-    const { seed, N, isoX, isoY, occupied, paths = [], hot = [], plotCells } = opts;
+    const { seed, N, isoX, isoY, occupied, paths = [], hot = [], plotCells, margin } = opts;
     const pathSet = new Set(paths.map(([x, y]) => `${x},${y}`));
     const hotSet = new Set(hot.map(([x, y]) => `${x},${y}`));
     const blocked = new Set([...(occupied || []), ...pathSet, ...(plotCells || [])]);
@@ -199,17 +199,26 @@ function islandForest(opts) {
     const out = [];
     const jitter = (m) => (rnd() - 0.5) * m;
 
-    for (let x = 0; x < N; x++) {
-        for (let y = 0; y < N; y++) {
+    // margin mode (owner 2026-10-16: ground/world continues past the borders):
+    // the dense tree wall plants OUTSIDE the playable ring (cells -1 and N),
+    // and the former in-map border ring drops to mid density so playable
+    // cells stop being eaten by trees.
+    const lo = margin ? -1 : 0, hi = margin ? N : N - 1;
+    for (let x = lo; x <= hi; x++) {
+        for (let y = lo; y <= hi; y++) {
             const key = `${x},${y}`;
-            const border = (x === 0 || y === 0 || x === N - 1 || y === N - 1);
-            const mid = !border && (x === 1 || y === 1 || x === N - 2 || y === N - 2);
+            const outside = x < 0 || y < 0 || x >= N || y >= N;
+            if (outside && !margin) continue;
+            const inMapBorder = (x === 0 || y === 0 || x === N - 1 || y === N - 1);
+            const border = outside || (!margin && inMapBorder);
+            const mid = !border && (x === 1 || y === 1 || x === N - 2 || y === N - 2 || (margin && inMapBorder));
             if (blocked.has(key)) continue;
             const px = isoX(x + 0.5, y + 0.5);
             const py = isoY(x + 0.5, y + 0.5);
             if (border) {
-                // dense wall — 2 staggered trees per border tile
-                for (let k = 0; k < 2; k++) {
+                // dense wall — 2-3 staggered trees per tile
+                const nTrees = outside ? 3 : 2;
+                for (let k = 0; k < nTrees; k++) {
                     out.push({ file: pickWeighted(rnd, RING_TREES), x: px + jitter(30), y: py + jitter(12) + 6 });
                 }
                 if (rnd() < 0.35) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(26), y: py + jitter(10) + 8 });

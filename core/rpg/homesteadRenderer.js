@@ -450,6 +450,35 @@ async function renderFrame(state, frame, opts = {}) {
         drawn.push({ p, spr, c, anchorY, w: spr.width * 2, h: spr.height * 2 });
     }
 
+    // ── move locomotion (owner 2026-10-16 "moving doesn't trigger an
+    // animation"): when pop carries a `from` cell, the piece SLIDES from the
+    // old tile to the new one with easeOutCubic + a dust kick at the origin.
+    if (opts.pop && opts.pop.from) {
+        for (const d of drawn) {
+            if (opts.pop.item !== d.p.item || opts.pop.x !== d.p.x || opts.pop.y !== d.p.y) continue;
+            const fc = footCenter(opts.pop.from.x, opts.pop.from.y, d.p.def.fw, d.p.def.fh);
+            const e = Math.min(1, t * 1.5);
+            const k = 1 - Math.pow(1 - e, 3); // easeOutCubic
+            const hop = Math.sin(k * Math.PI) * 9; // little lift mid-slide
+            d.c = { x: fc.x + (d.c.x - fc.x) * k, y: fc.y + (d.c.y - fc.y) * k };
+            d.anchorY = d.c.y + (d.p.def.fw + d.p.def.fh) * (TH / 4) - TH / 2 + 2 - hop;
+            if (k < 1) {
+                // dust kick at the origin cell, strongest right after the push-off
+                const pr = mulberry32(seed + 1234);
+                ctx.save();
+                ctx.globalAlpha = 0.5 * (1 - k);
+                ctx.fillStyle = '#d8c8a2';
+                for (let i = 0; i < 6; i++) {
+                    const a = pr() * Math.PI * 2, rr = 4 + pr() * 14 * (0.4 + k);
+                    ctx.beginPath();
+                    ctx.ellipse(fc.x + Math.cos(a) * rr, fc.y + 6 + Math.sin(a) * rr * 0.4, 3.4, 2, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+            }
+        }
+    }
+
     // ═══ SHADOWS — rebuilt from scratch (owner: "scrap it and redo") ═══
     // isoShadow.js: sprite-SILHOUETTE cast shadows squashed onto the floor
     // plane and marched along the key-light direction (upper-left key →
@@ -629,33 +658,62 @@ function drawDiamond(ctx, cx, cy, rx, ry) {
     ctx.closePath();
 }
 function drawGridFloor(ctx, g, frame) {
-    // labelled axes along the two FRONT edges, just outside the floor diamond
+    // v2 (owner 2026-10-16 17:27Z "the grid isn't a very visible overlay… tiny"):
+    // full hairline grid across EVERY floor tile + BIG bold coordinate
+    // numbers sitting IN the front-edge tiles, dark-outlined gold so they
+    // read at WhatsApp thumbnail size. Front rims stroked gold.
     ctx.save();
-    ctx.font = '12px Medieval, sans-serif';
+    // 1) full grid hairlines
+    ctx.strokeStyle = 'rgba(250,240,210,0.30)';
+    ctx.lineWidth = 1.2;
+    for (let i = 1; i < N; i++) {
+        ctx.beginPath(); ctx.moveTo(isoX(i, 0), isoY(i, 0)); ctx.lineTo(isoX(i, N), isoY(i, N)); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(isoX(0, i), isoY(0, i)); ctx.lineTo(isoX(N, i), isoY(N, i)); ctx.stroke();
+    }
+    // 2) gold front rims (SW + SE edges of the floor)
+    ctx.strokeStyle = 'rgba(244,206,110,0.95)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(isoX(0, N), isoY(0, N)); ctx.lineTo(isoX(N, N), isoY(N, N)); ctx.lineTo(isoX(N, 0), isoY(N, 0));
+    ctx.stroke();
+    // 3) bold coordinate numbers centred in the front-edge tiles
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    ctx.font = 'bold 26px Cinzel, Medieval, sans-serif';
     for (let i = 0; i < N; i++) {
-        // X indices along the south-west edge (tiles (*, N-1))
-        ctx.fillStyle = 'rgba(232,213,163,0.85)';
-        ctx.fillText(String(i), isoX(i, N - 1) - 17, isoY(i, N - 1) + 27);
-        // Y indices along the south-east edge (tiles (N-1, *))
-        ctx.fillText(String(i), isoX(N - 1, i) + 18, isoY(N - 1, i) + 27);
+        const spots = [
+            [isoX(i, N - 1), isoY(i, N - 1) - 1],   // SW edge tile (X axis)
+            [isoX(N - 1, i) + 1, isoY(N - 1, i) - 1], // SE edge tile (Y axis)
+        ];
+        for (const [tx, ty] of spots) {
+            ctx.lineWidth = 5;
+            ctx.strokeStyle = 'rgba(28,17,6,0.88)';
+            ctx.strokeText(String(i), tx, ty);
+            ctx.fillStyle = '#ffd76a';
+            ctx.fillText(String(i), tx, ty);
+        }
     }
-    ctx.fillStyle = 'rgba(240,200,110,0.95)';
-    ctx.font = '13px Medieval, sans-serif';
-    ctx.fillText('X', isoX(N, N - 1) - 2, isoY(N, N - 1) + 30);
-    ctx.fillText('Y', isoX(N - 1, N) + 8, isoY(N - 1, N) + 30);
-    // footprint cell highlight
+    // axis captions, oversized
+    ctx.font = 'bold 30px Cinzel, Medieval, sans-serif';
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = 'rgba(28,17,6,0.9)';
+    ctx.strokeText('X →', isoX(N, N - 1) - 26, isoY(N, N - 1) + 26);
+    ctx.fillStyle = '#ffe6a0';
+    ctx.fillText('X →', isoX(N, N - 1) - 26, isoY(N, N - 1) + 26);
+    ctx.strokeText('↓ Y', isoX(N - 1, N) + 30, isoY(N - 1, N) + 24);
+    ctx.fillStyle = '#ffe6a0';
+    ctx.fillText('↓ Y', isoX(N - 1, N) + 30, isoY(N - 1, N) + 24);
+    // footprint cell highlight (kept from v1, brightened)
     const pulse = 0.5 + 0.5 * Math.sin((frame / FRAMES) * Math.PI * 2);
     const valid = g.valid !== false;
     for (let ix = 0; ix < (g.fw || 1); ix++) {
         for (let iy = 0; iy < (g.fh || 1); iy++) {
             const cx = isoX(g.x + ix, g.y + iy), cy = isoY(g.x + ix, g.y + iy);
-            drawDiamond(ctx, cx, cy, TW / 2 - 3, TH / 2 - 1.5);
-            ctx.fillStyle = valid ? `rgba(240,200,90,${0.10 + 0.10 * pulse})` : `rgba(220,70,50,${0.13 + 0.13 * pulse})`;
+            drawDiamond(ctx, cx, cy, TW / 2 - 2, TH / 2 - 1);
+            ctx.fillStyle = valid ? `rgba(255,214,100,${0.16 + 0.14 * pulse})` : `rgba(235,70,50,${0.18 + 0.16 * pulse})`;
             ctx.fill();
-            ctx.strokeStyle = valid ? `rgba(240,200,90,${0.45 + 0.4 * pulse})` : `rgba(230,80,60,${0.5 + 0.4 * pulse})`;
-            ctx.lineWidth = 1.6;
+            ctx.strokeStyle = valid ? `rgba(255,214,100,${0.65 + 0.35 * pulse})` : `rgba(240,85,60,${0.7 + 0.3 * pulse})`;
+            ctx.lineWidth = 3;
             ctx.stroke();
         }
     }

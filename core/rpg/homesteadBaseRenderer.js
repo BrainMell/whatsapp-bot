@@ -101,14 +101,37 @@ function roundRect(ctx, x, y, w, h, r) {
     ctx.closePath();
 }
 
-// ── LAYOUT (must match baseBuilder.js LAYOUT) ──
+// ── LAYOUT v2 (owner 2026-10-16 17:27Z "the layout trash, the house too
+// big"): village-grade plan — house anchored centre-south on a proper plaza,
+// one clean spine north splitting to mines (NW) and pond (NE), west walk to
+// the hunting gate, south walk serving the plots. No more diagonal scrawl.
 const LAYOUT = {
     N,
-    house: { x: 6, y: 6, fw: 3, fh: 3 },
+    house: { x: 6, y: 7, fw: 3, fh: 3 },
     mines: { x: 1, y: 1, fw: 2, fh: 2, zone: { x: 0, y: 0, fw: 5, fh: 4 } },
     pond: { x: 12, y: 1, fw: 2, fh: 2, zone: { x: 11, y: 0, fw: 5, fh: 4 } },
-    hunting: { x: 3, y: 7, fw: 2, fh: 2, zone: { x: 0, y: 5, fw: 4, fh: 8 }, fenceCol: 4 },
-    paths: [[13, 13], [12, 12], [11, 11], [10, 10], [9, 9], [10, 11], [10, 12], [9, 12], [11, 9], [12, 9], [12, 8], [4, 9], [4, 10], [5, 9], [5, 10], [3, 10], [3, 11], [2, 12]],
+    hunting: { x: 3, y: 8, fw: 2, fh: 2, zone: { x: 0, y: 5, fw: 4, fh: 8 }, fenceCol: 4 },
+    paths: [
+        // plaza around the house (south face + west/east stubs)
+        [5, 8], [5, 9], [5, 10], [6, 10], [7, 10], [8, 10], [9, 10], [9, 9], [9, 8],
+        // north spine from the plaza top to the field crossroads
+        [7, 3], [7, 4], [7, 5], [7, 6],
+        // west branch to the mines
+        [3, 3], [4, 3], [5, 3], [6, 3],
+        // east branch to the pond
+        [8, 3], [9, 3], [10, 3], [11, 3], [12, 3],
+        // west walk to the hunting gate
+        [1, 9], [2, 9], [3, 9], [4, 9],
+        // south walk serving the plots
+        [9, 11], [9, 12], [9, 13], [8, 14], [7, 14], [6, 14], [5, 14],
+    ],
+};
+
+// per-structure draw scale (owner: "the house too big") — sprites were
+// authored larger than their footprint reads on a 64px tile grid.
+const STRUCT_SCALE = {
+    house: 0.62, blacksmith: 0.72, medbay: 0.72, alchemy: 0.72,
+    mines: 0.95, pond: 1.0, hunting: 0.92,
 };
 
 function inZone(z, x, y) { return x >= z.x && x < z.x + z.fw && y >= z.y && y < z.y + z.fh; }
@@ -129,24 +152,33 @@ async function renderFrame(state, frame, opts = {}) {
     // no sky, deep canopy wall + treelines + god rays behind the island ──
     await isoForest.paintBackdrop(ctx, ART_W, ART_H, frame, FRAMES, isoY(0, 0) - 16, isoY(N - 1, N - 1) + 16);
 
-    // ── terrain — mossy forest floor (tiles redesigned 2026-10-16) ──
+    // ── terrain — mossy forest floor, and it now STRETCHES PAST THE CARD
+    // BORDERS (owner: "the ground itself stretching past the borders of the
+    // gif/card") — margin tiles continue the world outside the playable ring
+    // so there is no floating-island void anywhere.
     const grass = ['forest_moss_a.png', 'forest_moss_b.png', 'forest_moss_c.png'];
     const waterF = frame % 4 < 2 ? 'forest_water_0.png' : 'forest_water_1.png';
-    for (let sum = 0; sum <= 2 * (N - 1); sum++) {
-        for (let x = Math.max(0, sum - N + 1); x <= Math.min(N - 1, sum); x++) {
-            const y = sum - x;
-            const r = mulberry32(seed + x * 131 + y * 17)();
+    const M = 7;
+    for (let x = -M; x < N + M; x++) {
+        for (let y = -M; y < N + M; y++) {
+            const px = isoX(x, y), py = isoY(x, y);
+            if (px < -TW || px > ART_W + TW || py < -TH || py > ART_H + TH) continue;
+            const r = mulberry32(seed + (x + 40) * 131 + (y + 40) * 17)();
+            const inside = x >= 0 && y >= 0 && x < N && y < N;
             let tile;
-            if (inZone(LAYOUT.mines.zone, x, y)) tile = r < 0.85 ? 'forest_rock_tile.png' : 'forest_moss_c.png';
+            if (!inside) {
+                // wild margin — same moss law, slightly wilder
+                tile = r < 0.06 ? 'forest_moss_shrooms.png' : (r < 0.13 ? 'forest_rock_tile.png' : grass[Math.floor(r * 3) % 3]);
+            } else if (inZone(LAYOUT.mines.zone, x, y)) tile = r < 0.85 ? 'forest_rock_tile.png' : 'forest_moss_c.png';
             else if (inZone(LAYOUT.pond.zone, x, y)) tile = r < 0.92 ? waterF : 'forest_moss_c.png';
-            else if ((LAYOUT.paths || []).some(([px, py]) => px === x && py === y)) tile = 'forest_trail.png';
+            else if ((LAYOUT.paths || []).some(([px2, py2]) => px2 === x && py2 === y)) tile = 'forest_trail.png';
             else tile = r < 0.07 ? 'forest_moss_shrooms.png' : grass[Math.floor(r * 3) % 3];
             const timg = await img(tile);
-            if (timg) ctx.drawImage(timg, isoX(x, y) - TW / 2, isoY(x, y) - TH / 2);
+            if (timg) ctx.drawImage(timg, px - TW / 2, py - TH / 2);
         }
     }
-    // map edge rim — deep mossy earth edge
-    ctx.strokeStyle = 'rgba(24,32,14,0.55)';
+    // playable-area rim — now a SOFT moss shadow instead of a hard island edge
+    ctx.strokeStyle = 'rgba(24,32,14,0.22)';
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(isoX(0, N), isoY(0, N));
@@ -207,7 +239,23 @@ async function renderFrame(state, frame, opts = {}) {
         occupied: usedMargin,
         paths: LAYOUT.paths || [],
         hot, plotCells,
+        margin: true, // tree wall relocated OUTSIDE the playable ring
     });
+    // wild understory scattered through the outer margin (world continuity)
+    {
+        const mRnd = mulberry32(seed + 909);
+        for (let x = -M; x < N + M; x++) {
+            for (let y = -M; y < N + M; y++) {
+                const inside = x >= -1 && y >= -1 && x <= N && y <= N;
+                if (inside) continue;
+                if (mRnd() > 0.10) continue;
+                const px = isoX(x + 0.5, y + 0.5), py = isoY(x + 0.5, y + 0.5);
+                if (px < 0 || px > ART_W || py < 0 || py > ART_H) continue;
+                const f = mRnd() < 0.5 ? 'forest_fern.png' : (mRnd() < 0.75 ? 'forest_grass_tuft.png' : 'forest_mushroom.png');
+                forestProps.push({ file: f, x: px, y: py });
+            }
+        }
+    }
     for (const f of forestProps) {
         const im = await img(f.file);
         if (im) props.push({ img: im, x: f.x, y: f.y });
@@ -243,7 +291,8 @@ async function renderFrame(state, frame, opts = {}) {
         const spr = await img(`${lv.sprite}.png`);
         if (!spr) continue;
         const { cx, ay } = anchorOf(st.x, st.y, st.def.fw, st.def.fh);
-        drawn.push({ st, spr, cx, ay, w: spr.width, h: spr.height, lv });
+        const sc = STRUCT_SCALE[st.type] || 0.85;
+        drawn.push({ st, spr, cx, ay, w: spr.width * sc, h: spr.height * sc, sc, lv });
     }
 
     // props behind structures merge into the same depth pass (props have no footprint)
@@ -261,7 +310,7 @@ async function renderFrame(state, frame, opts = {}) {
             continue;
         }
         isoShadow.drawItemShadow(ctx, {
-            img: d.spr, key: `${d.st.type}_${d.st.level}`, scale: 1,
+            img: d.spr, key: `${d.st.type}_${d.st.level}`, scale: d.sc,
             ax: d.cx, ay: d.ay, alpha: 1,
         });
     }
@@ -271,7 +320,7 @@ async function renderFrame(state, frame, opts = {}) {
             ctx.drawImage(d.img, d.x - d.img.width / 2, d.y - d.img.height);
             continue;
         }
-        ctx.drawImage(d.spr, d.cx - d.w / 2, d.ay - d.h);
+        ctx.drawImage(d.spr, d.cx - d.w / 2, d.ay - d.h, d.w, d.h);
     }
 
     // ── animations ──
@@ -294,8 +343,8 @@ async function renderFrame(state, frame, opts = {}) {
     const t = frame / FRAMES;
     for (const d of drawn) {
         let smokes = 0, sxo = 0, syo = 0;
-        if (d.st.type === 'house' && d.st.level >= 2) { smokes = 3; sxo = 40; syo = -d.h + 14; }
-        if (d.st.type === 'blacksmith' && d.st.level >= 2) { smokes = 4; sxo = 52; syo = -d.h + 30; }
+        if (d.st.type === 'house' && d.st.level >= 2) { smokes = 3; sxo = 40 * d.sc; syo = -d.h + 14; }
+        if (d.st.type === 'blacksmith' && d.st.level >= 2) { smokes = 4; sxo = 52 * d.sc; syo = -d.h + 30; }
         if (!smokes) continue;
         ctx.save();
         for (let i = 0; i < smokes; i++) {

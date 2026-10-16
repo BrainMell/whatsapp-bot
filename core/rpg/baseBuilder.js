@@ -40,16 +40,33 @@ function fixedSeed() {
 
 async function loadBase(userId) {
     let rec = await Base.findOne({ userId }).lean();
-    if (!rec || !Array.isArray(rec.structures) || rec.structures.length < 4) {
-        const seed = rec?.structures?.length ? rec.structures : fixedSeed();
-        // guarantee the four fixed structures exist exactly once
-        const have = new Set(seed.map((s) => s.type));
-        for (const f of fixedSeed()) if (!have.has(f.type)) seed.push(f);
+    if (!rec) {
         rec = await Base.findOneAndUpdate(
             { userId },
-            { $setOnInsert: { userId }, $set: { structures: seed, updatedAt: Date.now() } },
+            { $setOnInsert: { userId, structures: fixedSeed(), updatedAt: Date.now() } },
             { upsert: true, returnDocument: 'after' },
         ).lean();
+    }
+    // guarantee the four fixed structures exist exactly once — ALWAYS (older
+    // bases predating a layout change must still get their missing zones;
+    // owner 2026-10-16: "the pond and mines and everything else? Doesn't exist")
+    const have = new Set((rec.structures || []).map((s) => s.type));
+    const missing = fixedSeed().filter((f) => !have.has(f.type));
+    // layout v2 migration: the fixed anchors moved (house 6,6→6,7; hunting
+    // 3,7→3,8) — relocate the FIXED structures so every base matches the new
+    // village plan. Safe: nothing else can legally occupy these cells.
+    const ANCHORS = { house: LAYOUT.house, hunting: LAYOUT.hunting };
+    let dirty = missing.length > 0;
+    for (const st of rec.structures || []) {
+        const tgt = ANCHORS[st.type];
+        if (tgt && (st.x !== tgt.x || st.y !== tgt.y)) { st.x = tgt.x; st.y = tgt.y; dirty = true; }
+    }
+    if (missing.length) rec.structures = [...(rec.structures || []), ...missing];
+    if (dirty) {
+        await Base.updateOne(
+            { userId },
+            { $set: { structures: rec.structures, updatedAt: Date.now() } },
+        );
     }
     if (!rec) throw new Error('base record could not be created — try again');
     rec.structures = (rec.structures || []).filter((s) => structDef(s.type));

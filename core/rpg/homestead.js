@@ -489,13 +489,16 @@ async function cmdMove(ctx, rec, args) {
         nx = tx; ny = ty; moved++;
     }
     if (!moved) return ctx.reply(`🚧 *${d.name}* is blocked that way — it stays at (${p.x},${p.y}).`);
+    const fx = p.x, fy = p.y;
     await Homestead.updateOne(
         { userId: ctx.senderJid, 'placed.uid': p.uid },
         { $set: { 'placed.$.x': nx, 'placed.$.y': ny, updatedAt: Date.now() } },
     );
     p.x = nx; p.y = ny;
     rec.placed[idx] = p;
-    await viewRoom(ctx, rec, { ...gridOptsFor(p, d), hint: moved < steps ? `Stopped after ${moved} step${moved > 1 ? 's' : ''} (blocked).` : null });
+    // slide animation: pop carries the origin cell so the renderer plays the
+    // locomotion (owner 2026-10-16 "moving doesn't trigger an animation")
+    await viewRoom(ctx, rec, { ...gridOptsFor(p, d), pop: { item: p.item, x: nx, y: ny, from: { x: fx, y: fy } }, hint: moved < steps ? `Stopped after ${moved} step${moved > 1 ? 's' : ''} (blocked).` : null });
 }
 
 async function cmdMoveTo(ctx, rec, args) {
@@ -511,6 +514,7 @@ async function cmdMoveTo(ctx, rec, args) {
     }
     const spot = findFreeNear(rec, d, tx, ty, p.uid);
     if (!spot) return ctx.reply('🏠 Nowhere in the room fits it right now — free some space first.');
+    const fx0 = p.x, fy0 = p.y;
     await Homestead.updateOne(
         { userId: ctx.senderJid, 'placed.uid': p.uid },
         { $set: { 'placed.$.x': spot.x, 'placed.$.y': spot.y, updatedAt: Date.now() } },
@@ -519,7 +523,7 @@ async function cmdMoveTo(ctx, rec, args) {
     const hint = (spot.x !== tx || spot.y !== ty)
         ? `(${tx},${ty}) was blocked or out of bounds — *${d.name}* settled at (${spot.x},${spot.y}).`
         : null;
-    await viewRoom(ctx, rec, { ...gridOptsFor(p, d), hint });
+    await viewRoom(ctx, rec, { ...gridOptsFor(p, d), pop: { item: p.item, x: spot.x, y: spot.y, from: { x: fx0, y: fy0 } }, hint });
 }
 
 async function cmdRotate(ctx, rec) {
@@ -535,7 +539,7 @@ async function cmdRotate(ctx, rec) {
         { $set: { 'placed.$.f': nf, updatedAt: Date.now() } },
     );
     p.f = nf;
-    await viewRoom(ctx, rec, { ...gridOptsFor(p, d), hint: `The *${d.name}* turns to face ${nf ? 'the other way' : 'its original way'}.` });
+    await viewRoom(ctx, rec, { ...gridOptsFor(p, d), pop: { item: p.item, x: p.x, y: p.y }, hint: `The *${d.name}* turns to face ${nf ? 'the other way' : 'its original way'}.` });
 }
 
 async function cmdStore(ctx, rec, args) {
