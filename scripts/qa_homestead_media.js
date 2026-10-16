@@ -93,14 +93,17 @@ function ok(cond, label) {
     ctx.text = '.home select bed_bedroll'; await homestead.handleCommand(ctx);
     ok(sent.some(isStaticImage), 'select placed piece → static grid image');
     ok(!sent.some(isGif), 'select preview is NOT animated');
-    // move → static
+    // move → animated slide (v2 locomotion: pop accompanies the move, so the
+    // room renders ANIMATED with the grid overlay — owner 2026-10-16 "moving
+    // doesn't trigger an animation"; static-grid law now applies to select
+    // and placement mode only)
     sent.length = 0;
     ctx.text = '.home move right'; await homestead.handleCommand(ctx);
-    ok(sent.some(isStaticImage), 'move → static grid image');
-    // rotate → static
+    ok(sent.some(isGif), 'move → ANIMATED slide with grid overlay');
+    // rotate → animated turn pop (same law)
     sent.length = 0;
     ctx.text = '.home rotate'; await homestead.handleCommand(ctx);
-    ok(sent.some(isStaticImage), 'rotate → static grid image');
+    ok(sent.some(isGif), 'rotate → ANIMATED turn pop');
 
     console.log('\n══ 3. §5 PLACEMENT MODE — storage piece ══');
     // starter owned storage piece: plant_flower

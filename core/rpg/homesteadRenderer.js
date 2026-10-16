@@ -834,8 +834,10 @@ function stateHash(state, opts = {}) {
 // Media matrix (owner 2026-10-16 10:09Z "bring gifs back and make the
 // generation faster" — restores the agreed law, supersedes the 10-15 static
 // matrix): the ROOM VIEW is an ANIMATED GIF again (hearth/cauldron/torches
-// idle); placement grids (select/move/rotate) stay STATIC 1-frame cards for
-// snappy placement feedback; successful placement (pop) → ANIMATED GIF.
+// idle); select + placement-mode grids stay STATIC 1-frame cards for snappy
+// placement feedback; v2 locomotion (owner 2026-10-16 "moving doesn't
+// trigger an animation"): move/rotate now pass pop → ANIMATED render with
+// the grid overlay drawn (slide/turn plays under the labelled grid).
 // Speed: the bake is disk-cached per stateHash (mediaCache.js) — first view
 // renders, every repeat is an instant disk read even across restarts.
 async function renderRoomImage(state, opts = {}) {
