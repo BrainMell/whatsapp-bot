@@ -224,6 +224,32 @@ function jsonNorm(v) {
     if (v === undefined) return null;
     try { return JSON.parse(JSON.stringify(v)); } catch (e) { return String(v); }
 }
+// 🧯 2026-10-17 (owner: "bag upgrade bug"): the MongoDB driver serializes
+// undefined as NULL (ignoreUndefined defaults false). A single $set of a
+// field whose value is undefined plants a null into the doc — and a null
+// ANCESTOR then makes every nested leaf write fail forever with
+// "Cannot create field 'x' in element {stats: null}", killing the WHOLE
+// saveUser for that player (live: equipped items with stats:null → every
+// bag view / enhance / hp-tick save for 3 users failed, gear showed 0
+// stats). Producer family (pre-c68dba4 flattenLeaves emitted undefined
+// leaves; whole-doc $set of partial users) is dead, but strip ANY
+// undefined that still reaches an update document — belt and braces.
+// Plain-object values only; Dates/Maps/Buffers are passed through.
+function deepStripUndefined(v) {
+    if (v === null || typeof v !== 'object' || v instanceof Date || v instanceof Map
+        || typeof Buffer !== 'undefined' && v instanceof Buffer
+        || (v && typeof v === 'object' && typeof v._bsontype === 'string')) return v;
+    if (Array.isArray(v)) {
+        for (let i = 0; i < v.length; i++) if (v[i] !== undefined) v[i] = deepStripUndefined(v[i]);
+        return v;
+    }
+    if (Object.getPrototypeOf(v) !== Object.prototype && Object.getPrototypeOf(v) !== null) return v;
+    for (const k of Object.keys(v)) {
+        if (v[k] === undefined) delete v[k];
+        else v[k] = deepStripUndefined(v[k]);
+    }
+    return v;
+}
 
 // ── LEAF-LEVEL MERGE (2026-10-15, owner: "crafted items keeps going backwards") ──
 // The 10-05 guard merged at TOP-LEVEL field granularity and the 10-11 fix
@@ -326,9 +352,44 @@ function leafDiff(ours, base) {
         try { same = isDeepStrictEqual(jsonNorm(flatP[path]), jsonNorm(flatB[path])); } catch (e) { same = false; }
         if (!same) writeSet[path] = flatP[path];
     }
+    // 🧯 2026-10-17 NULL-ANCESTOR PROMOTION (owner: "bag upgrade bug" —
+    // "Cannot create field 'def' in element {stats: null}"): if a baseline
+    // leaf on our write path is null (or a scalar), Mongo refuses to create
+    // fields INSIDE it — and the old conflict loop even deleted the $unset
+    // that could have cleared the null ("best effort shape drift"), so the
+    // whole $set failed and the ENTIRE saveUser died, every time, forever.
+    // Fix: promote the write — $set the null/scalar ANCESTOR to the whole
+    // payload subtree (replaces the poison in one atomic write). Next saves
+    // go back to normal leaf granularity (self-healing, no ops script needed
+    // for future cases).
+    const promoted = new Set();
+    for (const path of Object.keys(writeSet)) {
+        const segs = path.split('.');
+        for (let i = segs.length - 1; i >= 1; i--) {
+            const anc = segs.slice(0, i).join('.');
+            if (!Object.prototype.hasOwnProperty.call(flatB, anc)) continue;
+            const bv = flatB[anc];
+            if (bv === null || typeof bv !== 'object') {
+                // rebuild the whole subtree at the ancestor from our leaves
+                const sub = {};
+                for (const p of Object.keys(flatP)) {
+                    if (p.startsWith(anc + '.')) sub[p.slice(anc.length + 1)] = flatP[p];
+                }
+                writeSet[anc] = deepStripUndefined(unflattenLeaves(sub));
+                promoted.add(anc);
+            }
+            break; // deepest blocker wins; shallower ones are superseded
+        }
+    }
+    for (const anc of promoted) {
+        for (const p of Object.keys(writeSet)) {
+            if (p.startsWith(anc + '.')) delete writeSet[p];
+        }
+    }
     const unsetSet = {};
     for (const path of Object.keys(flatB)) {
         if (path in flatP) continue;
+        if (path in writeSet) continue; // 🧯 2026-10-17: a promoted/whole write on the SAME path replaces it — $set+$unset on one path = Mongo conflict = whole save fails
         const idx = path.lastIndexOf('.');
         const parent = idx === -1 ? '' : path.slice(0, idx);
         const hasParent = parent === '' || Object.keys(flatP).some(k => k === parent || k.startsWith(parent + '.'));
@@ -437,7 +498,7 @@ async function saveUser(userId) {
             // no baseline (runtime-created user / unserializable snapshot):
             // behave exactly as before (whole doc). New users have no
             // sibling contention, so this stays safe.
-            writeSet = payload;
+            writeSet = deepStripUndefined(payload); // 🧯 2026-10-17: never let undefined reach $set (Mongo stores it as null — see deepStripUndefined note)
         }
         const updateDoc = { $set: { ...writeSet, updatedAt: now } };
         if (Object.keys(unsetSet).length) updateDoc.$unset = unsetSet;
@@ -2947,6 +3008,7 @@ module.exports = {
   leafDiff,
   flattenLeaves,
   unflattenLeaves,
+  deepStripUndefined, // 🧯 2026-10-17 QA harness (bag upgrade / null-poison round)
   getZENI,
   STARTING_BALANCE,
   getPlaceholderPFP,

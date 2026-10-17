@@ -319,7 +319,7 @@ function upgradeInventory(userId) {
     if (user.wallet < cost) {
         return {
             success: false,
-            message: `❌ Not enough Zeni! Need: ${cost}, Have: ${user.wallet}`
+            message: `❌ Not enough Zeni! Need: ${cost.toLocaleString()}, Have: ${(user.wallet || 0).toLocaleString()}`
         };
     }
     
@@ -1026,7 +1026,15 @@ function repairItemStats(item, itemId) {
     // if their stats are corrupted (negative values, or values that don't
     // match the DB base stats). The old code skipped these, leaving
     // corrupted items in the bag forever.
+    // 🧯 2026-10-17 (owner: "bag upgrade bug" / "equipment glitch"): items
+    // stored with stats === null (pre-c68dba4 undefined→BSON-null plant) were
+    // ALSO silently skipped — the `item.stats &&` guard below never fired —
+    // so the item showed zero stats forever AND every save that tried to
+    // write a leaf under its stats failed with "Cannot create field 'x' in
+    // element {stats: null}" (whole saveUser dies; live: 5 equipped items on
+    // 3 users). Null stats on a known item = corruption, same as wrong stats.
     let corrupted = false;
+    if (item.stats === null || item.stats === undefined) corrupted = true;
 
     if (item.enhancementLevel > 0) {
         // Enhanced items: check if stats exceed what's possible under the cap

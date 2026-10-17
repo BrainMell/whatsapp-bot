@@ -11882,6 +11882,24 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
+                    // 🧳 BAG UPGRADE (2026-10-17, owner: "bag upgrade bug — check
+                    // the logs you'll see them complaining"): live evidence —
+                    // Hexub¡ typed ".j inv upgrade" 3× 07:32-07:34Z then asked
+                    // "what's the prompt to upgrade inventory"; another player
+                    // too ("We are also trying to upgrade"). The inv/bag router
+                    // below swallowed the upgrade arg and just re-displayed the
+                    // bag, and ".j upgrade bag"/".j expand bag" had NO primaryCmd
+                    // branch at all (only a late exact-match block they could
+                    // never reach). Route every natural phrasing to the upgrade.
+                    if (
+                      (primaryCmd === "upgrade" || primaryCmd === "expand") &&
+                      cmdArgs[1] &&
+                      ["bag", "inv", "inventory"].includes(cmdArgs[1].toLowerCase())
+                    ) {
+                      await rpgCommands.upgradeInventory(sock, chatId, senderJid);
+                      return;
+                    }
+
                     // .j enhance <#bag_index> / .j enhance bag
                     if (primaryCmd === "enhance") {
                       const input = cmdArgs[1];
@@ -12353,8 +12371,15 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
-                    // .j inventory / .j bag [page]
+                    // .j inventory / .j bag [page] / .j inv upgrade
                     if (primaryCmd === "inventory" || primaryCmd === "bag" || primaryCmd === "inv") {
+                      // 🧳 "inv/bag/inventory upgrade|expand|up" upgrades the bag
+                      // instead of being silently swallowed as a page number
+                      // (2026-10-17 bag upgrade bug — see branch above).
+                      if (cmdArgs[1] && /^(upgrade|expand|up)$/i.test(cmdArgs[1])) {
+                        await rpgCommands.upgradeInventory(sock, chatId, senderJid);
+                        return;
+                      }
                       const bagPage = parseInt(cmdArgs[1]) || 1;
                       await rpgCommands.displayInventory(
                         sock,

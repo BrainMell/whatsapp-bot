@@ -463,7 +463,10 @@ async function displayInventory(sock, chatId, senderJid, page = 1) {
 
   msg += `\n━━━━━━━━━━━━━━━\n`;
   msg += `💡 Page: \`${botConfig.getPrefix()} bag <p>\`  •  Equip: \`${botConfig.getPrefix()} equip <#>\`\n`;
-  msg += `💰 Sell: \`${botConfig.getPrefix()} sell <#> [qty]\`  •  Use: \`${botConfig.getPrefix()} use <#>\``;
+  msg += `💰 Sell: \`${botConfig.getPrefix()} sell <#> [qty]\`  •  Use: \`${botConfig.getPrefix()} use <#>\`\n`;
+  // 🧳 2026-10-17: players didn't know the upgrade prompt ("what's the prompt
+  // to upgrade inventory") — surface it on every bag view.
+  msg += `📦 Expand: \`${botConfig.getPrefix()} upgrade bag\` (+5 slots)`;
 
   await sock.sendMessage(chatId, { text: msg });
 }
