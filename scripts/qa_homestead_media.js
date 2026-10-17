@@ -152,7 +152,7 @@ function ok(cond, label) {
     const t0 = Date.now();
     const stat = await renderer.renderRoomImage(state, { static: true });
     const statMs = Date.now() - t0;
-    ok(stat.contentType === 'image/png', `static render returns PNG (${(stat.buffer.length / 1024).toFixed(0)}KB)`);
+    ok(stat.contentType === 'image/jpeg', `static render returns JPEG (${(stat.buffer.length / 1024).toFixed(0)}KB)`);
     const anim = await renderer.renderRoomImage(state, {});
     ok(anim.contentType === 'video/mp4', `default render returns mp4 (${(anim.buffer.length / 1024).toFixed(0)}KB)`);
     ok(statMs < 15000, `static render is fast (${statMs}ms vs full 14-frame pipeline)`);
@@ -162,7 +162,7 @@ function ok(cond, label) {
     );
     ok(inv && inv.length > 30000, `inventory names card renders (${(inv.length / 1024).toFixed(0)}KB)`);
     const bstat = await baseRenderer.renderBaseImage({ owner: 'QA Media', structures: [], freePlots: [] }, { static: true });
-    ok(bstat.contentType === 'image/png', 'base static render returns PNG');
+    ok(bstat.contentType === 'image/jpeg', 'base static render returns JPEG');
     const banim = await baseRenderer.renderBaseImage({ owner: 'QA Media', structures: [], freePlots: [] }, { celebrate: true });
     ok(banim.contentType === 'video/mp4', 'base celebrate render returns mp4');
 

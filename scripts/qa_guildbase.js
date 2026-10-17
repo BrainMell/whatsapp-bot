@@ -39,7 +39,7 @@ async function main() {
         buildings: { hall: 3, training: 2, treasury: 2 },
         memberCount: 5, memberCap: 20, emblemColor: '#a02c3c', emblemIcon: '⚔️', motto: 'Steel sharpens steel.',
     }, {});
-    ok(base.contentType === 'image/png' && base.buffer.length > 50000, `static view is PNG (${base.buffer.length}B in ${Date.now() - t0}ms)`);
+    ok(base.contentType === 'image/jpeg' && base.buffer.length > 50000, `static view is JPEG (${base.buffer.length}B in ${Date.now() - t0}ms)`);
     fs.writeFileSync(path.join(OUTDIR, 'view_mid.png'), base.buffer);
 
     console.log('— level clamps + junk input never crash —');
@@ -48,7 +48,7 @@ async function main() {
         buildings: { hall: 99, training: -3, treasury: 'two' },
         memberCount: 500, memberCap: undefined, emblemColor: 'javascript:alert(1)', emblemIcon: '', motto: '',
     }, {});
-    ok(clamped.contentType === 'image/png' && clamped.buffer.length > 50000, 'junk levels/archetype/color render fine (clamped)');
+    ok(clamped.contentType === 'image/jpeg' && clamped.buffer.length > 50000, 'junk levels/archetype/color render fine (clamped)');
     fs.writeFileSync(path.join(OUTDIR, 'view_junk.png'), clamped.buffer);
 
     console.log('— L0 plots (fresh guild) —');
@@ -57,7 +57,7 @@ async function main() {
         buildings: { hall: 1, training: 0, treasury: 0 },
         memberCount: 2, memberCap: 10,
     }, {});
-    ok(fresh.contentType === 'image/png', 'L0 structures render as plots');
+    ok(fresh.contentType === 'image/jpeg', 'L0 structures render as plots');
     fs.writeFileSync(path.join(OUTDIR, 'view_fresh.png'), fresh.buffer);
 
     console.log('— celebrate animation (mp4 when ffmpeg present) —');

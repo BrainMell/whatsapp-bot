@@ -310,9 +310,14 @@ function drawTorch(ctx, wx, wy, frame, seed) {
 // ═══════════════════════════════════════════════════════════════════════════
 async function renderFrame(state, frame, opts = {}) {
     ensureFonts();
-    const canvas = require('canvas').createCanvas(ART_W * SS, ART_H * SS);
+    // SS OVERRIDE (Task 37 speed round, owner "increase processing speed for
+    // gif and card"): animated bakes render at ss=1 — the mp4 target was
+    // ALWAYS half-res (ART_W x ART_H), so an SS=2 raw frame was a 4x-more-
+    // pixels render whose pixels ffmpeg immediately threw half away.
+    const ss = Math.max(0.5, Math.min(4, parseFloat(opts.ss) || SS));
+    const canvas = require('canvas').createCanvas(ART_W * ss, ART_H * ss);
     const ctx = canvas.getContext('2d');
-    ctx.scale(SS, SS);
+    ctx.scale(ss, ss);
     ctx.imageSmoothingEnabled = false;
 
     const theme = THEMES[state.theme] || THEMES.oakhaven;
@@ -576,6 +581,10 @@ async function renderFrame(state, frame, opts = {}) {
     if (opts.encoder === 'raw') {
         return { raw: canvas.toBuffer('raw'), w: canvas.width, h: canvas.height };
     }
+    // RETURN-CANVAS (Task 37 speed round) — internal callers encode the
+    // finished art themselves (downscale + JPEG) without a full-res PNG
+    // encode round-trip.
+    if (opts.returnCanvas) return canvas;
     return canvas.toBuffer('image/png');
 }
 
@@ -848,7 +857,11 @@ async function encodeFramesToMp4(frames) {
             });
             return fs.readFileSync(out);
         }
-        frames.forEach((b, i) => fs.writeFileSync(path.join(tmp, `f${String(i).padStart(3, '0')}.png`), b));
+        // PNG PATH — plain buffers (QA smoke bakes / 3-frame renders)
+        frames.forEach((b, i) => {
+            if (!Buffer.isBuffer(b)) throw new Error(`frame ${i} is ${(b && typeof b === 'object') ? 'a raw-frame object, not a Buffer' : typeof b} — mixed encoder paths`);
+            fs.writeFileSync(path.join(tmp, `f${String(i).padStart(3, '0')}.png`), b);
+        });
         await new Promise((resolve, reject) => {
             ffmpeg()
                 .input(path.join(tmp, 'f%03d.png'))
@@ -873,6 +886,34 @@ async function encodeFramesToMp4(frames) {
 // state-hash render cache — same room state never re-renders
 const _renderCache = new Map(); // key → { buffer, contentType, ts }
 const CACHE_TTL = 10 * 60 * 1000;
+
+// OUT ENCODER (Task 36/37) — cards ship downscaled JPEG instead of full-res
+// PNG; room cards are 1800x1800 at SS=2, JPEG q0.88 ≈ 250-400KB.
+const OUT_MAX_W = Math.max(640, parseInt(process.env.RENDER_OUT_MAX_W || '2560', 10) || 2560);
+const OUT_JPEG_Q = Math.min(0.95, Math.max(0.5, parseFloat(process.env.RENDER_OUT_JPEG_Q || '0.88') || 0.88));
+function encodeOut(canvas) {
+    let c = canvas;
+    if (canvas.width > OUT_MAX_W) {
+        const h = Math.round(canvas.height * OUT_MAX_W / canvas.width);
+        c = require('canvas').createCanvas(OUT_MAX_W, h);
+        c.getContext('2d').drawImage(canvas, 0, 0, OUT_MAX_W, h);
+    }
+    return { buffer: c.toBuffer('image/jpeg', OUT_JPEG_Q), contentType: 'image/jpeg' };
+}
+
+// HOT CACHE BYTE CAP (Task 36) — bytes, not entries.
+const RENDER_CACHE_MAX_BYTES = 64 * 1048576;
+function cachePut(map, key, out) {
+    let total = (out && out.buffer && out.buffer.length) || 0;
+    for (const v of map.values()) total += (v && v.buffer && v.buffer.length) || 0;
+    while (total > RENDER_CACHE_MAX_BYTES && map.size) {
+        const oldestKey = map.keys().next().value;
+        const v = map.get(oldestKey);
+        total -= (v && v.buffer && v.buffer.length) || 0;
+        map.delete(oldestKey);
+    }
+    map.set(key, { ...out, ts: Date.now() });
+}
 function stateHash(state, opts = {}) {
     return hashStr(JSON.stringify([state.owner, state.theme, state.placed, opts.pop || null, opts.hint || '', opts.grid || null, opts.static ? 1 : 0]));
 }
@@ -896,29 +937,57 @@ async function renderRoomImage(state, opts = {}) {
     const hit = _renderCache.get(key);
     if (hit && (Date.now() - hit.ts) < CACHE_TTL) return hit;
     const out = await mediaCache.cached('room', key, async () => {
-        const frames = [];
-        const frameCount = opts.static ? 1 : FRAMES;
-        // ALL-RAW LAW (matches base/guild): every animated frame renders raw;
-        // PNG only re-renders if the mp4 encode fails (mixed arrays crash the
-        // PNG path on the raw objects — qa1 'renderRoomImage full pipeline')
-        for (let f = 0; f < frameCount; f++) {
-            frames.push(await renderFrame(state, f, opts.static ? opts : { ...opts, encoder: 'raw' }));
-            await breath();
-        }
-        let out = null;
-        if (!opts.static) {
+        // static card: render once, JPEG (no full-res PNG encode)
+        if (opts.static) return encodeOut(await renderFrame(state, 0, { ...opts, returnCanvas: true }));
+        // STREAMING BAKE (Task 37): feed ffmpeg's stdin AS frames render at
+        // ss=1 (the old loop held all 14 SS=2 raw frames ~180MB before the
+        // encode started). Frame pixels land exactly on the mp4 target.
+        try {
+            const fbin = process.env.FFMPEG_PATH || 'ffmpeg';
+            const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'homestead-'));
+            const outFile = path.join(tmp, 'room.mp4');
             try {
-                const mp4 = await encodeFramesToMp4(frames);
-                if (mp4 && mp4.length > 1000) out = { buffer: mp4, contentType: 'video/mp4' };
-            } catch (e) {
-                console.error('[homesteadRenderer] mp4 encode failed, PNG fallback:', e.message);
+                const f0 = await renderFrame(state, 0, { ...opts, encoder: 'raw', ss: 1 });
+                await breath();
+                const { w, h } = f0;
+                const args = [
+                    '-f', 'rawvideo', '-pix_fmt', 'bgra', '-video_size', `${w}x${h}`,
+                    '-framerate', `${1000 / FRAME_MS}`, '-i', 'pipe:0',
+                    // even-dim guard (no-op on even input) — replaces the old
+                    // half-res scale: ss=1 frames ARE the mp4 target size now
+                    '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+                    '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0',
+                    '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '23',
+                    '-movflags', '+faststart', '-an', '-y', outFile,
+                ];
+                await new Promise((resolve, reject) => {
+                    const p = require('child_process').spawn(fbin, args, { stdio: ['pipe', 'ignore', 'pipe'] });
+                    let err = '';
+                    p.stderr.on('data', (d) => { err += d; if (err.length > 6000) err = err.slice(-3000); });
+                    p.on('error', reject);
+                    p.on('exit', (code) => code === 0 ? resolve() : reject(new Error(`ffmpeg exit ${code}: ${err.slice(-500)}`)));
+                    (async () => {
+                        const feed = async (raw) => { if (!p.stdin.write(raw)) await new Promise((r) => p.stdin.once('drain', r)); };
+                        await feed(f0.raw);
+                        for (let f = 1; f < FRAMES; f++) {
+                            const fr = await renderFrame(state, f, { ...opts, encoder: 'raw', ss: 1 });
+                            await feed(fr.raw);
+                            await breath();
+                        }
+                        p.stdin.end();
+                    })().catch((e) => { try { p.stdin.destroy(); } catch (e2) {} try { p.kill('SIGKILL'); } catch (e3) {} reject(e); });
+                });
+                const mp4 = fs.readFileSync(outFile);
+                if (mp4 && mp4.length > 1000) return { buffer: mp4, contentType: 'video/mp4' };
+            } finally {
+                try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e2) {}
             }
+        } catch (e) {
+            console.error('[homesteadRenderer] mp4 encode failed, JPEG fallback:', e.message);
         }
-        if (!out) out = { buffer: opts.static ? frames[0] : await renderFrame(state, 0, opts), contentType: 'image/png' };
-        return out;
+        return encodeOut(await renderFrame(state, 0, { ...opts, returnCanvas: true }));  // fallback card
     });
-    if (_renderCache.size > 120) _renderCache.clear();
-    _renderCache.set(key, { ...out, ts: Date.now() });
+    cachePut(_renderCache, key, out);
     return out;
 }
 

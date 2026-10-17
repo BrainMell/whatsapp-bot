@@ -153,9 +153,14 @@ function inZone(z, x, y) { return x >= z.x && x < z.x + z.fw && y >= z.y && y < 
 // ═══════════════════════════════════════════════════════════════════════════
 async function renderFrame(state, frame, opts = {}) {
     ensureFonts();
-    const canvas = require('canvas').createCanvas(ART_W * SS, ART_H * SS);
+    // SS OVERRIDE (Task 37 speed round, owner "increase processing speed for
+    // gif and card"): animated bakes render at ss=1 — the mp4 target was
+    // ALWAYS half-res (ART_W x ART_H), so an SS=2 raw frame was a 4x-more-
+    // pixels render whose pixels ffmpeg immediately threw half away.
+    const ss = Math.max(0.5, Math.min(4, parseFloat(opts.ss) || SS));
+    const canvas = require('canvas').createCanvas(ART_W * ss, ART_H * ss);
     const ctx = canvas.getContext('2d');
-    ctx.scale(SS, SS);
+    ctx.scale(ss, ss);
     ctx.imageSmoothingEnabled = false;
 
     const seed = hashStr(state.owner || 'base');
@@ -199,9 +204,9 @@ async function renderFrame(state, frame, opts = {}) {
     const layerStore = opts.terrainLayers || null;
     let ground = layerStore ? layerStore[waterF] : null;
     if (!ground) {
-        ground = require('canvas').createCanvas(ART_W * SS, ART_H * SS);
+        ground = require('canvas').createCanvas(ART_W * ss, ART_H * ss);
         const g = ground.getContext('2d');
-        g.scale(SS, SS);
+        g.scale(ss, ss);
         g.imageSmoothingEnabled = false;
         if (layerStore) layerStore[waterF] = ground;
         const TCTX = g;   // terrain target for this block
@@ -741,13 +746,15 @@ async function encodeAnimStream(state, layers, opts) {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'base-'));
     const out = path.join(tmp, 'base.mp4');
     try {
-        const f0 = await renderFrame(state, 0, { ...opts, encoder: 'raw', terrainLayers: layers });
+        const f0 = await renderFrame(state, 0, { ...opts, encoder: 'raw', ss: 1, terrainLayers: layers });
         await breath();
         const { w, h } = f0;
         const args = [
             '-f', 'rawvideo', '-pix_fmt', 'bgra', '-video_size', `${w}x${h}`,
             '-framerate', `${1000 / FRAME_MS}`, '-i', 'pipe:0',
-            '-vf', `scale=${Math.round(w / 2)}:${Math.round(h / 2)}`,
+            // even-dim guard (no-op on even input) — replaces the old
+            // half-res scale: ss=1 frames ARE the mp4 target size now
+            '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
             '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0',
             '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '23',
             '-movflags', '+faststart', '-an', '-y', out,
@@ -762,7 +769,7 @@ async function encodeAnimStream(state, layers, opts) {
                 const feed = async (raw) => { if (!p.stdin.write(raw)) await new Promise((r) => p.stdin.once('drain', r)); };
                 await feed(f0.raw);
                 for (let f = 1; f < FRAMES; f++) {
-                    const fr = await renderFrame(state, f, { ...opts, encoder: 'raw', terrainLayers: layers });
+                    const fr = await renderFrame(state, f, { ...opts, encoder: 'raw', ss: 1, terrainLayers: layers });
                     await feed(fr.raw);
                     await breath();
                 }
