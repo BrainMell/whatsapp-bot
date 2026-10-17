@@ -204,6 +204,15 @@ async function addItem(userId, itemId, quantity = 1, itemData = {}) {
         };
     }
     
+    // 💡 FIX 2026-10-17: strip undefined-valued keys (slot: undefined from
+    // itemData spreads). Undefined keys defeat the save-layer baselines
+    // (JSON.stringify drops them) so leafDiff re-emitted them on EVERY save —
+    // the "inventory.strength_brew.slot" write churn (see economy.js
+    // flattenLeaves note). Clean keys = converging diffs.
+    for (const k of Object.keys(inventory[itemId] || {})) {
+        if (inventory[itemId][k] === undefined) delete inventory[itemId][k];
+    }
+
     await economy.saveUser(userId);
     
     return {

@@ -744,18 +744,24 @@ const _lastCraftList = new Map(); // chatId → { list: [recipe...], expiresAt }
 const CRAFT_LIST_TTL_MS = 10 * 60 * 1000;
 const STATION_KEYWORDS = new Set(['forge', 'brew', 'brewing', 'cook', 'cooking', 'craft', 'all']);
 
-function rememberCraftList(chatId, list) {
-    _lastCraftList.set(chatId, { list, expiresAt: Date.now() + CRAFT_LIST_TTL_MS });
+function rememberCraftList(chatId, list, senderJid) {
+    // 2026-10-17: keyed per (chat, sender). The old chatId-only key let two
+    // players browsing different pages in the same group overwrite each
+    // other's menus for up to 10 minutes — `.craft 4` then crafted from
+    // someone else's page ("I have the item to craft but it doesn't work").
+    const key = senderJid ? `${chatId}|${senderJid}` : chatId;
+    _lastCraftList.set(key, { list, expiresAt: Date.now() + CRAFT_LIST_TTL_MS });
     if (_lastCraftList.size > 500) {
         const oldest = _lastCraftList.keys().next().value;
         _lastCraftList.delete(oldest);
     }
 }
 
-function getRememberedCraftList(chatId) {
-    const entry = _lastCraftList.get(chatId);
+function getRememberedCraftList(chatId, senderJid) {
+    const key = senderJid ? `${chatId}|${senderJid}` : chatId;
+    const entry = _lastCraftList.get(key);
     if (!entry || Date.now() > entry.expiresAt) {
-        _lastCraftList.delete(chatId);
+        _lastCraftList.delete(key);
         return null;
     }
     return entry.list;
@@ -773,7 +779,7 @@ function parseCraftArgs(raw) {
     return { rank, rest: tokens.join(' ') };
 }
 
-async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', searchQuery = null, rank = null) {
+async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', searchQuery = null, rank = null, senderJid = null) {
     let recipes = Object.values(craftingSystem.getRecipes());
 
     const STATION_CATEGORIES = {
@@ -846,7 +852,7 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
     // player inventory for affordability marks (shop-parity: the price line)
     let invCounts = null;
     try {
-        const inv = inventorySystem.getInventory(senderJidOf(chatId, sock) || chatId);
+        const inv = inventorySystem.getInventory(senderJid || senderJidOf(chatId, sock) || chatId);
         invCounts = new Map();
         for (const it of (inv?.items || inv || [])) {
             const id = typeof it === 'string' ? it : it?.id;
@@ -878,12 +884,18 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
             return `${have >= qty ? '✔' : '✘'} ${qty}x ${ingInfo?.name || id}${have >= qty ? '' : ` (${have}/${qty})`}`;
         }).join(', ');
 
+        // 2026-10-17: show the Zeni cost — it used to be invisible until the
+        // craft failed on it (EPIC=25k, LEGENDARY=100k, MYTHIC=250k), reading
+        // to players as "I have everything, why won't it craft?"
+        const zeniCost = craftingSystem.getRecipeGoldCost(r);
+        const zeniStr = zeniCost > 0 ? `\n   💸 ${zeniCost.toLocaleString()} ${getCurrency().symbol || 'Z'}` : '';
+
         msg += `*${startIdx + i + 1}.* ${slotIcon} ${rarityEmoji} *${r.name}* \`${r.id}\`${lvlStr}\n`;
-        msg += `   🛠️ ${ingredients}\n`;
+        msg += `   🛠️ ${ingredients}${zeniStr}\n`;
     });
 
     // shop-parity: the menu powers `.craft <#>` — remember EXACTLY what was shown
-    rememberCraftList(chatId, pageItems.map(r => ({ ...r, _station: categoryFilter })));
+    rememberCraftList(chatId, pageItems.map(r => ({ ...r, _station: categoryFilter })), senderJid);
 
     msg += `━━━━━━━━━━━━━━━\n`;
     msg += `💡 Craft: \`${p} ${cmdName} <#>\` (numbers from this list) or \`${p} ${cmdName} <id>\` (e.g. \`${p} ${cmdName} ${pageItems[0]?.id || 'refined_steel'}\`)\n`;
@@ -900,7 +912,7 @@ function senderJidOf(chatId, sock) {
 
 async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CRAFT') {
     if (!recipeId || recipeId.trim() === '') {
-        return displayRecipes(sock, chatId, 1, categoryFilter);
+        return displayRecipes(sock, chatId, 1, categoryFilter, null, null, senderJid);
     }
 
     const input = recipeId.trim();
@@ -910,7 +922,7 @@ async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CR
     // currently shown in this chat — exactly how ".shop"/".buy <#>" behave.
     const pageMatch = input.match(/^page\s+(\d+)$/i);
     if (pageMatch) {
-        return displayRecipes(sock, chatId, parseInt(pageMatch[1]), categoryFilter);
+        return displayRecipes(sock, chatId, parseInt(pageMatch[1]), categoryFilter, null, null, senderJid);
     }
 
     // rank keyword anywhere in the args → filtered view (".craft forge epic")
@@ -918,16 +930,16 @@ async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CR
     if (rank && (!rest || STATION_KEYWORDS.has(rest.toLowerCase()))) {
         const station = rest ? rest.toLowerCase() : categoryFilter;
         const stationMap = { forge: 'FORGE', brew: 'BREWING', brewing: 'BREWING', cook: 'COOKING', cooking: 'COOKING', craft: 'CRAFT', all: 'CRAFT' };
-        return displayRecipes(sock, chatId, 1, stationMap[station] || categoryFilter, null, rank);
+        return displayRecipes(sock, chatId, 1, stationMap[station] || categoryFilter, null, rank, senderJid);
     }
     if (/^all$/i.test(input)) {
-        return displayRecipes(sock, chatId, 1, categoryFilter);
+        return displayRecipes(sock, chatId, 1, categoryFilter, null, null, senderJid);
     }
 
     // Check if input is pagination page number — ONLY when no remembered
-    // menu exists for this chat (with a menu on screen, numbers craft).
+    // menu exists for this chat+sender (with a menu on screen, numbers craft).
     if (/^\d+$/.test(input)) {
-        const remembered = getRememberedCraftList(chatId);
+        const remembered = getRememberedCraftList(chatId, senderJid);
         if (remembered) {
             const idx = parseInt(input) - 1;
             const recipe = remembered[idx];
@@ -936,7 +948,7 @@ async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CR
             }
             return craftItem(sock, chatId, senderJid, recipe.id, recipe._station || categoryFilter);
         }
-        return displayRecipes(sock, chatId, parseInt(input), categoryFilter);
+        return displayRecipes(sock, chatId, parseInt(input), categoryFilter, null, null, senderJid);
     }
 
     // Check if input is search
@@ -952,7 +964,7 @@ async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CR
             page = parseInt(lastPart);
             searchQuery = parts.slice(0, -1).join(" ");
         }
-        return displayRecipes(sock, chatId, page, categoryFilter, searchQuery);
+        return displayRecipes(sock, chatId, page, categoryFilter, searchQuery, null, senderJid);
     }
     
     // Normal crafting execution
@@ -1523,8 +1535,23 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
     }
     
     // Deduct ingredients
+    // 💡 FIX 2026-10-17: check removeItem results — a failed consumption used
+    // to be silently ignored and the output was added anyway (free item), or
+    // half-consumed stacks left the player short with no rollback.
+    const consumed = [];
     for (const ing of recipe.ingredients) {
-        inventorySystem.removeItem(senderJid, ing.itemId, ing.qty);
+        const removeResult = inventorySystem.removeItem(senderJid, ing.itemId, ing.qty);
+        if (!removeResult || !removeResult.success) {
+            for (const [rid, rq] of consumed) {
+                await inventorySystem.addItem(senderJid, rid, rq);
+            }
+            const ingInfo = lootSystem.getItemInfo(ing.itemId) || {};
+            await sock.sendMessage(chatId, {
+                text: `❌ *CRAFT FAILED*\n━━━━━━━━━━━━━━━━\nCouldn't consume ${ingInfo.name || ing.itemId} — materials refunded. Try again.`
+            });
+            return;
+        }
+        consumed.push([ing.itemId, ing.qty]);
     }
     
     // Add output

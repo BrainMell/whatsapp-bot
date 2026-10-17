@@ -248,7 +248,15 @@ function isPlainEmpty(v) {
 // flatten a plain-object tree into dot-path leaves; arrays/Dates/Maps/etc
 // become single leaves at their own path; an EMPTY plain object becomes an
 // explicit leaf ({} so "we cleared this object" survives the merge)
+// 2026-10-17: undefined-valued keys are SKIPPED, not emitted. JSON baselines
+// (baseJson) drop undefined keys, so an emitted undefined leaf could never
+// match its baseline — leafDiff re-emitted it on EVERY save ("inventory.
+// strength_brew.slot" churn: thousands of non-converging writes, every save
+// forced onto the slow merge path because our own debounced writes kept
+// bumping updatedAt). Skipping undefined = "not set"; a real clear (value in
+// base, undefined now) already falls out as $unset via the deletion loops.
 function flattenLeaves(v, prefix, out) {
+    if (v === undefined) return out;
     if (isMergeLeaf(v)) { if (prefix) out[prefix] = v; return out; }
     const keys = Object.keys(v);
     if (!keys.length) { if (prefix) out[prefix] = {}; return out; }

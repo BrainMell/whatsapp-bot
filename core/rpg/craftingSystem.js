@@ -579,6 +579,29 @@ function getRecipeById(id) {
     return null;
 }
 
+// 💡 2026-10-17: single source of truth for the Zeni cost of a craft — used by
+// performCraft AND the recipe menu (the cost used to be invisible until the
+// craft failed; players with every ingredient saw "it doesn't work").
+// rarity resolution order: recipe.goldCost override → result.rarity → recipe
+// rarity → loot DB entry for the result id → COMMON (free).
+function getRecipeGoldCost(recipe) {
+    if (!recipe) return 0;
+    if (recipe.goldCost !== undefined) return recipe.goldCost;
+    let rarity = (recipe.result && recipe.result.rarity) || recipe.rarity;
+    if (!rarity) {
+        try {
+            const lootSystem = require('./lootSystem');
+            const resultInfo = lootSystem.getItemInfo(recipe.result && recipe.result.id);
+            rarity = resultInfo?.rarity || 'COMMON';
+        } catch (e) { rarity = 'COMMON'; }
+    }
+    const RARITY_GOLD_COST = {
+        'COMMON': 0, 'UNCOMMON': 1000, 'RARE': 5000,
+        'EPIC': 25000, 'LEGENDARY': 100000, 'MYTHIC': 250000, // 💡 Rebalanced 2026-08-17: 500K was 0.1% of community cap per craft.
+    };
+    return RARITY_GOLD_COST[rarity] || 0;
+}
+
 function canCraft(userId, recipeId) {
     const recipe = getRecipeById(recipeId);
     if (!recipe) return { canCraft: false, reason: 'Recipe not found.' };
@@ -613,6 +636,15 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
     const resultItem = recipe.result;
 
     // Enforce Station Type
+    // 💡 FIX 2026-10-17 (owner: "sometimes you have the item to craft but it
+    // doesn't work" + live: Hexub¡ crafted banner_ale/holy_water via .craft with
+    // every ingredient owned and got "requires a **Laboratory**" — "what do they
+    // mean laboratory?"). The MAIN `.craft` path is the universal table: the
+    // menu lists recipes with ✔ ingredient marks, so refusing them at a station
+    // the player has never been told about is pure friction. `.craft` now
+    // crafts ANY recipe; the explicit station menus (.forge/.brew/.cook) keep
+    // their gates (their lists are category-filtered, so a mismatch there is
+    // a real caller bug, not player confusion).
     const STATION_CATEGORIES = {
         'FORGE': ['WEAPON', 'ARMOR'],
         'BREWING': ['BREWING'],
@@ -620,7 +652,7 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
         'CRAFT': ['CRAFT', 'ACCESSORY', 'CLOTHING', 'ENGINEERING', 'EVOLUTION']
     };
     const allowedCategories = STATION_CATEGORIES[requiredStation] || [];
-    if (!allowedCategories.includes(recipe.category)) {
+    if (!allowedCategories.includes(recipe.category) && requiredStation !== 'CRAFT') {
         let stationName = "General Crafting Table";
         if (recipe.category === 'BREWING') stationName = "Laboratory";
         if (recipe.category === 'COOKING') stationName = "Kitchen";
@@ -636,22 +668,10 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
 
     // 💡 QA FIX: Look up rarity from loot DB if recipe doesn't declare it.
     // Previously goldCost was ALWAYS 0 because no recipe declares rarity.
-    let goldCost = recipe.goldCost;
-    if (goldCost === undefined) {
-      let rarity = (recipe.result && recipe.result.rarity) || recipe.rarity;
-      if (!rarity) {
-        try {
-          const lootSystem = require('./lootSystem');
-          const resultInfo = lootSystem.getItemInfo(resultItem.id);
-          rarity = resultInfo?.rarity || 'COMMON';
-        } catch (e) { rarity = 'COMMON'; }
-      }
-      const RARITY_GOLD_COST = {
-        'COMMON': 0, 'UNCOMMON': 1000, 'RARE': 5000,
-        'EPIC': 25000, 'LEGENDARY': 100000, 'MYTHIC': 250000, // 💡 Rebalanced 2026-08-17: 500K was 0.1% of community cap per craft.
-      };
-      goldCost = RARITY_GOLD_COST[rarity] || 0;
-    }
+    // 2026-10-17: extracted to getRecipeGoldCost() so the craft MENU can show
+    // the same cost (the hidden Zeni wall was its own "it doesn't work" trap:
+    // menu showed ✔ on every ingredient, craft failed on Zeni with no hint).
+    const goldCost = getRecipeGoldCost(recipe);
 
     if (goldCost > 0) {
       const userGold = economy.getGold(userId);
@@ -4270,6 +4290,7 @@ module.exports = {
     getRecipes,
     getMiningLocations,
     getRecipeById,
+    getRecipeGoldCost,
     canCraft,
     performCraft,
     dismantleItem,
