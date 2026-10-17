@@ -41,9 +41,11 @@ const baseState = (owner) => ({
         ['v9_guild_coast.png', () => guild.renderFrame({ ...gState, name: 'Stone Watch' }, 0, { static: true })],
         ['v9_guild_forest.png', () => guild.renderFrame(gState, 0, { static: true })],
     ];
+    const toBuf = (o) => Buffer.isBuffer(o) ? o
+        : (o instanceof ArrayBuffer ? Buffer.from(o)
+            : (o && o.buffer ? Buffer.from(o.buffer) : o));
     for (const [name, fn] of shots) {
-        const out = await fn();
-        const buf = out && out.buffer ? out.buffer : out;   // renderBaseImage -> {buffer, contentType}
+        const buf = toBuf(await fn());
         fs.writeFileSync(path.join(OUT, name), buf);
         console.log(name, (buf.length / 1024).toFixed(0) + 'KB', Date.now() - t0 + 'ms');
     }
