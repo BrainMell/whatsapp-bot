@@ -42,7 +42,8 @@ const baseState = (owner) => ({
         ['v9_guild_forest.png', () => guild.renderFrame(gState, 0, { static: true })],
     ];
     for (const [name, fn] of shots) {
-        const buf = await fn();
+        const out = await fn();
+        const buf = out && out.buffer ? out.buffer : out;   // renderBaseImage -> {buffer, contentType}
         fs.writeFileSync(path.join(OUT, name), buf);
         console.log(name, (buf.length / 1024).toFixed(0) + 'KB', Date.now() - t0 + 'ms');
     }
