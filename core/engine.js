@@ -32,6 +32,8 @@ const {
   getPowerScale,
   handlePowerscaleSelection,
   hasPendingSelection,
+  runPowerscaleCommand,
+  sendCard,
 } = require('./utils/powerscale');
 const classSystem = require('./rpg/classSystem');
 
@@ -10606,30 +10608,13 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                             text: BOT_MARKER + `${result.keepPending ? "" : "❌ "}${result.error}`,
                           });
                         }
-                        if (result.imageUrl) {
-                          try {
-                            const imageResponse = await axios.get(
-                              result.imageUrl,
-                              {
-                                responseType: "arraybuffer",
-                                timeout: 15000,
-                                headers: { "User-Agent": "Mozilla/5.0" },
-                              },
-                            );
-                            await sock.sendMessage(chatId, {
-                              image: Buffer.from(imageResponse.data),
-                              caption: BOT_MARKER + result.message,
-                            });
-                          } catch {
-                            await sock.sendMessage(chatId, {
-                              text: BOT_MARKER + result.message,
-                            });
-                          }
-                        } else {
-                          await sock.sendMessage(chatId, {
-                            text: BOT_MARKER + result.message,
-                          });
-                        }
+                        // 💡 2026-10-18: shared card sender — wsrv-relayed image
+                        // (static.wikia 403-blocks this box) + styled caption
+                        // + full-detail follow-up + auto-pick hint
+                        await sock.sendMessage(chatId, {
+                          react: { text: "⚖️", key: m.key },
+                        });
+                        await sendCard(sock, chatId, BOT_MARKER, result);
                         await sock.sendMessage(chatId, {
                           react: { text: "✅", key: m.key },
                         });
@@ -12799,48 +12784,27 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
-                    // .j powerscale <character>
-                    if (primaryCmd === "powerscale") {
-                      const character = cmdArgs.slice(1).join(" ").trim();
-                      if (!character) {
-                        return await sendUsage(
+                    // .j powerscale <name>   |  .j powerscale speed <name>
+                    // .j power scale <name>  (spaced form seen in the wild)
+                    // 💡 2026-10-18: full flow moved into powerscale.js
+                    // (styled card + wsrv-relayed image + category feats)
+                    if (
+                      primaryCmd === "powerscale" ||
+                      (primaryCmd === "power" &&
+                        (cmdArgs[1] || "").toLowerCase() === "scale")
+                    ) {
+                      const raw =
+                        primaryCmd === "power"
+                          ? cmdArgs.slice(2).join(" ").trim()
+                          : cmdArgs.slice(1).join(" ").trim();
+                      try {
+                        await runPowerscaleCommand({
                           sock,
                           chatId,
-                          BOT_MARKER,
-                          "⚖️ SCALE",
-                          "powerscale <n>",
-                          "powerscale goku",
-                          "Analyze character stats via VS Battles.",
-                        );
-                      }
-                      await sock.sendMessage(chatId, {
-                        react: { text: `🔍`, key: m.key },
-                      });
-                      await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER +
-                          `🔍 Searching VS Battles Wiki for "${character}"...`,
-                      });
-                      try {
-                        const result = await getPowerScale(character, chatId);
-                        console.log(
-                          "[engine] Powerscale result:",
-                          JSON.stringify(result),
-                        );
-                        if (!result.success) {
-                          await sock.sendMessage(chatId, {
-                            react: { text: "❌", key: m.key },
-                          });
-                          return await sock.sendMessage(chatId, {
-                            text: BOT_MARKER + `❌ ${result.error}`,
-                          });
-                        }
-                        // isPending = true means we sent the character list, waiting for user to pick
-                        await sock.sendMessage(chatId, {
-                          react: { text: "✅", key: m.key },
-                        });
-                        await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + result.message,
+                          msgKey: m.key,
+                          raw,
+                          botMarker: BOT_MARKER,
+                          prefix: currentPrefix,
                         });
                       } catch (err) {
                         console.error("❌ Powerscale Error:", err.message);
@@ -25534,85 +25498,31 @@ _💡 Reply with another number from your search list!_`.trim();
                     }
 
                     // 🔥 `${botConfig.getPrefix().toLowerCase()}` powerscale <character> - Get character power stats from VS Battles Wiki
+                    // 💡 2026-10-18: legacy dispatch now delegates to the same
+                    // rewritten flow as the core intercept (styled card,
+                    // wsrv-relayed image, category feats) — no more raw
+                    // axios-on-static.wikia fetch that always 403'd here.
                     if (
                       lowerTxt.startsWith(
                         `${botConfig.getPrefix().toLowerCase()} powerscale`,
                       )
                     ) {
-                      const character = txt
+                      const raw = txt
                         .substring(
                           `${botConfig.getPrefix().toLowerCase()} powerscale`
                             .length,
                         )
                         .trim();
 
-                      if (!character) {
-                        return await sendUsage(
+                      try {
+                        await runPowerscaleCommand({
                           sock,
                           chatId,
-                          BOT_MARKER,
-                          "⚖️ SCALE",
-                          "powerscale <name>",
-                          "powerscale goku",
-                          "Analyze character stats via VS Battles.",
-                        );
-                      }
-
-                      await sock.sendMessage(chatId, {
-                        react: { text: `🔍`, key: m.key },
-                      });
-                      await sock.sendMessage(chatId, {
-                        text:
-                          BOT_MARKER +
-                          `🔍 Searching VS Battles Wiki for "${character}"...`,
-                      });
-
-                      try {
-                        const result = await getPowerScale(character, chatId);
-
-                        if (!result.success) {
-                          await sock.sendMessage(chatId, {
-                            react: { text: "❌", key: m.key },
-                          });
-                          return await sock.sendMessage(chatId, {
-                            text: BOT_MARKER + `❌ ${result.error}`,
-                          });
-                        }
-
-                        // Send with image if available
-                        if (result.imageUrl) {
-                          try {
-                            const imageResponse = await axios.get(
-                              result.imageUrl,
-                              {
-                                responseType: "arraybuffer",
-                                timeout: 15000,
-                                headers: { "User-Agent": "Mozilla/5.0" },
-                              },
-                            );
-
-                            await sock.sendMessage(chatId, {
-                              image: Buffer.from(imageResponse.data),
-                              caption: BOT_MARKER + result.message,
-                            });
-                          } catch (imgErr) {
-                            console.log(
-                              "📸 Image load failed, sending text only",
-                            );
-                            await sock.sendMessage(chatId, {
-                              text: BOT_MARKER + result.message,
-                            });
-                          }
-                        } else {
-                          await sock.sendMessage(chatId, {
-                            text: BOT_MARKER + result.message,
-                          });
-                        }
-
-                        await sock.sendMessage(chatId, {
-                          react: { text: "✅", key: m.key },
+                          msgKey: m.key,
+                          raw,
+                          botMarker: BOT_MARKER,
+                          prefix: botConfig.getPrefix().toLowerCase(),
                         });
-                        await awardProgression(senderJid, chatId);
                       } catch (err) {
                         console.error("❌ Powerscale Error:", err);
                         await sock.sendMessage(chatId, {
