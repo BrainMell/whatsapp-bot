@@ -84,7 +84,7 @@ function biomeOf(seedStr) {
 //   props: art-space sprites, bottom-anchored, depth = y
 // ═══════════════════════════════════════════════════════════════════════════
 function outlandProps(opts) {
-    const { seedStr, N, P, isoX, isoY, M, OX: OX_ = 620, OY: OY_ = 150, TW: TW_ = 64, TH: TH_ = 32 } = opts;
+    const { seedStr, N, P, isoX, isoY, M, OX: OX_ = 620, OY: OY_ = 150, TW: TW_ = 64, TH: TH_ = 32, gates = [] } = opts;
     const biome = biomeOf(seedStr);
     const seed = hashStr(String(seedStr) + '::outlands');
     const tiles = [];
@@ -101,6 +101,16 @@ function outlandProps(opts) {
     const AX = OX_ / 620, AY = OY_ / 150;
     const sa = ([x, y]) => [x * AX, y * AY];
     const DEEP_CY = OY_ + 280 * AY;   // ruins deep-site screen centre (430 @ ref)
+    // TREE-SCALE LAW (owner 2026-10-17: the guild's outside trees must read
+    // like the player base reference): sprite px are absolute while the
+    // guild card is 2.06x wider than the base reference card — the same sc
+    // reads half-size. Scale tree sprites by the canvas factor (base stays
+    // byte-identical at TS=1; rocks/ruins keep their own scales — those are
+    // already monumental polyy sprites).
+    const TS = Math.min(AX, 1.55);    // big-canvas tree scale (1.55 ≈ the
+    // reference's 1.3-1.9-tile trees; higher turned the south edge into a
+    // solid canopy wall that swallowed the fence and the front yard)
+    const CS = Math.min(AX, 1.35);    // ground clutter cap (logs/ferns/shrooms)
 
 
     // screen→grid helper: place set pieces by SCREEN position so they always
@@ -110,6 +120,19 @@ function outlandProps(opts) {
         const b = (sy - OY_) / (TH_ / 2);       // x + y
         return [(b + a) / 2, (b - a) / 2];
     }
+
+    // ── GATE CORRIDOR LAW (owner 2026-10-17: roads must walk out of the
+    // gate into the wilds) — renderers declare their gate cells (padded
+    // border coords); a ~5-deep corridor beyond each gate stays treeless so
+    // the road reads gate-to-horizon in EVERY biome.
+    const corridorRects = [];
+    for (const [gx, gy] of gates) {
+        if (gx === f0) corridorRects.push([f0 - 6, gy - 2.5, f0 + 1, gy + 3.5]);        // west gate
+        else if (gx === f1) corridorRects.push([f1 - 1, gy - 2.5, f1 + 6, gy + 3.5]);   // east gate
+        else if (gy === f0) corridorRects.push([gx - 2.5, f0 - 6, gx + 3.5, f0 + 1]);   // north gate
+        else corridorRects.push([gx - 2.5, f1 - 1, gx + 3.5, f1 + 6]);                  // south gate
+    }
+    const inGateCorridor = (x, y) => corridorRects.some(([a, b, c, d]) => x >= a && y >= b && x <= c && y <= d);
 
     // wild-cell classifier
     // coast law: ocean fills the wild band on the SOUTH-EAST edge (y > f1)
@@ -186,20 +209,59 @@ function outlandProps(opts) {
 
     const master = mulberry32(seed ^ 0x51ab3e);
 
-    if (biome === 'forest') {
-        // dense tree wall hugging the fence outside (2 staggered rows)
+    // ── STAGGERED FENCE WALL (owner 2026-10-17, g6 live render: "see how
+    // the trees outside the wall are set??? that's the kinda arrangement I
+    // want for trees outside the fence") — the forest biome's dense
+    // 2-row staggered treatment around ALL FOUR fence edges, extended to
+    // every biome (coast skips ocean cells; the gate corridor always stays
+    // open). FRONT-ROW THINNING: the south/east rows draw IN FRONT of the
+    // whole compound (painter's order) — they scatter at half rate with no
+    // stagger so the grounds stay visible behind them, exactly like the
+    // reference's sparse front band.
+    const treeWall = (rate, scBase, scVar, tint) => {
+        const plant = (x, y, r) => {
+            if (isOceanCell(x, y) || inGateCorridor(x, y)) return;
+            const hero = mulberry32(seed + Math.round(x * 733) * 3 + Math.round(y * 991))() < 0.12;
+            const sc = Math.min((hero ? 1.0 + r * 0.18 : scBase + r * scVar) * TS, 1.65);
+            put(pickWeighted(master, POOLS.forestTrees.map((f) => [f, 1])), x + (r - 0.5), y + (r * 0.4 - 0.2), sc, tint, 40, 14);
+        };
         for (let x = f0 - 2; x <= f1 + 2; x++) {
             for (const y of [f0 - 1, f0 - 2, f1 + 1, f1 + 2]) {
-                if (isOceanCell(x, y)) continue;
-                const r = mulberry32(seed + x * 313 + y * 977)();
-                if (r < 0.5) put(pickWeighted(master, POOLS.forestTrees.map((f) => [f, 1])), x + (r - 0.5), y + (r * 0.4 - 0.2), 0.5 + r * 0.24, TINT_NEAR, 40, 14);
+                const south = y >= f1 + 1;
+                const rr = south ? rate * 0.5 : rate;
+                const r = mulberry32(seed + x * 929 + y * 613)();
+                if (r < rr) plant(x, y, r);
+                if (!south && r < rr * 0.8) plant(x + 0.3, y + 0.4, mulberry32(seed + x * 929 + y * 613 + 5)()); // stagger
             }
         }
         for (let y = f0 - 2; y <= f1 + 2; y++) {
             for (const x of [f0 - 1, f0 - 2, f1 + 1, f1 + 2]) {
-                if (isOceanCell(x, y)) continue;
+                const east = x >= f1 + 1;
+                const rr = east ? rate * 0.7 : rate;
+                const r = mulberry32(seed + x * 457 + y * 1319)();
+                if (r < rr) plant(x, y, r);
+                if (r < rr * 0.8) plant(x + 0.4, y + 0.3, mulberry32(seed + x * 457 + y * 1319 + 5)()); // stagger
+            }
+        }
+    };
+
+    if (biome === 'forest') {
+        // dense tree wall hugging the fence outside (2 staggered rows) —
+        // THE REFERENCE ARRANGEMENT (untouched rates; gate corridor added)
+        for (let x = f0 - 2; x <= f1 + 2; x++) {
+            for (const y of [f0 - 1, f0 - 2, f1 + 1, f1 + 2]) {
+                if (isOceanCell(x, y) || inGateCorridor(x, y)) continue;
+                const r = mulberry32(seed + x * 313 + y * 977)();
+                if (y >= f1 + 1 && TS > 1.3 && r > 0.28) continue;   // big canvas: sparse front band
+                if (r < 0.5) put(pickWeighted(master, POOLS.forestTrees.map((f) => [f, 1])), x + (r - 0.5), y + (r * 0.4 - 0.2), (0.5 + r * 0.24) * TS, TINT_NEAR, 40, 14);
+            }
+        }
+        for (let y = f0 - 2; y <= f1 + 2; y++) {
+            for (const x of [f0 - 1, f0 - 2, f1 + 1, f1 + 2]) {
+                if (isOceanCell(x, y) || inGateCorridor(x, y)) continue;
                 const r = mulberry32(seed + x * 7717 + y * 313)();
-                if (r < 0.5) put(pickWeighted(master, POOLS.forestTrees.map((f) => [f, 1])), x + (r * 0.4 - 0.2), y + (r - 0.5), 0.5 + r * 0.24, TINT_NEAR, 40, 14);
+                if (x >= f1 + 1 && TS > 1.3 && r > 0.36) continue;   // big canvas: east edge lighter
+                if (r < 0.5) put(pickWeighted(master, POOLS.forestTrees.map((f) => [f, 1])), x + (r * 0.4 - 0.2), y + (r - 0.5), (0.5 + r * 0.24) * TS, TINT_NEAR, 40, 14);
             }
         }
         // deep wilds: conifer clusters + mossy clutter, at SCREEN anchors
@@ -207,12 +269,12 @@ function outlandProps(opts) {
         for (let i = 0; i < 5; i++) {
             const [sx, sy] = wildAnchors[Math.floor(master() * wildAnchors.length)];
             const [gx, gy] = screenToGrid(sx + (master() - 0.5) * 120, sy + (master() - 0.5) * 50);
-            cluster(master, POOLS.forestTrees.map((f) => [f, 1]), gx, gy, 2 + Math.floor(master() * 3), 0.5 + master() * 0.16, TINT_MID, 1.4);
+            cluster(master, POOLS.forestTrees.map((f) => [f, 1]), gx, gy, 2 + Math.floor(master() * 3), (0.5 + master() * 0.16) * TS, TINT_MID, 1.4);
         }
         for (let i = 0; i < 18; i++) {
             const [sx, sy] = wildAnchors[Math.floor(master() * wildAnchors.length)];
             const [gx, gy] = screenToGrid(sx + (master() - 0.5) * 260, sy + (master() - 0.5) * 110);
-            put(pickWeighted(master, POOLS.forestClutter.map((f) => [f, 1])), gx, gy, 0.7 + master() * 0.3, TINT_MID, 34, 12);
+            put(pickWeighted(master, POOLS.forestClutter.map((f) => [f, 1])), gx, gy, (0.7 + master() * 0.3) * CS, TINT_MID, 34, 12);
         }
     }
 
@@ -226,12 +288,14 @@ function outlandProps(opts) {
             const [gx, gy] = screenToGrid(sx + (master() - 0.5) * 90, sy + (master() - 0.5) * 40);
             cluster(master, POOLS.highRocks.map((f) => [f, 1]), gx, gy, 3 + Math.floor(master() * 3), 0.95 + master() * 0.2, TINT_MID, 1.5);
         }
-        // scree fields + sparse wind-stunted trees between clusters
+        // scree fields + sparse wind-stunted trees between clusters, PLUS
+        // a thin staggered fence wall so the compound still nests in woodland
+        treeWall(0.3, 0.55, 0.24, TINT_NEAR);
         for (let i = 0; i < 16; i++) {
             const [sx, sy] = rockAnchors[Math.floor(master() * rockAnchors.length)];
             const [gx, gy] = screenToGrid(sx + (master() - 0.5) * 300, sy + (master() - 0.5) * 120);
-            if (master() < 0.7) put(pickWeighted(master, POOLS.highClutter.map((f) => [f, 1])), gx, gy, 0.75 + master() * 0.35, TINT_MID, 30, 12);
-            else put(pickWeighted(master, POOLS.forestTrees.map((f) => [f, 1])), gx, gy, 0.5 + master() * 0.18, TINT_MID, 30, 12);
+            if (master() < 0.7) put(pickWeighted(master, POOLS.highClutter.map((f) => [f, 1])), gx, gy, (0.75 + master() * 0.35) * CS, TINT_MID, 30, 12);
+            else put(pickWeighted(master, POOLS.forestTrees.map((f) => [f, 1])), gx, gy, (0.5 + master() * 0.18) * TS, TINT_MID, 30, 12);
         }
     }
 
@@ -252,18 +316,14 @@ function outlandProps(opts) {
             cluster(master, POOLS.ruinsProps.map((f) => [f, 1]), cx + 1.2, cy + 0.6, 3 + Math.floor(master() * 2), deep ? 0.7 : 0.85, deep ? TINT_FAR : TINT_MID, 1.1);
             cluster(master, POOLS.ruinsClutter.map((f) => [f, 1]), cx - 1.4, cy - 0.8, 4 + Math.floor(master() * 3), deep ? 0.6 : 0.78, deep ? TINT_FAR : TINT_MID, 1.5);
         }
-        // tree wall still hugs the fence (mossy woodland around ruins)
-        for (let x = f0 - 2; x <= f1 + 2; x++) {
-            for (const y of [f0 - 1, f1 + 1]) {
-                const r = mulberry32(seed + x * 313 + y * 977)();
-                if (r < 0.45) put(pickWeighted(master, POOLS.forestTrees.map((f) => [f, 1])), x + (r - 0.5), y + (r * 0.4 - 0.2), 0.5 + r * 0.22, TINT_NEAR, 40, 14);
-            }
-        }
+        // tree wall still hugs the fence (mossy woodland around ruins) —
+        // now the full staggered treatment (was 2 rows at 0.45, no E/W edge)
+        treeWall(0.44, 0.58, 0.26, TINT_NEAR);
         for (let i = 0; i < 14; i++) {
             const cx = master() * (2 * (N + P) + 6) - (N + P) - 3;
             const cy = master() * (2 * (N + P) + 6) - (N + P) - 3;
             if (cx >= f0 && cx <= f1 && cy >= f0 && cy <= f1) continue;
-            put(pickWeighted(master, POOLS.forestClutter.map((f) => [f, 1])), cx, cy, 0.7 + master() * 0.3, TINT_MID, 34, 12);
+            put(pickWeighted(master, POOLS.forestClutter.map((f) => [f, 1])), cx, cy, (0.7 + master() * 0.3) * CS, TINT_MID, 34, 12);
         }
     }
 
@@ -281,20 +341,24 @@ function outlandProps(opts) {
             const y = shoreRow + 1 + Math.floor(master() * 2);
             if (isOceanCell(x, y) && master() < 0.8) put(master() < 0.4 ? 'poly_rock_spire.png' : 'poly_water_rock.png', x, y, 0.9 + master() * 0.3, TINT_SHORE, 20, 6);
         }
-        // land side: windswept tree wall + grassy clutter
-        for (let x = f0 - 2; x <= f1 + 2; x++) {
-            for (const y of [f0 - 1, f0 - 2, f1 + 1]) {
-                if (isOceanCell(x, y)) continue;
-                const r = mulberry32(seed + x * 313 + y * 977)();
-                if (r < 0.45) put(pickWeighted(master, POOLS.forestTrees.map((f) => [f, 1])), x + (r - 0.5), y + (r * 0.4 - 0.2), 0.5 + r * 0.2, TINT_NEAR, 40, 14);
-            }
+        // land side: THE REFERENCE WALL (owner: arrange the outside trees
+        // like the player base) — full staggered fence wall, ocean cells
+        // and the gate corridor stay clear
+        treeWall(0.5, 0.6, 0.28, TINT_NEAR);
+        // deep woodland clumps on the LAND sides (the old coast law had no
+        // clusters at all — the wilds read as empty lawn)
+        const landAnchors = [[110, 180], [170, 635], [590, 66], [340, 105], [90, 330], [620, 760]].map(sa);
+        for (let i = 0; i < 4; i++) {
+            const [sx, sy] = landAnchors[Math.floor(master() * landAnchors.length)];
+            const [gx, gy] = screenToGrid(sx + (master() - 0.5) * 120, sy + (master() - 0.5) * 50);
+            if (isOceanCell(Math.round(gx), Math.round(gy))) continue;
+            cluster(master, POOLS.forestTrees.map((f) => [f, 1]), gx, gy, 2 + Math.floor(master() * 3), (0.5 + master() * 0.18) * TS, TINT_MID, 1.4);
         }
-        for (let i = 0; i < 16; i++) {
-            const cx = master() * (2 * (N + P) + 6) - (N + P) - 3;
-            const cy = master() * (2 * (N + P) + 6) - (N + P) - 3;
-            if (cx >= f0 && cx <= f1 && cy >= f0 && cy <= f1) continue;
-            if (isOceanCell(Math.round(cx), Math.round(cy))) continue;
-            put(pickWeighted(master, POOLS.forestClutter.map((f) => [f, 1])), cx, cy, 0.7 + master() * 0.3, TINT_MID, 34, 12);
+        for (let i = 0; i < 12; i++) {
+            const [sx, sy] = landAnchors[Math.floor(master() * landAnchors.length)];
+            const [gx, gy] = screenToGrid(sx + (master() - 0.5) * 260, sy + (master() - 0.5) * 110);
+            if (isOceanCell(Math.round(gx), Math.round(gy))) continue;
+            put(pickWeighted(master, POOLS.forestClutter.map((f) => [f, 1])), gx, gy, (0.7 + master() * 0.3) * CS, TINT_MID, 34, 12);
         }
     }
 

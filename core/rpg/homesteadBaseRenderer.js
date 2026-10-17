@@ -175,7 +175,7 @@ async function renderFrame(state, frame, opts = {}) {
     // fence is rolled once per owner seed — biome (forest / highlands /
     // ruins / coast), terrain overrides and prop placements all derive from
     // it, so every render of the same player shows the same wilds.
-    const outlands = isoOutlands.outlandProps({ seedStr: state.owner || 'base', N, P, isoX, isoY, M });
+    const outlands = isoOutlands.outlandProps({ seedStr: state.owner || 'base', N, P, isoX, isoY, M, gates: [[5, N - 1 + P]] });
     const wildTile = new Map(outlands.tiles.map((t) => [`${t.x},${t.y}`, t.tile]));
     for (let x = -M; x < N + M; x++) {
         for (let y = -M; y < N + M; y++) {

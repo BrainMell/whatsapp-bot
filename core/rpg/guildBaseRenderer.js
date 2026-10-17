@@ -116,6 +116,11 @@ const ARCH = {
 // road runs between plot 4 and the hamlet). POLYY ART LAW: each slot draws
 // a DIFFERENT village-building sprite (gb_cottage_a..d cycling).
 const COTTAGE_SLOTS = [[12, 24], [16, 24], [10, 26], [14, 26], [18, 25]];
+// COTTAGE SCALE LAW (owner 2026-10-17, g6 live render: "now the houses are
+// too big again... fix that"): the full-size village sprites read bigger
+// than a low-tier castle and swamped their 3x3 plots — member homes shrink
+// into the castle's shadow (0.7 keeps the art crisp at the SS2 canvas).
+const COTTAGE_SCALE = 0.7;
 
 // GUILD PATHS v6 — citadel plan: a 2-wide gate road enters from the west
 // fence and hits the HUB ROUNDABOUT; spoke roads fan out from there — the
@@ -353,23 +358,44 @@ async function renderFrame(state, frame, opts = {}) {
                   // "the background looks weird again". Covering a card this
                   // tall needs y_max ~ 61 -> M = 36; the per-cell screen cull
                   // keeps the extra iterations cheap.)
-    const outlands = isoOutlands.outlandProps({ seedStr: state.name || 'guild', N, P, isoX, isoY, M, OX, OY });
+    const outlands = isoOutlands.outlandProps({ seedStr: state.name || 'guild', N, P, isoX, isoY, M, OX, OY, gates: [[-P, 14], [-P, 15]] });
     const wildTile = new Map(outlands.tiles.map((t) => [`${t.x},${t.y}`, t.tile]));
+    // ── STONE WALKWAY LAW (owner 2026-10-17, g6 live render: "add walk ways
+    // like the one in this image ... generate walk ways with stone ... not
+    // the old shit you had, leave the existing dirt ground walk ways
+    // alongside it for more detail"): roads + civic stone bake as COBBLE
+    // (forest_cobble_a/b/c, seeded per cell so long runs never visibly
+    // repeat), and the old dirt trail stays alive as WORN SHOULDERS hugging
+    // every road + the wild-side gate stub fading out.
+    const COBBLE = ['forest_cobble_a.png', 'forest_cobble_b.png', 'forest_cobble_c.png'];
+    const pathSet = new Set((PATHS || []).map(([x, y]) => `${x},${y}`));
+    const shoulder = new Set();
+    for (const [px, py] of PATHS || []) {
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const k = `${px + dx},${py + dy}`;
+            if (!pathSet.has(k) && !PLAZA.has(k)) shoulder.add(k);
+        }
+    }
     for (let x = -M; x < N + M; x++) {
         for (let y = -M; y < N + M; y++) {
             const px = isoX(x, y), py = isoY(x, y);
             if (px < -TW || px > ART_W + TW || py < -TH || py > ART_H + TH) continue;
             const r = mulberry32(seed + (x + 40) * 131 + (y + 40) * 17)();
+            const r2 = mulberry32(seed + (x + 40) * 131 + (y + 40) * 17 + 7)();
             const inside = x >= 0 && y >= 0 && x < N && y < N;
             const inFence = x >= -P && x <= N - 1 + P && y >= -P && y <= N - 1 + P;
             let tile;
             if (inside) {
-                if (PLAZA.has(`${x},${y}`)) tile = 'forest_rock_tile.png';                      // civic stone
-                else if ((PATHS || []).some(([px2, py2]) => px2 === x && py2 === y)) tile = 'forest_trail.png';
+                if (PLAZA.has(`${x},${y}`)) tile = r2 < 0.2 ? 'forest_rock_tile.png' : COBBLE[Math.floor(r2 * 13) % 3];  // civic cobble
+                else if (pathSet.has(`${x},${y}`)) tile = COBBLE[Math.floor(r2 * 13) % 3];                             // stone walkway
+                else if (shoulder.has(`${x},${y}`) && r2 < 0.5) tile = 'forest_trail.png';                             // worn dirt shoulder
                 else tile = r < 0.07 ? 'forest_moss_shrooms.png' : grass[Math.floor(r * 3) % 3];
             } else if (inFence) {
-                // the yard — tamed meadow inside the palisade
-                tile = r < 0.04 ? 'forest_moss_shrooms.png' : grass[Math.floor(r * 3) % 3];
+                // the yard — tamed meadow inside the palisade; the gate road
+                // cobbles across the yard so the walk reads gate-to-hub
+                const isGateRoad = (y === 14 || y === 15) && x >= -P && x < 0;
+                if (isGateRoad) tile = COBBLE[Math.floor(r2 * 13) % 3];
+                else tile = r < 0.04 ? 'forest_moss_shrooms.png' : grass[Math.floor(r * 3) % 3];
             } else {
                 const wt = wildTile.get(`${x},${y}`);
                 if (wt === 'water') tile = waterF;
@@ -380,15 +406,20 @@ async function renderFrame(state, frame, opts = {}) {
             if (timg) ctx.drawImage(timg, px - TW / 2, py - TH / 2);
         }
     }
-    // west gate trail: the road leaves through the west palisade and fades
-    // into the per-player wilds
+    // west gate trail: the road leaves through the west palisade — cobble
+    // apron at the gate mouth, then the old dirt walk fading into the
+    // per-player wilds (owner: keep the dirt alongside the stone for detail)
     {
         const trailImg = await hsImg('forest_trail.png');
+        const cob0 = await hsImg(COBBLE[0]);
+        const cob1 = await hsImg(COBBLE[1]);
         if (trailImg) {
             const trailCells = [[-P, 14], [-P - 1, 14], [-P - 2, 14], [-P - 3, 13], [-P - 4, 13],
                                 [-P, 15], [-P - 1, 15], [-P - 2, 15], [-P - 3, 16], [-P - 4, 16]];
             for (const [tx, ty] of trailCells) {
-                ctx.drawImage(trailImg, isoX(tx + 0.5, ty + 0.5) - TW / 2, isoY(tx + 0.5, ty + 0.5) - TH / 2);
+                const stone = tx >= -P - 1;
+                const im = stone ? ((tx + ty) % 2 === 0 ? cob0 : cob1) : trailImg;
+                if (im) ctx.drawImage(im, isoX(tx + 0.5, ty + 0.5) - TW / 2, isoY(tx + 0.5, ty + 0.5) - TH / 2);
             }
         }
     }
@@ -535,7 +566,8 @@ async function renderFrame(state, frame, opts = {}) {
         drawables.push({ kind: 'struct', st: s.st, lvl: s.lvl, lv: s.lv, spr, cx, ay: ay + bias, w: spr.width * sc, h: spr.height * sc, sc, order: s.st.x + s.st.y });
     }
     // member cottages — POLYY ART LAW: each member house is a different
-    // village building (gb_cottage_a..d cycling), south-corner anchored
+    // village building (gb_cottage_a..d cycling), south-corner anchored,
+    // COTTAGE_SCALE 0.7 (owner: houses were reading bigger than the castle)
     const nCottages = Math.max(0, Math.min(COTTAGE_SLOTS.length, parseInt(state.memberCount, 10) || 0));
     const COTTAGE_SPRITES = ['gb_cottage_a.png', 'gb_cottage_b.png', 'gb_cottage_c.png', 'gb_cottage_d.png'];
     const cottages = [];
@@ -543,12 +575,12 @@ async function renderFrame(state, frame, opts = {}) {
         const [cxx, cyy] = COTTAGE_SLOTS[i];
         const { cx, ay } = anchorOf(cxx, cyy, 1.35, 1.35);
         const spr = await gbImg(COTTAGE_SPRITES[i % COTTAGE_SPRITES.length]);
-        cottages.push({ cx, ay, spr });
+        cottages.push({ cx, ay, spr, sc: COTTAGE_SCALE });
     }
     // props merge into the depth pass
     const all = [
         ...props.map((p) => ({ kind: 'prop', x: p.x, y: p.y, img: p.img })),
-        ...cottages.map((c) => ({ kind: 'cottage', x: c.cx, y: c.ay, spr: c.spr })),
+        ...cottages.map((c) => ({ kind: 'cottage', x: c.cx, y: c.ay, spr: c.spr, sc: c.sc })),
         ...drawables,
     ].sort((a, b) => (a.y ?? (a.ay ?? 0)) - (b.y ?? (b.ay ?? 0)));
 
@@ -557,7 +589,7 @@ async function renderFrame(state, frame, opts = {}) {
         if (d.kind === 'prop') {
             if (d.img && d.img.height * (d.sc || 1) > 26) isoShadow.drawItemShadow(ctx, { img: d.img, key: `p${d.x}|${d.y}`, scale: d.sc || 1, ax: d.x, ay: d.y + 2, alpha: 0.8 });
         } else if (d.kind === 'cottage') {
-            if (d.spr) isoShadow.drawItemShadow(ctx, { img: d.spr, key: `c${d.x}|${d.y}`, scale: 1, ax: d.x, ay: d.y + 2, alpha: 0.9 });
+            if (d.spr) isoShadow.drawItemShadow(ctx, { img: d.spr, key: `c${d.x}|${d.y}`, scale: d.sc || 1, ax: d.x, ay: d.y + 2, alpha: 0.9 });
         } else if (d.kind === 'struct') {
             isoShadow.drawItemShadow(ctx, { img: d.spr, key: `${d.st.id}_${d.lvl}`, scale: d.sc || 1, ax: d.cx, ay: d.ay, alpha: 1 });
         }
@@ -569,7 +601,10 @@ async function renderFrame(state, frame, opts = {}) {
             const pw = d.img.width * (d.sc || 1), ph = d.img.height * (d.sc || 1);
             ctx.drawImage(d.img, (d.x - pw / 2) | 0, (d.y - ph) | 0, pw | 0, ph | 0);
         } else if (d.kind === 'cottage') {
-            if (d.spr) ctx.drawImage(d.spr, d.x - d.spr.width / 2, d.y - d.spr.height);
+            if (d.spr) {
+                const cw = d.spr.width * (d.sc || 1), ch = d.spr.height * (d.sc || 1);
+                ctx.drawImage(d.spr, d.x - cw / 2, d.y - ch, cw, ch);
+            }
         } else if (d.kind === 'struct') {
             ctx.drawImage(d.spr, d.cx - d.w / 2, d.ay - d.h);
         } else if (d.kind === 'plot') {
