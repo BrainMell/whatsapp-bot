@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Guild training/treasury re-pick: military/civic reads, zero houses.
-training: stable -> gear shed -> gatehouse -> watchtower -> village hall
+training: stable -> forge -> gatehouse -> watchtower -> village hall
 treasury l3: well -> granary staddle (elevated storehouse).
+l2 re-picks (owner 2026-10-17 'guild buildings haven't been fixed like the
+player base'): training l2 lumber_shed read ghost-pale -> blacksmith_forge
+(weapon forge on the training yard); treasury l2 dark watchtower ->
+market_stall (trade-wealth progression dovecote->stall->granary->barn->mill).
 FACING LAW v2 (see build_poly_sprites.py header): village turntable f28
 MIRRORED = corner view, door gable on the lit SW face. f0 frontal and f8
 side both read as facing off-grid."""
@@ -46,14 +50,14 @@ def cut_road_strip(im):
 
 JOBS = [
     ('1x1_stable_24bit.png',           f'{GB}/gb_training_l1.png', 115, False),
-    ('1x1_lumber_shed_24bit.png',      f'{GB}/gb_training_l2.png', 130, False),
+    ('1x1_blacksmith_forge_24bit.png', f'{GB}/gb_training_l2.png', 130, False),
     ('1x1_gatehouse_24bit.png',        f'{GB}/gb_training_l3.png', 150, True),
     ('1x1_watchtower_24bit.png',       f'{GB}/gb_training_l4.png', 150, False),
     ('1x1_village_hall_24bit.png',     f'{GB}/gb_training_l5.png', 185, False),
     ('1x1_granary_staddle_24bit.png',  f'{GB}/gb_treasury_l3.png', 140, False),
     # treasury tiers l1/l2/l4/l5 rebuilt at the hero frame too (old frames faced away)
     ('1x1_dovecote_24bit.png',         f'{GB}/gb_treasury_l1.png', 105, False),
-    ('1x1_watchtower_24bit.png',       f'{GB}/gb_treasury_l2.png', 125, False),
+    ('1x1_market_stall_24bit.png',     f'{GB}/gb_treasury_l2.png', 125, False),
     ('1x1_farmhouse_barn_24bit.png',   f'{GB}/gb_treasury_l4.png', 165, False),
     ('1x1_windmill_24bit.png',         f'{GB}/gb_treasury_l5.png', 185, False),
 ]

@@ -123,6 +123,27 @@ function outlandProps(opts) {
     }
 
     // ── 1. terrain tiles ──
+    // ROCK-GROUND LAW v2 (owner 2026-10-17 'the background looks weird
+    // again'): the old iid per-cell rock roll scattered lone flat stone
+    // diamonds across the moss — they read as glitch squares, worse the
+    // bigger the wild band (guild 28x28). Rocks now grow as CLUSTERED BLOBS:
+    // a few deterministic seeds per biome expand into organic stony patches,
+    // so they read as rocky ground, not floating tiles.
+    const rockRnd = mulberry32(seed ^ 0x51ed270b);
+    const nRocks = { highlands: 26, coast: 16, ruins: 8, forest: 10 }[biome] || 10;
+    const rockSeeds = [];
+    for (let i = 0; i < nRocks; i++) {
+        rockSeeds.push([Math.floor(rockRnd() * (hi - lo + 1)) + lo, Math.floor(rockRnd() * (hi - lo + 1)) + lo, 1 + Math.floor(rockRnd() * 2)]);
+    }
+    const rockAt = (x, y) => {
+        for (const [cx, cy, cr] of rockSeeds) {
+            if (Math.max(Math.abs(x - cx), Math.abs(y - cy)) <= cr) {
+                const rr = mulberry32(seed + (x + 80) * 131 + (y + 80) * 17)();
+                if (rr < 0.82) return true;   // nibble the blob edge so patches stay organic
+            }
+        }
+        return false;
+    };
     for (let x = lo; x <= hi; x++) {
         for (let y = lo; y <= hi; y++) {
             const insideFence = x >= f0 && x <= f1 && y >= f0 && y <= f1;
@@ -132,9 +153,9 @@ function outlandProps(opts) {
             // sandy-gritty (rock tile flecks read as shingle)
             const r = mulberry32(seed + (x + 80) * 131 + (y + 80) * 17)();
             let tile;
-            if (biome === 'highlands') tile = r < 0.20 ? 'forest_rock_tile.png' : (r < 0.26 ? 'forest_moss_shrooms.png' : 'grass');
-            else if (biome === 'coast') tile = r < 0.12 ? 'forest_rock_tile.png' : (r < 0.17 ? 'forest_moss_shrooms.png' : 'grass');
-            else tile = r < 0.05 ? 'forest_rock_tile.png' : (r < 0.10 ? 'forest_moss_shrooms.png' : 'grass');
+            if (rockAt(x, y)) tile = 'forest_rock_tile.png';
+            else if (r < 0.05) tile = 'forest_moss_shrooms.png';
+            else tile = 'grass';
             if (tile !== 'grass') tiles.push({ x, y, tile });
         }
     }

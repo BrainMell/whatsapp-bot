@@ -201,7 +201,12 @@ async function paintBackdrop(ctx, W, H, frame, FRAMES, horizonY, islandBottomY) 
 //   - every other free tile: understory clutter @ 17% (8% in shadow)
 // ═══════════════════════════════════════════════════════════════════════════
 function islandForest(opts) {
-    const { seed, N, isoX, isoY, occupied, paths = [], hot = [], plotCells, margin, structFoots } = opts;
+    const { seed, N, isoX, isoY, occupied, paths = [], hot = [], plotCells, margin, structFoots,
+            // TREE-RATE opts (owner 2026-10-17 'too many trees' on the 28x28
+            // guild grounds): renderers can thin the mid ring + the hot ring
+            // around the castle. Defaults = the historical rates, so the
+            // homestead caller stays byte-identical.
+            midRate = 0.45, hotRate = 0.42 } = opts;
     const pathSet = new Set(paths.map(([x, y]) => `${x},${y}`));
     const hotSet = new Set(hot.map(([x, y]) => `${x},${y}`));
     const blocked = new Set([...(occupied || []), ...pathSet, ...(plotCells || [])]);
@@ -279,7 +284,7 @@ function islandForest(opts) {
                 }
             } else if (mid) {
                 // margin mode calms the mid ring so zones/paths stay visible
-                const rate = margin ? 0.22 : 0.45;
+                const rate = margin ? 0.22 : midRate;
                 const sh = frontShadow.has(key);
                 if (!sh && rnd() < rate) out.push({ file: pickWeighted(rnd, RING_TREES), x: px + jitter(26), y: py + jitter(10) + 6 });
                 if (rnd() < (sh ? 0.15 : 0.30)) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(26), y: py + 8 });
@@ -288,7 +293,7 @@ function islandForest(opts) {
                 // the walls (owner 20:20Z: "houses seem to be on top of the
                 // trees") — lower rate, tighter outward jitter
                 const sh = frontShadow.has(key);
-                if (!sh && rnd() < 0.42) out.push({ file: pickWeighted(rnd, RING_TREES), x: px + jitter(16), y: py + jitter(8) + 4, sc: 0.88 + rnd() * 0.14 });
+                if (!sh && rnd() < hotRate) out.push({ file: pickWeighted(rnd, RING_TREES), x: px + jitter(16), y: py + jitter(8) + 4, sc: 0.88 + rnd() * 0.14 });
                 if (rnd() < (sh ? 0.20 : 0.40)) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(24), y: py + 6 });
             } else {
                 const sh = frontShadow.has(key);

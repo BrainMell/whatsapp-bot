@@ -9,7 +9,13 @@ RTS castle and the old Quaternius kit. Village sheets: f0 = flat frontal
 elevation (billboard, reads 45 deg off-grid), f28 = corner view with the
 front on the SE face; the pack bakes its light from image-RIGHT, so we use
 f28 MIRRORED = front on the lit SW face, pack light flipped onto the SW.
-RTS castle sheets: f0 already = corner view, gate on SW lit face (no mirror).
+RTS castle sheets (LIGHT LAW v3, owner 2026-10-17 'rotate the castle to face
+the right direction'): measured with measure_castle_light.py — every castle
+frame bakes its light from image-RIGHT (lit-SE raw = conflicts with our sun
+NW; the gate sat in shadow while the wrong faces glowed). Fix = MIRROR f0:
+lit faces flip onto SW (L/R 1.21, matches the village reference family) and
+the gate lands centered on the S corner, still facing the camera/approach.
+CASTLE LAW = f0 MIRRORED, same recipe as the village buildings.
 Mossy 24-rot sheets: frontal - 45deg = f21, mirrored, same recipe.
 Scales: base diamond width = (fw+fh) * 32px (TW/2), +spill for monuments."""
 import os
@@ -85,11 +91,13 @@ JOBS = [
     ('V', '1x1_stone_well_24bit.png',          f'{HS}/base_pond_l3.png', 150),
     # hunting gate
     ('V', '1x1_gatehouse_24bit.png',           f'{HS}/base_hunting_gate.png', 185),
-    # guild member cottages (variety)
-    ('V', '1x1_round_cottage_24bit.png',       f'{GB}/gb_cottage_a.png', 100),
-    ('V', '1x1_thatched_cottage_24bit.png',    f'{GB}/gb_cottage_b.png', 110),
-    ('V', '1x1_timber_frame_house_24bit.png',  f'{GB}/gb_cottage_c.png', 115),
-    ('V', '1x1_stable_24bit.png',              f'{GB}/gb_cottage_d.png', 115),
+    # guild member cottages (owner 2026-10-17 'guild buildings haven't been
+    # fixed like the player base' — member houses now use the SAME bright
+    # player-base building art, not dark barn/stable picks)
+    ('V', '1x1_thatched_cottage_24bit.png',    f'{GB}/gb_cottage_a.png', 110),
+    ('V', '1x1_timber_frame_house_24bit.png',  f'{GB}/gb_cottage_b.png', 115),
+    ('V', '1x1_farmhouse_barn_24bit.png',      f'{GB}/gb_cottage_c.png', 115),
+    ('V', '1x1_round_cottage_24bit.png',       f'{GB}/gb_cottage_d.png', 100),
 ]
 
 for kind, src, out, w in JOBS:
@@ -142,6 +150,6 @@ CASTLE_JOBS = [
     ('8_forest_duchy_nopalette.png',         f'{GB}/gb_castle_l5.png', 310),
 ]
 for src, out, w in CASTLE_JOBS:
-    save(frames(f'{CASTLES}/{src}')[0], out, width=w)
+    save(ImageOps.mirror(frames(f'{CASTLES}/{src}')[0]), out, width=w)
 
 print('DONE')
