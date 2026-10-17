@@ -7,7 +7,7 @@
 >   - `.j powerscale <name>` → styled card (caption) + full-stat follow-up + character image
 >   - `.j powerscale speed <name>` (or `<name> speed`) → **SPEED FEATS deep-dive**: rating per key/variant + feat bullets + calc links. Category aliases: `tier · ap · speed · dur · strike · lift · stam · range · intel · gear · weak · hax · techniques`
 >   - `.j power scale <name>` (spaced form seen in the wild) now routes here too
->   - numeric replies pick a character; after a card they switch characters (`picked #1 — reply 2-9…`); category queries auto-pick the top match when every query token appears in its name
+>   - numeric replies pick a character; after a card they switch characters (`picked #1 — reply 2-9…`). **List-first rule (owner, 2026-10-18):** any query with multiple matches — category/feats queries included — always shows the numbered pick list; auto-pick happens ONLY when search returns a single result
 >   - verse/item pages (no stat block) get a graceful overview card instead of a 60s timeout (old behavior on e.g. "High School DxD")
 > - Pages cache 30 min in `vsbFeats.PAGE_CACHE` (max 60 entries).
 > - QA: `58/58` on both boxes (`scripts/ps_qa.js` on-box; needs Fandom + wsrv reachability).

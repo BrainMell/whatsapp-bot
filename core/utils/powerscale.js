@@ -3,7 +3,7 @@
 // 2026-10-18 REWRITE (owner brief: better output style, working character
 // image, reliable per-category feat lookups):
 //   .j powerscale <name>              -> fancy card + character image
-//   .j powerscale speed <name>        -> SPEED FEATS deep-dive (one shot)
+//   .j powerscale speed <name>        -> pick list first, then SPEED FEATS card
 //   .j powerscale goku speed          -> same, category after the name
 //   .j power scale <name>             -> spaced typo now routes here too
 //   reply a number                     -> pick character (or switch after card)
@@ -213,7 +213,6 @@ function formatListMessage(query, characters, category) {
     characters.slice(0, 10).forEach((c) => lines.push(`*${c.id}.* ${clip(c.name, 60)}`));
     lines.push("");
     lines.push(`_Reply with a *number* (1-${Math.min(characters.length, 10)}) within 5 minutes._`);
-    if (category) lines.push(`_Or retype:_ *powerscale ${category.toLowerCase()} <name>* _auto-picks the top match._`);
     return lines.join("\n");
 }
 
@@ -347,7 +346,7 @@ async function sendUsageCard(sock, chatId, botMarker) {
         "⚖️ *POWERSCALE*",
         SEP,
         `*powerscale <name>* — full stat card + image`,
-        `*powerscale speed <name>* — speed feats deep-dive`,
+        `*powerscale speed <name>* — speed feats (pick from matches first)`,
         "",
         `*Categories:* tier · ap · speed · dur · strike · lift · stam · range · intel · gear · weakness · hax · techniques`,
         `_category can go before OR after the name_`,
@@ -367,13 +366,11 @@ async function resolveFlow(query, category, featsOverview) {
         return { success: false, error: `No VS Battles results for "${clip(query, 40)}". Check the spelling?` };
     }
 
-    // auto-pick when: single result, OR the user asked for a category and the
-    // top match contains every query token (fast one-shot feat lookups)
-    const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
-    const top = characters[0];
-    const topName = top.name.toLowerCase();
-    const topContainsAll = tokens.every((t) => topName.includes(t));
-    const autoPick = characters.length === 1 || (Boolean(category || featsOverview) && topContainsAll);
+    // Mellow rule (2026-10-18): NEVER auto-pick when several characters match —
+    // category/feats queries included ("randomly selecting a character won't
+    // work, which is why we had that system in the first place"). Always show
+    // the numbered pick list; the ONLY auto-pick case is a single result.
+    const autoPick = characters.length === 1;
 
     if (!autoPick) {
         return { success: true, mode: "list", message: formatListMessage(query, characters, category), characters };
