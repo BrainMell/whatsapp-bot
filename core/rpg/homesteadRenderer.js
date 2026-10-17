@@ -819,23 +819,32 @@ async function encodeFramesToMp4(frames) {
         // RAW PATH — BGRA memcpy frames skip the PNG round-trip
         if (frames.length && frames[0] && frames[0].raw) {
             const { w, h } = frames[0];
-            const rawFile = path.join(tmp, 'frames.raw');
-            const fd = fs.openSync(rawFile, 'w');
-            try { for (const f of frames) fs.writeSync(fd, f.raw); }
-            finally { fs.closeSync(fd); }
             const fbin = process.env.FFMPEG_PATH || 'ffmpeg';
+            // stdin-stream the BGRA frames (renders and encode run in
+            // parallel — v10d proved a 215MB frames.raw costs ~200s on the
+            // box's slow disk in write+read alone) and encode at HALF
+            // resolution (the mp4 plays thumbnail-sized; static PNGs stay
+            // full-res). fluent-ffmpeg hung on this input entirely.
+            const args = [
+                '-f', 'rawvideo', '-pix_fmt', 'bgra', '-video_size', `${w}x${h}`,
+                '-framerate', `${1000 / FRAME_MS}`, '-i', 'pipe:0',
+                '-vf', `scale=${Math.round(w / 2)}:${Math.round(h / 2)}`,
+                '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0',
+                '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '23',
+                '-movflags', '+faststart', '-an', '-y', out,
+            ];
             await new Promise((resolve, reject) => {
-                const p = require('child_process').spawn(fbin, [
-                    '-f', 'rawvideo', '-pix_fmt', 'bgra', '-video_size', `${w}x${h}`,
-                    '-framerate', `${1000 / FRAME_MS}`, '-i', rawFile,
-                    '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0',
-                    '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '23',
-                    '-movflags', '+faststart', '-an', '-y', out,
-                ], { stdio: ['ignore', 'ignore', 'pipe'] });
+                const p = require('child_process').spawn(fbin, args, { stdio: ['pipe', 'ignore', 'pipe'] });
                 let err = '';
                 p.stderr.on('data', (d) => { err += d; if (err.length > 6000) err = err.slice(-3000); });
                 p.on('error', reject);
                 p.on('exit', (code) => code === 0 ? resolve() : reject(new Error(`ffmpeg exit ${code}: ${err.slice(-500)}`)));
+                (async () => {
+                    for (const f of frames) {
+                        if (!p.stdin.write(f.raw)) await new Promise((r) => p.stdin.once('drain', r));
+                    }
+                    p.stdin.end();
+                })().catch((e) => { try { p.kill('SIGKILL'); } catch (e2) {} reject(e); });
             });
             return fs.readFileSync(out);
         }
