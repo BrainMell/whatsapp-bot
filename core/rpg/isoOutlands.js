@@ -450,30 +450,36 @@ function outlandProps(opts) {
         //   3. scree + boulder aprons spill below the peaks,
         //   4. stunted woodland arrives as the usual rolled patches.
         // MS: mountain scale follows the canvas law (guild card reads them
-        // at the same relative size as the base card, like TS for trees).
-        const MS = Math.min(AX, 1.5);
+        // at the same relative size as the base card, like TS for trees —
+        // capped lower would re-create the "reads half-size on the big
+        // canvas" trap; peaks are sparse so no canopy-wall risk)
+        const MS = Math.min(AX, 2.1);
         // 1. far horizon ridge — deepest, darkest, drawn first (small y)
         const farAnchors = [[140, 100], [1095, 105], [350, 72], [890, 72]];
         const nFar = 1 + Math.floor(master() * 3);
         const farOrder = farAnchors.slice().sort(() => master() - 0.5);
-        for (let i = 0; i < nFar; i++) {
-            const [sx, sy] = sa(farOrder[i % farOrder.length]);
+        let placedFar = 0;
+        for (let i = 0; i < farOrder.length && placedFar < nFar; i++) {
+            const [sx, sy] = sa(farOrder[i]);
             const [gx, gy] = screenToGrid(sx + (master() - 0.5) * 90, sy + (master() - 0.5) * 30);
             if (!openWild(gx, gy)) continue;
             put('px_mountain_far.png', gx, gy, (0.85 + master() * 0.3) * MS, TINT_FAR, 20, 8);
+            placedFar++;
         }
-        // 2. main massifs — west/east shoulder bands, upper rows tinted for
-        // depth, lower rows keep their natural snowcap palette
-        const peakAnchors = [[125, 148], [1112, 168], [88, 425], [1152, 472], [105, 560], [1120, 560]];
-        const nPeaks = 3 + Math.floor(master() * 3);
+        // 2. main massifs — west/east shoulder + corner bands; every skipped
+        // anchor retries the next one so the roll always plants its quota
+        // (the guild's west gate corridor eats the raw left-mid anchors)
+        const peakAnchors = [[125, 148], [1112, 168], [88, 425], [1152, 472], [105, 560], [1120, 560], [240, 660], [990, 665]];
+        const nPeaks = 4 + Math.floor(master() * 3);
         const order = peakAnchors.slice().sort(() => master() - 0.5);
-        for (let i = 0; i < nPeaks; i++) {
-            const [rx, ry] = order[i % order.length];
+        let placedPeaks = 0;
+        for (let i = 0; i < order.length && placedPeaks < nPeaks; i++) {
+            const [rx, ry] = order[i];
             const [sx, sy] = sa([rx, ry]);
             const [gx, gy] = screenToGrid(sx + (master() - 0.5) * 70, sy + (master() - 0.5) * 40);
             if (!openWild(gx, gy)) continue;
-            const back = ry <= 168;   // upper shoulder row
-            put(pickWeighted(master, POOLS.mountainPeaks.map((f) => [f, 1])), gx, gy, (1.25 + master() * 0.45) * MS, back ? TINT_MID : null, 22, 10);
+            put(pickWeighted(master, POOLS.mountainPeaks.map((f) => [f, 1])), gx, gy, (1.25 + master() * 0.45) * MS, null, 22, 10);
+            placedPeaks++;
         }
         // 3. scree aprons below the massifs + lone cliff shelves
         for (let i = 0; i < 6; i++) {
