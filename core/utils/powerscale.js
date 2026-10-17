@@ -376,6 +376,7 @@ async function resolveFlow(query, category, featsOverview) {
         return { success: true, mode: "list", message: formatListMessage(query, characters, category), characters };
     }
 
+    const top = characters[0]; // single result — the only auto-pick case
     const data = await parseWithFallback(top);
     if (!data) {
         return { success: false, error: `Found *${top.name}* but the page parse failed. Try another result: reply 1-${characters.length}.` };
