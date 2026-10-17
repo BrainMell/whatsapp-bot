@@ -171,21 +171,21 @@ function outlandProps(opts) {
     // tree terrains outside like in my reference image") — the reference's
     // woodland does not stand on lawn: the ground under/around the outside
     // trees rolls onto a DARK mossy forest floor (forest_floor_a/b/c,
-    // ~35% darker + browner than the yard moss). The floor grows as organic
-    // blobs that hug the fence and thin out with distance, so the tree wall
-    // visibly sits on its own terrain exactly like the reference; rock
-    // blobs keep overriding (stony ground pokes through the carpet).
+    // ~35% darker + browner than the yard moss). The carpet hugs the fence
+    // (the whole wall + decay band d<=4 is floored) and thins into the deep
+    // wilds via organic blobs; rock blobs keep overriding (stony ground
+    // pokes through).
     const floorRnd = mulberry32(seed ^ 0x0f10e5);
-    const nFloor = { forest: 34, coast: 26, ruins: 24, highlands: 15 }[biome] || 24;
+    const nFloor = { forest: 48, coast: 40, ruins: 36, highlands: 20 }[biome] || 36;
     const floorSeeds = [];
     for (let i = 0; i < nFloor; i++) {
-        floorSeeds.push([Math.floor(floorRnd() * (hi - lo + 1)) + lo, Math.floor(floorRnd() * (hi - lo + 1)) + lo, 1.5 + floorRnd() * 2.5]);
+        floorSeeds.push([Math.floor(floorRnd() * (hi - lo + 1)) + lo, Math.floor(floorRnd() * (hi - lo + 1)) + lo, 2 + floorRnd() * 2.5]);
     }
     const floorAt = (x, y) => {
         const d = Math.max(f0 - x, x - f1, f0 - y, y - f1);   // 0 inside fence, 1+ wilds
         if (d <= 0) return false;
-        if (d <= 2) return true;                              // the wall band always stands on floor
-        const keep = Math.max(0, 0.78 - d * 0.11);            // coverage decays with depth
+        if (d <= 4) return true;                              // wall + decay rows stand on floor
+        const keep = Math.max(0, 0.62 - d * 0.07);            // carpet thins into the deep wilds
         for (const [cx, cy, cr] of floorSeeds) {
             if (Math.max(Math.abs(x - cx), Math.abs(y - cy)) <= cr) {
                 const rr = mulberry32(seed + (x + 120) * 131 + (y + 120) * 17)();
