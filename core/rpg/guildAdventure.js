@@ -10549,6 +10549,45 @@ async function processVotes(sock, encounter, sessionKey) {
   );
 }
 
+// ==========================================
+// 🔮 SKILL POINT DROPS (dungeon victory)
+// ==========================================
+
+// 💡 OWNER ORDER 2026-10-17 21:51Z: "increase drop rates of skill points
+// because they seem to have decreased, you used to get 3 to 5 from high tier
+// dungeons and you want that drop rate back".
+// ROOT CAUSE of the decrease: SP historically flowed ONLY through level-ups
+// (1/level + 2 per 10th level in progression.addXP), so the post-50 XP wall
+// (49ce670, 2026-10-15, owner-ordered "harder after level 50") gutted per-run
+// SP income — an S/SSS clear that used to level a player 3-5 times now levels
+// 0-1, and SP income collapsed with it.
+// FIX: restore the income as a DIRECT victory drop, decoupled from the level
+// curve. The wall stays (the late game stays slower, as ordered), but a
+// high-tier clear pays 3-5 SP again — straight into user.skillPoints, the
+// same wallet the skill tree spends from (additive-safe: the reset refund
+// adds spent points and ensureSkillPointsInitialized only fires when the
+// field is undefined, so nothing overwrites the drop).
+//   S/SS/SSS = 3/4/5 — the owner's "3 to 5 from high tier dungeons"
+//   GOD = 5 (endgame vault), DRAGON = 2 (special mid-tier lair)
+//   F/E = 0 (low ranks level fast — 1 SP/level already flows there)
+const DUNGEON_SKILL_POINT_DROPS = {
+  F: 0, E: 0, D: 1, C: 1, B: 2, A: 2, S: 3, SS: 4, SSS: 5, DRAGON: 2, GOD: 5,
+};
+
+/**
+ * Skill points dropped by a dungeon clear. Pure + exported for QA.
+ * @param {string} rank dungeon rank (F..GOD, DRAGON)
+ * @param {Object} opts { victory, isDead, isAbyss, mode }
+ */
+function getDungeonSkillPointDrop(rank, opts = {}) {
+  if (!opts.victory) return 0;          // fleeing/wipe pays nothing — a DROP is for CLEARING
+  if (opts.isDead) return 0;            // carried corpses get the consolation XP, not SP (same rule as GP)
+  if (opts.isAbyss) return 0;           // Abyss runs its own per-floor economy (separately tuned)
+  const mode = String(opts.mode || "NORMAL").toUpperCase();
+  if (mode === "TUTORIAL" || mode === "TUTORIAL_GROUP") return 0; // practice fights never pay
+  return DUNGEON_SKILL_POINT_DROPS[String(rank || "").toUpperCase()] || 0;
+}
+
 async function endAdventure(sock, sessionKey, victory = true) {
   const state = gameStates.get(sessionKey);
   if (!state) { END_DEBUG(`endAdventure ABORT: no state for ${sessionKey}`); return; }
@@ -11018,6 +11057,8 @@ async function endAdventure(sock, sessionKey, victory = true) {
     F: 1, E: 2, D: 4, C: 7, B: 12, A: 20, S: 35, SS: 60, SSS: 100, DRAGON: 10
   };
   const _baseGp = rankGpMap[state.dungeonRank] || 1;
+  // 🔮 SP drops: table + rules live in getDungeonSkillPointDrop() (module
+  // scope, below) — rank ladder, victory-only, alive-only, abyss/tutorial-free.
 
   // 💡 NEW 2026-09-12: per-player rows for the PORTRAIT quest-complete card
   // (bg_QUEST family). Collected in the reward loop below; empty → text-only.
@@ -11033,6 +11074,14 @@ async function endAdventure(sock, sessionKey, victory = true) {
     let finalGold = Math.floor(player.goldEarned * multiplier * (1 + (player.passiveGoldFind || 0) / 100));
     let bonusGold = player.isDead ? 0 : _baseBonusGold;
     const gpGain = player.isDead ? 0 : _baseGp;
+    // 🔮 SP drop: victory clears only, alive players only, never the Abyss
+    // (its economy is a separately-tuned floor ladder) and never tutorials.
+    const spGain = getDungeonSkillPointDrop(state.dungeonRank, {
+      victory,
+      isDead: player.isDead,
+      isAbyss: state.isAbyss,
+      mode: state.mode,
+    });
 
     // Update stats and rank
     if (!player.isDead) {
@@ -11071,7 +11120,7 @@ async function endAdventure(sock, sessionKey, victory = true) {
         bonusGold = Math.floor(bonusGold * ratio);
         totalGoldThisRun = finalGold + bonusGold; // recalculate without guild bonus (it's absorbed)
       }
-      msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${totalXpEarned.toLocaleString()} _(combat: ${(player.xpEarned || 0).toLocaleString()} + bonus: ${(__finalXPBase + guildBonusXp).toLocaleString()})_\n  💰 Gold: ${totalGoldThisRun.toLocaleString()}\n  🏅 GP: +${gpGain}\n  ${player.isDead ? "💀 Fallen" : "✅ Survived"}\n\n`;
+      msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${totalXpEarned.toLocaleString()} _(combat: ${(player.xpEarned || 0).toLocaleString()} + bonus: ${(__finalXPBase + guildBonusXp).toLocaleString()})_\n  💰 Gold: ${totalGoldThisRun.toLocaleString()}\n  🏅 GP: +${gpGain}\n${spGain > 0 ? `  🔮 Skill Points: +${spGain}\n` : ""}  ${player.isDead ? "💀 Fallen" : "✅ Survived"}\n\n`;
       portraitPlayers.push({ name: player.name, xp: `+${totalXpEarned.toLocaleString()} XP`, zeni: `+${totalGoldThisRun.toLocaleString()} ${economy.getZENI ? economy.getZENI() : 'Z'}` });
 
       // 💡 FIX 2026-09-19 (tester re-report): addMoney returns false when the
@@ -11122,6 +11171,20 @@ async function endAdventure(sock, sessionKey, victory = true) {
       // Award GP - adventurer rank progression needs this
       if (gpGain > 0) {
         try { progression.awardGP(player.jid, gpGain); } catch (e) {}
+      }
+
+      // 🔮 SKILL POINT DROP (owner 2026-10-17: high-tier dungeons pay 3-5 SP
+      // per clear again). Credited straight to user.skillPoints + saved here,
+      // same pattern as the evolution trial's tier bonus (guildAdventure
+      // bonusPoints). 0 → no write, no extra DB round-trip.
+      if (spGain > 0) {
+        const _spUser = economy.getUser(player.jid);
+        if (_spUser) {
+          _spUser.skillPoints = (Number(_spUser.skillPoints) || 0) + spGain;
+          economy.saveUser(player.jid);
+        } else {
+          console.error(`[QuestPayout] SP drop skipped: no economy user for ${player.jid}`);
+        }
       }
 
       // 💡 Phase 2: Award guild XP from dungeon clear
@@ -13223,6 +13286,13 @@ module.exports = {
   autoResumeAfterRestart,
   // exported for qa_quest_flow.js (registration-window expiry simulation)
   startJourney,
+  // 🔮 exported for qa_skill_point_drops.js — seed a finished-run state and
+  // drive the REAL endAdventure payout path (SP drop e2e)
+  endAdventure,
+  gameStates,
+  // 🔮 exported for qa_skill_point_drops.js (dungeon SP drop ladder/rules)
+  getDungeonSkillPointDrop,
+  DUNGEON_SKILL_POINT_DROPS,
   getDungeonMenu,
   stopQuest,
   handleBuy,
