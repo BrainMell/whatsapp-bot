@@ -53,7 +53,7 @@ const GUILD_STRUCTS = {
     },
     training: {
         id: 'training', name: 'Training Ground', fw: 3, fh: 3,
-        x: 11, y: 2,
+        x: 10, y: 3,
         levels: [
             { level: 1, sprite: 'gb_training_l1', name: 'Dust Yard' },
             { level: 2, sprite: 'gb_training_l2', name: 'Spar Ring' },
@@ -85,12 +85,11 @@ const GUILD_PLOTS = [
     { id: 4, x: 12, y: 7 },  // E (east arm terminus)
 ];
 
-// per-structure draw scale — castle/cottage art is pre-scaled to footprint
-// (POLYY ART LAW, same as the base); the old megikit training/treasury keep
-// their shrink. AY_BIAS compensates the megikit sprites, which were authored
-// for the old south-corner-30px anchor law.
-const GUILD_SCALE = { training: 0.74, treasury: 0.74 };
-const GUILD_AY_BIAS = { training: -34, treasury: -34 };
+// per-structure draw scale — ALL guild art now pre-scaled to footprint
+// (POLYY ART LAW, same as the castle/cottages; training = military re-pick
+// stable/shed/gatehouse/siege tower/hall, treasury l3 = granary staddle).
+const GUILD_SCALE = { training: 1.0, treasury: 0.9 };
+const GUILD_AY_BIAS = {};
 
 // FENCE PAD — same bigger-compound law as the base (owner 2026-10-17
 // "the fence should be further away because the space is bigger").
