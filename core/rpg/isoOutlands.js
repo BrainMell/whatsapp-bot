@@ -10,18 +10,29 @@
 // tile is derived from mulberry32(seed ^ cell salts) so the same player
 // always sees the same outlands on every render, forever.
 //
-// BIOMES:
-//   forest     (38%) — mossy woodland: 2-4 ORGANIC FOREST PATCHES rolled
+// BIOMES (owner 2026-10-17: "a max of 5" terrains the bases exist in —
+// "diversify ... add rocks and what not, mountains blah blah"):
+//   forest     (30%) — mossy woodland: 2-4 ORGANIC FOREST PATCHES rolled
 //                      out in the open wilds (dark floor, dense interior
 //                      trees, thinning rim) + rare lone strays
-//   highlands  (24%) — rocky highlands: monoliths, basalt clusters, shard
-//                      spires and pylons in 2-4 clusters, rolled woodland
-//   ruins      (18%) — an ancient mossy ruin site: arch, gate, columns,
-//                      ivy tower, slabs, overgrown roots, woodland patches
-//   coast      (20%) — the compound sits on a headland: ocean starts past
+//   mountains  (22%) — a high valley: snow-capped massifs on the west/
+//                      east shoulders, a dark far ridge crowning the
+//                      horizon, scree fields and boulder aprons below,
+//                      stunted woodland as rolled patches
+//   coast      (18%) — the compound sits on a headland: ocean starts past
 //                      the fence on the south-east edge, shoreline rocks
 //                      and a stony spring mark the waterline; land-side
 //                      woodland arrives as patches (never ocean cells)
+//   highlands  (16%) — rocky highlands: monoliths, basalt clusters, shard
+//                      spires and pylons in 2-4 clusters, rolled woodland
+//   ruins      (14%) — an ancient mossy ruin site: arch, gate, columns,
+//                      ivy tower, slabs, overgrown roots, woodland patches
+//
+// BOULDER LAW ("add rocks and what not"): every soft biome (forest /
+// ruins / coast) also scatters 3-5 seeded boulder/stone clusters on the
+// open moss, and rocky biomes (highlands / mountains) seed a few tame
+// rocks into the yard margins — clustered always, never lone glitch
+// diamonds.
 //
 // PURE MODULE — no canvas. Returns art-space placements; the renderers draw.
 // ═══════════════════════════════════════════════════════════════════════════
@@ -52,6 +63,8 @@ const POOLS = {
     ruinsClutter: ['poly_ruin_clutter.png', 'poly_gnarled_roots.png', 'poly_mushrooms.png', 'poly_fairy_stump.png', 'px_fern.png'],
     shoreProps: ['poly_water_rock.png', 'poly_stream_rocks.png', 'poly_rocky_spring.png', 'px_rock.png'],
     yardProps: ['px_tuft.png', 'px_fern.png', 'px_shroom.png', 'poly_grassy_log.png'],
+    mountainPeaks: ['px_mountain_a.png', 'px_mountain_b.png'],
+    mountainClutter: ['px_boulder.png', 'px_rock.png', 'px_stone.png', 'px_cliff.png', 'poly_stream_rocks.png'],
 };
 
 const TINT_NEAR = '#31491d';   // just outside the fence
@@ -72,10 +85,11 @@ function pickWeighted(rnd, pool) {
 // ═══════════════════════════════════════════════════════════════════════════
 function biomeOf(seedStr) {
     const r = mulberry32(hashStr(String(seedStr) + '::biome'))();
-    if (r < 0.38) return 'forest';
-    if (r < 0.62) return 'highlands';
-    if (r < 0.80) return 'ruins';
-    return 'coast';
+    if (r < 0.30) return 'forest';
+    if (r < 0.52) return 'mountains';
+    if (r < 0.70) return 'coast';
+    if (r < 0.86) return 'highlands';
+    return 'ruins';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -155,7 +169,7 @@ function outlandProps(opts) {
     // a few deterministic seeds per biome expand into organic stony patches,
     // so they read as rocky ground, not floating tiles.
     const rockRnd = mulberry32(seed ^ 0x51ed270b);
-    const nRocks = { highlands: 26, coast: 16, ruins: 8, forest: 10 }[biome] || 10;
+    const nRocks = { highlands: 26, mountains: 22, coast: 16, ruins: 8, forest: 10 }[biome] || 10;
     const rockSeeds = [];
     for (let i = 0; i < nRocks; i++) {
         rockSeeds.push([Math.floor(rockRnd() * (hi - lo + 1)) + lo, Math.floor(rockRnd() * (hi - lo + 1)) + lo, 1 + Math.floor(rockRnd() * 2)]);
@@ -184,7 +198,7 @@ function outlandProps(opts) {
     // wilds), so open moss separates the forests instead of a wall of
     // green on the fence line.
     const patchRnd = mulberry32(seed ^ 0x70f11e);
-    const nPatch = { forest: 2, coast: 1, ruins: 1, highlands: 1 }[biome]
+    const nPatch = { forest: 2, coast: 1, ruins: 1, highlands: 1, mountains: 1 }[biome]
         + (patchRnd() < 0.55 ? 1 : 0) + (patchRnd() < 0.25 ? 1 : 0);
     // side anchors (ref-card screen pts) — pushed WELL out into the wilds
     // so patches read as open-country forests, never as fence dressing
@@ -260,6 +274,26 @@ function outlandProps(opts) {
 
     const master = mulberry32(seed ^ 0x51ab3e);
 
+    // a placement is only valid in the OPEN wilds: never inside the fence
+    // diamond (a peak standing in the yard margin is a glitch) and never
+    // in a gate corridor (roads walk out to the horizon)
+    const openWild = (gx, gy) => !(gx >= f0 && gx <= f1 && gy >= f0 && gy <= f1) && !inGateCorridor(gx, gy);
+
+    // BOULDER LAW — seeded stone clusters on the open moss for the soft
+    // biomes ("add rocks and what not"): 2-4 chunky boulders/stones around
+    // a wild anchor, clustered so they read as outcrops, never lone tiles
+    const boulderAnchors = [[160, 195], [1075, 210], [120, 590], [1115, 585], [350, 115], [905, 130], [300, 745], [935, 720]];
+    const scatterBoulders = (n, avoidOcean) => {
+        const order = boulderAnchors.slice().sort(() => master() - 0.5);
+        for (let i = 0; i < n; i++) {
+            const [sx, sy] = sa(order[i % order.length]);
+            const [gx, gy] = screenToGrid(sx + (master() - 0.5) * 220, sy + (master() - 0.5) * 90);
+            if (!openWild(gx, gy)) continue;
+            if (avoidOcean && isOceanCell(Math.round(gx), Math.round(gy))) continue;
+            cluster(master, POOLS.mountainClutter.map((f) => [f, 1]), gx, gy, 2 + Math.floor(master() * 3), (0.7 + master() * 0.5) * CS, TINT_MID, 1.3);
+        }
+    };
+
     // ── PATCH TREE PLANTING (replaces the dead fence wall + decay rows) —
     // dense interior canopy with a naturally thinning rim, rare lone
     // strays on the open moss. THE ANTI-'GREEN FENCE EDGE' LAW: nothing
@@ -315,6 +349,8 @@ function outlandProps(opts) {
             if (gx >= f0 && gx <= f1 && gy >= f0 && gy <= f1) continue;
             put(pickWeighted(master, POOLS.forestClutter.map((f) => [f, 1])), gx, gy, (0.7 + master() * 0.3) * CS, TINT_MID, 34, 12);
         }
+        // BOULDER LAW — a few stone outcrops on the open moss
+        scatterBoulders(4);
     }
 
     if (biome === 'highlands') {
@@ -367,6 +403,8 @@ function outlandProps(opts) {
             if (cx >= f0 && cx <= f1 && cy >= f0 && cy <= f1) continue;
             put(pickWeighted(master, POOLS.forestClutter.map((f) => [f, 1])), cx, cy, (0.7 + master() * 0.3) * CS, TINT_MID, 34, 12);
         }
+        // BOULDER LAW — mossy outcrops among the ruins
+        scatterBoulders(3);
     }
 
     if (biome === 'coast') {
@@ -397,18 +435,78 @@ function outlandProps(opts) {
             if (gx >= f0 && gx <= f1 && gy >= f0 && gy <= f1) continue;
             put(pickWeighted(master, POOLS.forestClutter.map((f) => [f, 1])), gx, gy, (0.7 + master() * 0.3) * CS, TINT_MID, 34, 12);
         }
+        // BOULDER LAW — land-side stone outcrops (never in the water)
+        scatterBoulders(4, true);
+    }
+
+    if (biome === 'mountains') {
+        // ── MOUNTAINS LAW (owner 2026-10-17: "diversify the terrains the
+        // player and guild bases exist in, add rocks and what not, mountains
+        // blah blah") — the compound sits in a HIGH VALLEY:
+        //   1. a dark far ridge crowns the horizon behind the north fence
+        //      corner (TINT_FAR aerial perspective),
+        //   2. true snow-capped massifs stand on the WEST/EAST shoulders
+        //      (never the south foreground — nothing may cover the yard),
+        //   3. scree + boulder aprons spill below the peaks,
+        //   4. stunted woodland arrives as the usual rolled patches.
+        // MS: mountain scale follows the canvas law (guild card reads them
+        // at the same relative size as the base card, like TS for trees).
+        const MS = Math.min(AX, 1.5);
+        // 1. far horizon ridge — deepest, darkest, drawn first (small y)
+        const farAnchors = [[140, 100], [1095, 105], [350, 72], [890, 72]];
+        const nFar = 1 + Math.floor(master() * 3);
+        const farOrder = farAnchors.slice().sort(() => master() - 0.5);
+        for (let i = 0; i < nFar; i++) {
+            const [sx, sy] = sa(farOrder[i % farOrder.length]);
+            const [gx, gy] = screenToGrid(sx + (master() - 0.5) * 90, sy + (master() - 0.5) * 30);
+            if (!openWild(gx, gy)) continue;
+            put('px_mountain_far.png', gx, gy, (0.85 + master() * 0.3) * MS, TINT_FAR, 20, 8);
+        }
+        // 2. main massifs — west/east shoulder bands, upper rows tinted for
+        // depth, lower rows keep their natural snowcap palette
+        const peakAnchors = [[125, 148], [1112, 168], [88, 425], [1152, 472], [105, 560], [1120, 560]];
+        const nPeaks = 3 + Math.floor(master() * 3);
+        const order = peakAnchors.slice().sort(() => master() - 0.5);
+        for (let i = 0; i < nPeaks; i++) {
+            const [rx, ry] = order[i % order.length];
+            const [sx, sy] = sa([rx, ry]);
+            const [gx, gy] = screenToGrid(sx + (master() - 0.5) * 70, sy + (master() - 0.5) * 40);
+            if (!openWild(gx, gy)) continue;
+            const back = ry <= 168;   // upper shoulder row
+            put(pickWeighted(master, POOLS.mountainPeaks.map((f) => [f, 1])), gx, gy, (1.25 + master() * 0.45) * MS, back ? TINT_MID : null, 22, 10);
+        }
+        // 3. scree aprons below the massifs + lone cliff shelves
+        for (let i = 0; i < 6; i++) {
+            const [rx, ry] = peakAnchors[Math.floor(master() * peakAnchors.length)];
+            const [sx, sy] = sa([rx, ry]);
+            const [gx, gy] = screenToGrid(sx + (master() - 0.5) * 260, sy + 55 + (master() - 0.5) * 130);
+            if (!openWild(gx, gy)) continue;
+            cluster(master, POOLS.mountainClutter.map((f) => [f, 1]), gx, gy, 2 + Math.floor(master() * 3), (0.75 + master() * 0.45) * CS, null, 1.25);
+        }
+        // 4. stunted woodland — the patch law, same as every biome
+        plantWildTrees();
+        plantPatchUndergrowth();
     }
 
     // ── 4. yard dressing (inside fence, outside playable) — tamed meadow ──
+    // rocky biomes seed a few TAME stones into the yard margins too
+    // ("add rocks and what not") — clustered rolls, never a scatter of
+    // lone glitch diamonds
+    const rockyYard = biome === 'highlands' || biome === 'mountains';
     for (let x = f0; x <= f1; x++) {
         for (let y = f0; y <= f1; y++) {
             const playable = x >= 0 && y >= 0 && x < N && y < N;
             if (playable) continue;
             const r = mulberry32(seed + (x + 60) * 197 + (y + 60) * 29)();
             if (r < 0.13) {
+                const yr = mulberry32(seed + (x + 60) * 197 + (y + 60) * 29 + 5)();
+                const rocky = rockyYard && yr < 0.42;
                 const px = isoX(x + 0.5, y + 0.5) + (r - 0.5) * 30;
                 const py = isoY(x + 0.5, y + 0.5) + (r * 0.4 - 0.2) * 20;
-                props.push({ file: POOLS.yardProps[Math.floor(r * 97) % POOLS.yardProps.length], x: px, y: py, sc: 0.85 + r * 0.4, tint: null });
+                props.push({
+                    file: rocky ? (yr < 0.21 ? 'px_rock.png' : 'px_stone.png') : POOLS.yardProps[Math.floor(r * 97) % POOLS.yardProps.length],
+                    x: px, y: py, sc: 0.85 + r * 0.4, tint: null,
+                });
             }
         }
     }
