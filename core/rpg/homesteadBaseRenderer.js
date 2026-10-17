@@ -177,18 +177,35 @@ async function renderFrame(state, frame, opts = {}) {
     // it, so every render of the same player shows the same wilds.
     const outlands = isoOutlands.outlandProps({ seedStr: state.owner || 'base', N, P, isoX, isoY, M, gates: [[5, N - 1 + P]] });
     const wildTile = new Map(outlands.tiles.map((t) => [`${t.x},${t.y}`, t.tile]));
+    // ── STONE WALKWAY LAW (owner 2026-10-17, v81 stack: "you left the stone
+    // roads out of the base one, the guild???") — the base gets the SAME
+    // cobble walkways as the guild grounds: every path cell bakes cobble
+    // (forest_cobble_a/b/c, per-cell seeded pick so runs never repeat), and
+    // the old dirt trail stays alive as WORN SHOULDERS hugging every walk
+    // (4-neighbour cells at a 50% seeded roll) for the two-texture detail.
+    const COBBLE = ['forest_cobble_a.png', 'forest_cobble_b.png', 'forest_cobble_c.png'];
+    const pathSet = new Set((LAYOUT.paths || []).map(([x2, y2]) => `${x2},${y2}`));
+    const shoulder = new Set();
+    for (const [px2, py2] of LAYOUT.paths || []) {
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const k = `${px2 + dx},${py2 + dy}`;
+            if (!pathSet.has(k)) shoulder.add(k);
+        }
+    }
     for (let x = -M; x < N + M; x++) {
         for (let y = -M; y < N + M; y++) {
             const px = isoX(x, y), py = isoY(x, y);
             if (px < -TW || px > ART_W + TW || py < -TH || py > ART_H + TH) continue;
             const r = mulberry32(seed + (x + 40) * 131 + (y + 40) * 17)();
+            const r2 = mulberry32(seed + (x + 40) * 131 + (y + 40) * 17 + 7)();
             const inside = x >= 0 && y >= 0 && x < N && y < N;
             const inFence = x >= -P && x <= N - 1 + P && y >= -P && y <= N - 1 + P;
             let tile;
             if (inside) {
                 if (inZone(LAYOUT.mines.zone, x, y)) tile = r < 0.85 ? 'forest_rock_tile.png' : 'forest_moss_c.png';
                 else if (inZone(LAYOUT.pond.zone, x, y)) tile = r < 0.92 ? waterF : 'forest_moss_c.png';
-                else if ((LAYOUT.paths || []).some(([px2, py2]) => px2 === x && py2 === y)) tile = 'forest_trail.png';
+                else if (pathSet.has(`${x},${y}`)) tile = COBBLE[Math.floor(r2 * 13) % 3];              // stone walkway
+                else if (shoulder.has(`${x},${y}`) && r2 < 0.5) tile = 'forest_trail.png';              // worn dirt shoulder
                 else tile = r < 0.07 ? 'forest_moss_shrooms.png' : grass[Math.floor(r * 3) % 3];
             } else if (inFence) {
                 // the YARD — tamed meadow between playable ring and fence
@@ -204,15 +221,20 @@ async function renderFrame(state, frame, opts = {}) {
             if (timg) ctx.drawImage(timg, px - TW / 2, py - TH / 2);
         }
     }
-    // gate trail: the walk runs out the south gate and fades into the wilds
+    // gate trail: the walk runs out the south gate — cobble across the yard
+    // and a cobble apron at the gate mouth, then the old dirt walk fading
+    // into the per-player wilds (same two-texture law as the guild grounds)
     {
         const trailImg = await img('forest_trail.png');
+        const cob0 = await img(COBBLE[0]);
+        const cob1 = await img(COBBLE[1]);
         if (trailImg) {
             const trailCells = [];
-            for (let y = N; y <= N - 1 + P; y++) trailCells.push([5, y]);                 // yard walk to the gate
-            trailCells.push([5, N + P], [4, N + P + 1], [4, N + P + 2], [3, N + P + 3]);  // fades into the wilds
-            for (const [tx, ty] of trailCells) {
-                ctx.drawImage(trailImg, isoX(tx + 0.5, ty + 0.5) - TW / 2, isoY(tx + 0.5, ty + 0.5) - TH / 2);
+            for (let y = N; y <= N - 1 + P; y++) trailCells.push([5, y, 1]);   // yard walk = cobble
+            trailCells.push([5, N + P, 1], [4, N + P + 1, 0], [4, N + P + 2, 0], [3, N + P + 3, 0]); // apron, then dirt fade
+            for (const [tx, ty, stone] of trailCells) {
+                const im = stone ? ((tx + ty) % 2 === 0 ? cob0 : cob1) : trailImg;
+                if (im) ctx.drawImage(im, isoX(tx + 0.5, ty + 0.5) - TW / 2, isoY(tx + 0.5, ty + 0.5) - TH / 2);
             }
         }
     }
