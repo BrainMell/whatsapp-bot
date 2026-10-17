@@ -323,6 +323,12 @@ async function renderFrame(state, frame, opts = {}) {
         hot, plotCells,
         margin: false, // outside the fence is the outlands module's domain now
         haze: false,
+        // owner 2026-10-17 v91 stack: "too many trees inside" — the yard's
+        // mid ring + house hot ring thin way down; the playable ring stays
+        // an open settlement with tree garnish, the woodland lives OUTSIDE
+        // as the outlands' rolled forest patches
+        midRate: 0.13,
+        hotRate: 0.15,
         structFoots: (state.structures || [])
             .map((st) => { const d = structDef(st.type); return d ? [st.x, st.y, d.fw, d.fh] : null; })
             .filter(Boolean),
@@ -521,6 +527,15 @@ async function renderFrame(state, frame, opts = {}) {
     ctx.fillRect(0, 0, ART_W, ART_H);
 
     drawHud(ctx, state, opts);
+    // RAW ENCODER (owner 2026-10-17 "sometimes when I do .j base the bot
+    // shuts down??? Investigate"): 14 sync PNG encodes at 1.1-2.7s each
+    // starved the event loop for 15-40s straight -> the liveness canary
+    // SIGKILLed the bake mid-flight. opts.encoder='raw' returns the cairo
+    // surface as a BGRA memcpy (toBuffer('raw'), ~40ms) for ffmpeg to
+    // encode directly — the PNG round-trip is skipped entirely.
+    if (opts.encoder === 'raw') {
+        return { raw: canvas.toBuffer('raw'), w: canvas.width, h: canvas.height };
+    }
     return canvas.toBuffer('image/png');
 }
 
@@ -580,9 +595,35 @@ async function encodeFramesToMp4(frames) {
     const ffmpeg = require('fluent-ffmpeg');
     try { ffmpeg.setFfmpegPath(process.env.FFMPEG_PATH || 'ffmpeg'); } catch (e) { /* engine sets it too */ }
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'base-'));
-    frames.forEach((b, i) => fs.writeFileSync(path.join(tmp, `f${String(i).padStart(3, '0')}.png`), b));
     const out = path.join(tmp, 'base.mp4');
     try {
+        // RAW PATH — frames rendered via opts.encoder='raw' ({ raw, w, h }):
+        // concat the BGRA memcpys and let ffmpeg demux rawvideo. This skips
+        // 13 PNG encodes (~15-35s of sync event-loop blocking per bake).
+        if (frames.length && frames[0] && frames[0].raw) {
+            const { w, h } = frames[0];
+            const rawFile = path.join(tmp, 'frames.raw');
+            const fd = fs.openSync(rawFile, 'w');
+            try { for (const f of frames) fs.writeSync(fd, f.raw); }
+            finally { fs.closeSync(fd); }
+            await new Promise((resolve, reject) => {
+                ffmpeg()
+                    .input(rawFile)
+                    .inputOptions(['-f', 'rawvideo', '-pix_fmt', 'bgra', '-video_size', `${w}x${h}`, '-framerate', `${1000 / FRAME_MS}`])
+                    .outputOptions([
+                        '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0',
+                        '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '23',
+                        '-movflags', '+faststart', '-an', '-y',
+                    ])
+                    .output(out)
+                    .on('end', resolve)
+                    .on('error', reject)
+                    .run();
+            });
+            return fs.readFileSync(out);
+        }
+        // PNG PATH — plain buffers (QA smoke bakes / 3-frame renders)
+        frames.forEach((b, i) => fs.writeFileSync(path.join(tmp, `f${String(i).padStart(3, '0')}.png`), b));
         await new Promise((resolve, reject) => {
             ffmpeg()
                 .input(path.join(tmp, 'f%03d.png'))
@@ -609,6 +650,13 @@ function stateHash(state, opts = {}) {
     return hashStr(JSON.stringify([state.owner, state.structures, state.freePlots, opts.hint || '', opts.static ? 1 : 0]));
 }
 
+// EVENT-LOOP BREATH — a real setTimeout between frames lets timers/IO run
+// during a bake (hot-cache promise chains only yield microtasks, which do
+// NOT feed the heartbeat interval — a full 14-frame bake starved the canary
+// heartbeat past the 75s stall threshold and the process got SIGKILLed).
+const FRAME_BREATH_MS = 8;
+const breath = () => new Promise((r) => setTimeout(r, FRAME_BREATH_MS));
+
 // Media matrix (owner 2026-10-16 10:09Z "bring gifs back and make the
 // generation faster"): the BASE VIEW ("house idle") is an ANIMATED GIF again
 // — water shimmer, forge/chimney smoke, gate torch, fireflies; build/upgrade
@@ -621,7 +669,12 @@ async function renderBaseImage(state, opts = {}) {
     const out = await mediaCache.cached('base', key, async () => {
         const frames = [];
         const frameCount = opts.static ? 1 : FRAMES;
-        for (let f = 0; f < frameCount; f++) frames.push(await renderFrame(state, f, opts));
+        // frame 0 stays PNG (mp4-failure fallback + static cards); the rest
+        // render RAW so the bake never sync-encodes 13 giant PNGs
+        for (let f = 0; f < frameCount; f++) {
+            frames.push(await renderFrame(state, f, f === 0 || opts.static ? opts : { ...opts, encoder: 'raw' }));
+            await breath();
+        }
         let out = { buffer: frames[0], contentType: 'image/png' };
         if (!opts.static) {
             try {

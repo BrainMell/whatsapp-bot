@@ -11,15 +11,17 @@
 // always sees the same outlands on every render, forever.
 //
 // BIOMES:
-//   forest     (38%) — deep mossy woodland, dense tree wall outside the
-//                      fence, conifer clusters, mossy clutter
+//   forest     (38%) — mossy woodland: 2-4 ORGANIC FOREST PATCHES rolled
+//                      out in the open wilds (dark floor, dense interior
+//                      trees, thinning rim) + rare lone strays
 //   highlands  (24%) — rocky highlands: monoliths, basalt clusters, shard
-//                      spires and pylons in 2-4 clusters, thin tree cover
+//                      spires and pylons in 2-4 clusters, rolled woodland
 //   ruins      (18%) — an ancient mossy ruin site: arch, gate, columns,
-//                      ivy tower, slabs, overgrown roots
+//                      ivy tower, slabs, overgrown roots, woodland patches
 //   coast      (20%) — the compound sits on a headland: ocean starts past
 //                      the fence on the south-east edge, shoreline rocks
-//                      and a stony spring mark the waterline
+//                      and a stony spring mark the waterline; land-side
+//                      woodland arrives as patches (never ocean cells)
 //
 // PURE MODULE — no canvas. Returns art-space placements; the renderers draw.
 // ═══════════════════════════════════════════════════════════════════════════
@@ -167,34 +169,53 @@ function outlandProps(opts) {
         }
         return false;
     };
-    // ── TREE TERRAIN LAW (owner 2026-10-17, v81 stack: "I don't see any
-    // tree terrains outside like in my reference image") — the reference's
-    // woodland does not stand on lawn: DARK mossy forest floor
-    // (forest_floor_a/b/c, ~35% darker + browner than the yard moss) is the
-    // DEFAULT ground of the wilds, and ORGANIC moss clearings open up in it
-    // (reverse blobs — a floor stripe with a hard edge read as a painted
-    // ring in the v9 zooms, so the carpet is continuous and the LIGHT
-    // patches are what get blobbed). Clearings never open in the wall band
-    // (d<=3 stays solid carpet under the tree wall) and grow more common
-    // with depth; rock blobs keep overriding (stony ground pokes through).
-    const clearRnd = mulberry32(seed ^ 0x0f10e5);
-    const nClear = { forest: 22, coast: 18, ruins: 16, highlands: 26 }[biome] || 20;
-    const clearSeeds = [];
-    for (let i = 0; i < nClear; i++) {
-        clearSeeds.push([Math.floor(clearRnd() * (hi - lo + 1)) + lo, Math.floor(clearRnd() * (hi - lo + 1)) + lo, 2 + clearRnd() * 3]);
-    }
-    const floorAt = (x, y) => {
-        const d = Math.max(f0 - x, x - f1, f0 - y, y - f1);   // 0 inside fence, 1+ wilds
-        if (d <= 0) return false;
-        if (d <= 3) return true;                              // wall band: solid carpet
-        const keep = Math.min(0.55, (d - 3) * 0.09);          // clearing odds grow with depth
-        for (const [cx, cy, cr] of clearSeeds) {
-            if (Math.max(Math.abs(x - cx), Math.abs(y - cy)) <= cr) {
-                const rr = mulberry32(seed + (x + 120) * 131 + (y + 120) * 17)();
-                if (rr < keep) return false;                  // a moss clearing opens here
-            }
+    // ── FOREST PATCH LAW (owner 2026-10-17, v91 stack: "no that isn't what
+    // I meant this is, the yellow circled parts like they look like a
+    // natural forest of sorts just like how sometimes some sides generate
+    // water, not just green [trees] at the fucking edges of the fence") —
+    // THE FENCE WALL IS DEAD. No more 2-row tree borders hugging the
+    // palisade. Instead each player seed rolls 1-3 ORGANIC WOODLAND
+    // PATCHES out in the open wilds — the reference's yellow-circled
+    // forests: a dark forest-floor carpet with dense interior trees and
+    // undergrowth, thinning to a wobbled natural edge. Same spirit as the
+    // coast's water band: sometimes a side grows a forest, sometimes it
+    // doesn't, and WHICH sides is rolled per seed and permanent for that
+    // player. The dark floor now belongs to the PATCH (not the whole
+    // wilds), so open moss separates the forests instead of a wall of
+    // green on the fence line.
+    const patchRnd = mulberry32(seed ^ 0x70f11e);
+    const nPatch = { forest: 2, coast: 1, ruins: 1, highlands: 1 }[biome]
+        + (patchRnd() < 0.55 ? 1 : 0) + (patchRnd() < 0.25 ? 1 : 0);
+    // side anchors (ref-card screen pts) — pushed WELL out into the wilds
+    // so patches read as open-country forests, never as fence dressing
+    const patchAnchors = [[125, 148], [1112, 168], [88, 425], [1152, 472], [305, 88], [898, 772], [178, 682], [1082, 642], [430, 795], [620, 62]].map(sa);
+    const patchSeeds = [];
+    {
+        const order = patchAnchors.map((_, i) => i).sort(() => patchRnd() - 0.5);
+        for (let i = 0; i < Math.min(nPatch, order.length); i++) {
+            const [sx, sy] = patchAnchors[order[i]];
+            const [gx, gy] = screenToGrid(sx + (patchRnd() - 0.5) * 80, sy + (patchRnd() - 0.5) * 40);
+            patchSeeds.push({
+                cx: Math.max(lo + 2, Math.min(hi - 2, gx)),
+                cy: Math.max(lo + 2, Math.min(hi - 2, gy)),
+                r: 3.8 + patchRnd() * 2.6,               // 3.8-6.4 tile radius
+                wob: patchRnd() * Math.PI * 2,           // organic edge phase
+            });
         }
-        return true;
+    }
+    const patchOf = (x, y) => {
+        for (const p of patchSeeds) {
+            const dx = x - p.cx, dy = y - p.cy;
+            const d = Math.sqrt(dx * dx + dy * dy);
+            const edge = p.r + Math.sin(Math.atan2(dy, dx) * 2.7 + p.wob) * 1.15;  // wobbled boundary
+            if (d <= edge) return { p, d, edge };
+        }
+        return null;
+    };
+    const floorAt = (x, y) => {
+        // dark woodland floor ONLY inside patches now — the old wall-band
+        // carpet + reverse-blob clearings belonged to the fence-wall law
+        return !!patchOf(x, y);
     };
     for (let x = lo; x <= hi; x++) {
         for (let y = lo; y <= hi; y++) {
@@ -239,114 +260,59 @@ function outlandProps(opts) {
 
     const master = mulberry32(seed ^ 0x51ab3e);
 
-    // ── STAGGERED FENCE WALL (owner 2026-10-17, g6 live render: "see how
-    // the trees outside the wall are set??? that's the kinda arrangement I
-    // want for trees outside the fence") — the forest biome's dense
-    // 2-row staggered treatment around ALL FOUR fence edges, extended to
-    // every biome (coast skips ocean cells; the gate corridor always stays
-    // open). FRONT-ROW THINNING: the south/east rows draw IN FRONT of the
-    // whole compound (painter's order) — they scatter at half rate with no
-    // stagger so the grounds stay visible behind them, exactly like the
-    // reference's sparse front band.
-    const treeWall = (rate, scBase, scVar, tint) => {
-        const plant = (x, y, r) => {
-            if (isOceanCell(x, y) || inGateCorridor(x, y)) return;
-            const hero = mulberry32(seed + Math.round(x * 733) * 3 + Math.round(y * 991))() < 0.12;
-            const sc = Math.min((hero ? 1.0 + r * 0.18 : scBase + r * scVar) * TS, 1.65);
-            put(pickWeighted(master, POOLS.forestTrees.map((f) => [f, 1])), x + (r - 0.5), y + (r * 0.4 - 0.2), sc, tint, 40, 14);
-        };
-        for (let x = f0 - 2; x <= f1 + 2; x++) {
-            for (const y of [f0 - 1, f0 - 2, f1 + 1, f1 + 2]) {
-                const south = y >= f1 + 1;
-                const rr = south ? rate * 0.5 : rate;
-                const r = mulberry32(seed + x * 929 + y * 613)();
-                if (r < rr) plant(x, y, r);
-                if (!south && r < rr * 0.8) plant(x + 0.3, y + 0.4, mulberry32(seed + x * 929 + y * 613 + 5)()); // stagger
-            }
-        }
-        for (let y = f0 - 2; y <= f1 + 2; y++) {
-            for (const x of [f0 - 1, f0 - 2, f1 + 1, f1 + 2]) {
-                const east = x >= f1 + 1;
-                const rr = east ? rate * 0.7 : rate;
-                const r = mulberry32(seed + x * 457 + y * 1319)();
-                if (r < rr) plant(x, y, r);
-                if (r < rr * 0.8) plant(x + 0.4, y + 0.3, mulberry32(seed + x * 457 + y * 1319 + 5)()); // stagger
+    // ── PATCH TREE PLANTING (replaces the dead fence wall + decay rows) —
+    // dense interior canopy with a naturally thinning rim, rare lone
+    // strays on the open moss. THE ANTI-'GREEN FENCE EDGE' LAW: nothing
+    // plants just because a cell is near the fence — only patch members
+    // and seeded strays exist.
+    const plantWildTrees = () => {
+        for (let x = lo; x <= hi; x++) {
+            for (let y = lo; y <= hi; y++) {
+                if (isOceanCell(x, y) || inGateCorridor(x, y)) continue;
+                if (x >= f0 && x <= f1 && y >= f0 && y <= f1) continue;   // yard + playable
+                const r = mulberry32(seed + x * 613 + y * 929 + 41)();
+                const hit = patchOf(x, y);
+                if (hit) {
+                    const edgeT = hit.d / hit.edge;            // 0 centre → 1 rim
+                    const rate = edgeT > 0.72 ? 0.24 : 0.62;   // natural thinning rim
+                    if (r >= rate) continue;
+                    const hero = r < 0.09;
+                    const sc = Math.min((hero ? 1.0 + r * 2.2 : 0.52 + r * 0.42) * TS, 1.62);
+                    put(pickWeighted(master, POOLS.forestTrees.map((f) => [f, 1])), x + (r - 0.5), y + (r * 0.4 - 0.2), sc, edgeT > 0.72 ? TINT_NEAR : TINT_MID, 40, 14);
+                } else if (r < 0.028) {
+                    // lone stray on the open moss — big, solitary, no clutter
+                    const sc = Math.min((0.85 + r * 8) * TS, 1.5);
+                    put(pickWeighted(master, POOLS.forestTrees.map((f) => [f, 1])), x + (r - 0.5), y + (r * 0.4 - 0.2), sc, null, 40, 14);
+                }
             }
         }
     };
-
-    // ── WILD WOODLAND DECAY (same owner note: the reference's woodland
-    // extends well past the wall rows, thinning as it goes — it does not
-    // stop after 2 rows into empty lawn) — rows d=3..6 beyond the fence on
-    // every edge, rate + canopy shrinking with depth; ocean cells and gate
-    // corridors stay clear; the south/east keep their front-row thinning
-    // factors so the compound's foreground stays readable.
-    const wildWood = (rateBase) => {
-        const DECAY = [0, 0, 0, 0.34, 0.2, 0.11, 0.05];
-        const plantDeep = (x, y, r, south, east) => {
-            if (isOceanCell(x, y) || inGateCorridor(x, y)) return;
-            const d = Math.max(f0 - y, y - f1, f0 - x, x - f1);
-            const rr = rateBase * DECAY[d] * (south ? 0.5 : 1) * (east ? 0.7 : 1);
-            if (r >= rr) return;
-            const sc = Math.min((0.5 + r * 0.2) * TS * (d >= 5 ? 0.85 : 1), 1.6);
-            put(pickWeighted(master, POOLS.forestTrees.map((f) => [f, 1])), x + (r - 0.5), y + (r * 0.4 - 0.2), sc, d >= 4 ? TINT_MID : TINT_NEAR, 40, 14);
-        };
-        for (let x = f0 - 6; x <= f1 + 6; x++) {
-            for (const y of [f0 - 6, f0 - 5, f0 - 4, f0 - 3, f1 + 3, f1 + 4, f1 + 5, f1 + 6]) {
-                plantDeep(x, y, mulberry32(seed + x * 613 + y * 929 + 11)(), y >= f1 + 3, false);
+    // patch undergrowth — ferns/tufts/logs INSIDE the woodland carpet only,
+    // so the floor reads as lived-in thicket ground
+    const plantPatchUndergrowth = () => {
+        for (let x = lo; x <= hi; x++) {
+            for (let y = lo; y <= hi; y++) {
+                if (isOceanCell(x, y) || inGateCorridor(x, y)) continue;
+                if (x >= f0 && x <= f1 && y >= f0 && y <= f1) continue;
+                if (!patchOf(x, y)) continue;
+                const r = mulberry32(seed + x * 331 + y * 701 + 23)();
+                if (r < 0.13) put(pickWeighted(master, POOLS.forestClutter.map((f) => [f, 1])), x + (r - 0.5), y + (r * 0.4 - 0.2), (0.55 + r * 1.6) * CS, TINT_NEAR, 34, 12);
             }
-        }
-        for (let y = f0 - 6; y <= f1 + 6; y++) {
-            for (const x of [f0 - 6, f0 - 5, f0 - 4, f0 - 3, f1 + 3, f1 + 4, f1 + 5, f1 + 6]) {
-                plantDeep(x, y, mulberry32(seed + x * 1319 + y * 457 + 11)(), false, x >= f1 + 3);
-            }
-        }
-    };
-    // ── NEAR-BAND UNDERGROWTH — ferns/tufts/logs/mushrooms scattered on the
-    // dark floor right outside the wall so the band reads as thicket floor,
-    // not a tree border on raked lawn.
-    const wildUndergrowth = (rate) => {
-        const cells = [];
-        for (let x = f0 - 3; x <= f1 + 3; x++) for (const y of [f0 - 3, f0 - 2, f0 - 1, f1 + 1, f1 + 2, f1 + 3]) cells.push([x, y]);
-        for (let y = f0 - 3; y <= f1 + 3; y++) for (const x of [f0 - 3, f0 - 2, f0 - 1, f1 + 1, f1 + 2, f1 + 3]) cells.push([x, y]);
-        for (const [x, y] of cells) {
-            if (isOceanCell(x, y) || inGateCorridor(x, y)) continue;
-            const r = mulberry32(seed + x * 331 + y * 701 + 23)();
-            if (r < rate) put(pickWeighted(master, POOLS.forestClutter.map((f) => [f, 1])), x + (r - 0.5), y + (r * 0.4 - 0.2), (0.55 + r * 1.6) * CS, TINT_NEAR, 34, 12);
         }
     };
 
     if (biome === 'forest') {
-        // dense tree wall hugging the fence outside (2 staggered rows) —
-        // THE REFERENCE ARRANGEMENT (untouched rates; gate corridor added)
-        for (let x = f0 - 2; x <= f1 + 2; x++) {
-            for (const y of [f0 - 1, f0 - 2, f1 + 1, f1 + 2]) {
-                if (isOceanCell(x, y) || inGateCorridor(x, y)) continue;
-                const r = mulberry32(seed + x * 313 + y * 977)();
-                if (y >= f1 + 1 && TS > 1.3 && r > 0.28) continue;   // big canvas: sparse front band
-                if (r < 0.5) put(pickWeighted(master, POOLS.forestTrees.map((f) => [f, 1])), x + (r - 0.5), y + (r * 0.4 - 0.2), (0.5 + r * 0.24) * TS, TINT_NEAR, 40, 14);
-            }
-        }
-        for (let y = f0 - 2; y <= f1 + 2; y++) {
-            for (const x of [f0 - 1, f0 - 2, f1 + 1, f1 + 2]) {
-                if (isOceanCell(x, y) || inGateCorridor(x, y)) continue;
-                const r = mulberry32(seed + x * 7717 + y * 313)();
-                if (x >= f1 + 1 && TS > 1.3 && r > 0.36) continue;   // big canvas: east edge lighter
-                if (r < 0.5) put(pickWeighted(master, POOLS.forestTrees.map((f) => [f, 1])), x + (r * 0.4 - 0.2), y + (r - 0.5), (0.5 + r * 0.24) * TS, TINT_NEAR, 40, 14);
-            }
-        }
-        wildWood(0.5);
-        wildUndergrowth(0.16);
-        // deep wilds: conifer clusters + mossy clutter, at SCREEN anchors
+        // FOREST PATCH LAW — no fence wall; 2-4 rolled woodland patches +
+        // rare strays carry the whole look now
+        plantWildTrees();
+        plantPatchUndergrowth();
+        // deep-wilds mossy clutter (the patches' floor already carries the
+        // woodland read — only scatter remains from the old cluster law)
         const wildAnchors = [[110, 180], [1110, 225], [170, 635], [1060, 600], [590, 66], [650, 792], [340, 105], [920, 772]].map(sa);
-        for (let i = 0; i < 5; i++) {
-            const [sx, sy] = wildAnchors[Math.floor(master() * wildAnchors.length)];
-            const [gx, gy] = screenToGrid(sx + (master() - 0.5) * 120, sy + (master() - 0.5) * 50);
-            cluster(master, POOLS.forestTrees.map((f) => [f, 1]), gx, gy, 2 + Math.floor(master() * 3), (0.5 + master() * 0.16) * TS, TINT_MID, 1.4);
-        }
-        for (let i = 0; i < 18; i++) {
+        for (let i = 0; i < 14; i++) {
             const [sx, sy] = wildAnchors[Math.floor(master() * wildAnchors.length)];
             const [gx, gy] = screenToGrid(sx + (master() - 0.5) * 260, sy + (master() - 0.5) * 110);
+            if (gx >= f0 && gx <= f1 && gy >= f0 && gy <= f1) continue;
             put(pickWeighted(master, POOLS.forestClutter.map((f) => [f, 1])), gx, gy, (0.7 + master() * 0.3) * CS, TINT_MID, 34, 12);
         }
     }
@@ -361,11 +327,11 @@ function outlandProps(opts) {
             const [gx, gy] = screenToGrid(sx + (master() - 0.5) * 90, sy + (master() - 0.5) * 40);
             cluster(master, POOLS.highRocks.map((f) => [f, 1]), gx, gy, 3 + Math.floor(master() * 3), 0.95 + master() * 0.2, TINT_MID, 1.5);
         }
-        // scree fields + sparse wind-stunted trees between clusters, PLUS
-        // a thin staggered fence wall so the compound still nests in woodland
-        treeWall(0.3, 0.55, 0.24, TINT_NEAR);
-        wildWood(0.3);
-        wildUndergrowth(0.09);
+        // scree fields + sparse wind-stunted trees between clusters;
+        // FOREST PATCH LAW — 1-3 rolled woodland patches + strays, no fence
+        // wall (the compound nests beside woodland, not inside a border)
+        plantWildTrees();
+        plantPatchUndergrowth();
         for (let i = 0; i < 16; i++) {
             const [sx, sy] = rockAnchors[Math.floor(master() * rockAnchors.length)];
             const [gx, gy] = screenToGrid(sx + (master() - 0.5) * 300, sy + (master() - 0.5) * 120);
@@ -391,11 +357,10 @@ function outlandProps(opts) {
             cluster(master, POOLS.ruinsProps.map((f) => [f, 1]), cx + 1.2, cy + 0.6, 3 + Math.floor(master() * 2), deep ? 0.7 : 0.85, deep ? TINT_FAR : TINT_MID, 1.1);
             cluster(master, POOLS.ruinsClutter.map((f) => [f, 1]), cx - 1.4, cy - 0.8, 4 + Math.floor(master() * 3), deep ? 0.6 : 0.78, deep ? TINT_FAR : TINT_MID, 1.5);
         }
-        // tree wall still hugs the fence (mossy woodland around ruins) —
-        // now the full staggered treatment (was 2 rows at 0.45, no E/W edge)
-        treeWall(0.44, 0.58, 0.26, TINT_NEAR);
-        wildWood(0.44);
-        wildUndergrowth(0.13);
+        // FOREST PATCH LAW — mossy woodland arrives as rolled patches
+        // around the ruin sites, not as a fence border
+        plantWildTrees();
+        plantPatchUndergrowth();
         for (let i = 0; i < 14; i++) {
             const cx = master() * (2 * (N + P) + 6) - (N + P) - 3;
             const cy = master() * (2 * (N + P) + 6) - (N + P) - 3;
@@ -418,25 +383,18 @@ function outlandProps(opts) {
             const y = shoreRow + 1 + Math.floor(master() * 2);
             if (isOceanCell(x, y) && master() < 0.8) put(master() < 0.4 ? 'poly_rock_spire.png' : 'poly_water_rock.png', x, y, 0.9 + master() * 0.3, TINT_SHORE, 20, 6);
         }
-        // land side: THE REFERENCE WALL (owner: arrange the outside trees
-        // like the player base) — full staggered fence wall, ocean cells
-        // and the gate corridor stay clear
-        treeWall(0.5, 0.6, 0.28, TINT_NEAR);
-        wildWood(0.5);
-        wildUndergrowth(0.14);
-        // deep woodland clumps on the LAND sides (the old coast law had no
-        // clusters at all — the wilds read as empty lawn)
+        // land side: FOREST PATCH LAW (owner v91 stack — natural forests of
+        // sorts like the reference's yellow circles, NOT a green fence
+        // edge); ocean cells and the gate corridor stay clear
+        plantWildTrees();
+        plantPatchUndergrowth();
+        // deep woodland clutter on the LAND sides
         const landAnchors = [[110, 180], [170, 635], [590, 66], [340, 105], [90, 330], [620, 760]].map(sa);
-        for (let i = 0; i < 4; i++) {
-            const [sx, sy] = landAnchors[Math.floor(master() * landAnchors.length)];
-            const [gx, gy] = screenToGrid(sx + (master() - 0.5) * 120, sy + (master() - 0.5) * 50);
-            if (isOceanCell(Math.round(gx), Math.round(gy))) continue;
-            cluster(master, POOLS.forestTrees.map((f) => [f, 1]), gx, gy, 2 + Math.floor(master() * 3), (0.5 + master() * 0.18) * TS, TINT_MID, 1.4);
-        }
-        for (let i = 0; i < 12; i++) {
+        for (let i = 0; i < 10; i++) {
             const [sx, sy] = landAnchors[Math.floor(master() * landAnchors.length)];
             const [gx, gy] = screenToGrid(sx + (master() - 0.5) * 260, sy + (master() - 0.5) * 110);
             if (isOceanCell(Math.round(gx), Math.round(gy))) continue;
+            if (gx >= f0 && gx <= f1 && gy >= f0 && gy <= f1) continue;
             put(pickWeighted(master, POOLS.forestClutter.map((f) => [f, 1])), gx, gy, (0.7 + master() * 0.3) * CS, TINT_MID, 34, 12);
         }
     }

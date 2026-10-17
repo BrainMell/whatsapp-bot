@@ -505,8 +505,8 @@ async function renderFrame(state, frame, opts = {}) {
             paths: PATHS || [],
             hot,
             plotCells,
-            midRate: 0.16,  // v6: interior ring thinned hard (was 0.45)
-            hotRate: 0.22,  // v6: a handful of trees by the keep (was 0.42)
+            midRate: 0.12,  // v6 thinned, v9.2 harder (owner: 'too many trees inside')
+            hotRate: 0.14,  // v6 thinned, v9.2 harder (owner: 'too many trees inside')
             margin: false, // outside the fence is the outlands module's domain
             haze: false,
             structFoots: Object.values(GUILD_STRUCTS).map((st) => [st.x, st.y, st.fw, st.fh]),
@@ -733,6 +733,12 @@ async function renderFrame(state, frame, opts = {}) {
     ctx.fillRect(0, 0, ART_W, ART_H);
 
     drawHud(ctx, state, opts);
+    // RAW ENCODER — see homesteadBaseRenderer (owner 2026-10-17 '.j base
+    // shuts down'): the 2560x1500 guild card's sync PNG encode is even
+    // heavier than the base's; animated guild bakes render raw BGRA frames.
+    if (opts.encoder === 'raw') {
+        return { raw: canvas.toBuffer('raw'), w: canvas.width, h: canvas.height };
+    }
     return canvas.toBuffer('image/png');
 }
 
@@ -804,9 +810,32 @@ async function encodeFramesToMp4(frames) {
     const ffmpeg = require('fluent-ffmpeg');
     try { ffmpeg.setFfmpegPath(process.env.FFMPEG_PATH || 'ffmpeg'); } catch (e) { /* engine sets it too */ }
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gbase-'));
-    frames.forEach((b, i) => fs.writeFileSync(path.join(tmp, `f${String(i).padStart(3, '0')}.png`), b));
     const out = path.join(tmp, 'gbase.mp4');
     try {
+        // RAW PATH — BGRA memcpy frames skip the giant PNG round-trip
+        if (frames.length && frames[0] && frames[0].raw) {
+            const { w, h } = frames[0];
+            const rawFile = path.join(tmp, 'frames.raw');
+            const fd = fs.openSync(rawFile, 'w');
+            try { for (const f of frames) fs.writeSync(fd, f.raw); }
+            finally { fs.closeSync(fd); }
+            await new Promise((resolve, reject) => {
+                ffmpeg()
+                    .input(rawFile)
+                    .inputOptions(['-f', 'rawvideo', '-pix_fmt', 'bgra', '-video_size', `${w}x${h}`, '-framerate', `${1000 / FRAME_MS}`])
+                    .outputOptions([
+                        '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0',
+                        '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '23',
+                        '-movflags', '+faststart', '-an', '-y',
+                    ])
+                    .output(out)
+                    .on('end', resolve)
+                    .on('error', reject)
+                    .run();
+            });
+            return fs.readFileSync(out);
+        }
+        frames.forEach((b, i) => fs.writeFileSync(path.join(tmp, `f${String(i).padStart(3, '0')}.png`), b));
         await new Promise((resolve, reject) => {
             ffmpeg()
                 .input(path.join(tmp, 'f%03d.png'))
@@ -833,6 +862,11 @@ function stateHash(state, opts = {}) {
     return hashStr(JSON.stringify([state.name, state.level, state.archetype, state.buildings, state.memberCount, state.memberCap, state.emblemColor, state.emblemIcon, state.motto, opts.hint || '', opts.static ? 1 : 0]));
 }
 
+// EVENT-LOOP BREATH — real timers between frames keep the canary heartbeat
+// alive during an animated bake (microtask yields don't feed timers).
+const FRAME_BREATH_MS = 8;
+const breath = () => new Promise((r) => setTimeout(r, FRAME_BREATH_MS));
+
 async function renderGuildBaseImage(state, opts = {}) {
     const key = stateHash(state, opts);
     const hit = _renderCache.get(key);
@@ -840,7 +874,10 @@ async function renderGuildBaseImage(state, opts = {}) {
     const out = await mediaCache.cached('guildbase', key, async () => {
         const frames = [];
         const frameCount = opts.static === false ? FRAMES : 1;
-        for (let f = 0; f < frameCount; f++) frames.push(await renderFrame(state, f, opts));
+        for (let f = 0; f < frameCount; f++) {
+            frames.push(await renderFrame(state, f, frameCount > 1 && f > 0 ? { ...opts, encoder: 'raw' } : opts));
+            await breath();
+        }
         let out = { buffer: frames[0], contentType: 'image/png' };
         if (frameCount > 1) {
             try {

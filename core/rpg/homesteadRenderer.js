@@ -570,6 +570,12 @@ async function renderFrame(state, frame, opts = {}) {
     ctx.fillRect(0, 0, ART_W, ART_H);
 
     drawHud(ctx, state, theme, opts);
+    // RAW ENCODER — see homesteadBaseRenderer (owner 2026-10-17 '.j base
+    // shuts down'): animated room bakes render raw BGRA frames so the bake
+    // never sync-encodes 13 PNGs back to back.
+    if (opts.encoder === 'raw') {
+        return { raw: canvas.toBuffer('raw'), w: canvas.width, h: canvas.height };
+    }
     return canvas.toBuffer('image/png');
 }
 
@@ -808,9 +814,32 @@ async function encodeFramesToMp4(frames) {
     const ffmpeg = require('fluent-ffmpeg');
     try { ffmpeg.setFfmpegPath(process.env.FFMPEG_PATH || 'ffmpeg'); } catch (e) { /* engine sets it too */ }
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'homestead-'));
-    frames.forEach((b, i) => fs.writeFileSync(path.join(tmp, `f${String(i).padStart(3, '0')}.png`), b));
     const out = path.join(tmp, 'room.mp4');
     try {
+        // RAW PATH — BGRA memcpy frames skip the PNG round-trip
+        if (frames.length && frames[0] && frames[0].raw) {
+            const { w, h } = frames[0];
+            const rawFile = path.join(tmp, 'frames.raw');
+            const fd = fs.openSync(rawFile, 'w');
+            try { for (const f of frames) fs.writeSync(fd, f.raw); }
+            finally { fs.closeSync(fd); }
+            await new Promise((resolve, reject) => {
+                ffmpeg()
+                    .input(rawFile)
+                    .inputOptions(['-f', 'rawvideo', '-pix_fmt', 'bgra', '-video_size', `${w}x${h}`, '-framerate', `${1000 / FRAME_MS}`])
+                    .outputOptions([
+                        '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0',
+                        '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '23',
+                        '-movflags', '+faststart', '-an', '-y',
+                    ])
+                    .output(out)
+                    .on('end', resolve)
+                    .on('error', reject)
+                    .run();
+            });
+            return fs.readFileSync(out);
+        }
+        frames.forEach((b, i) => fs.writeFileSync(path.join(tmp, `f${String(i).padStart(3, '0')}.png`), b));
         await new Promise((resolve, reject) => {
             ffmpeg()
                 .input(path.join(tmp, 'f%03d.png'))
@@ -839,6 +868,11 @@ function stateHash(state, opts = {}) {
     return hashStr(JSON.stringify([state.owner, state.theme, state.placed, opts.pop || null, opts.hint || '', opts.grid || null, opts.static ? 1 : 0]));
 }
 
+// EVENT-LOOP BREATH — real timers between frames keep the canary heartbeat
+// alive during an animated bake (microtask yields don't feed timers).
+const FRAME_BREATH_MS = 8;
+const breath = () => new Promise((r) => setTimeout(r, FRAME_BREATH_MS));
+
 // Media matrix (owner 2026-10-16 10:09Z "bring gifs back and make the
 // generation faster" — restores the agreed law, supersedes the 10-15 static
 // matrix): the ROOM VIEW is an ANIMATED GIF again (hearth/cauldron/torches
@@ -855,7 +889,10 @@ async function renderRoomImage(state, opts = {}) {
     const out = await mediaCache.cached('room', key, async () => {
         const frames = [];
         const frameCount = opts.static ? 1 : FRAMES;
-        for (let f = 0; f < frameCount; f++) frames.push(await renderFrame(state, f, opts));
+        for (let f = 0; f < frameCount; f++) {
+            frames.push(await renderFrame(state, f, f === 0 || opts.static ? opts : { ...opts, encoder: 'raw' }));
+            await breath();
+        }
         let out = { buffer: frames[0], contentType: 'image/png' };
         if (!opts.static) {
             try {
