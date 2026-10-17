@@ -13,6 +13,7 @@ const path = require('path');
 const os = require('os');
 const isoShadow = require('./isoShadow');
 const isoForest = require('./isoForest');
+const wilds = require('./wilds');
 const mediaCache = require('./mediaCache');
 
 const SS = 2;
@@ -147,6 +148,11 @@ async function renderFrame(state, frame, opts = {}) {
     ctx.imageSmoothingEnabled = false;
 
     const seed = hashStr(state.owner || 'base');
+    // PROCEDURAL WILDS (owner 2026-10-16 23:18Z "the world outside the fence
+    // should be procedurally generated and should stick to that for that
+    // player"): a pure function of the owner's identity — same player, same
+    // wilds, every render, forever. See core/rpg/wilds.js for THE RULES.
+    const wildsProf = wilds.wildsProfile(state.owner || 'base');
 
     // ── FOREST LAW (owner 2026-10-16 11:57Z): the whole thing is a forest —
     // no sky, deep canopy wall + treelines + god rays behind the island ──
@@ -159,6 +165,7 @@ async function renderFrame(state, frame, opts = {}) {
     const grass = ['forest_moss_a.png', 'forest_moss_b.png', 'forest_moss_c.png'];
     const waterF = frame % 4 < 2 ? 'forest_water_0.png' : 'forest_water_1.png';
     const M = 12; // full coverage to the card corners (owner: ground past borders)
+    const seaSet = wilds.seaCells(wildsProf, N, M);
     for (let x = -M; x < N + M; x++) {
         for (let y = -M; y < N + M; y++) {
             const px = isoX(x, y), py = isoY(x, y);
@@ -167,8 +174,13 @@ async function renderFrame(state, frame, opts = {}) {
             const inside = x >= 0 && y >= 0 && x < N && y < N;
             let tile;
             if (!inside) {
-                // wild margin — same moss law, slightly wilder
-                tile = r < 0.06 ? 'forest_moss_shrooms.png' : (r < 0.13 ? 'forest_rock_tile.png' : grass[Math.floor(r * 3) % 3]);
+                // wild margin — biome-flavoured: rock drifts in the
+                // highlands, meadow patches in the vale, OPEN SEA on the
+                // coast's flooded far edge (wilds.js rules 2/3/4)
+                tile = wilds.marginTile(wildsProf, x, y, N,
+                    r < 0.06 ? 'forest_moss_shrooms.png' : (r < 0.13 ? 'forest_rock_tile.png' : grass[Math.floor(r * 3) % 3]),
+                    seaSet);
+                if (tile === 'forest_water_0.png' && frame % 4 >= 2) tile = 'forest_water_1.png';
             } else if (inZone(LAYOUT.mines.zone, x, y)) tile = r < 0.85 ? 'forest_rock_tile.png' : 'forest_moss_c.png';
             else if (inZone(LAYOUT.pond.zone, x, y)) tile = r < 0.92 ? waterF : 'forest_moss_c.png';
             else if ((LAYOUT.paths || []).some(([px2, py2]) => px2 === x && py2 === y)) tile = 'forest_trail.png';
@@ -255,6 +267,9 @@ async function renderFrame(state, frame, opts = {}) {
             for (let yy = LAYOUT.hunting.zone.y; yy < LAYOUT.hunting.zone.y + LAYOUT.hunting.zone.fh; yy++) hot.push([xx, yy]);
         }
     }
+    // the sea claims its band — nothing plants in open water or on the wet
+    // shoreline ring (wilds.js rule 3)
+    for (const k of seaSet) usedMargin.add(k.startsWith('?') ? k.slice(1) : k);
     const forestProps = isoForest.islandForest({
         seed, N, isoX, isoY,
         occupied: usedMargin,
@@ -280,6 +295,12 @@ async function renderFrame(state, frame, opts = {}) {
                 forestProps.push({ file: f, x: px, y: py, tint: '#263d17' });
             }
         }
+    }
+    // PROCEDURAL WILDS props — mountain ranges, landmarks, coast garnish
+    // (owner 2026-10-16 23:18Z: "use rocks and mountain assets that fit,
+    // maybe some will have a small part that connects to an ocean")
+    for (const wp of wilds.wildProps(wildsProf, N, M, isoX, isoY, [5, 15], seaSet)) {
+        forestProps.push(wp);
     }
     for (const f of forestProps) {
         // hazed wilds: tinted variants are pre-scaled canvases (draw at sc 1)

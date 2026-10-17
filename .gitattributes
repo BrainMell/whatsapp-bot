@@ -73,3 +73,15 @@ core/rpgasset/homestead/px_*.png -text
 # forest set - reset --hard deploys would otherwise serve LFS pointers)
 core/rpgasset/guildbase/px_*.png -filter -diff -merge -text
 core/rpgasset/guildbase/px_*.png -text
+
+# guild structure kit renders must be real bytes on both boxes (the LFS
+# pointer blanking lesson: reset --hard deploys would serve stubs and blank
+# every guild building — same fix as the pixel forest/castle sets)
+core/rpgasset/guildbase/gb_castle_*.png -filter -diff -merge -text
+core/rpgasset/guildbase/gb_castle_*.png -text
+core/rpgasset/guildbase/gb_training_*.png -filter -diff -merge -text
+core/rpgasset/guildbase/gb_training_*.png -text
+core/rpgasset/guildbase/gb_treasury_*.png -filter -diff -merge -text
+core/rpgasset/guildbase/gb_treasury_*.png -text
+core/rpgasset/guildbase/gb_cottage.png -filter -diff -merge -text
+core/rpgasset/guildbase/gb_cottage.png -text
