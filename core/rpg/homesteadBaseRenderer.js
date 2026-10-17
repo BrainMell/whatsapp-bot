@@ -551,6 +551,10 @@ async function renderFrame(state, frame, opts = {}) {
     if (opts.encoder === 'raw') {
         return { raw: canvas.toBuffer('raw'), w: canvas.width, h: canvas.height };
     }
+    // RETURN-CANVAS (Task 36 memory round) — internal callers encode the
+    // finished art themselves (downscale + JPEG); skipping the full-res PNG
+    // encode saves ~1-2s AND the 2-4MB PNG buffer it allocates.
+    if (opts.returnCanvas) return canvas;
     return canvas.toBuffer('image/png');
 }
 
@@ -649,7 +653,10 @@ async function encodeFramesToMp4(frames) {
             return fs.readFileSync(out);
         }
         // PNG PATH — plain buffers (QA smoke bakes / 3-frame renders)
-        frames.forEach((b, i) => fs.writeFileSync(path.join(tmp, `f${String(i).padStart(3, '0')}.png`), b));
+        frames.forEach((b, i) => {
+            if (!Buffer.isBuffer(b)) throw new Error(`frame ${i} is ${(b && typeof b === 'object') ? 'a raw-frame object, not a Buffer' : typeof b} — mixed encoder paths`);
+            fs.writeFileSync(path.join(tmp, `f${String(i).padStart(3, '0')}.png`), b);
+        });
         await new Promise((resolve, reject) => {
             ffmpeg()
                 .input(path.join(tmp, 'f%03d.png'))
@@ -670,6 +677,41 @@ async function encodeFramesToMp4(frames) {
     }
 }
 
+// OUT ENCODER (Task 36: owner "the guild area is 5mb+ in size???? Yhh that
+// won't do") — static cards ship DOWNSCALED + JPEG instead of the full-res
+// SS=2 PNG. WhatsApp phones never show more than ~1200px; a full-res PNG was
+// ~2-4MB out plus a ~1.4x base64 copy in the send path, and every entry sat
+// in the hot render cache. Downscale to OUT_MAX_W and encode JPEG q0.88:
+// visually identical in-app, ~0.4-1.1MB. Env-tunable for future art passes.
+const OUT_MAX_W = Math.max(640, parseInt(process.env.RENDER_OUT_MAX_W || '2560', 10) || 2560);
+const OUT_JPEG_Q = Math.min(0.95, Math.max(0.5, parseFloat(process.env.RENDER_OUT_JPEG_Q || '0.88') || 0.88));
+function encodeOut(canvas) {
+    let c = canvas;
+    if (canvas.width > OUT_MAX_W) {
+        const h = Math.round(canvas.height * OUT_MAX_W / canvas.width);
+        c = require('canvas').createCanvas(OUT_MAX_W, h);
+        c.getContext('2d').drawImage(canvas, 0, 0, OUT_MAX_W, h);
+    }
+    return { buffer: c.toBuffer('image/jpeg', OUT_JPEG_Q), contentType: 'image/jpeg' };
+}
+
+// HOT CACHE BYTE CAP (Task 36: "why are there such large memory spikes?") —
+// the old cap was 120 ENTRIES; at multi-MB cards that is half a GB of
+// resident buffers. Cap by bytes instead (oldest evicted first) — 64MB holds
+// ~60 cards or ~240 mp4s, far past any real chat session.
+const RENDER_CACHE_MAX_BYTES = 64 * 1048576;
+function cachePut(map, key, out) {
+    let total = (out && out.buffer && out.buffer.length) || 0;
+    for (const v of map.values()) total += (v && v.buffer && v.buffer.length) || 0;
+    while (total > RENDER_CACHE_MAX_BYTES && map.size) {
+        const oldestKey = map.keys().next().value;
+        const v = map.get(oldestKey);
+        total -= (v && v.buffer && v.buffer.length) || 0;
+        map.delete(oldestKey);
+    }
+    map.set(key, { ...out, ts: Date.now() });
+}
+
 const _renderCache = new Map();
 const CACHE_TTL = 10 * 60 * 1000;
 function stateHash(state, opts = {}) {
@@ -688,34 +730,70 @@ const breath = () => new Promise((r) => setTimeout(r, FRAME_BREATH_MS));
 // — water shimmer, forge/chimney smoke, gate torch, fireflies; build/upgrade
 // transformation stays ANIMATED (opts.celebrate). Speed: bake is disk-cached
 // per stateHash (mediaCache.js) — first view renders, repeats are instant.
+// STREAMING BAKE (Task 36: owner "why are there such large memory spikes?")
+// — the old loop pushed ALL 14 raw frames (~16MB each = ~225MB resident) into
+// an array before encoding even started. ffmpeg's stdin is now fed AS frames
+// render: render f -> pipe -> release -> render f+1. Resident frame memory
+// drops from ~225MB to ~2 frames, and the encode overlaps the render exactly
+// like the stdin-stream fix already did for IO.
+async function encodeAnimStream(state, layers, opts) {
+    const fbin = process.env.FFMPEG_PATH || 'ffmpeg';
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'base-'));
+    const out = path.join(tmp, 'base.mp4');
+    try {
+        const f0 = await renderFrame(state, 0, { ...opts, encoder: 'raw', terrainLayers: layers });
+        await breath();
+        const { w, h } = f0;
+        const args = [
+            '-f', 'rawvideo', '-pix_fmt', 'bgra', '-video_size', `${w}x${h}`,
+            '-framerate', `${1000 / FRAME_MS}`, '-i', 'pipe:0',
+            '-vf', `scale=${Math.round(w / 2)}:${Math.round(h / 2)}`,
+            '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0',
+            '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '23',
+            '-movflags', '+faststart', '-an', '-y', out,
+        ];
+        await new Promise((resolve, reject) => {
+            const p = require('child_process').spawn(fbin, args, { stdio: ['pipe', 'ignore', 'pipe'] });
+            let err = '';
+            p.stderr.on('data', (d) => { err += d; if (err.length > 6000) err = err.slice(-3000); });
+            p.on('error', reject);
+            p.on('exit', (code) => code === 0 ? resolve() : reject(new Error(`ffmpeg exit ${code}: ${err.slice(-500)}`)));
+            (async () => {
+                const feed = async (raw) => { if (!p.stdin.write(raw)) await new Promise((r) => p.stdin.once('drain', r)); };
+                await feed(f0.raw);
+                for (let f = 1; f < FRAMES; f++) {
+                    const fr = await renderFrame(state, f, { ...opts, encoder: 'raw', terrainLayers: layers });
+                    await feed(fr.raw);
+                    await breath();
+                }
+                p.stdin.end();
+            })().catch((e) => { try { p.stdin.destroy(); } catch (e2) {} try { p.kill('SIGKILL'); } catch (e3) {} reject(e); });
+        });
+        return fs.readFileSync(out);
+    } finally {
+        try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) {}
+    }
+}
+
 async function renderBaseImage(state, opts = {}) {
     const key = stateHash(state, opts);
     const hit = _renderCache.get(key);
     if (hit && (Date.now() - hit.ts) < CACHE_TTL) return hit;
     const out = await mediaCache.cached('base', key, async () => {
-        const frames = [];
-        const frameCount = opts.static ? 1 : FRAMES;
-        // animated bakes: ALL frames raw (13 sync PNG encodes removed) + a
-        // shared terrain-layer store; PNG only re-renders if mp4 fails
-        const layers = opts.static ? null : {};
-        for (let f = 0; f < frameCount; f++) {
-            frames.push(await renderFrame(state, f, layers ? { ...opts, encoder: 'raw', terrainLayers: layers } : opts));
-            await breath();
+        // static card: render once, downscale + JPEG (no full-res PNG encode)
+        if (opts.static) return encodeOut(await renderFrame(state, 0, { ...opts, returnCanvas: true }));
+        // animated bake: streaming raw frames + one shared terrain-layer store;
+        // JPEG card re-render only if mp4 fails
+        const layers = {};
+        try {
+            const mp4 = await encodeAnimStream(state, layers, opts);
+            if (mp4 && mp4.length > 1000) return { buffer: mp4, contentType: 'video/mp4' };
+        } catch (e) {
+            console.error('[baseRenderer] mp4 encode failed, JPEG fallback:', e.message);
         }
-        let out = layers ? null : { buffer: frames[0], contentType: 'image/png' };
-        if (layers) {
-            try {
-                const mp4 = await encodeFramesToMp4(frames);
-                if (mp4 && mp4.length > 1000) out = { buffer: mp4, contentType: 'video/mp4' };
-            } catch (e) {
-                console.error('[baseRenderer] mp4 encode failed, PNG fallback:', e.message);
-            }
-            if (!out) out = { buffer: await renderFrame(state, 0, opts), contentType: 'image/png' };  // PNG re-render for fallback
-        }
-        return out;
+        return encodeOut(await renderFrame(state, 0, { ...opts, returnCanvas: true }));  // fallback card
     });
-    if (_renderCache.size > 120) _renderCache.clear();
-    _renderCache.set(key, { ...out, ts: Date.now() });
+    cachePut(_renderCache, key, out);
     return out;
 }
 
