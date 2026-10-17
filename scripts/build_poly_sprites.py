@@ -46,7 +46,10 @@ def save(im, out, width=None, height=None):
     im.save(out)
     print(f'{out}  {im.size}')
 
-# ── base structures (frame 8) ──────────────────────────────────────────────
+# ── base structures (frame 0 — owner 2026-10-17 facing fix: the sheet is a
+# 32-step turntable, f0 = hero angle, front + LIT face toward our camera's
+# SW face = matches the up-left environment light; f8 showed backs/sides
+# with the light coming from the wrong side) ────────────────────────────────
 # [target, source, out, width]
 JOBS = [
     # house progression: round hut -> thatched cottage -> longhouse (3x3, 200px)
@@ -79,12 +82,12 @@ JOBS = [
 
 for kind, src, out, w in JOBS:
     if kind == 'V':
-        save(frames(f'{VILLAGE}/{src}')[8], out, width=w)
+        save(frames(f'{VILLAGE}/{src}')[0], out, width=w)
 
-# ── mines (Foozle, 3 progression states, no ground) ────────────────────────
-save(Image.open(f'{MINE1}/gold_mine_without_ground_inactive.png').convert('RGBA'), f'{HS}/base_mines_l1.png', width=190)
-save(Image.open(f'{MINE1}/gold_mine_without_ground_active_empty.png').convert('RGBA'), f'{HS}/base_mines_l2.png', width=190)
-save(Image.open(f'{MINE1}/gold_mine_without_ground_active_full.png').convert('RGBA'), f'{HS}/base_mines_l3.png', width=190)
+# ── mines (Foozle, 3 progression states, WITH ground so tiers read) ────────
+save(Image.open(f'{MINE1}/gold_mine_with_ground_inactive.png').convert('RGBA'), f'{HS}/base_mines_l1.png', width=175)
+save(Image.open(f'{MINE1}/gold_mine_with_ground_active_empty.png').convert('RGBA'), f'{HS}/base_mines_l2.png', width=195)
+save(Image.open(f'{MINE1}/gold_mine_with_ground_active_full.png').convert('RGBA'), f'{HS}/base_mines_l3.png', width=225)
 
 # ── outland clutter (mossy forest, frame 8 of 24) ─────────────────────────
 OUTLANDS = [
