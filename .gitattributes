@@ -85,3 +85,8 @@ core/rpgasset/guildbase/gb_treasury_*.png -filter -diff -merge -text
 core/rpgasset/guildbase/gb_treasury_*.png -text
 core/rpgasset/guildbase/gb_cottage.png -filter -diff -merge -text
 core/rpgasset/guildbase/gb_cottage.png -text
+# 2026-10-17 polyy art pass: ALL guildbase sprites (castles, cottages,
+# training, treasury) must be real bytes on the boxes — same reset --hard
+# LFS-pointer hazard as the homestead set above
+core/rpgasset/guildbase/*.png -filter -diff -merge -text
+core/rpgasset/guildbase/*.png -text

@@ -246,8 +246,12 @@ function islandForest(opts) {
             if (outside && !margin) continue;
             const far = x <= -2 || y <= -2 || x >= N + 1 || y >= N + 1;
             const inMapBorder = (x === 0 || y === 0 || x === N - 1 || y === N - 1);
-            const border = outside || (!margin && inMapBorder);
-            const mid = !border && !far && (x === 1 || y === 1 || x === N - 2 || y === N - 2 || (margin && inMapBorder));
+            // GUILD/BASE v4 (owner 2026-10-17): the outside-the-map work moved
+            // to isoOutlands (fence + procedural wilds live there now), so an
+            // in-map border row calms to MID density instead of walling the
+            // playable edge with trees.
+            const border = outside;
+            const mid = !border && !far && (x === 1 || y === 1 || x === N - 2 || y === N - 2 || (margin && inMapBorder) || inMapBorder);
             if (blocked.has(key)) continue;
             const px = isoX(x + 0.5, y + 0.5);
             const py = isoY(x + 0.5, y + 0.5);
@@ -306,16 +310,21 @@ module.exports = { paintBackdrop, islandForest, fenceRing, RING_TREES, UNDERSTOR
 // between the map content and the wild margin behind them.
 // gates: [[x,y]...] BORDER TILE cells whose outward fence segment is left
 // open (the walk exits there) — base gate (5,15), guild gate (7,15).
-function fenceRing(N, isoX, isoY, gates = []) {
+// pad (owner 2026-10-17 "the fence should be further away because the space
+// is bigger"): pushes the whole ring OUTWARD by `pad` tiles, so the compound
+// encloses a yard ring around the playable map. Gate cells are given in the
+// same padded border coordinates (e.g. y = N-1+pad for the south run).
+function fenceRing(N, isoX, isoY, gates = [], pad = 0) {
     const out = [];
     const gateSet = new Set(gates.map(([x, y]) => `${x},${y}`));
-    for (let x = 0; x < N; x++) {
-        if (!gateSet.has(`${x},0`)) out.push({ file: 'px_fence_a.png', x: isoX(x + 0.5, 0), y: isoY(x + 0.5, 0) + 4 });
-        if (!gateSet.has(`${x},${N - 1}`)) out.push({ file: 'px_fence_a.png', x: isoX(x + 0.5, N), y: isoY(x + 0.5, N) + 4 });
+    const lo = -pad, hiN = N - 1 + pad;
+    for (let x = lo; x <= hiN; x++) {
+        if (!gateSet.has(`${x},${lo}`)) out.push({ file: 'px_fence_a.png', x: isoX(x + 0.5, lo), y: isoY(x + 0.5, lo) + 4 });
+        if (!gateSet.has(`${x},${hiN}`)) out.push({ file: 'px_fence_a.png', x: isoX(x + 0.5, hiN), y: isoY(x + 0.5, hiN) + 4 });
     }
-    for (let y = 0; y < N; y++) {
-        if (!gateSet.has(`0,${y}`)) out.push({ file: 'px_fence_b.png', x: isoX(0, y + 0.5), y: isoY(0, y + 0.5) + 4 });
-        if (!gateSet.has(`${N - 1},${y}`)) out.push({ file: 'px_fence_b.png', x: isoX(N, y + 0.5), y: isoY(N, y + 0.5) + 4 });
+    for (let y = lo; y <= hiN; y++) {
+        if (!gateSet.has(`${lo},${y}`)) out.push({ file: 'px_fence_b.png', x: isoX(lo, y + 0.5), y: isoY(lo, y + 0.5) + 4 });
+        if (!gateSet.has(`${hiN},${y}`)) out.push({ file: 'px_fence_b.png', x: isoX(hiN, y + 0.5), y: isoY(hiN, y + 0.5) + 4 });
     }
     return out;
 }

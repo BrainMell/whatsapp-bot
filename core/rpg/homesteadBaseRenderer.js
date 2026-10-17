@@ -13,7 +13,7 @@ const path = require('path');
 const os = require('os');
 const isoShadow = require('./isoShadow');
 const isoForest = require('./isoForest');
-const wilds = require('./wilds');
+const isoOutlands = require('./isoOutlands');
 const mediaCache = require('./mediaCache');
 
 const SS = 2;
@@ -87,9 +87,13 @@ function isoY(x, y) { return OY + (x + y) * (TH / 2); }
 function footCenter(x, y, fw, fh) {
     return { x: isoX(x + fw / 2, y + fh / 2), y: isoY(x + fw / 2, y + fh / 2) };
 }
+// POLYY ART LAW (owner 2026-10-17: base art swapped to Polyy's Village
+// Buildings + Foozle mine renders) — sprites are exported so their base
+// diamond bottom sits at the bbox bottom, so the anchor is the footprint's
+// SOUTH CORNER (+4px sink so bases read grounded into their tile).
 function anchorOf(x, y, fw, fh) {
     const c = footCenter(x, y, fw, fh);
-    return { cx: c.x, ay: c.y + (fw + fh) * (TH / 4) - TH / 2 + 2 };
+    return { cx: c.x, ay: c.y + (fw + fh) * (TH / 4) + 4 };
 }
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -128,12 +132,19 @@ const LAYOUT = {
     ],
 };
 
-// per-structure draw scale (owner: "the house too big") — sprites were
-// authored larger than their footprint reads on a 64px tile grid.
+// per-structure draw scale — POLYY ART LAW: sprites are pre-scaled in
+// scripts/build_poly_sprites.py so their base diamond ≈ footprint diamond
+// (fw+fh)*TW/2; scale stays ~1.0 and only tunes minor over/undershoot.
 const STRUCT_SCALE = {
-    house: 0.62, blacksmith: 0.72, medbay: 0.72, alchemy: 0.72,
-    mines: 0.95, pond: 1.0, hunting: 0.92,
+    house: 1.0, blacksmith: 1.0, medbay: 1.0, alchemy: 1.0,
+    mines: 1.0, pond: 1.0, hunting: 1.0,
 };
+
+// FENCE PAD (owner 2026-10-17 "the fence should be further away because the
+// space is bigger"): the pixel palisade now stands `P` tiles OUTSIDE the
+// playable ring, enclosing a yard meadow around the buildable 16x16. The
+// world beyond the fence is the per-player procedural outlands.
+const P = 3;
 
 function inZone(z, x, y) { return x >= z.x && x < z.x + z.fw && y >= z.y && y < z.y + z.fh; }
 
@@ -148,11 +159,6 @@ async function renderFrame(state, frame, opts = {}) {
     ctx.imageSmoothingEnabled = false;
 
     const seed = hashStr(state.owner || 'base');
-    // PROCEDURAL WILDS (owner 2026-10-16 23:18Z "the world outside the fence
-    // should be procedurally generated and should stick to that for that
-    // player"): a pure function of the owner's identity — same player, same
-    // wilds, every render, forever. See core/rpg/wilds.js for THE RULES.
-    const wildsProf = wilds.wildsProfile(state.owner || 'base');
 
     // ── FOREST LAW (owner 2026-10-16 11:57Z): the whole thing is a forest —
     // no sky, deep canopy wall + treelines + god rays behind the island ──
@@ -165,28 +171,49 @@ async function renderFrame(state, frame, opts = {}) {
     const grass = ['forest_moss_a.png', 'forest_moss_b.png', 'forest_moss_c.png'];
     const waterF = frame % 4 < 2 ? 'forest_water_0.png' : 'forest_water_1.png';
     const M = 12; // full coverage to the card corners (owner: ground past borders)
-    const seaSet = wilds.seaCells(wildsProf, N, M);
+    // PER-PLAYER PROCEDURAL OUTLANDS (owner 2026-10-17): the world beyond the
+    // fence is rolled once per owner seed — biome (forest / highlands /
+    // ruins / coast), terrain overrides and prop placements all derive from
+    // it, so every render of the same player shows the same wilds.
+    const outlands = isoOutlands.outlandProps({ seedStr: state.owner || 'base', N, P, isoX, isoY, M });
+    const wildTile = new Map(outlands.tiles.map((t) => [`${t.x},${t.y}`, t.tile]));
     for (let x = -M; x < N + M; x++) {
         for (let y = -M; y < N + M; y++) {
             const px = isoX(x, y), py = isoY(x, y);
             if (px < -TW || px > ART_W + TW || py < -TH || py > ART_H + TH) continue;
             const r = mulberry32(seed + (x + 40) * 131 + (y + 40) * 17)();
             const inside = x >= 0 && y >= 0 && x < N && y < N;
+            const inFence = x >= -P && x <= N - 1 + P && y >= -P && y <= N - 1 + P;
             let tile;
-            if (!inside) {
-                // wild margin — biome-flavoured: rock drifts in the
-                // highlands, meadow patches in the vale, OPEN SEA on the
-                // coast's flooded far edge (wilds.js rules 2/3/4)
-                tile = wilds.marginTile(wildsProf, x, y, N,
-                    r < 0.06 ? 'forest_moss_shrooms.png' : (r < 0.13 ? 'forest_rock_tile.png' : grass[Math.floor(r * 3) % 3]),
-                    seaSet);
-                if (tile === 'forest_water_0.png' && frame % 4 >= 2) tile = 'forest_water_1.png';
-            } else if (inZone(LAYOUT.mines.zone, x, y)) tile = r < 0.85 ? 'forest_rock_tile.png' : 'forest_moss_c.png';
-            else if (inZone(LAYOUT.pond.zone, x, y)) tile = r < 0.92 ? waterF : 'forest_moss_c.png';
-            else if ((LAYOUT.paths || []).some(([px2, py2]) => px2 === x && py2 === y)) tile = 'forest_trail.png';
-            else tile = r < 0.07 ? 'forest_moss_shrooms.png' : grass[Math.floor(r * 3) % 3];
+            if (inside) {
+                if (inZone(LAYOUT.mines.zone, x, y)) tile = r < 0.85 ? 'forest_rock_tile.png' : 'forest_moss_c.png';
+                else if (inZone(LAYOUT.pond.zone, x, y)) tile = r < 0.92 ? waterF : 'forest_moss_c.png';
+                else if ((LAYOUT.paths || []).some(([px2, py2]) => px2 === x && py2 === y)) tile = 'forest_trail.png';
+                else tile = r < 0.07 ? 'forest_moss_shrooms.png' : grass[Math.floor(r * 3) % 3];
+            } else if (inFence) {
+                // the YARD — tamed meadow between playable ring and fence
+                tile = r < 0.04 ? 'forest_moss_shrooms.png' : grass[Math.floor(r * 3) % 3];
+            } else {
+                // beyond the fence: per-player wilds (biome terrain)
+                const wt = wildTile.get(`${x},${y}`);
+                if (wt === 'water') tile = waterF;
+                else if (wt) tile = wt;
+                else tile = grass[Math.floor(r * 3) % 3];
+            }
             const timg = await img(tile);
             if (timg) ctx.drawImage(timg, px - TW / 2, py - TH / 2);
+        }
+    }
+    // gate trail: the walk runs out the south gate and fades into the wilds
+    {
+        const trailImg = await img('forest_trail.png');
+        if (trailImg) {
+            const trailCells = [];
+            for (let y = N; y <= N - 1 + P; y++) trailCells.push([5, y]);                 // yard walk to the gate
+            trailCells.push([5, N + P], [4, N + P + 1], [4, N + P + 2], [3, N + P + 3]);  // fades into the wilds
+            for (const [tx, ty] of trailCells) {
+                ctx.drawImage(trailImg, isoX(tx + 0.5, ty + 0.5) - TW / 2, isoY(tx + 0.5, ty + 0.5) - TH / 2);
+            }
         }
     }
     // playable-area rim — now a SOFT moss shadow instead of a hard island edge
@@ -199,19 +226,19 @@ async function renderFrame(state, frame, opts = {}) {
     ctx.stroke();
 
     // ── wild haze floor wash (owner pre-restart promise: "everything behind
-    // [the fence] = dense hazed forest") — translucent forest-green over
-    // everything OUTSIDE the playable diamond, painted before props so only
-    // the ground recedes; the wild props carry their own deeper tint.
+    // [the fence] = dense hazed forest") — now clipped to the FENCE diamond:
+    // the yard inside the fence stays bright and tamed; only the procedural
+    // wilds beyond the palisade recede.
     ctx.save();
     ctx.beginPath();
     ctx.rect(-8, -8, ART_W + 16, ART_H + 16);
-    ctx.moveTo(isoX(0, 0), isoY(0, 0));
-    ctx.lineTo(isoX(N, 0), isoY(N, 0));
-    ctx.lineTo(isoX(N, N), isoY(N, N));
-    ctx.lineTo(isoX(0, N), isoY(0, N));
+    ctx.moveTo(isoX(-P, -P), isoY(-P, -P));
+    ctx.lineTo(isoX(N + P, -P), isoY(N + P, -P));
+    ctx.lineTo(isoX(N + P, N + P), isoY(N + P, N + P));
+    ctx.lineTo(isoX(-P, N + P), isoY(-P, N + P));
     ctx.closePath();
     ctx.clip('evenodd');
-    const hz = ctx.createLinearGradient(0, isoY(0, 0) - 60, 0, isoY(N, N) + 30);
+    const hz = ctx.createLinearGradient(0, isoY(-P, -P) - 60, 0, isoY(N + P, N + P) + 30);
     hz.addColorStop(0, 'rgba(18,28,14,0.38)');
     hz.addColorStop(0.5, 'rgba(24,36,16,0.26)');
     hz.addColorStop(1, 'rgba(12,20,10,0.44)');
@@ -267,50 +294,31 @@ async function renderFrame(state, frame, opts = {}) {
             for (let yy = LAYOUT.hunting.zone.y; yy < LAYOUT.hunting.zone.y + LAYOUT.hunting.zone.fh; yy++) hot.push([xx, yy]);
         }
     }
-    // the sea claims its band — nothing plants in open water or on the wet
-    // shoreline ring (wilds.js rule 3)
-    for (const k of seaSet) usedMargin.add(k.startsWith('?') ? k.slice(1) : k);
     const forestProps = isoForest.islandForest({
         seed, N, isoX, isoY,
         occupied: usedMargin,
         paths: LAYOUT.paths || [],
         hot, plotCells,
-        margin: true, // tree wall relocated OUTSIDE the playable ring
-        haze: true, // wild props recede behind the fence (tinted draws)
+        margin: false, // outside the fence is the outlands module's domain now
+        haze: false,
         structFoots: (state.structures || [])
             .map((st) => { const d = structDef(st.type); return d ? [st.x, st.y, d.fw, d.fh] : null; })
             .filter(Boolean),
     });
-    // wild understory scattered through the outer margin (world continuity)
-    {
-        const mRnd = mulberry32(seed + 909);
-        for (let x = -M; x < N + M; x++) {
-            for (let y = -M; y < N + M; y++) {
-                const inside = x >= -1 && y >= -1 && x <= N && y <= N;
-                if (inside) continue;
-                if (mRnd() > 0.16) continue;
-                const px = isoX(x + 0.5, y + 0.5), py = isoY(x + 0.5, y + 0.5);
-                if (px < 0 || px > ART_W || py < 0 || py > ART_H) continue;
-                const f = mRnd() < 0.34 ? 'px_fern.png' : (mRnd() < 0.55 ? 'px_tuft.png' : mRnd() < 0.70 ? 'px_shroom.png' : mRnd() < 0.82 ? 'px_rock.png' : mRnd() < 0.92 ? 'px_bush_b.png' : 'px_stump.png');
-                forestProps.push({ file: f, x: px, y: py, tint: '#263d17' });
-            }
-        }
-    }
-    // PROCEDURAL WILDS props — mountain ranges, landmarks, coast garnish
-    // (owner 2026-10-16 23:18Z: "use rocks and mountain assets that fit,
-    // maybe some will have a small part that connects to an ocean")
-    for (const wp of wilds.wildProps(wildsProf, N, M, isoX, isoY, [5, 15], seaSet)) {
-        forestProps.push(wp);
-    }
     for (const f of forestProps) {
-        // hazed wilds: tinted variants are pre-scaled canvases (draw at sc 1)
         const im = f.tint ? await isoForest.tinted(f.file, f.tint, f.sc || 1) : await img(f.file);
         if (im) props.push({ img: im, x: f.x, y: f.y, sc: f.tint ? 1 : (f.sc || 1) });
     }
-    // ── pixel fence ring around the playable diamond (owner pre-restart
-    // promise: "tree wall comes out, pixel fence ring goes in") — gate gap
-    // where the south walk leaves the compound (5,15)
-    for (const seg of isoForest.fenceRing(N, isoX, isoY, [[5, 15]])) {
+    // PER-PLAYER OUTLANDS PROPS — biome placements beyond the fence (rocks,
+    // mountains, ruins, shore) + yard meadow dressing; hazed by tint there.
+    for (const f of outlands.props) {
+        const im = f.tint ? await isoForest.tinted(f.file, f.tint, f.sc || 1) : await img(f.file);
+        if (im) props.push({ img: im, x: f.x, y: f.y, sc: f.tint ? 1 : (f.sc || 1) });
+    }
+    // ── pixel fence ring — pushed OUTWARD by P tiles (owner: "the fence
+    // should be further away because the space is bigger"), gate gap where
+    // the south walk leaves the compound (5, N-1+P)
+    for (const seg of isoForest.fenceRing(N, isoX, isoY, [[5, N - 1 + P]], P)) {
         const fim = await img(seg.file);
         if (fim) props.push({ img: fim, x: seg.x, y: seg.y, sc: 1 });
     }
