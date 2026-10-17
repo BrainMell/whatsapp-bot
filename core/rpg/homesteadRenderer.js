@@ -898,8 +898,11 @@ async function renderRoomImage(state, opts = {}) {
     const out = await mediaCache.cached('room', key, async () => {
         const frames = [];
         const frameCount = opts.static ? 1 : FRAMES;
+        // ALL-RAW LAW (matches base/guild): every animated frame renders raw;
+        // PNG only re-renders if the mp4 encode fails (mixed arrays crash the
+        // PNG path on the raw objects — qa1 'renderRoomImage full pipeline')
         for (let f = 0; f < frameCount; f++) {
-            frames.push(await renderFrame(state, f, f === 0 || opts.static ? opts : { ...opts, encoder: 'raw' }));
+            frames.push(await renderFrame(state, f, opts.static ? opts : { ...opts, encoder: 'raw' }));
             await breath();
         }
         let out = null;
@@ -910,7 +913,6 @@ async function renderRoomImage(state, opts = {}) {
             } catch (e) {
                 console.error('[homesteadRenderer] mp4 encode failed, PNG fallback:', e.message);
             }
-            // frames[0] is a raw object here — a PNG re-render is the fallback
         }
         if (!out) out = { buffer: opts.static ? frames[0] : await renderFrame(state, 0, opts), contentType: 'image/png' };
         return out;
