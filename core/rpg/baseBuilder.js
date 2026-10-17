@@ -52,16 +52,25 @@ async function loadBase(userId) {
     // owner 2026-10-16: "the pond and mines and everything else? Doesn't exist")
     const have = new Set((rec.structures || []).map((s) => s.type));
     const missing = fixedSeed().filter((f) => !have.has(f.type));
-    // layout v2/v3 migration: the fixed anchors moved (v2 house 6,6→6,7; v3
-    // house 6,7→10,6 — MAIN STREET VILLAGE, owner 2026-10-17) — relocate the
-    // FIXED structures so every base matches the new village plan. Safe:
-    // nothing else can legally occupy these cells.
+    // layout v2/v3/v4 migration: the fixed anchors moved (v2 house 6,6→6,7;
+    // v3 house 6,7→10,6 MAIN STREET VILLAGE; v4 hunting gatehouse 3,8→7,14
+    // — THE GATEHOUSE NOW GUARDS THE SOUTH GATE, owner "orientation still
+    // weird") — relocate the FIXED structures so every base matches the new
+    // village plan. Safe: nothing else can legally occupy these cells.
     const ANCHORS = { house: LAYOUT.house, hunting: LAYOUT.hunting };
-    // layout v3 plot re-anchoring: built structures bought on the OLD plot
+    // layout v3/v4 plot re-anchoring: built structures bought on the OLD plot
     // anchors re-seat onto the new ones (else a v2 blacksmith at 11,6 would
-    // end up buried under the relocated house). Only EXACT old anchors move —
+    // end up buried under the relocated house). Map chases every historical
+    // anchor straight to its v4 home in ONE pass. Only EXACT anchors move —
     // admin-relocated structures keep their custom spot.
-    const OLD_PLOT_ANCHORS = { '11,6': [13, 5], '11,10': [12, 10], '6,11': [5, 11] };
+    const OLD_PLOT_ANCHORS = {
+        '11,6': [8, 1], '13,5': [8, 1],      // → #1 north terrace (fronts miners'/pond lane)
+        '11,10': [13, 7], '12,10': [13, 7], // → #2 SE terrace (fronts extended south lane)
+        '6,11': [5, 11], '5,11': [4, 5],     // → #3 west plaza frontage — v3's (5,11) sat
+                                             //   directly BEHIND the relocated gatehouse
+                                             //   on screen (same street diagonal), a built
+                                             //   structure there rendered ~90% hidden
+    };
     let dirty = missing.length > 0;
     for (const st of rec.structures || []) {
         const tgt = ANCHORS[st.type];
@@ -90,14 +99,20 @@ function plotsFor(rec) {
         for (let ix = 0; ix < d.fw; ix++)
             for (let iy = 0; iy < d.fh; iy++) occupied.add(`${st.x + ix},${st.y + iy}`);
     }
-    // LAYOUT v3 expansion plots (3x3 each) — re-anchored to FRONT the village
-    // lanes (owner: "leaving room for plots of land"): #1 NE terrace under
-    // the pond lane, #2 SE terrace off the main street, #3 south row off the
-    // west lane, #4 SW pocket by the hunting woods.
+    // LAYOUT v4 expansion plots (3x3 each) — re-anchored to the FRONTABLE
+    // sides of the lanes (owner: "leaving room for plots of land" + "the
+    // orientation still weird"): an iso building can only front a street
+    // from the street's north/west side, so every plot sits where a built
+    // structure's baked facade greets the street: #1 north terrace above
+    // the miners'/pond lane, #2 SE terrace above the extended south lane,
+    // #3 west plaza frontage — faces the village green across the ring (a
+    // building there mirrors its facade onto the square); v3's (5,11) spot
+    // is a visual trap now: it sits directly BEHIND the relocated gatehouse
+    // on the same screen diagonal, so a built structure rendered ~90% hidden
     const PLOTS = [
-        { id: 1, x: 13, y: 5 },
-        { id: 2, x: 12, y: 10 },
-        { id: 3, x: 5, y: 11 },
+        { id: 1, x: 8, y: 1 },
+        { id: 2, x: 13, y: 7 },
+        { id: 3, x: 4, y: 5 },
         { id: 4, x: 2, y: 13 },
     ];
     return PLOTS.map((p) => {

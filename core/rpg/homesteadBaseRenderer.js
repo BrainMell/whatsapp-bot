@@ -126,12 +126,35 @@ function roundRect(ctx, x, y, w, h, r) {
 //   5. the 4 expansion plots re-anchor to FRONT the lanes (NE terrace, SE
 //      terrace, south row, SW pocket) so the village grows along its streets
 //   6. every frontage keeps ≥1 meadow setback — room for land, no cramming
+//
+// ── LAYOUT v4 ORIENTATION PASS (owner 2026-10-17 "The orientation still weird
+// dude"): v3 moved the buildings but every sprite bakes ONE facing, so the
+// smithy/medbay demo builds sat SOUTH of their lanes showing their backs,
+// and the monumental stone gatehouse (the hunting structure!) stood mid-left
+// aiming its arch at nothing while the real entrance was a bare fence gap.
+//   1. THE GATEHOUSE GUARDS THE GATE: hunting moves (3,8)→(7,14) so its
+//      2x2 footprint is CENTRED on the street column x=8 — the cobble main
+//      street now passes straight THROUGH its arch into the village, and
+//      the arch opening (which faces +y = along the street) greets the eye
+//      entering the south fence gap. The west woods keep their fence gap at
+//      the walk row (walkY) instead of a second gatehouse.
+//   2. FACADE LAW (see NATURAL_FRONT below): every building checks which
+//      street actually touches its front edge and MIRRORS when its natural
+//      facade points the wrong way — no more backs to the road.
+//   3. PLOTS re-anchor to the FRONTABLE sides of lanes (buildings can only
+//      front a street from its north/west side — the south/east faces of an
+//      iso box are the visible ones): #1 north terrace above the miners'/
+//      pond lane, #2 SE terrace above the extended south lane, #3 west
+//      main-street frontage (alchemy's natural +x facade), #4 SW pocket.
+//   4. south lane east branch extended to x=14 so the SE terrace fronts it.
 const LAYOUT = {
     N,
     house: { x: 10, y: 6, fw: 3, fh: 3 },
     mines: { x: 1, y: 1, fw: 2, fh: 2, zone: { x: 0, y: 0, fw: 5, fh: 4 } },
     pond: { x: 12, y: 1, fw: 2, fh: 2, zone: { x: 11, y: 0, fw: 5, fh: 4 } },
-    hunting: { x: 3, y: 8, fw: 2, fh: 2, zone: { x: 0, y: 5, fw: 4, fh: 8 }, fenceCol: 4 },
+    // hunting = the stone gatehouse — now the VILLAGE GATE on the main
+    // street (footprint centred on x=8); the woods gate gap lives at walkY.
+    hunting: { x: 7, y: 14, fw: 2, fh: 2, zone: { x: 0, y: 5, fw: 4, fh: 8 }, fenceCol: 4, walkY: 9, walkH: 2 },
     paths: [
         // main street — gate yard (south) up to the north lane junction
         [8, 4], [8, 5], [8, 9], [8, 10], [8, 11], [8, 12], [8, 13], [8, 14], [8, 15],
@@ -141,10 +164,34 @@ const LAYOUT = {
         [3, 4], [4, 4], [5, 4], [6, 4], [7, 4], [9, 4], [10, 4], [11, 4], [12, 4], [13, 4],
         // hunting walk — plaza SW corner through the fence gate into the woods
         [7, 9], [6, 9], [5, 9], [4, 9], [3, 9], [2, 9],
-        // south lanes serving the expansion plots
-        [7, 10], [6, 10], [5, 10], [9, 10], [10, 10], [11, 10],
+        // south lanes serving the expansion plots — east branch runs to x=14
+        // so the SE terrace (plot 2) fronts it from the north
+        [7, 10], [6, 10], [5, 10], [9, 10], [10, 10], [11, 10], [12, 10], [13, 10], [14, 10],
     ],
 };
+
+// ── FACADE ORIENTATION LAW (owner "The orientation still weird dude"):
+// every sprite bakes ONE facing — smithy/medbay/mines/hunting-gate front the
+// +y face (down-left), alchemy fronts +x (down-right), house/pond neutral.
+// An iso building can only FRONT a street from the street's north/west side
+// (its visible faces look +y and +x), so each structure checks which street
+// actually touches its front edge and MIRRORS when its natural facade would
+// show its back to the road. Fronts are checked +y first, then +x.
+const NATURAL_FRONT = {
+    house: 'y', blacksmith: 'y', medbay: 'y', alchemy: 'x',
+    mines: 'y', pond: 'y', hunting: 'y',
+};
+function facadeMirror(st, def, pathSet) {
+    const nat = NATURAL_FRONT[st.type] || 'y';
+    let want = nat;
+    const frontRow = [];  // +y face: cells just south of the footprint
+    for (let ix = 0; ix < def.fw; ix++) frontRow.push(`${st.x + ix},${st.y + def.fh}`);
+    const frontCol = [];  // +x face: cells just east of the footprint
+    for (let iy = 0; iy < def.fh; iy++) frontCol.push(`${st.x + def.fw},${st.y + iy}`);
+    if (frontRow.some((k) => pathSet.has(k))) want = 'y';
+    else if (frontCol.some((k) => pathSet.has(k))) want = 'x';
+    return want !== nat;
+}
 
 // per-structure draw scale — POLYY ART LAW: sprites are pre-scaled in
 // scripts/build_poly_sprites.py so their base diamond ≈ footprint diamond
@@ -307,7 +354,11 @@ async function renderFrame(state, frame, opts = {}) {
     if (fenceImg) {
         const z = LAYOUT.hunting;
         for (let yy = z.zone.y; yy < z.zone.y + z.zone.fh; yy++) {
-            if (yy >= z.y && yy < z.y + z.fh) continue; // gate gap
+            { // woods gate gap now rides the WALK ROW (v4: the gatehouse
+              // structure itself guards the south gate on the main street)
+                const wy = z.walkY ?? z.y, wh = z.walkH ?? z.fh;
+                if (yy >= wy && yy < wy + wh) continue; // gate gap
+            }
             ctx.drawImage(fenceImg, isoX(z.fenceCol, yy) - 32, isoY(z.fenceCol, yy) - 14);
         }
         // north run of the fence (along x, at y = zone.y)
@@ -444,7 +495,7 @@ async function renderFrame(state, frame, opts = {}) {
         if (!spr) continue;
         const { cx, ay } = anchorOf(st.x, st.y, st.def.fw, st.def.fh);
         const sc = STRUCT_SCALE[st.type] || 0.85;
-        drawn.push({ st, spr, cx, ay, w: spr.width * sc, h: spr.height * sc, sc, lv });
+        drawn.push({ st, spr, cx, ay, w: spr.width * sc, h: spr.height * sc, sc, lv, mirror: facadeMirror(st, st.def, pathSet) });
     }
 
     // props behind structures merge into the same depth pass.
@@ -480,15 +531,27 @@ async function renderFrame(state, frame, opts = {}) {
             ctx.drawImage(d.img, (d.x - pw / 2) | 0, (d.y - ph) | 0, pw | 0, ph | 0);
             continue;
         }
-        ctx.drawImage(d.spr, d.cx - d.w / 2, d.ay - d.h, d.w, d.h);
+        if (d.mirror) {
+            // FACADE LAW: flip the sprite about its anchor so the baked
+            // facade faces the street it actually fronts
+            ctx.save();
+            ctx.translate(d.cx, 0);
+            ctx.scale(-1, 1);
+            ctx.drawImage(d.spr, -d.w / 2, d.ay - d.h, d.w, d.h);
+            ctx.restore();
+        } else {
+            ctx.drawImage(d.spr, d.cx - d.w / 2, d.ay - d.h, d.w, d.h);
+        }
     }
 
     // ── animations ──
-    // gate torch flicker
+    // gate torch flicker — rides the gatehouse ARCH (v4: the gatehouse is
+    // the village gate; arch centre = footprint centre, apex ≈ 55% up the
+    // 242px sprite → 36px anchor bump − 133px ≈ −97 from footprint centre)
     const gate = structs.find((s) => s.type === 'hunting');
     if (gate) {
         const fl = Math.sin(frame * 1.9) * 0.5 + 0.5;
-        const gx = isoX(gate.x + 1.9, gate.y), gy = isoY(gate.x + 1.9, gate.y) - 66;
+        const gx = isoX(gate.x + 1, gate.y + 1), gy = isoY(gate.x + 1, gate.y + 1) - 97;
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         const R = 22 + fl * 6;
