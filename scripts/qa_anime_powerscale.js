@@ -11,6 +11,10 @@
  *  D. powerscale LIST-FIRST rule — category/feats queries always show the
  *     numbered pick list when several characters match; auto-pick ONLY on a
  *     single result; picked number with locked category -> category card
+ *  E. powerscale stat markup variants — DCEU <p><br/> paragraphs (the
+ *     "No Attack Potency found" bug), Maki/Nightwing colon styles, Key line
+ *  F. powerscale buffered pick — numbers typed while the search is still
+ *     running are held and auto-applied when the results land (race fix)
  *  C. drift guards — engine must not call dead sources (jikan/anikai URLs)
  */
 process.env.GW_TEST = "";
@@ -224,6 +228,131 @@ async function sectionD() {
   }
 }
 
+/**
+ * Section E — STAT PARAGRAPH MARKUP VARIANTS (pure, no network).
+ * Owner incident 2026-10-18: ".j powerscale ap superman" → "No Attack Potency
+ * stat found" — DCEU-style pages open the stat paragraph with <p><br /> and
+ * the old STAT_P_RE only allowed whitespace, silently skipping AP (and any
+ * other stat with that prefix) on the whole page.
+ */
+async function sectionE() {
+  console.log("\n── E. powerscale stat markup variants (extractStatsFromHtml) ──");
+  const vsb = require(path.join(ROOT, "core/utils/vsbFeats.js"));
+  const PSH = `<h2><span class="mw-headline" id="Powers_and_Stats">Powers and Stats</span></h2>`;
+
+  // DCEU Superman style: <p><br /> before EVERY stat + Key line with <br>
+  const dceu = vsb.extractStatsFromHtml(`${PSH}
+<p><br />
+<b><a href="/wiki/Key" title="Key">Key</a>:</b> Pre-Resurrection | Post-Resurrection</p>
+<p><br />
+<b><a href="/wiki/Attack_Potency" title="Attack Potency">Attack Potency</a>:</b> <b>Town level+</b> (Can fight those who harm him. <a href="/wiki/User_blog:X/Cloud">Moved a part of a cloud</a>), up to at least <b>Brown Dwarf level</b>, likely <b>Small Star level+</b> (Grew stronger over time)</p>
+<p><br />
+<b><a href="/wiki/Attack_Potency" title="Attack Potency">Attack Potency</a>:</b> <b>Small Town level</b> (Weakened after resurrection)</p>
+<p><b><a href="/wiki/Speed" title="Speed">Speed</a>:</b> at least <b>Relativistic+</b> (Flew from the Moon to Earth in moments)</p>`);
+  ok("DCEU: Attack Potency no longer skipped", dceu.stats.has("Attack Potency"), [...dceu.stats.keys()].join(","));
+  ok("DCEU: AP has 2 key variants", (dceu.stats.get("Attack Potency") || []).length === 2);
+  ok("DCEU: AP variant names from Key line", (dceu.stats.get("Attack Potency") || [])[0].variant === "Pre-Resurrection" && (dceu.stats.get("Attack Potency") || [])[1].variant === "Post-Resurrection");
+  ok("DCEU: AP rating keeps multi-bold values", /Town level\+.*Brown Dwarf level.*Small Star level\+/.test((dceu.stats.get("Attack Potency") || [])[0].rating || ""));
+  ok("DCEU: AP feats extracted from parens", ((dceu.stats.get("Attack Potency") || [])[0].feats || []).some((f) => f.includes("Moved a part of a cloud")));
+  ok("DCEU: AP calc link captured", ((dceu.stats.get("Attack Potency") || [])[0].calcs || []).length === 1);
+  ok("DCEU: Key line parsed with <br> prefix", dceu.keyLine === "Pre-Resurrection | Post-Resurrection", JSON.stringify(dceu.keyLine));
+  ok("DCEU: plain <p><b> Speed still parses", dceu.stats.has("Speed") && /Relativistic\+/.test(dceu.stats.get("Speed")[0].rating));
+
+  // Maki style: colon outside the anchor; Nightwing style: colon inside the anchor
+  const maki = vsb.extractStatsFromHtml(`${PSH}
+<p><b><a href="/wiki/Speed" title="Speed">Speed</a>:</b> Subsonic (Can cut and dodge rubber bullets)</p>`);
+  ok("Maki style: colon-outside-anchor parses", maki.stats.has("Speed") && maki.stats.get("Speed")[0].rating.includes("Subsonic"));
+  const nightwing = vsb.extractStatsFromHtml(`${PSH}
+<p><b><a href="/wiki/Tier" title="Tier">Tier:</a></b> 9-A</p>`);
+  ok("Nightwing style: colon-inside-anchor parses", nightwing.stats.has("Tier") && nightwing.stats.get("Tier")[0].rating === "9-A");
+
+  // <br> without space + self-closing variants
+  const tight = vsb.extractStatsFromHtml(`${PSH}
+<p><br/><b>Tier:</b> 2-B</p>`);
+  ok("tight <br/> variant parses", tight.stats.has("Tier") && tight.stats.get("Tier")[0].rating === "2-B");
+
+  // verse pages still detected
+  const verse = vsb.extractStatsFromHtml(`<h2><span class="mw-headline" id="Summary">Summary</span></h2><p>A verse page.</p>`);
+  ok("verse page detection intact", verse.isVerse === true && verse.stats.size === 0);
+}
+
+/**
+ * Section F — BUFFERED PICK (race fix e2e).
+ * Owner incident 2026-10-18: Mellow typed "1" 2s BEFORE the 10-match list
+ * landed (search ~15-19s) — the number died silently. Now the searching
+ * session holds it and auto-applies when the results arrive.
+ */
+async function sectionF() {
+  console.log("\n── F. powerscale buffered pick (search-in-flight race) ──");
+  const vsbPath = require.resolve(path.join(ROOT, "core/utils/vsbFeats.js"));
+  const vsb = require(vsbPath);
+  const savedF = { searchCharacters: vsb.searchCharacters, parseCharacter: vsb.parseCharacter, fetchImageBuffer: vsb.fetchImageBuffer };
+  const MULTI = [
+    { id: 1, name: "Son Goku (Dragon Ball Z)", url: "https://vsbattles.fandom.com/wiki/Son_Goku_(Dragon_Ball_Z)" },
+    { id: 2, name: "Goku Black", url: "https://vsbattles.fandom.com/wiki/Goku_Black" },
+    { id: 3, name: "Son Goku (Dragon Ball Super)", url: "https://vsbattles.fandom.com/wiki/Son_Goku_(Dragon_Ball_Super)" },
+  ];
+  const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+  vsb.searchCharacters = async () => { await delay(150); return MULTI; }; // slow search = race window
+  vsb.parseCharacter = async (url) => {
+    const nm = url.includes("Black") ? "Goku Black" : "Son Goku (Dragon Ball Z)";
+    return {
+      name: nm, pageUrl: url, imageUrl: "", imageUrls: [], summary: "", keyLine: "",
+      stats: new Map([["Speed", [{ variant: "Base", text: "Supersonic (blitzed Nappa)", rating: "Supersonic", feats: ["Casually dodged and blitzed Nappa"], calcs: [] }]]]),
+      categories: ["Speed"], isVerse: false,
+    };
+  };
+  vsb.fetchImageBuffer = async () => null;
+
+  const CHAT = "qa-ps-buffered";
+  try {
+    ps.pendingSelections.delete(CHAT);
+    const sends = [];
+    const sock = { sendMessage: async (_c, content) => { sends.push(content); return {}; } };
+
+    // 1. number typed MID-SEARCH gets buffered, then auto-applies
+    const cmdPromise = ps.runPowerscaleCommand({ sock, chatId: CHAT, msgKey: { id: "m1" }, raw: "speed goku", botMarker: "", prefix: "j" });
+    await delay(30); // search still in flight
+    const duringSearch = await ps.handlePowerscaleSelection(CHAT, "2");
+    ok("mid-search number is accepted+buffered", duringSearch && duringSearch.success === true && duringSearch.mode === "buffered", JSON.stringify(duringSearch || {}).slice(0, 80));
+    await cmdPromise;
+    const texts = sends.map((s) => s.text || s.caption || "");
+    ok("card for the PICKED char arrives (no list)", texts.some((t) => t.includes("SPEED — GOKU BLACK")), texts.join("||").slice(0, 200));
+    ok("list is skipped when a pick was buffered", !texts.some((t) => t.includes("matches for")));
+    ok("session survives in view mode (for switching)", ps.hasPendingSelection(CHAT));
+    ps.pendingSelections.delete(CHAT);
+
+    // 2. out-of-range buffered number → list shown with a note
+    ps.pendingSelections.delete(CHAT);
+    const sends2 = [];
+    const sock2 = { sendMessage: async (_c, content) => { sends2.push(content); return {}; } };
+    const cmd2 = ps.runPowerscaleCommand({ sock: sock2, chatId: CHAT, msgKey: { id: "m2" }, raw: "speed goku", botMarker: "", prefix: "j" });
+    await delay(30);
+    const during2 = await ps.handlePowerscaleSelection(CHAT, "9"); // only 3 matches
+    ok("out-of-range mid-search number also buffered", during2 && during2.mode === "buffered");
+    await cmd2;
+    const texts2 = sends2.map((s) => s.text || "");
+    ok("fallback shows the list", texts2.some((t) => t.includes("matches for")));
+    ok("fallback explains the invalid pick", texts2.some((t) => t.includes("earlier reply *9*")));
+    ps.pendingSelections.delete(CHAT);
+
+    // 3. search failure clears the session (numbers stop being swallowed)
+    ps.pendingSelections.delete(CHAT);
+    vsb.searchCharacters = async () => { await delay(20); throw new Error("network dead"); };
+    const sends3 = [];
+    const sock3 = { sendMessage: async (_c, content) => { sends3.push(content); return {}; } };
+    await ps.runPowerscaleCommand({ sock: sock3, chatId: CHAT, msgKey: { id: "m3" }, raw: "speed goku", botMarker: "", prefix: "j" });
+    ok("failed search clears the session", !ps.hasPendingSelection(CHAT));
+    ok("failed search reports the error", sends3.some((s) => (s.text || "").includes("lookup failed")));
+    ps.pendingSelections.delete(CHAT);
+  } finally {
+    vsb.searchCharacters = savedF.searchCharacters;
+    vsb.parseCharacter = savedF.parseCharacter;
+    vsb.fetchImageBuffer = savedF.fetchImageBuffer;
+    ps.pendingSelections.delete("qa-ps-buffered");
+  }
+}
+
 function sectionC() {
   console.log("\n── C. drift guards ──");
   const fs = require("fs");
@@ -241,6 +370,8 @@ function sectionC() {
   await sectionA();
   await sectionB();
   await sectionD();
+  await sectionE();
+  await sectionF();
   sectionC();
   console.log(`\n═══ RESULT: ${pass} pass / ${fail} fail ═══`);
   process.exit(fail ? 1 : 0);

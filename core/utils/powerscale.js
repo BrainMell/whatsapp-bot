@@ -167,7 +167,10 @@ function formatCategoryCard(data, category) {
     lines.push(SEP);
     if (!entries.length) {
         lines.push(`_No *${category}* stat found on this page._`);
-        const near = data.categories.filter((c) => FULL_CARD_ORDER.includes(c)).slice(0, 8);
+        // 💡 no slice: with 13 possible categories, truncating at 8 hid real
+        // stats (owner saw "Available: Tier · Speed · …" while Intelligence
+        // existed but was cut). FULL_CARD_ORDER caps the list at 13 anyway.
+        const near = data.categories.filter((c) => FULL_CARD_ORDER.includes(c));
         if (near.length) {
             lines.push("");
             lines.push(`_Available stats:_ ${near.join(" · ")}`);
@@ -194,7 +197,7 @@ function formatCategoryCard(data, category) {
     }
     lines.push(SEP);
     // quick-menu of other categories present
-    const others = FULL_CARD_ORDER.filter((c) => c !== category && data.stats.has(c)).slice(0, 8);
+    const others = FULL_CARD_ORDER.filter((c) => c !== category && data.stats.has(c));
     if (others.length) {
         lines.push(`_Other stats:_ ${others.map((c) => `*${CATEGORY_SHORT[c] || c.toLowerCase()}*`).join(" · ")}`);
         lines.push(`_e.g._ *.${global.__PS_PREFIX || "j"} powerscale ${CATEGORY_SHORT[others[0]] || others[0].toLowerCase()} ${clip(fmtName(data), 28)}*`);
@@ -287,6 +290,20 @@ async function runPowerscaleCommand(ctx) {
         return sendUsageCard(sock, chatId, botMarker);
     }
 
+    // 💡 RACE FIX (2026-10-18, owner incident log): Mellow typed "1" 2s BEFORE
+    // the 10-match list even landed (search takes ~15-19s). The old flow only
+    // armed the pick session when the list was sent, so early numbers fell
+    // through to the legacy cached-search branch (or nowhere) — silent death.
+    // Arm a "searching" session NOW: numbers typed mid-search are BUFFERED in
+    // the session and auto-applied when the results arrive.
+    pendingSelections.set(chatId, {
+        phase: "searching",
+        category: category || null,
+        query,
+        timestamp: now(),
+    });
+    armAutoClear(chatId);
+
     await react("🔍");
     await sock.sendMessage(chatId, {
         text: `${botMarker}🔍 *VS Battles* — searching _"${clip(query, 40)}"_${category ? ` · category *${category}*` : ""}…`,
@@ -297,26 +314,60 @@ async function runPowerscaleCommand(ctx) {
         result = await resolveFlow(query, category, featsOverview);
     } catch (err) {
         console.error("[Powerscale] resolveFlow failed:", err.message);
+        pendingSelections.delete(chatId); // searching session gone — stop swallowing numbers
         await react("❌");
         return sock.sendMessage(chatId, { text: `${botMarker}❌ VS Battles lookup failed — try again in a moment.` });
     }
 
     if (!result.success) {
+        pendingSelections.delete(chatId); // searching session gone — stop swallowing numbers
         await react("❌");
         return sock.sendMessage(chatId, { text: `${botMarker}❌ ${result.error}` });
     }
 
     if (result.mode === "list") {
         // register pick session so numeric replies select a character
-        pendingSelections.set(chatId, {
-            phase: "pick",
-            characters: result.characters,
-            category: category || null,
-            query,
-            pickedId: 0,
-            timestamp: now(),
-        });
-        armAutoClear(chatId);
+        // (MUTATE the searching session in place — a bufferedPick may already
+        // be sitting on it; a fresh .set() would drop it)
+        const session = pendingSelections.get(chatId);
+        if (session && session.phase === "searching") {
+            session.phase = "pick";
+            session.characters = result.characters;
+            session.pickedId = 0;
+            session.timestamp = now();
+        } else {
+            pendingSelections.set(chatId, {
+                phase: "pick",
+                characters: result.characters,
+                category: category || null,
+                query,
+                pickedId: 0,
+                timestamp: now(),
+            });
+            armAutoClear(chatId);
+        }
+
+        // 💡 RACE FIX: a number typed while the search was running now applies
+        // instantly — the user already chose, skip the list entirely.
+        const sess = pendingSelections.get(chatId);
+        const bp = sess && sess.bufferedPick;
+        if (bp) {
+            delete sess.bufferedPick;
+            const pickResult = await handlePowerscaleSelection(chatId, String(bp));
+            if (pickResult && pickResult.success) {
+                console.log(`[Powerscale] buffered pick applied: chat=${chatId} n=${bp} query="${query}"`);
+                await react("⚖️");
+                await sendCard(sock, chatId, botMarker, pickResult);
+                await react("✅");
+                return;
+            }
+            // out-of-range/failed buffered pick → show the list + a note
+            console.log(`[Powerscale] buffered pick invalid: chat=${chatId} n=${bp} — falling back to list`);
+            await react("📋");
+            const note = pickResult && pickResult.error ? `\n\n_Your earlier reply *${bp}*: ${pickResult.error}_` : "";
+            return sock.sendMessage(chatId, { text: `${botMarker}${result.message}${note}` });
+        }
+
         await react("📋");
         return sock.sendMessage(chatId, { text: `${botMarker}${result.message}` });
     }
@@ -521,15 +572,36 @@ async function handlePowerscaleSelection(chatId, selection) {
     touch(session);
 
     const idx = parseInt(selection, 10);
-    if (isNaN(idx) || idx < 1 || idx > Math.min(session.characters.length, 10)) {
+    if (isNaN(idx) || idx < 1 || idx > Math.min(session.characters ? session.characters.length : 10, 10)) {
+        // searching session: characters not known yet — validate range 1-10 only
+        if (session.phase === "searching") {
+            const n = parseInt(selection, 10);
+            if (!isNaN(n) && n >= 1 && n <= 10) {
+                session.bufferedPick = n;
+                session.timestamp = now();
+                console.log(`[Powerscale] pick buffered (search in flight): chat=${chatId} n=${n}`);
+                return { success: true, mode: "buffered" };
+            }
+        }
         return {
             success: false,
-            error: `Pick a number between 1 and ${Math.min(session.characters.length, 10)}.`,
+            error: `Pick a number between 1 and ${Math.min(session.characters ? session.characters.length : 10, 10)}.`,
         };
+    }
+
+    // 💡 RACE FIX: a number typed while the search was still running lands
+    // here when the results are NOT in yet — hold it on the session; the
+    // list branch of runPowerscaleCommand applies it the moment they land.
+    if (session.phase === "searching") {
+        session.bufferedPick = idx;
+        session.timestamp = now();
+        console.log(`[Powerscale] pick buffered (search in flight): chat=${chatId} n=${idx}`);
+        return { success: true, mode: "buffered" };
     }
 
     const chosen = session.characters[idx - 1];
     session.pickedId = idx;
+    console.log(`[Powerscale] numeric pick: chat=${chatId} n=${idx} phase=${session.phase} -> "${chosen.name}"`);
 
     // already showing this exact character? just re-prompt category usage
     if (session.phase === "view" && session.data && session.data.name === chosen.name) {
@@ -538,6 +610,7 @@ async function handlePowerscaleSelection(chatId, selection) {
 
     const data = await parseWithFallback(chosen);
     if (!data) {
+        console.log(`[Powerscale] numeric pick parse FAILED: chat=${chatId} n=${idx} "${chosen.name}"`);
         return { success: false, error: `Failed to parse *${chosen.name}*. Try another number.` };
     }
     session.phase = "view";

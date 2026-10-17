@@ -10598,6 +10598,12 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                           selectedNumber,
                         );
                         if (!result) return;
+                        // 💡 2026-10-18 race fix: the pick arrived while the
+                        // search was still running — it's BUFFERED on the
+                        // session and will auto-apply when the results land.
+                        // The ⏳ react above already acknowledged it; nothing
+                        // else to say right now.
+                        if (result.mode === "buffered") return;
                         if (!result.success) {
                           // keepPending = disambiguation hit — the list stays
                           // alive so the user can pick a more specific entry.

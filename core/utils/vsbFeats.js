@@ -226,7 +226,16 @@ function cachePut(url, data) {
 // universal stat paragraph: <p[any attrs]><b>[<a ...>]Label[:][</a>][:]</b> value</p>
 // colon may sit inside the anchor ("<a>Tier:</a></b>", Nightwing style) or
 // outside it ("<a>Speed</a>:</b>", Maki style)
-const STAT_P_RE = /<p[^>]*>\s*<b>\s*(?:<a[^>]*>)?([\s\S]{2,48}?)(?:<\/a>\s*:\s*<\/b>|:\s*<\/a>\s*<\/b>|:\s*<\/b>)([\s\S]*?)<\/p>/g;
+// 💡 FIX (2026-10-18, owner report ".j powerscale ap superman" -> "No Attack
+// Potency stat found"): DCEU-style pages open the stat paragraph with a <br />
+// ("_<p><br />\n<b><a ...>Attack Potency</a>:</b> <b>Town level+</b>…</p>_") —
+// the old pattern only allowed whitespace between <p> and <b>, so EVERY stat
+// with that prefix was silently skipped (AP vanished from the whole page while
+// Tier/Speed parsed fine). Now <br> variants are accepted too.
+const STAT_P_RE = /<p[^>]*>(?:\s|<br\s*\/?>)*<b>\s*(?:<a[^>]*>)?([\s\S]{2,48}?)(?:<\/a>\s*:\s*<\/b>|:\s*<\/a>\s*<\/b>|:\s*<\/b>)([\s\S]*?)<\/p>/g;
+
+// canonical Key line (same <br>-tolerant prefix as STAT_P_RE)
+const KEY_P_RE = /<p[^>]*>(?:\s|<br\s*\/?>)*<b>\s*(?:<a[^>]*>)?Key(?:<\/a>\s*:\s*<\/b>|:\s*<\/a>\s*<\/b>|:\s*<\/b>)([\s\S]*?)<\/p>/;
 
 // tab labels (keys/variants): <div class="wds-tabs__tab-label">...</div>
 const TAB_LABEL_RE = /<div class="wds-tabs__tab-label"[^>]*>([\s\S]*?)<\/div>/g;
@@ -277,12 +286,6 @@ async function parseCharacter(pageUrl) {
         }
     }
 
-    // -- Powers and Stats block --
-    const psIdx = html.search(/<h2><span class="mw-headline" id="Powers_and_Stats">/);
-    const psBlock = psIdx > -1 ? html.slice(psIdx, psIdx + 300000) : "";
-    const nextH2 = psBlock.slice(20).search(/<h2><span class="mw-headline"/);
-    const block = nextH2 > -1 ? psBlock.slice(0, nextH2 + 20) : psBlock;
-
     // character image: first file figure in the page (P&S tabs carry renders)
     const imgRe = /<figure[^>]*>[\s\S]*?<img[^>]*src="(https:\/\/static\.wikia\.nocookie\.net[^"]+)"[^>]*>/i;
     const imgMatch = html.match(imgRe);
@@ -293,11 +296,41 @@ async function parseCharacter(pageUrl) {
         out.imageUrls = [...new Set(all)].slice(0, 4);
     }
 
-    if (!block) {
+    // 💡 REFACTOR (2026-10-18): stat-block extraction moved into the PURE
+    // extractStatsFromHtml() below — unit-testable without network (QA feeds
+    // synthetic markup variants: Maki/Nightwing colon styles, DCEU <p><br/>).
+    const extracted = extractStatsFromHtml(html);
+    if (extracted.isVerse) {
         // verse / item / disambiguation pages have no P&S section
         out.isVerse = true;
         cachePut(urlKey, out);
         return out;
+    }
+    out.keyLine = extracted.keyLine;
+    out.stats = extracted.stats;
+    out.categories = extracted.categories;
+    cachePut(urlKey, out);
+    return out;
+}
+
+/**
+ * Pure extraction: page HTML -> { stats, categories, keyLine, isVerse }.
+ * No network, no cache — QA can feed synthetic markup variants directly.
+ * @param {string} html full parsed page HTML (action=parse prop=text)
+ */
+function extractStatsFromHtml(html) {
+    const res = { stats: new Map(), categories: [], keyLine: "", isVerse: false };
+
+    // -- Powers and Stats block --
+    const psIdx = html.search(/<h2><span class="mw-headline" id="Powers_and_Stats">/);
+    const psBlock = psIdx > -1 ? html.slice(psIdx, psIdx + 300000) : "";
+    const nextH2 = psBlock.slice(20).search(/<h2><span class="mw-headline"/);
+    const block = nextH2 > -1 ? psBlock.slice(0, nextH2 + 20) : psBlock;
+
+    if (!block) {
+        // verse / item / disambiguation pages have no P&S section
+        res.isVerse = true;
+        return res;
     }
 
     // -- tab labels in order (variant names) --
@@ -307,10 +340,10 @@ async function parseCharacter(pageUrl) {
 
     // canonical Key line - parsed FIRST so pipe-style per-key values can be
     // split into named variants ("Incomplete HR | Complete HR" style pages)
-    const keyP = block.match(/<p[^>]*>\s*<b>\s*(?:<a[^>]*>)?Key(?:<\/a>\s*:\s*<\/b>|:\s*<\/a>\s*<\/b>|:\s*<\/b>)([\s\S]*?)<\/p>/);
-    if (keyP) out.keyLine = htmlToText(keyP[1]).slice(0, 160);
-    const keyNames = out.keyLine
-        ? out.keyLine.split(/\s*\|\s*/).map((k) => k.trim()).filter(Boolean)
+    const keyP = block.match(KEY_P_RE);
+    if (keyP) res.keyLine = htmlToText(keyP[1]).slice(0, 160);
+    const keyNames = res.keyLine
+        ? res.keyLine.split(/\s*\|\s*/).map((k) => k.trim()).filter(Boolean)
         : [];
 
     // -- walk stat paragraphs --
@@ -378,7 +411,7 @@ async function parseCharacter(pageUrl) {
 
     // build rating/feats per entry + Notable Techniques from <h3> section
     for (const [label, entries] of stats) {
-        out.categories.push(label);
+        res.categories.push(label);
         for (const e of entries) {
             const parsed = splitRatingAndFeats(e.text);
             e.rating = parsed.rating;
@@ -396,13 +429,12 @@ async function parseCharacter(pageUrl) {
             stats.set("Notable Techniques", [
                 { variant: "", text: natText.slice(0, 2400), rating: "", feats: natText.split(/(?<=[.;])\s+(?=[A-Z(])/).slice(0, 8).map((s) => s.trim()), calcs: [] },
             ]);
-            out.categories.push("Notable Techniques");
+            res.categories.push("Notable Techniques");
         }
     }
 
-    out.stats = stats;
-    cachePut(urlKey, out);
-    return out;
+    res.stats = stats;
+    return res;
 }
 
 /**
@@ -532,6 +564,9 @@ module.exports = {
     fetchImageBuffer,
     splitRatingAndFeats,
     splitTopLevelPipes,
+    // pure HTML->stats extraction (QA feeds synthetic markup variants)
+    extractStatsFromHtml,
+    STAT_P_RE,
     CATEGORY_ALIASES,
     CATEGORY_ICONS,
     htmlToText,
