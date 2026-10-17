@@ -342,8 +342,8 @@ async function renderFrame(state, frame, opts = {}) {
         // mid ring + house hot ring thin way down; the playable ring stays
         // an open settlement with tree garnish, the woodland lives OUTSIDE
         // as the outlands' rolled forest patches
-        midRate: 0.13,
-        hotRate: 0.15,
+        midRate: 0.08,
+        hotRate: 0.09,
         structFoots: (state.structures || [])
             .map((st) => { const d = structDef(st.type); return d ? [st.x, st.y, d.fw, d.fh] : null; })
             .filter(Boolean),

@@ -287,14 +287,14 @@ function islandForest(opts) {
                 const rate = margin ? 0.22 : midRate;
                 const sh = frontShadow.has(key);
                 if (!sh && rnd() < rate) out.push({ file: pickWeighted(rnd, RING_TREES), x: px + jitter(26), y: py + jitter(10) + 6 });
-                if (rnd() < (sh ? 0.15 : 0.30)) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(26), y: py + 8 });
+                if (rnd() < (sh ? 0.10 : 0.18)) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(26), y: py + 8 });
             } else if (hotSet.has(key)) {
                 // clearing around the house — trees beside it, never crowding
                 // the walls (owner 20:20Z: "houses seem to be on top of the
                 // trees") — lower rate, tighter outward jitter
                 const sh = frontShadow.has(key);
                 if (!sh && rnd() < hotRate) out.push({ file: pickWeighted(rnd, RING_TREES), x: px + jitter(16), y: py + jitter(8) + 4, sc: 0.88 + rnd() * 0.14 });
-                if (rnd() < (sh ? 0.20 : 0.40)) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(24), y: py + 6 });
+                if (rnd() < (sh ? 0.12 : 0.25)) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(24), y: py + 6 });
             } else {
                 const sh = frontShadow.has(key);
                 if (rnd() < (sh ? 0.08 : 0.17)) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(28), y: py + 8 });
