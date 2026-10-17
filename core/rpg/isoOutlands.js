@@ -95,6 +95,13 @@ function outlandProps(opts) {
     // fence diamond bounds (grid space): [-P .. N-1+P]
     const f0 = -P, f1 = N - 1 + P;
 
+    // SCREEN-ANCHOR SCALE LAW (guild v5 big canvas): every screen anchor
+    // below was tuned on the 1240x850 reference card (OX 620 / OY 150);
+    // scale them proportionally for bigger canvases. 1:1 for the homestead.
+    const AX = OX_ / 620, AY = OY_ / 150;
+    const sa = ([x, y]) => [x * AX, y * AY];
+    const DEEP_CY = OY_ + 280 * AY;   // ruins deep-site screen centre (430 @ ref)
+
 
     // screen→grid helper: place set pieces by SCREEN position so they always
     // land on-card (grid-space offsets run off the diamond diagonals)
@@ -175,7 +182,7 @@ function outlandProps(opts) {
             }
         }
         // deep wilds: conifer clusters + mossy clutter, at SCREEN anchors
-        const wildAnchors = [[110, 180], [1110, 225], [170, 635], [1060, 600], [590, 66], [650, 792], [340, 105], [920, 772]];
+        const wildAnchors = [[110, 180], [1110, 225], [170, 635], [1060, 600], [590, 66], [650, 792], [340, 105], [920, 772]].map(sa);
         for (let i = 0; i < 5; i++) {
             const [sx, sy] = wildAnchors[Math.floor(master() * wildAnchors.length)];
             const [gx, gy] = screenToGrid(sx + (master() - 0.5) * 120, sy + (master() - 0.5) * 50);
@@ -190,7 +197,7 @@ function outlandProps(opts) {
 
     if (biome === 'highlands') {
         // 3-5 rock/mountain clusters ringing the compound at SCREEN anchors
-        const rockAnchors = [[110, 185], [1110, 240], [175, 645], [1035, 610], [620, 62], [620, 795]];
+        const rockAnchors = [[110, 185], [1110, 240], [175, 645], [1035, 610], [620, 62], [620, 795]].map(sa);
         const nClusters = 3 + Math.floor(master() * 3);
         const order = rockAnchors.slice().sort(() => master() - 0.5);
         for (let i = 0; i < nClusters; i++) {
@@ -212,12 +219,12 @@ function outlandProps(opts) {
         // site pushed deeper along the same direction
         const sites = 1 + Math.floor(master() * 2);
         // [top-right, right-mid, left-mid, bottom-left] wild bands (SCREEN pts)
-        const bandPts = [[930, 85], [1120, 380], [90, 330], [330, 700]];
+        const bandPts = [[930, 85], [1120, 380], [90, 330], [330, 700]].map(sa);
         const ci = Math.floor(master() * 4);
         for (let s = 0; s < sites; s++) {
             let cx, cy, deep;
             if (s === 0) { [cx, cy] = screenToGrid(bandPts[ci][0], bandPts[ci][1]); deep = false; }
-            else { [cx, cy] = screenToGrid(620 + (bandPts[ci][0] - 620) * 1.35, 430 + (bandPts[ci][1] - 430) * 1.35); deep = true; }
+            else { [cx, cy] = screenToGrid(OX_ + (bandPts[ci][0] - OX_) * 1.35, DEEP_CY + (bandPts[ci][1] - DEEP_CY) * 1.35); deep = true; }
             // centerpiece: gate or tower
             put(master() < 0.5 ? 'poly_ivy_tower.png' : 'poly_ruin_gate.png', cx, cy, deep ? 0.9 : 1.05, deep ? TINT_FAR : TINT_MID, 10, 6);
             // flanking columns + arch + slabs

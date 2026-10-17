@@ -159,7 +159,8 @@ async function paintBackdrop(ctx, W, H, frame, FRAMES, horizonY, islandBottomY) 
     ctx.globalCompositeOperation = 'lighter';
     for (let i = 0; i < 3; i++) {
         const ph = Math.sin((frame / FRAMES) * Math.PI * 2 + i * 2.1) * 0.5 + 0.5;
-        const x0 = 140 + i * 330;
+        const rayS = W / 1240; // spread rays across bigger canvases (1:1 @ reference card)
+        const x0 = 140 * rayS + i * 330 * rayS;
         ctx.globalAlpha = 0.028 + ph * 0.02;
         ctx.fillStyle = '#e8f2c0';
         ctx.beginPath();

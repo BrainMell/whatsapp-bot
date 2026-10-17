@@ -1,7 +1,11 @@
 'use strict';
 // ═══════════════════════════════════════════════════════════════════════════
 //  GUILD BASE RENDERER — outdoor isometric guild grounds
-//  Same visual law as homesteadBaseRenderer.js: 16x16 iso island, grass
+//  GUILD v5 SCALE LAW (owner 2026-10-17 "still the same size as a regular
+//  base... should be wayyy bigger — space inside the walls and outside
+//  double, maybe triple"): 28x28 playable diamond (3x the base's 16x16
+//  tile count), 5-tile tamed yard band outside the palisade, canvas grows
+//  with the grounds. Same visual law as homesteadBaseRenderer.js: grass
 //  tiles, isoShadow grounding, back-to-front depth sort, ambient animation.
 //  Structures mirror GUILD_UPGRADES (guilds.js): hall L0-5 (4x4),
 //  training L0-5 (3x3), treasury L0-5 (2x2). L0 = building plot (scaffold).
@@ -20,10 +24,10 @@ const mediaCache = require('./mediaCache');
 
 const SS = 2;
 const TW = 64, TH = 32;
-const N = 16;
-const ART_W = 1240, ART_H = 850;
+const N = 28;                          // playable diamond: 784 tiles ≈ 3× the base's 256
+const ART_W = 2560, ART_H = 1500;      // canvas grows with the grounds
 const OX = ART_W / 2;
-const OY = 150;
+const OY = 210;
 const FRAMES = 14, FRAME_MS = 110;
 
 const PREFIX = '.j'; // display-only default; engine passes real prefix via opts.hint when it matters
@@ -32,17 +36,16 @@ const HS_ASSETS = path.join(__dirname, '..', 'rpgasset', 'homestead');
 const FONTS = path.join(__dirname, '..', 'rpgasset', 'fonts');
 
 // ── structure defs (mirror of GUILD_UPGRADES visual states) ──
-// GUILD v4 (owner 2026-10-17 "the guild area should obviously be a different
-// design and orientation" + "by castles I meant the ones from Polyy's RTS
-// Castles pack"): the whole plan rotates to a WEST-GATE / EAST-WEST axis so
-// it never reads as the base spun 90° — the road enters from the west,
-// crosses a stone courtyard to the CASTLE dead-center (Polyy RTS castles,
-// gb_castle_l1..l5), training holds the NE corner, treasury the SE, member
-// cottages line the south meadow, and four build plots sit NW / N / SW / E.
+// GUILD v5 SCALE LAW (owner 2026-10-17 "the space inside the walls and
+// outside should be double the size maybe triple"): the whole v4 west-gate
+// plan (Polyy RTS castles gb_castle_l1..l5) spreads across the 28x28
+// grounds — road enters from the west, crosses a stone courtyard to the
+// CASTLE dead-center, training holds the NE corner, treasury the SE,
+// member cottages line the south meadow, four build plots sit NW / N / SW / E.
 const GUILD_STRUCTS = {
     hall: {
         id: 'hall', name: 'Guild Hall', fw: 4, fh: 4,
-        x: 6, y: 6,
+        x: 12, y: 12,
         levels: [
             { level: 1, sprite: 'gb_castle_l1', name: 'Outpost Keep' },
             { level: 2, sprite: 'gb_castle_l2', name: 'Bailey Fort' },
@@ -53,7 +56,7 @@ const GUILD_STRUCTS = {
     },
     training: {
         id: 'training', name: 'Training Ground', fw: 3, fh: 3,
-        x: 10, y: 3,
+        x: 22, y: 4,
         levels: [
             { level: 1, sprite: 'gb_training_l1', name: 'Dust Yard' },
             { level: 2, sprite: 'gb_training_l2', name: 'Spar Ring' },
@@ -64,7 +67,7 @@ const GUILD_STRUCTS = {
     },
     treasury: {
         id: 'treasury', name: 'Treasury', fw: 2, fh: 2,
-        x: 12, y: 12,
+        x: 24, y: 25,
         levels: [
             { level: 1, sprite: 'gb_treasury_l1', name: 'Coin Chest' },
             { level: 2, sprite: 'gb_treasury_l2', name: 'Vault Hut' },
@@ -79,10 +82,10 @@ const GUILD_STRUCTS = {
 // locations to build all the various houses") — four 3x3 marked expansion
 // sites ringing the castle on the v4 diagonal/axis plan.
 const GUILD_PLOTS = [
-    { id: 1, x: 2, y: 2 },   // NW
-    { id: 2, x: 7, y: 1 },   // N (between gate road and training)
-    { id: 3, x: 2, y: 12 },  // SW
-    { id: 4, x: 12, y: 7 },  // E (east arm terminus)
+    { id: 1, x: 3, y: 3 },   // NW
+    { id: 2, x: 14, y: 2 },  // N (north meadow, clear of the training spur)
+    { id: 3, x: 3, y: 22 },  // SW
+    { id: 4, x: 23, y: 14 }, // E (east arm terminus)
 ];
 
 // per-structure draw scale — ALL guild art now pre-scaled to footprint
@@ -91,9 +94,9 @@ const GUILD_PLOTS = [
 const GUILD_SCALE = { training: 1.0, treasury: 0.9 };
 const GUILD_AY_BIAS = {};
 
-// FENCE PAD — same bigger-compound law as the base (owner 2026-10-17
-// "the fence should be further away because the space is bigger").
-const P = 3;
+// FENCE PAD — v5 scale law: the OUTSIDE band grows too (owner: "the space
+// inside the walls and outside should be double the size maybe triple").
+const P = 5;
 
 const ARCH = {
     ADVENTURER: { flag: '#a02c3c', flagD: '#7c1e2c', label: 'Adventurers' },
@@ -104,32 +107,36 @@ const ARCH = {
 // cottage slots along the south meadow (member housing visual; clear of the
 // SW plot, treasury and the south path arm). POLYY ART LAW: each slot draws
 // a DIFFERENT village-building sprite (gb_cottage_a..d, cycling).
-const COTTAGE_SLOTS = [[6, 13], [9, 13], [5, 15], [8, 15], [14, 14]];
-// GUILD PATHS v4 — west-gate civic plan: gate road crosses the grounds to a
-// STONE courtyard ring around the castle, spurs reach training (NE), the
-// east plot and the treasury (SE), and a south arm serves the cottages.
+const COTTAGE_SLOTS = [[12, 24], [16, 24], [10, 26], [14, 26], [21, 25]];
+// GUILD PATHS v5 — west-gate civic plan at full scale: gate road crosses the
+// grounds to a STONE courtyard apron around the castle, spurs reach training
+// (NE), the east plot and the treasury (SE), and a south arm serves the
+// cottages.
 const PATHS = [
-    // west gate road (gate sits on the west fence edge at y=8)
-    [0, 8], [1, 8], [2, 8], [3, 8], [4, 8],
-    // stone courtyard ring around the castle (footprint 6-9 x 6-9)
-    [5, 5], [6, 5], [7, 5], [8, 5], [9, 5],
-    [5, 6], [5, 7], [5, 8], [5, 9],
-    [10, 6], [10, 7], [10, 8], [10, 9],
-    [5, 10], [6, 10], [7, 10], [8, 10], [9, 10], [10, 10],
-    // east arm to plot 4
-    [11, 8], [12, 8],
+    // west gate road (gate sits on the west fence edge at y=14)
+    [0, 14], [1, 14], [2, 14], [3, 14], [4, 14], [5, 14], [6, 14], [7, 14], [8, 14], [9, 14],
+    // stone courtyard apron around the castle (footprint 12-15 x 12-15)
+    [10, 10], [11, 10], [12, 10], [13, 10], [14, 10], [15, 10], [16, 10], [17, 10],
+    [10, 11], [10, 12], [10, 13], [10, 14], [10, 15], [10, 16],
+    [17, 11], [17, 12], [17, 13], [17, 14], [17, 15], [17, 16],
+    [10, 17], [11, 17], [12, 17], [13, 17], [14, 17], [15, 17], [16, 17], [17, 17],
     // north spur to training (NE corner)
-    [8, 3], [8, 4], [9, 3], [10, 3], [11, 3],
+    [18, 12], [19, 12], [20, 12], [21, 12], [21, 11], [21, 10], [21, 9], [21, 8], [21, 7], [21, 6], [21, 5],
+    // east arm to plot 4
+    [18, 14], [19, 14], [20, 14], [21, 14], [22, 14],
+    // treasury spur (SE) — drops to the treasury pocket in the SE foreground
+    // (kept clear of the castle's south face; the tall L5 art crowds otherwise)
+    [18, 19], [19, 20], [20, 21], [21, 22], [22, 23], [23, 24],
     // south arm to the cottage meadow
-    [7, 11], [7, 12], [6, 13],
+    [13, 18], [13, 19], [13, 20], [13, 21], [13, 22], [13, 23],
 ];
 // courtyard cells — the castle plaza draws STONE (civic look, distinct from
 // the base's dirt trails)
 const PLAZA = new Set([
-    [5, 5], [6, 5], [7, 5], [8, 5], [9, 5],
-    [5, 6], [5, 7], [5, 8], [5, 9],
-    [10, 6], [10, 7], [10, 8], [10, 9],
-    [5, 10], [6, 10], [7, 10], [8, 10], [9, 10], [10, 10],
+    [10, 10], [11, 10], [12, 10], [13, 10], [14, 10], [15, 10], [16, 10], [17, 10],
+    [10, 11], [10, 12], [10, 13], [10, 14], [10, 15], [10, 16],
+    [17, 11], [17, 12], [17, 13], [17, 14], [17, 15], [17, 16],
+    [10, 17], [11, 17], [12, 17], [13, 17], [14, 17], [15, 17], [16, 17], [17, 17],
 ].map(([x, y]) => `${x},${y}`));
 
 let fontsReady = false;
@@ -303,7 +310,7 @@ async function renderFrame(state, frame, opts = {}) {
     const grass = ['forest_moss_a.png', 'forest_moss_b.png', 'forest_moss_c.png'];
     const waterF = frame % 4 < 2 ? 'forest_water_0.png' : 'forest_water_1.png';
     const M = 12; // full coverage to the card corners
-    const outlands = isoOutlands.outlandProps({ seedStr: state.name || 'guild', N, P, isoX, isoY, M });
+    const outlands = isoOutlands.outlandProps({ seedStr: state.name || 'guild', N, P, isoX, isoY, M, OX, OY });
     const wildTile = new Map(outlands.tiles.map((t) => [`${t.x},${t.y}`, t.tile]));
     for (let x = -M; x < N + M; x++) {
         for (let y = -M; y < N + M; y++) {
@@ -335,7 +342,7 @@ async function renderFrame(state, frame, opts = {}) {
     {
         const trailImg = await hsImg('forest_trail.png');
         if (trailImg) {
-            const trailCells = [[-P, 8], [-P - 1, 8], [-P - 2, 8], [-P - 3, 7], [-P - 4, 7]];
+            const trailCells = [[-P, 14], [-P - 1, 14], [-P - 2, 14], [-P - 3, 13], [-P - 4, 13]];
             for (const [tx, ty] of trailCells) {
                 ctx.drawImage(trailImg, isoX(tx + 0.5, ty + 0.5) - TW / 2, isoY(tx + 0.5, ty + 0.5) - TH / 2);
             }
@@ -378,9 +385,12 @@ async function renderFrame(state, frame, opts = {}) {
         for (let ix = -1; ix <= st.fw; ix++) for (let iy = -1; iy <= st.fh; iy++) occupied.add(`${st.x + ix},${st.y + iy}`);
     }
     for (const [px, py] of PATHS) occupied.add(`${px},${py}`);
-    for (const [px, py] of COTTAGE_SLOTS) { occupied.add(`${px},${py}`); occupied.add(`${px},${py - 1}`); }
+    for (const [px, py] of COTTAGE_SLOTS) {
+        // 3-wide, 4-deep clearing so member cottages never hide behind trees
+        for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 2; dy++) occupied.add(`${px + dx},${py + dy}`);
+    }
     // archetype-prop meadow beside the castle's SE flank stays clear
-    for (let ax = 11; ax <= 12; ax++) for (let ay = 10; ay <= 10; ay++) occupied.add(`${ax},${ay}`);
+    for (let ax = 18; ax <= 19; ax++) for (let ay = 17; ay <= 18; ay++) occupied.add(`${ax},${ay}`);
     // house-plot cells + 1 ring stay clear (the plots are the build sites)
     const plotCells = new Set();
     for (const plot of GUILD_PLOTS) {
@@ -417,8 +427,8 @@ async function renderFrame(state, frame, opts = {}) {
             if (im) props.push({ img: im, x: f.x, y: f.y, sc: f.tint ? 1 : (f.sc || 1) });
         }
         // pixel fence ring — pushed OUTWARD by P tiles, gate on the WEST edge
-        // where the civic road leaves the grounds (-P, 8)
-        for (const seg of isoForest.fenceRing(N, isoX, isoY, [[-P, 8]], P)) {
+        // where the civic road leaves the grounds (-P, 14)
+        for (const seg of isoForest.fenceRing(N, isoX, isoY, [[-P, 14]], P)) {
             const fim = await hsImg(seg.file);
             if (fim) props.push({ img: fim, x: seg.x, y: seg.y, sc: 1 });
         }
@@ -515,11 +525,11 @@ async function renderFrame(state, frame, opts = {}) {
     }
 
     // ── archetype props on the open SE meadow (beside the castle's flank) ──
-    const apX = isoX(11.5, 10.5), apY = isoY(11.5, 10.5) + 8; // tile (11,10) centre
+    const apX = isoX(19.5, 18.5), apY = isoY(19.5, 18.5) + 8; // tile (19,18) centre
     drawArchProps(ctx, arch, apX, apY + 8, t);
 
     // ── guild banner on the west gate road (cloth waves; emblem color) ──
-    const poleX = isoX(4.5, 9.5) + 18, poleBase = isoY(4.5, 9.5) + 8;
+    const poleX = isoX(4.5, 15.5) + 18, poleBase = isoY(4.5, 15.5) + 8;
     ctx.fillStyle = '#4a2d17';
     ctx.fillRect(poleX - 1.5, poleBase - 84, 3, 84);
     const wave = Math.sin(t * Math.PI * 2) * 3;
@@ -600,13 +610,13 @@ async function renderFrame(state, frame, opts = {}) {
         ctx.globalAlpha = 0.5 * Math.sin(ph * Math.PI);
         ctx.fillStyle = '#ffe9a8';
         ctx.beginPath();
-        ctx.arc(OX + (r1 - 0.5) * 700, OY + 300 + (i % 3) * 90 - ph * 26, 1.6, 0, Math.PI * 2);
+        ctx.arc(OX + (r1 - 0.5) * 2000, OY + 470 + (i % 3) * 130 - ph * 30, 1.6, 0, Math.PI * 2);
         ctx.fill();
     }
     ctx.restore();
 
     // vignette
-    const vg = ctx.createRadialGradient(OX, OY + 340, 380, OX, OY + 340, 900);
+    const vg = ctx.createRadialGradient(OX, OY + 560, 620, OX, OY + 560, 1500);
     vg.addColorStop(0, 'rgba(0,0,0,0)');
     vg.addColorStop(1, 'rgba(20,14,6,0.42)');
     ctx.fillStyle = vg;
