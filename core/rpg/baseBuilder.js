@@ -52,14 +52,22 @@ async function loadBase(userId) {
     // owner 2026-10-16: "the pond and mines and everything else? Doesn't exist")
     const have = new Set((rec.structures || []).map((s) => s.type));
     const missing = fixedSeed().filter((f) => !have.has(f.type));
-    // layout v2 migration: the fixed anchors moved (house 6,6→6,7; hunting
-    // 3,7→3,8) — relocate the FIXED structures so every base matches the new
-    // village plan. Safe: nothing else can legally occupy these cells.
+    // layout v2/v3 migration: the fixed anchors moved (v2 house 6,6→6,7; v3
+    // house 6,7→10,6 — MAIN STREET VILLAGE, owner 2026-10-17) — relocate the
+    // FIXED structures so every base matches the new village plan. Safe:
+    // nothing else can legally occupy these cells.
     const ANCHORS = { house: LAYOUT.house, hunting: LAYOUT.hunting };
+    // layout v3 plot re-anchoring: built structures bought on the OLD plot
+    // anchors re-seat onto the new ones (else a v2 blacksmith at 11,6 would
+    // end up buried under the relocated house). Only EXACT old anchors move —
+    // admin-relocated structures keep their custom spot.
+    const OLD_PLOT_ANCHORS = { '11,6': [13, 5], '11,10': [12, 10], '6,11': [5, 11] };
     let dirty = missing.length > 0;
     for (const st of rec.structures || []) {
         const tgt = ANCHORS[st.type];
-        if (tgt && (st.x !== tgt.x || st.y !== tgt.y)) { st.x = tgt.x; st.y = tgt.y; dirty = true; }
+        if (tgt && (st.x !== tgt.x || st.y !== tgt.y)) { st.x = tgt.x; st.y = tgt.y; dirty = true; continue; }
+        const old = OLD_PLOT_ANCHORS[`${st.x},${st.y}`];
+        if (old && (st.x !== old[0] || st.y !== old[1])) { st.x = old[0]; st.y = old[1]; dirty = true; }
     }
     if (missing.length) rec.structures = [...(rec.structures || []), ...missing];
     if (dirty) {
@@ -82,10 +90,14 @@ function plotsFor(rec) {
         for (let ix = 0; ix < d.fw; ix++)
             for (let iy = 0; iy < d.fh; iy++) occupied.add(`${st.x + ix},${st.y + iy}`);
     }
+    // LAYOUT v3 expansion plots (3x3 each) — re-anchored to FRONT the village
+    // lanes (owner: "leaving room for plots of land"): #1 NE terrace under
+    // the pond lane, #2 SE terrace off the main street, #3 south row off the
+    // west lane, #4 SW pocket by the hunting woods.
     const PLOTS = [
-        { id: 1, x: 11, y: 6 },
-        { id: 2, x: 11, y: 10 },
-        { id: 3, x: 6, y: 11 },
+        { id: 1, x: 13, y: 5 },
+        { id: 2, x: 12, y: 10 },
+        { id: 3, x: 5, y: 11 },
         { id: 4, x: 2, y: 13 },
     ];
     return PLOTS.map((p) => {

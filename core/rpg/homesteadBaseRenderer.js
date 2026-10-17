@@ -106,29 +106,43 @@ function roundRect(ctx, x, y, w, h, r) {
     ctx.closePath();
 }
 
-// ── LAYOUT v2 (owner 2026-10-16 17:27Z "the layout trash, the house too
-// big"): village-grade plan — house anchored centre-south on a proper plaza,
-// one clean spine north splitting to mines (NW) and pond (NE), west walk to
-// the hunting gate, south walk serving the plots. No more diagonal scrawl.
+// ── LAYOUT v3 (owner 2026-10-17 21:18Z "the arrangement of the houses??? All
+// packed into the center?? Ass ... redesign their ordination, read up on
+// house placement design for isometric or top down games ... leaving room
+// for plots of land"): MAIN STREET VILLAGE — researched iso/top-down town
+// design laws applied (roads & plazas are the lines that lead the eye;
+// buildings FRONT streets with setbacks; focal space offset off dead-center;
+// districts ring the green; T-junctions, no dead-end scrawl; expansion land
+// fronts the lanes):
+//   1. SOUTH GATE moves 5→8 and a cobble MAIN STREET runs gate → plaza →
+//      north lane — the eye enters where the player enters
+//   2. cobble PLAZA (3x3 ring, grass heart) at the street's T — offset NE of
+//      the geometric centre, never a dead-center focal
+//   3. the HOUSE fronts the plaza from the east across the street (hero
+//      building faces the square) — pond stays NE (owner: "leave the pond
+//      where it is"), mines NW, hunting woods west
+//   4. lanes terminate at DESTINATIONS: miners' row west + pond lane east,
+//      hunting walk through the fence gate, south lanes serving the plots
+//   5. the 4 expansion plots re-anchor to FRONT the lanes (NE terrace, SE
+//      terrace, south row, SW pocket) so the village grows along its streets
+//   6. every frontage keeps ≥1 meadow setback — room for land, no cramming
 const LAYOUT = {
     N,
-    house: { x: 6, y: 7, fw: 3, fh: 3 },
+    house: { x: 10, y: 6, fw: 3, fh: 3 },
     mines: { x: 1, y: 1, fw: 2, fh: 2, zone: { x: 0, y: 0, fw: 5, fh: 4 } },
     pond: { x: 12, y: 1, fw: 2, fh: 2, zone: { x: 11, y: 0, fw: 5, fh: 4 } },
     hunting: { x: 3, y: 8, fw: 2, fh: 2, zone: { x: 0, y: 5, fw: 4, fh: 8 }, fenceCol: 4 },
     paths: [
-        // plaza around the house (south face + west/east stubs)
-        [5, 8], [5, 9], [5, 10], [6, 10], [7, 10], [8, 10], [9, 10], [9, 9], [9, 8],
-        // north spine from the plaza top to the field crossroads
-        [7, 3], [7, 4], [7, 5], [7, 6],
-        // west branch to the mines
-        [3, 3], [4, 3], [5, 3], [6, 3],
-        // east branch to the pond
-        [8, 3], [9, 3], [10, 3], [11, 3], [12, 3],
-        // west walk to the hunting gate
-        [1, 9], [2, 9], [3, 9], [4, 9],
-        // south walk serving the plots
-        [9, 11], [9, 12], [9, 13], [8, 14], [7, 14], [6, 14], [5, 14],
+        // main street — gate yard (south) up to the north lane junction
+        [8, 4], [8, 5], [8, 9], [8, 10], [8, 11], [8, 12], [8, 13], [8, 14], [8, 15],
+        // plaza ring east of the street (grass heart at 8,7 — village green)
+        [7, 6], [8, 6], [9, 6], [7, 7], [9, 7], [7, 8], [8, 8], [9, 8],
+        // miners' row west + pond lane east (north lane, y=4)
+        [3, 4], [4, 4], [5, 4], [6, 4], [7, 4], [9, 4], [10, 4], [11, 4], [12, 4], [13, 4],
+        // hunting walk — plaza SW corner through the fence gate into the woods
+        [7, 9], [6, 9], [5, 9], [4, 9], [3, 9], [2, 9],
+        // south lanes serving the expansion plots
+        [7, 10], [6, 10], [5, 10], [9, 10], [10, 10], [11, 10],
     ],
 };
 
@@ -180,7 +194,7 @@ async function renderFrame(state, frame, opts = {}) {
     // fence is rolled once per owner seed — biome (forest / highlands /
     // ruins / coast), terrain overrides and prop placements all derive from
     // it, so every render of the same player shows the same wilds.
-    const outlands = isoOutlands.outlandProps({ seedStr: state.owner || 'base', N, P, isoX, isoY, M, gates: [[5, N - 1 + P]] });
+    const outlands = isoOutlands.outlandProps({ seedStr: state.owner || 'base', N, P, isoX, isoY, M, gates: [[8, N - 1 + P]] });
     const wildTile = new Map(outlands.tiles.map((t) => [`${t.x},${t.y}`, t.tile]));
     // ── STONE WALKWAY LAW (owner 2026-10-17, v81 stack: "you left the stone
     // roads out of the base one, the guild???") — the base gets the SAME
@@ -248,8 +262,8 @@ async function renderFrame(state, frame, opts = {}) {
         const cob1 = await img(COBBLE[1]);
         if (trailImg) {
             const trailCells = [];
-            for (let y = N; y <= N - 1 + P; y++) trailCells.push([5, y, 1]);   // yard walk = cobble
-            trailCells.push([5, N + P, 1], [4, N + P + 1, 0], [4, N + P + 2, 0], [3, N + P + 3, 0]); // apron, then dirt fade
+            for (let y = N; y <= N - 1 + P; y++) trailCells.push([8, y, 1]);   // yard walk = cobble
+            trailCells.push([8, N + P, 1], [7, N + P + 1, 0], [7, N + P + 2, 0], [6, N + P + 3, 0]); // apron, then dirt fade
             for (const [tx, ty, stone] of trailCells) {
                 const im = stone ? ((tx + ty) % 2 === 0 ? cob0 : cob1) : trailImg;
                 if (im) TCTX.drawImage(im, isoX(tx + 0.5, ty + 0.5) - TW / 2, isoY(tx + 0.5, ty + 0.5) - TH / 2);
@@ -365,8 +379,8 @@ async function renderFrame(state, frame, opts = {}) {
     }
     // ── pixel fence ring — pushed OUTWARD by P tiles (owner: "the fence
     // should be further away because the space is bigger"), gate gap where
-    // the south walk leaves the compound (5, N-1+P)
-    for (const seg of isoForest.fenceRing(N, isoX, isoY, [[5, N - 1 + P]], P)) {
+    // the main street leaves the compound (8, N-1+P) — LAYOUT v3
+    for (const seg of isoForest.fenceRing(N, isoX, isoY, [[8, N - 1 + P]], P)) {
         const fim = await img(seg.file);
         if (fim) props.push({ img: fim, x: seg.x, y: seg.y, sc: 1 });
     }

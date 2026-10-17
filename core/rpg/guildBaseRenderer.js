@@ -529,8 +529,8 @@ async function renderFrame(state, frame, opts = {}) {
             paths: PATHS || [],
             hot,
             plotCells,
-            midRate: 0.12,  // v6 thinned, v9.2 harder (owner: 'too many trees inside')
-            hotRate: 0.14,  // v6 thinned, v9.2 harder (owner: 'too many trees inside')
+            midRate: 0.03,  // owner 2026-10-17 21:18Z: "remove most of the trees from the guild area too" — interior is garnish now
+            hotRate: 0.04,  // v6 0.16/0.22 → v9.2 0.12/0.14 → v10 0.03/0.04 (the compound reads open; the woodland lives in the outlands)
             margin: false, // outside the fence is the outlands module's domain
             haze: false,
             structFoots: Object.values(GUILD_STRUCTS).map((st) => [st.x, st.y, st.fw, st.fh]),
