@@ -1,18 +1,17 @@
 'use strict';
 // ═══════════════════════════════════════════════════════════════════════════
 //  GUILD BASE RENDERER — outdoor isometric guild grounds
-//  GUILD v6 CITADEL PLAN (owner 2026-10-17 "change around the layout
-//  formula ... the castle should be at the edge of the right side
-//  topwards, and there should be a path leading out to different areas
-//  that can potentially host houses; make the procedural generation
-//  around that ... too many trees"): the castle crowns the TOP-RIGHT
-//  edge of the 28x28 grounds on a stone apron; a HUB ROUNDABOUT west of
-//  centre feeds SPOKE ROADS fanning out to five marked house plots in
-//  every direction (NW / W / SW / S hamlet / E) plus the training yard
-//  and the citadel avenue; trees are thinned to pockets + a planted
-//  allée along the avenue. Same visual law as homesteadBaseRenderer.js:
-//  grass tiles, isoShadow grounding, back-to-front depth sort, ambient
-//  animation.
+//  GUILD v7 KINGDOM PLAN (owner 2026-10-17 23:13Z msg 1561155345102151774
+//  "Remake the guild area to structure more like a kingdom ... the castle
+//  is touching the edge? ... move it to the center area of the fence, now
+//  rearrange the path again ... with the guild banner floating on top of
+//  the castle"): the castle is the HEART of the grounds — centred on the
+//  28x28 diamond inside a stone COURT; the 2-wide grand avenue runs from
+//  the west gate straight to the keep; district lanes fan from the court
+//  edges to the five house plots, the training yard and the cottage
+//  hamlet; the guild banner FLOATS above the castle's roofline (hover bob
+//  + cloth wave). Same visual law as homesteadBaseRenderer.js: grass
+//  tiles, isoShadow grounding, back-to-front depth sort, ambient anim.
 //  Structures mirror GUILD_UPGRADES (guilds.js): hall L0-5 (4x4),
 //  training L0-5 (3x3), treasury L0-5 (2x2). L0 = building plot (scaffold).
 //  Archetype theming (ADVENTURER/MERCHANT/RESEARCH) + member cottages.
@@ -42,14 +41,14 @@ const HS_ASSETS = path.join(__dirname, '..', 'rpgasset', 'homestead');
 const FONTS = path.join(__dirname, '..', 'rpgasset', 'fonts');
 
 // ── structure defs (mirror of GUILD_UPGRADES visual states) ──
-// GUILD v6 CITADEL PLAN: CASTLE crowns the top-right edge (owner: "the
-// castle should be at the edge of the right side topwards") on a stone
-// apron; training holds the south-east yard; treasury tucks against the
-// citadel's south-west approach so the keep complex reads as one unit.
+// GUILD v7 KINGDOM PLAN: the CASTLE is the heart of the grounds — centred
+// on the 28x28 diamond (footprint 12..15 x 12..15) inside the stone court;
+// treasury tucks into the court's south-west inner corner so the keep
+// complex reads as one unit; training holds the south-east yard.
 const GUILD_STRUCTS = {
     hall: {
         id: 'hall', name: 'Guild Hall', fw: 4, fh: 4,
-        x: 20, y: 1,
+        x: 12, y: 12,
         levels: [
             { level: 1, sprite: 'gb_castle_l1', name: 'Outpost Keep' },
             { level: 2, sprite: 'gb_castle_l2', name: 'Bailey Fort' },
@@ -71,7 +70,7 @@ const GUILD_STRUCTS = {
     },
     treasury: {
         id: 'treasury', name: 'Treasury', fw: 2, fh: 2,
-        x: 14, y: 7,
+        x: 9, y: 16,
         levels: [
             { level: 1, sprite: 'gb_treasury_l1', name: 'Coin Chest' },
             { level: 2, sprite: 'gb_treasury_l2', name: 'Vault Hut' },
@@ -83,10 +82,9 @@ const GUILD_STRUCTS = {
 };
 
 // GUILD HOUSE PLOTS (owner 2026-10-16 21:23Z: "the guild should also have
-// locations to build all the various houses"; v6 owner: "a path leading
-// out to different areas that can potentially host houses") — five 3x3
-// marked expansion sites, each serviced by its own spoke road from the
-// central roundabout.
+// locations to build all the various houses"; v7 owner: "structured like
+// a kingdom") — five 3x3 marked expansion sites, each serviced by its own
+// lane off the castle court or the grand avenue.
 const GUILD_PLOTS = [
     { id: 1, x: 3, y: 3 },   // NW — end of the north-west spur
     { id: 2, x: 2, y: 10 },  // W — just north of the gate road
@@ -122,14 +120,13 @@ const COTTAGE_SLOTS = [[12, 24], [16, 24], [10, 26], [14, 26], [18, 25]];
 // into the castle's shadow (0.7 keeps the art crisp at the SS2 canvas).
 const COTTAGE_SCALE = 0.7;
 
-// GUILD PATHS v6 — citadel plan: a 2-wide gate road enters from the west
-// fence and hits the HUB ROUNDABOUT; spoke roads fan out from there — the
-// citadel AVENUE (2-wide, planted allée) climbs to the castle apron at the
-// top-right edge, and 1-wide spurs reach every house plot, the training
-// yard and the cottage hamlet (owner: "a path leading out to different
-// areas that can potentially host houses").
-const HUB = { x0: 12, y0: 12, x1: 14, y1: 15 };   // roundabout rect
-const APRON = { x0: 18, y0: 0, x1: 25, y1: 6 };   // citadel stone apron
+// GUILD PATHS v7 — kingdom plan: the 2-wide GRAND AVENUE enters from the
+// west gate and runs dead straight to the castle court's west face; the
+// COURT stone rings the centred keep; district lanes fan from the court
+// edges — NW to plot 1, W off the avenue to plot 2, SW to plot 3, S to
+// plot 4, E to plot 5, SE to the training yard — and the hamlet lane
+// drops south to the cottage rows (owner: "structured like a kingdom").
+const COURT = { x0: 9, y0: 9, x1: 18, y1: 18 };  // the keep's stone court
 // ROAD LAW: iso tiles only share EDGES with 4-connected neighbours — a
 // diagonal step touches at a single point and the trail reads beaded. All
 // diagonal runs are expanded into orthogonal staircases (braids nicely
@@ -147,40 +144,32 @@ function stair(a, b) {
     return out;
 }
 const PATHS = [
-    // west gate road, 2 wide (gate sits on the west fence edge at y=14,15)
-    ...stair([0, 14], [11, 14]),
-    ...stair([0, 15], [11, 15]),
-    // citadel avenue — 2 wide braided staircase, hub NE to the apron south
-    ...stair([14, 12], [18, 8]), [18, 7],
-    ...stair([15, 12], [19, 8]), [19, 7],
-    // NW spur — plot 1
-    ...stair([11, 11], [6, 6]), [6, 5],
-    // W spur — plot 2 (off the gate road)
+    // grand avenue — west gate (y=14,15) straight to the court's west face
+    ...stair([0, 14], [8, 14]),
+    ...stair([0, 15], [8, 15]),
+    // NW lane — court's north corner to plot 1
+    ...stair([10, 10], [6, 6]), [6, 5],
+    // W spur — plot 2 (off the avenue)
     [4, 13],
-    // SW spur — plot 3
-    ...stair([11, 16], [6, 21]),
-    // S spur — plot 4, then the hamlet lane east of it down to the cottages
-    ...stair([13, 16], [13, 19]),
+    // SW lane — court's west corner to plot 3
+    ...stair([10, 18], [6, 21]),
+    // S lane — court's south face to plot 4
+    [13, 18], [13, 19],
+    // hamlet lane — past plot 4 down to the cottage rows
     ...stair([14, 18], [16, 23]),
-    // E spur — plot 5 (branches off the avenue)
-    ...stair([16, 11], [22, 11]), [22, 12],
-    // treasury stub — off the avenue to the keep's south-west flank
-    [16, 9], [15, 9],
-    // training spur — hub SE corner to the training yard
-    ...stair([14, 16], [22, 16]), [22, 17],
+    // E lane — court to plot 5
+    ...stair([18, 11], [22, 11]), [22, 12],
+    // SE lane — court to the training yard's west face
+    [17, 18], ...stair([18, 18], [22, 18]),
 ].filter((c, i, arr) => arr.findIndex((d) => d[0] === c[0] && d[1] === c[1]) === i);
-// planted allée flanking the citadel avenue (deliberate, spaced — the only
+// planted allée flanking the grand avenue (deliberate, spaced — the only
 // trees allowed near the roads; everything else stays in pockets)
-const ALLEE = [[13, 10], [14, 9], [15, 8], [17, 12], [17, 13], [19, 10], [20, 12]];
-// courtyard cells — hub roundabout + citadel apron draw STONE (civic look,
+const ALLEE = [[6, 13], [8, 13], [9, 13], [3, 16], [5, 16]];
+// courtyard cells — the castle court draws STONE (civic look,
 // distinct from the base's dirt trails)
-const PLAZA = new Set([
-    ...[[12, 12], [13, 12], [14, 12],
-        [12, 13], [13, 13], [14, 13],
-        [12, 14], [13, 14], [14, 14],
-        [12, 15], [13, 15], [14, 15]],
-    ...(() => { const a = []; for (let x = APRON.x0; x <= APRON.x1; x++) for (let y = APRON.y0; y <= APRON.y1; y++) a.push([x, y]); return a; })(),
-].map(([x, y]) => `${x},${y}`));
+const PLAZA = new Set(
+    (() => { const a = []; for (let x = COURT.x0; x <= COURT.x1; x++) for (let y = COURT.y0; y <= COURT.y1; y++) a.push([x, y]); return a; })()
+        .map(([x, y]) => `${x},${y}`));
 
 let fontsReady = false;
 function ensureFonts() {
@@ -505,8 +494,8 @@ async function renderFrame(state, frame, opts = {}) {
         // 3-wide, 4-deep clearing so member cottages never hide behind trees
         for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 2; dy++) occupied.add(`${px + dx},${py + dy}`);
     }
-    // archetype-prop lawn beside the citadel's south approach stays clear
-    for (let ax = 23; ax <= 25; ax++) for (let ay = 9; ay <= 10; ay++) occupied.add(`${ax},${ay}`);
+    // archetype-prop lawn west of the court, off the avenue's south shoulder
+    for (let ax = 6; ax <= 8; ax++) for (let ay = 16; ay <= 18; ay++) occupied.add(`${ax},${ay}`);
     // house-plot cells + 1 ring stay clear (the plots are the build sites)
     const plotCells = new Set();
     for (const plot of GUILD_PLOTS) {
@@ -658,37 +647,78 @@ async function renderFrame(state, frame, opts = {}) {
         }
     }
 
-    // ── archetype props on the open SE meadow (beside the castle's flank) ──
-    const apX = isoX(24.5, 9.5), apY = isoY(24.5, 9.5) + 8; // lawn south of the citadel apron
+    // ── archetype props on the west lawn (framing the grand avenue) ──
+    const apX = isoX(7, 17), apY = isoY(7, 17) + 8; // lawn off the avenue's south shoulder
     drawArchProps(ctx, arch, apX, apY + 8, t);
 
-    // ── guild banner on the west gate road (cloth waves; emblem color) ──
-    const poleX = isoX(4.5, 15.5) + 18, poleBase = isoY(4.5, 15.5) + 8;
-    ctx.fillStyle = '#4a2d17';
-    ctx.fillRect(poleX - 1.5, poleBase - 84, 3, 84);
-    const wave = Math.sin(t * Math.PI * 2) * 3;
-    ctx.fillStyle = flagCol;
-    ctx.beginPath();
-    ctx.moveTo(poleX + 1.5, poleBase - 83);
-    ctx.quadraticCurveTo(poleX + 22, poleBase - 80 + wave, poleX + 40, poleBase - 77 + wave * 0.4);
-    ctx.lineTo(poleX + 38, poleBase - 63 + wave * 0.4);
-    ctx.quadraticCurveTo(poleX + 20, poleBase - 66 + wave, poleX + 1.5, poleBase - 69);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = 'rgba(0,0,0,0.22)';
-    ctx.beginPath();
-    ctx.moveTo(poleX + 1.5, poleBase - 76);
-    ctx.quadraticCurveTo(poleX + 22, poleBase - 73 + wave, poleX + 40, poleBase - 70 + wave * 0.4);
-    ctx.lineTo(poleX + 38, poleBase - 63 + wave * 0.4);
-    ctx.quadraticCurveTo(poleX + 20, poleBase - 66 + wave, poleX + 1.5, poleBase - 69);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = '#e8b84a';
-    ctx.beginPath(); ctx.arc(poleX, poleBase - 86, 3.4, 0, Math.PI * 2); ctx.fill();
-    if (state.emblemIcon) {
-        ctx.font = '14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(String(state.emblemIcon).slice(0, 2), poleX + 20, poleBase - 68 + wave * 0.3);
+    // ── GUILD BANNER — floats above the keep (owner msg 1561155345102151774:
+    // "structured like a kingdom with the guild banner floating on top of
+    // the castle"): heraldic swallowtail cloth hovering over the castle's
+    // roofline — slow hover bob + cloth wave, emblem colour, gold finial
+    // orb with a soft glow pulse. Replaces the old gate-road pole banner. ──
+    {
+        const hallD = drawables.find((d) => d.kind === 'struct' && d.st.id === 'hall');
+        const ha = anchorOf(GUILD_STRUCTS.hall.x, GUILD_STRUCTS.hall.y, GUILD_STRUCTS.hall.fw, GUILD_STRUCTS.hall.fh);
+        const bx = ha.cx;
+        const topY = hallD ? (hallD.ay - hallD.h) : (ha.ay - 110);
+        const bob = Math.sin(t * Math.PI * 2) * 3.2;
+        const wave = Math.sin(t * Math.PI * 2 + 0.9) * 3.4;
+        const wave2 = Math.sin(t * Math.PI * 2 + 2.1) * 2.2;
+        const bw = 52, bh = 72;
+        const x0 = bx - bw / 2, y0 = topY - bh - 20 + bob;
+        const pulse = 0.5 + 0.5 * Math.sin(t * Math.PI * 2);
+        // gold glow halo
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.15 + 0.10 * pulse;
+        const gg = ctx.createRadialGradient(bx, y0 + bh / 2, 4, bx, y0 + bh / 2, 78);
+        gg.addColorStop(0, 'rgba(255,214,120,0.9)');
+        gg.addColorStop(1, 'rgba(255,214,120,0)');
+        ctx.fillStyle = gg;
+        ctx.beginPath(); ctx.arc(bx, y0 + bh / 2, 78, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        // swallowtail cloth
+        ctx.fillStyle = flagCol;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.quadraticCurveTo(bx, y0 - 6 + wave2, x0 + bw, y0 + wave2);
+        ctx.lineTo(x0 + bw, y0 + bh - 14 + wave);
+        ctx.lineTo(x0 + bw / 2, y0 + bh + wave2 * 0.5);
+        ctx.lineTo(x0, y0 + bh - 14 + wave);
+        ctx.closePath();
+        ctx.fill();
+        // top shading band
+        ctx.fillStyle = 'rgba(0,0,0,0.20)';
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.quadraticCurveTo(bx, y0 - 6 + wave2, x0 + bw, y0 + wave2);
+        ctx.lineTo(x0 + bw, y0 + 16 + wave2);
+        ctx.quadraticCurveTo(bx, y0 + 10 + wave2 * 0.6, x0, y0 + 14);
+        ctx.closePath();
+        ctx.fill();
+        // cloth border
+        ctx.strokeStyle = 'rgba(35,20,10,0.45)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.quadraticCurveTo(bx, y0 - 6 + wave2, x0 + bw, y0 + wave2);
+        ctx.lineTo(x0 + bw, y0 + bh - 14 + wave);
+        ctx.lineTo(x0 + bw / 2, y0 + bh + wave2 * 0.5);
+        ctx.lineTo(x0, y0 + bh - 14 + wave);
+        ctx.closePath();
+        ctx.stroke();
+        // emblem
+        if (state.emblemIcon) {
+            ctx.font = '26px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#f2e2b8';
+            ctx.fillText(String(state.emblemIcon).slice(0, 2), bx, y0 + bh / 2 + 4 + wave * 0.3);
+        }
+        // gold finial orb floating over the cloth
+        ctx.fillStyle = '#e8b84a';
+        ctx.beginPath(); ctx.arc(bx, y0 - 10 + bob * 0.6, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,240,180,0.9)';
+        ctx.beginPath(); ctx.arc(bx - 1.2, y0 - 11.2 + bob * 0.6, 1.4, 0, Math.PI * 2); ctx.fill();
     }
 
     // ── ambient animation ──
