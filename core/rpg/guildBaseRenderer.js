@@ -376,6 +376,21 @@ async function renderFrame(state, frame, opts = {}) {
             if (!pathSet.has(k) && !PLAZA.has(k)) shoulder.add(k);
         }
     }
+    // ── PER-BAKE TERRAIN LAYER (shutdown fix, part 2): the tiles+trail+rim
+    // plane is frame-independent except the 2-state water shimmer, so an
+    // animated bake paints it ONCE per state instead of 14x (the
+    // 2560x1500 guild bake measured 70s of tile redraws). Bakes pass an
+    // opts.terrainLayers store; single-frame callers get a transient layer
+    // that is GC'd after the blit — behaviour identical either way.
+    const layerStore = opts.terrainLayers || null;
+    let ground = layerStore ? layerStore[waterF] : null;
+    if (!ground) {
+        ground = require('canvas').createCanvas(ART_W * SS, ART_H * SS);
+        const g = ground.getContext('2d');
+        g.scale(SS, SS);
+        g.imageSmoothingEnabled = false;
+        if (layerStore) layerStore[waterF] = ground;
+        const TCTX = g;   // terrain target for this block
     for (let x = -M; x < N + M; x++) {
         for (let y = -M; y < N + M; y++) {
             const px = isoX(x, y), py = isoY(x, y);
@@ -403,7 +418,7 @@ async function renderFrame(state, frame, opts = {}) {
                 else tile = grass[Math.floor(r * 3) % 3];
             }
             const timg = await hsImg(tile);
-            if (timg) ctx.drawImage(timg, px - TW / 2, py - TH / 2);
+            if (timg) TCTX.drawImage(timg, px - TW / 2, py - TH / 2);
         }
     }
     // west gate trail: the road leaves through the west palisade — cobble
@@ -419,18 +434,20 @@ async function renderFrame(state, frame, opts = {}) {
             for (const [tx, ty] of trailCells) {
                 const stone = tx >= -P - 1;
                 const im = stone ? ((tx + ty) % 2 === 0 ? cob0 : cob1) : trailImg;
-                if (im) ctx.drawImage(im, isoX(tx + 0.5, ty + 0.5) - TW / 2, isoY(tx + 0.5, ty + 0.5) - TH / 2);
+                if (im) TCTX.drawImage(im, isoX(tx + 0.5, ty + 0.5) - TW / 2, isoY(tx + 0.5, ty + 0.5) - TH / 2);
             }
         }
     }
     // playable-area rim — SOFT moss shadow (matches the base's law)
-    ctx.strokeStyle = 'rgba(24,32,14,0.22)';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(isoX(0, N), isoY(0, N));
-    ctx.lineTo(isoX(N, N), isoY(N, N));
-    ctx.lineTo(isoX(N, 0), isoY(N, 0));
-    ctx.stroke();
+    TCTX.strokeStyle = 'rgba(24,32,14,0.22)';
+    TCTX.lineWidth = 3;
+    TCTX.beginPath();
+    TCTX.moveTo(isoX(0, N), isoY(0, N));
+    TCTX.lineTo(isoX(N, N), isoY(N, N));
+    TCTX.lineTo(isoX(N, 0), isoY(N, 0));
+    TCTX.stroke();
+    }
+    ctx.drawImage(ground, 0, 0, ART_W, ART_H);
 
     // ── wild haze floor wash — clipped to the FENCE diamond: the yard stays
     // bright and tamed; only the procedural wilds beyond the palisade recede
@@ -874,11 +891,13 @@ async function renderGuildBaseImage(state, opts = {}) {
     const out = await mediaCache.cached('guildbase', key, async () => {
         const frames = [];
         const frameCount = opts.static === false ? FRAMES : 1;
+        // animated bakes: raw frames + one shared terrain-layer store
+        const layers = frameCount > 1 ? {} : null;
         for (let f = 0; f < frameCount; f++) {
-            frames.push(await renderFrame(state, f, frameCount > 1 && f > 0 ? { ...opts, encoder: 'raw' } : opts));
+            frames.push(await renderFrame(state, f, layers ? { ...opts, encoder: 'raw', terrainLayers: layers } : opts));
             await breath();
         }
-        let out = { buffer: frames[0], contentType: 'image/png' };
+        let out = layers ? null : { buffer: frames[0], contentType: 'image/png' };
         if (frameCount > 1) {
             try {
                 const mp4 = await encodeFramesToMp4(frames);
@@ -886,6 +905,7 @@ async function renderGuildBaseImage(state, opts = {}) {
             } catch (e) {
                 console.error('[guildBaseRenderer] mp4 encode failed, PNG fallback:', e.message);
             }
+            if (!out) out = { buffer: await renderFrame(state, 0, opts), contentType: 'image/png' };  // PNG re-render for fallback
         }
         return out;
     });

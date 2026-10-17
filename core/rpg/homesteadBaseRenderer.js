@@ -192,6 +192,19 @@ async function renderFrame(state, frame, opts = {}) {
             if (!pathSet.has(k)) shoulder.add(k);
         }
     }
+    // ── PER-BAKE TERRAIN LAYER (shutdown fix, part 2): the tiles+trail+rim
+    // plane is frame-independent except the 2-state water shimmer — bakes
+    // pass an opts.terrainLayers store so it paints ONCE per state instead
+    // of 14x; single-frame callers get a transient layer (same output).
+    const layerStore = opts.terrainLayers || null;
+    let ground = layerStore ? layerStore[waterF] : null;
+    if (!ground) {
+        ground = require('canvas').createCanvas(ART_W * SS, ART_H * SS);
+        const g = ground.getContext('2d');
+        g.scale(SS, SS);
+        g.imageSmoothingEnabled = false;
+        if (layerStore) layerStore[waterF] = ground;
+        const TCTX = g;   // terrain target for this block
     for (let x = -M; x < N + M; x++) {
         for (let y = -M; y < N + M; y++) {
             const px = isoX(x, y), py = isoY(x, y);
@@ -218,7 +231,7 @@ async function renderFrame(state, frame, opts = {}) {
                 else tile = grass[Math.floor(r * 3) % 3];
             }
             const timg = await img(tile);
-            if (timg) ctx.drawImage(timg, px - TW / 2, py - TH / 2);
+            if (timg) TCTX.drawImage(timg, px - TW / 2, py - TH / 2);
         }
     }
     // gate trail: the walk runs out the south gate — cobble across the yard
@@ -234,18 +247,20 @@ async function renderFrame(state, frame, opts = {}) {
             trailCells.push([5, N + P, 1], [4, N + P + 1, 0], [4, N + P + 2, 0], [3, N + P + 3, 0]); // apron, then dirt fade
             for (const [tx, ty, stone] of trailCells) {
                 const im = stone ? ((tx + ty) % 2 === 0 ? cob0 : cob1) : trailImg;
-                if (im) ctx.drawImage(im, isoX(tx + 0.5, ty + 0.5) - TW / 2, isoY(tx + 0.5, ty + 0.5) - TH / 2);
+                if (im) TCTX.drawImage(im, isoX(tx + 0.5, ty + 0.5) - TW / 2, isoY(tx + 0.5, ty + 0.5) - TH / 2);
             }
         }
     }
     // playable-area rim — now a SOFT moss shadow instead of a hard island edge
-    ctx.strokeStyle = 'rgba(24,32,14,0.22)';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(isoX(0, N), isoY(0, N));
-    ctx.lineTo(isoX(N, N), isoY(N, N));
-    ctx.lineTo(isoX(N, 0), isoY(N, 0));
-    ctx.stroke();
+    TCTX.strokeStyle = 'rgba(24,32,14,0.22)';
+    TCTX.lineWidth = 3;
+    TCTX.beginPath();
+    TCTX.moveTo(isoX(0, N), isoY(0, N));
+    TCTX.lineTo(isoX(N, N), isoY(N, N));
+    TCTX.lineTo(isoX(N, 0), isoY(N, 0));
+    TCTX.stroke();
+    }
+    ctx.drawImage(ground, 0, 0, ART_W, ART_H);
 
     // ── wild haze floor wash (owner pre-restart promise: "everything behind
     // [the fence] = dense hazed forest") — now clipped to the FENCE diamond:
@@ -669,20 +684,22 @@ async function renderBaseImage(state, opts = {}) {
     const out = await mediaCache.cached('base', key, async () => {
         const frames = [];
         const frameCount = opts.static ? 1 : FRAMES;
-        // frame 0 stays PNG (mp4-failure fallback + static cards); the rest
-        // render RAW so the bake never sync-encodes 13 giant PNGs
+        // animated bakes: ALL frames raw (13 sync PNG encodes removed) + a
+        // shared terrain-layer store; PNG only re-renders if mp4 fails
+        const layers = opts.static ? null : {};
         for (let f = 0; f < frameCount; f++) {
-            frames.push(await renderFrame(state, f, f === 0 || opts.static ? opts : { ...opts, encoder: 'raw' }));
+            frames.push(await renderFrame(state, f, layers ? { ...opts, encoder: 'raw', terrainLayers: layers } : opts));
             await breath();
         }
-        let out = { buffer: frames[0], contentType: 'image/png' };
-        if (!opts.static) {
+        let out = layers ? null : { buffer: frames[0], contentType: 'image/png' };
+        if (layers) {
             try {
                 const mp4 = await encodeFramesToMp4(frames);
                 if (mp4 && mp4.length > 1000) out = { buffer: mp4, contentType: 'video/mp4' };
             } catch (e) {
                 console.error('[baseRenderer] mp4 encode failed, PNG fallback:', e.message);
             }
+            if (!out) out = { buffer: await renderFrame(state, 0, opts), contentType: 'image/png' };  // PNG re-render for fallback
         }
         return out;
     });

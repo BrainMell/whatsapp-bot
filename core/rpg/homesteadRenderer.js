@@ -893,7 +893,7 @@ async function renderRoomImage(state, opts = {}) {
             frames.push(await renderFrame(state, f, f === 0 || opts.static ? opts : { ...opts, encoder: 'raw' }));
             await breath();
         }
-        let out = { buffer: frames[0], contentType: 'image/png' };
+        let out = null;
         if (!opts.static) {
             try {
                 const mp4 = await encodeFramesToMp4(frames);
@@ -901,7 +901,9 @@ async function renderRoomImage(state, opts = {}) {
             } catch (e) {
                 console.error('[homesteadRenderer] mp4 encode failed, PNG fallback:', e.message);
             }
+            // frames[0] is a raw object here — a PNG re-render is the fallback
         }
+        if (!out) out = { buffer: opts.static ? frames[0] : await renderFrame(state, 0, opts), contentType: 'image/png' };
         return out;
     });
     if (_renderCache.size > 120) _renderCache.clear();
