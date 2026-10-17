@@ -613,27 +613,29 @@ async function encodeFramesToMp4(frames) {
     const out = path.join(tmp, 'base.mp4');
     try {
         // RAW PATH — frames rendered via opts.encoder='raw' ({ raw, w, h }):
-        // concat the BGRA memcpys and let ffmpeg demux rawvideo. This skips
-        // 13 PNG encodes (~15-35s of sync event-loop blocking per bake).
+        // concat the BGRA memcpys and let ffmpeg demux rawvideo. Direct
+        // spawn (NOT fluent-ffmpeg): fluent silently hung on the rawvideo
+        // input (slept at ~590KB probed, zero IO) while the PNG path works
+        // — the raw demux needs its input options in a specific order.
         if (frames.length && frames[0] && frames[0].raw) {
             const { w, h } = frames[0];
             const rawFile = path.join(tmp, 'frames.raw');
             const fd = fs.openSync(rawFile, 'w');
             try { for (const f of frames) fs.writeSync(fd, f.raw); }
             finally { fs.closeSync(fd); }
+            const fbin = process.env.FFMPEG_PATH || 'ffmpeg';
             await new Promise((resolve, reject) => {
-                ffmpeg()
-                    .input(rawFile)
-                    .inputOptions(['-f', 'rawvideo', '-pix_fmt', 'bgra', '-video_size', `${w}x${h}`, '-framerate', `${1000 / FRAME_MS}`])
-                    .outputOptions([
-                        '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0',
-                        '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '23',
-                        '-movflags', '+faststart', '-an', '-y',
-                    ])
-                    .output(out)
-                    .on('end', resolve)
-                    .on('error', reject)
-                    .run();
+                const p = require('child_process').spawn(fbin, [
+                    '-f', 'rawvideo', '-pix_fmt', 'bgra', '-video_size', `${w}x${h}`,
+                    '-framerate', `${1000 / FRAME_MS}`, '-i', rawFile,
+                    '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0',
+                    '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '23',
+                    '-movflags', '+faststart', '-an', '-y', out,
+                ], { stdio: ['ignore', 'ignore', 'pipe'] });
+                let err = '';
+                p.stderr.on('data', (d) => { err += d; if (err.length > 6000) err = err.slice(-3000); });
+                p.on('error', reject);
+                p.on('exit', (code) => code === 0 ? resolve() : reject(new Error(`ffmpeg exit ${code}: ${err.slice(-500)}`)));
             });
             return fs.readFileSync(out);
         }
