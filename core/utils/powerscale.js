@@ -222,17 +222,30 @@ function formatListMessage(query, characters, category) {
 // ---------- data resolution (MW first, Go fallback) ----------
 
 async function searchWithFallback(query) {
+    // 💡 DISTINCTION (2026-10-18): "both sources THREW" (network down / infra
+    // broken) is NOT "zero matches" — the old code merged them, so a dead
+    // network told users "check the spelling". Both-throws now throws a tagged
+    // error → runPowerscaleCommand catch → "lookup failed, try again" (and the
+    // searching session is cleaned up there).
+    const errors = [];
     try {
         const chars = await vsb.searchCharacters(query, 10);
         if (chars && chars.length) return chars;
     } catch (e) {
+        errors.push(`MW: ${e.message}`);
         console.log(`[Powerscale] MW search failed (${e.message}), trying Go service`);
     }
     try {
         const data = await goService.searchPowerscale(query);
         if (data && data.characters && data.characters.length) return data.characters;
     } catch (e) {
+        errors.push(`Go: ${e.message}`);
         console.log(`[Powerscale] Go search failed too: ${e.message}`);
+    }
+    if (errors.length >= 2) {
+        const err = new Error(`both search sources failed: ${errors.join("; ")}`);
+        err.searchDown = true;
+        throw err;
     }
     return [];
 }
