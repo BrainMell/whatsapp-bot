@@ -1,9 +1,19 @@
 #!/usr/bin/env python3
 """Build the Polyy/Foozle sprite set into the repo (base structures, outland
-clutter, guild castles + cottages). Frame 8 = our camera (door on left face).
+clutter, guild castles + cottages).
+FACING LAW v2 (owner 2026-10-17 'still facing the wrong direction' after the
+f0 attempt): the sheets are turntables; our world is 2:1 iso, camera at the
+S corner, sun NW (isoShadow marches down-right), so a correct building shows
+TWO walls with its door gable on the SW (image-left, LIT) face - like the
+RTS castle and the old Quaternius kit. Village sheets: f0 = flat frontal
+elevation (billboard, reads 45 deg off-grid), f28 = corner view with the
+front on the SE face; the pack bakes its light from image-RIGHT, so we use
+f28 MIRRORED = front on the lit SW face, pack light flipped onto the SW.
+RTS castle sheets: f0 already = corner view, gate on SW lit face (no mirror).
+Mossy 24-rot sheets: frontal - 45deg = f21, mirrored, same recipe.
 Scales: base diamond width = (fw+fh) * 32px (TW/2), +spill for monuments."""
 import os
-from PIL import Image
+from PIL import Image, ImageOps
 
 PACKS = '/home/z/my-project/download/assets/packs'
 HS = '/home/z/my-project/repos/whatsapp-bot/core/rpgasset/homestead'
@@ -27,8 +37,13 @@ def frames(path):
         out.append(f.crop(bbox) if bbox else f)
     return out
 
-def frame24(path, idx=8):
-    """mossy forest: 24 rotations, grid 8x3 (probe)."""
+def village_hero(path):
+    """f28 mirrored: corner view, door gable on the LIT SW face (see header)."""
+    return ImageOps.mirror(frames(path)[28])
+
+def frame24(path, idx=21):
+    """mossy forest: 24 rotations, grid 8x3 (probe). idx 21 = frontal - 45deg;
+    caller mirrors for the lit-SW law."""
     im = Image.open(path).convert('RGBA')
     W, H = im.size
     r = W / H
@@ -46,10 +61,7 @@ def save(im, out, width=None, height=None):
     im.save(out)
     print(f'{out}  {im.size}')
 
-# ── base structures (frame 0 — owner 2026-10-17 facing fix: the sheet is a
-# 32-step turntable, f0 = hero angle, front + LIT face toward our camera's
-# SW face = matches the up-left environment light; f8 showed backs/sides
-# with the light coming from the wrong side) ────────────────────────────────
+# ── base structures (facing law v2 — village_hero = f28 mirrored; see header)
 # [target, source, out, width]
 JOBS = [
     # house progression: round hut -> thatched cottage -> longhouse (3x3, 200px)
@@ -82,7 +94,7 @@ JOBS = [
 
 for kind, src, out, w in JOBS:
     if kind == 'V':
-        save(frames(f'{VILLAGE}/{src}')[0], out, width=w)
+        save(village_hero(f'{VILLAGE}/{src}'), out, width=w)
 
 # ── mines (Foozle, 3 progression states, WITH ground so tiers read) ────────
 save(Image.open(f'{MINE1}/gold_mine_with_ground_inactive.png').convert('RGBA'), f'{HS}/base_mines_l1.png', width=175)
@@ -115,11 +127,11 @@ OUTLANDS = [
     ('fossilized_wood_128',      'poly_fossil_wood.png', 120),
 ]
 for src, out, w in OUTLANDS:
-    save(frame24(f'{FOREST}/{src}_1x_24rot.png', 8), f'{HS}/{out}', width=w)
+    save(ImageOps.mirror(frame24(f'{FOREST}/{src}_1x_24rot.png', 21)), f'{HS}/{out}', width=w)
 
 # also copy pond l3 as poly_rocky_spring is used in outlands; pond keeps well
 # (pond l2 = fisherman hut, l3 = well -> hmm well for Crystal Spring? use spring)
-save(frame24(f'{FOREST}/rocky_spring_128_1x_24rot.png', 8), f'{HS}/base_pond_l3.png', width=160)
+save(ImageOps.mirror(frame24(f'{FOREST}/rocky_spring_128_1x_24rot.png', 21)), f'{HS}/base_pond_l3.png', width=160)
 
 # ── guild castles (hall L1-5) ──────────────────────────────────────────────
 CASTLE_JOBS = [
@@ -130,6 +142,6 @@ CASTLE_JOBS = [
     ('8_forest_duchy_nopalette.png',         f'{GB}/gb_castle_l5.png', 310),
 ]
 for src, out, w in CASTLE_JOBS:
-    save(frames(f'{CASTLES}/{src}')[8], out, width=w)
+    save(frames(f'{CASTLES}/{src}')[0], out, width=w)
 
 print('DONE')

@@ -1,22 +1,26 @@
 #!/usr/bin/env python3
 """Guild training/treasury re-pick: military/civic reads, zero houses.
 training: stable -> gear shed -> gatehouse -> watchtower -> village hall
-treasury l3: well -> granary staddle (elevated storehouse)."""
-from PIL import Image, ImageDraw, ImageFont
+treasury l3: well -> granary staddle (elevated storehouse).
+FACING LAW v2 (see build_poly_sprites.py header): village turntable f28
+MIRRORED = corner view, door gable on the lit SW face. f0 frontal and f8
+side both read as facing off-grid."""
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 V = '/home/z/my-project/download/assets/packs/village/sprite/128sun'
 GB = '/home/z/my-project/repos/whatsapp-bot/core/rpgasset/guildbase'
 
-def frame0(path):
-    """village pack = 32-step turntable (8x4 sheet, row-major); f0 = hero angle
-    (front + lit face toward our camera SW = env light). f8 showed backs/sides."""
+def frame_hero(path):
+    """village pack = 32-step turntable (8x4 sheet, row-major);
+    f28 mirrored = corner view with the front on the LIT SW face."""
     im = Image.open(path).convert('RGBA')
     W, H = im.size
     cw, ch = W / 8, H / 4
-    r, c = divmod(0, 8)
+    r, c = divmod(28, 8)
     f = im.crop((int(c * cw), int(r * ch), int((c + 1) * cw), int((r + 1) * ch)))
     b = f.getbbox()
-    return f.crop(b) if b else f
+    f = f.crop(b) if b else f
+    return ImageOps.mirror(f)
 
 def cut_road_strip(im):
     """gatehouse frame ships with a road strip welded below — cut at the widest
@@ -47,14 +51,14 @@ JOBS = [
     ('1x1_watchtower_24bit.png',       f'{GB}/gb_training_l4.png', 150, False),
     ('1x1_village_hall_24bit.png',     f'{GB}/gb_training_l5.png', 185, False),
     ('1x1_granary_staddle_24bit.png',  f'{GB}/gb_treasury_l3.png', 140, False),
-    # treasury tiers l1/l2/l4/l5 rebuilt at f0 too (old frames faced away)
+    # treasury tiers l1/l2/l4/l5 rebuilt at the hero frame too (old frames faced away)
     ('1x1_dovecote_24bit.png',         f'{GB}/gb_treasury_l1.png', 105, False),
     ('1x1_watchtower_24bit.png',       f'{GB}/gb_treasury_l2.png', 125, False),
     ('1x1_farmhouse_barn_24bit.png',   f'{GB}/gb_treasury_l4.png', 165, False),
     ('1x1_windmill_24bit.png',         f'{GB}/gb_treasury_l5.png', 185, False),
 ]
 for src, out, w, de_road in JOBS:
-    im = frame0(f'{V}/{src}')
+    im = frame_hero(f'{V}/{src}')
     if de_road:
         im = cut_road_strip(im)
     sc = w / im.width
