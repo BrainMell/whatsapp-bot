@@ -90,3 +90,6 @@ core/rpgasset/guildbase/gb_cottage.png -text
 # LFS-pointer hazard as the homestead set above
 core/rpgasset/guildbase/*.png -filter -diff -merge -text
 core/rpgasset/guildbase/*.png -text
+
+# kingdom3d baked sprites: plain git blobs (deploy-safe, no LFS dependency)
+core/rpgasset/kingdom3d/*.png -filter -diff -merge -text
