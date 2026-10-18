@@ -43,6 +43,8 @@ try {
         stdio: ['ignore', 'pipe', 'ignore'],
     }).toString().trim()}`;
 } catch (e) { /* non-git runtime keeps 'v2' */ }
+    // env override: proof bakes/QA set CODE_VER to bust stale disk entries without touching production keys
+    if (process.env.CODE_VER) CODE_VER = process.env.CODE_VER;
 
 function pathsFor(kind, key) {
     return {

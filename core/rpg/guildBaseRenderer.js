@@ -93,11 +93,13 @@ const GUILD_PLOTS = [
     { id: 5, x: 23, y: 12 }, // E — the east arm beneath the citadel
 ];
 
-// per-structure draw scale — ALL guild art now pre-scaled to footprint
-// (POLYY ART LAW). Treasury 0.75: the L5 windmill towered over the member
-// cottages and read as the biggest thing on the grounds (owner: guild
-// buildings should sit in the castle's shadow, not compete with it).
-const GUILD_SCALE = { training: 1.0, treasury: 0.75 };
+// per-structure draw scale — COC41 ART LAW v2 (owner 2026-10-18: "the assets
+// don't even have textures ... let's stick to 3d ... make this perfect"): the
+// whole guild set was REBUILT in-house (scripts/coc41/*) — strict 2:1 iso,
+// textured stone/timber faces, CoC palette, castle progression baked in
+// (l1 1.15x → l5 1.5x zoom). Draw scales: 1.0 for castle/training, treasury
+// 0.75 so it sits in the castle's shadow, never competes with it.
+const GUILD_SCALE = { training: 1.0, treasury: 0.75, castle: 1.0 };
 const GUILD_AY_BIAS = {};
 
 // FENCE PAD — v5 scale law: the OUTSIDE band grows too (owner: "the space
@@ -114,11 +116,11 @@ const ARCH = {
 // road runs between plot 4 and the hamlet). POLYY ART LAW: each slot draws
 // a DIFFERENT village-building sprite (gb_cottage_a..d cycling).
 const COTTAGE_SLOTS = [[12, 24], [16, 24], [10, 26], [14, 26], [18, 25]];
-// COTTAGE SCALE LAW (owner 2026-10-17, g6 live render: "now the houses are
-// too big again... fix that"): the full-size village sprites read bigger
-// than a low-tier castle and swamped their 3x3 plots — member homes shrink
-// into the castle's shadow (0.7 keeps the art crisp at the SS2 canvas).
-const COTTAGE_SCALE = 0.7;
+// COTTAGE SCALE LAW (owner 2026-10-17: "now the houses are too big again"):
+// member homes shrink into the castle's shadow. COC41 cottages bake at 1.42x
+// of the 1.35-slot diamond (~124px); 0.72 draw ≈ 0.90 of the slot — homey,
+// never castle-rivaling.
+const COTTAGE_SCALE = 0.72;
 
 // GUILD PATHS v7 — kingdom plan: the 2-wide GRAND AVENUE enters from the
 // west gate and runs dead straight to the castle court's west face; the
@@ -170,6 +172,47 @@ const ALLEE = [[6, 13], [8, 13], [9, 13], [3, 16], [5, 16]];
 const PLAZA = new Set(
     (() => { const a = []; for (let x = COURT.x0; x <= COURT.x1; x++) for (let y = COURT.y0; y <= COURT.y1; y++) a.push([x, y]); return a; })()
         .map(([x, y]) => `${x},${y}`));
+
+// ── KINGDOM WALL RING (owner 2026-10-18 "the guild area should be a wall")
+// Same edge law as isoForest.fenceRing (walls ride the pad diamond's cells,
+// anchored at cell centres +4px sink) but with the COC41 stone set: runs of
+// gb_wall_a (north/south edges, along +x) / gb_wall_b (west/east, along +y),
+// gb_wall_tower at the 4 corners + mid-span buttresses, gb_wall_gate (a
+// 2-cell twin-towered gatehouse) replacing the west gate pair.
+function wallRing(N, isoX, isoY, gates = [], pad = 0) {
+    const out = [];
+    const gateSet = new Set(gates.map(([x, y]) => `${x},${y}`));
+    const lo = -pad, hiN = N - 1 + pad;
+    const span = hiN - lo;
+    const mid1 = lo + Math.round(span * 0.28), mid2 = lo + Math.round(span * 0.72);
+    for (let x = lo; x <= hiN; x++) {
+        if (!gateSet.has(`${x},${lo}`)) out.push({ file: 'gb_wall_a.png', x: isoX(x + 0.5, lo), y: isoY(x + 0.5, lo) + 4 });
+        if (!gateSet.has(`${x},${hiN}`)) out.push({ file: 'gb_wall_a.png', x: isoX(x + 0.5, hiN), y: isoY(x + 0.5, hiN) + 4 });
+    }
+    for (let y = lo; y <= hiN; y++) {
+        if (!gateSet.has(`${lo},${y}`)) out.push({ file: 'gb_wall_b.png', x: isoX(lo, y + 0.5), y: isoY(lo, y + 0.5) + 4 });
+        if (!gateSet.has(`${hiN},${y}`)) out.push({ file: 'gb_wall_b.png', x: isoX(hiN, y + 0.5), y: isoY(hiN, y + 0.5) + 4 });
+    }
+    // corner keeps + mid-span towers (both edges share corner cells)
+    for (const [cx, cy] of [[lo, lo], [hiN, lo], [lo, hiN], [hiN, hiN]]) {
+        out.push({ file: 'gb_wall_tower.png', x: isoX(cx + 0.5, cy + 0.5), y: isoY(cx + 0.5, cy + 0.5) + 4 });
+    }
+    for (const m of [mid1, mid2]) {
+        out.push({ file: 'gb_wall_tower.png', x: isoX(m + 0.5, lo), y: isoY(m + 0.5, lo) + 4 });
+        out.push({ file: 'gb_wall_tower.png', x: isoX(m + 0.5, hiN), y: isoY(m + 0.5, hiN) + 4 });
+        out.push({ file: 'gb_wall_tower.png', x: isoX(lo, m + 0.5), y: isoY(lo, m + 0.5) + 4 });
+        out.push({ file: 'gb_wall_tower.png', x: isoX(hiN, m + 0.5), y: isoY(hiN, m + 0.5) + 4 });
+    }
+    // twin-towered gatehouse across the west gate pair (anchor = pair centre)
+    const g0 = gates[0];
+    if (g0) {
+        const [gx0, gy0] = g0;
+        const gy1 = (gates[1] && gates[1][1]) || gy0 + 1;
+        const my = (gy0 + gy1) / 2 + 0.5;
+        out.push({ file: 'gb_wall_gate.png', x: isoX(gx0, my), y: isoY(gx0, my) + 6 });
+    }
+    return out;
+}
 
 let fontsReady = false;
 function ensureFonts() {
@@ -545,10 +588,13 @@ async function renderFrame(state, frame, opts = {}) {
             const im = f.tint ? await isoForest.tinted(f.file, f.tint, f.sc || 1) : await hsImg(f.file);
             if (im) props.push({ img: im, x: f.x, y: f.y, sc: f.tint ? 1 : (f.sc || 1) });
         }
-        // pixel fence ring — pushed OUTWARD by P tiles, gate on the WEST edge
-        // where the civic road leaves the grounds (-P, 14 / -P, 15)
-        for (const seg of isoForest.fenceRing(N, isoX, isoY, [[-P, 14], [-P, 15]], P)) {
-            const fim = await hsImg(seg.file);
+        // KINGDOM WALL (owner 2026-10-18 "the guild area should be a wall"):
+        // the wooden palisade becomes a crenellated stone wall ring —
+        // wall_a/b segments tile cell-to-cell, round towers hold the corners
+        // + mid-spans, and a twin-towered gatehouse guards the west gate
+        // where the grand avenue leaves the grounds (cells (-P,14)/(-P,15)).
+        for (const seg of wallRing(N, isoX, isoY, [[-P, 14], [-P, 15]], P)) {
+            const fim = await gbImg(seg.file);
             if (fim) props.push({ img: fim, x: seg.x, y: seg.y, sc: 1 });
         }
     }

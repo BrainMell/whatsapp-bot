@@ -193,9 +193,14 @@ function facadeMirror(st, def, pathSet) {
     return want !== nat;
 }
 
-// per-structure draw scale — POLYY ART LAW: sprites are pre-scaled in
-// scripts/build_poly_sprites.py so their base diamond ≈ footprint diamond
-// (fw+fh)*TW/2; scale stays ~1.0 and only tunes minor over/undershoot.
+// per-structure draw scale — COC41 ART LAW v2 (owner 2026-10-18 "the houses
+// are white and look like shit ... the lenses are clearly turned wrongly ...
+// let's stick to 3d ... make this perfect"): the whole building set was
+// REBUILT in-house (scripts/coc41/*) on strict 2:1 iso axes with textured
+// faces (stone courses / plaster+timber / tile roofs) and the CoC palette —
+// no more white plastic, no rotated pieces. Sprites bake at 1x ART scale,
+// bottom-centre = footprint south corner, so everything draws at 1.0. Pond
+// keeps its legacy water sprite (untouched).
 const STRUCT_SCALE = {
     house: 1.0, blacksmith: 1.0, medbay: 1.0, alchemy: 1.0,
     mines: 1.0, pond: 1.0, hunting: 1.0,
@@ -546,12 +551,13 @@ async function renderFrame(state, frame, opts = {}) {
 
     // ── animations ──
     // gate torch flicker — rides the gatehouse ARCH (v4: the gatehouse is
-    // the village gate; arch centre = footprint centre, apex ≈ 55% up the
-    // 242px sprite → 36px anchor bump − 133px ≈ −97 from footprint centre)
+    // the village gate). COC41 ART LAW: the rebuilt gatehouse bakes at 1x
+    // (zoom 1.42) — its arch apex sits ≈ anchor − 2px, and the anchor is
+    // centre + (fw+fh)*8 + 4 = centre + 36, so the flame hugs centre + 34.
     const gate = structs.find((s) => s.type === 'hunting');
     if (gate) {
         const fl = Math.sin(frame * 1.9) * 0.5 + 0.5;
-        const gx = isoX(gate.x + 1, gate.y + 1), gy = isoY(gate.x + 1, gate.y + 1) - 97;
+        const gx = isoX(gate.x + 1, gate.y + 1), gy = isoY(gate.x + 1, gate.y + 1) + 34;
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         const R = 22 + fl * 6;
