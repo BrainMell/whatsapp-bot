@@ -22,6 +22,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const K = require('./kingdom3d');
+const KT = require('./kingdomTerrain');
 const mediaCache = require('./mediaCache');
 
 const FRAMES = 14, FRAME_MS = 110;
@@ -125,41 +126,53 @@ function buildWorld(state) {
     const treas = Math.max(0, Math.min(5, parseInt((state.buildings || {}).treasury, 10) || 0));
     const members = Math.max(0, Math.min(40, parseInt(state.memberCount, 10) || 0));
 
-    const w = new K.HexWorld(COLS, ROWS, { scale: SCALE });
+    const biome = KT.pickBiome(state);
+    const land = biome !== 'isle';
+    const w = new K.HexWorld(COLS, ROWS, { scale: SCALE, biome, oobWater: !land });
     const used = new Set();                 // cells claimed by structures/props
     const claim = (c, r) => used.add(key(c, r));
 
-    // ── island silhouette (per-guild noise) ──
-    const p1 = rng() * 6.28, p2 = rng() * 6.28, p3 = rng() * 6.28;
-    const radius = (deg) => {
-        const t = deg * Math.PI / 180;
-        return 6.5 + 0.55 * Math.sin(3 * t + p1) + 0.4 * Math.sin(5 * t + p2) + 0.25 * Math.sin(2 * t + p3);
-    };
-    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-        const d = cdist(c, r);
-        const rad = radius(angleDeg(c, r));
-        w.cell[r][c].water = d > rad || r === 0 || r === ROWS - 1 || c === 0 || c === COLS - 1;
-        w.cell[r][c].void = d > rad + 1.9 + 0.5 * Math.sin(angleDeg(c, r) * 0.07 + p3);   // sea shelf, ragged edge
-    }
-    // keep the walled city + a margin always land
-    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (cdist(c, r) <= 5) { w.cell[r][c].water = false; w.cell[r][c].keepLand = true; }
+    let riverCells = [];
+    let S = null;
+    if (land) {
+        // land biomes: ragged haze-edged silhouette, lakes/lava pools, optional river (no sea)
+        S = KT.shape(w, { seed, biome, CC, CR, keepR: 5, wallRing: WALL_RING, angleDeg, cdist });
+        riverCells = S.riverCells;
+    } else {
+        // ── island silhouette (per-guild noise) ──
+        const p1 = rng() * 6.28, p2 = rng() * 6.28, p3 = rng() * 6.28;
+        const radius = (deg) => {
+            const t = deg * Math.PI / 180;
+            return 6.5 + 0.55 * Math.sin(3 * t + p1) + 0.4 * Math.sin(5 * t + p2) + 0.25 * Math.sin(2 * t + p3);
+        };
+        for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+            const d = cdist(c, r);
+            const rad = radius(angleDeg(c, r));
+            w.cell[r][c].water = d > rad || r === 0 || r === ROWS - 1 || c === 0 || c === COLS - 1;
+            w.cell[r][c].void = d > rad + 1.9 + 0.5 * Math.sin(angleDeg(c, r) * 0.07 + p3);   // sea shelf, ragged edge
+        }
+        // keep the walled city + a margin always land
+        for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (cdist(c, r) <= 5) { w.cell[r][c].water = false; w.cell[r][c].keepLand = true; }
 
-    // ── river (decorative, outside the walls): arc of ring 6 → sea ──
-    const riverStart = 285 + Math.floor(rng() * 40), riverSpan = 70;
-    const r6 = K.ring(CC, CR, 6).filter(([c, r]) => w.inb(c, r));
-    const arc = r6.filter(([c, r]) => { const a = (angleDeg(c, r) - riverStart + 360) % 360; return a <= riverSpan; });
-    const riverCells = [];
-    for (const [c, r] of arc) if (!w.cell[r][c].water) riverCells.push([c, r]);
-    const extend = (from, toward) => {
-        const line = K.hexLine(from[0], from[1], toward[0], toward[1]).slice(1);
-        for (const [c, r] of line) { if (!w.inb(c, r) || w.cell[r][c].water) break; riverCells.push([c, r]); }
-    };
-    if (arc.length) {
-        const a0 = arc[0], a1 = arc[arc.length - 1];
-        const far = (cell) => { const wc = K.hexWorld(cell[0], cell[1]), wo = K.hexWorld(CC, CR); const k = 3; const x = wo.x + (wc.x - wo.x) * k, z = wo.z + (wc.z - wo.z) * k; return [Math.max(0, Math.min(COLS - 1, Math.round(x / 2))), Math.max(0, Math.min(ROWS - 1, Math.round(z / K.SQ3)))]; };
-        extend(a0, far(a0)); extend(a1, far(a1));
+        // ── river (decorative, outside the walls): arc of ring 6 → sea ──
+        const riverStart = 285 + Math.floor(rng() * 40), riverSpan = 70;
+        const r6 = K.ring(CC, CR, 6).filter(([c, r]) => w.inb(c, r));
+        const arc = r6.filter(([c, r]) => { const a = (angleDeg(c, r) - riverStart + 360) % 360; return a <= riverSpan; });
+        riverCells = [];
+        for (const [c, r] of arc) if (!w.cell[r][c].water) riverCells.push([c, r]);
+        const extend = (from, toward) => {
+            const line = K.hexLine(from[0], from[1], toward[0], toward[1]).slice(1);
+            for (const [c, r] of line) { if (!w.inb(c, r) || w.cell[r][c].water) break; riverCells.push([c, r]); }
+        };
+        if (arc.length) {
+            const a0 = arc[0], a1 = arc[arc.length - 1];
+            const far = (cell) => { const wc = K.hexWorld(cell[0], cell[1]), wo = K.hexWorld(CC, CR); const k = 3; const x = wo.x + (wc.x - wo.x) * k, z = wo.z + (wc.z - wo.z) * k; return [Math.max(0, Math.min(COLS - 1, Math.round(x / 2))), Math.max(0, Math.min(ROWS - 1, Math.round(z / K.SQ3)))]; };
+            extend(a0, far(a0)); extend(a1, far(a1));
+        }
+        for (const [c, r] of riverCells) if (w.inb(c, r) && !w.cell[r][c].keepLand) w.cell[r][c].river = true;
+
+
     }
-    for (const [c, r] of riverCells) if (w.inb(c, r) && !w.cell[r][c].keepLand) w.cell[r][c].river = true;
 
     // ── wall ring + south gate ──
     const ringCells = K.ring(CC, CR, WALL_RING);
@@ -174,7 +187,11 @@ function buildWorld(state) {
     const addRoad = (cells) => { for (const [c, r] of cells) { if (!w.inb(c, r) || w.cell[r][c].water || w.cell[r][c].wall && key(c, r) !== key(gateCell[0], gateCell[1])) continue; roadSet.add(key(c, r)); } };
     addRoad(mainRoad.slice(1));                                           // inside the walls (gate cell stays a wall piece)
     const outRoad = K.hexLine(gateCell[0], gateCell[1], CC, Math.min(ROWS - 2, CR + 8)).slice(1);
-    for (const [c, r] of outRoad) { if (!w.inb(c, r) || w.cell[r][c].water || w.cell[r][c].river) break; roadSet.add(key(c, r)); }
+    for (const [c, r] of outRoad) {
+        if (!w.inb(c, r) || w.cell[r][c].water || w.cell[r][c].void) break;
+        if (w.cell[r][c].river) { if (!land) break; w.cell[r][c].crossRoad = true; continue; }   // land biomes: bridge it
+        roadSet.add(key(c, r));
+    }
     const spurTo = (cell) => {
         // walk toward the nearest road cell
         let best = null, bd = 99;
@@ -281,6 +298,8 @@ function buildWorld(state) {
         outer.push([c, r]);
     }
     const TREES = ['trees_A_large', 'trees_B_large', 'trees_A_medium', 'trees_B_medium'];
+    if (land) KT.populate(S, w, { used, claim, B, team, key, cdist, wallRing: WALL_RING });
+    else {
     let mine = null, mill = null, windmill = null, lighthouse = null, fieldsN = 0, farmHome = false;
     for (const [c, r] of outer) {
         const a = angleDeg(c, r), d = cdist(c, r), x = rng();
@@ -312,6 +331,7 @@ function buildWorld(state) {
     const shore = [];
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) { const k = w.cell[r][c]; if (k.coast && !used.has(key(c, r)) && angleDeg(c, r) > 85 && angleDeg(c, r) < 135) shore.push([c, r]); }
     if (shore.length) { lighthouse = shore[Math.floor(rng() * shore.length)]; w.put(B('tower_B'), lighthouse[0], lighthouse[1], { sc: 0.9 }); }
+    }
 
     // gate flags + garden props inside the walls
     w.put('flag_' + team, gateCell[0], gateCell[1], { dx: -1.0, dz: 0.55, h: 0 });
@@ -402,7 +422,7 @@ function drawBanner(ctx, x, y, k, flagCol, flagD, icon, t) {
 const _scenes = new Map();
 const SCENE_MAX = 4;
 function sceneKey(state, opts) {
-    return hashStr(JSON.stringify([state.name, state.level, state.archetype, state.buildings, state.memberCount, state.emblemColor, state.emblemIcon]));
+    return hashStr(JSON.stringify([state.name, state.level, state.archetype, state.buildings, state.memberCount, state.emblemColor, state.emblemIcon, state.biome]));
 }
 
 async function buildScene(state) {
@@ -416,7 +436,9 @@ async function buildScene(state) {
     const canvas = require('canvas').createCanvas(W, H);
     const ctx = canvas.getContext('2d');
     const seed = hashStr(state.name || 'guild');
-    await w.draw(ctx, { drawBackdrop: (c2) => K.paintBackdrop(c2, W, H, seed, { clouds: 8, cloudScale: SCALE * 1.05 }) });
+    const bi = (K.biomeInfo().biomes || {})[w.biome];
+    const bd = bi ? { top: bi.backdrop[0], mid: bi.backdrop[1], bot: bi.backdrop[2] } : {};
+    await w.draw(ctx, { drawBackdrop: (c2) => K.paintBackdrop(c2, W, H, seed, { clouds: 8, cloudScale: SCALE * 1.05, ...bd }) });
 
     // facility plaques + banner (drawn over the art, anchored under each facility)
     const k = SCALE;
@@ -605,7 +627,7 @@ function cachePut(map, k, out) {
 const _renderCache = new Map();
 const CACHE_TTL = 10 * 60 * 1000;
 function stateHash(state, opts = {}) {
-    return hashStr(JSON.stringify(['v8-3d', state.name, state.level, state.archetype, state.buildings, state.memberCount, state.memberCap, state.emblemColor, state.emblemIcon, state.motto, opts.hint || '', opts.static === false ? 0 : 1]));
+    return hashStr(JSON.stringify(['v9-biomes', state.name, state.biome || '', state.level, state.archetype, state.buildings, state.memberCount, state.memberCap, state.emblemColor, state.emblemIcon, state.motto, opts.hint || '', opts.static === false ? 0 : 1]));
 }
 
 async function renderGuildBaseImage(state, opts = {}) {

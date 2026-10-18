@@ -17,8 +17,8 @@ Commit every time you do something; finish before this free session ends."*
 5. Proof sheets rendered + eyeballed for every biome and several seeds; docs updated.
 
 ## Progress log (newest last — each line = a pushed commit)
-- [ ] palette-swap baker
-- [ ] biome sprite sets baked
-- [ ] terrain generator
-- [ ] guild renderer wired to biomes
-- [ ] proof sheets + docs
+- [x] palette-swap baker — `scripts/kingdom3d/recolor_biomes.py` (hue-class recolour of ground/foliage/water/earth/rock)
+- [x] biome sprite sets baked — `core/rpgasset/kingdom3d/biomes/{desert,tundra,highlands,volcanic}/` (255 files each, plain git, `.gitattributes` rule added)
+- [x] terrain generator — `core/rpg/kingdomTerrain.js` (`pickBiome`, `shape`, `populate`; seeded value-noise elevation + moisture)
+- [x] guild renderer wired to biomes — `buildWorld` picks biome from guild name (`state.biome` override); only `isle` has a sea
+- [ ] proof sheets + docs (`node scripts/render_guild_biomes.js /tmp/gb`)

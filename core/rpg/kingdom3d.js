@@ -36,6 +36,21 @@ async function loadSprite(file) {
     }
     return p;
 }
+// ── biomes: recoloured terrain/nature sprites live in biomes/<biome>/<file> (same names) ──
+let _biomeInfo = null;
+function biomeInfo() {
+    if (!_biomeInfo) {
+        try { _biomeInfo = JSON.parse(fs.readFileSync(path.join(DIR, 'biomes', 'biomes.json'), 'utf8')); _biomeInfo.set = new Set(_biomeInfo.files); }
+        catch (e) { _biomeInfo = { files: [], biomes: {}, set: new Set() }; }
+    }
+    return _biomeInfo;
+}
+/** file path (relative to DIR) of `file` in `biome`; falls back to the base sprite. */
+function biomeFile(file, biome) {
+    if (!biome || biome === 'isle') return file;
+    const bi = biomeInfo();
+    return bi.biomes[biome] && bi.set.has(file) ? `biomes/${biome}/${file}` : file;
+}
 function spriteMeta(name) { return manifest().sprites[name] || null; }
 function hasSprite(name) { return !!manifest().sprites[name]; }
 
@@ -150,6 +165,8 @@ class HexWorld {
      */
     constructor(cols, rows, o = {}) {
         this.cols = cols; this.rows = rows;
+        this.biome = o.biome || null;               // recolour set (null/'isle' = base sprites)
+        this.oobWater = o.oobWater !== false;       // false: beyond the map is NOT sea (land biomes)
         this.scale = o.scale || 0.6;
         this.cell = []; // [row][col] = {land,road,river,door,wall,...}
         for (let r = 0; r < rows; r++) {
@@ -162,7 +179,7 @@ class HexWorld {
     }
     inb(c, r) { return c >= 0 && r >= 0 && c < this.cols && r < this.rows; }
     at(c, r) { return this.inb(c, r) ? this.cell[r][c] : null; }
-    isWater(c, r) { const k = this.at(c, r); return !k ? true : k.water; } // beyond the map = sea
+    isWater(c, r) { const k = this.at(c, r); return !k ? this.oobWater : k.water; } // beyond the map = sea (isle only)
     fillWater(pred) { for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) if (pred(c, r)) this.cell[r][c].water = true; }
 
     // ── terrain resolution ──
@@ -191,7 +208,7 @@ class HexWorld {
                 let want = 0;
                 for (let d = 0; d < 6; d++) {
                     const n = neighbor(c, r, d); const nk = this.at(n[0], n[1]);
-                    if (!nk || nk.water || nk.river) want |= 1 << d;
+                    if (!nk || nk.water || nk.river || nk.void) want |= 1 << d;
                 }
                 if (k.crossRoad) {
                     // pick the crossing whose river line matches and whose road line matches
@@ -311,10 +328,11 @@ class HexWorld {
         for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) names.add(this.cell[r][c].tile);
         for (const o of this.objs) names.add(o.name);
         const files = new Set();
-        for (const n of names) { const m = spriteMeta(n); if (!m) continue; files.add(m.file); if (m.sh) files.add(m.sh.file); }
+        const bf = (f) => biomeFile(f, this.biome);
+        for (const n of names) { const m = spriteMeta(n); if (!m) continue; files.add(bf(m.file)); if (m.sh) files.add(m.sh.file); }
         await Promise.all([...files].map(loadSprite));
         const drawSpr = async (m, file, ax, ay, X, Y, sc, flip, alpha) => {
-            const img = await loadSprite(file);
+            const img = await loadSprite(file === m.file ? bf(file) : file);
             if (!img) return;
             const w = m.w * k * sc, h = m.h * k * sc;
             const dx = X - (flip ? (m.w - ax) : ax) * k * sc, dy = Y - ay * k * sc;
@@ -437,6 +455,7 @@ function roundRect(ctx, x, y, w, h, r) {
 }
 
 module.exports = {
+    biomeFile, biomeInfo,
     hexLine, hexPath, paintBackdrop, roundRect,
     HexWorld, hexWorld, neighbor, dirTo, ring, hexDist, mulberry32, hashStr,
     hasSprite, spriteMeta, loadSprite, tables, DIR, manifest, popcount, rotMask, SQ3,
