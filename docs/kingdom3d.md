@@ -85,3 +85,17 @@ sprite renderers and will not run against v8 — safe to delete/archive.
 - Hunting-woods palisade fence + gate pieces (fence_wood_* rotations not yet used).
 - Cathedral / arena / harbour kits are NOT in the Hexagon pack (see asset ledger).
 - Optional: more building variety from other CC0 packs once reachable via GitHub mirrors.
+
+## Guild biomes (v9)
+Each guild gets one of 5 biomes from its name hash (`state.biome` overrides): `isle` (ocean island,
+the only one with a sea), `desert`, `tundra`, `highlands` (autumn), `volcanic`. Goal + log:
+`docs/KINGDOM_BIOMES_GOAL.md`; proof sheet: `docs/kingdom3d_biomes.jpg`.
+- **Art**: `scripts/kingdom3d/recolor_biomes.py` palette-swaps the baked terrain/nature sprites into
+  `core/rpgasset/kingdom3d/biomes/<biome>/` (same file names; buildings/walls shared). Re-run it after
+  re-baking the base sprites. `K.biomeFile()` resolves per-biome paths; `HexWorld({biome})` selects the set.
+- **Generator**: `core/rpg/kingdomTerrain.js` — `shape()` (ragged silhouette with `void` edge so no sea,
+  lakes/oasis/lava pools, river with a road bridge in 60% of guilds) and `populate()` (value-noise
+  elevation + moisture → mountains, hills/dunes, forest, rocks, fields/windmill, mine, lumber mill,
+  watermill, war camps, ruins, watch-tower). Pure function of guild name + biome.
+- **Proof**: `node scripts/render_guild_biomes.js /tmp/gb "Name A,Name B,Name C"`; 30 different names → 30 unique maps.
+- `.gitattributes` keeps `core/rpgasset/kingdom3d/biomes/*/*.png` as plain git blobs (no LFS).

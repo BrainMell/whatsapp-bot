@@ -21,4 +21,4 @@ Commit every time you do something; finish before this free session ends."*
 - [x] biome sprite sets baked — `core/rpgasset/kingdom3d/biomes/{desert,tundra,highlands,volcanic}/` (255 files each, plain git, `.gitattributes` rule added)
 - [x] terrain generator — `core/rpg/kingdomTerrain.js` (`pickBiome`, `shape`, `populate`; seeded value-noise elevation + moisture)
 - [x] guild renderer wired to biomes — `buildWorld` picks biome from guild name (`state.biome` override); only `isle` has a sea
-- [ ] proof sheets + docs (`node scripts/render_guild_biomes.js /tmp/gb`)
+- [x] proof sheets + docs — `docs/kingdom3d_biomes.jpg`, `docs/kingdom3d.md` (Guild biomes section)
