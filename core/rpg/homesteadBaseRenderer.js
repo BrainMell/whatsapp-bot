@@ -134,7 +134,13 @@ const LAYOUT = {
 const hc = (x, y) => [x + M, y + M];                     // saved grid → hex cell
 const keyOf = (c, r) => `${c},${r}`;
 const TEAMS = ['blue', 'green', 'red', 'yellow'];
-const BIOMES = ['meadow', 'highlands', 'farmland', 'lakeside'];
+// A base takes the land of its realm (continents.js): its guild's realm, else a realm seeded from the owner.
+// realm biome → wilds terrain:  isle→coast, desert→desert, tundra→tundra, highlands→wildwood, volcanic→ashlands
+const TERRAIN_OF = { isle: 'coast', desert: 'desert', tundra: 'tundra', highlands: 'wildwood', volcanic: 'ashlands' };
+function realmBiome(state) {
+    if (state.biome && TERRAIN_OF[state.biome]) return state.biome;
+    return require('./continents').baseBiome({ owner: state.owner || 'base', guildName: state.guildName, guild: state.guild, continent: state.continent });
+}
 
 function footprintCells(st, def) {
     const out = [];
@@ -152,9 +158,11 @@ function buildWorld(state) {
     const seed = hashStr(seedStr);
     const rng = mulberry32(seed);
     const team = TEAMS[seed % 4];
-    const biome = BIOMES[(seed >>> 3) % 4];
+    const realm = realmBiome(state);                 // 'isle'|'desert'|'tundra'|'highlands'|'volcanic'
+    const biome = TERRAIN_OF[realm];                 // coast|desert|tundra|wildwood|ashlands
+    const land = realm !== 'isle';                   // only the coastal realm has a sea
     const B = (n) => `building_${n}_${team}`;
-    const w = new K.HexWorld(COLS, ROWS, { scale: SCALE });
+    const w = new K.HexWorld(COLS, ROWS, { scale: SCALE, biome: realm, oobWater: !land });
     const used = new Set();
     const claim = (c, r) => used.add(keyOf(c, r));
 
@@ -168,12 +176,12 @@ function buildWorld(state) {
         const out = Math.hypot(dx, dy * 1.15);
         const reach = 1.6 + 1.5 * coastN(c, r);
         const k = w.cell[r][c];
-        k.water = out > reach;
-        k.void = out > reach + 1.8;
+        if (land) { k.water = false; k.void = out > reach; }       // land realms: ragged edge fades into haze, no sea
+        else { k.water = out > reach; k.void = out > reach + 1.8; }
         if (out <= 1.2) k.keepLand = true;
     }
-    // lakeside biome: the south-east margin is open water
-    if (biome === 'lakeside') {
+    // coastal realm / ashlands: the south-east margin is open water (sea) or a lava lake (volcanic set recolours water)
+    if (biome === 'coast' || biome === 'ashlands') {
         for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
             const gx = c - M, gy = r - M;
             if (gx > N - 1 - 1 && gy > 6) { w.cell[r][c].water = true; w.cell[r][c].keepLand = false; }
@@ -253,7 +261,7 @@ function buildWorld(state) {
 
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
         const k = w.cell[r][c];
-        if (k.water || k.coast || k.road || used.has(keyOf(c, r))) continue;
+        if (k.water || k.coast || k.road || k.void || used.has(keyOf(c, r))) continue;
         const gx = c - M, gy = r - M, x = rng();
         if (inGrid(gx, gy) && inZ(mz, gx, gy)) {                      // quarry hills (NW)
             if (x < 0.6) { w.put(['mountain_A_grass_trees', 'mountain_B_grass', 'mountain_C_grass_trees', 'mountain_A'][Math.floor(rng() * 4)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
@@ -264,21 +272,31 @@ function buildWorld(state) {
             if (x < 0.07) { w.put(TREES[2 + Math.floor(rng() * 2)], c, r, { sc: 0.8, flip: rng() < 0.5 }); claim(c, r); }
             else if (x < 0.1) w.put('rock_single_' + 'ABCDE'[Math.floor(rng() * 5)], c, r, { dx: (rng() - 0.5) * 0.7, dz: (rng() - 0.5) * 0.5 });
         } else {                                                       // the wilds: biome
-            const edge = Math.min(gx, gy, N - 1 - gx, N - 1 - gy);
-            if (biome === 'highlands') {
-                if (x < 0.5) { w.put(['hills_A_trees', 'hills_B_trees', 'hills_C', 'mountain_B_grass_trees', 'mountain_A_grass'][Math.floor(rng() * 5)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
-                else if (x < 0.6) w.put('rock_single_' + 'ABCDE'[Math.floor(rng() * 5)], c, r);
-            } else if (biome === 'farmland') {
-                if (x < 0.34) { w.put('building_grain', c, r, { layer: 'flat' }); claim(c, r); }
-                else if (x < 0.4) { w.put(B('windmill'), c, r); claim(c, r); }
-                else if (x < 0.62) { w.put(TREES[2 + Math.floor(rng() * 2)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
-            } else {                                                    // meadow + lakeside: forest
+            const rock = () => w.put('rock_single_' + 'ABCDE'[Math.floor(rng() * 5)], c, r, { dx: (rng() - 0.5) * 0.7, dz: (rng() - 0.5) * 0.5 });
+            if (biome === 'desert') {                                   // dunes, sandstone, scrub round the odd oasis palm
+                if (x < 0.34) { w.put(['hills_A', 'hills_B', 'hills_C', 'hill_single_A', 'hill_single_B'][Math.floor(rng() * 5)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
+                else if (x < 0.44) rock();
+                else if (x < 0.5) { w.put(['tree_single_A', 'tree_single_B', 'trees_A_small'][Math.floor(rng() * 3)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
+            } else if (biome === 'tundra') {                            // pine-dark ridges and snowy crags
+                if (x < 0.34) { w.put(TREES[Math.floor(rng() * 4)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
+                else if (x < 0.5) { w.put(['hills_A', 'hills_B', 'hills_C', 'mountain_A_grass', 'mountain_B_grass'][Math.floor(rng() * 5)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
+                else if (x < 0.58) rock();
+            } else if (biome === 'ashlands') {                          // basalt ridges and cinder rock
+                if (x < 0.40) { w.put(['mountain_A', 'mountain_B', 'mountain_C', 'hills_C'][Math.floor(rng() * 4)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
+                else if (x < 0.56) rock();
+                else if (x < 0.6) { w.put('hill_single_' + 'AB'[Math.floor(rng() * 2)], c, r); claim(c, r); }
+            } else if (biome === 'wildwood') {                          // copper oaks with the odd mill and hill
+                if (x < 0.56) { w.put(TREES[Math.floor(rng() * 4)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
+                else if (x < 0.64) { w.put(['hills_A_trees', 'hills_B_trees', 'hills_C'][Math.floor(rng() * 3)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
+                else if (x < 0.655) { w.put(B('windmill'), c, r); claim(c, r); }
+                else if (x < 0.7) rock();
+            } else {                                                    // coast: green headland forest
                 if (x < 0.62) { w.put(TREES[Math.floor(rng() * 4)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
-                else if (x < 0.7) w.put('rock_single_' + 'ABCDE'[Math.floor(rng() * 5)], c, r);
+                else if (x < 0.7) rock();
             }
         }
     }
-    if (biome === 'lakeside') {                                        // a little dock-side lumber hut on the shore
+    if (biome === 'coast') {                                           // a little dock-side lumber hut on the shore
         const spot = [];
         for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) { const k = w.cell[r][c]; if (k.coast && !used.has(keyOf(c, r))) spot.push([c, r]); }
         if (spot.length) { const [c, r] = spot[Math.floor(rng() * spot.length)]; w.put(B('lumbermill'), c, r); claim(c, r); }
@@ -348,7 +366,7 @@ function buildWorld(state) {
         w.overlay((ctx, pp, k) => plotOverlay(ctx, w, cen, p.id, k), 0, 0, { dx: cen.x, dz: cen.z });
     }
     // overlay anchors use world coords passed via dx/dz (hexWorld(0,0) = origin)
-    return { w, info, plots, team, biome };
+    return { w, info, plots, team, biome, realm };
 }
 
 function plotOverlay(ctx, w, cen, id, k) {
@@ -397,15 +415,17 @@ const _scenes = new Map();
 const SCENE_MAX = 4;
 async function buildScene(state) {
     ensureFonts();
-    const key0 = hashStr(JSON.stringify([state.owner, state.structures, state.freePlots]));
+    const key0 = hashStr(JSON.stringify([state.owner, state.structures, state.freePlots, realmBiome(state)]));
     const hit = _scenes.get(key0);
     if (hit) { _scenes.delete(key0); _scenes.set(key0, hit); return hit; }
-    const { w, info, plots, team, biome } = buildWorld(state);
+    const { w, info, plots, team, biome, realm } = buildWorld(state);
     const { W, H } = w.layout({ top: 170, bottom: 190, left: 30, right: 30 });
     const canvas = require('canvas').createCanvas(W, H);
     const ctx = canvas.getContext('2d');
     const seed = hashStr(state.owner || 'base');
-    await w.draw(ctx, { drawBackdrop: (c2) => K.paintBackdrop(c2, W, H, seed, { clouds: 7, cloudScale: SCALE * 1.1, top: '#356f6a', mid: '#1f4a4c', bot: '#0d2527' }) });
+    const bi = (K.biomeInfo().biomes || {})[realm];
+    const bd = realm === 'isle' ? { top: '#cfe8ef', mid: '#8fc7b2', bot: '#3f7a5c' } : bi ? { top: bi.backdrop[0], mid: bi.backdrop[1], bot: bi.backdrop[2] } : { top: '#356f6a', mid: '#1f4a4c', bot: '#0d2527' };
+    await w.draw(ctx, { drawBackdrop: (c2) => K.paintBackdrop(c2, W, H, seed, { clouds: 7, cloudScale: SCALE * 1.1, ...bd }) });
     const k = SCALE;
     const smoke = [];
     for (const it of info) {
@@ -538,7 +558,7 @@ function cachePut(map, k, out) {
 const _renderCache = new Map();
 const CACHE_TTL = 10 * 60 * 1000;
 function stateHash(state, opts = {}) {
-    return hashStr(JSON.stringify(['v8-3d', state.owner, state.structures, state.freePlots, opts.hint || '', opts.static ? 1 : 0]));
+    return hashStr(JSON.stringify(['v9-realms', state.owner, realmBiome(state), state.structures, state.freePlots, opts.hint || '', opts.static ? 1 : 0]));
 }
 
 async function renderBaseImage(state, opts = {}) {

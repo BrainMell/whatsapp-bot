@@ -140,6 +140,12 @@ async function viewBase(ctx, opts = {}) {
         structures: rec.structures,
         freePlots: plots.filter((p) => p.free),
     };
+    // a base takes the land of its guild's realm (continents.js); solo players get a realm seeded from their name
+    try {
+        const guilds = require('./guilds');
+        const gName = guilds.getUserGuild(rec.userId);
+        if (gName) { state.guildName = gName; state.guild = guilds.getGuild(gName) || null; }
+    } catch (e) { /* realm falls back to the owner-seeded default */ }
     try {
         if (ctx.m?.key) await sock.sendMessage(chatId, { react: { text: '🗺️', key: ctx.m.key } });
     } catch (e) { /* best-effort */ }
