@@ -579,4 +579,4 @@ async function renderBaseImage(state, opts = {}) {
     return out;
 }
 
-module.exports = { LAYOUT, DRESS, N, FRAMES, renderFrame, renderBaseImage, encodeFramesToMp4, structDef, structures };
+module.exports = { LAYOUT, N, FRAMES, renderFrame, renderBaseImage, encodeFramesToMp4, structDef, structures };
