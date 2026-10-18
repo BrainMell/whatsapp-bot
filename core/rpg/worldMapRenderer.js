@@ -2125,6 +2125,7 @@ module.exports = {
     renderWorldBeyondLockedCard,
     _liveGeometry,
     _worldDots,
+    _ensureFonts, _bg, _frame, _titleBlock, _decreePlate, _waxSealBig,   // chrome reused by continentMapRenderer
     _loadWorldArt,
     WORLD_CATALOG,
     PAL,
