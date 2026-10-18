@@ -22,3 +22,6 @@ Commit every time you do something; finish before this free session ends."*
 - [x] terrain generator — `core/rpg/kingdomTerrain.js` (`pickBiome`, `shape`, `populate`; seeded value-noise elevation + moisture)
 - [x] guild renderer wired to biomes — `buildWorld` picks biome from guild name (`state.biome` override); only `isle` has a sea
 - [x] proof sheets + docs — `docs/kingdom3d_biomes.jpg`, `docs/kingdom3d.md` (Guild biomes section)
+- [x] coastal realm — `isle` is now land on every side with the sea on one seeded shore
+- [x] realms / continents — `core/rpg/continents.js` + `continentMapRenderer.js`; guild creation picks a realm, seeded charter-stone marker + member hearths (see `docs/kingdom3d.md` → Realms)
+- [x] player bases follow the guild's realm (terrain, sprite set, backdrop)

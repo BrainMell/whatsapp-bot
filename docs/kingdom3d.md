@@ -99,3 +99,35 @@ the only one with a sea), `desert`, `tundra`, `highlands` (autumn), `volcanic`. 
   watermill, war camps, ruins, watch-tower). Pure function of guild name + biome.
 - **Proof**: `node scripts/render_guild_biomes.js /tmp/gb "Name A,Name B,Name C"`; 30 different names → 30 unique maps.
 - `.gitattributes` keeps `core/rpgasset/kingdom3d/biomes/*/*.png` as plain git blobs (no LFS).
+
+## Realms (continents) — one world map, five lands
+Owner brief (2026-10-18): home bases get different biome versions, tied to the world map's art direction and cosmology;
+a new map shows the continents, each tied to a biome; when someone founds a guild they choose a continent and a
+random part of it holds the guild's marker, with the member home bases nearby, lore-wise.
+
+| Realm (key) | Biome | Charted regions |
+|---|---|---|
+| The Storm Reach (`stormreach`) | `isle` — coastal realm, the ONLY sea | Gullwatch · The Salt Marches · Thunderhead Cape |
+| The Sunscorch (`sunscorch`) | `desert` | The Glass Dunes · Mirage Wells · The Bone Road |
+| The Frost Reach (`frostreach`) | `tundra` | Rimewall · The Whitefast · Lantern Fjord |
+| The Wildwood (`wildwood`) | `highlands` | Amberdeep · The Hundred Oaks · Millrace |
+| The Ember Fields (`emberfields`) | `volcanic` | The Cinder Steps · Slagmouth · Ashfall Basin |
+
+- `core/rpg/continents.js` — pure data + functions. Canonical geometry (fixed seed per realm, map space 0..1),
+  `markerFor(guild, realm)` (seeded random spot, kept off the coast), `baseSites()` (hamlets in a loose ring round
+  the marker), `baseBiome()`, `find()` (fuzzy: "desert", "the frost reach", "lava"…). A guild stores `continent`
+  + `marker` at creation; legacy guilds fall back to the old name-hash biome, so nothing changes for them.
+- `core/rpg/continentMapRenderer.js` — the map, in the Royal Decree chrome of `worldMapRenderer` (parchment, ink,
+  wax). Plain atlas, or with the guild's charter-stone banner + member hearths. ~100 ms.
+- **Founding:** `.j guild create <name> | <type> | <realm>` (type and realm may come in either order). With no
+  realm the bot shows the chooser and does not create the guild.
+- **Commands:** `.j guild map` (your charter-stone on the chart), `.j realms` / `.j continents` (plain atlas + chooser).
+- **Guild kingdom:** biome now comes from the guild's realm; the card subtitle shows the realm.
+- **Player base** (`homesteadBaseRenderer.js`): terrain, sprite set and backdrop follow the guild's realm
+  (coast / desert / tundra / wildwood / ashlands); a solo player gets a realm seeded from their name. The saved
+  16x16 grid and `LAYOUT` are untouched. The caption names the realm and, for guild members, the region.
+- **QA:** `node scripts/qa_continents.js` (geometry, markers/hamlets on land, determinism, parsing);
+  proofs: `scripts/render_base_realms.js`, `docs/kingdom3d_continents_*.jpg`, `docs/kingdom3d_base_realms.jpg`.
+
+Cosmology fit: realms are lands *of the First World* and scatter across all four quadrants of the chart;
+timelines never appear as regions. Names reuse the surveyor field-names of the existing catalog.

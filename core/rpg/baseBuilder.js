@@ -171,7 +171,10 @@ async function viewBase(ctx, opts = {}) {
             return `#${i + 1} ${d.name} — *${lv.name}* (Lv.${st.level})${st.type === 'house' ? '  🏠' : ''}`;
         })
         .join('\n');
-    const cap = `🗺️ *${state.owner}'s Base*\n\n${list}\n` +
+    const _C = require('./continents');
+    const _realm = _C.BY_BIOME[_C.baseBiome({ owner: state.owner, guildName: state.guildName, guild: state.guild })];
+    const _near = state.guildName ? ` · near *${_C.placementOf(state.guildName, state.guild || {}).marker.region}*` : '';
+    const cap = `🗺️ *${state.owner}'s Base*\n🌍 ${_realm.name}${_near}\n\n${list}\n` +
         `🪧 Free plots: ${plots.filter((p) => p.free).map((p) => p.id).join(', ') || 'none'}\n\n` +
         `_${ctx.prefix} base house 1 — enter your house_\n` +
         `_${ctx.prefix} base build <blacksmith|medbay|alchemy> [plot#]_\n` +
