@@ -518,7 +518,7 @@ function paintConfetti(ctx, W, H, t, seed, k) {
         const fall = (t * (1.3 + r3 * 0.9) + r1) % 1;
         const x = W * (0.03 + 0.94 * r1) + Math.sin((t + r2) * Math.PI * 4) * 16 * k;
         const y = -20 + fall * (H + 60);
-        ctx.globalAlpha = 0.92 * Math.sin(Math.min(1, fall * 1.15) * Math.PI);
+        ctx.globalAlpha = 0.95 * Math.min(1, Math.sin(Math.min(1, fall * 1.15) * Math.PI) * 2.2);   // vivid through the middle of the fall
         ctx.fillStyle = CONFETTI_COLS[i % CONFETTI_COLS.length];
         const s = (14 + r3 * 14) * k * 2, rot = (t + r2) * Math.PI * 2;   // chunky card-scale scraps (12-25px)
         ctx.translate(x, y); ctx.rotate(rot);
