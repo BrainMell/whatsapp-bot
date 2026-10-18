@@ -87,7 +87,7 @@ sprite renderers and will not run against v8 — safe to delete/archive.
 - Optional: more building variety from other CC0 packs once reachable via GitHub mirrors.
 
 ## Guild biomes (v9)
-Each guild gets one of 5 biomes from its name hash (`state.biome` overrides): `isle` (ocean island,
+Each guild gets one of 5 biomes from its name hash (`state.biome` overrides): `isle` (now a COASTAL realm: sea on one seeded side only,
 the only one with a sea), `desert`, `tundra`, `highlands` (autumn), `volcanic`. Goal + log:
 `docs/KINGDOM_BIOMES_GOAL.md`; proof sheet: `docs/kingdom3d_biomes.jpg`.
 - **Art**: `scripts/kingdom3d/recolor_biomes.py` palette-swaps the baked terrain/nature sprites into

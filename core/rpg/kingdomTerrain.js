@@ -16,7 +16,7 @@
 const K = require('./kingdom3d');
 
 const BIOMES = ['isle', 'desert', 'tundra', 'highlands', 'volcanic'];
-const LABELS = { isle: 'Island realm', desert: 'Sun-scorched dunes', tundra: 'Frozen tundra', highlands: 'Autumn highlands', volcanic: 'Ashen volcanic wastes' };
+const LABELS = { isle: 'Coastal realm', desert: 'Sun-scorched dunes', tundra: 'Frozen tundra', highlands: 'Autumn highlands', volcanic: 'Ashen volcanic wastes' };
 
 function pickBiome(state) {
     if (state && state.biome && BIOMES.includes(state.biome)) return state.biome;
@@ -40,6 +40,13 @@ function fbm(seed, x, y) { return (vnoise(seed, x, y) * 0.55 + vnoise(seed + 71,
 
 // ── per-biome tuning ─────────────────────────────────────────────────────────
 const P = {
+    isle: {   // 'isle' key kept for compatibility: now a COASTAL realm — sea on one side only
+        river: true, lakes: 1, lakeBig: 0, rim: 0.30, coastal: true,
+        mountainE: 0.76, mountains: ['mountain_A_grass_trees', 'mountain_B_grass_trees', 'mountain_C_grass_trees', 'mountain_A_grass'],
+        hillE: 0.52, hillP: 0.8, hills: ['hills_A_trees', 'hills_B_trees', 'hills_C_trees', 'hills_A'],
+        forestM: 0.46, forestP: 0.75, trees: ['trees_A_large', 'trees_B_large', 'trees_A_medium', 'trees_B_medium'], treeM: ['trees_A_small', 'trees_B_small', 'tree_single_A', 'tree_single_B'],
+        oasisTrees: false, rockP: 0.06, fields: true, camps: 1, ruins: 1, mill: true, lumber: true,
+    },
     desert: {
         river: false, lakes: 1, lakeBig: 0, rim: 0.30,
         mountainE: 0.70, mountains: ['mountain_A', 'mountain_B', 'mountain_C'],
@@ -82,11 +89,18 @@ function shape(w, o) {
     const p1 = rng() * 6.28, p2 = rng() * 6.28, p3 = rng() * 6.28;
     const radius = (deg) => { const t = deg * Math.PI / 180; return 7.5 + 0.7 * Math.sin(3 * t + p1) + 0.5 * Math.sin(5 * t + p2) + 0.35 * Math.sin(2 * t + p3); };
     const R = (c, r) => radius(o.angleDeg(c, r));
+    // coastal realm: the sea lies beyond a wavy shoreline on ONE side (seeded direction)
+    const seaDeg = par.coastal ? [0, 45, 90, 135, 180, 225, 315][Math.floor(rng() * 7)] : null;
+    const sdx = par.coastal ? Math.cos(seaDeg * Math.PI / 180) : 0, sdz = par.coastal ? Math.sin(seaDeg * Math.PI / 180) : 0;
+    const coastT = (c, r) => { const p = K.hexWorld(c, r), q = K.hexWorld(CC, CR); const lat = ((p.x - q.x) * -sdz + (p.z - q.z) * sdx) / 2; return 5.7 + 0.9 * Math.sin(lat * 0.8 + p2) + 0.5 * Math.sin(lat * 1.7 + p3); };
+    const along = (c, r) => { const p = K.hexWorld(c, r), q = K.hexWorld(CC, CR); return ((p.x - q.x) * sdx + (p.z - q.z) * sdz) / 2; };
+    const isSea = (c, r) => par.coastal && along(c, r) > coastT(c, r);
     for (let r = 0; r < w.rows; r++) for (let c = 0; c < w.cols; c++) {
         const k = w.cell[r][c];
         k.water = false;
-        k.void = o.cdist(c, r) > R(c, r);
-        if (o.cdist(c, r) <= o.keepR) k.keepLand = true;
+        k.void = o.cdist(c, r) > R(c, r) + (par.coastal && isSea(c, r) ? 1.6 : 0);
+        if (isSea(c, r)) { k.water = true; k.sea = true; }
+        if (o.cdist(c, r) <= o.keepR) { k.keepLand = true; k.water = false; k.sea = false; k.void = false; }
     }
     const edgeGap = (c, r) => R(c, r) - o.cdist(c, r);         // >0 inside the silhouette
 
@@ -95,7 +109,7 @@ function shape(w, o) {
     const cand = [];
     for (let r = 1; r < w.rows - 1; r++) for (let c = 1; c < w.cols - 1; c++) {
         const d = o.cdist(c, r);
-        if (d < 6 || edgeGap(c, r) < 2.2 || w.cell[r][c].void) continue;
+        if (d < 6 || edgeGap(c, r) < 2.2 || w.cell[r][c].void || w.cell[r][c].water || (par.coastal && along(c, r) > coastT(c, r) - 2)) continue;
         cand.push({ c, r, s: M(c, r) + rng() * 0.45 });
     }
     cand.sort((a, b) => b.s - a.s);
@@ -115,7 +129,8 @@ function shape(w, o) {
     const riverCells = [];
     if (par.river) {
         const south = rng() < 0.6;
-        const a0 = south ? 15 + rng() * 70 : 105 + rng() * 240;
+        let a0 = south ? 15 + rng() * 70 : 105 + rng() * 240;
+        if (par.coastal) a0 = ((seaDeg - 50 + (rng() - 0.5) * 60) + 720) % 360;     // flows to the sea
         const span = 85 + rng() * 40;
         const arc = K.ring(CC, CR, 6).filter(([c, r]) => w.inb(c, r) && ((o.angleDeg(c, r) - a0 + 360) % 360) <= span);
         const take = (c, r) => {
@@ -132,7 +147,7 @@ function shape(w, o) {
         };
         if (arc.length) { out(arc[0]); out(arc[arc.length - 1]); }
     }
-    return { E, M, R, edgeGap, lakeCells, riverCells, par, biome, rng, seed };
+    return { E, M, R, edgeGap, lakeCells, riverCells, par, biome, rng, seed, seaDeg };
 }
 
 /** Phase 2 — fill the wilds.  o: {used, claim, B, team, key, cdist, wallRing, TREE_FALLBACK} */
@@ -197,6 +212,15 @@ function populate(S, w, o) {
         const [c, r] = stats.hill.slice().sort((a, b) => E(b[0], b[1]) - E(a[0], a[1]))[0];
         const f = freeNear(c, r, 9)[0];
         if (f) { w.put(o.B('tower_B'), f[0], f[1], { sc: 0.9 }); o.claim(f[0], f[1]); placed.tower = f; }
+    }
+    if (par.coastal) {
+        const shore = [];
+        for (let r = 0; r < w.rows; r++) for (let c = 0; c < w.cols; c++) { const k = w.cell[r][c]; if (k.coast && !o.used.has(o.key(c, r)) && !k.river && !k.void) shore.push([c, r]); }
+        const ang = (c, r) => o.angleDeg(c, r);
+        shore.sort((a, b) => Math.abs(((ang(a[0], a[1]) - S.seaDeg + 540) % 360) - 180) - Math.abs(((ang(b[0], b[1]) - S.seaDeg + 540) % 360) - 180));
+        if (shore.length) { const [c, r] = shore[Math.floor(rng() * Math.min(5, shore.length))]; w.put(o.B('tower_B'), c, r, { sc: 0.9 }); o.claim(c, r); placed.lighthouse = [c, r]; }
+        const pool = shore.filter(([c, r]) => !o.used.has(o.key(c, r)));
+        for (const [c, r] of pool.filter((_, i) => i % 3 === 0).slice(0, 3)) { w.put(o.B('home_A'), c, r, { flip: rng() < 0.5, sc: 0.9 }); o.claim(c, r); }
     }
     return { stats, placed };
 }

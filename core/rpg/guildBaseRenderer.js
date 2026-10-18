@@ -127,7 +127,7 @@ function buildWorld(state) {
     const members = Math.max(0, Math.min(40, parseInt(state.memberCount, 10) || 0));
 
     const biome = KT.pickBiome(state);
-    const land = biome !== 'isle';
+    const land = true;                      // every biome (incl. the coastal 'isle') comes from the terrain generator
     const w = new K.HexWorld(COLS, ROWS, { scale: SCALE, biome, oobWater: !land });
     const used = new Set();                 // cells claimed by structures/props
     const claim = (c, r) => used.add(key(c, r));
@@ -298,7 +298,7 @@ function buildWorld(state) {
         outer.push([c, r]);
     }
     const TREES = ['trees_A_large', 'trees_B_large', 'trees_A_medium', 'trees_B_medium'];
-    if (land) KT.populate(S, w, { used, claim, B, team, key, cdist, wallRing: WALL_RING });
+    if (land) KT.populate(S, w, { used, claim, B, team, key, cdist, angleDeg, wallRing: WALL_RING });
     else {
     let mine = null, mill = null, windmill = null, lighthouse = null, fieldsN = 0, farmHome = false;
     for (const [c, r] of outer) {
@@ -436,8 +436,9 @@ async function buildScene(state) {
     const canvas = require('canvas').createCanvas(W, H);
     const ctx = canvas.getContext('2d');
     const seed = hashStr(state.name || 'guild');
+    const biome0 = w.biome;
     const bi = (K.biomeInfo().biomes || {})[w.biome];
-    const bd = bi ? { top: bi.backdrop[0], mid: bi.backdrop[1], bot: bi.backdrop[2] } : {};
+    const bd = biome0 === 'isle' ? { top: '#cfe8ef', mid: '#8fc7b2', bot: '#3f7a5c' } : bi ? { top: bi.backdrop[0], mid: bi.backdrop[1], bot: bi.backdrop[2] } : {};
     await w.draw(ctx, { drawBackdrop: (c2) => K.paintBackdrop(c2, W, H, seed, { clouds: 8, cloudScale: SCALE * 1.05, ...bd }) });
 
     // facility plaques + banner (drawn over the art, anchored under each facility)
@@ -627,7 +628,7 @@ function cachePut(map, k, out) {
 const _renderCache = new Map();
 const CACHE_TTL = 10 * 60 * 1000;
 function stateHash(state, opts = {}) {
-    return hashStr(JSON.stringify(['v9-biomes', state.name, state.biome || '', state.level, state.archetype, state.buildings, state.memberCount, state.memberCap, state.emblemColor, state.emblemIcon, state.motto, opts.hint || '', opts.static === false ? 0 : 1]));
+    return hashStr(JSON.stringify(['v10-coastal', state.name, state.biome || '', state.level, state.archetype, state.buildings, state.memberCount, state.memberCap, state.emblemColor, state.emblemIcon, state.motto, opts.hint || '', opts.static === false ? 0 : 1]));
 }
 
 async function renderGuildBaseImage(state, opts = {}) {
