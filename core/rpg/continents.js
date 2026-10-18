@@ -1,25 +1,19 @@
 'use strict';
 // ═══════════════════════════════════════════════════════════════════════════
-//  CONTINENTS — Aldafold, the First World (owner 2026-10-18: name the planet,
-//  drop the "Five Realms" framing, give the lands Norse names).
+//  CONTINENTS — the five realms of the First World, each tied to ONE biome.
 //
-//  Aldafold (alda "the ages/mankind" + fold "earth") is the mortal world the
-//  regular players live on: five continents around the Drowned Sea, each tied
-//  to ONE biome. A guild picks a continent when it is founded; the choice
-//  decides the biome of its guild kingdom AND of every member's home base.
-//  The guild gets a marker at a seeded random spot of the land (lore: where
-//  its charter-stone stands) and member home bases sit in a loose cluster
-//  around that marker.
+//  A guild picks a realm when it is founded; the realm decides the biome of its
+//  guild kingdom AND of every member's home base. The guild gets a marker at a
+//  seeded random spot of the realm's land (lore: where its charter-stone stands)
+//  and member home bases sit in a loose cluster around that marker.
 //
-//  Pure data + pure functions (no I/O). Map geometry is CANONICAL: every
-//  continent has a fixed shape (fixed seed) in a 0..1 × 0..1 map space, so
-//  markers are comparable across guilds and the continent map never changes
-//  between renders.
+//  Pure data + pure functions (no I/O). Map geometry is CANONICAL: every realm has a
+//  fixed shape (fixed seed) in a 0..1 × 0..1 map space, so markers are comparable
+//  across guilds and the continent map never changes between renders.
 //
-//  COMPAT: the storage keys (stormreach/sunscorch/…) and array order (=
-//  kingdomTerrain.BIOMES order, for the hash%5 back-compat) are FROZEN. Only
-//  display names went Norse; get()/find() resolve both the new names and the
-//  old surveyor names, so nothing stored ever breaks.
+//  Cosmology fit (cosmology_orbits.md invariants): realms are lands *of the First
+//  World*; they scatter across all four quadrants; timelines never appear as regions.
+//  Names are the surveyor field-names already charted in worldMapRenderer's catalog.
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Order matters: it is the same order as kingdomTerrain.BIOMES, so a guild with no
@@ -28,48 +22,48 @@ const CONTINENTS = [
     {
         key: 'stormreach', name: 'Stormheim', biome: 'isle', epithet: 'Coast of Gulls and Thunder',
         alias: ['storm reach', 'the storm reach'],
-        centre: [0.825, 0.46], rx: 0.11, ry: 0.16, seed: 4101, ink: '#2E6E73',
-        lore: 'The only continent that touches the open sea. Green headlands, fishing huts and a lighthouse on every cape; the storm-line sits on the horizon and nobody has seen it move.',
-        regions: [['Gullwatch', 0.30, -0.45], ['The Salt Marshes', -0.30, 0.20], ['Thunderhead Cape', 0.25, 0.50]],
+        centre: [0.81, 0.42], rx: 0.125, ry: 0.205, seed: 4101, ink: '#2E6E73',
+        lore: 'The only realm that touches the open sea. Green headlands, fishing huts and a lighthouse on every cape; the storm-line sits on the horizon and nobody has seen it move.',
+        regions: [['Gullwatch', 0.8160, 0.3273], ['The Salt Marshes', 0.7060, 0.4050], ['Thunderhead Cape', 0.7870, 0.4421]],
         guide: 'Sea-side guilds: lighthouse, river mouth, fishing huts.',
     },
     {
         key: 'sunscorch', name: 'Solheim', biome: 'desert', epithet: 'Glass Dunes and Mirage Wells',
         alias: ['sunscorch', 'the sunscorch'],
-        centre: [0.31, 0.84], rx: 0.18, ry: 0.10, seed: 5202, ink: '#9C5B23',
+        centre: [0.27, 0.80], rx: 0.17, ry: 0.115, seed: 5202, ink: '#9C5B23',
         lore: 'Gold dunes under a white sun. Water is a rumour kept by oases, and every oasis has an owner. Ruined caravan-forts stud the Bone Road.',
-        regions: [['The Glass Dunes', -0.35, -0.20], ['Mirage Wells', 0.30, 0.15], ['The Bone Road', 0.0, 0.55]],
+        regions: [['The Glass Dunes', 0.2373, 0.5884], ['Mirage Wells', 0.3125, 0.6157], ['The Bone Road', 0.3009, 0.6388]],
         guide: 'Dune guilds: oasis pools, scrub, sandstone ridges, war camps.',
     },
     {
         key: 'frostreach', name: 'Rimeheim', biome: 'tundra', epithet: 'Rimewall and the Whitefast',
         alias: ['frost reach', 'the frost reach'],
-        centre: [0.52, 0.15], rx: 0.26, ry: 0.085, seed: 6303, ink: '#4A6A8C',
+        centre: [0.50, 0.125], rx: 0.20, ry: 0.075, seed: 6303, ink: '#4A6A8C',
         lore: 'Snow to the horizon, pine-dark valleys and frozen lakes the colour of old glass. The rivers never thaw; the roads are kept open by those who live on them.',
-        regions: [['Rimewall', -0.40, 0.10], ['The Whitefast', 0.05, -0.35], ['Lantern Fjord', 0.45, 0.20]],
+        regions: [['Rimewall', 0.4282, 0.2124], ['The Whitefast', 0.5012, 0.1959], ['Lantern Fjord', 0.5787, 0.2198]],
         guide: 'Tundra guilds: frozen lakes, pine woods, snowy ridgelines.',
     },
     {
         key: 'wildwood', name: 'Skogheim', biome: 'highlands', epithet: 'Amberdeep and the Hundred Oaks',
         alias: ['wildwood', 'the wildwood'],
-        centre: [0.185, 0.47], rx: 0.115, ry: 0.17, seed: 7404, ink: '#8B5A1E',
+        centre: [0.18, 0.45], rx: 0.105, ry: 0.185, seed: 7404, ink: '#8B5A1E',
         lore: 'An autumn that never ends: copper oaks, mossy hills, mills on every river. The woodcutters say the forest remembers who walked it.',
-        regions: [['Amberdeep', 0.0, -0.40], ['The Hundred Oaks', 0.25, 0.10], ['Millrace', -0.25, 0.45]],
+        regions: [['Amberdeep', 0.2199, 0.3570], ['The Hundred Oaks', 0.2315, 0.4091], ['Millrace', 0.1968, 0.4463]],
         guide: 'Forest guilds: autumn woods, farms, mills, rivers.',
     },
     {
         key: 'emberfields', name: 'Eldheim', biome: 'volcanic', epithet: 'Cinder Steps and Slagmouth',
         alias: ['ember fields', 'the ember fields'],
-        centre: [0.75, 0.83], rx: 0.13, ry: 0.105, seed: 8505, ink: '#8B1A2B',
+        centre: [0.76, 0.79], rx: 0.15, ry: 0.125, seed: 8505, ink: '#8B1A2B',
         lore: 'Black basalt and rivers of lava. Ash falls like slow snow. Eldheim is the continent of smiths: forges are built where the ground is already hot.',
-        regions: [['The Cinder Steps', -0.30, -0.25], ['Slagmouth', 0.30, 0.10], ['Ashfall Basin', -0.05, 0.50]],
+        regions: [['The Cinder Steps', 0.6829, 0.5785], ['Slugwraith', 0.7581, 0.6033], ['Ashfall Basin', 0.7176, 0.6322]],
         guide: 'Volcanic guilds: lava pools and rivers, basalt ridges, ruins.',
     },
 ];
 const BY_KEY = Object.fromEntries(CONTINENTS.map((c) => [c.key, c]));
 const BY_BIOME = Object.fromEntries(CONTINENTS.map((c) => [c.biome, c]));
 // the sea at the heart of the chart (existing charted world "the drowned sea")
-const CENTRE_SEA = { name: 'The Drowned Sea', at: [0.50, 0.50] };
+const CENTRE_SEA = { name: 'The Drowned Sea', at: [0.50, 0.43] };
 // the planet itself (owner 2026-10-18: "call it the name of this specific planet — give it a name")
 const PLANET = {
     name: 'Aldafold',
@@ -84,33 +78,25 @@ function mulberry32(seed) {
 }
 function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 
-const _strip = (s) => String(s || '').toLowerCase().replace(/[^a-z]/g, '');
 function get(key) {
-    const k = _strip(key);
+    const k = String(key || '').toLowerCase().replace(/[^a-z]/g, '');
     if (!k) return null;
     for (const c of CONTINENTS) {
-        if (c.key === k || _strip(c.name) === k) return c;
-        if (c.alias && c.alias.some((a) => _strip(a) === k)) return c;
+        if (c.key === k || String(c.name).toLowerCase().replace(/[^a-z]/g, '') === k) return c;
+        if (c.alias && c.alias.some((a) => a.toLowerCase().replace(/[^a-z]/g, '') === k)) return c;
     }
     return null;
 }
-/** fuzzy lookup: 'storm', 'rimeheim', 'the frost reach', 'desert', 'ember' … */
+/** fuzzy lookup: 'storm', 'the frost reach', 'desert', 'ember' … */
 function find(text) {
     const t = String(text || '').toLowerCase().replace(/[^a-z ]/g, '').replace(/^the\s+/, '').trim();
     if (!t) return null;
     for (const c of CONTINENTS) {
-        const n = c.name.toLowerCase();
+        const n = c.name.toLowerCase().replace(/^the\s+/, '');
         if (c.key === t.replace(/ /g, '') || n === t || n.startsWith(t) || c.key.startsWith(t.replace(/ /g, '')) || c.biome === t) return c;
         if (n.split(' ').some((w) => w === t)) return c;
-        if (c.alias && c.alias.includes(t)) return c;
     }
-    const alias = {
-        sea: 'stormreach', coast: 'stormreach', coastal: 'stormreach', island: 'stormreach', storm: 'stormreach', stormheim: 'stormreach', gull: 'stormreach',
-        dune: 'sunscorch', dunes: 'sunscorch', desert: 'sunscorch', sand: 'sunscorch', sun: 'sunscorch', solheim: 'sunscorch', glass: 'sunscorch',
-        snow: 'frostreach', ice: 'frostreach', frozen: 'frostreach', frost: 'frostreach', rime: 'frostreach', rimeheim: 'frostreach', tundra: 'frostreach',
-        forest: 'wildwood', autumn: 'wildwood', wood: 'wildwood', skogheim: 'wildwood', skog: 'wildwood', oak: 'wildwood',
-        lava: 'emberfields', fire: 'emberfields', volcano: 'emberfields', ash: 'emberfields', eldheim: 'emberfields', eld: 'emberfields', ember: 'emberfields',
-    };
+    const alias = { sea: 'stormreach', coast: 'stormreach', coastal: 'stormreach', island: 'stormreach', storm: 'stormreach', stormheim: 'stormreach', gull: 'stormreach', dune: 'sunscorch', dunes: 'sunscorch', desert: 'sunscorch', sand: 'sunscorch', sun: 'sunscorch', solheim: 'sunscorch', glass: 'sunscorch', snow: 'frostreach', ice: 'frostreach', frozen: 'frostreach', frost: 'frostreach', rime: 'frostreach', rimeheim: 'frostreach', tundra: 'frostreach', forest: 'wildwood', autumn: 'wildwood', wood: 'wildwood', skogheim: 'wildwood', skog: 'wildwood', oak: 'wildwood', lava: 'emberfields', fire: 'emberfields', volcano: 'emberfields', ash: 'emberfields', eldheim: 'emberfields', eld: 'emberfields', ember: 'emberfields' };
     return alias[t] ? BY_KEY[alias[t]] : null;
 }
 /** the realm a guild gets when nothing was stored (back-compat: same as the old name-hash biome). */
@@ -122,52 +108,47 @@ function continentOf(entity) {
 }
 const biomeOf = (entity) => continentOf(entity).biome;
 
-// ── canonical geometry (map space 0..1) ──────────────────────────────────────
-const _poly = new Map();
-function polygon(key) {
-    if (_poly.has(key)) return _poly.get(key);
-    const c = BY_KEY[key];
-    const rng = mulberry32(c.seed);
-    const ph = [rng() * 6.28, rng() * 6.28, rng() * 6.28, rng() * 6.28, rng() * 6.28];
-    const N = 96, pts = [];
-    for (let i = 0; i < N; i++) {
-        const t = (i / N) * Math.PI * 2;
-        // 2026-10-18 owner round: richer silhouettes than the old blobs — still
-        // deterministic, still inside the chart (qa_continents checks bounds).
-        const k = 1
-            + 0.14 * Math.sin(2 * t + ph[0])
-            + 0.10 * Math.sin(3 * t + ph[1])
-            + 0.06 * Math.sin(5 * t + ph[2])
-            + 0.045 * Math.sin(7 * t + ph[3])
-            + 0.028 * Math.sin(11 * t + ph[4]);
-        pts.push([c.centre[0] + Math.cos(t) * c.rx * k, c.centre[1] + Math.sin(t) * c.ry * k]);
-    }
-    _poly.set(key, pts);
-    return pts;
+// ── canonical geometry: land masks traced from core/rpgasset/continents/five_realms.jpg ─────────
+// Map space is the chart image normalised to 0..1 (u = x/864, v = y/1210). The mask grid
+// (scripts/kingdom3d/make_realm_mask.py) marks which cells are land of which realm.
+const fs = require('fs');
+const path = require('path');
+const CHART = path.join(__dirname, '..', 'rpgasset', 'continents', 'five_realms.jpg');
+let _mask = null;
+function mask() {
+    if (_mask) return _mask;
+    const j = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'rpgasset', 'continents', 'realm_mask.json'), 'utf8'));
+    const byId = Object.fromEntries(Object.entries(j.ids).map(([k, v]) => [v, k]));
+    const gh = j.rows.length, gw = j.rows[0].length;
+    // distance (in grid cells) from each land cell to the nearest non-land cell of its realm — chamfer pass
+    const dist = new Float32Array(gw * gh);
+    const land = (x, y) => x >= 0 && y >= 0 && x < gw && y < gh && j.rows[y][x] !== '.';
+    const same = (x, y, ch) => x >= 0 && y >= 0 && x < gw && y < gh && j.rows[y][x] === ch;
+    for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) dist[y * gw + x] = same(x, y, j.rows[y][x]) && land(x, y) ? 1e3 : 0;
+    const at = (x, y) => (x < 0 || y < 0 || x >= gw || y >= gh ? 0 : dist[y * gw + x]);
+    for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) { const i = y * gw + x; if (dist[i]) dist[i] = Math.min(dist[i], at(x - 1, y) + 1, at(x, y - 1) + 1, at(x - 1, y - 1) + 1.4, at(x + 1, y - 1) + 1.4); }
+    for (let y = gh - 1; y >= 0; y--) for (let x = gw - 1; x >= 0; x--) { const i = y * gw + x; if (dist[i]) dist[i] = Math.min(dist[i], at(x + 1, y) + 1, at(x, y + 1) + 1, at(x + 1, y + 1) + 1.4, at(x - 1, y + 1) + 1.4); }
+    _mask = { j, gw, gh, byId, dist, W: j.w, H: j.h, step: j.step };
+    return _mask;
 }
-function inside(pts, x, y) {
-    let ins = false;
-    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-        const [xi, yi] = pts[i], [xj, yj] = pts[j];
-        if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) ins = !ins;
-    }
-    return ins;
+/** realm key whose land is at map-space (u, v), or null (sea) */
+function landAt(u, v) {
+    const m = mask(), x = Math.floor((u * m.W) / m.step), y = Math.floor((v * m.H) / m.step);
+    if (x < 0 || y < 0 || x >= m.gw || y >= m.gh) return null;
+    const ch = m.j.rows[y][x];
+    return ch === '.' ? null : m.byId[ch];
 }
-function edgeDist(pts, x, y) {
-    let best = 9;
-    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-        const [ax, ay] = pts[j], [bx, by] = pts[i];
-        const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy || 1e-9;
-        const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / l2));
-        best = Math.min(best, Math.hypot(x - (ax + t * dx), y - (ay + t * dy)));
-    }
-    return best;
+const inside = (key, u, v) => landAt(u, v) === key;
+/** distance from the realm's coast, in map-space units (≈0.004 per grid cell) */
+function edgeDist(key, u, v) {
+    const m = mask(), x = Math.floor((u * m.W) / m.step), y = Math.floor((v * m.H) / m.step);
+    if (x < 0 || y < 0 || x >= m.gw || y >= m.gh || !inside(key, u, v)) return 0;
+    return m.dist[y * m.gw + x] * (m.step / m.W);
 }
-function regionAt(c, x, y) {
+function regionAt(c, u, v) {
     let best = null, bd = 9;
-    for (const [name, ox, oy] of c.regions) {
-        const rx = c.centre[0] + ox * c.rx, ry = c.centre[1] + oy * c.ry;
-        const d = Math.hypot(x - rx, y - ry);
+    for (const [name, rx, ry] of c.regions) {
+        const d = Math.hypot((u - rx) * 0.72, v - ry);       // the chart is portrait: weight x so distance is ~isotropic
         if (d < bd) { bd = d; best = { name, x: rx, y: ry }; }
     }
     return best;
@@ -176,38 +157,40 @@ function regionAt(c, x, y) {
 /** a seeded RANDOM spot on the realm's land (kept off the coast) — the guild's charter-stone. */
 function markerFor(guildName, continentKey) {
     const c = get(continentKey) || defaultFor(guildName);
-    const pts = polygon(c.key);
+    const m = mask();
     const rng = mulberry32(hashStr(`marker:${guildName}:${c.key}`));
-    let x = c.centre[0], y = c.centre[1];
-    for (let i = 0; i < 400; i++) {
-        const cx = c.centre[0] + (rng() * 2 - 1) * c.rx * 1.3, cy = c.centre[1] + (rng() * 2 - 1) * c.ry * 1.3;
-        if (inside(pts, cx, cy) && edgeDist(pts, cx, cy) > 0.03) { x = cx; y = cy; break; }
-    }
-    const reg = regionAt(c, x, y);
-    return { x: +x.toFixed(4), y: +y.toFixed(4), region: reg.name };
+    const cells = [];
+    for (let y = 0; y < m.gh; y++) for (let x = 0; x < m.gw; x++) if (m.j.rows[y][x] === m.j.ids[c.key] && m.dist[y * m.gw + x] >= 2 && y * m.step >= 268) cells.push([x, y]);   // keep the pin + floating emblem inside the chart frame
+    const [gx, gy] = cells[Math.floor(rng() * cells.length)] || [0, 0];
+    const u = +((gx + 0.5 + (rng() - 0.5) * 0.8) * m.step / m.W).toFixed(4), v = +((gy + 0.5 + (rng() - 0.5) * 0.8) * m.step / m.H).toFixed(4);
+    const reg = regionAt(c, u, v);
+    return { x: +u.toFixed(4), y: +v.toFixed(4), region: reg.name };
 }
 /** full placement for a new guild (what gets stored on the guild). */
 function placementFor(guildName, continentKey) {
     const c = get(continentKey) || defaultFor(guildName);
     return { continent: c.key, marker: markerFor(guildName, c.key) };
 }
-/** placement of an existing guild record; fills in anything missing deterministically. */
+/** placement of an existing guild record; fills in anything missing deterministically.
+ *  A stored marker from the old procedural map (not on this chart's land) is re-derived. */
 function placementOf(guildName, guild) {
     const c = continentOf({ name: guildName, continent: guild && guild.continent });
-    const m = guild && guild.marker && typeof guild.marker.x === 'number' && inside(polygon(c.key), guild.marker.x, guild.marker.y) ? guild.marker : markerFor(guildName, c.key);
-    return { continent: c.key, marker: m };
+    const ok = guild && guild.marker && typeof guild.marker.x === 'number' && inside(c.key, guild.marker.x, guild.marker.y);
+    return { continent: c.key, marker: ok ? guild.marker : markerFor(guildName, c.key) };
 }
 /** where `n` member home bases sit: a loose ring of hamlets around the guild marker (stays on land). */
 function baseSites(guildName, guild, n) {
     const { continent, marker } = placementOf(guildName, guild);
-    const pts = polygon(continent);
     const rng = mulberry32(hashStr('bases:' + guildName));
     const out = [];
     for (let i = 0; i < n; i++) {
-        let a = i * 2.399 + rng() * 0.6, rad = 0.022 + 0.012 * Math.sqrt(i + 1) + rng() * 0.01;
-        let x = marker.x + Math.cos(a) * rad, y = marker.y + Math.sin(a) * rad * 0.9;
-        for (let g = 0; g < 8 && !(inside(pts, x, y) && edgeDist(pts, x, y) > 0.012); g++) { rad *= 0.7; x = marker.x + Math.cos(a) * rad; y = marker.y + Math.sin(a) * rad * 0.9; }
-        out.push({ x: +x.toFixed(4), y: +y.toFixed(4) });
+        const a = i * 2.399 + rng() * 0.6;
+        let rad = 0.020 + 0.010 * Math.sqrt(i + 1) + rng() * 0.008;
+        const r4 = (n) => +n.toFixed(4);
+        let x = r4(marker.x + Math.cos(a) * rad * 0.72), y = r4(marker.y + Math.sin(a) * rad);
+        for (let g = 0; g < 8 && !(inside(continent, x, y) && edgeDist(continent, x, y) > 0.004); g++) { rad *= 0.7; x = r4(marker.x + Math.cos(a) * rad * 0.72); y = r4(marker.y + Math.sin(a) * rad); }
+        if (!inside(continent, x, y)) { x = r4(marker.x + (rng() - 0.5) * 0.004); y = r4(marker.y + (rng() - 0.5) * 0.004); if (!inside(continent, x, y)) { x = marker.x; y = marker.y; } }
+        out.push({ x, y });
     }
     return out;
 }
@@ -223,4 +206,4 @@ function chooserText(prefix = '.j') {
     return CONTINENTS.map((c, i) => `${i + 1}. *${c.name}* — ${c.epithet}\n   _${c.guide}_  (\`${prefix} guild create <name> | <type> | ${c.key}\`)`).join('\n');
 }
 
-module.exports = { CONTINENTS, BY_KEY, BY_BIOME, CENTRE_SEA, PLANET, get, find, defaultFor, continentOf, biomeOf, polygon, inside, edgeDist, regionAt, markerFor, placementFor, placementOf, baseSites, baseBiome, list, chooserText, hashStr, mulberry32 };
+module.exports = { CONTINENTS, BY_KEY, BY_BIOME, CENTRE_SEA, PLANET, get, find, defaultFor, continentOf, biomeOf, landAt, inside, edgeDist, regionAt, CHART, markerFor, placementFor, placementOf, baseSites, baseBiome, list, chooserText, hashStr, mulberry32 };

@@ -131,3 +131,40 @@ random part of it holds the guild's marker, with the member home bases nearby, l
 
 Cosmology fit: realms are lands *of the First World* and scatter across all four quadrants of the chart;
 timelines never appear as regions. Names reuse the surveyor field-names of the existing catalog.
+
+## 2026-10-18 round 2 — Aldafold, the traced chart, the diagonal camera
+
+**The planet has a name: Aldafold.** The five realms go Norse — Stormheim (coast),
+Solheim (desert), Rimeheim (tundra), Skogheim (highlands), Eldheim (volcanic).
+Storage keys and biome order stay frozen; `get()` / `find()` resolve the old
+surveyor names (the Storm Reach, the Sunscorch…) as aliases, so nothing stored
+breaks. `.j world` defaults to the continents atlas of Aldafold; the cosmology
+sheet moved to `.j world cosmology`.
+
+**The chart is traced art.** `core/rpgasset/continents/five_realms.jpg` is drawn
+1:1 and the renderer overlays the guild location pin (emblem floating above) plus
+member hearths. Land masks derive from the chart via `scripts/kingdom3d/make_realm_mask.py`
+(`core/rpgasset/continents/realm_mask.json`), so markers, hamlets and region
+lookups sit exactly where the art says the land is.
+
+**Player base — diagonal isometric camera (yaw 45):** full-card terrain (no void
+frame), hex-edge palisade, lakeside pier, cottages facing the street with spurs to
+every building, denser village dressing (farmsteads, yards, fields, reeds and
+lilies). Water and lava animate from the old two-frame glint art; smoke and
+fireflies drift on the animated frames. The baker takes a camera yaw; sprite sets
+are biome-recoloured.
+
+**Guild kingdom — terrain fills the whole card:** oversized grid, far-field
+mountains/forests/hills, off-card culling. The upgrade celebrate bake now rains
+confetti over the card (deterministic per state, chunky card-scale scraps);
+player-base build/upgrade bakes celebrate the same way.
+
+**Guild gate:** `.j base` view/house/build/upgrade/info require a guild — no
+charter, no land (mods keep baseadmin).
+
+**Scrape status:** the 2D iso pipeline stays dead (`isoOutlands.js`, `isoForest.js`
+deleted; `homesteadRenderer.js` and `isoShadow.js` remain for the flows that still
+use them). Old scripts pointing at the scrapped renderers were removed.
+
+QA: `node scripts/qa_continents.js` — geometry against the chart masks, markers and
+hamlets on land, determinism, name resolution both ways.

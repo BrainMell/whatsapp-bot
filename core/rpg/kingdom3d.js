@@ -15,44 +15,58 @@ const fs = require('fs');
 const path = require('path');
 
 const DIR = path.join(__dirname, '..', 'rpgasset', 'kingdom3d');
+const DIR_ISO = path.join(__dirname, '..', 'rpgasset', 'kingdom3d_iso');
 const SQ3 = Math.sqrt(3);
 
-let _manifest = null;
-function manifest() {
-    if (!_manifest) _manifest = JSON.parse(fs.readFileSync(path.join(DIR, 'manifest.json'), 'utf8'));
-    return _manifest;
+// Two camera views share one hex engine: 'top' (guild kingdom, pitch 40, yaw 0) and 'iso'
+// (player base, diagonal isometric: yaw 45, pitch 35.264). Sprites for each are baked separately
+// (scripts/kingdom3d/bake_kingdom_sprites.py, KK_YAW=45) under the same sprite names.
+const _views = {};
+function getView(name) {
+    const key = name === 'iso' ? 'iso' : 'top';
+    if (_views[key]) return _views[key];
+    const dir = key === 'iso' ? DIR_ISO : DIR;
+    const man = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
+    const rad = (d) => (d * Math.PI) / 180;
+    const v = { key, dir, man, S: man.S, sinP: Math.sin(rad(man.pitch)), cosP: Math.cos(rad(man.pitch)), yaw: man.yaw || 0,
+        cy: Math.cos(rad(man.yaw || 0)), sy: Math.sin(rad(man.yaw || 0)), binfo: null };
+    _views[key] = v;
+    return v;
 }
+function manifest() { return getView('top').man; }
 const BAKE_S = () => manifest().S;
-const SIN_P = () => Math.sin((manifest().pitch * Math.PI) / 180);
-const COS_P = () => Math.cos((manifest().pitch * Math.PI) / 180);
+const SIN_P = () => getView('top').sinP;
+const COS_P = () => getView('top').cosP;
 
 // ── image cache (shared across renders; sprites are tiny) ───────────────────
 const _imgs = new Map();
-async function loadSprite(file) {
-    let p = _imgs.get(file);
+async function loadSprite(file, view = 'top') {
+    const dir = getView(view).dir;
+    const key = dir + '|' + file;
+    let p = _imgs.get(key);
     if (!p) {
-        p = require('canvas').loadImage(path.join(DIR, file)).catch(() => null);
-        _imgs.set(file, p);
+        p = require('canvas').loadImage(path.join(dir, file)).catch(() => null);
+        _imgs.set(key, p);
     }
     return p;
 }
 // ── biomes: recoloured terrain/nature sprites live in biomes/<biome>/<file> (same names) ──
-let _biomeInfo = null;
-function biomeInfo() {
-    if (!_biomeInfo) {
-        try { _biomeInfo = JSON.parse(fs.readFileSync(path.join(DIR, 'biomes', 'biomes.json'), 'utf8')); _biomeInfo.set = new Set(_biomeInfo.files); }
-        catch (e) { _biomeInfo = { files: [], biomes: {}, set: new Set() }; }
+function biomeInfo(view = 'top') {
+    const v = getView(view);
+    if (!v.binfo) {
+        try { v.binfo = JSON.parse(fs.readFileSync(path.join(v.dir, 'biomes', 'biomes.json'), 'utf8')); v.binfo.set = new Set(v.binfo.files); }
+        catch (e) { v.binfo = { files: [], biomes: {}, set: new Set() }; }
     }
-    return _biomeInfo;
+    return v.binfo;
 }
-/** file path (relative to DIR) of `file` in `biome`; falls back to the base sprite. */
-function biomeFile(file, biome) {
+/** file path (relative to the view's sprite dir) of `file` in `biome`; falls back to the base sprite. */
+function biomeFile(file, biome, view = 'top') {
     if (!biome || biome === 'isle') return file;
-    const bi = biomeInfo();
+    const bi = biomeInfo(view);
     return bi.biomes[biome] && bi.set.has(file) ? `biomes/${biome}/${file}` : file;
 }
-function spriteMeta(name) { return manifest().sprites[name] || null; }
-function hasSprite(name) { return !!manifest().sprites[name]; }
+function spriteMeta(name, view = 'top') { return getView(view).man.sprites[name] || null; }
+function hasSprite(name, view = 'top') { return !!getView(view).man.sprites[name]; }
 
 // ── RNG helpers ──────────────────────────────────────────────────────────────
 function mulberry32(seed) {
@@ -166,6 +180,8 @@ class HexWorld {
     constructor(cols, rows, o = {}) {
         this.cols = cols; this.rows = rows;
         this.biome = o.biome || null;               // recolour set (null/'isle' = base sprites)
+        this.viewKey = o.view === 'iso' ? 'iso' : 'top';   // 'iso' = diagonal isometric camera (player base)
+        this.view = getView(this.viewKey);
         this.oobWater = o.oobWater !== false;       // false: beyond the map is NOT sea (land biomes)
         this.scale = o.scale || 0.6;
         this.cell = []; // [row][col] = {land,road,river,door,wall,...}
@@ -293,7 +309,7 @@ class HexWorld {
 
     /** place a sprite on hex (c,r); dx/dz in world units; h = height above ground. */
     put(name, c, r, o = {}) {
-        if (!hasSprite(name)) return;
+        if (!hasSprite(name, this.viewKey)) return;
         const w = o.wx != null ? { x: o.wx, z: o.wz } : hexWorld(c, r);
         this.objs.push({
             name, x: w.x + (o.dx || 0), z: w.z + (o.dz || 0), y: o.h || 0,
@@ -302,57 +318,113 @@ class HexWorld {
     }
     overlay(fn, c, r, o = {}) { const w = hexWorld(c, r); this.overlays.push({ fn, x: w.x + (o.dx || 0), z: w.z + (o.dz || 0), y: o.h || 0 }); }
 
-    // ── projection ──
+    // ── camera: world (x,z) is rotated by the view yaw first (0 for the top-down guild view) ──
+    rot(x, z) { const v = this.view; return v.yaw ? { x: v.cy * x + v.sy * z, z: -v.sy * x + v.cy * z } : { x, z }; }
+    unrot(xr, zr) { const v = this.view; return v.yaw ? { x: v.cy * xr - v.sy * zr, z: v.sy * xr + v.cy * zr } : { x: xr, z: zr }; }
+    /** depth key of a world point (bigger = closer to the camera). */
+    depth(x, z) { return this.rot(x, z).z; }
+
     layout(pad = {}) {
-        const S = BAKE_S(), k = this.scale;
+        const S = this.view.S, k = this.scale, V = this.view;
         const left = pad.left == null ? 30 : pad.left, right = pad.right == null ? 30 : pad.right;
         const top = pad.top == null ? 300 : pad.top, bottom = pad.bottom == null ? 60 : pad.bottom;
         this.W = Math.ceil((2 * this.cols + 1) * S * k + left + right);
         this.ox = left + S * k;           // x of hex(0,0) centre
         this.oy = top;                    // y of hex(0,0) centre (top surface)
-        this.H = Math.ceil(this.oy + ((SQ3 * (this.rows - 1) + 1.1547) * SIN_P() + COS_P()) * S * k + bottom);
-        if (pad.W) this.W = pad.W;        // fixed-canvas override (full-bleed renders)
-        if (pad.H) this.H = pad.H;
+        this.H = Math.ceil(this.oy + ((SQ3 * (this.rows - 1) + 1.1547) * V.sinP + V.cosP) * S * k + bottom);
         return { W: this.W, H: this.H };
     }
-
-    /** FULL-BLEED layout (owner 2026-10-18: "ion like the floating in the sky thing — fill in
-     *  the rest of the space / stretch the generation to cover the full screen"): the grid was
-     *  built with `extra` margin cells on every side around the ORIGINAL cols×rows diorama;
-     *  canvas stays the ORIGINAL size and the origin shifts so the margin cells hang off every
-     *  edge — terrain covers the whole card, no sky void. */
-    layoutBleed(origCols, origRows, pad = {}, extra = 0) {
-        const S = BAKE_S(), k = this.scale;
-        const left = pad.left == null ? 30 : pad.left, right = pad.right == null ? 30 : pad.right;
-        const top = pad.top == null ? 300 : pad.top, bottom = pad.bottom == null ? 60 : pad.bottom;
-        const W = Math.ceil((2 * origCols + 1) * S * k + left + right);
-        const oy0 = top;
-        const H = Math.ceil(oy0 + ((SQ3 * (origRows - 1) + 1.1547) * SIN_P() + COS_P()) * S * k + bottom);
+    /** fixed-size card: world point (fx,fz) lands on card pixel (px,py); the grid is expected to over-cover the card. */
+    layoutFixed(W, H, fx, fz, px, py) {
+        const S = this.view.S, k = this.scale, V = this.view;
         this.W = W; this.H = H;
-        this.ox = left + S * k - 2 * extra * S * k;                 // shift left by the extra cols
-        this.oy = oy0 - SQ3 * SIN_P() * S * k * extra;              // shift up by the extra rows
+        const f = this.rot(fx, fz);
+        this.ox = px - f.x * S * k;
+        this.oy = py - f.z * V.sinP * S * k;
         return { W, H };
     }
     proj(x, z, y = 0) {
-        const S = BAKE_S(), k = this.scale;
-        return { x: this.ox + x * S * k, y: this.oy + z * SIN_P() * S * k - y * COS_P() * S * k };
+        const V = this.view, S = V.S, k = this.scale;
+        const r = this.rot(x, z);
+        return { x: this.ox + r.x * S * k, y: this.oy + r.z * V.sinP * S * k - y * V.cosP * S * k };
     }
 
-    async draw(ctx, { drawBackdrop } = {}) {
-        const S = BAKE_S(), k = this.scale;
+    /** screen polygon (px) of the ground footprint of cell (c,r) at height y. */
+    cellPoly(c, r, y = 0, inset = 0) {
+        const w = hexWorld(c, r), R = 1.1547 - inset, out = [];
+        for (let i = 0; i < 6; i++) { const a = (Math.PI / 180) * (60 * i - 30); out.push(this.proj(w.x + R * Math.cos(a), w.z + R * Math.sin(a), y)); }
+        return out;
+    }
+
+    /** wooden fence along the OUTER EDGES of a region (the pack's fence pieces each cover one hex edge, at rot r = edge (3-r)).
+     *  inside(c,r) → bool; gateAt(c,r,edge) → true puts a gate piece there; edges facing water/river or `skipOut` are left open. */
+    layFenceEdges(inside, { gateAt = null, skipOut = null, sort = 0.15, name = 'fence_wood_straight' } = {}) {
+        let n = 0;
+        for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+            if (!inside(c, r)) continue;
+            const k = this.cell[r][c];
+            if (k.water || k.river) continue;
+            for (let e = 0; e < 6; e++) {
+                const nb = neighbor(c, r, e);
+                if (inside(nb[0], nb[1])) continue;
+                const nk = this.at(nb[0], nb[1]);
+                if (!nk || nk.water || nk.river || (skipOut && skipOut(nb[0], nb[1], nk))) continue;
+                const gate = gateAt && gateAt(c, r, e);
+                this.put(`${name}${gate ? '_gate' : ''}@${(3 - e + 6) % 6}`, c, r, { sort });
+                k.fenced = true; n++;
+            }
+        }
+        return n;
+    }
+
+    /** pier of `len` cells from shore cell (c,r) heading in direction d across water. Returns the cells used. */
+    layPier(c, r, d, len = 3) {
+        const used = [];
+        let [cc, rr] = [c, r];
+        for (let i = 0; i < len; i++) {
+            const nx = neighbor(cc, rr, d);
+            const k = this.at(nx[0], nx[1]);
+            if (!k) break;
+            const last = i === len - 1;
+            const axis = (3 - (d % 3)) % 3;
+            const rotEnd = d >= 3 ? d - 3 : d;        // end piece is open on its W side at rot 0 (edge 3)
+            // straight pieces run along the axis; the end piece must point back at the shore (edge d+3 = open side)
+            if (last) this.put(`dock_end@${(((3 - ((d + 3) % 6)) % 6) + 6) % 6}`, nx[0], nx[1], { sort: 0.3 });
+            else this.put(`dock_straight@${axis}`, nx[0], nx[1], { sort: 0.3 });
+            used.push(nx);
+            [cc, rr] = nx;
+        }
+        return used;
+    }
+
+    async draw(ctx, { drawBackdrop, phase } = {}) {
+        const V = this.view, k = this.scale;
+        const doTerrain = phase !== 'objects', doObjects = phase !== 'terrain';
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
-        if (drawBackdrop) await drawBackdrop(ctx, this);
-        // gather unique sprites then preload in one go
-        const names = new Set();
-        for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) names.add(this.cell[r][c].tile);
-        for (const o of this.objs) names.add(o.name);
+        if (drawBackdrop && doTerrain) await drawBackdrop(ctx, this);
+        const vk = V.key;
+        const bf = (f) => biomeFile(f, this.biome, vk);
+        const onCard = (p, m) => !(p.x < -140 || p.x > this.W + 140 || p.y < -200 || p.y > this.H + 200);
+        // gather the visible terrain tiles (depth sorted) + object sprites, then preload in one go
+        const tiles = [];
+        for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+            const kc = this.cell[r][c];
+            if (kc.void) continue;
+            const m = spriteMeta(kc.tile, vk); if (!m) continue;
+            const w = hexWorld(c, r);
+            const p = this.proj(w.x, w.z, kc.h || 0);
+            if (!onCard(p)) continue;
+            tiles.push({ m, p, d: this.rot(w.x, w.z) });
+        }
+        if (V.yaw) tiles.sort((a, b) => (a.d.z - b.d.z) || (a.d.x - b.d.x));
+        const sorted = [...this.objs].sort((a, b) => (this.depth(a.x, a.z) - this.depth(b.x, b.z)) || (a.sort - b.sort) || (a.x - b.x));
         const files = new Set();
-        const bf = (f) => biomeFile(f, this.biome);
-        for (const n of names) { const m = spriteMeta(n); if (!m) continue; files.add(bf(m.file)); if (m.sh) files.add(m.sh.file); }
-        await Promise.all([...files].map(loadSprite));
+        if (doTerrain) for (const t of tiles) files.add(bf(t.m.file));
+        if (doObjects) for (const o of sorted) { const m = spriteMeta(o.name, vk); if (!m) continue; files.add(bf(m.file)); if (m.sh) files.add(m.sh.file); }
+        await Promise.all([...files].map((f) => loadSprite(f, vk)));
         const drawSpr = async (m, file, ax, ay, X, Y, sc, flip, alpha) => {
-            const img = await loadSprite(file === m.file ? bf(file) : file);
+            const img = await loadSprite(file === m.file ? bf(file) : file, vk);
             if (!img) return;
             const w = m.w * k * sc, h = m.h * k * sc;
             const dx = X - (flip ? (m.w - ax) : ax) * k * sc, dy = Y - ay * k * sc;
@@ -361,41 +433,33 @@ class HexWorld {
             else ctx.drawImage(img, dx, dy, w, h);
             if (alpha < 1) ctx.globalAlpha = 1;
         };
-        // 1. terrain, row by row (full-bleed grids extend past the canvas — skip off-card tiles)
-        const tw = 2 * S * k, th2 = 2 * S * k;
-        for (let r = 0; r < this.rows; r++) {
-            for (let c = 0; c < this.cols; c++) {
-                const kcell = this.cell[r][c];
-                if (kcell.void) continue;                 // outside the diorama: backdrop shows through
-                const m = spriteMeta(kcell.tile); if (!m) continue;
-                const w = hexWorld(c, r);
-                const p = this.proj(w.x, w.z, kcell.h || 0);
-                if (p.x < -tw || p.x > this.W + tw || p.y < -th2 || p.y > this.H + th2) continue;
-                await drawSpr(m, m.file, m.ax, m.ay, p.x, p.y, 1, false, 1);
-            }
-        }
-        const sorted = [...this.objs].sort((a, b) => (a.z - b.z) || (a.sort - b.sort) || (a.x - b.x));
+        // 1. terrain, back to front
+        if (doTerrain) for (const t of tiles) await drawSpr(t.m, t.m.file, t.m.ax, t.m.ay, t.p.x, t.p.y, 1, false, 1);
+        if (!doObjects) return;
         // 2. shadows
         for (const o of sorted) {
-            const m = spriteMeta(o.name); if (!m || !m.sh || o.layer === 'flat') continue;
+            const m = spriteMeta(o.name, vk); if (!m || !m.sh || o.layer === 'flat') continue;
             const p = this.proj(o.x, o.z, o.y);
+            if (!onCard(p)) continue;
             await drawSpr(m.sh, m.sh.file, m.sh.ax, m.sh.ay, p.x, p.y, o.sc, o.flip, o.alpha);
         }
         // 3. objects (flat decals first)
-        for (const o of sorted.filter((q) => q.layer === 'flat')) {
-            const m = spriteMeta(o.name); const p = this.proj(o.x, o.z, o.y);
+        for (const o of sorted) {
+            if (o.layer !== 'flat') continue;
+            const m = spriteMeta(o.name, vk); const p = this.proj(o.x, o.z, o.y);
+            if (!onCard(p)) continue;
             await drawSpr(m, m.file, m.ax, m.ay, p.x, p.y, o.sc, o.flip, o.alpha);
         }
         for (const o of sorted) {
             if (o.layer === 'flat') continue;
-            const m = spriteMeta(o.name); const p = this.proj(o.x, o.z, o.y);
+            const m = spriteMeta(o.name, vk); const p = this.proj(o.x, o.z, o.y);
+            if (!onCard(p)) continue;
             await drawSpr(m, m.file, m.ax, m.ay, p.x, p.y, o.sc, o.flip, o.alpha);
         }
         // 4. overlays (labels, banners)
         for (const ov of this.overlays) { const p = this.proj(ov.x, ov.z, ov.y); ov.fn(ctx, p, k); }
     }
 }
-
 
 /** straight hex line between two cells (inclusive), as [[c,r],...] */
 function hexLine(c1, r1, c2, r2) {
@@ -466,68 +530,6 @@ async function paintBackdrop(ctx, W, H, seed, opts = {}) {
     ctx.globalAlpha = 1;
 }
 
-// ── liquid animation (owner 2026-10-18: "the old water used to have [shimmer]? use that to
-// make the water and lava animated") — the old 2D renderer toggled two baked water tiles
-// (frame%4<2). The hex tiles are single sprites, so the shimmer is painted OVER the scene:
-// each liquid cell gets a soft hex tint whose alpha flips between two states at the same
-// 220ms rhythm (2 cycles per 14-frame loop); lava glows amber instead of glinting blue.
-function paintLiquidAnim(ctx, world, cells, t) {
-    if (!cells || !cells.length) return;
-    ctx.save();
-    for (const q of cells) {
-        const p = world.proj(q.x, q.z, 0);
-        if (p.x < -60 || p.x > world.W + 60 || p.y < -60 || p.y > world.H + 60) continue;
-        const wave = Math.sin(2 * Math.PI * (2 * t + q.ph));
-        const on = wave > 0;
-        ctx.globalAlpha = q.lava ? (on ? 0.34 : 0.12) : (on ? 0.22 : 0.05);
-        ctx.fillStyle = q.lava ? (on && wave > 0.55 ? '#ffd76b' : '#ff9430') : '#cfeaff';
-        hexPath(ctx, world, q.c, q.r, 0.06);
-        ctx.fill();
-        if (q.lava && wave > 0.82) {                              // ember spark at crest
-            ctx.globalAlpha = 0.85 * (wave - 0.82) / 0.18;
-            ctx.fillStyle = '#ffe9a0';
-            ctx.beginPath(); ctx.arc(p.x + (q.ph - 0.5) * 26, p.y - 2, 2.1, 0, Math.PI * 2); ctx.fill();
-        }
-    }
-    ctx.restore();
-}
-
-/** collect the liquid cells of a resolved HexWorld as {c,r,x,z,ph,lava}, capped + seeded. */
-function liquidCells(w, { lava = false, cap = 150, seed = 1 } = {}) {
-    const out = [];
-    for (let r = 0; r < w.rows; r++) for (let c = 0; c < w.cols; c++) {
-        const k = w.cell[r][c];
-        if (k.water && !k.void) { const pw = hexWorld(c, r); out.push({ c, r, x: pw.x, z: pw.z, ph: 0, lava }); }
-    }
-    if (out.length > cap) {
-        const rng = mulberry32(seed);
-        for (let i = out.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); const tmp = out[i]; out[i] = out[j]; out[j] = tmp; }
-        out.length = cap;
-    }
-    for (const q of out) q.ph = (hashStr(`${q.c},${q.r}`) % 1000) / 1000;
-    return out;
-}
-
-// ── confetti (owner: "the animations for buildings and upgrades with the confetti") —
-// celebrated builds/upgrades rain paper scraps over the card. Deterministic per seed+t.
-const CONFETTI_COLS = ['#ff5d5d', '#ffc93c', '#4ecdc4', '#7c6ff0', '#ff9ff3', '#6bed8f', '#feca57'];
-function paintConfetti(ctx, W, H, t, seed, k) {
-    ctx.save();
-    for (let i = 0; i < 80; i++) {
-        const r1 = mulberry32(seed + 40 + i)(), r2 = mulberry32(seed + 440 + i)(), r3 = mulberry32(seed + 840 + i)();
-        const fall = (t * (1.3 + r3 * 0.9) + r1) % 1;
-        const x = W * (0.03 + 0.94 * r1) + Math.sin((t + r2) * Math.PI * 4) * 16 * k;
-        const y = -20 + fall * (H + 60);
-        ctx.globalAlpha = 0.95 * Math.min(1, Math.sin(Math.min(1, fall * 1.15) * Math.PI) * 2.2);   // vivid through the middle of the fall
-        ctx.fillStyle = CONFETTI_COLS[i % CONFETTI_COLS.length];
-        const s = (14 + r3 * 14) * k * 2, rot = (t + r2) * Math.PI * 2;   // chunky card-scale scraps (12-25px)
-        ctx.translate(x, y); ctx.rotate(rot);
-        ctx.fillRect(-s / 2, -s / 4, s, s / 2);
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-    }
-    ctx.restore();
-}
-
 function roundRect(ctx, x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -538,9 +540,32 @@ function roundRect(ctx, x, y, w, h, r) {
     ctx.closePath();
 }
 
+// ── confetti (owner: "the animations for buildings and upgrades with the confetti") —
+// celebrated builds/upgrades rain paper scraps over the card. Deterministic per seed+t.
+// NOTE: per-scrap save/restore (NOT setTransform reset) — animated mp4 frames compose
+// under a ctx scale, and an identity reset would shred the coordinate space.
+const CONFETTI_COLS = ['#ff5d5d', '#ffc93c', '#4ecdc4', '#7c6ff0', '#ff9ff3', '#6bed8f', '#feca57'];
+function paintConfetti(ctx, W, H, t, seed, k) {
+    ctx.save();
+    for (let i = 0; i < 80; i++) {
+        const r1 = mulberry32(seed + 40 + i)(), r2 = mulberry32(seed + 440 + i)(), r3 = mulberry32(seed + 840 + i)();
+        const fall = (t * (1.3 + r3 * 0.9) + r1) % 1;
+        const x = W * (0.03 + 0.94 * r1) + Math.sin((t + r2) * Math.PI * 4) * 16 * k;
+        const y = -20 + fall * (H + 60);
+        ctx.save();
+        ctx.globalAlpha = 0.95 * Math.min(1, Math.sin(Math.min(1, fall * 1.15) * Math.PI) * 2.2);   // vivid through the middle of the fall
+        ctx.fillStyle = CONFETTI_COLS[i % CONFETTI_COLS.length];
+        const s = (14 + r3 * 14) * k * 2, rot = (t + r2) * Math.PI * 2;   // chunky card-scale scraps (12-25px)
+        ctx.translate(x, y); ctx.rotate(rot);
+        ctx.fillRect(-s / 2, -s / 4, s, s / 2);
+        ctx.restore();
+    }
+    ctx.restore();
+}
+
 module.exports = {
-    biomeFile, biomeInfo,
-    hexLine, hexPath, paintBackdrop, paintLiquidAnim, liquidCells, paintConfetti, roundRect,
+    getView, DIR_ISO, biomeFile, biomeInfo,
+    hexLine, hexPath, paintBackdrop, roundRect, paintConfetti,
     HexWorld, hexWorld, neighbor, dirTo, ring, hexDist, mulberry32, hashStr,
     hasSprite, spriteMeta, loadSprite, tables, DIR, manifest, popcount, rotMask, SQ3,
 };

@@ -98,7 +98,7 @@ function shape(w, o) {
     for (let r = 0; r < w.rows; r++) for (let c = 0; c < w.cols; c++) {
         const k = w.cell[r][c];
         k.water = false;
-        k.void = false;   // FULL-BLEED (owner 2026-10-18 "no floating in the sky thing"): wilds run to the canvas edges
+        k.void = false;                               // terrain fills the whole frame: no void, no floating diorama
         if (isSea(c, r)) { k.water = true; k.sea = true; }
         if (o.cdist(c, r) <= o.keepR) { k.keepLand = true; k.water = false; k.sea = false; k.void = false; }
     }
@@ -166,15 +166,18 @@ function populate(S, w, o) {
     let fields = 0, windmill = null, farmHome = false;
     for (const [c, r] of outer) {
         const d = o.cdist(c, r), gap = edgeGap(c, r);
-        const rim = gap < 1.8 ? par.rim * (1.8 - gap) / 1.8 : 0;                // frame the diorama with ridges
-        const e = Math.min(1, E(c, r) + rim + (d >= 6 ? 0.04 : -0.12)), m = M(c, r), x = rng();
-        if (e > par.mountainE && d >= 6) {
+        const far = gap < 0.5;                                                  // beyond the near field: open country that runs off the frame
+        const farT = far ? Math.min(1, (0.5 - gap) / 4) : 0;                    // 0 at the near-field edge → 1 well out
+        // broad ridge/valley noise so the far field reads as real landscape (mountain ranges, wooded valleys, plains)
+        const ridge = far ? (fbm(S.seed + 313, K.hexWorld(c, r).x * 0.11, K.hexWorld(c, r).z * 0.11) - 0.5) * 0.5 : 0;
+        const e = Math.min(1, E(c, r) + ridge + 0.06 * farT + (d >= 6 ? 0.04 : -0.12)), m = M(c, r) + (far ? 0.1 : 0), x = rng();
+        if (e > par.mountainE - (far ? 0.03 : 0) && d >= 6) {
             w.put(pickOf(par.mountains), c, r); o.claim(c, r); stats.mountain.push([c, r]);
-        } else if (e > par.hillE && d >= 5 && x < par.hillP) {
+        } else if (e > par.hillE - (far ? 0.04 : 0) && d >= 5 && x < par.hillP) {
             w.put(pickOf(par.hills), c, r); o.claim(c, r); stats.hill.push([c, r]);
         } else if (par.oasisTrees && lakeNear(c, r, 2) && x < 0.7) {
             w.put(pickOf(par.treeM), c, r, { flip: rng() < 0.5 }); o.claim(c, r); stats.forest.push([c, r]);
-        } else if (par.forestP && m > par.forestM && x < par.forestP && d >= 5) {
+        } else if (par.forestP && m > par.forestM - (far ? 0.05 : 0) && x < par.forestP && d >= 5) {
             w.put(pickOf(par.trees), c, r, { flip: rng() < 0.5 }); o.claim(c, r); stats.forest.push([c, r]);
         } else if (par.fields && fields < 5 && d <= 7 && e < 0.5 && m > 0.3 && x < 0.5) {
             w.put('building_grain', c, r, { layer: 'flat' }); o.claim(c, r); fields++; stats.field.push([c, r]);
@@ -182,9 +185,9 @@ function populate(S, w, o) {
             windmill = [c, r]; w.put(o.B('windmill'), c, r); o.claim(c, r);
         } else if (par.fields && !farmHome && d <= 7 && e < 0.5 && x < 0.75) {
             farmHome = true; w.put(o.B('home_A'), c, r, { flip: true }); o.claim(c, r);
-        } else if (x < par.rockP) {
+        } else if (x < par.rockP + (far ? 0.03 : 0)) {
             w.put('rock_single_' + 'ABCDE'[Math.floor(rng() * 5)], c, r, { dx: (rng() - 0.5) * 0.8, dz: (rng() - 0.5) * 0.6 });
-        } else if (x < par.rockP + 0.10 && par.treeM.length && !par.oasisTrees) {
+        } else if (x < par.rockP + (far ? 0.03 : 0) + (far ? 0.18 : 0.10) && par.treeM.length && !par.oasisTrees) {
             w.put(pickOf(par.treeM), c, r, { flip: rng() < 0.5 }); o.claim(c, r);
         } else { stats.free.push([c, r]); }
     }
