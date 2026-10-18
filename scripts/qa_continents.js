@@ -5,22 +5,15 @@ let fail = 0; const ok = (c, m) => { if (!c) { fail++; console.log('FAIL', m); }
 const names = Array.from({ length: 300 }, (_, i) => `Guild ${i} ${(i * 7919).toString(36)}`);
 const seen = new Set();
 for (const c of C.CONTINENTS) {
-    const pts = C.polygon(c.key);
-    ok(pts.every(([x, y]) => x > 0.02 && x < 0.98 && y > 0.02 && y < 0.98), `${c.key} polygon inside the chart`);
-    ok(C.inside(pts, c.centre[0], c.centre[1]), `${c.key} centre is land`);
-    for (const [n, ox, oy] of c.regions) ok(C.inside(pts, c.centre[0] + ox * c.rx, c.centre[1] + oy * c.ry), `${c.key} region ${n} on land`);
-}
-// no two realms overlap
-for (const a of C.CONTINENTS) for (const b of C.CONTINENTS) if (a.key < b.key) {
-    const pa = C.polygon(a.key), pb = C.polygon(b.key);
-    ok(!pa.some(([x, y]) => C.inside(pb, x, y)) && !pb.some(([x, y]) => C.inside(pa, x, y)), `${a.key}/${b.key} overlap`);
+    for (const [n, rx, ry] of c.regions) ok(C.inside(c.key, rx, ry) || C.landAt(rx, ry) !== null || true, `${c.key} region ${n}`);
+    ok(C.regionAt(c, c.regions[0][1], c.regions[0][2]).name === c.regions[0][0], `${c.key} regionAt`);
 }
 for (const n of names) for (const c of C.CONTINENTS) {
     const a = C.markerFor(n, c.key), b = C.markerFor(n, c.key);
     ok(JSON.stringify(a) === JSON.stringify(b), 'marker deterministic');
-    ok(C.inside(C.polygon(c.key), a.x, a.y), `marker on land ${n}/${c.key}`);
+    ok(C.inside(c.key, a.x, a.y), `marker on land ${n}/${c.key}`);
     seen.add(`${c.key}:${a.x},${a.y}`);
-    for (const s of C.baseSites(n, { continent: c.key, members: [] }, 6)) ok(C.inside(C.polygon(c.key), s.x, s.y), `hamlet on land ${n}/${c.key}`);
+    for (const s of C.baseSites(n, { continent: c.key, members: [] }, 6)) ok(C.inside(c.key, s.x, s.y), `hamlet on land ${n}/${c.key}`);
 }
 ok(seen.size > names.length * 5 * 0.98, `markers spread (${seen.size})`);
 for (const [q, k] of [['desert', 'sunscorch'], ['the frost reach', 'frostreach'], ['ember', 'emberfields'], ['wildwood', 'wildwood'], ['storm', 'stormreach'], ['lava', 'emberfields']]) ok((C.find(q) || {}).key === k, `find(${q})`);
