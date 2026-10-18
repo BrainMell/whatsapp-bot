@@ -20877,7 +20877,8 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                         );
                       }
 
-                      if (guildName.length < 3) {
+                      const guildNameOnly = guildName.split("|")[0].trim();   // length rules apply to the name, not the "| type | realm" tail
+                      if (guildNameOnly.length < 3) {
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
@@ -20886,7 +20887,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                         return;
                       }
 
-                      if (guildName.length > 30) {
+                      if (guildNameOnly.length > 30) {
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
@@ -20898,20 +20899,36 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                       try {
                         const parts = guildName.split("|");
                         const name = parts[0].trim();
-                        const archetype = parts[1]
-                          ? parts[1].trim()
-                          : "ADVENTURER";
+                        // remaining parts: a guild path (ADVENTURER/MERCHANT/RESEARCH) and/or a realm, in any order
+                        const continentsLib = require("./rpg/continents");
+                        let archetype = "ADVENTURER";
+                        let realm = null;
+                        for (const part of parts.slice(1).map((x) => x.trim()).filter(Boolean)) {
+                          const found = continentsLib.find(part);
+                          if (found) realm = found;
+                          else archetype = part;
+                        }
+                        if (!realm) {
+                          // the realm is the guild's home land — ask before founding
+                          await sock.sendMessage(chatId, {
+                            text:
+                              BOT_MARKER +
+                              `🌍 *Choose your realm, founder.*\nYour guild kingdom and every member's home base will grow from its land.\n\n${continentsLib.chooserText(botConfig.getPrefix())}\n\n_${botConfig.getPrefix()} realms — see the map of all five_`,
+                          });
+                          return;
+                        }
 
                         const result = guilds.createGuild(
                           name,
                           senderJid,
                           archetype,
+                          realm.key,
                         );
                         await sock.sendMessage(chatId, {
                           text:
                             BOT_MARKER +
                             result.message +
-                            `\n\n💡 Use \`${botConfig.getPrefix()} guild create <name> | <type>\` to choose a path: ADVENTURER, MERCHANT, or RESEARCH.`,
+                            `\n\n💡 Use \`${botConfig.getPrefix()} guild create <name> | <type> | <realm>\` to choose a path (ADVENTURER, MERCHANT, or RESEARCH) and a realm. \`${botConfig.getPrefix()} guild map\` shows where your charter-stone stands.`,
                         });
                       } catch (err) {
                         console.error("Guild create error:", err);
@@ -22131,6 +22148,41 @@ Admins can:
                       }
                     }
 
+                    // 🌍 `.j guild map` / `.j guild realm` — the continent map with YOUR guild's charter-stone
+                    // and member hearths; `.j realms` / `.j continents` — the plain atlas + realm chooser.
+                    {
+                      const _pf = botConfig.getPrefix().toLowerCase();
+                      const _isMine = lowerTxt === `${_pf} guild map` || lowerTxt === `${_pf} guild realm`;
+                      const _isAtlas = lowerTxt === `${_pf} realms` || lowerTxt === `${_pf} continents`;
+                      if (_isMine || _isAtlas) {
+                        try {
+                          const continentsLib = require('./rpg/continents');
+                          const cmr = require('./rpg/continentMapRenderer');
+                          let gName = null, gRec = null;
+                          if (_isMine) {
+                            gName = guilds.getUserGuild(senderJid);
+                            if (!gName) return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You are not in a guild. See \`${botConfig.getPrefix()} realms\` for the five lands.` });
+                            gRec = guilds.getGuild(gName);
+                          }
+                          const buf = await cmr.renderContinentMap({ guildName: gName, guild: gRec });
+                          let cap;
+                          if (gName) {
+                            const pl = continentsLib.placementOf(gName, gRec || {});
+                            const rc = continentsLib.get(pl.continent);
+                            cap = `🌍 *${gName}* — ${rc.name}\n_${rc.epithet}_\n📍 Charter-stone: *${pl.marker.region}*\n\n${rc.lore}`;
+                          } else {
+                            cap = `🌍 *THE FIVE REALMS*\n\n${continentsLib.chooserText(botConfig.getPrefix())}`;
+                          }
+                          if (buf && buf.length > 100) await sock.sendMessage(chatId, { image: buf, caption: BOT_MARKER + cap }, { quoted: m });
+                          else await sock.sendMessage(chatId, { text: BOT_MARKER + cap }, { quoted: m });
+                        } catch (e) {
+                          console.error('[guild] realm map failed:', e?.message || e);
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ The cartographer dropped his quill. Try again in a minute.' });
+                        }
+                        return;
+                      }
+                    }
+
                     // `.g guild info` - comprehensive guild info (level, members, perks, buildings)
                     // 💡 2026-09-14 owner: "add an image card to the guild info
                     // command" - GUILDINFO charter card (800x800) is now the
@@ -22182,6 +22234,7 @@ Admins can:
                             emblemColor: guild.emblem?.color || '',
                             emblemIcon: guild.emblem?.icon || '',
                             motto: guild.motto || '',
+                            continent: guild.continent || '',     // realm → biome (continents.js); '' = legacy name-hash biome
                           }, { hint: `${botConfig.getPrefix()} guild upgrade hall • ${botConfig.getPrefix()} guild donate • ${botConfig.getPrefix()} guild perks` });
                         } catch (e) {
                           console.error('[guild] base grounds render failed:', e?.message || e);
@@ -22194,6 +22247,7 @@ Admins can:
                           const capB = BOT_MARKER +
                             `🏰 *${userGuild}* — Lv ${guildLevel} · XP ${guildPoints.toLocaleString()}/${guildXpNeed.toLocaleString()}\n` +
                             `🏷️ Archetype: ${String(guild.type || 'ADVENTURER').toUpperCase()}\n` +
+                            `🌍 Realm: ${require('./rpg/continents').continentOf({ name: userGuild, continent: guild.continent }).name}\n` +
                             `👤 Leader: ${guild.owner ? '@' + guild.owner.split('@')[0] : 'unknown'}\n` +
                             `👥 Members: ${(guild.members || []).length}/${memberCap}\n` +
                             `💰 Bank: ${(guild.balance || 0).toLocaleString()} Zeni\n` +

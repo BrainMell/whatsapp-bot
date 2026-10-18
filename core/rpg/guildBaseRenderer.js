@@ -422,7 +422,7 @@ function drawBanner(ctx, x, y, k, flagCol, flagD, icon, t) {
 const _scenes = new Map();
 const SCENE_MAX = 4;
 function sceneKey(state, opts) {
-    return hashStr(JSON.stringify([state.name, state.level, state.archetype, state.buildings, state.memberCount, state.emblemColor, state.emblemIcon, state.biome]));
+    return hashStr(JSON.stringify([state.name, state.level, state.archetype, state.buildings, state.memberCount, state.emblemColor, state.emblemIcon, state.biome, state.continent]));
 }
 
 async function buildScene(state) {
@@ -523,7 +523,7 @@ function drawHud(ctx, state, opts, W, H) {
     ctx.fillText(`${state.emblemIcon ? state.emblemIcon + ' ' : ''}${String(state.name || 'Guild').slice(0, 20)}`, x0 + 26, y0 + 34);
     ctx.font = '16px Medieval';
     ctx.fillStyle = '#9c8455';
-    ctx.fillText(`${ARCH[arch].label} Guild · Level ${state.level || 1}`, x0 + 26, y0 + 60);
+    ctx.fillText(`${ARCH[arch].label} Guild · Level ${state.level || 1} · ${require('./continents').continentOf(state).name.replace(/^The /, '')}`, x0 + 26, y0 + 60);
 
     ctx.textAlign = 'center';
     ctx.font = '20px Cinzel';
@@ -628,7 +628,7 @@ function cachePut(map, k, out) {
 const _renderCache = new Map();
 const CACHE_TTL = 10 * 60 * 1000;
 function stateHash(state, opts = {}) {
-    return hashStr(JSON.stringify(['v10-coastal', state.name, state.biome || '', state.level, state.archetype, state.buildings, state.memberCount, state.memberCap, state.emblemColor, state.emblemIcon, state.motto, opts.hint || '', opts.static === false ? 0 : 1]));
+    return hashStr(JSON.stringify(['v11-realms', state.name, state.biome || '', state.continent || '', state.level, state.archetype, state.buildings, state.memberCount, state.memberCap, state.emblemColor, state.emblemIcon, state.motto, opts.hint || '', opts.static === false ? 0 : 1]));
 }
 
 async function renderGuildBaseImage(state, opts = {}) {
