@@ -93,3 +93,4 @@ core/rpgasset/guildbase/*.png -text
 
 # kingdom3d baked sprites: plain git blobs (deploy-safe, no LFS dependency)
 core/rpgasset/kingdom3d/*.png -filter -diff -merge -text
+core/rpgasset/kingdom3d/biomes/*/*.png -filter -diff -merge -text
