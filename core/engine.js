@@ -12610,10 +12610,28 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
-                    // .j world [beyond|afterlife|abyss] - live cosmology charts
-                    // (owner pass-3 geometry; gates per world_map.md §1)
+                    // .j world [cosmology|beyond|afterlife|abyss] — DEFAULT (bare) = the mortal
+                    // world: the five realms atlas (owner 2026-10-18 "by default it should show
+                    // the continents, sub command for the existing cosmology map"). The cosmology
+                    // charts (First World / Beyond / Afterlife / Abyss / full atlas) stay here:
+                    //   .j world cosmology → the full cosmology atlas
+                    //   .j world first → the First World sheet; beyond/afterlife/abyss as before
                     if (primaryCmd === "world" || primaryCmd === "maps" || primaryCmd === "map") {
                       try {
+                        const __wArg = cmdArgs.slice(1).join(" ").trim().toLowerCase();
+                        if (!__wArg) {
+                          const cmr = require('./rpg/continentMapRenderer');
+                          const continentsLib = require('./rpg/continents');
+                          const __buf = await cmr.renderContinentMap({});
+                          const __cap = BOT_MARKER +
+                            `🌍 *THE FIVE REALMS* — the mortal world of the First World.\n` +
+                            `_Every guild claims its charter-stone here; member bases grow from that land._\n\n` +
+                            continentsLib.chooserText(botConfig.getPrefix()) +
+                            `\n\n🌙 The wider cosmology — First World, World Beyond, Afterlife, Abyss — \`${botConfig.getPrefix()} world cosmology\``;
+                          if (__buf && __buf.length > 100) await sock.sendMessage(chatId, { image: __buf, caption: __cap }, { quoted: m });
+                          else await sock.sendMessage(chatId, { text: __cap }, { quoted: m });
+                          return;
+                        }
                         const worldMap = require('./rpg/worldMap');
                         const progressionForWorld = require('./rpg/progression');
                         const __wUser = economy.getUser(senderJid) || {};
@@ -21956,6 +21974,39 @@ Admins can:
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + result.message,
                       });
+                      // 🎉 a successful upgrade plays the celebrate bake — animated kingdom
+                      // (banner wave + water/lava shimmer + confetti) on top of the grounds
+                      if (result.success) {
+                        try {
+                          const _ug = guilds.getUserGuild(senderJid);
+                          const _g = _ug ? guilds.getGuild(_ug) : null;
+                          if (_ug && _g) {
+                            const gbr = require('./rpg/guildBaseRenderer');
+                            const _media = await gbr.renderGuildBaseImage({
+                              name: _ug,
+                              level: _g.level || 1,
+                              archetype: String(_g.type || 'ADVENTURER').toUpperCase(),
+                              buildings: {
+                                hall: (_g.buildings?.hall?.level) || 0,
+                                training: (_g.buildings?.training?.level) || 0,
+                                treasury: (_g.buildings?.treasury?.level) || 0,
+                              },
+                              memberCount: (_g.members || []).length,
+                              emblemColor: _g.emblem?.color || '',
+                              emblemIcon: _g.emblem?.icon || '',
+                              motto: _g.motto || '',
+                              continent: _g.continent || '',
+                            }, { static: false, celebrate: true, hint: `${buildingId.toUpperCase()} rises!` });
+                            if (_media && _media.buffer && _media.buffer.length > 100) {
+                              const _cap = BOT_MARKER + `🎉 *${_ug}* — the *${buildingId}* works rise!`;
+                              if (_media.contentType === 'video/mp4') await sock.sendMessage(chatId, { video: _media.buffer, gifPlayback: true, caption: _cap });
+                              else await sock.sendMessage(chatId, { image: _media.buffer, caption: _cap });
+                            }
+                          }
+                        } catch (_ce) {
+                          console.error('[guild] celebrate render failed:', _ce?.message || _ce);
+                        }
+                      }
                       await awardProgression(senderJid, chatId);
                       return;
                     }

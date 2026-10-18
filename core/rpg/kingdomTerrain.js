@@ -98,7 +98,7 @@ function shape(w, o) {
     for (let r = 0; r < w.rows; r++) for (let c = 0; c < w.cols; c++) {
         const k = w.cell[r][c];
         k.water = false;
-        k.void = o.cdist(c, r) > R(c, r) + (par.coastal && isSea(c, r) ? 1.6 : 0);
+        k.void = false;   // FULL-BLEED (owner 2026-10-18 "no floating in the sky thing"): wilds run to the canvas edges
         if (isSea(c, r)) { k.water = true; k.sea = true; }
         if (o.cdist(c, r) <= o.keepR) { k.keepLand = true; k.water = false; k.sea = false; k.void = false; }
     }

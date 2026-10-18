@@ -153,7 +153,7 @@ async function viewBase(ctx, opts = {}) {
     try {
         let watchdogTimer;
         media = await Promise.race([
-            renderer.renderBaseImage(state, { hint: opts.hint, static: false }),
+            renderer.renderBaseImage(state, { hint: opts.hint, static: false, celebrate: opts.celebrate }),
             new Promise((_, reject) => {
                 watchdogTimer = setTimeout(() => reject(new Error('render watchdog: base render exceeded 90s')), 90000);
                 if (watchdogTimer.unref) watchdogTimer.unref();
@@ -446,6 +446,24 @@ async function handleBaseCommand(ctx) {
 
     if (!economy.isRegistered(ctx.senderJid)) {
         return ctx.reply(`❌ You need to register first!\n\nType: \`${ctx.prefix} register <nickname>\``);
+    }
+    // 🌍 A base grows from a guild's realm land (owner 2026-10-18: "if a player checks base
+    // tell um they have to join a guild") — the base, its biome and its plots all charter
+    // from the guild's realm, so land claims start at a guild.
+    if (sub !== 'help' && sub !== 'admin' && sub !== 'baseadmin') {
+        try {
+            const _guilds = require('./guilds');
+            if (!_guilds.getUserGuild(ctx.senderJid)) {
+                return ctx.reply(
+                    `🌍 *Your hands hold no charter.*\n` +
+                    `Land in the Five Realms is claimed through a guild — found or join one and your base, its realm and every plot grow from its charter-stone.\n\n` +
+                    `• \`${ctx.prefix} guild create <name> | <type> | <realm>\` — found a guild (types: ADVENTURER, MERCHANT, RESEARCH)\n` +
+                    `• \`${ctx.prefix} guild list\` — guilds recruiting members\n` +
+                    `• \`${ctx.prefix} guild join <name>\` — pledge yourself to a banner\n` +
+                    `• \`${ctx.prefix} realms\` — see the map of the Five Realms`
+                );
+            }
+        } catch (e) { /* fail-open: the realm lookup inside the renderer already falls back to the owner seed */ }
     }
     try {
         switch (sub) {

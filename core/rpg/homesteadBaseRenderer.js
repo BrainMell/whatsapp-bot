@@ -25,7 +25,10 @@ const mediaCache = require('./mediaCache');
 
 const N = 16;                 // base tiles per side (saved-structure grid)
 const M = 3;                  // wilderness margin (hex cells) around the grid
-const COLS = N + 2 * M, ROWS = N + 2 * M;
+const BLEED = 6;              // FULL-BLEED margin (owner 2026-10-18: no more floating island —
+                              // the generation stretches to cover the full screen; these extra
+                              // cells hang off every edge of the fixed canvas)
+const COLS = N + 2 * (M + BLEED), ROWS = N + 2 * (M + BLEED);
 const FRAMES = 14, FRAME_MS = 110;
 const SCALE = parseFloat(process.env.RENDER_BASE_SCALE || '0.44') || 0.44;
 
@@ -166,7 +169,7 @@ function buildWorld(state) {
     const used = new Set();
     const claim = (c, r) => used.add(keyOf(c, r));
 
-    // ── island silhouette: the 16x16 grid + a ragged wilderness margin ──
+    // ── full-bleed land: the 16x16 grid + ragged wilderness to the EDGES (no void, no sky) ──
     const ph1 = rng() * 6.28, ph2 = rng() * 6.28;
     const coastN = (c, r) => 0.5 + 0.5 * Math.sin(c * 0.9 + ph1) * Math.cos(r * 0.8 + ph2);
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
@@ -176,15 +179,15 @@ function buildWorld(state) {
         const out = Math.hypot(dx, dy * 1.15);
         const reach = 1.6 + 1.5 * coastN(c, r);
         const k = w.cell[r][c];
-        if (land) { k.water = false; k.void = out > reach; }       // land realms: ragged edge fades into haze, no sea
-        else { k.water = out > reach; k.void = out > reach + 1.8; }
+        if (land) { k.water = false; k.void = false; }             // land realms: biome ground past the borders
+        else { k.water = out > reach; k.void = false; }            // coastal realm: the sea runs to the edges
         if (out <= 1.2) k.keepLand = true;
     }
     // coastal realm / ashlands: the south-east margin is open water (sea) or a lava lake (volcanic set recolours water)
     if (biome === 'coast' || biome === 'ashlands') {
         for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
             const gx = c - M, gy = r - M;
-            if (gx > N - 1 - 1 && gy > 6) { w.cell[r][c].water = true; w.cell[r][c].keepLand = false; }
+            if (gx > N - 1 - 2 && gy > 5) { w.cell[r][c].water = true; w.cell[r][c].keepLand = false; }
         }
     }
 
@@ -214,7 +217,7 @@ function buildWorld(state) {
         const [c1, r1] = hc(p1[0], p1[1]), [c2, r2] = hc(p2[0], p2[1]);
         roadCells(K.hexLine(c1, r1, c2, r2));
     };
-    roadLine([8, 4], [8, N + 2]);                         // main street, through the gate and out
+    roadLine([8, 4], [8, N + 2 + BLEED]);                 // main street, through the gate and off into the wilds
     roadLine([3, 4], [13, 4]);                            // north lane (miners' row + pond lane)
     roadLine([2, 9], [7, 9]);                             // hunting walk
     roadLine([5, 10], [14, 10]);                          // south lanes
@@ -419,13 +422,14 @@ async function buildScene(state) {
     const hit = _scenes.get(key0);
     if (hit) { _scenes.delete(key0); _scenes.set(key0, hit); return hit; }
     const { w, info, plots, team, biome, realm } = buildWorld(state);
-    const { W, H } = w.layout({ top: 170, bottom: 190, left: 30, right: 30 });
+    const { W, H } = w.layoutBleed(N + 2 * M, N + 2 * M, { top: 170, bottom: 190, left: 30, right: 30 }, BLEED);
     const canvas = require('canvas').createCanvas(W, H);
     const ctx = canvas.getContext('2d');
     const seed = hashStr(state.owner || 'base');
     const bi = (K.biomeInfo().biomes || {})[realm];
     const bd = realm === 'isle' ? { top: '#cfe8ef', mid: '#8fc7b2', bot: '#3f7a5c' } : bi ? { top: bi.backdrop[0], mid: bi.backdrop[1], bot: bi.backdrop[2] } : { top: '#356f6a', mid: '#1f4a4c', bot: '#0d2527' };
     await w.draw(ctx, { drawBackdrop: (c2) => K.paintBackdrop(c2, W, H, seed, { clouds: 7, cloudScale: SCALE * 1.1, ...bd }) });
+    const liquid = K.liquidCells(w, { lava: biome === 'ashlands', seed: seed ^ 0x51ed, cap: 160 });   // animated water/lava cells
     const k = SCALE;
     const smoke = [];
     for (const it of info) {
@@ -437,7 +441,7 @@ async function buildScene(state) {
             const sp = w.proj(it.cen.x + 0.5, it.cen.z - 0.4, 2.2); smoke.push({ x: sp.x, y: sp.y, smoky: it.st.type === 'blacksmith' });
         }
     }
-    const scene = { canvas, W, H, w, k, smoke, biome };
+    const scene = { canvas, W, H, w, k, smoke, biome, liquid };
     _scenes.set(key0, scene);
     while (_scenes.size > SCENE_MAX) _scenes.delete(_scenes.keys().next().value);
     return scene;
@@ -454,6 +458,8 @@ async function renderFrame(state, frame, opts = {}) {
     const t = (frame || 0) / FRAMES;
     const seed = hashStr(state.owner || 'base');
     if (opts.animate || frame > 0) {
+        K.paintLiquidAnim(ctx, sc.w, sc.liquid, t);              // water shimmer / lava glow (old 2-state rhythm)
+        if (opts.celebrate) K.paintConfetti(ctx, sc.W, sc.H, t, seed, sc.k);   // build/upgrade celebration
         ctx.save();
         for (const s of sc.smoke) {                              // chimney / forge smoke puffs
             for (let i = 0; i < 4; i++) {
@@ -558,7 +564,7 @@ function cachePut(map, k, out) {
 const _renderCache = new Map();
 const CACHE_TTL = 10 * 60 * 1000;
 function stateHash(state, opts = {}) {
-    return hashStr(JSON.stringify(['v9-realms', state.owner, realmBiome(state), state.structures, state.freePlots, opts.hint || '', opts.static ? 1 : 0]));
+    return hashStr(JSON.stringify(['v9-realms', state.owner, realmBiome(state), state.structures, state.freePlots, opts.hint || '', opts.static ? 1 : 0, opts.celebrate ? 1 : 0]));
 }
 
 async function renderBaseImage(state, opts = {}) {

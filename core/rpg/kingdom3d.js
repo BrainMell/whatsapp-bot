@@ -311,7 +311,27 @@ class HexWorld {
         this.ox = left + S * k;           // x of hex(0,0) centre
         this.oy = top;                    // y of hex(0,0) centre (top surface)
         this.H = Math.ceil(this.oy + ((SQ3 * (this.rows - 1) + 1.1547) * SIN_P() + COS_P()) * S * k + bottom);
+        if (pad.W) this.W = pad.W;        // fixed-canvas override (full-bleed renders)
+        if (pad.H) this.H = pad.H;
         return { W: this.W, H: this.H };
+    }
+
+    /** FULL-BLEED layout (owner 2026-10-18: "ion like the floating in the sky thing — fill in
+     *  the rest of the space / stretch the generation to cover the full screen"): the grid was
+     *  built with `extra` margin cells on every side around the ORIGINAL cols×rows diorama;
+     *  canvas stays the ORIGINAL size and the origin shifts so the margin cells hang off every
+     *  edge — terrain covers the whole card, no sky void. */
+    layoutBleed(origCols, origRows, pad = {}, extra = 0) {
+        const S = BAKE_S(), k = this.scale;
+        const left = pad.left == null ? 30 : pad.left, right = pad.right == null ? 30 : pad.right;
+        const top = pad.top == null ? 300 : pad.top, bottom = pad.bottom == null ? 60 : pad.bottom;
+        const W = Math.ceil((2 * origCols + 1) * S * k + left + right);
+        const oy0 = top;
+        const H = Math.ceil(oy0 + ((SQ3 * (origRows - 1) + 1.1547) * SIN_P() + COS_P()) * S * k + bottom);
+        this.W = W; this.H = H;
+        this.ox = left + S * k - 2 * extra * S * k;                 // shift left by the extra cols
+        this.oy = oy0 - SQ3 * SIN_P() * S * k * extra;              // shift up by the extra rows
+        return { W, H };
     }
     proj(x, z, y = 0) {
         const S = BAKE_S(), k = this.scale;
@@ -341,7 +361,8 @@ class HexWorld {
             else ctx.drawImage(img, dx, dy, w, h);
             if (alpha < 1) ctx.globalAlpha = 1;
         };
-        // 1. terrain, row by row
+        // 1. terrain, row by row (full-bleed grids extend past the canvas — skip off-card tiles)
+        const tw = 2 * S * k, th2 = 2 * S * k;
         for (let r = 0; r < this.rows; r++) {
             for (let c = 0; c < this.cols; c++) {
                 const kcell = this.cell[r][c];
@@ -349,6 +370,7 @@ class HexWorld {
                 const m = spriteMeta(kcell.tile); if (!m) continue;
                 const w = hexWorld(c, r);
                 const p = this.proj(w.x, w.z, kcell.h || 0);
+                if (p.x < -tw || p.x > this.W + tw || p.y < -th2 || p.y > this.H + th2) continue;
                 await drawSpr(m, m.file, m.ax, m.ay, p.x, p.y, 1, false, 1);
             }
         }
@@ -444,6 +466,68 @@ async function paintBackdrop(ctx, W, H, seed, opts = {}) {
     ctx.globalAlpha = 1;
 }
 
+// ── liquid animation (owner 2026-10-18: "the old water used to have [shimmer]? use that to
+// make the water and lava animated") — the old 2D renderer toggled two baked water tiles
+// (frame%4<2). The hex tiles are single sprites, so the shimmer is painted OVER the scene:
+// each liquid cell gets a soft hex tint whose alpha flips between two states at the same
+// 220ms rhythm (2 cycles per 14-frame loop); lava glows amber instead of glinting blue.
+function paintLiquidAnim(ctx, world, cells, t) {
+    if (!cells || !cells.length) return;
+    ctx.save();
+    for (const q of cells) {
+        const p = world.proj(q.x, q.z, 0);
+        if (p.x < -60 || p.x > world.W + 60 || p.y < -60 || p.y > world.H + 60) continue;
+        const wave = Math.sin(2 * Math.PI * (2 * t + q.ph));
+        const on = wave > 0;
+        ctx.globalAlpha = q.lava ? (on ? 0.30 : 0.10) : (on ? 0.16 : 0.04);
+        ctx.fillStyle = q.lava ? (on && wave > 0.55 ? '#ffd76b' : '#ff9430') : '#cfeaff';
+        hexPath(ctx, world, q.c, q.r, 0.06);
+        ctx.fill();
+        if (q.lava && wave > 0.82) {                              // ember spark at crest
+            ctx.globalAlpha = 0.85 * (wave - 0.82) / 0.18;
+            ctx.fillStyle = '#ffe9a0';
+            ctx.beginPath(); ctx.arc(p.x + (q.ph - 0.5) * 26, p.y - 2, 2.1, 0, Math.PI * 2); ctx.fill();
+        }
+    }
+    ctx.restore();
+}
+
+/** collect the liquid cells of a resolved HexWorld as {c,r,x,z,ph,lava}, capped + seeded. */
+function liquidCells(w, { lava = false, cap = 150, seed = 1 } = {}) {
+    const out = [];
+    for (let r = 0; r < w.rows; r++) for (let c = 0; c < w.cols; c++) {
+        const k = w.cell[r][c];
+        if (k.water && !k.void) { const pw = hexWorld(c, r); out.push({ c, r, x: pw.x, z: pw.z, ph: 0, lava }); }
+    }
+    if (out.length > cap) {
+        const rng = mulberry32(seed);
+        for (let i = out.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); const tmp = out[i]; out[i] = out[j]; out[j] = tmp; }
+        out.length = cap;
+    }
+    for (const q of out) q.ph = (hashStr(`${q.c},${q.r}`) % 1000) / 1000;
+    return out;
+}
+
+// ── confetti (owner: "the animations for buildings and upgrades with the confetti") —
+// celebrated builds/upgrades rain paper scraps over the card. Deterministic per seed+t.
+const CONFETTI_COLS = ['#ff5d5d', '#ffc93c', '#4ecdc4', '#7c6ff0', '#ff9ff3', '#6bed8f', '#feca57'];
+function paintConfetti(ctx, W, H, t, seed, k) {
+    ctx.save();
+    for (let i = 0; i < 46; i++) {
+        const r1 = mulberry32(seed + 40 + i)(), r2 = mulberry32(seed + 440 + i)(), r3 = mulberry32(seed + 840 + i)();
+        const fall = (t * (1.3 + r3 * 0.9) + r1) % 1;
+        const x = W * (0.03 + 0.94 * r1) + Math.sin((t + r2) * Math.PI * 4) * 16 * k;
+        const y = -20 + fall * (H + 60);
+        ctx.globalAlpha = 0.85 * Math.sin(Math.min(1, fall * 1.15) * Math.PI);
+        ctx.fillStyle = CONFETTI_COLS[i % CONFETTI_COLS.length];
+        const s = (2.6 + r3 * 3.4) * k * 2, rot = (t + r2) * Math.PI * 2;
+        ctx.translate(x, y); ctx.rotate(rot);
+        ctx.fillRect(-s / 2, -s / 4, s, s / 2);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+    }
+    ctx.restore();
+}
+
 function roundRect(ctx, x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -456,7 +540,7 @@ function roundRect(ctx, x, y, w, h, r) {
 
 module.exports = {
     biomeFile, biomeInfo,
-    hexLine, hexPath, paintBackdrop, roundRect,
+    hexLine, hexPath, paintBackdrop, paintLiquidAnim, liquidCells, paintConfetti, roundRect,
     HexWorld, hexWorld, neighbor, dirTo, ring, hexDist, mulberry32, hashStr,
     hasSprite, spriteMeta, loadSprite, tables, DIR, manifest, popcount, rotMask, SQ3,
 };

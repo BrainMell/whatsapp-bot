@@ -26,7 +26,8 @@ const KT = require('./kingdomTerrain');
 const mediaCache = require('./mediaCache');
 
 const FRAMES = 14, FRAME_MS = 110;
-const COLS = 17, ROWS = 15, CC = 8, CR = 7;     // 17x15 hex island, castle on (8,7)
+const BLEED = 6;                              // full-bleed margin cells around the kingdom grounds
+const COLS = 17 + 2 * BLEED, ROWS = 15 + 2 * BLEED, CC = 8 + BLEED, CR = 7 + BLEED;     // 17x15 kingdom + FULL-BLEED wilds to every edge (owner 2026-10-18: no floating island)
 const SCALE = parseFloat(process.env.RENDER_GUILD_SCALE || '0.5') || 0.5;
 const PREFIX = '.j'; // display-only default; engine passes real prefix via opts.hint when it matters
 const FONTS = path.join(__dirname, '..', 'rpgasset', 'fonts');
@@ -432,7 +433,7 @@ async function buildScene(state) {
     if (hit) { _scenes.delete(key0); _scenes.set(key0, hit); return hit; }
 
     const { w, castle, hall, train, treas, team, gateCell } = buildWorld(state);
-    const { W, H } = w.layout({ top: 190, bottom: 190, left: 36, right: 36 });
+    const { W, H } = w.layoutBleed(17, 15, { top: 190, bottom: 190, left: 36, right: 36 }, BLEED);
     const canvas = require('canvas').createCanvas(W, H);
     const ctx = canvas.getContext('2d');
     const seed = hashStr(state.name || 'guild');
@@ -440,6 +441,7 @@ async function buildScene(state) {
     const bi = (K.biomeInfo().biomes || {})[w.biome];
     const bd = biome0 === 'isle' ? { top: '#cfe8ef', mid: '#8fc7b2', bot: '#3f7a5c' } : bi ? { top: bi.backdrop[0], mid: bi.backdrop[1], bot: bi.backdrop[2] } : {};
     await w.draw(ctx, { drawBackdrop: (c2) => K.paintBackdrop(c2, W, H, seed, { clouds: 8, cloudScale: SCALE * 1.05, ...bd }) });
+    const liquid = K.liquidCells(w, { lava: biome0 === 'volcanic', seed: seed ^ 0x2b99, cap: 170 });   // animated sea/lakes/lava
 
     // facility plaques + banner (drawn over the art, anchored under each facility)
     const k = SCALE;
@@ -460,7 +462,7 @@ async function buildScene(state) {
     const roofH = [0, 2.3, 2.2, 2.0, 4.1, 4.1][hall] || 2.5;
     const bpos = w.proj(wc.x, wc.z, roofH + 0.1);
 
-    const scene = { canvas, W, H, w, banner: { x: bpos.x, y: bpos.y, flagCol, flagD: archC.flagD, icon: state.emblemIcon || '' }, k };
+    const scene = { canvas, W, H, w, banner: { x: bpos.x, y: bpos.y, flagCol, flagD: archC.flagD, icon: state.emblemIcon || '' }, k, liquid };
     _scenes.set(key0, scene);
     while (_scenes.size > SCENE_MAX) _scenes.delete(_scenes.keys().next().value);
     return scene;
@@ -478,7 +480,9 @@ async function renderFrame(state, frame, opts = {}) {
     // waving banner over the keep
     if (sc.banner) drawBanner(ctx, sc.banner.x, sc.banner.y, sc.k, sc.banner.flagCol, sc.banner.flagD, sc.banner.icon, t);
     if (opts.animate || frame > 0) {
-        // sea glints + drifting fireflies around the keep
+        // water shimmer / lava glow + sea glints and drifting fireflies around the keep
+        K.paintLiquidAnim(ctx, sc.w, sc.liquid, t);
+        if (opts.celebrate) K.paintConfetti(ctx, sc.W, sc.H, t, hashStr(state.name || 'guild'), sc.k);
         const seed = hashStr(state.name || 'guild');
         ctx.save();
         for (let i = 0; i < 26; i++) {
@@ -628,7 +632,7 @@ function cachePut(map, k, out) {
 const _renderCache = new Map();
 const CACHE_TTL = 10 * 60 * 1000;
 function stateHash(state, opts = {}) {
-    return hashStr(JSON.stringify(['v11-realms', state.name, state.biome || '', state.continent || '', state.level, state.archetype, state.buildings, state.memberCount, state.memberCap, state.emblemColor, state.emblemIcon, state.motto, opts.hint || '', opts.static === false ? 0 : 1]));
+    return hashStr(JSON.stringify(['v11-realms', state.name, state.biome || '', state.continent || '', state.level, state.archetype, state.buildings, state.memberCount, state.memberCap, state.emblemColor, state.emblemIcon, state.motto, opts.hint || '', opts.static === false ? 0 : 1, opts.celebrate ? 1 : 0]));
 }
 
 async function renderGuildBaseImage(state, opts = {}) {
