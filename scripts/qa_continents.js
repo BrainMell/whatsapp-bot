@@ -23,9 +23,18 @@ for (const n of names) for (const c of C.CONTINENTS) {
     for (const s of C.baseSites(n, { continent: c.key, members: [] }, 6)) ok(C.inside(C.polygon(c.key), s.x, s.y), `hamlet on land ${n}/${c.key}`);
 }
 ok(seen.size > names.length * 5 * 0.98, `markers spread (${seen.size})`);
-for (const [q, k] of [['desert', 'sunscorch'], ['the frost reach', 'frostreach'], ['ember', 'emberfields'], ['wildwood', 'wildwood'], ['storm', 'stormreach'], ['lava', 'emberfields']]) ok((C.find(q) || {}).key === k, `find(${q})`);
+for (const [q, k] of [['desert', 'sunscorch'], ['the frost reach', 'frostreach'], ['ember', 'emberfields'], ['wildwood', 'wildwood'], ['storm', 'stormreach'], ['lava', 'emberfields'],
+    // 2026-10-18 Norse rename: new names resolve…
+    ['stormheim', 'stormreach'], ['solheim', 'sunscorch'], ['rimeheim', 'frostreach'], ['skogheim', 'wildwood'], ['eldheim', 'emberfields'],
+    ['rime', 'frostreach'], ['skog', 'wildwood'], ['sol', 'sunscorch'], ['eld', 'emberfields'],
+    // …old surveyor names STILL resolve (stored guilds)
+    ['the storm reach', 'stormreach'], ['sunscorch', 'sunscorch'], ['the ember fields', 'emberfields']]) ok((C.find(q) || {}).key === k, `find(${q})`);
 for (const t of ['ADVENTURER', 'MERCHANT', 'RESEARCH']) ok(C.find(t) === null, `archetype ${t} must not parse as a realm`);
-ok(C.biomeOf({ name: 'x', continent: 'wildwood' }) === 'highlands', 'continent → biome');
+ok(C.biomeOf({ name: 'x', continent: 'wildwood' }) === 'highlands', 'continent → biome (old key)');
+ok(C.biomeOf({ name: 'x', continent: 'skogheim' }) === 'highlands', 'continent → biome (new name)');
+ok(C.get('THE FROST REACH') && C.get('the frost reach').key === 'frostreach', 'get() legacy name');
+ok(C.get('Rimeheim').key === 'frostreach', 'get() new name');
 ok(C.baseBiome({ owner: 'solo' }) === C.defaultFor('solo').biome, 'solo base default');
 ok(C.baseBiome({ owner: 'a', guildName: 'G', guild: { continent: 'sunscorch' } }) === 'desert', 'member base follows guild realm');
+ok(C.PLANET && C.PLANET.name === 'Aldafold', 'planet named');
 console.log(fail ? `${fail} FAILED` : 'continents QA: all checks passed'); process.exit(fail ? 1 : 0);

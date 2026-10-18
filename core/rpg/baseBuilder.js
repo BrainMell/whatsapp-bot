@@ -456,11 +456,11 @@ async function handleBaseCommand(ctx) {
             if (!_guilds.getUserGuild(ctx.senderJid)) {
                 return ctx.reply(
                     `🌍 *Your hands hold no charter.*\n` +
-                    `Land in the Five Realms is claimed through a guild — found or join one and your base, its realm and every plot grow from its charter-stone.\n\n` +
+                    `Land in Aldafold is claimed through a guild — found or join one and your base, its realm and every plot grow from its charter-stone.\n\n` +
                     `• \`${ctx.prefix} guild create <name> | <type> | <realm>\` — found a guild (types: ADVENTURER, MERCHANT, RESEARCH)\n` +
                     `• \`${ctx.prefix} guild list\` — guilds recruiting members\n` +
                     `• \`${ctx.prefix} guild join <name>\` — pledge yourself to a banner\n` +
-                    `• \`${ctx.prefix} realms\` — see the map of the Five Realms`
+                    `• \`${ctx.prefix} realms\` — see the map of Aldafold`
                 );
             }
         } catch (e) { /* fail-open: the realm lookup inside the renderer already falls back to the owner seed */ }

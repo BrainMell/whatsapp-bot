@@ -1,56 +1,67 @@
 'use strict';
 // ═══════════════════════════════════════════════════════════════════════════
-//  CONTINENTS — the five realms of the First World, each tied to ONE biome.
+//  CONTINENTS — Aldafold, the First World (owner 2026-10-18: name the planet,
+//  drop the "Five Realms" framing, give the lands Norse names).
 //
-//  A guild picks a realm when it is founded; the realm decides the biome of its
-//  guild kingdom AND of every member's home base. The guild gets a marker at a
-//  seeded random spot of the realm's land (lore: where its charter-stone stands)
-//  and member home bases sit in a loose cluster around that marker.
+//  Aldafold (alda "the ages/mankind" + fold "earth") is the mortal world the
+//  regular players live on: five continents around the Drowned Sea, each tied
+//  to ONE biome. A guild picks a continent when it is founded; the choice
+//  decides the biome of its guild kingdom AND of every member's home base.
+//  The guild gets a marker at a seeded random spot of the land (lore: where
+//  its charter-stone stands) and member home bases sit in a loose cluster
+//  around that marker.
 //
-//  Pure data + pure functions (no I/O). Map geometry is CANONICAL: every realm has a
-//  fixed shape (fixed seed) in a 0..1 × 0..1 map space, so markers are comparable
-//  across guilds and the continent map never changes between renders.
+//  Pure data + pure functions (no I/O). Map geometry is CANONICAL: every
+//  continent has a fixed shape (fixed seed) in a 0..1 × 0..1 map space, so
+//  markers are comparable across guilds and the continent map never changes
+//  between renders.
 //
-//  Cosmology fit (cosmology_orbits.md invariants): realms are lands *of the First
-//  World*; they scatter across all four quadrants; timelines never appear as regions.
-//  Names are the surveyor field-names already charted in worldMapRenderer's catalog.
+//  COMPAT: the storage keys (stormreach/sunscorch/…) and array order (=
+//  kingdomTerrain.BIOMES order, for the hash%5 back-compat) are FROZEN. Only
+//  display names went Norse; get()/find() resolve both the new names and the
+//  old surveyor names, so nothing stored ever breaks.
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Order matters: it is the same order as kingdomTerrain.BIOMES, so a guild with no
 // stored continent keeps exactly the biome it already had (hash % 5).
 const CONTINENTS = [
     {
-        key: 'stormreach', name: 'The Storm Reach', biome: 'isle', epithet: 'Coast of Gulls and Thunder',
-        centre: [0.81, 0.42], rx: 0.125, ry: 0.205, seed: 4101, ink: '#2E6E73',
-        lore: 'The only realm that touches the open sea. Green headlands, fishing huts and a lighthouse on every cape; the storm-line sits on the horizon and nobody has seen it move.',
-        regions: [['Gullwatch', 0.30, -0.45], ['The Salt Marches', -0.30, 0.20], ['Thunderhead Cape', 0.25, 0.50]],
+        key: 'stormreach', name: 'Stormheim', biome: 'isle', epithet: 'Coast of Gulls and Thunder',
+        alias: ['storm reach', 'the storm reach'],
+        centre: [0.825, 0.46], rx: 0.11, ry: 0.16, seed: 4101, ink: '#2E6E73',
+        lore: 'The only continent that touches the open sea. Green headlands, fishing huts and a lighthouse on every cape; the storm-line sits on the horizon and nobody has seen it move.',
+        regions: [['Gullwatch', 0.30, -0.45], ['The Salt Marshes', -0.30, 0.20], ['Thunderhead Cape', 0.25, 0.50]],
         guide: 'Sea-side guilds: lighthouse, river mouth, fishing huts.',
     },
     {
-        key: 'sunscorch', name: 'The Sunscorch', biome: 'desert', epithet: 'Glass Dunes and Mirage Wells',
-        centre: [0.27, 0.80], rx: 0.17, ry: 0.115, seed: 5202, ink: '#9C5B23',
+        key: 'sunscorch', name: 'Solheim', biome: 'desert', epithet: 'Glass Dunes and Mirage Wells',
+        alias: ['sunscorch', 'the sunscorch'],
+        centre: [0.31, 0.84], rx: 0.18, ry: 0.10, seed: 5202, ink: '#9C5B23',
         lore: 'Gold dunes under a white sun. Water is a rumour kept by oases, and every oasis has an owner. Ruined caravan-forts stud the Bone Road.',
         regions: [['The Glass Dunes', -0.35, -0.20], ['Mirage Wells', 0.30, 0.15], ['The Bone Road', 0.0, 0.55]],
         guide: 'Dune guilds: oasis pools, scrub, sandstone ridges, war camps.',
     },
     {
-        key: 'frostreach', name: 'The Frost Reach', biome: 'tundra', epithet: 'Rimewall and the Whitefast',
-        centre: [0.50, 0.125], rx: 0.20, ry: 0.075, seed: 6303, ink: '#4A6A8C',
+        key: 'frostreach', name: 'Rimeheim', biome: 'tundra', epithet: 'Rimewall and the Whitefast',
+        alias: ['frost reach', 'the frost reach'],
+        centre: [0.52, 0.15], rx: 0.26, ry: 0.085, seed: 6303, ink: '#4A6A8C',
         lore: 'Snow to the horizon, pine-dark valleys and frozen lakes the colour of old glass. The rivers never thaw; the roads are kept open by those who live on them.',
         regions: [['Rimewall', -0.40, 0.10], ['The Whitefast', 0.05, -0.35], ['Lantern Fjord', 0.45, 0.20]],
         guide: 'Tundra guilds: frozen lakes, pine woods, snowy ridgelines.',
     },
     {
-        key: 'wildwood', name: 'The Wildwood', biome: 'highlands', epithet: 'Amberdeep and the Hundred Oaks',
-        centre: [0.18, 0.45], rx: 0.105, ry: 0.185, seed: 7404, ink: '#8B5A1E',
+        key: 'wildwood', name: 'Skogheim', biome: 'highlands', epithet: 'Amberdeep and the Hundred Oaks',
+        alias: ['wildwood', 'the wildwood'],
+        centre: [0.185, 0.47], rx: 0.115, ry: 0.17, seed: 7404, ink: '#8B5A1E',
         lore: 'An autumn that never ends: copper oaks, mossy hills, mills on every river. The woodcutters say the forest remembers who walked it.',
         regions: [['Amberdeep', 0.0, -0.40], ['The Hundred Oaks', 0.25, 0.10], ['Millrace', -0.25, 0.45]],
         guide: 'Forest guilds: autumn woods, farms, mills, rivers.',
     },
     {
-        key: 'emberfields', name: 'The Ember Fields', biome: 'volcanic', epithet: 'Cinder Steps and Slagmouth',
-        centre: [0.76, 0.79], rx: 0.15, ry: 0.125, seed: 8505, ink: '#8B1A2B',
-        lore: 'Black basalt and rivers of lava. Ash falls like slow snow. The Ember Fields are the realm of smiths: forges are built where the ground is already hot.',
+        key: 'emberfields', name: 'Eldheim', biome: 'volcanic', epithet: 'Cinder Steps and Slagmouth',
+        alias: ['ember fields', 'the ember fields'],
+        centre: [0.75, 0.83], rx: 0.13, ry: 0.105, seed: 8505, ink: '#8B1A2B',
+        lore: 'Black basalt and rivers of lava. Ash falls like slow snow. Eldheim is the continent of smiths: forges are built where the ground is already hot.',
         regions: [['The Cinder Steps', -0.30, -0.25], ['Slagmouth', 0.30, 0.10], ['Ashfall Basin', -0.05, 0.50]],
         guide: 'Volcanic guilds: lava pools and rivers, basalt ridges, ruins.',
     },
@@ -59,6 +70,12 @@ const BY_KEY = Object.fromEntries(CONTINENTS.map((c) => [c.key, c]));
 const BY_BIOME = Object.fromEntries(CONTINENTS.map((c) => [c.biome, c]));
 // the sea at the heart of the chart (existing charted world "the drowned sea")
 const CENTRE_SEA = { name: 'The Drowned Sea', at: [0.50, 0.50] };
+// the planet itself (owner 2026-10-18: "call it the name of this specific planet — give it a name")
+const PLANET = {
+    name: 'Aldafold',
+    kicker: 'THE COSMOLOGY - THE LANDS OF THE FIRST WORLD',
+    subtitle: 'five lands, five guild kingdoms, one drowned sea between them',
+};
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function mulberry32(seed) {
@@ -67,17 +84,33 @@ function mulberry32(seed) {
 }
 function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 
-function get(key) { return BY_KEY[String(key || '').toLowerCase().replace(/[^a-z]/g, '')] || null; }
-/** fuzzy lookup: 'storm', 'the frost reach', 'desert', 'ember' … */
+const _strip = (s) => String(s || '').toLowerCase().replace(/[^a-z]/g, '');
+function get(key) {
+    const k = _strip(key);
+    if (!k) return null;
+    for (const c of CONTINENTS) {
+        if (c.key === k || _strip(c.name) === k) return c;
+        if (c.alias && c.alias.some((a) => _strip(a) === k)) return c;
+    }
+    return null;
+}
+/** fuzzy lookup: 'storm', 'rimeheim', 'the frost reach', 'desert', 'ember' … */
 function find(text) {
     const t = String(text || '').toLowerCase().replace(/[^a-z ]/g, '').replace(/^the\s+/, '').trim();
     if (!t) return null;
     for (const c of CONTINENTS) {
-        const n = c.name.toLowerCase().replace(/^the\s+/, '');
+        const n = c.name.toLowerCase();
         if (c.key === t.replace(/ /g, '') || n === t || n.startsWith(t) || c.key.startsWith(t.replace(/ /g, '')) || c.biome === t) return c;
         if (n.split(' ').some((w) => w === t)) return c;
+        if (c.alias && c.alias.includes(t)) return c;
     }
-    const alias = { sea: 'stormreach', coast: 'stormreach', coastal: 'stormreach', island: 'stormreach', dune: 'sunscorch', dunes: 'sunscorch', desert: 'sunscorch', sand: 'sunscorch', snow: 'frostreach', ice: 'frostreach', frozen: 'frostreach', forest: 'wildwood', autumn: 'wildwood', lava: 'emberfields', fire: 'emberfields', volcano: 'emberfields', ash: 'emberfields' };
+    const alias = {
+        sea: 'stormreach', coast: 'stormreach', coastal: 'stormreach', island: 'stormreach', storm: 'stormreach', stormheim: 'stormreach', gull: 'stormreach',
+        dune: 'sunscorch', dunes: 'sunscorch', desert: 'sunscorch', sand: 'sunscorch', sun: 'sunscorch', solheim: 'sunscorch', glass: 'sunscorch',
+        snow: 'frostreach', ice: 'frostreach', frozen: 'frostreach', frost: 'frostreach', rime: 'frostreach', rimeheim: 'frostreach', tundra: 'frostreach',
+        forest: 'wildwood', autumn: 'wildwood', wood: 'wildwood', skogheim: 'wildwood', skog: 'wildwood', oak: 'wildwood',
+        lava: 'emberfields', fire: 'emberfields', volcano: 'emberfields', ash: 'emberfields', eldheim: 'emberfields', eld: 'emberfields', ember: 'emberfields',
+    };
     return alias[t] ? BY_KEY[alias[t]] : null;
 }
 /** the realm a guild gets when nothing was stored (back-compat: same as the old name-hash biome). */
@@ -95,11 +128,18 @@ function polygon(key) {
     if (_poly.has(key)) return _poly.get(key);
     const c = BY_KEY[key];
     const rng = mulberry32(c.seed);
-    const ph = [rng() * 6.28, rng() * 6.28, rng() * 6.28, rng() * 6.28];
-    const N = 72, pts = [];
+    const ph = [rng() * 6.28, rng() * 6.28, rng() * 6.28, rng() * 6.28, rng() * 6.28];
+    const N = 96, pts = [];
     for (let i = 0; i < N; i++) {
         const t = (i / N) * Math.PI * 2;
-        const k = 1 + 0.15 * Math.sin(2 * t + ph[0]) + 0.11 * Math.sin(3 * t + ph[1]) + 0.07 * Math.sin(5 * t + ph[2]) + 0.04 * Math.sin(9 * t + ph[3]);
+        // 2026-10-18 owner round: richer silhouettes than the old blobs — still
+        // deterministic, still inside the chart (qa_continents checks bounds).
+        const k = 1
+            + 0.14 * Math.sin(2 * t + ph[0])
+            + 0.10 * Math.sin(3 * t + ph[1])
+            + 0.06 * Math.sin(5 * t + ph[2])
+            + 0.045 * Math.sin(7 * t + ph[3])
+            + 0.028 * Math.sin(11 * t + ph[4]);
         pts.push([c.centre[0] + Math.cos(t) * c.rx * k, c.centre[1] + Math.sin(t) * c.ry * k]);
     }
     _poly.set(key, pts);
@@ -183,4 +223,4 @@ function chooserText(prefix = '.j') {
     return CONTINENTS.map((c, i) => `${i + 1}. *${c.name}* — ${c.epithet}\n   _${c.guide}_  (\`${prefix} guild create <name> | <type> | ${c.key}\`)`).join('\n');
 }
 
-module.exports = { CONTINENTS, BY_KEY, BY_BIOME, CENTRE_SEA, get, find, defaultFor, continentOf, biomeOf, polygon, inside, edgeDist, regionAt, markerFor, placementFor, placementOf, baseSites, baseBiome, list, chooserText, hashStr, mulberry32 };
+module.exports = { CONTINENTS, BY_KEY, BY_BIOME, CENTRE_SEA, PLANET, get, find, defaultFor, continentOf, biomeOf, polygon, inside, edgeDist, regionAt, markerFor, placementFor, placementOf, baseSites, baseBiome, list, chooserText, hashStr, mulberry32 };

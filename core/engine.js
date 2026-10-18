@@ -12611,7 +12611,7 @@ _💡 Reply with another number from your search list!_`.trim();
                     }
 
                     // .j world [cosmology|beyond|afterlife|abyss] — DEFAULT (bare) = the mortal
-                    // world: the five realms atlas (owner 2026-10-18 "by default it should show
+                    // world: the Aldafold continents atlas (owner 2026-10-18 "by default it should show
                     // the continents, sub command for the existing cosmology map"). The cosmology
                     // charts (First World / Beyond / Afterlife / Abyss / full atlas) stay here:
                     //   .j world cosmology → the full cosmology atlas
@@ -12624,7 +12624,7 @@ _💡 Reply with another number from your search list!_`.trim();
                           const continentsLib = require('./rpg/continents');
                           const __buf = await cmr.renderContinentMap({});
                           const __cap = BOT_MARKER +
-                            `🌍 *THE FIVE REALMS* — the mortal world of the First World.\n` +
+                            `🌍 *ALDAFOLD* — the mortal world of the First World.\n` +
                             `_Every guild claims its charter-stone here; member bases grow from that land._\n\n` +
                             continentsLib.chooserText(botConfig.getPrefix()) +
                             `\n\n🌙 The wider cosmology — First World, World Beyond, Afterlife, Abyss — \`${botConfig.getPrefix()} world cosmology\``;
@@ -22222,7 +22222,7 @@ Admins can:
                             const rc = continentsLib.get(pl.continent);
                             cap = `🌍 *${gName}* — ${rc.name}\n_${rc.epithet}_\n📍 Charter-stone: *${pl.marker.region}*\n\n${rc.lore}`;
                           } else {
-                            cap = `🌍 *THE FIVE REALMS*\n\n${continentsLib.chooserText(botConfig.getPrefix())}`;
+                            cap = `🌍 *ALDAFOLD*\n\n${continentsLib.chooserText(botConfig.getPrefix())}`;
                           }
                           if (buf && buf.length > 100) await sock.sendMessage(chatId, { image: buf, caption: BOT_MARKER + cap }, { quoted: m });
                           else await sock.sendMessage(chatId, { text: BOT_MARKER + cap }, { quoted: m });
