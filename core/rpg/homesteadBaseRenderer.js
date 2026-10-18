@@ -1,28 +1,33 @@
 'use strict';
 // ═══════════════════════════════════════════════════════════════════════════
-//  HOMESTEAD BASE RENDERER — outdoor isometric base hub (Sections 6/7/10)
-//  16x16 outdoor map: grass terrain, fixed zones (mines rock, pond water,
-//  fenced hunting grounds), expansion plots, upgradeable structures drawn
-//  1:1 with the SAME shadow engine as the room (isoShadow.js) so both views
-//  share one light model and one grounding law.
-//  Animated: water shimmer, chimney/forge smoke, gate torch, fireflies.
+//  HOMESTEAD BASE RENDERER — 3D hex player base (v8, owner 2026-10-18:
+//  "make the player base look like a player base with the right terrain")
+//
+//  Same art + engine as the guild kingdom: KayKit Medieval Hexagon Pack (CC0)
+//  baked to sprites (scripts/kingdom3d), composited by core/rpg/kingdom3d.js.
+//  The persisted data model is UNCHANGED — structures still live on the
+//  16x16 grid (x,y,fw,fh) so existing saves / baseBuilder.js keep working;
+//  grid (x,y) maps to hex (col=x+M, row=y+M) on a bigger island whose
+//  margin is the player's wilderness (biome rolled per owner seed).
+//
+//  Zones: house on the village green; mines = NW mountain quarry; pond = NE
+//  lake; hunting grounds = west woods; the stone GATEHOUSE guards the south
+//  gate on the main street; free expansion plots show as dashed build sites.
+//  Public API unchanged: LAYOUT, N, FRAMES, renderFrame, renderBaseImage,
+//  encodeFramesToMp4, structDef, structures.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const isoShadow = require('./isoShadow');
-const isoForest = require('./isoForest');
-const isoOutlands = require('./isoOutlands');
+const K = require('./kingdom3d');
 const mediaCache = require('./mediaCache');
 
-const SS = 2;
-const TW = 64, TH = 32;
-const N = 16;                 // base tiles per side
-const ART_W = 1240, ART_H = 850;
-const OX = ART_W / 2;
-const OY = 150;
+const N = 16;                 // base tiles per side (saved-structure grid)
+const M = 3;                  // wilderness margin (hex cells) around the grid
+const COLS = N + 2 * M, ROWS = N + 2 * M;
 const FRAMES = 14, FRAME_MS = 110;
+const SCALE = parseFloat(process.env.RENDER_BASE_SCALE || '0.44') || 0.44;
 
 const ASSETS = path.join(__dirname, '..', 'rpgasset', 'homestead');
 const FONTS = path.join(__dirname, '..', 'rpgasset', 'fonts');
@@ -56,55 +61,7 @@ function ensureFonts() {
         return true;
     } catch (e) { return false; }
 }
-
-function mulberry32(seed) {
-    let a = seed >>> 0;
-    return function () {
-        a |= 0; a = (a + 0x6D2B79F5) | 0;
-        let t = Math.imul(a ^ (a >>> 15), 1 | a);
-        t = Math.imul(t ^ (t >>> 7), 61 | t);
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-}
-function hashStr(s) {
-    let h = 2166136261;
-    s = String(s || '');
-    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
-    return h >>> 0;
-}
-
-const _img = new Map();
-async function img(file) {
-    if (_img.has(file)) return _img.get(file);
-    let out = null;
-    try { out = await require('canvas').loadImage(path.join(ASSETS, file)); } catch (e) { out = null; }
-    _img.set(file, out);
-    return out;
-}
-
-function isoX(x, y) { return OX + (x - y) * (TW / 2); }
-function isoY(x, y) { return OY + (x + y) * (TH / 2); }
-function footCenter(x, y, fw, fh) {
-    return { x: isoX(x + fw / 2, y + fh / 2), y: isoY(x + fw / 2, y + fh / 2) };
-}
-// POLYY ART LAW (owner 2026-10-17: base art swapped to Polyy's Village
-// Buildings + Foozle mine renders) — sprites are exported so their base
-// diamond bottom sits at the bbox bottom, so the anchor is the footprint's
-// SOUTH CORNER (+4px sink so bases read grounded into their tile).
-function anchorOf(x, y, fw, fh) {
-    const c = footCenter(x, y, fw, fh);
-    return { cx: c.x, ay: c.y + (fw + fh) * (TH / 4) + 4 };
-}
-
-function roundRect(ctx, x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
-}
+const mulberry32 = K.mulberry32, hashStr = (s) => K.hashStr(String(s || ''));
 
 // ── LAYOUT v3 (owner 2026-10-17 21:18Z "the arrangement of the houses??? All
 // packed into the center?? Ass ... redesign their ordination, read up on
@@ -170,798 +127,412 @@ const LAYOUT = {
     ],
 };
 
-// ── FACADE ORIENTATION LAW (owner "The orientation still weird dude"):
-// every sprite bakes ONE facing — smithy/medbay/mines/hunting-gate front the
-// +y face (down-left), alchemy fronts +x (down-right), house/pond neutral.
-// An iso building can only FRONT a street from the street's north/west side
-// (its visible faces look +y and +x), so each structure checks which street
-// actually touches its front edge and MIRRORS when its natural facade would
-// show its back to the road. Fronts are checked +y first, then +x.
-const NATURAL_FRONT = {
-    house: 'y', blacksmith: 'y', medbay: 'y', alchemy: 'x',
-    mines: 'y', pond: 'y', hunting: 'y',
-};
-function facadeMirror(st, def, pathSet) {
-    const nat = NATURAL_FRONT[st.type] || 'y';
-    let want = nat;
-    const frontRow = [];  // +y face: cells just south of the footprint
-    for (let ix = 0; ix < def.fw; ix++) frontRow.push(`${st.x + ix},${st.y + def.fh}`);
-    const frontCol = [];  // +x face: cells just east of the footprint
-    for (let iy = 0; iy < def.fh; iy++) frontCol.push(`${st.x + def.fw},${st.y + iy}`);
-    if (frontRow.some((k) => pathSet.has(k))) want = 'y';
-    else if (frontCol.some((k) => pathSet.has(k))) want = 'x';
-    return want !== nat;
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  SCENE BUILD
+// ═══════════════════════════════════════════════════════════════════════════
+const hc = (x, y) => [x + M, y + M];                     // saved grid → hex cell
+const keyOf = (c, r) => `${c},${r}`;
+const TEAMS = ['blue', 'green', 'red', 'yellow'];
+// A base takes the land of its realm (continents.js): its guild's realm, else a realm seeded from the owner.
+// realm biome → wilds terrain:  isle→coast, desert→desert, tundra→tundra, highlands→wildwood, volcanic→ashlands
+const TERRAIN_OF = { isle: 'coast', desert: 'desert', tundra: 'tundra', highlands: 'wildwood', volcanic: 'ashlands' };
+function realmBiome(state) {
+    if (state.biome && TERRAIN_OF[state.biome]) return state.biome;
+    return require('./continents').baseBiome({ owner: state.owner || 'base', guildName: state.guildName, guild: state.guild, continent: state.continent });
 }
 
-// per-structure draw scale — COC41 ART LAW v2 (owner 2026-10-18 "the houses
-// are white and look like shit ... the lenses are clearly turned wrongly ...
-// let's stick to 3d ... make this perfect"): the whole building set was
-// REBUILT in-house (scripts/coc41/*) on strict 2:1 iso axes with textured
-// faces (stone courses / plaster+timber / tile roofs) and the CoC palette —
-// no more white plastic, no rotated pieces. Sprites bake at 1x ART scale,
-// bottom-centre = footprint south corner, so everything draws at 1.0. Pond
-// keeps its legacy water sprite (untouched).
-const STRUCT_SCALE = {
-    house: 1.0, blacksmith: 1.0, medbay: 1.0, alchemy: 1.0,
-    mines: 1.0, pond: 1.0, hunting: 1.0,
-};
+function footprintCells(st, def) {
+    const out = [];
+    for (let i = 0; i < def.fw; i++) for (let j = 0; j < def.fh; j++) out.push(hc(st.x + i, st.y + j));
+    return out;
+}
+function centroid(cells) {
+    let x = 0, z = 0;
+    for (const [c, r] of cells) { const w = K.hexWorld(c, r); x += w.x; z += w.z; }
+    return { x: x / cells.length, z: z / cells.length };
+}
 
-// FENCE PAD (owner 2026-10-17 "the fence should be further away because the
-// space is bigger"): the pixel palisade now stands `P` tiles OUTSIDE the
-// playable ring, enclosing a yard meadow around the buildable 16x16. The
-// world beyond the fence is the per-player procedural outlands.
-const P = 3;
+function buildWorld(state) {
+    const seedStr = state.owner || 'base';
+    const seed = hashStr(seedStr);
+    const rng = mulberry32(seed);
+    const team = TEAMS[seed % 4];
+    const realm = realmBiome(state);                 // 'isle'|'desert'|'tundra'|'highlands'|'volcanic'
+    const biome = TERRAIN_OF[realm];                 // coast|desert|tundra|wildwood|ashlands
+    const land = realm !== 'isle';                   // only the coastal realm has a sea
+    const B = (n) => `building_${n}_${team}`;
+    const w = new K.HexWorld(COLS, ROWS, { scale: SCALE, biome: realm, oobWater: !land });
+    const used = new Set();
+    const claim = (c, r) => used.add(keyOf(c, r));
+
+    // ── island silhouette: the 16x16 grid + a ragged wilderness margin ──
+    const ph1 = rng() * 6.28, ph2 = rng() * 6.28;
+    const coastN = (c, r) => 0.5 + 0.5 * Math.sin(c * 0.9 + ph1) * Math.cos(r * 0.8 + ph2);
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+        const gx = c - M, gy = r - M;
+        const dx = gx < 0 ? -gx : gx > N - 1 ? gx - (N - 1) : 0;
+        const dy = gy < 0 ? -gy : gy > N - 1 ? gy - (N - 1) : 0;
+        const out = Math.hypot(dx, dy * 1.15);
+        const reach = 1.6 + 1.5 * coastN(c, r);
+        const k = w.cell[r][c];
+        if (land) { k.water = false; k.void = out > reach; }       // land realms: ragged edge fades into haze, no sea
+        else { k.water = out > reach; k.void = out > reach + 1.8; }
+        if (out <= 1.2) k.keepLand = true;
+    }
+    // coastal realm / ashlands: the south-east margin is open water (sea) or a lava lake (volcanic set recolours water)
+    if (biome === 'coast' || biome === 'ashlands') {
+        for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+            const gx = c - M, gy = r - M;
+            if (gx > N - 1 - 1 && gy > 6) { w.cell[r][c].water = true; w.cell[r][c].keepLand = false; }
+        }
+    }
+
+    // ── pond zone (NE lake): a blob around the zone centre ──
+    {
+        const pz = LAYOUT.pond.zone;
+        const [lc, lr] = hc(pz.x + Math.floor(pz.fw / 2), pz.y + Math.floor(pz.fh / 2));
+        for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+            const d = K.hexDist(lc, lr, c, r);
+            if (d <= 1 || (d === 2 && rng() < 0.7)) { const k = w.cell[r][c]; k.water = true; k.void = false; k.keepLand = false; k.lake = true; }
+        }
+    }
+
+    // ── streets / plaza: the saved square-grid street plan re-drawn as hex lines ──
+    const roadCells = (cells, closed = false) => {
+        let prev = null, first = null;
+        for (const [c, r] of cells) {
+            if (!w.inb(c, r) || w.cell[r][c].water) { prev = null; continue; }
+            w.cell[r][c].road = true; claim(c, r);
+            if (prev) w.link(prev[0], prev[1], c, r);
+            if (!first) first = [c, r];
+            prev = [c, r];
+        }
+        if (closed && first && prev) w.link(prev[0], prev[1], first[0], first[1]);
+    };
+    const roadLine = (p1, p2) => {
+        const [c1, r1] = hc(p1[0], p1[1]), [c2, r2] = hc(p2[0], p2[1]);
+        roadCells(K.hexLine(c1, r1, c2, r2));
+    };
+    roadLine([8, 4], [8, N + 2]);                         // main street, through the gate and out
+    roadLine([3, 4], [13, 4]);                            // north lane (miners' row + pond lane)
+    roadLine([2, 9], [7, 9]);                             // hunting walk
+    roadLine([5, 10], [14, 10]);                          // south lanes
+    {
+        const [pc, pr] = hc(8, 7);                        // village green ring
+        // ring cells are listed in walking order, so consecutive ones are hex neighbours
+        roadCells(K.ring(pc, pr, 1), true);
+        claim(pc, pr);
+        w.put('building_well_' + team, pc, pr, { sc: 1.1 });
+        w.put('flag_' + team, pc, pr, { dx: 0.9, dz: 0.5 });
+    }
+    w.resolve();
+
+    // ── gatehouse + wall wings across the south gate (hunting structure) ──
+    const gh = LAYOUT.hunting;
+    const gateCells = [hc(gh.x, gh.y), hc(gh.x + 1, gh.y)];
+    const gateW = centroid(gateCells);
+    // walls run E-W across the street; the gate piece sits on the street cell
+    const rowY = gh.y;                                   // 14
+    const wallXs = [6, 10];
+    for (const gx of wallXs) { const [c, r] = hc(gx, rowY); if (!w.cell[r][c].water) { w.put('wall_straight@0', c, r, { sort: 0.2 }); claim(c, r); } }
+    {
+        const [c, r] = hc(8, rowY);
+        w.put('wall_straight_gate@0', c, r, { sort: 0.2, sc: 1.0 });
+        for (const gx of [7, 9]) { const [c2, r2] = hc(gx, rowY); w.put('wall_straight@0', c2, r2, { sort: 0.2 }); claim(c2, r2); }
+        const [tc1, tr1] = hc(5, rowY), [tc2, tr2] = hc(11, rowY);
+        w.put(B('tower_A'), tc1, tr1, { sc: 0.95 }); w.put(B('tower_A'), tc2, tr2, { sc: 0.95 });
+        claim(tc1, tr1); claim(tc2, tr2);
+        w.put('flag_' + team, c, r, { dx: -1.15, dz: 0.5 });
+        w.put('flag_' + team, c, r, { dx: 1.15, dz: 0.5 });
+    }
+
+    // ── zones ──
+    const mz = LAYOUT.mines.zone, hz = LAYOUT.hunting.zone;
+    const inZ = (z, gx, gy) => gx >= z.x && gx < z.x + z.fw && gy >= z.y && gy < z.y + z.fh;
+    const TREES = ['trees_A_large', 'trees_B_large', 'trees_A_medium', 'trees_B_medium'];
+    const inGrid = (gx, gy) => gx >= 0 && gy >= 0 && gx < N && gy < N;
+
+    // reserve structure footprints first so props never land under buildings
+    const sts = state.structures || [];
+    for (const st of sts) { const def = structDef(st.type); if (!def) continue; for (const [c, r] of footprintCells(st, def)) claim(c, r); }
+    const plotCellsAll = [];
+    for (const p of state.freePlots || []) for (let i = 0; i < (p.fw || 3); i++) for (let j = 0; j < (p.fh || 3); j++) { const [c, r] = hc(p.x + i, p.y + j); claim(c, r); plotCellsAll.push([c, r]); }
+
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+        const k = w.cell[r][c];
+        if (k.water || k.coast || k.road || k.void || used.has(keyOf(c, r))) continue;
+        const gx = c - M, gy = r - M, x = rng();
+        if (inGrid(gx, gy) && inZ(mz, gx, gy)) {                      // quarry hills (NW)
+            if (x < 0.6) { w.put(['mountain_A_grass_trees', 'mountain_B_grass', 'mountain_C_grass_trees', 'mountain_A'][Math.floor(rng() * 4)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
+            else if (x < 0.8) { w.put('rock_single_' + 'ABCDE'[Math.floor(rng() * 5)], c, r, { dx: (rng() - 0.5) * 0.7, dz: (rng() - 0.5) * 0.5 }); }
+        } else if (inGrid(gx, gy) && inZ(hz, gx, gy)) {                // hunting woods (W)
+            if (x < 0.7) { w.put(TREES[Math.floor(rng() * 4)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
+        } else if (inGrid(gx, gy)) {                                   // village green
+            if (x < 0.07) { w.put(TREES[2 + Math.floor(rng() * 2)], c, r, { sc: 0.8, flip: rng() < 0.5 }); claim(c, r); }
+            else if (x < 0.1) w.put('rock_single_' + 'ABCDE'[Math.floor(rng() * 5)], c, r, { dx: (rng() - 0.5) * 0.7, dz: (rng() - 0.5) * 0.5 });
+        } else {                                                       // the wilds: biome
+            const rock = () => w.put('rock_single_' + 'ABCDE'[Math.floor(rng() * 5)], c, r, { dx: (rng() - 0.5) * 0.7, dz: (rng() - 0.5) * 0.5 });
+            if (biome === 'desert') {                                   // dunes, sandstone, scrub round the odd oasis palm
+                if (x < 0.34) { w.put(['hills_A', 'hills_B', 'hills_C', 'hill_single_A', 'hill_single_B'][Math.floor(rng() * 5)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
+                else if (x < 0.44) rock();
+                else if (x < 0.5) { w.put(['tree_single_A', 'tree_single_B', 'trees_A_small'][Math.floor(rng() * 3)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
+            } else if (biome === 'tundra') {                            // pine-dark ridges and snowy crags
+                if (x < 0.34) { w.put(TREES[Math.floor(rng() * 4)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
+                else if (x < 0.5) { w.put(['hills_A', 'hills_B', 'hills_C', 'mountain_A_grass', 'mountain_B_grass'][Math.floor(rng() * 5)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
+                else if (x < 0.58) rock();
+            } else if (biome === 'ashlands') {                          // basalt ridges and cinder rock
+                if (x < 0.40) { w.put(['mountain_A', 'mountain_B', 'mountain_C', 'hills_C'][Math.floor(rng() * 4)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
+                else if (x < 0.56) rock();
+                else if (x < 0.6) { w.put('hill_single_' + 'AB'[Math.floor(rng() * 2)], c, r); claim(c, r); }
+            } else if (biome === 'wildwood') {                          // copper oaks with the odd mill and hill
+                if (x < 0.56) { w.put(TREES[Math.floor(rng() * 4)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
+                else if (x < 0.64) { w.put(['hills_A_trees', 'hills_B_trees', 'hills_C'][Math.floor(rng() * 3)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
+                else if (x < 0.655) { w.put(B('windmill'), c, r); claim(c, r); }
+                else if (x < 0.7) rock();
+            } else {                                                    // coast: green headland forest
+                if (x < 0.62) { w.put(TREES[Math.floor(rng() * 4)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
+                else if (x < 0.7) rock();
+            }
+        }
+    }
+    if (biome === 'coast') {                                           // a little dock-side lumber hut on the shore
+        const spot = [];
+        for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) { const k = w.cell[r][c]; if (k.coast && !used.has(keyOf(c, r))) spot.push([c, r]); }
+        if (spot.length) { const [c, r] = spot[Math.floor(rng() * spot.length)]; w.put(B('lumbermill'), c, r); claim(c, r); }
+    }
+
+    // ── structures ──
+    const props = (list, wx, wz, sc = 1) => { for (const [n, dx, dz, s] of list) w.put(n, 0, 0, { wx, wz, dx: dx * sc, dz: dz * sc, sc: s || 1 }); };
+    const info = [];
+    for (const st of sts) {
+        const def = structDef(st.type); if (!def) continue;
+        const lvl = Math.max(1, Math.min(def.levels.length, st.level || 1));
+        const cells = footprintCells(st, def);
+        const cen = centroid(cells);
+        info.push({ st, def, lvl, cen });
+        if (st.type !== 'pond' && st.type !== 'hunting') w.put('building_dirt', 0, 0, { wx: cen.x, wz: cen.z, layer: 'flat', sc: def.fw >= 3 ? 1.9 : 1.2 });
+        const P = (n, o = {}) => w.put(n, 0, 0, { wx: cen.x, wz: cen.z, ...o });
+        switch (st.type) {
+            case 'house':
+                if (lvl === 1) { P('building_home_A_' + team, { sc: 1.55 }); P('building_well_' + team, { dx: 1.5, dz: 0.9 }); }
+                else if (lvl === 2) { P('building_home_B_' + team, { sc: 1.75 }); P('building_well_' + team, { dx: 1.7, dz: 1.0 }); P('crate_A_small', { dx: -1.5, dz: 0.8 }); }
+                else { P('building_home_B_' + team, { sc: 2.05 }); P('building_home_A_' + team, { dx: -2.0, dz: 0.5, sc: 0.95, flip: true }); P('building_well_' + team, { dx: 1.8, dz: 1.2 }); P('flag_' + team, { dx: 0.9, dz: 1.5 }); }
+                break;
+            case 'blacksmith':
+                if (lvl === 1) { P('building_blacksmith_' + team, { sc: 1.35 }); P('crate_A_small', { dx: 1.3, dz: 0.8 }); }
+                else if (lvl === 2) { P('building_blacksmith_' + team, { sc: 1.65 }); P('weaponrack', { dx: -1.4, dz: 0.9 }); P('resource_stone', { dx: 1.5, dz: 0.9 }); }
+                else { P('building_blacksmith_' + team, { sc: 1.95 }); P('weaponrack', { dx: -1.8, dz: 1.0 }); P('resource_stone', { dx: 1.7, dz: 1.0 }); P('wheelbarrow', { dx: 1.0, dz: 1.7 }); P('barrel', { dx: -0.8, dz: 1.6 }); }
+                break;
+            case 'medbay':
+                if (lvl === 1) { P('tent', { sc: 2.1 }); P('sack', { dx: 1.3, dz: 0.9 }); P('bucket_water', { dx: -1.3, dz: 0.9 }); }
+                else if (lvl === 2) { P('building_church_' + team, { sc: 1.35 }); P('tent', { dx: 1.7, dz: 0.8, sc: 1.2 }); }
+                else { P('building_church_' + team, { sc: 1.8 }); P('building_well_' + team, { dx: 1.8, dz: 1.0 }); P('flag_' + team, { dx: -1.6, dz: 1.0 }); }
+                break;
+            case 'alchemy':
+                if (lvl === 1) { P('barrel', { sc: 1.6 }); P('bucket_water', { dx: 1.2, dz: 0.8 }); P('crate_open', { dx: -1.2, dz: 0.8 }); }
+                else if (lvl === 2) { P('building_tavern_' + team, { sc: 1.5 }); P('barrel', { dx: 1.5, dz: 1.0 }); }
+                else { P('building_tavern_' + team, { sc: 1.9 }); P('building_windmill_' + team, { dx: -2.1, dz: -0.2, sc: 0.95 }); P('barrel', { dx: 1.8, dz: 1.1 }); P('crate_B_small', { dx: 0.9, dz: 1.7 }); }
+                break;
+            case 'mines':
+                P('building_mine_' + team, { sc: lvl === 1 ? 1.35 : lvl === 2 ? 1.6 : 1.85 });
+                if (lvl >= 2) { P('resource_stone', { dx: 1.2, dz: 0.9 }); P('wheelbarrow', { dx: -1.1, dz: 0.9 }); }
+                if (lvl >= 3) { P('resource_lumber', { dx: 0.2, dz: 1.5 }); P('crate_long_A', { dx: -1.6, dz: 0.6 }); }
+                break;
+            case 'pond': {
+                const mid = [hc(st.x, st.y), hc(st.x + 1, st.y), hc(st.x, st.y + 1), hc(st.x + 1, st.y + 1)];
+                for (const [c, r] of mid) { w.cell[r][c].water = true; }
+                P('waterlily_A', { dx: -0.6, dz: -0.2, h: -0.2 }); P('waterlily_B', { dx: 0.7, dz: 0.4, h: -0.2 }); P('waterplant_A', { dx: 0.0, dz: -0.8, h: -0.2 });
+                if (lvl >= 2) { P('bucket_water', { dx: 1.7, dz: 1.2 }); P('crate_open', { dx: -1.6, dz: 1.1 }); }
+                if (lvl >= 3) { P(B('watermill'), { dx: 2.0, dz: 0.2, sc: 0.95 }); }
+                break;
+            }
+            case 'hunting': break;
+            default: break;
+        }
+    }
+
+    // ── free expansion plots ──
+    const plots = [];
+    for (const p of state.freePlots || []) {
+        const cells = [];
+        for (let i = 0; i < (p.fw || 3); i++) for (let j = 0; j < (p.fh || 3); j++) cells.push(hc(p.x + i, p.y + j));
+        const cen = centroid(cells);
+        plots.push({ id: p.id, cen, cells });
+        w.put('building_dirt', 0, 0, { wx: cen.x, wz: cen.z, layer: 'flat', sc: 1.95 });
+        w.put('building_scaffolding', 0, 0, { wx: cen.x, wz: cen.z, sc: 0.8 });
+        w.put('crate_A_small', 0, 0, { wx: cen.x, wz: cen.z, dx: -1.5, dz: 0.8 });
+        w.put('resource_lumber', 0, 0, { wx: cen.x, wz: cen.z, dx: 1.5, dz: 0.9 });
+        w.overlay((ctx, pp, k) => plotOverlay(ctx, w, cen, p.id, k), 0, 0, { dx: cen.x, dz: cen.z });
+    }
+    // overlay anchors use world coords passed via dx/dz (hexWorld(0,0) = origin)
+    return { w, info, plots, team, biome, realm };
+}
+
+function plotOverlay(ctx, w, cen, id, k) {
+    ctx.save();
+    ctx.setLineDash([14 * k * 2, 9 * k * 2]);
+    ctx.lineWidth = Math.max(2, 3.2 * k * 2);
+    ctx.strokeStyle = 'rgba(255,214,120,0.95)';
+    // outline the 3x3 flower: a hexagon around the centroid, radius ~2 cells
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+        const a = (Math.PI / 180) * (60 * i);
+        const p = w.proj(cen.x + 3.0 * Math.cos(a), cen.z + 2.55 * Math.sin(a), 0);
+        if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+    }
+    ctx.closePath(); ctx.stroke();
+    ctx.setLineDash([]);
+    const p = w.proj(cen.x, cen.z + 1.9, 0);
+    const label = `PLOT ${id}`;
+    ctx.font = `${Math.round(17 * k * 2)}px Cinzel`;
+    const tw = ctx.measureText(label).width, bw = tw + 22 * k * 2, bh = 26 * k * 2;
+    ctx.fillStyle = 'rgba(30,20,10,0.84)';
+    K.roundRect(ctx, p.x - bw / 2, p.y - bh / 2, bw, bh, 8 * k * 2); ctx.fill();
+    ctx.strokeStyle = '#d6a845'; ctx.lineWidth = Math.max(1.2, 1.6 * k * 2);
+    K.roundRect(ctx, p.x - bw / 2, p.y - bh / 2, bw, bh, 8 * k * 2); ctx.stroke();
+    ctx.fillStyle = '#f0dba0'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, p.x, p.y + 1);
+    ctx.restore();
+}
+
+function plaque(ctx, x, y, title, sub, k) {
+    ctx.save();
+    const f1 = Math.round(18 * k * 2), f2 = Math.round(13 * k * 2);
+    ctx.font = `${f1}px Cinzel`; const w1 = ctx.measureText(title).width;
+    ctx.font = `${f2}px Medieval`; const w2 = ctx.measureText(sub).width;
+    const bw = Math.max(w1, w2) + 24 * k * 2, bh = f1 + f2 + 15 * k * 2;
+    ctx.fillStyle = 'rgba(28,19,10,0.88)'; K.roundRect(ctx, x - bw / 2, y, bw, bh, 9 * k * 2); ctx.fill();
+    ctx.strokeStyle = '#a67c2e'; ctx.lineWidth = Math.max(1.4, 2 * k * 2); K.roundRect(ctx, x - bw / 2, y, bw, bh, 9 * k * 2); ctx.stroke();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `${f1}px Cinzel`; ctx.fillStyle = '#ecd9a6'; ctx.fillText(title, x, y + f1 * 0.85);
+    ctx.font = `${f2}px Medieval`; ctx.fillStyle = '#c9a65a'; ctx.fillText(sub, x, y + f1 + f2 * 0.8 + 5 * k * 2);
+    ctx.restore();
+}
+
+// ── scene cache (static art, no HUD / animation) ──
+const _scenes = new Map();
+const SCENE_MAX = 4;
+async function buildScene(state) {
+    ensureFonts();
+    const key0 = hashStr(JSON.stringify([state.owner, state.structures, state.freePlots, realmBiome(state)]));
+    const hit = _scenes.get(key0);
+    if (hit) { _scenes.delete(key0); _scenes.set(key0, hit); return hit; }
+    const { w, info, plots, team, biome, realm } = buildWorld(state);
+    const { W, H } = w.layout({ top: 170, bottom: 190, left: 30, right: 30 });
+    const canvas = require('canvas').createCanvas(W, H);
+    const ctx = canvas.getContext('2d');
+    const seed = hashStr(state.owner || 'base');
+    const bi = (K.biomeInfo().biomes || {})[realm];
+    const bd = realm === 'isle' ? { top: '#cfe8ef', mid: '#8fc7b2', bot: '#3f7a5c' } : bi ? { top: bi.backdrop[0], mid: bi.backdrop[1], bot: bi.backdrop[2] } : { top: '#356f6a', mid: '#1f4a4c', bot: '#0d2527' };
+    await w.draw(ctx, { drawBackdrop: (c2) => K.paintBackdrop(c2, W, H, seed, { clouds: 7, cloudScale: SCALE * 1.1, ...bd }) });
+    const k = SCALE;
+    const smoke = [];
+    for (const it of info) {
+        if (it.st.type === 'hunting') continue;
+        const lv = it.def.levels.find((l) => l.level === it.lvl) || it.def.levels[0];
+        const p = w.proj(it.cen.x, it.cen.z + 2.1, 0);
+        plaque(ctx, p.x, p.y + 2 * k * 2, it.def.name, `${lv.name} · Lv ${it.lvl}`, k);
+        if (it.st.type === 'house' || it.st.type === 'blacksmith' || it.st.type === 'alchemy') {
+            const sp = w.proj(it.cen.x + 0.5, it.cen.z - 0.4, 2.2); smoke.push({ x: sp.x, y: sp.y, smoky: it.st.type === 'blacksmith' });
+        }
+    }
+    const scene = { canvas, W, H, w, k, smoke, biome };
+    _scenes.set(key0, scene);
+    while (_scenes.size > SCENE_MAX) _scenes.delete(_scenes.keys().next().value);
+    return scene;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
-// LAYOUT v5 DRESSING LAW (owner 2026-10-18 "look up books, look up images,
-// look up whatever you can to make a proper arrangement for the house with
-// the right amount of environmental assets, rules and regulations ... make
-// sure you can do it good before you even attempt").
-// RESEARCH BASE: Kevin Lynch "The Image of the City" (paths / edges /
-// districts / nodes / landmarks), medieval Angerdorf morphology (green with
-// a central water source, fenced dooryard gardens, common meadow beyond the
-// plots), CoC home-village doctrine (anchor building, density gradient,
-// production at the periphery, spawned obstacles in clusters), iso city-
-// builder art production laws (roads lead the eye; plazas slow the eye;
-// landmarks at composition points; props cluster at corners, never scatter)
-// + the cozy-iso pixel-village reference board (lantern rhythm, dooryard
-// dressing, species-massed trees, dense backdrop / open foreground).
-// THE STREET SKELETON (gate x=8, main street, plaza ring, lanes, frontable
-// plots) IS v3/v4 OWNER-APPROVED AND STAYS. v5 dresses it to live:
-//   NODE      the plaza grass heart gains the WISHING WELL — water at the
-//             green (Angerdorf law) + a bench on the west shoulder + lantern
-//             posts flanking the north mouth (Lynch: nodes are the foci)
-//   LANDMARK  house dooryard (fenced-garden law): flower bed + herb pot +
-//             barrel on the front strip between house and south lane
-//   RHYTHM    lantern stands every ~4 cells along the main street
-//             (7,5)(9,5)(7,11)(9,13) — the gatehouse torch already
-//             anchors the gate mouth, the well anchors the plaza
-//   MASSING   trees plant in SPECIES CLUSTERS (conifer/oak/birch/pine/big),
-//             never salt-and-pepper; the random scatter rate drops to a
-//             whisper (0.04) and clusters carry the composition
-//   WOODS     the fenced hunting woods stay a WOOD (0.30 tree rate) instead
-//             of mowed lawn, with a tiny hunter's camp (rack + stump)
-//   EDGES     zone identity: ore cart + boulders + log at the mines head,
-//             boat + water rocks + reeds at the pond shore, fallen log +
-//             mushrooms + stone through the farm plots, hedge line softening
-//             the inside of the fence ring
-//   BUDGET    in-fence props ≤ 95; plaza node ≤ 6; dooryard ≤ 4; trees only
-//             in clusters (scatter 4%); nothing on paths/plots/footprints;
-//             tall props never in a built structure's front-shadow band
-const DRESS = {
-    well: [[8, 7]],
-    bench: [[6, 8]],
-    lanterns: [[7, 5], [9, 5], [7, 11], [9, 13]],
-    dooryard: [
-        { cell: [10, 9], file: 'plant_flower.png', sc: 1.3 },
-        { cell: [11, 9], file: 'pot_herbs.png', sc: 1.3 },
-        { cell: [12, 9], file: 'barrel_oak.png', sc: 1.5 },
-    ],
-    pondEdge: [
-        { cell: [15, 1], file: 'px_boat.png', sc: 1.0, water: true },
-        { cell: [14, 2], file: 'poly_water_rock.png', sc: 0.45, water: true },
-        { cell: [10, 0], file: 'poly_stream_rocks.png', sc: 0.9 },
-        { cell: [14, 4], file: 'px_fern.png', sc: 1.0 },
-        { cell: [15, 4], file: 'px_tuft.png', sc: 1.1 },
-    ],
-    minesEdge: [
-        { cell: [2, 4], file: 'cart_merchant.png', sc: 1.5 },
-        { cell: [0, 4], file: 'px_boulder.png', sc: 1.0 },
-        { cell: [5, 3], file: 'px_rock.png', sc: 1.0 },
-        { cell: [7, 3], file: 'poly_grassy_log.png', sc: 1.0 },
-    ],
-    woodsCamp: [
-        { cell: [1, 10], file: 'weapon_rack.png', sc: 1.1 },
-        { cell: [2, 10], file: 'px_stump.png', sc: 1.2 },
-    ],
-    farm: [
-        { cell: [1, 13], file: 'poly_fallen_tree.png', sc: 1.0 },
-        { cell: [5, 13], file: 'poly_mushrooms.png', sc: 0.9 },
-        { cell: [14, 12], file: 'px_stone.png', sc: 1.0 },
-    ],
-    // tree massing (species clusters — isoForest CLUSTER_POOLS)
-    // NOTE: no cluster in the (9..12,11..13) south pocket — that is the
-    // village COMMON in front of the gatehouse (Angerdorf commons law):
-    // gate → street → plaza → house sightline stays open, the meadow reads
-    // as expansion ground, and the density gradient stays core-dense.
-    clusters: [
-        { x: 0, y: 12, sp: 'conifer', n: 3, r: 1 },
-        { x: 10, y: 2, sp: 'big', n: 1 },
-        { x: 6, y: 1, sp: 'oak', n: 2, r: 1 },
-        { x: 14, y: 13, sp: 'oak', n: 2, r: 1 },
-        { x: 1, y: 7, sp: 'birch', n: 2, r: 1 },
-        { x: 15, y: 5, sp: 'pine', n: 2, r: 1 },
-    ],
-};
-
-function inZone(z, x, y) { return x >= z.x && x < z.x + z.fw && y >= z.y && y < z.y + z.fh; }
-
-// ═══════════════════════════════════════════════════════════════════════════
-// ONE FRAME
+//  FRAME RENDER (frame 0 = static card; frames animate smoke + glints)
 // ═══════════════════════════════════════════════════════════════════════════
 async function renderFrame(state, frame, opts = {}) {
-    ensureFonts();
-    // SS OVERRIDE (Task 37 speed round, owner "increase processing speed for
-    // gif and card"): animated bakes render at ss=1 — the mp4 target was
-    // ALWAYS half-res (ART_W x ART_H), so an SS=2 raw frame was a 4x-more-
-    // pixels render whose pixels ffmpeg immediately threw half away.
-    const ss = Math.max(0.5, Math.min(4, parseFloat(opts.ss) || SS));
-    const canvas = require('canvas').createCanvas(ART_W * ss, ART_H * ss);
-    const ctx = canvas.getContext('2d');
-    ctx.scale(ss, ss);
-    ctx.imageSmoothingEnabled = false;
-
+    const sc = await buildScene(state);
+    const out = require('canvas').createCanvas(sc.W, sc.H);
+    const ctx = out.getContext('2d');
+    ctx.drawImage(sc.canvas, 0, 0);
+    const t = (frame || 0) / FRAMES;
     const seed = hashStr(state.owner || 'base');
-
-    // ── FOREST LAW (owner 2026-10-16 11:57Z): the whole thing is a forest —
-    // no sky, deep canopy wall + treelines + god rays behind the island ──
-    await isoForest.paintBackdrop(ctx, ART_W, ART_H, frame, FRAMES, isoY(0, 0) - 16, isoY(N - 1, N - 1) + 16);
-
-    // ── terrain — mossy forest floor, and it now STRETCHES PAST THE CARD
-    // BORDERS (owner: "the ground itself stretching past the borders of the
-    // gif/card") — margin tiles continue the world outside the playable ring
-    // so there is no floating-island void anywhere.
-    const grass = ['forest_moss_a.png', 'forest_moss_b.png', 'forest_moss_c.png'];
-    const waterF = frame % 4 < 2 ? 'forest_water_0.png' : 'forest_water_1.png';
-    const M = 12; // full coverage to the card corners (owner: ground past borders)
-    // PER-PLAYER PROCEDURAL OUTLANDS (owner 2026-10-17): the world beyond the
-    // fence is rolled once per owner seed — biome (forest / highlands /
-    // ruins / coast), terrain overrides and prop placements all derive from
-    // it, so every render of the same player shows the same wilds.
-    const outlands = isoOutlands.outlandProps({ seedStr: state.owner || 'base', N, P, isoX, isoY, M, gates: [[8, N - 1 + P]] });
-    const wildTile = new Map(outlands.tiles.map((t) => [`${t.x},${t.y}`, t.tile]));
-    // ── STONE WALKWAY LAW (owner 2026-10-17, v81 stack: "you left the stone
-    // roads out of the base one, the guild???") — the base gets the SAME
-    // cobble walkways as the guild grounds: every path cell bakes cobble
-    // (forest_cobble_a/b/c, per-cell seeded pick so runs never repeat), and
-    // the old dirt trail stays alive as WORN SHOULDERS hugging every walk
-    // (4-neighbour cells at a 50% seeded roll) for the two-texture detail.
-    const COBBLE = ['forest_cobble_a.png', 'forest_cobble_b.png', 'forest_cobble_c.png'];
-    const pathSet = new Set((LAYOUT.paths || []).map(([x2, y2]) => `${x2},${y2}`));
-    const shoulder = new Set();
-    for (const [px2, py2] of LAYOUT.paths || []) {
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-            const k = `${px2 + dx},${py2 + dy}`;
-            if (!pathSet.has(k)) shoulder.add(k);
-        }
-    }
-    // ── PER-BAKE TERRAIN LAYER (shutdown fix, part 2): the tiles+trail+rim
-    // plane is frame-independent except the 2-state water shimmer — bakes
-    // pass an opts.terrainLayers store so it paints ONCE per state instead
-    // of 14x; single-frame callers get a transient layer (same output).
-    const layerStore = opts.terrainLayers || null;
-    let ground = layerStore ? layerStore[waterF] : null;
-    if (!ground) {
-        ground = require('canvas').createCanvas(ART_W * ss, ART_H * ss);
-        const g = ground.getContext('2d');
-        g.scale(ss, ss);
-        g.imageSmoothingEnabled = false;
-        if (layerStore) layerStore[waterF] = ground;
-        const TCTX = g;   // terrain target for this block
-    for (let x = -M; x < N + M; x++) {
-        for (let y = -M; y < N + M; y++) {
-            const px = isoX(x, y), py = isoY(x, y);
-            if (px < -TW || px > ART_W + TW || py < -TH || py > ART_H + TH) continue;
-            const r = mulberry32(seed + (x + 40) * 131 + (y + 40) * 17)();
-            const r2 = mulberry32(seed + (x + 40) * 131 + (y + 40) * 17 + 7)();
-            const inside = x >= 0 && y >= 0 && x < N && y < N;
-            const inFence = x >= -P && x <= N - 1 + P && y >= -P && y <= N - 1 + P;
-            let tile;
-            if (inside) {
-                if (inZone(LAYOUT.mines.zone, x, y)) tile = r < 0.85 ? 'forest_rock_tile.png' : 'forest_moss_c.png';
-                else if (inZone(LAYOUT.pond.zone, x, y)) tile = r < 0.92 ? waterF : 'forest_moss_c.png';
-                else if (pathSet.has(`${x},${y}`)) tile = COBBLE[Math.floor(r2 * 13) % 3];              // stone walkway
-                else if (shoulder.has(`${x},${y}`) && r2 < 0.5) tile = 'forest_trail.png';              // worn dirt shoulder
-                else tile = r < 0.07 ? 'forest_moss_shrooms.png' : grass[Math.floor(r * 3) % 3];
-            } else if (inFence) {
-                // the YARD — tamed meadow between playable ring and fence
-                tile = r < 0.04 ? 'forest_moss_shrooms.png' : grass[Math.floor(r * 3) % 3];
-            } else {
-                // beyond the fence: per-player wilds (biome terrain)
-                const wt = wildTile.get(`${x},${y}`);
-                if (wt === 'water') tile = waterF;
-                else if (wt) tile = wt;
-                else tile = grass[Math.floor(r * 3) % 3];
-            }
-            const timg = await img(tile);
-            if (timg) TCTX.drawImage(timg, px - TW / 2, py - TH / 2);
-        }
-    }
-    // gate trail: the walk runs out the south gate — cobble across the yard
-    // and a cobble apron at the gate mouth, then the old dirt walk fading
-    // into the per-player wilds (same two-texture law as the guild grounds)
-    {
-        const trailImg = await img('forest_trail.png');
-        const cob0 = await img(COBBLE[0]);
-        const cob1 = await img(COBBLE[1]);
-        if (trailImg) {
-            const trailCells = [];
-            for (let y = N; y <= N - 1 + P; y++) trailCells.push([8, y, 1]);   // yard walk = cobble
-            trailCells.push([8, N + P, 1], [7, N + P + 1, 0], [7, N + P + 2, 0], [6, N + P + 3, 0]); // apron, then dirt fade
-            for (const [tx, ty, stone] of trailCells) {
-                const im = stone ? ((tx + ty) % 2 === 0 ? cob0 : cob1) : trailImg;
-                if (im) TCTX.drawImage(im, isoX(tx + 0.5, ty + 0.5) - TW / 2, isoY(tx + 0.5, ty + 0.5) - TH / 2);
-            }
-        }
-    }
-    // playable-area rim — now a SOFT moss shadow instead of a hard island edge
-    TCTX.strokeStyle = 'rgba(24,32,14,0.22)';
-    TCTX.lineWidth = 3;
-    TCTX.beginPath();
-    TCTX.moveTo(isoX(0, N), isoY(0, N));
-    TCTX.lineTo(isoX(N, N), isoY(N, N));
-    TCTX.lineTo(isoX(N, 0), isoY(N, 0));
-    TCTX.stroke();
-    }
-    ctx.drawImage(ground, 0, 0, ART_W, ART_H);
-
-    // ── wild haze floor wash (owner pre-restart promise: "everything behind
-    // [the fence] = dense hazed forest") — now clipped to the FENCE diamond:
-    // the yard inside the fence stays bright and tamed; only the procedural
-    // wilds beyond the palisade recede.
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(-8, -8, ART_W + 16, ART_H + 16);
-    ctx.moveTo(isoX(-P, -P), isoY(-P, -P));
-    ctx.lineTo(isoX(N + P, -P), isoY(N + P, -P));
-    ctx.lineTo(isoX(N + P, N + P), isoY(N + P, N + P));
-    ctx.lineTo(isoX(-P, N + P), isoY(-P, N + P));
-    ctx.closePath();
-    ctx.clip('evenodd');
-    const hz = ctx.createLinearGradient(0, isoY(-P, -P) - 60, 0, isoY(N + P, N + P) + 30);
-    hz.addColorStop(0, 'rgba(18,28,14,0.38)');
-    hz.addColorStop(0.5, 'rgba(24,36,16,0.26)');
-    hz.addColorStop(1, 'rgba(12,20,10,0.44)');
-    ctx.fillStyle = hz;
-    ctx.fillRect(0, 0, ART_W, ART_H);
-    ctx.restore();
-
-    // ── hunting grounds fence (east boundary, gate gap) ──
-    const fenceImg = await img('base_fence.png');
-    if (fenceImg) {
-        const z = LAYOUT.hunting;
-        for (let yy = z.zone.y; yy < z.zone.y + z.zone.fh; yy++) {
-            { // woods gate gap now rides the WALK ROW (v4: the gatehouse
-              // structure itself guards the south gate on the main street)
-                const wy = z.walkY ?? z.y, wh = z.walkH ?? z.fh;
-                if (yy >= wy && yy < wy + wh) continue; // gate gap
-            }
-            ctx.drawImage(fenceImg, isoX(z.fenceCol, yy) - 32, isoY(z.fenceCol, yy) - 14);
-        }
-        // north run of the fence (along x, at y = zone.y)
-        for (let xx = 0; xx < z.zone.fw; xx++) {
-            ctx.drawImage(fenceImg, isoX(xx + 0.5, z.zone.y) - 33, isoY(xx + 0.5, z.zone.y) - 30);
-        }
-    }
-    // ── FOREST PROP LAW — dense tree wall on the border ring, clearing
-    // trees around the player house, understory everywhere else. Plots,
-    // structures, paths and the fenced hunting meadow stay walkable.
-    const props = [];
-    const used = new Set();
-    for (const st of state.structures || []) {
-        const d = structDef(st.type);
-        if (!d) continue;
-        for (let ix = 0; ix < d.fw; ix++) for (let iy = 0; iy < d.fh; iy++) used.add(`${st.x + ix},${st.y + iy}`);
-    }
-    // keep a 1-tile clearing around every structure so buildings stay readable
-    const usedMargin = new Set(used);
-    for (const key of used) {
-        const [sx, sy] = key.split(',').map(Number);
-        for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) usedMargin.add(`${sx + dx},${sy + dy}`);
-    }
-    const plotCells = new Set();
-    for (const plot of state.freePlots || []) {
-        for (let ix = -1; ix < 4; ix++) for (let iy = -1; iy < 4; iy++) plotCells.add(`${plot.x + ix},${plot.y + iy}`);
-    }
-    // hot cells: ring around the house footprint (trees right by the house)
-    const hot = [];
-    {
-        const h = LAYOUT.house;
-        for (let xx = h.x - 1; xx <= h.x + h.fw; xx++) {
-            for (let yy = h.y - 1; yy <= h.y + h.fh; yy++) {
-                if (xx >= h.x && xx < h.x + h.fw && yy >= h.y && yy < h.y + h.fh) continue;
-                hot.push([xx, yy]);
-            }
-        }
-        // the hunting woods stay wooded
-        for (let xx = LAYOUT.hunting.zone.x; xx < LAYOUT.hunting.zone.x + LAYOUT.hunting.zone.fw; xx++) {
-            for (let yy = LAYOUT.hunting.zone.y; yy < LAYOUT.hunting.zone.y + LAYOUT.hunting.zone.fh; yy++) hot.push([xx, yy]);
-        }
-    }
-    // ── v5 DRESS CELLS — every curated placement claims its cell so the
-    // random scatter can never double-plant under furniture or trees.
-    const dressCells = new Set();
-    const dressAll = [
-        ...(DRESS.dooryard || []), ...(DRESS.pondEdge || []), ...(DRESS.minesEdge || []),
-        ...(DRESS.woodsCamp || []), ...(DRESS.farm || []),
-    ];
-    for (const d of dressAll) dressCells.add(`${d.cell[0]},${d.cell[1]}`);
-    for (const c of [...(DRESS.well || []), ...(DRESS.bench || []), ...(DRESS.lanterns || [])]) dressCells.add(`${c[0]},${c[1]}`);
-
-    // occupied for the forest pass = structures+clearing ∪ dress cells —
-    // curated placements own their ground, scatter never double-plants there
-    const forestOccupied = new Set([...usedMargin, ...dressCells]);
-    // WOODS LAW cells: the fenced hunting woods stay a wood (the zone cells
-    // also ride the `hot` list, but the woods branch outranks hot in the
-    // islandForest chain)
-    const woodsCells = [];
-    for (let xx = LAYOUT.hunting.zone.x; xx < LAYOUT.hunting.zone.x + LAYOUT.hunting.zone.fw; xx++) {
-        for (let yy = LAYOUT.hunting.zone.y; yy < LAYOUT.hunting.zone.y + LAYOUT.hunting.zone.fh; yy++) woodsCells.push([xx, yy]);
-    }
-    const forestProps = isoForest.islandForest({
-        seed, N, isoX, isoY,
-        occupied: forestOccupied,
-        paths: LAYOUT.paths || [],
-        hot, plotCells,
-        margin: false, // outside the fence is the outlands module's domain now
-        haze: false,
-        // owner 2026-10-17 v91 stack: "too many trees inside" — the yard's
-        // mid ring + house hot ring thin way down; the playable ring stays
-        // an open settlement with tree garnish, the woodland lives OUTSIDE
-        // as the outlands' rolled forest patches
-        // v5 CLUSTER LAW: scatter drops to a whisper (0.04/0.05) — the
-        // species clusters in DRESS carry the tree massing instead
-        midRate: 0.04,
-        hotRate: 0.05,
-        // WOODS LAW: the fenced hunting woods stay a wood, not lawn
-        woods: { cells: woodsCells, treeRate: 0.42, underRate: 0.35 },
-        // TREE CLUSTER LAW (v5): art-directed species massing
-        clusters: DRESS.clusters || [],
-        structFoots: (state.structures || [])
-            .map((st) => { const d = structDef(st.type); return d ? [st.x, st.y, d.fw, d.fh] : null; })
-            .filter(Boolean),
-    });
-    for (const f of forestProps) {
-        const im = f.tint ? await isoForest.tinted(f.file, f.tint, f.sc || 1) : await img(f.file);
-        if (im) props.push({ img: im, x: f.x, y: f.y, sc: f.tint ? 1 : (f.sc || 1) });
-    }
-    // PER-PLAYER OUTLANDS PROPS — biome placements beyond the fence (rocks,
-    // mountains, ruins, shore) + yard meadow dressing; hazed by tint there.
-    for (const f of outlands.props) {
-        const im = f.tint ? await isoForest.tinted(f.file, f.tint, f.sc || 1) : await img(f.file);
-        if (im) props.push({ img: im, x: f.x, y: f.y, sc: f.tint ? 1 : (f.sc || 1) });
-    }
-    // zone garnish (owner: "the pond and mines and everything else? Doesn't
-    // exist") — v5: the IDENTITY dressing moved to the curated DRESS pass
-    // (cart/boulders/log at the mines head, boat/reeds/rocks at the pond
-    // shore); this block keeps only a few seeded extras INSIDE the zones so
-    // the rock/water tiles never read sterile.
-    {
-        const gRnd = mulberry32(seed + 4711);
-        const zoneFree = (x, y) => {
-            for (const st of state.structures || []) {
-                const d = structDef(st.type);
-                if (!d) continue;
-                if (x >= st.x - 1 && x < st.x + d.fw + 1 && y >= st.y - 1 && y < st.y + d.fh + 1) return false;
-            }
-            return !(LAYOUT.paths || []).some(([px2, py2]) => px2 === x && py2 === y);
-        };
-        const mz = LAYOUT.mines.zone, pz = LAYOUT.pond.zone;
-        const garnish = [];
-        for (let i = 0; i < 3; i++) {
-            const gx = mz.x + Math.floor(gRnd() * mz.fw), gy = mz.y + Math.floor(gRnd() * mz.fh);
-            if (zoneFree(gx, gy)) garnish.push({ file: gRnd() < 0.6 ? 'px_boulder.png' : 'px_rock.png', x: isoX(gx + 0.5, gy + 0.5) + (gRnd() - 0.5) * 30, y: isoY(gx + 0.5, gy + 0.5) + (gRnd() - 0.5) * 14 });
-        }
-        for (let i = 0; i < 2; i++) {
-            const gx = pz.x + Math.floor(gRnd() * pz.fw), gy = pz.y + Math.floor(gRnd() * pz.fh);
-            if (zoneFree(gx, gy)) garnish.push({ file: gRnd() < 0.55 ? 'px_fern.png' : 'px_bush_a.png', x: isoX(gx + 0.5, gy + 0.5) + (gRnd() - 0.5) * 30, y: isoY(gx + 0.5, gy + 0.5) + (gRnd() - 0.5) * 14 });
-        }
-        for (const g of garnish) {
-            const im = await img(g.file);
-            if (im) props.push({ img: im, x: g.x, y: g.y, sc: 1 });
-        }
-    }
-
-    // ── v5 STREET FURNITURE + ZONE EDGES (DRESS law) — curated props,
-    // bottom-centre anchored on their cells. Street furniture (well / bench
-    // / lanterns) sits pixel-straight on the cell; nature dressing gets a
-    // seeded ±10px organic drift. Water props sink to the tile centre so
-    // they sit IN the pond.
-    {
-        const fRnd = mulberry32(seed + 5150);
-        const furn = [];
-        for (const c of DRESS.well || []) furn.push({ cell: c, file: 'well_wishing.png', sc: 1.9 });
-        for (const c of DRESS.bench || []) furn.push({ cell: c, file: 'bench_oak.png', sc: 1.35 });
-        for (const c of DRESS.lanterns || []) furn.push({ cell: c, file: 'lantern_stand.png', sc: 1.5 });
-        furn.push(...dressAll);
-        for (const d of furn) {
-            const im = await img(d.file);
-            if (!im) continue;
-            const [dx2, dy2] = d.cell;
-            const sc = d.sc || 1;
-            const straight = d.file === 'well_wishing.png' || d.file === 'bench_oak.png' || d.file === 'lantern_stand.png' || d.file === 'cart_merchant.png' || d.file === 'weapon_rack.png';
-            const jx = straight ? 0 : (fRnd() - 0.5) * 20;
-            const jy = straight ? 0 : (fRnd() - 0.5) * 10;
-            props.push({
-                img: im, sc,
-                x: isoX(dx2 + 0.5, dy2 + 0.5) + jx,
-                y: isoY(dx2 + 0.5, dy2 + 0.5) + (d.water ? 8 : 6) + jy,
-            });
-        }
-    }
-    // ── v5 HEDGE LAW — the fence line softens with a bush/tuft row on the
-    // yard cells just inside the palisade (35% per cell), skipping the gate
-    // corridor so the entrance stays open. The tamed estate reads fenced,
-    // not clear-cut.
-    {
-        const hRnd = mulberry32(seed + 911);
-        const hedgeCell = (x, y) => {
-            if (hRnd() >= 0.35) return;
-            const bush = hRnd() < 0.6;
-            props.push({
-                img: null, file: bush ? (hRnd() < 0.5 ? 'px_bush_a.png' : 'px_bush_b.png') : 'px_tuft.png',
-                x: isoX(x + 0.5, y + 0.5) + (hRnd() - 0.5) * 18,
-                y: isoY(x + 0.5, y + 0.5) + 6 + (hRnd() - 0.5) * 8,
-                sc: 0.9 + hRnd() * 0.25,
-            });
-        };
-        for (let x = -2; x <= N + 1; x++) { hedgeCell(x, -2); if (x < 6 || x > 10) hedgeCell(x, N - 1 + P - 1); }
-        for (let y = -2; y <= N + 1; y++) { hedgeCell(-2, y); hedgeCell(N - 1 + P - 1, y); }
-        // resolve the lazy img refs (props.push above stashed file names)
-        for (const p of props) {
-            if (p.img === null && p.file) { p.img = await img(p.file); delete p.file; }
-        }
-    }
-    // ── pixel fence ring — pushed OUTWARD by P tiles (owner: "the fence
-    // should be further away because the space is bigger"), gate gap where
-    // the main street leaves the compound (8, N-1+P) — LAYOUT v3
-    for (const seg of isoForest.fenceRing(N, isoX, isoY, [[8, N - 1 + P]], P)) {
-        const fim = await img(seg.file);
-        if (fim) props.push({ img: fim, x: seg.x, y: seg.y, sc: 1 });
-    }
-    // zone garnish (owner: "the pond and mines and everything else? Doesn't
-    // exist") — boulders ringing the mines zone, reeds/bushes by the pond so
-    // both read instantly as landmarks
-    {
-        const gRnd = mulberry32(seed + 4711);
-        const zoneFree = (x, y) => {
-            for (const st of state.structures || []) {
-                const d = structDef(st.type);
-                if (!d) continue;
-                if (x >= st.x - 1 && x < st.x + d.fw + 1 && y >= st.y - 1 && y < st.y + d.fh + 1) return false;
-            }
-            return !(LAYOUT.paths || []).some(([px2, py2]) => px2 === x && py2 === y);
-        };
-        const mz = LAYOUT.mines.zone, pz = LAYOUT.pond.zone;
-        const garnish = [];
-        for (let i = 0; i < 6; i++) {
-            const gx = mz.x + Math.floor(gRnd() * mz.fw), gy = mz.y + Math.floor(gRnd() * mz.fh);
-            if (zoneFree(gx, gy)) garnish.push({ file: gRnd() < 0.6 ? 'px_boulder.png' : 'px_rock.png', x: isoX(gx + 0.5, gy + 0.5) + (gRnd() - 0.5) * 30, y: isoY(gx + 0.5, gy + 0.5) + (gRnd() - 0.5) * 14 });
-        }
-        for (let i = 0; i < 5; i++) {
-            const gx = pz.x + Math.floor(gRnd() * pz.fw), gy = pz.y + Math.floor(gRnd() * pz.fh);
-            if (zoneFree(gx, gy)) garnish.push({ file: gRnd() < 0.55 ? 'px_fern.png' : 'px_bush_a.png', x: isoX(gx + 0.5, gy + 0.5) + (gRnd() - 0.5) * 30, y: isoY(gx + 0.5, gy + 0.5) + (gRnd() - 0.5) * 14 });
-        }
-        for (const g of garnish) {
-            const im = await img(g.file);
-            if (im) props.push({ img: im, x: g.x, y: g.y, sc: 1 });
-        }
-    }
-
-    // ── plot markers for free expansion plots ──
-    const plotImg = await img('base_plot_marker.png');
-    for (const plot of state.freePlots || []) {
-        if (!plotImg) break;
-        const c = footCenter(plot.x, plot.y, 3, 3);
-        const bob = Math.sin((frame / FRAMES) * Math.PI * 2 + plot.id) * 1.2;
+    if (opts.animate || frame > 0) {
         ctx.save();
-        ctx.globalAlpha = 0.85;
-        ctx.drawImage(plotImg, c.x - plotImg.width / 2, isoY(plot.x + 1, plot.y + 1) - plotImg.height / 2 + bob);
-        ctx.font = '15px Medieval, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = 'rgba(35,25,12,0.9)';
-        ctx.fillText(`PLOT ${plot.id}`, c.x, isoY(plot.x + 1, plot.y + 1) + 5 + bob);
-        ctx.fillStyle = '#f2e2b8';
-        ctx.fillText(`PLOT ${plot.id}`, c.x, isoY(plot.x + 1, plot.y + 1) + 4 + bob);
-        ctx.restore();
-    }
-
-    // ── structures: back→front depth sort ──
-    const structs = (state.structures || [])
-        .map((st) => ({ ...st, def: structDef(st.type) }))
-        .filter((st) => st.def)
-        .sort((a, b) => (a.x + a.y) - (b.x + b.y));
-
-    const drawn = [];
-    for (const st of structs) {
-        const lv = st.def.levels.find((l) => l.level === st.level) || st.def.levels[0];
-        const spr = await img(`${lv.sprite}.png`);
-        if (!spr) continue;
-        const { cx, ay } = anchorOf(st.x, st.y, st.def.fw, st.def.fh);
-        const sc = STRUCT_SCALE[st.type] || 0.85;
-        drawn.push({ st, spr, cx, ay, w: spr.width * sc, h: spr.height * sc, sc, lv, mirror: facadeMirror(st, st.def, pathSet) });
-    }
-
-    // props behind structures merge into the same depth pass.
-    // DEPTH LAW (fixes owner 20:20Z "houses seem to be on top of the trees"):
-    // a struct's depth is its footprint's SOUTH CORNER (the max x+y vertex —
-    // the point nearest the camera); a prop's depth is its anchor tile.
-    // +2 bias makes ties at the south corner resolve prop-in-front, so a
-    // tree's canopy may overlap a house base, never the reverse. The old
-    // sort compared structs' UNDEFINED .y -> NaN comparator -> arbitrary
-    // draw order, which let houses paint over trees standing in front.
-    const drawables = [
-        ...props.map((p) => ({ kind: 'prop', depth: p.y, x: p.x, y: p.y, img: p.img, sc: p.sc || 1 })),
-        ...drawn.map((d) => ({ kind: 'struct', depth: isoY(d.st.x + d.st.def.fw, d.st.y + d.st.def.fh) + 2, ...d })),
-    ].sort((a, b) => a.depth - b.depth);
-
-    // shadows first (floor level)
-    for (const d of drawables) {
-        if (d.kind === 'prop') {
-            if (d.img && d.img.height * (d.sc || 1) > 26) {
-                isoShadow.drawItemShadow(ctx, { img: d.img, key: `prop${d.x}|${d.y}`, scale: d.sc || 1, ax: d.x, ay: d.y + 2, alpha: 0.8 });
+        for (const s of sc.smoke) {                              // chimney / forge smoke puffs
+            for (let i = 0; i < 4; i++) {
+                const ph = (t + i / 4) % 1;
+                ctx.globalAlpha = 0.5 * (1 - ph);
+                ctx.fillStyle = s.smoky ? '#6b6b73' : '#d8d8de';
+                ctx.beginPath(); ctx.arc(s.x + Math.sin(ph * 5 + i) * 4 * sc.k * 2 + ph * 6, s.y - ph * 42 * sc.k * 2, (3 + ph * 7) * sc.k * 2, 0, Math.PI * 2); ctx.fill();
             }
-            continue;
         }
-        isoShadow.drawItemShadow(ctx, {
-            img: d.spr, key: `${d.st.type}_${d.st.level}`, scale: d.sc,
-            ax: d.cx, ay: d.ay, alpha: 1,
-        });
-    }
-    // sprites (pixel-snap prop draw — keeps the chunky look crisp)
-    for (const d of drawables) {
-        if (d.kind === 'prop') {
-            const pw = d.img.width * (d.sc || 1), ph = d.img.height * (d.sc || 1);
-            ctx.drawImage(d.img, (d.x - pw / 2) | 0, (d.y - ph) | 0, pw | 0, ph | 0);
-            continue;
-        }
-        if (d.mirror) {
-            // FACADE LAW: flip the sprite about its anchor so the baked
-            // facade faces the street it actually fronts
-            ctx.save();
-            ctx.translate(d.cx, 0);
-            ctx.scale(-1, 1);
-            ctx.drawImage(d.spr, -d.w / 2, d.ay - d.h, d.w, d.h);
-            ctx.restore();
-        } else {
-            ctx.drawImage(d.spr, d.cx - d.w / 2, d.ay - d.h, d.w, d.h);
-        }
-    }
-
-    // ── animations ──
-    // gate torch flicker — rides the gatehouse ARCH (v4: the gatehouse is
-    // the village gate). COC41 ART LAW: the rebuilt gatehouse bakes at 1x
-    // (zoom 1.42) — its arch apex sits ≈ anchor − 2px, and the anchor is
-    // centre + (fw+fh)*8 + 4 = centre + 36, so the flame hugs centre + 34.
-    const gate = structs.find((s) => s.type === 'hunting');
-    if (gate) {
-        const fl = Math.sin(frame * 1.9) * 0.5 + 0.5;
-        const gx = isoX(gate.x + 1, gate.y + 1), gy = isoY(gate.x + 1, gate.y + 1) + 34;
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        const R = 22 + fl * 6;
-        const g = ctx.createRadialGradient(gx, gy, 2, gx, gy, R);
-        g.addColorStop(0, 'rgba(255,190,90,0.5)');
-        g.addColorStop(1, 'rgba(255,120,40,0)');
-        ctx.fillStyle = g;
-        ctx.beginPath(); ctx.arc(gx, gy, R, 0, Math.PI * 2); ctx.fill();
-        ctx.restore();
-    }
-    // chimney/forge smoke: house L2+, smithy L2+
-    const t = frame / FRAMES;
-    for (const d of drawn) {
-        let smokes = 0, sxo = 0, syo = 0;
-        if (d.st.type === 'house' && d.st.level >= 2) { smokes = 3; sxo = 40 * d.sc; syo = -d.h + 14; }
-        if (d.st.type === 'blacksmith' && d.st.level >= 2) { smokes = 4; sxo = 52 * d.sc; syo = -d.h + 30; }
-        if (!smokes) continue;
-        ctx.save();
-        for (let i = 0; i < smokes; i++) {
-            const ph = (t + i / smokes) % 1;
-            ctx.globalAlpha = 0.30 * (1 - ph);
-            ctx.fillStyle = '#e8e4da';
-            ctx.beginPath();
-            ctx.ellipse(d.cx + sxo + Math.sin(ph * 5 + i) * 8, d.ay + syo - ph * 44, 4 + ph * 10, 3 + ph * 7, 0, 0, Math.PI * 2);
-            ctx.fill();
+        for (let i = 0; i < 22; i++) {                           // fireflies / water glints
+            const r1 = mulberry32(seed + 700 + i)(), r2 = mulberry32(seed + 1700 + i)();
+            const ph = (t + r1) % 1;
+            ctx.globalAlpha = 0.7 * Math.sin(ph * Math.PI);
+            ctx.fillStyle = i % 3 ? '#ffffff' : '#ffe9a8';
+            ctx.beginPath(); ctx.arc(sc.W * (0.06 + 0.88 * r1), sc.H * (0.2 + 0.6 * r2) - ph * 12, 1.6 + (i % 3), 0, Math.PI * 2); ctx.fill();
         }
         ctx.restore();
     }
-    // pond sparkle + alchemy sparks
-    const pond = structs.find((s) => s.type === 'pond');
-    if (pond && pond.level >= 3) {
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        const sp = (t * 3) % 1;
-        ctx.globalAlpha = 0.6 * (1 - sp);
-        ctx.fillStyle = '#dff6fa';
-        ctx.beginPath(); ctx.arc(pond.cx + Math.sin(t * 6.28) * 20, pond.ay - 30 - sp * 24, 2, 0, Math.PI * 2); ctx.fill();
-        ctx.restore();
-    }
-    const alch = structs.find((s) => s.type === 'alchemy');
-    if (alch) {
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        for (let i = 0; i < 3; i++) {
-            const ph = (t + i / 3) % 1;
-            ctx.globalAlpha = 0.5 * (1 - ph);
-            ctx.fillStyle = '#aef0b8';
-            ctx.beginPath(); ctx.arc(alch.cx + 70 + Math.sin(ph * 9 + i * 2) * 10, alch.ay - 8 - ph * 30, 1.8, 0, Math.PI * 2); ctx.fill();
-        }
-        ctx.restore();
-    }
-    // fireflies (dusk ambience near grass)
-    ctx.save();
-    for (let i = 0; i < 6; i++) {
-        const r1 = mulberry32(seed + 3000 + i)();
-        const ph = (t + r1) % 1;
-        ctx.globalAlpha = 0.5 * Math.sin(ph * Math.PI);
-        ctx.fillStyle = '#ffe9a8';
-        ctx.beginPath();
-        ctx.arc(OX + (r1 - 0.5) * 700, OY + 300 + (i % 3) * 90 - ph * 26, 1.6, 0, Math.PI * 2);
-        ctx.fill();
-    }
-    ctx.restore();
-
-    // vignette
-    const vg = ctx.createRadialGradient(OX, OY + 340, 380, OX, OY + 340, 900);
-    vg.addColorStop(0, 'rgba(0,0,0,0)');
-    vg.addColorStop(1, 'rgba(20,14,6,0.42)');
-    ctx.fillStyle = vg;
-    ctx.fillRect(0, 0, ART_W, ART_H);
-
-    drawHud(ctx, state, opts);
-    // RAW ENCODER (owner 2026-10-17 "sometimes when I do .j base the bot
-    // shuts down??? Investigate"): 14 sync PNG encodes at 1.1-2.7s each
-    // starved the event loop for 15-40s straight -> the liveness canary
-    // SIGKILLed the bake mid-flight. opts.encoder='raw' returns the cairo
-    // surface as a BGRA memcpy (toBuffer('raw'), ~40ms) for ffmpeg to
-    // encode directly — the PNG round-trip is skipped entirely.
-    if (opts.encoder === 'raw') {
-        return { raw: canvas.toBuffer('raw'), w: canvas.width, h: canvas.height };
-    }
-    // RETURN-CANVAS (Task 36 memory round) — internal callers encode the
-    // finished art themselves (downscale + JPEG); skipping the full-res PNG
-    // encode saves ~1-2s AND the 2-4MB PNG buffer it allocates.
-    if (opts.returnCanvas) return canvas;
-    return canvas.toBuffer('image/png');
+    drawHud(ctx, state, opts, sc.W, sc.H);
+    if (opts.encoder === 'raw') return { raw: out.toBuffer('raw'), w: out.width, h: out.height };
+    if (opts.returnCanvas) return out;
+    return out.toBuffer('image/png');
 }
 
 // ── HUD plate ──
-function drawHud(ctx, state, opts) {
-    const H = 132, Wp = ART_W - 60;
-    const x0 = 30, y0 = ART_H - H - 22;
+function drawHud(ctx, state, opts, W, H) {
+    const Hh = 132, Wp = W - 60;
+    const x0 = 30, y0 = H - Hh - 22;
     ctx.save();
-    ctx.fillStyle = 'rgba(24,17,10,0.88)';
-    roundRect(ctx, x0, y0, Wp, H, 14);
-    ctx.fill();
-    ctx.strokeStyle = '#a67c2e';
-    ctx.lineWidth = 2.5;
-    roundRect(ctx, x0 + 4, y0 + 4, Wp - 8, H - 8, 10);
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(166,124,46,0.35)';
-    ctx.lineWidth = 1;
-    roundRect(ctx, x0 + 9, y0 + 9, Wp - 18, H - 18, 8);
-    ctx.stroke();
-
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#e8d5a3';
-    ctx.font = '26px "Cinzel Deco", Cinzel';
-    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(24,17,10,0.88)'; K.roundRect(ctx, x0, y0, Wp, Hh, 14); ctx.fill();
+    ctx.strokeStyle = '#a67c2e'; ctx.lineWidth = 2.5; K.roundRect(ctx, x0 + 4, y0 + 4, Wp - 8, Hh - 8, 10); ctx.stroke();
+    ctx.strokeStyle = 'rgba(166,124,46,0.35)'; ctx.lineWidth = 1; K.roundRect(ctx, x0 + 9, y0 + 9, Wp - 18, Hh - 18, 8); ctx.stroke();
+    ctx.textBaseline = 'middle'; ctx.fillStyle = '#e8d5a3'; ctx.font = '26px "Cinzel Deco", Cinzel'; ctx.textAlign = 'left';
     ctx.fillText(String(state.owner || 'Adventurer').slice(0, 22), x0 + 26, y0 + 38);
-    ctx.font = '16px Medieval';
-    ctx.fillStyle = '#9c8455';
-    ctx.fillText(`The base of ${state.owner}`, x0 + 26, y0 + 64);
-
+    ctx.font = '16px Medieval'; ctx.fillStyle = '#9c8455'; ctx.fillText(`The base of ${state.owner}`, x0 + 26, y0 + 64);
     const count = (state.structures || []).length;
-    ctx.textAlign = 'center';
-    ctx.font = '20px Cinzel';
-    ctx.fillStyle = '#e8d5a3';
-    ctx.fillText(`${count}`, x0 + Wp - 250, y0 + 38);
-    ctx.font = '14px Medieval';
-    ctx.fillStyle = '#9c8455';
-    ctx.fillText('STRUCTURES', x0 + Wp - 250, y0 + 62);
-
-    ctx.font = '20px Cinzel';
-    ctx.fillStyle = '#e8d5a3';
-    ctx.fillText(`${(state.freePlots || []).length}`, x0 + Wp - 90, y0 + 38);
-    ctx.font = '14px Medieval';
-    ctx.fillStyle = '#9c8455';
-    ctx.fillText('FREE PLOTS', x0 + Wp - 90, y0 + 62);
-
-    ctx.textAlign = 'center';
-    ctx.font = '15px Medieval';
-    ctx.fillStyle = '#7a663f';
-    ctx.fillText(opts.hint || 'base build <type> [plot]  •  base upgrade <type|#>  •  base house 1  •  base info', x0 + Wp / 2, y0 + H - 26);
+    ctx.textAlign = 'center'; ctx.font = '20px Cinzel'; ctx.fillStyle = '#e8d5a3'; ctx.fillText(`${count}`, x0 + Wp - 250, y0 + 38);
+    ctx.font = '14px Medieval'; ctx.fillStyle = '#9c8455'; ctx.fillText('STRUCTURES', x0 + Wp - 250, y0 + 62);
+    ctx.font = '20px Cinzel'; ctx.fillStyle = '#e8d5a3'; ctx.fillText(`${(state.freePlots || []).length}`, x0 + Wp - 90, y0 + 38);
+    ctx.font = '14px Medieval'; ctx.fillStyle = '#9c8455'; ctx.fillText('FREE PLOTS', x0 + Wp - 90, y0 + 62);
+    ctx.textAlign = 'center'; ctx.font = '15px Medieval'; ctx.fillStyle = '#7a663f';
+    ctx.fillText(opts.hint || 'base build <type> [plot]  •  base upgrade <type|#>  •  base house 1  •  base info', x0 + Wp / 2, y0 + Hh - 26);
     ctx.restore();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PUBLIC: base animation (WhatsApp GIF = mp4) with PNG fallback
+//  mp4 + public render
 // ═══════════════════════════════════════════════════════════════════════════
+const FRAME_BREATH_MS = 8;
+const breath = () => new Promise((r) => setTimeout(r, FRAME_BREATH_MS));
+
 async function encodeFramesToMp4(frames) {
-    const ffmpeg = require('fluent-ffmpeg');
-    try { ffmpeg.setFfmpegPath(process.env.FFMPEG_PATH || 'ffmpeg'); } catch (e) { /* engine sets it too */ }
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'base-'));
     const out = path.join(tmp, 'base.mp4');
     try {
-        // RAW PATH — frames rendered via opts.encoder='raw' ({ raw, w, h }):
-        // concat the BGRA memcpys and let ffmpeg demux rawvideo. Direct
-        // spawn (NOT fluent-ffmpeg): fluent silently hung on the rawvideo
-        // input (slept at ~590KB probed, zero IO) while the PNG path works
-        // — the raw demux needs its input options in a specific order.
-        if (frames.length && frames[0] && frames[0].raw) {
-            const { w, h } = frames[0];
-            const fbin = process.env.FFMPEG_PATH || 'ffmpeg';
-            // stdin-stream the BGRA frames (renders and encode run in
-            // parallel — v10d proved a 215MB frames.raw costs ~200s on the
-            // box's slow disk in write+read alone) and encode at HALF
-            // resolution (the mp4 plays thumbnail-sized; static PNGs stay
-            // full-res). fluent-ffmpeg hung on this input entirely.
-            const args = [
-                '-f', 'rawvideo', '-pix_fmt', 'bgra', '-video_size', `${w}x${h}`,
-                '-framerate', `${1000 / FRAME_MS}`, '-i', 'pipe:0',
-                '-vf', `scale=${Math.round(w / 2)}:${Math.round(h / 2)}`,
-                '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0',
-                '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '23',
-                '-movflags', '+faststart', '-an', '-y', out,
-            ];
-            await new Promise((resolve, reject) => {
-                const p = require('child_process').spawn(fbin, args, { stdio: ['pipe', 'ignore', 'pipe'] });
-                let err = '';
-                p.stderr.on('data', (d) => { err += d; if (err.length > 6000) err = err.slice(-3000); });
-                p.on('error', reject);
-                p.on('exit', (code) => code === 0 ? resolve() : reject(new Error(`ffmpeg exit ${code}: ${err.slice(-500)}`)));
-                (async () => {
-                    for (const f of frames) {
-                        if (!p.stdin.write(f.raw)) await new Promise((r) => p.stdin.once('drain', r));
-                    }
-                    p.stdin.end();
-                })().catch((e) => { try { p.kill('SIGKILL'); } catch (e2) {} reject(e); });
-            });
-            return fs.readFileSync(out);
-        }
-        // PNG PATH — plain buffers (QA smoke bakes / 3-frame renders)
-        frames.forEach((b, i) => {
-            if (!Buffer.isBuffer(b)) throw new Error(`frame ${i} is ${(b && typeof b === 'object') ? 'a raw-frame object, not a Buffer' : typeof b} — mixed encoder paths`);
-            fs.writeFileSync(path.join(tmp, `f${String(i).padStart(3, '0')}.png`), b);
-        });
+        if (!(frames.length && frames[0] && frames[0].raw)) throw new Error('encodeFramesToMp4: raw frames required');
+        const { w, h } = frames[0];
+        const args = [
+            '-f', 'rawvideo', '-pix_fmt', 'bgra', '-video_size', `${w}x${h}`,
+            '-framerate', `${1000 / FRAME_MS}`, '-i', 'pipe:0',
+            '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+            '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0',
+            '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '23',
+            '-movflags', '+faststart', '-an', '-y', out,
+        ];
         await new Promise((resolve, reject) => {
-            ffmpeg()
-                .input(path.join(tmp, 'f%03d.png'))
-                .inputOptions(['-framerate', `${1000 / FRAME_MS}`])
-                .outputOptions([
-                    '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0',
-                    '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '23',
-                    '-movflags', '+faststart', '-an', '-y',
-                ])
-                .output(out)
-                .on('end', resolve)
-                .on('error', reject)
-                .run();
+            const p = require('child_process').spawn(process.env.FFMPEG_PATH || 'ffmpeg', args, { stdio: ['pipe', 'ignore', 'pipe'] });
+            let err = '';
+            p.stderr.on('data', (d) => { err += d; if (err.length > 6000) err = err.slice(-3000); });
+            p.on('error', reject);
+            p.on('exit', (code) => code === 0 ? resolve() : reject(new Error(`ffmpeg exit ${code}: ${err.slice(-500)}`)));
+            (async () => { for (const f of frames) { if (!p.stdin.write(f.raw)) await new Promise((r2) => p.stdin.once('drain', r2)); } p.stdin.end(); })().catch(reject);
         });
         return fs.readFileSync(out);
-    } finally {
-        try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) {}
-    }
+    } finally { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) { /* ignore */ } }
 }
 
-// OUT ENCODER (Task 36: owner "the guild area is 5mb+ in size???? Yhh that
-// won't do") — static cards ship DOWNSCALED + JPEG instead of the full-res
-// SS=2 PNG. WhatsApp phones never show more than ~1200px; a full-res PNG was
-// ~2-4MB out plus a ~1.4x base64 copy in the send path, and every entry sat
-// in the hot render cache. Downscale to OUT_MAX_W and encode JPEG q0.88:
-// visually identical in-app, ~0.4-1.1MB. Env-tunable for future art passes.
 const OUT_MAX_W = Math.max(640, parseInt(process.env.RENDER_OUT_MAX_W || '2560', 10) || 2560);
-const OUT_JPEG_Q = Math.min(0.95, Math.max(0.5, parseFloat(process.env.RENDER_OUT_JPEG_Q || '0.88') || 0.88));
+const OUT_JPEG_Q = Math.min(0.95, Math.max(0.5, parseFloat(process.env.RENDER_OUT_JPEG_Q || '0.9') || 0.9));
 function encodeOut(canvas) {
     let c = canvas;
     if (canvas.width > OUT_MAX_W) {
@@ -969,15 +540,11 @@ function encodeOut(canvas) {
         c = require('canvas').createCanvas(OUT_MAX_W, h);
         c.getContext('2d').drawImage(canvas, 0, 0, OUT_MAX_W, h);
     }
-    return { buffer: c.toBuffer('image/jpeg', OUT_JPEG_Q), contentType: 'image/jpeg' };
+    return { buffer: c.toBuffer('image/jpeg', { quality: OUT_JPEG_Q }), contentType: 'image/jpeg' };
 }
 
-// HOT CACHE BYTE CAP (Task 36: "why are there such large memory spikes?") —
-// the old cap was 120 ENTRIES; at multi-MB cards that is half a GB of
-// resident buffers. Cap by bytes instead (oldest evicted first) — 64MB holds
-// ~60 cards or ~240 mp4s, far past any real chat session.
 const RENDER_CACHE_MAX_BYTES = 64 * 1048576;
-function cachePut(map, key, out) {
+function cachePut(map, k, out) {
     let total = (out && out.buffer && out.buffer.length) || 0;
     for (const v of map.values()) total += (v && v.buffer && v.buffer.length) || 0;
     while (total > RENDER_CACHE_MAX_BYTES && map.size) {
@@ -986,93 +553,29 @@ function cachePut(map, key, out) {
         total -= (v && v.buffer && v.buffer.length) || 0;
         map.delete(oldestKey);
     }
-    map.set(key, { ...out, ts: Date.now() });
+    map.set(k, { ...out, ts: Date.now() });
 }
-
 const _renderCache = new Map();
 const CACHE_TTL = 10 * 60 * 1000;
 function stateHash(state, opts = {}) {
-    return hashStr(JSON.stringify([state.owner, state.structures, state.freePlots, opts.hint || '', opts.static ? 1 : 0]));
-}
-
-// EVENT-LOOP BREATH — a real setTimeout between frames lets timers/IO run
-// during a bake (hot-cache promise chains only yield microtasks, which do
-// NOT feed the heartbeat interval — a full 14-frame bake starved the canary
-// heartbeat past the 75s stall threshold and the process got SIGKILLed).
-const FRAME_BREATH_MS = 8;
-const breath = () => new Promise((r) => setTimeout(r, FRAME_BREATH_MS));
-
-// Media matrix (owner 2026-10-16 10:09Z "bring gifs back and make the
-// generation faster"): the BASE VIEW ("house idle") is an ANIMATED GIF again
-// — water shimmer, forge/chimney smoke, gate torch, fireflies; build/upgrade
-// transformation stays ANIMATED (opts.celebrate). Speed: bake is disk-cached
-// per stateHash (mediaCache.js) — first view renders, repeats are instant.
-// STREAMING BAKE (Task 36: owner "why are there such large memory spikes?")
-// — the old loop pushed ALL 14 raw frames (~16MB each = ~225MB resident) into
-// an array before encoding even started. ffmpeg's stdin is now fed AS frames
-// render: render f -> pipe -> release -> render f+1. Resident frame memory
-// drops from ~225MB to ~2 frames, and the encode overlaps the render exactly
-// like the stdin-stream fix already did for IO.
-async function encodeAnimStream(state, layers, opts) {
-    const fbin = process.env.FFMPEG_PATH || 'ffmpeg';
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'base-'));
-    const out = path.join(tmp, 'base.mp4');
-    try {
-        const f0 = await renderFrame(state, 0, { ...opts, encoder: 'raw', ss: 1, terrainLayers: layers });
-        await breath();
-        const { w, h } = f0;
-        const args = [
-            '-f', 'rawvideo', '-pix_fmt', 'bgra', '-video_size', `${w}x${h}`,
-            '-framerate', `${1000 / FRAME_MS}`, '-i', 'pipe:0',
-            // even-dim guard (no-op on even input) — replaces the old
-            // half-res scale: ss=1 frames ARE the mp4 target size now
-            '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
-            '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0',
-            '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '23',
-            '-movflags', '+faststart', '-an', '-y', out,
-        ];
-        await new Promise((resolve, reject) => {
-            const p = require('child_process').spawn(fbin, args, { stdio: ['pipe', 'ignore', 'pipe'] });
-            let err = '';
-            p.stderr.on('data', (d) => { err += d; if (err.length > 6000) err = err.slice(-3000); });
-            p.on('error', reject);
-            p.on('exit', (code) => code === 0 ? resolve() : reject(new Error(`ffmpeg exit ${code}: ${err.slice(-500)}`)));
-            (async () => {
-                const feed = async (raw) => { if (!p.stdin.write(raw)) await new Promise((r) => p.stdin.once('drain', r)); };
-                await feed(f0.raw);
-                for (let f = 1; f < FRAMES; f++) {
-                    const fr = await renderFrame(state, f, { ...opts, encoder: 'raw', ss: 1, terrainLayers: layers });
-                    await feed(fr.raw);
-                    await breath();
-                }
-                p.stdin.end();
-            })().catch((e) => { try { p.stdin.destroy(); } catch (e2) {} try { p.kill('SIGKILL'); } catch (e3) {} reject(e); });
-        });
-        return fs.readFileSync(out);
-    } finally {
-        try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) {}
-    }
+    return hashStr(JSON.stringify(['v9-realms', state.owner, realmBiome(state), state.structures, state.freePlots, opts.hint || '', opts.static ? 1 : 0]));
 }
 
 async function renderBaseImage(state, opts = {}) {
-    const key = stateHash(state, opts);
-    const hit = _renderCache.get(key);
+    const k = stateHash(state, opts);
+    const hit = _renderCache.get(k);
     if (hit && (Date.now() - hit.ts) < CACHE_TTL) return hit;
-    const out = await mediaCache.cached('base', key, async () => {
-        // static card: render once, downscale + JPEG (no full-res PNG encode)
+    const out = await mediaCache.cached('base', k, async () => {
         if (opts.static) return encodeOut(await renderFrame(state, 0, { ...opts, returnCanvas: true }));
-        // animated bake: streaming raw frames + one shared terrain-layer store;
-        // JPEG card re-render only if mp4 fails
-        const layers = {};
         try {
-            const mp4 = await encodeAnimStream(state, layers, opts);
+            const frames = [];
+            for (let f = 0; f < FRAMES; f++) { frames.push(await renderFrame(state, f, { ...opts, encoder: 'raw', animate: true })); await breath(); }
+            const mp4 = await encodeFramesToMp4(frames);
             if (mp4 && mp4.length > 1000) return { buffer: mp4, contentType: 'video/mp4' };
-        } catch (e) {
-            console.error('[baseRenderer] mp4 encode failed, JPEG fallback:', e.message);
-        }
-        return encodeOut(await renderFrame(state, 0, { ...opts, returnCanvas: true }));  // fallback card
+        } catch (e) { console.error('[baseRenderer] mp4 encode failed, JPEG fallback:', e.message); }
+        return encodeOut(await renderFrame(state, 0, { ...opts, returnCanvas: true }));
     });
-    cachePut(_renderCache, key, out);
+    cachePut(_renderCache, k, out);
     return out;
 }
 

@@ -140,6 +140,12 @@ async function viewBase(ctx, opts = {}) {
         structures: rec.structures,
         freePlots: plots.filter((p) => p.free),
     };
+    // a base takes the land of its guild's realm (continents.js); solo players get a realm seeded from their name
+    try {
+        const guilds = require('./guilds');
+        const gName = guilds.getUserGuild(rec.userId);
+        if (gName) { state.guildName = gName; state.guild = guilds.getGuild(gName) || null; }
+    } catch (e) { /* realm falls back to the owner-seeded default */ }
     try {
         if (ctx.m?.key) await sock.sendMessage(chatId, { react: { text: '🗺️', key: ctx.m.key } });
     } catch (e) { /* best-effort */ }
@@ -165,7 +171,10 @@ async function viewBase(ctx, opts = {}) {
             return `#${i + 1} ${d.name} — *${lv.name}* (Lv.${st.level})${st.type === 'house' ? '  🏠' : ''}`;
         })
         .join('\n');
-    const cap = `🗺️ *${state.owner}'s Base*\n\n${list}\n` +
+    const _C = require('./continents');
+    const _realm = _C.BY_BIOME[_C.baseBiome({ owner: state.owner, guildName: state.guildName, guild: state.guild })];
+    const _near = state.guildName ? ` · near *${_C.placementOf(state.guildName, state.guild || {}).marker.region}*` : '';
+    const cap = `🗺️ *${state.owner}'s Base*\n🌍 ${_realm.name}${_near}\n\n${list}\n` +
         `🪧 Free plots: ${plots.filter((p) => p.free).map((p) => p.id).join(', ') || 'none'}\n\n` +
         `_${ctx.prefix} base house 1 — enter your house_\n` +
         `_${ctx.prefix} base build <blacksmith|medbay|alchemy> [plot#]_\n` +

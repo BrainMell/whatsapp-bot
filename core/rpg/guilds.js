@@ -269,7 +269,7 @@ function getGuildInfo() {
 }
 
 // make a new guild
-function createGuild(guildName, creatorJid, archetype = 'ADVENTURER') {
+function createGuild(guildName, creatorJid, archetype = 'ADVENTURER', continentKey = null) {
   const info = globalGuildData;
 
   // Cleanup orphaned ownership if guild doesn't exist anymore
@@ -316,6 +316,8 @@ Delete it first with: ${botConfig.getPrefix()} guild delete`
     points: 0,
     level: 1,
     type: type,
+    // 🌍 realm (continent) the guild chose + the charter-stone marker seeded on it (see continents.js)
+    ...require('./continents').placementFor(guildName, continentKey),
     dailyBoard: { lastUpdate: Date.now(), targets: [] },
     pointsHistory: [],
     motto: "Adapt or be Infected.",
