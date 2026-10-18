@@ -513,14 +513,14 @@ function liquidCells(w, { lava = false, cap = 150, seed = 1 } = {}) {
 const CONFETTI_COLS = ['#ff5d5d', '#ffc93c', '#4ecdc4', '#7c6ff0', '#ff9ff3', '#6bed8f', '#feca57'];
 function paintConfetti(ctx, W, H, t, seed, k) {
     ctx.save();
-    for (let i = 0; i < 72; i++) {
+    for (let i = 0; i < 80; i++) {
         const r1 = mulberry32(seed + 40 + i)(), r2 = mulberry32(seed + 440 + i)(), r3 = mulberry32(seed + 840 + i)();
         const fall = (t * (1.3 + r3 * 0.9) + r1) % 1;
         const x = W * (0.03 + 0.94 * r1) + Math.sin((t + r2) * Math.PI * 4) * 16 * k;
         const y = -20 + fall * (H + 60);
         ctx.globalAlpha = 0.92 * Math.sin(Math.min(1, fall * 1.15) * Math.PI);
         ctx.fillStyle = CONFETTI_COLS[i % CONFETTI_COLS.length];
-        const s = (7 + r3 * 9) * k * 2, rot = (t + r2) * Math.PI * 2;   // chunky visible scraps
+        const s = (14 + r3 * 14) * k * 2, rot = (t + r2) * Math.PI * 2;   // chunky card-scale scraps (12-25px)
         ctx.translate(x, y); ctx.rotate(rot);
         ctx.fillRect(-s / 2, -s / 4, s, s / 2);
         ctx.setTransform(1, 0, 0, 1, 0, 0);
