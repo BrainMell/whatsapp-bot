@@ -20,7 +20,7 @@ const LABELS = { isle: 'Coastal realm', desert: 'Sun-scorched dunes', tundra: 'F
 
 function pickBiome(state) {
     if (state && state.biome && BIOMES.includes(state.biome)) return state.biome;
-    return BIOMES[K.hashStr('biome:' + String((state && state.name) || 'guild')) % BIOMES.length];
+    return require('./continents').biomeOf(state || {});     // realm (state.continent) → biome; legacy = name hash
 }
 
 // ── smooth value noise (deterministic from seed) ─────────────────────────────
