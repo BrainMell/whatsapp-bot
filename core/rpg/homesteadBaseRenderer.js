@@ -24,10 +24,11 @@ const K = require('./kingdom3d');
 const mediaCache = require('./mediaCache');
 
 const N = 16;                 // base tiles per side (saved-structure grid)
-const M = 3;                  // wilderness margin (hex cells) around the grid
+const M = 15;                 // wilderness margin (hex cells) around the grid — big enough to over-cover the diagonal card
 const COLS = N + 2 * M, ROWS = N + 2 * M;
 const FRAMES = 14, FRAME_MS = 110;
 const SCALE = parseFloat(process.env.RENDER_BASE_SCALE || '0.44') || 0.44;
+const CARD_W = 1960, CARD_H = 1420;   // fixed card; terrain over-covers it (no floating diorama)
 
 const ASSETS = path.join(__dirname, '..', 'rpgasset', 'homestead');
 const FONTS = path.join(__dirname, '..', 'rpgasset', 'fonts');
@@ -129,7 +130,7 @@ const LAYOUT = {
 
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  SCENE BUILD
+//  SCENE BUILD — diagonal isometric camera (yaw 45), terrain over-covers the whole card
 // ═══════════════════════════════════════════════════════════════════════════
 const hc = (x, y) => [x + M, y + M];                     // saved grid → hex cell
 const keyOf = (c, r) => `${c},${r}`;
@@ -153,185 +154,325 @@ function centroid(cells) {
     return { x: x / cells.length, z: z / cells.length };
 }
 
+// ── value noise (deterministic) for the far-field wilds ──
+function hash2(seed, x, y) {
+    let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(seed | 0, 2246822519)) | 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16;
+    return (h >>> 0) / 4294967296;
+}
+function vnoise(seed, x, y) {
+    const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+    const sm = (t) => t * t * (3 - 2 * t);
+    const a = hash2(seed, xi, yi), b = hash2(seed, xi + 1, yi), c = hash2(seed, xi, yi + 1), d = hash2(seed, xi + 1, yi + 1);
+    const u = sm(xf), v = sm(yf);
+    return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+const fbm = (seed, x, y) => vnoise(seed, x, y) * 0.55 + vnoise(seed + 71, x * 2.1, y * 2.1) * 0.3 + vnoise(seed + 133, x * 4.3, y * 4.3) * 0.15;
+
+const TREES = ['trees_A_large', 'trees_B_large', 'trees_A_medium', 'trees_B_medium'];
+const SMALL_TREES = ['trees_A_small', 'trees_B_small', 'tree_single_A', 'tree_single_B'];
+// per-terrain far-field palette: mountain / hill / forest thresholds on noise, with sprite lists
+const WILDS = {
+    coast: { mt: ['mountain_A_grass_trees', 'mountain_B_grass_trees', 'mountain_C_grass_trees'], hl: ['hills_A_trees', 'hills_B_trees', 'hills_C_trees', 'hills_A'], tr: TREES, fo: 0.50, hi: 0.60, mo: 0.80, rock: 0.05 },
+    desert: { mt: ['mountain_A', 'mountain_B', 'mountain_C'], hl: ['hills_A', 'hills_B', 'hills_C', 'hill_single_A', 'hill_single_B'], tr: SMALL_TREES, fo: 9, hi: 0.40, mo: 0.74, rock: 0.09 },
+    tundra: { mt: ['mountain_A_grass', 'mountain_B_grass', 'mountain_C_grass', 'mountain_A'], hl: ['hills_A', 'hills_B', 'hills_C', 'hill_single_A'], tr: TREES, fo: 0.44, hi: 0.58, mo: 0.76, rock: 0.07 },
+    wildwood: { mt: ['mountain_A_grass_trees', 'mountain_B_grass_trees', 'mountain_C_grass_trees'], hl: ['hills_A_trees', 'hills_B_trees', 'hills_C_trees'], tr: TREES, fo: 0.38, hi: 0.60, mo: 0.80, rock: 0.04 },
+    ashlands: { mt: ['mountain_A', 'mountain_B', 'mountain_C'], hl: ['hills_C', 'hills_A', 'hills_B', 'hill_single_B'], tr: SMALL_TREES, fo: 9, hi: 0.46, mo: 0.68, rock: 0.12 },
+};
+const ROCKS = 'ABCDE';
+const FAR_R = 13;                                       // fence ring radius (hex cells) around the village green
+
 function buildWorld(state) {
     const seedStr = state.owner || 'base';
     const seed = hashStr(seedStr);
     const rng = mulberry32(seed);
     const team = TEAMS[seed % 4];
-    const realm = realmBiome(state);                 // 'isle'|'desert'|'tundra'|'highlands'|'volcanic'
-    const biome = TERRAIN_OF[realm];                 // coast|desert|tundra|wildwood|ashlands
-    const land = realm !== 'isle';                   // only the coastal realm has a sea
+    const realm = realmBiome(state);                    // 'isle'|'desert'|'tundra'|'highlands'|'volcanic'
+    const biome = TERRAIN_OF[realm];                    // coast|desert|tundra|wildwood|ashlands
+    const coastal = realm === 'isle';
+    const WP = WILDS[biome];
     const B = (n) => `building_${n}_${team}`;
-    const w = new K.HexWorld(COLS, ROWS, { scale: SCALE, biome: realm, oobWater: !land });
+    const w = new K.HexWorld(COLS, ROWS, { scale: SCALE, biome: realm, oobWater: coastal, view: 'iso' });
     const used = new Set();
     const claim = (c, r) => used.add(keyOf(c, r));
+    const inCells = (c, r) => w.inb(c, r);
+    const centreCell = hc(8, 8);
+    const ringDist = (c, r) => K.hexDist(centreCell[0], centreCell[1], c, r);
+    const isLand = (c, r) => { const k = w.at(c, r); return !!k && !k.water && !k.river; };
 
-    // ── island silhouette: the 16x16 grid + a ragged wilderness margin ──
+    // ── the sea (coastal realm only): the whole east/south-east side; everything else is land ──
     const ph1 = rng() * 6.28, ph2 = rng() * 6.28;
-    const coastN = (c, r) => 0.5 + 0.5 * Math.sin(c * 0.9 + ph1) * Math.cos(r * 0.8 + ph2);
-    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-        const gx = c - M, gy = r - M;
-        const dx = gx < 0 ? -gx : gx > N - 1 ? gx - (N - 1) : 0;
-        const dy = gy < 0 ? -gy : gy > N - 1 ? gy - (N - 1) : 0;
-        const out = Math.hypot(dx, dy * 1.15);
-        const reach = 1.6 + 1.5 * coastN(c, r);
-        const k = w.cell[r][c];
-        if (land) { k.water = false; k.void = out > reach; }       // land realms: ragged edge fades into haze, no sea
-        else { k.water = out > reach; k.void = out > reach + 1.8; }
-        if (out <= 1.2) k.keepLand = true;
-    }
-    // coastal realm / ashlands: the south-east margin is open water (sea) or a lava lake (volcanic set recolours water)
-    if (biome === 'coast' || biome === 'ashlands') {
+    const coastN = (c, r) => 0.5 + 0.5 * Math.sin(c * 0.55 + ph1) * Math.cos(r * 0.5 + ph2);
+    if (coastal) {
         for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
             const gx = c - M, gy = r - M;
-            if (gx > N - 1 - 1 && gy > 6) { w.cell[r][c].water = true; w.cell[r][c].keepLand = false; }
+            if ((gx - (N - 1)) + (gy - 8) * 0.5 > 1.5 + 2.2 * coastN(c, r)) w.cell[r][c].water = true;
         }
     }
-
-    // ── pond zone (NE lake): a blob around the zone centre ──
-    {
-        const pz = LAYOUT.pond.zone;
-        const [lc, lr] = hc(pz.x + Math.floor(pz.fw / 2), pz.y + Math.floor(pz.fh / 2));
-        for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-            const d = K.hexDist(lc, lr, c, r);
-            if (d <= 1 || (d === 2 && rng() < 0.7)) { const k = w.cell[r][c]; k.water = true; k.void = false; k.keepLand = false; k.lake = true; }
+    // ── the lake NE of the village (the pond structure's pier runs out into it) ──
+    const [lc, lr] = hc(16, 2);
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+        const d = K.hexDist(lc, lr, c, r);
+        if (d <= 2 || (d === 3 && rng() < 0.55)) { const k = w.cell[r][c]; k.water = true; k.lake = true; }
+    }
+    if (coastal) {                                      // the lake is joined to the ocean by a channel
+        const [tc, tr] = hc(23, 4);
+        for (const [c, r] of K.hexLine(lc, lr, tc, tr)) if (inCells(c, r)) w.cell[r][c].water = true;
+    } else if (biome !== 'desert') {                    // a stream wanders off the lake to the edge of the world
+        let cur = [lc, lr];
+        const [tc, tr] = hc(34, -22);
+        const way = [hc(22 + Math.floor(rng() * 4), -2 + Math.floor(rng() * 4)), hc(28 + Math.floor(rng() * 4), -12 + Math.floor(rng() * 4)), [tc, tr]];
+        for (const nx of way) {
+            for (const [c, r] of K.hexLine(cur[0], cur[1], nx[0], nx[1])) if (inCells(c, r) && !w.cell[r][c].water) w.cell[r][c].river = true;
+            cur = nx;
         }
     }
 
     // ── streets / plaza: the saved square-grid street plan re-drawn as hex lines ──
+    const roadList = [];
     const roadCells = (cells, closed = false) => {
         let prev = null, first = null;
         for (const [c, r] of cells) {
-            if (!w.inb(c, r) || w.cell[r][c].water) { prev = null; continue; }
-            w.cell[r][c].road = true; claim(c, r);
+            if (!w.inb(c, r) || w.cell[r][c].water || w.cell[r][c].river) { prev = null; continue; }
+            const kk = w.cell[r][c];
+            if (!kk.road) roadList.push([c, r]);
+            kk.road = true; claim(c, r);
             if (prev) w.link(prev[0], prev[1], c, r);
             if (!first) first = [c, r];
             prev = [c, r];
         }
         if (closed && first && prev) w.link(prev[0], prev[1], first[0], first[1]);
     };
-    const roadLine = (p1, p2) => {
-        const [c1, r1] = hc(p1[0], p1[1]), [c2, r2] = hc(p2[0], p2[1]);
+    const roadLine = (p1, p2) => { const [c1, r1] = hc(p1[0], p1[1]), [c2, r2] = hc(p2[0], p2[1]); roadCells(K.hexLine(c1, r1, c2, r2)); };
+    roadLine([8, 4], [8, N + 3]);                       // main street, through the gate and out of the village
+    roadLine([3, 4], [13, 4]);                          // north lane (miners' row + pond lane)
+    roadLine([2, 9], [7, 9]);                           // hunting walk
+    roadLine([5, 10], [14, 10]);                        // south lanes
+    {   // the road beyond the gate runs off into the wilds
+        const [c1, r1] = hc(8, N + 3), [c2, r2] = hc(10, N + 14);
         roadCells(K.hexLine(c1, r1, c2, r2));
+    }
+    const [pc, pr] = hc(8, 7);
+    roadCells(K.ring(pc, pr, 1), true);                 // village green ring
+    claim(pc, pr);
+    w.put('building_well_' + team, pc, pr, { sc: 1.1 });
+    w.put('flag_' + team, pc, pr, { dx: 0.9, dz: 0.5 });
+
+    // ── structure + plot footprints first, so nothing else lands on them ──
+    const sts = state.structures || [];
+    const sFoot = [];
+    for (const st of sts) { const def = structDef(st.type); if (!def) continue; const cells = footprintCells(st, def); sFoot.push({ st, def, cells }); for (const [c, r] of cells) claim(c, r); }
+    const plotFoot = [];
+    for (const p of state.freePlots || []) {
+        const cells = [];
+        for (let i = 0; i < (p.fw || 3); i++) for (let j = 0; j < (p.fh || 3); j++) { const [c, r] = hc(p.x + i, p.y + j); cells.push([c, r]); claim(c, r); }
+        plotFoot.push({ p, cells });
+    }
+    const nearestRoad = (cells) => {
+        let best = null, bd = 1e9;
+        for (const [c, r] of cells) for (const [rc, rr] of roadList) { const d = K.hexDist(c, r, rc, rr); if (d < bd) { bd = d; best = { from: [c, r], to: [rc, rr], d }; } }
+        return best;
     };
-    roadLine([8, 4], [8, N + 2]);                         // main street, through the gate and out
-    roadLine([3, 4], [13, 4]);                            // north lane (miners' row + pond lane)
-    roadLine([2, 9], [7, 9]);                             // hunting walk
-    roadLine([5, 10], [14, 10]);                          // south lanes
-    {
-        const [pc, pr] = hc(8, 7);                        // village green ring
-        // ring cells are listed in walking order, so consecutive ones are hex neighbours
-        roadCells(K.ring(pc, pr, 1), true);
-        claim(pc, pr);
-        w.put('building_well_' + team, pc, pr, { sc: 1.1 });
-        w.put('flag_' + team, pc, pr, { dx: 0.9, dz: 0.5 });
+    // every building / plot gets a cobble spur to the nearest street, so the village reads as ONE connected place
+    for (const g of [...sFoot, ...plotFoot]) {
+        if (g.st && (g.st.type === 'hunting')) continue;
+        const nr = nearestRoad(g.cells);
+        if (!nr || nr.d <= 1) continue;
+        const path = K.hexLine(nr.from[0], nr.from[1], nr.to[0], nr.to[1]);
+        const foot = new Set(g.cells.map(([c, r]) => keyOf(c, r)));
+        let prev = nr.from;
+        for (let i = 1; i < path.length - 1; i++) {
+            const [c, r] = path[i];
+            if (!w.inb(c, r) || w.cell[r][c].water || w.cell[r][c].river || (used.has(keyOf(c, r)) && !foot.has(keyOf(c, r)) && !w.cell[r][c].road)) break;
+            if (!foot.has(keyOf(c, r))) { w.cell[r][c].road = true; claim(c, r); roadList.push([c, r]); }
+            w.link(prev[0], prev[1], c, r);
+            prev = [c, r];
+        }
+        if (K.hexDist(prev[0], prev[1], nr.to[0], nr.to[1]) <= 1 && !foot.has(keyOf(prev[0], prev[1]))) w.link(prev[0], prev[1], nr.to[0], nr.to[1]);
     }
     w.resolve();
 
     // ── gatehouse + wall wings across the south gate (hunting structure) ──
     const gh = LAYOUT.hunting;
-    const gateCells = [hc(gh.x, gh.y), hc(gh.x + 1, gh.y)];
-    const gateW = centroid(gateCells);
-    // walls run E-W across the street; the gate piece sits on the street cell
-    const rowY = gh.y;                                   // 14
-    const wallXs = [6, 10];
-    for (const gx of wallXs) { const [c, r] = hc(gx, rowY); if (!w.cell[r][c].water) { w.put('wall_straight@0', c, r, { sort: 0.2 }); claim(c, r); } }
     {
+        const rowY = gh.y;
+        for (const gx of [6, 7, 9, 10]) { const [c, r] = hc(gx, rowY); if (!w.cell[r][c].water) { w.put('wall_straight@0', c, r, { sort: 0.2 }); claim(c, r); } }
         const [c, r] = hc(8, rowY);
-        w.put('wall_straight_gate@0', c, r, { sort: 0.2, sc: 1.0 });
-        for (const gx of [7, 9]) { const [c2, r2] = hc(gx, rowY); w.put('wall_straight@0', c2, r2, { sort: 0.2 }); claim(c2, r2); }
+        w.put('wall_straight_gate@0', c, r, { sort: 0.2 });
         const [tc1, tr1] = hc(5, rowY), [tc2, tr2] = hc(11, rowY);
         w.put(B('tower_A'), tc1, tr1, { sc: 0.95 }); w.put(B('tower_A'), tc2, tr2, { sc: 0.95 });
         claim(tc1, tr1); claim(tc2, tr2);
-        w.put('flag_' + team, c, r, { dx: -1.15, dz: 0.5 });
-        w.put('flag_' + team, c, r, { dx: 1.15, dz: 0.5 });
+        w.put('flag_' + team, c, r, { dx: -1.15, dz: 0.5 }); w.put('flag_' + team, c, r, { dx: 1.15, dz: 0.5 });
     }
 
-    // ── zones ──
+    // ── the wooden palisade: follows the hex edges of a ring round the whole village, one gate on the main street ──
+    {
+        const inside = (c, r) => ringDist(c, r) <= FAR_R - 1;
+        const gateW = K.hexWorld(...hc(8, N + 3));
+        // the gate edge: a boundary road cell nearest the street's line out of the village
+        let best = null, bd = 1e9;
+        for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+            if (!inside(c, r) || !w.cell[r][c].road) continue;
+            for (let e = 0; e < 6; e++) {
+                const nb = K.neighbor(c, r, e);
+                if (inside(nb[0], nb[1])) continue;
+                const ww = K.hexWorld(c, r), d = Math.hypot(ww.x - gateW.x, ww.z - gateW.z);
+                if (d < bd) { bd = d; best = keyOf(c, r) + ',' + e; }
+            }
+        }
+        w.layFenceEdges(inside, { gateAt: (c, r, e) => `${c},${r},${e}` === best });
+        w.put('flag_' + team, ...(best ? best.split(',').slice(0, 2).map(Number) : [0, 0]), { dx: -1.0, dz: 0.6 });
+        w.put('flag_' + team, ...(best ? best.split(',').slice(0, 2).map(Number) : [0, 0]), { dx: 1.0, dz: 0.6 });
+        for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (ringDist(c, r) === FAR_R - 1 || ringDist(c, r) === FAR_R) claim(c, r);
+    }
+
+    // ── zones (structure-driven; same as the saved layout) ──
     const mz = LAYOUT.mines.zone, hz = LAYOUT.hunting.zone;
     const inZ = (z, gx, gy) => gx >= z.x && gx < z.x + z.fw && gy >= z.y && gy < z.y + z.fh;
-    const TREES = ['trees_A_large', 'trees_B_large', 'trees_A_medium', 'trees_B_medium'];
     const inGrid = (gx, gy) => gx >= 0 && gy >= 0 && gx < N && gy < N;
+    const rock = (c, r) => w.put('rock_single_' + ROCKS[Math.floor(rng() * 5)], c, r, { dx: (rng() - 0.5) * 0.8, dz: (rng() - 0.5) * 0.6 });
+    const flip = () => rng() < 0.5;
 
-    // reserve structure footprints first so props never land under buildings
-    const sts = state.structures || [];
-    for (const st of sts) { const def = structDef(st.type); if (!def) continue; for (const [c, r] of footprintCells(st, def)) claim(c, r); }
-    const plotCellsAll = [];
-    for (const p of state.freePlots || []) for (let i = 0; i < (p.fw || 3); i++) for (let j = 0; j < (p.fh || 3); j++) { const [c, r] = hc(p.x + i, p.y + j); claim(c, r); plotCellsAll.push([c, r]); }
-
-    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-        const k = w.cell[r][c];
-        if (k.water || k.coast || k.road || k.void || used.has(keyOf(c, r))) continue;
-        const gx = c - M, gy = r - M, x = rng();
-        if (inGrid(gx, gy) && inZ(mz, gx, gy)) {                      // quarry hills (NW)
-            if (x < 0.6) { w.put(['mountain_A_grass_trees', 'mountain_B_grass', 'mountain_C_grass_trees', 'mountain_A'][Math.floor(rng() * 4)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
-            else if (x < 0.8) { w.put('rock_single_' + 'ABCDE'[Math.floor(rng() * 5)], c, r, { dx: (rng() - 0.5) * 0.7, dz: (rng() - 0.5) * 0.5 }); }
-        } else if (inGrid(gx, gy) && inZ(hz, gx, gy)) {                // hunting woods (W)
-            if (x < 0.7) { w.put(TREES[Math.floor(rng() * 4)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
-        } else if (inGrid(gx, gy)) {                                   // village green
-            if (x < 0.07) { w.put(TREES[2 + Math.floor(rng() * 2)], c, r, { sc: 0.8, flip: rng() < 0.5 }); claim(c, r); }
-            else if (x < 0.1) w.put('rock_single_' + 'ABCDE'[Math.floor(rng() * 5)], c, r, { dx: (rng() - 0.5) * 0.7, dz: (rng() - 0.5) * 0.5 });
-        } else {                                                       // the wilds: biome
-            const rock = () => w.put('rock_single_' + 'ABCDE'[Math.floor(rng() * 5)], c, r, { dx: (rng() - 0.5) * 0.7, dz: (rng() - 0.5) * 0.5 });
-            if (biome === 'desert') {                                   // dunes, sandstone, scrub round the odd oasis palm
-                if (x < 0.34) { w.put(['hills_A', 'hills_B', 'hills_C', 'hill_single_A', 'hill_single_B'][Math.floor(rng() * 5)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
-                else if (x < 0.44) rock();
-                else if (x < 0.5) { w.put(['tree_single_A', 'tree_single_B', 'trees_A_small'][Math.floor(rng() * 3)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
-            } else if (biome === 'tundra') {                            // pine-dark ridges and snowy crags
-                if (x < 0.34) { w.put(TREES[Math.floor(rng() * 4)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
-                else if (x < 0.5) { w.put(['hills_A', 'hills_B', 'hills_C', 'mountain_A_grass', 'mountain_B_grass'][Math.floor(rng() * 5)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
-                else if (x < 0.58) rock();
-            } else if (biome === 'ashlands') {                          // basalt ridges and cinder rock
-                if (x < 0.40) { w.put(['mountain_A', 'mountain_B', 'mountain_C', 'hills_C'][Math.floor(rng() * 4)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
-                else if (x < 0.56) rock();
-                else if (x < 0.6) { w.put('hill_single_' + 'AB'[Math.floor(rng() * 2)], c, r); claim(c, r); }
-            } else if (biome === 'wildwood') {                          // copper oaks with the odd mill and hill
-                if (x < 0.56) { w.put(TREES[Math.floor(rng() * 4)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
-                else if (x < 0.64) { w.put(['hills_A_trees', 'hills_B_trees', 'hills_C'][Math.floor(rng() * 3)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
-                else if (x < 0.655) { w.put(B('windmill'), c, r); claim(c, r); }
-                else if (x < 0.7) rock();
-            } else {                                                    // coast: green headland forest
-                if (x < 0.62) { w.put(TREES[Math.floor(rng() * 4)], c, r, { flip: rng() < 0.5 }); claim(c, r); }
-                else if (x < 0.7) rock();
+    // ── ambient village life (cottages that face the street, yards, fields, orchards) ──
+    const cottageSpots = [];
+    const FARM = biome === 'coast' || biome === 'wildwood';
+    const freeCell = (c, r) => { const k = w.at(c, r); return !!k && !k.water && !k.river && !k.coast && !k.road && !used.has(keyOf(c, r)); };
+    const gridOK = (c, r) => { const gx = c - M, gy = r - M; return inGrid(gx, gy) && !inZ(mz, gx, gy) && !inZ(hz, gx, gy) && gx < 15; };
+    const cands = [];
+    for (const [rc, rr] of roadList) for (let d = 0; d < 6; d++) {
+        const [c, r] = K.neighbor(rc, rr, d);
+        if (freeCell(c, r) && gridOK(c, r)) cands.push({ c, r, rc, rr });
+    }
+    for (let i = cands.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [cands[i], cands[j]] = [cands[j], cands[i]]; }
+    const want = Math.min(9, 5 + (sts.length));
+    const YARD = [['barrel', 0.9, 0.7], ['crate_A_small', -0.9, 0.7], ['bucket_water', 0.8, -0.6], ['wheelbarrow', -0.8, 0.8], ['sack', 0.6, 0.9], ['resource_lumber', -0.9, -0.5], ['crate_open', 0.9, 0.6], ['pallet', -0.7, 0.8]];
+    for (const cd of cands) {
+        if (cottageSpots.length >= want) break;
+        if (!freeCell(cd.c, cd.r)) continue;
+        if (cottageSpots.some((q) => K.hexDist(q.c, q.r, cd.c, cd.r) < 3)) continue;
+        if (K.hexDist(cd.c, cd.r, pc, pr) < 2) continue;
+        cottageSpots.push(cd); claim(cd.c, cd.r);
+        const me = K.hexWorld(cd.c, cd.r), rd = K.hexWorld(cd.rc, cd.rr);
+        const west = (me.x - rd.x) > Math.abs(rd.z - me.z) * 0.6;        // road lies to the west → mirror the door that way
+        const useB = rng() < 0.35;
+        const hut = rng() < 0.18;
+        w.put('building_dirt', cd.c, cd.r, { layer: 'flat', sc: 0.85 });
+        w.put(hut ? 'tent' : (useB ? B('home_B') : B('home_A')), cd.c, cd.r, { sc: hut ? 1.2 : 0.95 + rng() * 0.12, flip: west });
+        for (let i = 0; i < 2; i++) { const y = YARD[Math.floor(rng() * YARD.length)]; w.put(y[0], cd.c, cd.r, { dx: y[1], dz: y[2] }); }
+        if (rng() < 0.5) w.put(SMALL_TREES[Math.floor(rng() * 4)], cd.c, cd.r, { dx: -1.1, dz: -0.9, sc: 0.85 });
+    }
+    // farm patch (grain) by the SE lane, or a caravan camp where there is no soil
+    {
+        const seedCells = [];
+        for (let gy = 11; gy < 15; gy++) for (let gx = 10; gx < 15; gx++) { const [c, r] = hc(gx, gy); if (freeCell(c, r)) seedCells.push([c, r]); }
+        if (seedCells.length) {
+            const [sc0, sr0] = seedCells[Math.floor(rng() * seedCells.length)];
+            let n = 0;
+            for (const [c, r] of [[sc0, sr0], ...[0, 1, 2, 3, 4, 5].map((d) => K.neighbor(sc0, sr0, d))]) {
+                if (!freeCell(c, r) || n >= 5) continue;
+                if (FARM) w.put('building_grain', c, r, { sc: 1.0 });
+                else if (n === 0) { w.put('tent', c, r, { sc: 1.25 }); w.put('crate_A_big', c, r, { dx: 1.0, dz: 0.8 }); }
+                else if (n === 1) w.put('resource_stone', c, r, { dx: 0.3, dz: 0.2 });
+                else continue;
+                claim(c, r); n++;
             }
         }
     }
-    if (biome === 'coast') {                                           // a little dock-side lumber hut on the shore
+    // orchard: a loose grid of small trees on the green, off the lanes
+    {
+        let n = 0;
+        for (let gy = 0; gy < N && n < 16; gy++) for (let gx = 4; gx < 12; gx++) {
+            const [c, r] = hc(gx, gy);
+            if (!freeCell(c, r) || !gridOK(c, r) || (gx + gy) % 3 !== 0 || rng() < 0.4) continue;
+            w.put(SMALL_TREES[Math.floor(rng() * 4)], c, r, { sc: 0.85, flip: flip() }); claim(c, r); n++;
+        }
+    }
+    // street furniture along the roads: barrels, crates, buckets, the odd flag
+    {
+        const fur = ['barrel', 'crate_A_small', 'bucket_water', 'sack', 'crate_B_small', 'wheelbarrow'];
+        let n = 0;
+        for (const [c, r] of roadList) {
+            if (n > 26 || rng() > 0.2) continue;
+            const k = w.at(c, r); if (!k || k.river || k.water) continue;
+            const gx = c - M, gy = r - M; if (!inGrid(gx, gy)) continue;
+            w.put(fur[Math.floor(rng() * fur.length)], c, r, { dx: (rng() < 0.5 ? -1 : 1) * 0.85, dz: (rng() - 0.5) * 0.6, sc: 0.9 });
+            n++;
+        }
+    }
+
+    // ── fill the rest of the grid with biome wilds (village green = light, inside the palisade; far field = heavy) ──
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+        const k = w.cell[r][c];
+        if (k.water || k.coast || k.road || used.has(keyOf(c, r))) continue;
+        const gx = c - M, gy = r - M, x = rng();
+        const rd = ringDist(c, r);
+        if (inGrid(gx, gy) && inZ(mz, gx, gy)) {                      // quarry hills (NW)
+            if (x < 0.62) { w.put(['mountain_A_grass_trees', 'mountain_B_grass', 'mountain_C_grass_trees', 'mountain_A'][Math.floor(rng() * 4)], c, r, { flip: flip() }); claim(c, r); }
+            else if (x < 0.82) rock(c, r);
+            continue;
+        }
+        if (inGrid(gx, gy) && inZ(hz, gx, gy)) {                      // hunting woods (W)
+            if (x < 0.72) { w.put(TREES[Math.floor(rng() * 4)], c, r, { flip: flip() }); claim(c, r); }
+            continue;
+        }
+        if (rd <= FAR_R - 1) {                                        // inside the palisade: tidy meadow
+            if (x < 0.06) { w.put(SMALL_TREES[Math.floor(rng() * 4)], c, r, { sc: 0.85, flip: flip() }); claim(c, r); }
+            else if (x < 0.10) rock(c, r);
+            continue;
+        }
+        // far field — noise driven: ridges of mountains, rolling hills, woods, scatter; denser the further out
+        const n1 = fbm(seed, c * 0.16, r * 0.16), n2 = fbm(seed + 17, c * 0.3 + 40, r * 0.3 + 9);
+        const far = Math.min(1, (rd - FAR_R) / 8);
+        const e = n1 * 0.8 + far * 0.22;
+        if (e > WP.mo) { w.put(WP.mt[Math.floor(rng() * WP.mt.length)], c, r, { flip: flip() }); claim(c, r); }
+        else if (e > WP.hi) { w.put(WP.hl[Math.floor(rng() * WP.hl.length)], c, r, { flip: flip() }); claim(c, r); }
+        else if (n2 > WP.fo && x < 0.78) { w.put(WP.tr[Math.floor(rng() * WP.tr.length)], c, r, { flip: flip() }); claim(c, r); }
+        else if (x < WP.rock) rock(c, r);
+        else if (x < WP.rock + 0.07 && biome !== 'ashlands') { w.put(SMALL_TREES[Math.floor(rng() * 4)], c, r, { sc: 0.9, flip: flip() }); }
+    }
+    if (biome === 'coast') {                                          // dock-side lumber hut on the shore + a lighthouse-ish watch tower
         const spot = [];
-        for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) { const k = w.cell[r][c]; if (k.coast && !used.has(keyOf(c, r))) spot.push([c, r]); }
-        if (spot.length) { const [c, r] = spot[Math.floor(rng() * spot.length)]; w.put(B('lumbermill'), c, r); claim(c, r); }
+        for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) { const k = w.cell[r][c]; if (k.coast && !used.has(keyOf(c, r)) && ringDist(c, r) > FAR_R - 2 && ringDist(c, r) < FAR_R + 6) spot.push([c, r]); }
+        if (spot.length) { const [c, r] = spot[Math.floor(rng() * spot.length)]; w.put(B('lumbermill'), c, r, { flip: flip() }); claim(c, r); }
     }
 
     // ── structures ──
-    const props = (list, wx, wz, sc = 1) => { for (const [n, dx, dz, s] of list) w.put(n, 0, 0, { wx, wz, dx: dx * sc, dz: dz * sc, sc: s || 1 }); };
+    const roadWorld = roadList.map(([c, r]) => K.hexWorld(c, r));
+    const facing = (cen) => {                                          // sprites bake one facade; mirror it toward the nearest street
+        let best = null, bd = 1e9;
+        for (const rw of roadWorld) { const d = Math.hypot(rw.x - cen.x, rw.z - cen.z); if (d < bd) { bd = d; best = rw; } }
+        if (!best) return false;
+        const dx = best.x - cen.x, dz = best.z - cen.z;
+        return -dx > dz;                                               // street is more west than south → door faces west (mirrored)
+    };
     const info = [];
-    for (const st of sts) {
-        const def = structDef(st.type); if (!def) continue;
+    const lakeShore = [];
+    for (const { st, def, cells } of sFoot) {
         const lvl = Math.max(1, Math.min(def.levels.length, st.level || 1));
-        const cells = footprintCells(st, def);
         const cen = centroid(cells);
+        const ff = facing(cen);
         info.push({ st, def, lvl, cen });
-        if (st.type !== 'pond' && st.type !== 'hunting') w.put('building_dirt', 0, 0, { wx: cen.x, wz: cen.z, layer: 'flat', sc: def.fw >= 3 ? 1.9 : 1.2 });
-        const P = (n, o = {}) => w.put(n, 0, 0, { wx: cen.x, wz: cen.z, ...o });
+        if (st.type !== 'hunting') w.put('building_dirt', 0, 0, { wx: cen.x, wz: cen.z, layer: 'flat', sc: def.fw >= 3 ? 1.9 : 1.2 });
+        const P = (n, o = {}) => w.put(n, 0, 0, { wx: cen.x, wz: cen.z, ...(o.dx == null && o.dz == null && !('flip' in o) && n.startsWith('building_') ? { flip: ff } : {}), ...o });
         switch (st.type) {
             case 'house':
-                if (lvl === 1) { P('building_home_A_' + team, { sc: 1.55 }); P('building_well_' + team, { dx: 1.5, dz: 0.9 }); }
-                else if (lvl === 2) { P('building_home_B_' + team, { sc: 1.75 }); P('building_well_' + team, { dx: 1.7, dz: 1.0 }); P('crate_A_small', { dx: -1.5, dz: 0.8 }); }
-                else { P('building_home_B_' + team, { sc: 2.05 }); P('building_home_A_' + team, { dx: -2.0, dz: 0.5, sc: 0.95, flip: true }); P('building_well_' + team, { dx: 1.8, dz: 1.2 }); P('flag_' + team, { dx: 0.9, dz: 1.5 }); }
+                if (lvl === 1) { P('building_home_A_' + team, { sc: 1.55 }); P('building_well_' + team, { dx: 1.5, dz: 0.9 }); P('crate_A_small', { dx: -1.4, dz: 1.0 }); }
+                else if (lvl === 2) { P('building_home_B_' + team, { sc: 1.75 }); P('building_well_' + team, { dx: 1.7, dz: 1.0 }); P('crate_A_small', { dx: -1.5, dz: 0.8 }); P('barrel', { dx: -1.0, dz: 1.6 }); }
+                else { P('building_home_B_' + team, { sc: 2.05 }); P('building_home_A_' + team, { dx: -2.0, dz: 0.5, sc: 0.95, flip: true }); P('building_well_' + team, { dx: 1.8, dz: 1.2 }); P('flag_' + team, { dx: 0.9, dz: 1.5 }); P('wheelbarrow', { dx: -0.3, dz: 1.9 }); }
                 break;
             case 'blacksmith':
-                if (lvl === 1) { P('building_blacksmith_' + team, { sc: 1.35 }); P('crate_A_small', { dx: 1.3, dz: 0.8 }); }
+                if (lvl === 1) { P('building_blacksmith_' + team, { sc: 1.35 }); P('crate_A_small', { dx: 1.3, dz: 0.8 }); P('resource_stone', { dx: -1.2, dz: 0.9 }); }
                 else if (lvl === 2) { P('building_blacksmith_' + team, { sc: 1.65 }); P('weaponrack', { dx: -1.4, dz: 0.9 }); P('resource_stone', { dx: 1.5, dz: 0.9 }); }
                 else { P('building_blacksmith_' + team, { sc: 1.95 }); P('weaponrack', { dx: -1.8, dz: 1.0 }); P('resource_stone', { dx: 1.7, dz: 1.0 }); P('wheelbarrow', { dx: 1.0, dz: 1.7 }); P('barrel', { dx: -0.8, dz: 1.6 }); }
                 break;
             case 'medbay':
                 if (lvl === 1) { P('tent', { sc: 2.1 }); P('sack', { dx: 1.3, dz: 0.9 }); P('bucket_water', { dx: -1.3, dz: 0.9 }); }
-                else if (lvl === 2) { P('building_church_' + team, { sc: 1.35 }); P('tent', { dx: 1.7, dz: 0.8, sc: 1.2 }); }
+                else if (lvl === 2) { P('building_church_' + team, { sc: 1.35 }); P('tent', { dx: 1.7, dz: 0.8, sc: 1.2 }); P('bucket_water', { dx: -1.5, dz: 0.9 }); }
                 else { P('building_church_' + team, { sc: 1.8 }); P('building_well_' + team, { dx: 1.8, dz: 1.0 }); P('flag_' + team, { dx: -1.6, dz: 1.0 }); }
                 break;
             case 'alchemy':
                 if (lvl === 1) { P('barrel', { sc: 1.6 }); P('bucket_water', { dx: 1.2, dz: 0.8 }); P('crate_open', { dx: -1.2, dz: 0.8 }); }
-                else if (lvl === 2) { P('building_tavern_' + team, { sc: 1.5 }); P('barrel', { dx: 1.5, dz: 1.0 }); }
+                else if (lvl === 2) { P('building_tavern_' + team, { sc: 1.5 }); P('barrel', { dx: 1.5, dz: 1.0 }); P('crate_B_small', { dx: -1.4, dz: 1.0 }); }
                 else { P('building_tavern_' + team, { sc: 1.9 }); P('building_windmill_' + team, { dx: -2.1, dz: -0.2, sc: 0.95 }); P('barrel', { dx: 1.8, dz: 1.1 }); P('crate_B_small', { dx: 0.9, dz: 1.7 }); }
                 break;
             case 'mines':
@@ -339,34 +480,42 @@ function buildWorld(state) {
                 if (lvl >= 2) { P('resource_stone', { dx: 1.2, dz: 0.9 }); P('wheelbarrow', { dx: -1.1, dz: 0.9 }); }
                 if (lvl >= 3) { P('resource_lumber', { dx: 0.2, dz: 1.5 }); P('crate_long_A', { dx: -1.6, dz: 0.6 }); }
                 break;
-            case 'pond': {
-                const mid = [hc(st.x, st.y), hc(st.x + 1, st.y), hc(st.x, st.y + 1), hc(st.x + 1, st.y + 1)];
-                for (const [c, r] of mid) { w.cell[r][c].water = true; }
-                P('waterlily_A', { dx: -0.6, dz: -0.2, h: -0.2 }); P('waterlily_B', { dx: 0.7, dz: 0.4, h: -0.2 }); P('waterplant_A', { dx: 0.0, dz: -0.8, h: -0.2 });
-                if (lvl >= 2) { P('bucket_water', { dx: 1.7, dz: 1.2 }); P('crate_open', { dx: -1.6, dz: 1.1 }); }
-                if (lvl >= 3) { P(B('watermill'), { dx: 2.0, dz: 0.2, sc: 0.95 }); }
+            case 'pond': {                                              // the lakeside boardwalk: a pier out over the water
+                const [sc1, sr1] = hc(st.x + def.fw - 1, st.y + def.fh - 1);
+                const len = lvl === 1 ? 2 : lvl === 2 ? 3 : 4;
+                for (let i = 1; i <= len; i++) { const kk = w.at(sc1 + i, sr1); if (kk) { kk.water = true; kk.river = false; } }     // make sure the pier is over water
+                lakeShore.push([sc1, sr1, len]);
+                P('barrel', { dx: -1.2, dz: 0.9 }); P('crate_open', { dx: 0.4, dz: 1.3 }); P('bucket_water', { dx: -0.4, dz: -1.1 });
+                if (lvl >= 2) { P('sack', { dx: -1.7, dz: 0.2 }); P('resource_lumber', { dx: -1.3, dz: -0.9 }); }
+                if (lvl >= 3) { P(B('watermill'), { dx: -0.2, dz: -2.3, sc: 0.95 }); }
                 break;
             }
-            case 'hunting': break;
             default: break;
         }
+    }
+    w.resolve();                                                      // re-resolve now that the pier cells are water
+    for (const [c, r, len] of lakeShore) {
+        const cells = w.layPier(c, r, 0, len);
+        if (process.env.DBG_PIER) console.log('pier', c, r, len, cells, cells.map(([a,b])=>w.cell[b][a].tile));
+        const last = cells[cells.length - 1];
+        if (last) { w.put('barrel', last[0], last[1], { dx: 0.15, dz: 0.2, h: 0.12, sc: 0.8 }); }
     }
 
     // ── free expansion plots ──
     const plots = [];
-    for (const p of state.freePlots || []) {
-        const cells = [];
-        for (let i = 0; i < (p.fw || 3); i++) for (let j = 0; j < (p.fh || 3); j++) cells.push(hc(p.x + i, p.y + j));
-        const cen = centroid(cells);
-        plots.push({ id: p.id, cen, cells });
+    for (const pf of plotFoot) {
+        const cen = centroid(pf.cells);
+        plots.push({ id: pf.p.id, cen, cells: pf.cells });
         w.put('building_dirt', 0, 0, { wx: cen.x, wz: cen.z, layer: 'flat', sc: 1.95 });
         w.put('building_scaffolding', 0, 0, { wx: cen.x, wz: cen.z, sc: 0.8 });
         w.put('crate_A_small', 0, 0, { wx: cen.x, wz: cen.z, dx: -1.5, dz: 0.8 });
         w.put('resource_lumber', 0, 0, { wx: cen.x, wz: cen.z, dx: 1.5, dz: 0.9 });
-        w.overlay((ctx, pp, k) => plotOverlay(ctx, w, cen, p.id, k), 0, 0, { dx: cen.x, dz: cen.z });
+        w.overlay((ctx, pp, k) => plotOverlay(ctx, w, cen, pf.p.id, k), 0, 0, { dx: cen.x, dz: cen.z });
     }
-    // overlay anchors use world coords passed via dx/dz (hexWorld(0,0) = origin)
-    return { w, info, plots, team, biome, realm };
+    // water / lava cells (animated in renderFrame)
+    const waterCells = [];
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (w.cell[r][c].tile === 'hex_water') waterCells.push([c, r]);
+    return { w, info, plots, team, biome, realm, waterCells };
 }
 
 function plotOverlay(ctx, w, cen, id, k) {
@@ -410,49 +559,116 @@ function plaque(ctx, x, y, title, sub, k) {
     ctx.restore();
 }
 
+// ── old water art (two glint frames, 64x32) → white glint masks for the animated water / lava ──
+let _glints = null;
+async function glints() {
+    if (_glints) return _glints;
+    const { createCanvas, loadImage } = require('canvas');
+    const out = [];
+    for (const f of ['base_water_0.png', 'base_water_1.png']) {
+        try {
+            const img = await loadImage(path.join(ASSETS, f));
+            const c = createCanvas(img.width, img.height), x = c.getContext('2d');
+            x.drawImage(img, 0, 0);
+            const d = x.getImageData(0, 0, c.width, c.height);
+            for (let i = 0; i < d.data.length; i += 4) {
+                const lum = (d.data[i] + d.data[i + 1] + d.data[i + 2]) / 3;
+                const a = d.data[i + 3];
+                if (a > 20 && lum > 135) { d.data[i] = d.data[i + 1] = d.data[i + 2] = 255; d.data[i + 3] = Math.min(255, (lum - 120) * 2); }
+                else d.data[i + 3] = 0;                                    // keep ONLY the bright glints, drop the diamond fill
+            }
+            x.putImageData(d, 0, 0);
+            out.push(c);
+        } catch (e) { /* no glints: water just stays still */ }
+    }
+    _glints = out;
+    return out;
+}
+
 // ── scene cache (static art, no HUD / animation) ──
 const _scenes = new Map();
-const SCENE_MAX = 4;
+const SCENE_MAX = 3;
 async function buildScene(state) {
     ensureFonts();
-    const key0 = hashStr(JSON.stringify([state.owner, state.structures, state.freePlots, realmBiome(state)]));
+    const key0 = hashStr(JSON.stringify(['v10', state.owner, state.structures, state.freePlots, realmBiome(state)]));
     const hit = _scenes.get(key0);
     if (hit) { _scenes.delete(key0); _scenes.set(key0, hit); return hit; }
-    const { w, info, plots, team, biome, realm } = buildWorld(state);
-    const { W, H } = w.layout({ top: 170, bottom: 190, left: 30, right: 30 });
-    const canvas = require('canvas').createCanvas(W, H);
-    const ctx = canvas.getContext('2d');
+    const { w, info, plots, team, biome, realm, waterCells } = buildWorld(state);
+    // fixed card: the village green sits slightly above centre, the over-sized grid fills every pixel
+    const focus = centroid([hc(7, 7), hc(8, 7), hc(7, 8), hc(8, 8)]);
+    w.layoutFixed(CARD_W, CARD_H, focus.x, focus.z, CARD_W / 2, CARD_H * 0.47);
+    const { createCanvas } = require('canvas');
     const seed = hashStr(state.owner || 'base');
-    const bi = (K.biomeInfo().biomes || {})[realm];
+    const bi = (K.biomeInfo('iso').biomes || {})[realm];
     const bd = realm === 'isle' ? { top: '#cfe8ef', mid: '#8fc7b2', bot: '#3f7a5c' } : bi ? { top: bi.backdrop[0], mid: bi.backdrop[1], bot: bi.backdrop[2] } : { top: '#356f6a', mid: '#1f4a4c', bot: '#0d2527' };
-    await w.draw(ctx, { drawBackdrop: (c2) => K.paintBackdrop(c2, W, H, seed, { clouds: 7, cloudScale: SCALE * 1.1, ...bd }) });
+    const terrain = createCanvas(CARD_W, CARD_H), tctx = terrain.getContext('2d');
+    await w.draw(tctx, { phase: 'terrain', drawBackdrop: (c2) => { const g = c2.createLinearGradient(0, 0, 0, CARD_H); g.addColorStop(0, bd.top); g.addColorStop(0.5, bd.mid); g.addColorStop(1, bd.bot); c2.fillStyle = g; c2.fillRect(0, 0, CARD_W, CARD_H); } });
+    const objects = createCanvas(CARD_W, CARD_H), octx = objects.getContext('2d');
+    await w.draw(octx, { phase: 'objects' });
     const k = SCALE;
     const smoke = [];
     for (const it of info) {
         if (it.st.type === 'hunting') continue;
         const lv = it.def.levels.find((l) => l.level === it.lvl) || it.def.levels[0];
         const p = w.proj(it.cen.x, it.cen.z + 2.1, 0);
-        plaque(ctx, p.x, p.y + 2 * k * 2, it.def.name, `${lv.name} · Lv ${it.lvl}`, k);
+        plaque(octx, p.x, p.y + 2 * k * 2, it.def.name, `${lv.name} · Lv ${it.lvl}`, k);
         if (it.st.type === 'house' || it.st.type === 'blacksmith' || it.st.type === 'alchemy') {
             const sp = w.proj(it.cen.x + 0.5, it.cen.z - 0.4, 2.2); smoke.push({ x: sp.x, y: sp.y, smoky: it.st.type === 'blacksmith' });
         }
     }
-    const scene = { canvas, W, H, w, k, smoke, biome };
+    // screen polygons of every open-water cell, for the animated shimmer / lava glow
+    const water = [];
+    for (const [c, r] of waterCells) {
+        const poly = w.cellPoly(c, r, -0.2);
+        const cx = poly.reduce((a, p) => a + p.x, 0) / 6, cy = poly.reduce((a, p) => a + p.y, 0) / 6;
+        if (cx < -80 || cx > CARD_W + 80 || cy < -80 || cy > CARD_H + 80) continue;
+        water.push({ poly, cx, cy, h: hashStr(`${c},${r}`) });
+    }
+    const scene = { terrain, objects, W: CARD_W, H: CARD_H, w, k, smoke, biome, realm, water, seed };
     _scenes.set(key0, scene);
     while (_scenes.size > SCENE_MAX) _scenes.delete(_scenes.keys().next().value);
     return scene;
 }
 
+function animateWater(ctx, sc, t, G) {
+    const lava = sc.realm === 'volcanic', ice = sc.realm === 'tundra';
+    const cellW = 1.9 * 96 * sc.k;                                   // glint tile ≈ one cell wide
+    ctx.save();
+    for (const cell of sc.water) {
+        const ph = (t + (cell.h % 997) / 997) % 1;
+        ctx.save();
+        ctx.beginPath(); cell.poly.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.closePath(); ctx.clip();
+        if (lava) {                                                  // molten pulse
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.globalAlpha = 0.16 + 0.16 * Math.sin(ph * Math.PI * 2);
+            const g = ctx.createRadialGradient(cell.cx, cell.cy, 2, cell.cx, cell.cy, cellW * 0.7);
+            g.addColorStop(0, 'rgba(255,190,70,1)'); g.addColorStop(1, 'rgba(255,70,0,0)');
+            ctx.fillStyle = g; ctx.fillRect(cell.cx - cellW, cell.cy - cellW, cellW * 2, cellW * 2);
+        }
+        if (G && G.length) {
+            const g = G[Math.floor(ph * 4) % G.length];                // two old-water frames, cycled
+            const drift = Math.sin(ph * Math.PI * 2) * 5 * sc.k * 2;
+            ctx.globalCompositeOperation = lava ? 'lighter' : 'source-over';
+            ctx.globalAlpha = lava ? 0.5 : ice ? 0.35 : 0.6;
+            ctx.drawImage(g, cell.cx - cellW / 2 + drift, cell.cy - cellW / 4, cellW, cellW / 2);
+        }
+        ctx.restore();
+    }
+    ctx.restore();
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
-//  FRAME RENDER (frame 0 = static card; frames animate smoke + glints)
+//  FRAME RENDER (frame 0 = static card; frames animate water/lava + smoke + fireflies)
 // ═══════════════════════════════════════════════════════════════════════════
 async function renderFrame(state, frame, opts = {}) {
     const sc = await buildScene(state);
     const out = require('canvas').createCanvas(sc.W, sc.H);
     const ctx = out.getContext('2d');
-    ctx.drawImage(sc.canvas, 0, 0);
     const t = (frame || 0) / FRAMES;
-    const seed = hashStr(state.owner || 'base');
+    ctx.drawImage(sc.terrain, 0, 0);
+    if (opts.animate || frame > 0) animateWater(ctx, sc, t, await glints());
+    ctx.drawImage(sc.objects, 0, 0);
+    const seed = sc.seed;
     if (opts.animate || frame > 0) {
         ctx.save();
         for (const s of sc.smoke) {                              // chimney / forge smoke puffs
@@ -463,7 +679,7 @@ async function renderFrame(state, frame, opts = {}) {
                 ctx.beginPath(); ctx.arc(s.x + Math.sin(ph * 5 + i) * 4 * sc.k * 2 + ph * 6, s.y - ph * 42 * sc.k * 2, (3 + ph * 7) * sc.k * 2, 0, Math.PI * 2); ctx.fill();
             }
         }
-        for (let i = 0; i < 22; i++) {                           // fireflies / water glints
+        for (let i = 0; i < 22; i++) {                           // fireflies
             const r1 = mulberry32(seed + 700 + i)(), r2 = mulberry32(seed + 1700 + i)();
             const ph = (t + r1) % 1;
             ctx.globalAlpha = 0.7 * Math.sin(ph * Math.PI);
@@ -558,7 +774,7 @@ function cachePut(map, k, out) {
 const _renderCache = new Map();
 const CACHE_TTL = 10 * 60 * 1000;
 function stateHash(state, opts = {}) {
-    return hashStr(JSON.stringify(['v9-realms', state.owner, realmBiome(state), state.structures, state.freePlots, opts.hint || '', opts.static ? 1 : 0]));
+    return hashStr(JSON.stringify(['v10-iso', state.owner, realmBiome(state), state.structures, state.freePlots, opts.hint || '', opts.static ? 1 : 0]));
 }
 
 async function renderBaseImage(state, opts = {}) {
