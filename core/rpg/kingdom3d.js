@@ -479,7 +479,7 @@ function paintLiquidAnim(ctx, world, cells, t) {
         if (p.x < -60 || p.x > world.W + 60 || p.y < -60 || p.y > world.H + 60) continue;
         const wave = Math.sin(2 * Math.PI * (2 * t + q.ph));
         const on = wave > 0;
-        ctx.globalAlpha = q.lava ? (on ? 0.30 : 0.10) : (on ? 0.16 : 0.04);
+        ctx.globalAlpha = q.lava ? (on ? 0.34 : 0.12) : (on ? 0.22 : 0.05);
         ctx.fillStyle = q.lava ? (on && wave > 0.55 ? '#ffd76b' : '#ff9430') : '#cfeaff';
         hexPath(ctx, world, q.c, q.r, 0.06);
         ctx.fill();
@@ -513,14 +513,14 @@ function liquidCells(w, { lava = false, cap = 150, seed = 1 } = {}) {
 const CONFETTI_COLS = ['#ff5d5d', '#ffc93c', '#4ecdc4', '#7c6ff0', '#ff9ff3', '#6bed8f', '#feca57'];
 function paintConfetti(ctx, W, H, t, seed, k) {
     ctx.save();
-    for (let i = 0; i < 46; i++) {
+    for (let i = 0; i < 72; i++) {
         const r1 = mulberry32(seed + 40 + i)(), r2 = mulberry32(seed + 440 + i)(), r3 = mulberry32(seed + 840 + i)();
         const fall = (t * (1.3 + r3 * 0.9) + r1) % 1;
         const x = W * (0.03 + 0.94 * r1) + Math.sin((t + r2) * Math.PI * 4) * 16 * k;
         const y = -20 + fall * (H + 60);
-        ctx.globalAlpha = 0.85 * Math.sin(Math.min(1, fall * 1.15) * Math.PI);
+        ctx.globalAlpha = 0.92 * Math.sin(Math.min(1, fall * 1.15) * Math.PI);
         ctx.fillStyle = CONFETTI_COLS[i % CONFETTI_COLS.length];
-        const s = (2.6 + r3 * 3.4) * k * 2, rot = (t + r2) * Math.PI * 2;
+        const s = (7 + r3 * 9) * k * 2, rot = (t + r2) * Math.PI * 2;   // chunky visible scraps
         ctx.translate(x, y); ctx.rotate(rot);
         ctx.fillRect(-s / 2, -s / 4, s, s / 2);
         ctx.setTransform(1, 0, 0, 1, 0, 0);
