@@ -28,6 +28,7 @@ const M = 15;                 // wilderness margin (hex cells) around the grid �
 const COLS = N + 2 * M, ROWS = N + 2 * M;
 const FRAMES = 14, FRAME_MS = 110;
 const SCALE = parseFloat(process.env.RENDER_BASE_SCALE || '0.44') || 0.44;
+const ANIM_SCALE = parseFloat(process.env.RENDER_BASE_ANIM_SCALE || '0.62') || 0.62;
 const CARD_W = 1960, CARD_H = 1420;   // fixed card; terrain over-covers it (no floating diorama)
 
 const ASSETS = path.join(__dirname, '..', 'rpgasset', 'homestead');
@@ -180,7 +181,7 @@ const WILDS = {
     ashlands: { mt: ['mountain_A', 'mountain_B', 'mountain_C'], hl: ['hills_C', 'hills_A', 'hills_B', 'hill_single_B'], tr: SMALL_TREES, fo: 9, hi: 0.46, mo: 0.68, rock: 0.12 },
 };
 const ROCKS = 'ABCDE';
-const FAR_R = 13;                                       // fence ring radius (hex cells) around the village green
+const FAR_R = 12;                                       // fence ring radius (hex cells) around the village green
 
 function buildWorld(state) {
     const seedStr = state.owner || 'base';
@@ -344,7 +345,7 @@ function buildWorld(state) {
         if (freeCell(c, r) && gridOK(c, r)) cands.push({ c, r, rc, rr });
     }
     for (let i = cands.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [cands[i], cands[j]] = [cands[j], cands[i]]; }
-    const want = Math.min(9, 5 + (sts.length));
+    const want = Math.min(14, 8 + sts.length * 2);
     const YARD = [['barrel', 0.9, 0.7], ['crate_A_small', -0.9, 0.7], ['bucket_water', 0.8, -0.6], ['wheelbarrow', -0.8, 0.8], ['sack', 0.6, 0.9], ['resource_lumber', -0.9, -0.5], ['crate_open', 0.9, 0.6], ['pallet', -0.7, 0.8]];
     for (const cd of cands) {
         if (cottageSpots.length >= want) break;
@@ -387,6 +388,18 @@ function buildWorld(state) {
             w.put(SMALL_TREES[Math.floor(rng() * 4)], c, r, { sc: 0.85, flip: flip() }); claim(c, r); n++;
         }
     }
+    // second ring of homes: farmsteads tucked behind the street cottages (with their own yard, field and trees)
+    for (let tries = 0; tries < 80 && cottageSpots.length < want; tries++) {
+        const base = cottageSpots[Math.floor(rng() * Math.max(1, cottageSpots.length))];
+        if (!base) break;
+        const d = Math.floor(rng() * 6), [c, r] = K.neighbor(...K.neighbor(base.c, base.r, d), (d + 1) % 6);
+        if (!freeCell(c, r) || !gridOK(c, r) || cottageSpots.some((q) => K.hexDist(q.c, q.r, c, r) < 3) || K.hexDist(c, r, pc, pr) < 3) continue;
+        cottageSpots.push({ c, r, rc: base.rc, rr: base.rr }); claim(c, r);
+        w.put('building_dirt', c, r, { layer: 'flat', sc: 0.85 });
+        w.put(rng() < 0.5 ? B('home_A') : B('home_B'), c, r, { sc: 0.92 + rng() * 0.1, flip: rng() < 0.5 });
+        const y = YARD[Math.floor(rng() * YARD.length)]; w.put(y[0], c, r, { dx: y[1], dz: y[2] });
+        for (let dd = 0; dd < 6; dd++) { const [fc, fr] = K.neighbor(c, r, dd); if (FARM && freeCell(fc, fr) && gridOK(fc, fr) && rng() < 0.35) { w.put('building_grain', fc, fr, { sc: 1.0 }); claim(fc, fr); } }
+    }
     // street furniture along the roads: barrels, crates, buckets, the odd flag
     {
         const fur = ['barrel', 'crate_A_small', 'bucket_water', 'sack', 'crate_B_small', 'wheelbarrow'];
@@ -423,10 +436,10 @@ function buildWorld(state) {
         // far field — noise driven: ridges of mountains, rolling hills, woods, scatter; denser the further out
         const n1 = fbm(seed, c * 0.16, r * 0.16), n2 = fbm(seed + 17, c * 0.3 + 40, r * 0.3 + 9);
         const far = Math.min(1, (rd - FAR_R) / 8);
-        const e = n1 * 0.8 + far * 0.22;
+        const e = n1 * 0.8 + far * 0.30;
         if (e > WP.mo) { w.put(WP.mt[Math.floor(rng() * WP.mt.length)], c, r, { flip: flip() }); claim(c, r); }
         else if (e > WP.hi) { w.put(WP.hl[Math.floor(rng() * WP.hl.length)], c, r, { flip: flip() }); claim(c, r); }
-        else if (n2 > WP.fo && x < 0.78) { w.put(WP.tr[Math.floor(rng() * WP.tr.length)], c, r, { flip: flip() }); claim(c, r); }
+        else if (n2 > WP.fo - 0.05 && x < 0.85) { w.put(WP.tr[Math.floor(rng() * WP.tr.length)], c, r, { flip: flip() }); claim(c, r); }
         else if (x < WP.rock) rock(c, r);
         else if (x < WP.rock + 0.07 && biome !== 'ashlands') { w.put(SMALL_TREES[Math.floor(rng() * 4)], c, r, { sc: 0.9, flip: flip() }); }
     }
@@ -496,7 +509,6 @@ function buildWorld(state) {
     w.resolve();                                                      // re-resolve now that the pier cells are water
     for (const [c, r, len] of lakeShore) {
         const cells = w.layPier(c, r, 0, len);
-        if (process.env.DBG_PIER) console.log('pier', c, r, len, cells, cells.map(([a,b])=>w.cell[b][a].tile));
         const last = cells[cells.length - 1];
         if (last) { w.put('barrel', last[0], last[1], { dx: 0.15, dz: 0.2, h: 0.12, sc: 0.8 }); }
     }
@@ -511,6 +523,13 @@ function buildWorld(state) {
         w.put('crate_A_small', 0, 0, { wx: cen.x, wz: cen.z, dx: -1.5, dz: 0.8 });
         w.put('resource_lumber', 0, 0, { wx: cen.x, wz: cen.z, dx: 1.5, dz: 0.9 });
         w.overlay((ctx, pp, k) => plotOverlay(ctx, w, cen, pf.p.id, k), 0, 0, { dx: cen.x, dz: cen.z });
+    }
+    // reeds + lilies on the lake / pond margins (nothing on the lava)
+    if (realm !== 'volcanic') for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+        const k = w.cell[r][c];
+        if (k.tile !== 'hex_water' || !k.lake || rng() > 0.12) continue;
+        const n = ['waterlily_A', 'waterlily_B', 'waterplant_A', 'waterplant_B'][Math.floor(rng() * 4)];
+        w.put(n, c, r, { dx: (rng() - 0.5) * 0.8, dz: (rng() - 0.5) * 0.6, h: -0.2 });
     }
     // water / lava cells (animated in renderFrame)
     const waterCells = [];
@@ -662,8 +681,12 @@ function animateWater(ctx, sc, t, G) {
 // ═══════════════════════════════════════════════════════════════════════════
 async function renderFrame(state, frame, opts = {}) {
     const sc = await buildScene(state);
-    const out = require('canvas').createCanvas(sc.W, sc.H);
+    // animated (mp4) frames are composed at reduced size: the clip is a half-res preview anyway and this halves the per-frame cost
+    const as = opts.encoder === 'raw' ? ANIM_SCALE : 1;
+    const out = require('canvas').createCanvas(Math.round(sc.W * as / 2) * 2, Math.round(sc.H * as / 2) * 2);
     const ctx = out.getContext('2d');
+    if (as !== 1) ctx.scale(out.width / sc.W, out.height / sc.H);
+    ctx.imageSmoothingQuality = 'low';
     const t = (frame || 0) / FRAMES;
     ctx.drawImage(sc.terrain, 0, 0);
     if (opts.animate || frame > 0) animateWater(ctx, sc, t, await glints());
