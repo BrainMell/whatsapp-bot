@@ -349,6 +349,7 @@ class HexWorld {
                 const m = spriteMeta(kcell.tile); if (!m) continue;
                 const w = hexWorld(c, r);
                 const p = this.proj(w.x, w.z, kcell.h || 0);
+                if (p.x < -140 || p.x > this.W + 140 || p.y < -160 || p.y > this.H + 160) continue;   // off-card: skip
                 await drawSpr(m, m.file, m.ax, m.ay, p.x, p.y, 1, false, 1);
             }
         }

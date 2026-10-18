@@ -26,7 +26,8 @@ const KT = require('./kingdomTerrain');
 const mediaCache = require('./mediaCache');
 
 const FRAMES = 14, FRAME_MS = 110;
-const COLS = 17, ROWS = 15, CC = 8, CR = 7;     // 17x15 hex island, castle on (8,7)
+const COLS = 23, ROWS = 31, CC = 11, CR = 15;   // oversized grid: terrain runs past every edge of the card, castle on (11,15)
+const OLD_COLS = 17, OLD_ROWS = 15, OLD_CC = 8, OLD_CR = 7;   // the framing the card was designed around
 const SCALE = parseFloat(process.env.RENDER_GUILD_SCALE || '0.5') || 0.5;
 const PREFIX = '.j'; // display-only default; engine passes real prefix via opts.hint when it matters
 const FONTS = path.join(__dirname, '..', 'rpgasset', 'fonts');
@@ -432,7 +433,14 @@ async function buildScene(state) {
     if (hit) { _scenes.delete(key0); _scenes.set(key0, hit); return hit; }
 
     const { w, castle, hall, train, treas, team, gateCell } = buildWorld(state);
-    const { W, H } = w.layout({ top: 190, bottom: 190, left: 36, right: 36 });
+    const pad = { top: 190, bottom: 190, left: 36, right: 36 };
+    // keep the card size and castle framing of the old 17x15 layout, but let the (larger) grid fill every pixel of it
+    const ref = new K.HexWorld(OLD_COLS, OLD_ROWS, { scale: SCALE, biome: w.biome });
+    const { W, H } = ref.layout(pad);
+    const oc = K.hexWorld(OLD_CC, OLD_CR), refP = ref.proj(oc.x, oc.z, 0);
+    w.layout(pad);
+    const nc = K.hexWorld(CC, CR), newP = w.proj(nc.x, nc.z, 0);
+    w.ox += refP.x - newP.x; w.oy += refP.y - newP.y; w.W = W; w.H = H;
     const canvas = require('canvas').createCanvas(W, H);
     const ctx = canvas.getContext('2d');
     const seed = hashStr(state.name || 'guild');
