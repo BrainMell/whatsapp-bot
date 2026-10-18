@@ -330,7 +330,7 @@ function outlandProps(opts) {
                 if (x >= f0 && x <= f1 && y >= f0 && y <= f1) continue;
                 if (!patchOf(x, y)) continue;
                 const r = mulberry32(seed + x * 331 + y * 701 + 23)();
-                if (r < 0.13) put(pickWeighted(master, POOLS.forestClutter.map((f) => [f, 1])), x + (r - 0.5), y + (r * 0.4 - 0.2), (0.55 + r * 1.6) * CS, TINT_NEAR, 34, 12);
+                if (r < 0.13) put(pickWeighted(master, POOLS.forestClutter.map((f) => [f, 1])), x + (r - 0.5), y + (r * 0.4 - 0.2), Math.min((0.55 + r * 1.6) * CS, 1.15), TINT_NEAR, 34, 12);
             }
         }
     };
@@ -347,7 +347,7 @@ function outlandProps(opts) {
             const [sx, sy] = wildAnchors[Math.floor(master() * wildAnchors.length)];
             const [gx, gy] = screenToGrid(sx + (master() - 0.5) * 260, sy + (master() - 0.5) * 110);
             if (gx >= f0 && gx <= f1 && gy >= f0 && gy <= f1) continue;
-            put(pickWeighted(master, POOLS.forestClutter.map((f) => [f, 1])), gx, gy, (0.7 + master() * 0.3) * CS, TINT_MID, 34, 12);
+            put(pickWeighted(master, POOLS.forestClutter.map((f) => [f, 1])), gx, gy, Math.min((0.7 + master() * 0.3) * CS, 0.95), TINT_MID, 34, 12);
         }
         // BOULDER LAW — a few stone outcrops on the open moss
         scatterBoulders(4);
@@ -401,7 +401,7 @@ function outlandProps(opts) {
             const cx = master() * (2 * (N + P) + 6) - (N + P) - 3;
             const cy = master() * (2 * (N + P) + 6) - (N + P) - 3;
             if (cx >= f0 && cx <= f1 && cy >= f0 && cy <= f1) continue;
-            put(pickWeighted(master, POOLS.forestClutter.map((f) => [f, 1])), cx, cy, (0.7 + master() * 0.3) * CS, TINT_MID, 34, 12);
+            put(pickWeighted(master, POOLS.forestClutter.map((f) => [f, 1])), cx, cy, Math.min((0.7 + master() * 0.3) * CS, 0.95), TINT_MID, 34, 12);
         }
         // BOULDER LAW — mossy outcrops among the ruins
         scatterBoulders(3);
@@ -433,7 +433,7 @@ function outlandProps(opts) {
             const [gx, gy] = screenToGrid(sx + (master() - 0.5) * 260, sy + (master() - 0.5) * 110);
             if (isOceanCell(Math.round(gx), Math.round(gy))) continue;
             if (gx >= f0 && gx <= f1 && gy >= f0 && gy <= f1) continue;
-            put(pickWeighted(master, POOLS.forestClutter.map((f) => [f, 1])), gx, gy, (0.7 + master() * 0.3) * CS, TINT_MID, 34, 12);
+            put(pickWeighted(master, POOLS.forestClutter.map((f) => [f, 1])), gx, gy, Math.min((0.7 + master() * 0.3) * CS, 0.95), TINT_MID, 34, 12);
         }
         // BOULDER LAW — land-side stone outcrops (never in the water)
         scatterBoulders(4, true);

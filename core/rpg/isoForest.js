@@ -41,6 +41,19 @@ const FAR_TREES = [
     ['px_conifer_a.png', 3], ['px_conifer_b.png', 2.2],
     ['px_pine_a.png', 1.2], ['px_pine_b.png', 1.0],
 ];
+// ── TREE CLUSTER LAW (owner 2026-10-18 "look up books, look up images ...
+// right amount of environmental assets, rules and regulations"): trees read
+// as INTENTIONAL when they mass in species groups (cozy-iso village refs),
+// never salt-and-pepper. Clusters are seeded cells + species + count so a
+// renderer can art-direct the massing while the seeded jitter keeps it
+// organic. big = the px_bigtree feature tree (plaza/landmark duty).
+const CLUSTER_POOLS = {
+    conifer: [['px_conifer_a.png', 3], ['px_conifer_b.png', 2.2], ['px_pine_a.png', 1.4], ['px_pine_b.png', 1.2]],
+    oak: [['px_oak_a.png', 3], ['px_oak_b.png', 2.5]],
+    birch: [['px_birch.png', 3], ['px_oak_b.png', 1]],
+    pine: [['px_pine_a.png', 3], ['px_pine_b.png', 2.4], ['px_pine_c.png', 1.6]],
+    big: [['px_bigtree.png', 1]],
+};
 
 function mulberry32(seed) {
     let a = seed >>> 0;
@@ -206,7 +219,15 @@ function islandForest(opts) {
             // guild grounds): renderers can thin the mid ring + the hot ring
             // around the castle. Defaults = the historical rates, so the
             // homestead caller stays byte-identical.
-            midRate = 0.45, hotRate = 0.42 } = opts;
+            midRate = 0.45, hotRate = 0.42,
+            // WOODS LAW (v5): explicit cells that stay WOODED (the fenced
+            // hunting woods read as woods, not lawn) at their own rates.
+            woods = null,          // { cells:[[x,y]], treeRate, underRate }
+            // CLUSTER LAW (v5): art-directed tree massing — seeded cells
+            // win over scatter; scatter rates are expected to drop when
+            // clusters are provided.
+            clusters = [] } = opts;
+    if (woods && woods.cells && !woods.cellSet) woods.cellSet = new Set(woods.cells.map(([x, y]) => `${x},${y}`));
     const pathSet = new Set(paths.map(([x, y]) => `${x},${y}`));
     const hotSet = new Set(hot.map(([x, y]) => `${x},${y}`));
     const blocked = new Set([...(occupied || []), ...pathSet, ...(plotCells || [])]);
@@ -232,6 +253,38 @@ function islandForest(opts) {
     const rnd = mulberry32(hashStr(seed ^ 0x6d2b79f5));
     const out = [];
     const jitter = (m) => (rnd() - 0.5) * m;
+    const taken = new Set();   // cluster cells claim their spots first
+
+    // ── CLUSTER PASS — art-directed massing beats scatter (v5). Each cluster
+    // claims up to n FREE cells within radius r of its seed (seeded nearest
+    // order), never on blocked/front-shadow ground, then plants species-
+    // weighted trees with tight organic jitter. Feature trees (sp 'big')
+    // also skip the front-shadow band.
+    for (const cl of clusters || []) {
+        const pool = CLUSTER_POOLS[cl.sp] || CLUSTER_POOLS.oak;
+        const r = cl.r ?? 1;
+        const cands = [];
+        for (let dx = -r; dx <= r; dx++) {
+            for (let dy = -r; dy <= r; dy++) {
+                const cx = cl.x + dx, cy = cl.y + dy;
+                const k = `${cx},${cy}`;
+                if (cx < 0 || cy < 0 || cx >= N || cy >= N) continue;
+                if (blocked.has(k) || taken.has(k) || frontShadow.has(k)) continue;
+                if (hotSet.has(k) && (cl.sp !== 'big')) continue; // house clearing law holds
+                cands.push([cx, cy, dx * dx + dy * dy]);
+            }
+        }
+        cands.sort((a, b) => (a[2] - b[2]) + (rnd() - 0.5) * 0.9);
+        for (const [cx, cy] of cands.slice(0, cl.n || 1)) {
+            taken.add(`${cx},${cy}`);
+            const px = isoX(cx + 0.5, cy + 0.5), py = isoY(cx + 0.5, cy + 0.5);
+            out.push({
+                file: pickWeighted(rnd, pool),
+                x: px + jitter(22), y: py + jitter(10) + 6,
+                sc: cl.sp === 'big' ? (1.05 + rnd() * 0.12) : (0.92 + rnd() * 0.18),
+            });
+        }
+    }
     // HAZE LAW (owner pre-restart promise: "everything behind [the fence] =
     // dense hazed forest"): wild props outside the playable ring carry a tint
     // the renderer applies via tinted() — deeper ring = darker, so the wilds
@@ -258,7 +311,7 @@ function islandForest(opts) {
             // playable edge with trees.
             const border = outside;
             const mid = !border && !far && (x === 1 || y === 1 || x === N - 2 || y === N - 2 || (margin && inMapBorder) || inMapBorder);
-            if (blocked.has(key)) continue;
+            if (blocked.has(key) || taken.has(key)) continue;
             const px = isoX(x + 0.5, y + 0.5);
             const py = isoY(x + 0.5, y + 0.5);
             if (far) {
@@ -282,6 +335,14 @@ function islandForest(opts) {
                     }
                     if (rnd() < 0.35) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(26), y: py + jitter(10) + 8 });
                 }
+            } else if (woods && woods.cellSet.has(key)) {
+                // WOODS LAW (v5): fenced hunting woods stay a WOOD — tall
+                // trees at the woods rate (never in a structure's front
+                // shadow), thick understory floor. Checked BEFORE the mid
+                // ring so woods cells at x==1 don't fall to lawn rates.
+                const sh = frontShadow.has(key);
+                if (!sh && rnd() < (woods.treeRate ?? 0.30)) out.push({ file: pickWeighted(rnd, RING_TREES), x: px + jitter(24), y: py + jitter(10) + 6, sc: 0.9 + rnd() * 0.16 });
+                if (rnd() < (woods.underRate ?? 0.30)) out.push({ file: pickWeighted(rnd, UNDERSTORY), x: px + jitter(24), y: py + 8 });
             } else if (mid) {
                 // margin mode calms the mid ring so zones/paths stay visible
                 const rate = margin ? 0.22 : midRate;
@@ -304,7 +365,7 @@ function islandForest(opts) {
     return out;
 }
 
-module.exports = { paintBackdrop, islandForest, fenceRing, RING_TREES, UNDERSTORY, FAR_TREES, loadImg, tinted };
+module.exports = { paintBackdrop, islandForest, fenceRing, RING_TREES, UNDERSTORY, FAR_TREES, CLUSTER_POOLS, loadImg, tinted };
 
 // ═══════════════════════════════════════════════════════════════════════
 // FENCE RING — pixel palisade placements around the playable diamond

@@ -212,6 +212,88 @@ const STRUCT_SCALE = {
 // world beyond the fence is the per-player procedural outlands.
 const P = 3;
 
+// ═══════════════════════════════════════════════════════════════════════════
+// LAYOUT v5 DRESSING LAW (owner 2026-10-18 "look up books, look up images,
+// look up whatever you can to make a proper arrangement for the house with
+// the right amount of environmental assets, rules and regulations ... make
+// sure you can do it good before you even attempt").
+// RESEARCH BASE: Kevin Lynch "The Image of the City" (paths / edges /
+// districts / nodes / landmarks), medieval Angerdorf morphology (green with
+// a central water source, fenced dooryard gardens, common meadow beyond the
+// plots), CoC home-village doctrine (anchor building, density gradient,
+// production at the periphery, spawned obstacles in clusters), iso city-
+// builder art production laws (roads lead the eye; plazas slow the eye;
+// landmarks at composition points; props cluster at corners, never scatter)
+// + the cozy-iso pixel-village reference board (lantern rhythm, dooryard
+// dressing, species-massed trees, dense backdrop / open foreground).
+// THE STREET SKELETON (gate x=8, main street, plaza ring, lanes, frontable
+// plots) IS v3/v4 OWNER-APPROVED AND STAYS. v5 dresses it to live:
+//   NODE      the plaza grass heart gains the WISHING WELL — water at the
+//             green (Angerdorf law) + a bench on the west shoulder + lantern
+//             posts flanking the north mouth (Lynch: nodes are the foci)
+//   LANDMARK  house dooryard (fenced-garden law): flower bed + herb pot +
+//             barrel on the front strip between house and south lane
+//   RHYTHM    lantern stands every ~4 cells along the main street
+//             (7,5)(9,5)(7,11)(9,13) — the gatehouse torch already
+//             anchors the gate mouth, the well anchors the plaza
+//   MASSING   trees plant in SPECIES CLUSTERS (conifer/oak/birch/pine/big),
+//             never salt-and-pepper; the random scatter rate drops to a
+//             whisper (0.04) and clusters carry the composition
+//   WOODS     the fenced hunting woods stay a WOOD (0.30 tree rate) instead
+//             of mowed lawn, with a tiny hunter's camp (rack + stump)
+//   EDGES     zone identity: ore cart + boulders + log at the mines head,
+//             boat + water rocks + reeds at the pond shore, fallen log +
+//             mushrooms + stone through the farm plots, hedge line softening
+//             the inside of the fence ring
+//   BUDGET    in-fence props ≤ 95; plaza node ≤ 6; dooryard ≤ 4; trees only
+//             in clusters (scatter 4%); nothing on paths/plots/footprints;
+//             tall props never in a built structure's front-shadow band
+const DRESS = {
+    well: [[8, 7]],
+    bench: [[6, 8]],
+    lanterns: [[7, 5], [9, 5], [7, 11], [9, 13]],
+    dooryard: [
+        { cell: [10, 9], file: 'plant_flower.png', sc: 1.3 },
+        { cell: [11, 9], file: 'pot_herbs.png', sc: 1.3 },
+        { cell: [12, 9], file: 'barrel_oak.png', sc: 1.5 },
+    ],
+    pondEdge: [
+        { cell: [15, 1], file: 'px_boat.png', sc: 1.0, water: true },
+        { cell: [14, 2], file: 'poly_water_rock.png', sc: 0.45, water: true },
+        { cell: [10, 0], file: 'poly_stream_rocks.png', sc: 0.9 },
+        { cell: [14, 4], file: 'px_fern.png', sc: 1.0 },
+        { cell: [15, 4], file: 'px_tuft.png', sc: 1.1 },
+    ],
+    minesEdge: [
+        { cell: [2, 4], file: 'cart_merchant.png', sc: 1.5 },
+        { cell: [0, 4], file: 'px_boulder.png', sc: 1.0 },
+        { cell: [5, 3], file: 'px_rock.png', sc: 1.0 },
+        { cell: [7, 3], file: 'poly_grassy_log.png', sc: 1.0 },
+    ],
+    woodsCamp: [
+        { cell: [1, 10], file: 'weapon_rack.png', sc: 1.1 },
+        { cell: [2, 10], file: 'px_stump.png', sc: 1.2 },
+    ],
+    farm: [
+        { cell: [1, 13], file: 'poly_fallen_tree.png', sc: 1.0 },
+        { cell: [5, 13], file: 'poly_mushrooms.png', sc: 0.9 },
+        { cell: [14, 12], file: 'px_stone.png', sc: 1.0 },
+    ],
+    // tree massing (species clusters — isoForest CLUSTER_POOLS)
+    // NOTE: no cluster in the (9..12,11..13) south pocket — that is the
+    // village COMMON in front of the gatehouse (Angerdorf commons law):
+    // gate → street → plaza → house sightline stays open, the meadow reads
+    // as expansion ground, and the density gradient stays core-dense.
+    clusters: [
+        { x: 0, y: 12, sp: 'conifer', n: 3, r: 1 },
+        { x: 10, y: 2, sp: 'big', n: 1 },
+        { x: 6, y: 1, sp: 'oak', n: 2, r: 1 },
+        { x: 14, y: 13, sp: 'oak', n: 2, r: 1 },
+        { x: 1, y: 7, sp: 'birch', n: 2, r: 1 },
+        { x: 15, y: 5, sp: 'pine', n: 2, r: 1 },
+    ],
+};
+
 function inZone(z, x, y) { return x >= z.x && x < z.x + z.fw && y >= z.y && y < z.y + z.fh; }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -406,9 +488,29 @@ async function renderFrame(state, frame, opts = {}) {
             for (let yy = LAYOUT.hunting.zone.y; yy < LAYOUT.hunting.zone.y + LAYOUT.hunting.zone.fh; yy++) hot.push([xx, yy]);
         }
     }
+    // ── v5 DRESS CELLS — every curated placement claims its cell so the
+    // random scatter can never double-plant under furniture or trees.
+    const dressCells = new Set();
+    const dressAll = [
+        ...(DRESS.dooryard || []), ...(DRESS.pondEdge || []), ...(DRESS.minesEdge || []),
+        ...(DRESS.woodsCamp || []), ...(DRESS.farm || []),
+    ];
+    for (const d of dressAll) dressCells.add(`${d.cell[0]},${d.cell[1]}`);
+    for (const c of [...(DRESS.well || []), ...(DRESS.bench || []), ...(DRESS.lanterns || [])]) dressCells.add(`${c[0]},${c[1]}`);
+
+    // occupied for the forest pass = structures+clearing ∪ dress cells —
+    // curated placements own their ground, scatter never double-plants there
+    const forestOccupied = new Set([...usedMargin, ...dressCells]);
+    // WOODS LAW cells: the fenced hunting woods stay a wood (the zone cells
+    // also ride the `hot` list, but the woods branch outranks hot in the
+    // islandForest chain)
+    const woodsCells = [];
+    for (let xx = LAYOUT.hunting.zone.x; xx < LAYOUT.hunting.zone.x + LAYOUT.hunting.zone.fw; xx++) {
+        for (let yy = LAYOUT.hunting.zone.y; yy < LAYOUT.hunting.zone.y + LAYOUT.hunting.zone.fh; yy++) woodsCells.push([xx, yy]);
+    }
     const forestProps = isoForest.islandForest({
         seed, N, isoX, isoY,
-        occupied: usedMargin,
+        occupied: forestOccupied,
         paths: LAYOUT.paths || [],
         hot, plotCells,
         margin: false, // outside the fence is the outlands module's domain now
@@ -417,8 +519,14 @@ async function renderFrame(state, frame, opts = {}) {
         // mid ring + house hot ring thin way down; the playable ring stays
         // an open settlement with tree garnish, the woodland lives OUTSIDE
         // as the outlands' rolled forest patches
-        midRate: 0.08,
-        hotRate: 0.09,
+        // v5 CLUSTER LAW: scatter drops to a whisper (0.04/0.05) — the
+        // species clusters in DRESS carry the tree massing instead
+        midRate: 0.04,
+        hotRate: 0.05,
+        // WOODS LAW: the fenced hunting woods stay a wood, not lawn
+        woods: { cells: woodsCells, treeRate: 0.42, underRate: 0.35 },
+        // TREE CLUSTER LAW (v5): art-directed species massing
+        clusters: DRESS.clusters || [],
         structFoots: (state.structures || [])
             .map((st) => { const d = structDef(st.type); return d ? [st.x, st.y, d.fw, d.fh] : null; })
             .filter(Boolean),
@@ -432,6 +540,87 @@ async function renderFrame(state, frame, opts = {}) {
     for (const f of outlands.props) {
         const im = f.tint ? await isoForest.tinted(f.file, f.tint, f.sc || 1) : await img(f.file);
         if (im) props.push({ img: im, x: f.x, y: f.y, sc: f.tint ? 1 : (f.sc || 1) });
+    }
+    // zone garnish (owner: "the pond and mines and everything else? Doesn't
+    // exist") — v5: the IDENTITY dressing moved to the curated DRESS pass
+    // (cart/boulders/log at the mines head, boat/reeds/rocks at the pond
+    // shore); this block keeps only a few seeded extras INSIDE the zones so
+    // the rock/water tiles never read sterile.
+    {
+        const gRnd = mulberry32(seed + 4711);
+        const zoneFree = (x, y) => {
+            for (const st of state.structures || []) {
+                const d = structDef(st.type);
+                if (!d) continue;
+                if (x >= st.x - 1 && x < st.x + d.fw + 1 && y >= st.y - 1 && y < st.y + d.fh + 1) return false;
+            }
+            return !(LAYOUT.paths || []).some(([px2, py2]) => px2 === x && py2 === y);
+        };
+        const mz = LAYOUT.mines.zone, pz = LAYOUT.pond.zone;
+        const garnish = [];
+        for (let i = 0; i < 3; i++) {
+            const gx = mz.x + Math.floor(gRnd() * mz.fw), gy = mz.y + Math.floor(gRnd() * mz.fh);
+            if (zoneFree(gx, gy)) garnish.push({ file: gRnd() < 0.6 ? 'px_boulder.png' : 'px_rock.png', x: isoX(gx + 0.5, gy + 0.5) + (gRnd() - 0.5) * 30, y: isoY(gx + 0.5, gy + 0.5) + (gRnd() - 0.5) * 14 });
+        }
+        for (let i = 0; i < 2; i++) {
+            const gx = pz.x + Math.floor(gRnd() * pz.fw), gy = pz.y + Math.floor(gRnd() * pz.fh);
+            if (zoneFree(gx, gy)) garnish.push({ file: gRnd() < 0.55 ? 'px_fern.png' : 'px_bush_a.png', x: isoX(gx + 0.5, gy + 0.5) + (gRnd() - 0.5) * 30, y: isoY(gx + 0.5, gy + 0.5) + (gRnd() - 0.5) * 14 });
+        }
+        for (const g of garnish) {
+            const im = await img(g.file);
+            if (im) props.push({ img: im, x: g.x, y: g.y, sc: 1 });
+        }
+    }
+
+    // ── v5 STREET FURNITURE + ZONE EDGES (DRESS law) — curated props,
+    // bottom-centre anchored on their cells. Street furniture (well / bench
+    // / lanterns) sits pixel-straight on the cell; nature dressing gets a
+    // seeded ±10px organic drift. Water props sink to the tile centre so
+    // they sit IN the pond.
+    {
+        const fRnd = mulberry32(seed + 5150);
+        const furn = [];
+        for (const c of DRESS.well || []) furn.push({ cell: c, file: 'well_wishing.png', sc: 1.9 });
+        for (const c of DRESS.bench || []) furn.push({ cell: c, file: 'bench_oak.png', sc: 1.35 });
+        for (const c of DRESS.lanterns || []) furn.push({ cell: c, file: 'lantern_stand.png', sc: 1.5 });
+        furn.push(...dressAll);
+        for (const d of furn) {
+            const im = await img(d.file);
+            if (!im) continue;
+            const [dx2, dy2] = d.cell;
+            const sc = d.sc || 1;
+            const straight = d.file === 'well_wishing.png' || d.file === 'bench_oak.png' || d.file === 'lantern_stand.png' || d.file === 'cart_merchant.png' || d.file === 'weapon_rack.png';
+            const jx = straight ? 0 : (fRnd() - 0.5) * 20;
+            const jy = straight ? 0 : (fRnd() - 0.5) * 10;
+            props.push({
+                img: im, sc,
+                x: isoX(dx2 + 0.5, dy2 + 0.5) + jx,
+                y: isoY(dx2 + 0.5, dy2 + 0.5) + (d.water ? 8 : 6) + jy,
+            });
+        }
+    }
+    // ── v5 HEDGE LAW — the fence line softens with a bush/tuft row on the
+    // yard cells just inside the palisade (35% per cell), skipping the gate
+    // corridor so the entrance stays open. The tamed estate reads fenced,
+    // not clear-cut.
+    {
+        const hRnd = mulberry32(seed + 911);
+        const hedgeCell = (x, y) => {
+            if (hRnd() >= 0.35) return;
+            const bush = hRnd() < 0.6;
+            props.push({
+                img: null, file: bush ? (hRnd() < 0.5 ? 'px_bush_a.png' : 'px_bush_b.png') : 'px_tuft.png',
+                x: isoX(x + 0.5, y + 0.5) + (hRnd() - 0.5) * 18,
+                y: isoY(x + 0.5, y + 0.5) + 6 + (hRnd() - 0.5) * 8,
+                sc: 0.9 + hRnd() * 0.25,
+            });
+        };
+        for (let x = -2; x <= N + 1; x++) { hedgeCell(x, -2); if (x < 6 || x > 10) hedgeCell(x, N - 1 + P - 1); }
+        for (let y = -2; y <= N + 1; y++) { hedgeCell(-2, y); hedgeCell(N - 1 + P - 1, y); }
+        // resolve the lazy img refs (props.push above stashed file names)
+        for (const p of props) {
+            if (p.img === null && p.file) { p.img = await img(p.file); delete p.file; }
+        }
     }
     // ── pixel fence ring — pushed OUTWARD by P tiles (owner: "the fence
     // should be further away because the space is bigger"), gate gap where
@@ -887,4 +1076,4 @@ async function renderBaseImage(state, opts = {}) {
     return out;
 }
 
-module.exports = { LAYOUT, N, FRAMES, renderFrame, renderBaseImage, encodeFramesToMp4, structDef, structures };
+module.exports = { LAYOUT, DRESS, N, FRAMES, renderFrame, renderBaseImage, encodeFramesToMp4, structDef, structures };
