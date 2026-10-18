@@ -1,6 +1,6 @@
 # Kingdom3D — 3D hex guild kingdom + player base (v8)
 
-Status: **WIP on branch `kingdom3d`** (guild renderer done; player base renderer in progress).
+Status: **WIP on branch `kingdom3d`** — guild kingdom + player base both rebuilt on the hex engine; static + animated (mp4) paths verified. Not merged to main.
 
 ## What it is
 Both base views are now composited from **pre-baked sprites of real 3D models**
@@ -58,9 +58,30 @@ church → church + tower). Team colour from archetype (red/yellow/green); emble
 - `git clone` here skips LFS (`GIT_LFS_SKIP_SMUDGE=1`) → `scripts/render_out/*.png`
   show as modified (pointer stubs). **Never `git add -A` in such a clone.**
 
+## Player base (homesteadBaseRenderer.js)
+Saved data model untouched (16x16 grid `x,y,fw,fh`; `LAYOUT` kept verbatim so `baseBuilder.js`
+needs no change). Grid (x,y) → hex (col=x+3,row=y+3); the 3-cell margin is the player's wilds,
+biome rolled from the owner seed (meadow / highlands / farmland / lakeside) with a ragged
+coastline. House on the village green (plaza ring + well), mines = NW quarry mountains, pond =
+NE lake blob, hunting grounds = W woods, stone gatehouse + towers across the south gate on the
+main street, free expansion plots = dirt pad + scaffolding + dashed outline + "PLOT n" plaque.
+Roads are re-drawn as hex lines with **explicit links** (`HexWorld.link`) — auto-connecting to
+every adjacent road cell produced a messy lattice. Structures: per-type/level compositions of
+KayKit buildings scaled 1.3-2.1x for the 3x3 footprint (house home_A→home_B→manor, blacksmith,
+medbay tent→church, alchemy barrel→tavern→tavern+windmill, mines, pond lilies→dock props→mill).
+Animated path (`static:false`): smoke puffs + fireflies, 14 frames → mp4 in ~1.6 s (was ~15-20 s).
+
+## Verify locally
+```
+npm i canvas            # (or use the repo's node_modules)
+node scripts/render_guild_kingdom.js /tmp/guild   # 4 guild cards
+node scripts/render_base_kingdom.js  /tmp/base    # 3 base cards
+```
+Old one-off proof scripts (`scripts/bake_proof_v*.js`, `qa_*`, `check_*`) target the retired 2D
+sprite renderers and will not run against v8 — safe to delete/archive.
+
 ## TODO
-- Player base (`core/rpg/homesteadBaseRenderer.js`) → HexWorld: map the saved 16×16
-  structure grid (x,y) to hex (col=x,row=y); keep `LAYOUT`, `structDef`, `renderBaseImage`
-  exports so `baseBuilder.js` is unchanged; terrain for house/mines/pond/hunting/plots.
-- Animated mp4 (water shimmer) for the base `static:false` path.
+- Facade orientation: sprites all face the camera; mirror buildings whose door should face a street.
+- Hunting-woods palisade fence + gate pieces (fence_wood_* rotations not yet used).
 - Cathedral / arena / harbour kits are NOT in the Hexagon pack (see asset ledger).
+- Optional: more building variety from other CC0 packs once reachable via GitHub mirrors.
