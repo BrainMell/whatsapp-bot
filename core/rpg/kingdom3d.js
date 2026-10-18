@@ -215,7 +215,8 @@ class HexWorld {
             }
             if (k.road || k.door) {
                 let want = 0;
-                for (let d = 0; d < 6; d++) {
+                if (k.links) want = k.links;
+                else for (let d = 0; d < 6; d++) {
                     const n = neighbor(c, r, d); const nk = this.at(n[0], n[1]);
                     if (nk && (nk.road || nk.door) && !nk.water) want |= 1 << d;
                 }
@@ -264,10 +265,19 @@ class HexWorld {
         }
     }
 
+    /** explicit road/path link between two adjacent cells (otherwise roads auto-connect to every road neighbour). */
+    link(c1, r1, c2, r2) {
+        const d = dirTo(c1, r1, c2, r2);
+        if (d < 0 || !this.inb(c1, r1) || !this.inb(c2, r2)) return;
+        const a = this.cell[r1][c1], b = this.cell[r2][c2];
+        a.links = (a.links || 0) | (1 << d);
+        b.links = (b.links || 0) | (1 << ((d + 3) % 6));
+    }
+
     /** place a sprite on hex (c,r); dx/dz in world units; h = height above ground. */
     put(name, c, r, o = {}) {
         if (!hasSprite(name)) return;
-        const w = hexWorld(c, r);
+        const w = o.wx != null ? { x: o.wx, z: o.wz } : hexWorld(c, r);
         this.objs.push({
             name, x: w.x + (o.dx || 0), z: w.z + (o.dz || 0), y: o.h || 0,
             flip: !!o.flip, sc: o.sc || 1, layer: o.layer || 'obj', sort: o.sort || 0, alpha: o.alpha == null ? 1 : o.alpha,
@@ -409,7 +419,7 @@ async function paintBackdrop(ctx, W, H, seed, opts = {}) {
         const name = cl[i % 2]; const m = spriteMeta(name); if (!m) continue;
         const img = await loadSprite(m.file); if (!img) continue;
         const sc = (opts.cloudScale || 0.5) * (0.7 + rng() * 0.7);
-        const x = rng() * W, y = (i % 2 ? 0.08 + rng() * 0.2 : 0.7 + rng() * 0.25) * H;
+        const x = rng() * W, y = (i % 2 ? 0.05 + rng() * 0.2 : 0.5 + rng() * 0.2) * H;
         ctx.globalAlpha = 0.55 + rng() * 0.3;
         ctx.drawImage(img, x - m.ax * sc, y - m.ay * sc, m.w * sc, m.h * sc);
     }
