@@ -274,6 +274,14 @@ function buildWorld(state, cel = null) {
         if (!ms) return;
         const wc = K.hexWorld(cell[0], cell[1]);
         fall = { name: ms.name, wx: wc.x + (ms.dx || 0), wz: wc.z + (ms.dz || 0), sc: ms.sc || 1, flip: false };
+        // an UPGRADE (cel.prev >= 1) also records the replaced works — the overlay sinks them
+        // into the ground as the new building comes in (owner 2026-10-19). Treasury lvl-1 is
+        // loose crates (no main sprite): they burst away as before, nothing sinks.
+        const prev = Number.isInteger(cel.prev) ? Math.max(1, cel.prev) : 0;           // 0 = fresh build
+        if (prev >= 1 && prev < lvl) {
+            const oms = guildMainSprite(kind, prev, team);
+            if (oms) fall.old = { name: oms.name, wx: wc.x + (oms.dx || 0), wz: wc.z + (oms.dz || 0), sc: oms.sc || 1, flip: false };
+        }
     };
     if (cel && cel.building === 'hall' && hall > 0) {
         fallAt('hall', hall, castle);                                  // omitted from the scene — the overlay drops it in

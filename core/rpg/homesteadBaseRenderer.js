@@ -363,7 +363,10 @@ function buildWorld(state, cel = null) {
         if (best && K.hasSprite('struct_gate_90', 'iso')) {                   // the village entrance: a stone gatehouse spanning the palisade gap
             const [gc, gr, ge] = best.split(',').map(Number); const nbG = K.neighbor(gc, gr, ge);
             const a0 = K.hexWorld(gc, gr), a1 = K.hexWorld(nbG[0], nbG[1]);
-            w.put('struct_gate_' + [30, 90, 150, 30, 90, 150][ge], 0, 0, { wx: (a0.x + a1.x) / 2, wz: (a0.z + a1.z) / 2, sc: 1.35, sort: 0.6 });
+            // sprite yaw must equal MINUS the edge's world tangent (the bake yaws the model
+            // clockwise, the iso cam yaw cancels out): tangents are e0/e3 90°, e1/e4 150°,
+            // e2/e5 30° → yaws 90/30/150. The old +60e mapping walled every E/SE/W/NW gap sideways.
+            w.put('struct_gate_' + [90, 30, 150, 90, 30, 150][ge], 0, 0, { wx: (a0.x + a1.x) / 2, wz: (a0.z + a1.z) / 2, sc: 1.35, sort: 0.6 });
         }
         w.put('flag_' + team, ...(best ? best.split(',').slice(0, 2).map(Number) : [0, 0]), { dx: -1.0, dz: 0.6 });
         w.put('flag_' + team, ...(best ? best.split(',').slice(0, 2).map(Number) : [0, 0]), { dx: 1.0, dz: 0.6 });
@@ -516,10 +519,20 @@ function buildWorld(state, cel = null) {
         const ff = facing(cen);
         info.push({ st, def, lvl, cen });
         if (cel && st.type === cel.type && st.x === cel.x && st.y === cel.y) {
-            // the celebrated structure is OMITTED from the scene (plot reads empty); its main
-            // sprite goes to the frame overlay, which drops it in from the sky (paintLanding)
+            // the celebrated structure is OMITTED from the scene (plot keeps its dirt pad);
+            // its main sprite goes to the frame overlay, which drops it in from the sky
+            // (paintLanding). An UPGRADE (cel.prev >= 1) also records the replaced building's
+            // main sprite — the overlay sinks it into the ground as the new one comes in.
+            w.put('building_dirt', 0, 0, { wx: cen.x, wz: cen.z, layer: 'flat', sc: def.fw >= 3 ? 1.9 : 1.2 });
             const ms = mainSpriteOf(st, lvl, team);
-            if (ms) fall = { name: ms.name, wx: cen.x + (ms.dx || 0), wz: cen.z + (ms.dz || 0), sc: ms.sc, flip: ff };
+            if (ms) {
+                fall = { name: ms.name, wx: cen.x + (ms.dx || 0), wz: cen.z + (ms.dz || 0), sc: ms.sc, flip: ff };
+                const prev = Number.isInteger(cel.prev) ? Math.max(1, cel.prev) : 0;      // 0 = fresh build, nothing to swallow
+                if (prev >= 1 && prev < lvl) {
+                    const oms = mainSpriteOf(st, prev, team);
+                    if (oms) fall.old = { name: oms.name, wx: cen.x + (oms.dx || 0), wz: cen.z + (oms.dz || 0), sc: oms.sc, flip: ff };
+                }
+            }
             continue;
         }
         if (st.type !== 'hunting') w.put('building_dirt', 0, 0, { wx: cen.x, wz: cen.z, layer: 'flat', sc: def.fw >= 3 ? 1.9 : 1.2 });

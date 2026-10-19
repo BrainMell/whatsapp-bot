@@ -600,12 +600,17 @@ function paintConfetti(ctx, W, H, t, seed, k) {
 // ── landing celebrate (owner 2026-10-19: "the building should fall in and when it touches
 // down it should be a confetti explosion from that source") — staged + deterministic:
 //   t < LAND_TD   the upgraded building drops onto its plot (gravity ease-in, ground shadow
-//                 grows as it closes), the scene build omitted it so the plot reads empty
+//                 grows as it closes), the scene build omitted it so the plot reads empty.
+//                 If the celebrate replaced an EXISTING building (fall.old), the old main
+//                 sprite sinks into the ground over the same window (owner: "the old one
+//                 should move into the ground as the new one comes in") — clipped at its
+//                 own rest base line so the earth visibly swallows it, shadow fading out.
 //   t = LAND_TD   squash frame + dust ring + soft gold flash
 //   t > LAND_TD   confetti BURSTS radially FROM the building (source-based, iso-compressed,
 //                 gravity droop) — not the card-wide rain
-// `fall` = { name, wx, wz, sc, flip, dx, dz } — the main sprite of the celebrated structure,
-// recorded by the scene build. Returns false when it cannot draw → caller falls back to rain.
+// `fall` = { name, wx, wz, sc, flip, dx, dz, old? } — the main sprite of the celebrated
+// structure (+ the replaced building's main sprite as `old`), recorded by the scene build.
+// Returns false when it cannot draw → caller falls back to rain.
 const LAND_TD = 0.42;
 async function paintLanding(ctx, w, W, H, t, seed, k, fall) {
     const meta = spriteMeta(fall.name, w.viewKey);
@@ -619,6 +624,18 @@ async function paintLanding(ctx, w, W, H, t, seed, k, fall) {
     const u = Math.max(0, Math.min(1, t / LAND_TD));
     const landed = t >= LAND_TD;
     const yOff = landed ? 0 : -(1 - u * u) * DROP;                    // gravity ease-in
+    // the replaced building (upgrade of an existing one) — resolved up front so its fading
+    // shadow sits under the incoming one's, while its walls draw over the ground
+    let om = null, oImg = null, oShImg = null, oX = 0, oY = 0;
+    if (fall.old && t < LAND_TD) {
+        om = spriteMeta(fall.old.name, w.viewKey);
+        oImg = om ? await loadSprite(biomeFile(om.file, w.biome, w.viewKey), w.viewKey) : null;
+        if (om && oImg) {
+            oX = w.proj(fall.old.wx, fall.old.wz, 0).x;
+            oY = w.proj(fall.old.wx, fall.old.wz, 0).y;
+            if (om.sh) oShImg = await loadSprite(biomeFile(om.sh.file, w.biome, w.viewKey), w.viewKey);
+        } else om = null;
+    }
     const drawIt = (m, image, px, py, sc, flip, alpha, sx = 1, sy = 1) => {
         const axpx = (flip ? (m.w - m.ax) : m.ax) * k * sc;
         ctx.save();
@@ -629,9 +646,24 @@ async function paintLanding(ctx, w, W, H, t, seed, k, fall) {
         ctx.drawImage(image, -m.ax * k * sc, -m.ay * k * sc, m.w * k * sc, m.h * k * sc);
         ctx.restore();
     };
+    // the old building's shadow pools out as it sinks (gone by touchdown)
+    if (om && oShImg) drawIt(om.sh, oShImg, oX, oY, fall.old.sc, fall.old.flip, 0.62 * (1 - u));
     // ground shadow: small + faint high up, full + firm at touchdown (and for the rest of the loop)
     if (shImg && t < LAND_TD) drawIt(meta.sh, shImg, X, Y, fall.sc * (1 + 0.4 * (1 - u)), fall.flip, 0.14 + 0.5 * u);
     else if (shImg) drawIt(meta.sh, shImg, X, Y, fall.sc, fall.flip, 0.62);
+    // the old structure sinks into the earth: straight down, clipped at its own rest base
+    // line so the ground swallows it bottom-first — fully gone as the new one touches down
+    if (om) {
+        const sink = (om.h * k * fall.old.sc + 2) * u;
+        const halfW = om.w * k * fall.old.sc + 8 * k * 2;
+        const groundLine = oY + (om.h - om.ay) * k * fall.old.sc + 1;  // where the old walls meet the dirt
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(oX - halfW, -2, halfW * 2, Math.max(0, groundLine + 2));
+        ctx.clip();
+        drawIt(om, oImg, oX, oY + sink, fall.old.sc, fall.old.flip, 1);
+        ctx.restore();
+    }
     // the building itself (drawn every frame — the scene has no copy of it)
     {
         let sx = 1, sy = 1;
