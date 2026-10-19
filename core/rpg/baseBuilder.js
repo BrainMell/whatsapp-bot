@@ -273,7 +273,7 @@ async function cmdBuild(ctx, rec, args) {
             economy.addMoney(ctx.senderJid, lv1.price, `Base: refund ${lv1.name}`);
             return ctx.reply('🔥 The builders returned your ZENI (ledger write failed). Nothing was lost — try again.');
         }
-        return viewBase(ctx, { celebrate: { type: st.type, x: st.x, y: st.y, level: st.level }, hint: `The *${lv1.name}* rises on plot #${plot.id}!` });
+        return viewBase(ctx, { celebrate: { type, x: plot.x, y: plot.y, level: 1 }, hint: `The *${lv1.name}* rises on plot #${plot.id}!` });
     } finally {
         opLocks.delete(ctx.senderJid);
     }
