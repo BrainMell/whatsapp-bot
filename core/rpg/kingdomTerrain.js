@@ -181,7 +181,10 @@ function populate(S, w, o) {
             w.put(pickOf(par.trees), c, r, { flip: rng() < 0.5 }); o.claim(c, r); stats.forest.push([c, r]);
         } else if (par.fields && fields < 5 && d <= 7 && e < 0.5 && m > 0.3 && x < 0.5) {
             w.put('building_grain', c, r, { layer: 'flat' }); o.claim(c, r); fields++; stats.field.push([c, r]);
-        } else if (par.fields && !windmill && d <= 7 && e < 0.5 && x < 0.62) {
+        } else if (!windmill && d <= 9 && e < 0.52 && x < 0.62) {
+            // owner 2026-10-19 "utilise all the 3d assets": every realm gets its mill —
+            // the windmill is a landmark of the realm, not a farm-belt-only piece.
+            // (populate only sees ring >= wallRing, so the band must reach past ring 7)
             windmill = [c, r]; w.put(o.B('windmill'), c, r); o.claim(c, r);
         } else if (par.fields && !farmHome && d <= 7 && e < 0.5 && x < 0.75) {
             farmHome = true; w.put(o.B('home_A'), c, r, { flip: true }); o.claim(c, r);

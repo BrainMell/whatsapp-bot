@@ -218,12 +218,17 @@ function buildWorld(state, cel = null) {
 
     }
 
-    // ── wall ring + south gate ──
+    // ── wall ring + south gate + north postern ──
     const ringCells = K.ring(CC, CR, WALL_RING);
     const gateRow = CR + WALL_RING;
     const gateCell = ringCells.filter(([, r]) => r === gateRow).sort((a, b) => Math.abs(a[0] - CC) - Math.abs(b[0] - CC))[0];
+    // the pack's diverse gates (owner 2026-10-19): the stone gatehouse guards the south
+    // road, and a quiet wall-straight-gate postern sits in the north wall behind the keep
+    const postern = ringCells.filter(([, r]) => r === CR - WALL_RING).sort((a, b) => Math.abs(a[0] - CC) - Math.abs(b[0] - CC))[0];
+    const gateSet = new Set([key(gateCell[0], gateCell[1])]);
+    if (postern && key(postern[0], postern[1]) !== key(gateCell[0], gateCell[1])) gateSet.add(key(postern[0], postern[1]));
     for (const [c, r] of ringCells) claim(c, r);
-    w.layWall(ringCells, { closed: true, gates: new Set([key(gateCell[0], gateCell[1])]), outside: true });
+    w.layWall(ringCells, { closed: true, gates: gateSet, outside: true });
 
     // ── roads: gate → castle avenue + spur to each facility/plot + road out of the gate ──
     const mainRoad = K.hexLine(gateCell[0], gateCell[1], CC, CR);
@@ -353,10 +358,52 @@ function buildWorld(state, cel = null) {
         inside.push([c, r, d, angleDeg(c, r)]);
     }
     const takeIn = (pred) => { const i = inside.findIndex((q) => !used.has(key(q[0], q[1])) && pred(q)); if (i < 0) return null; return inside[i]; };
-    const mk = takeIn((q) => q[2] === 4 && ang(q[3]) > 20 && ang(q[3]) < 80);            // market square, (mirrored) south-east
-    if (mk) { w.put('building_dirt', mk[0], mk[1], { layer: 'flat' }); w.put(B('market'), mk[0], mk[1]); claim(mk[0], mk[1]); }
+    const mk = takeIn((q) => q[2] === 4 && ang(q[3]) > 20 && ang(q[3]) < 80)              // market square, (mirrored) south-east
+        || takeIn((q) => q[2] >= 4 && q[2] <= 5 && ang(q[3]) > 20 && ang(q[3]) < 80);     // fallback: the same band one ring out
+    if (mk) {
+        w.put('building_dirt', mk[0], mk[1], { layer: 'flat' }); w.put(B('market'), mk[0], mk[1]); claim(mk[0], mk[1]);
+        // market-day clutter: the pack's long crates, pallet and sacks around the market hall
+        w.put('crate_long_B', mk[0], mk[1], { dx: -1.3, dz: 0.4 }); w.put('sack', mk[0], mk[1], { dx: 1.2, dz: 0.6 });
+        w.put('pallet', mk[0], mk[1], { dx: 0.25, dz: 1.1 });
+        if (rng() < 0.6) w.put('crate_long_A', mk[0], mk[1], { dx: 1.35, dz: -0.45 });
+    }
     const wl = takeIn((q) => q[2] === 4 && ang(q[3]) > 100 && ang(q[3]) < 160);          // well, (mirrored) south-west
     if (wl) { w.put(B('well'), wl[0], wl[1]); w.put('barrel', wl[0], wl[1], { dx: 0.5, dz: 0.3 }); claim(wl[0], wl[1]); }
+    // the guard's yard: a barracks stands beside the gate road in EVERY guild ("maybe some
+    // barracks in the guild area" — owner 2026-10-19); a second joins once the keep is a castle
+    const gb = takeIn((q) => q[2] >= 4 && q[2] <= 5 && ang(q[3]) > 76 && ang(q[3]) < 104)
+        || takeIn((q) => q[2] >= 3 && q[2] <= 5 && ang(q[3]) > 70 && ang(q[3]) < 110);
+    if (gb) {
+        w.put('building_dirt', gb[0], gb[1], { layer: 'flat' });
+        w.put(B('barracks'), gb[0], gb[1], { sc: 0.92 });
+        w.put('weaponrack', gb[0], gb[1], { dx: 1.15, dz: 0.55 }); w.put('barrel', gb[0], gb[1], { dx: -1.1, dz: 0.7 });
+        claim(gb[0], gb[1]);
+    }
+    if (hall >= 4) {
+        const gb2 = takeIn((q) => q[2] >= 3 && q[2] <= 5 && ang(q[3]) > 60 && ang(q[3]) < 120);
+        if (gb2) {
+            w.put('building_dirt', gb2[0], gb2[1], { layer: 'flat' });
+            w.put(B('barracks'), gb2[0], gb2[1], { sc: 0.9, flip: true }); w.put('weaponrack', gb2[0], gb2[1], { dx: -1.15, dz: 0.5 });
+            claim(gb2[0], gb2[1]);
+        }
+    }
+    // drill lawn: even before the training ground is built, targets and arrow buckets sit out on the green
+    if (train < 2) {
+        const dl = takeIn((q) => q[2] >= 3 && q[2] <= 5 && ang(q[3]) > 14 && ang(q[3]) < 70);
+        if (dl) {
+            w.put('building_dirt', dl[0], dl[1], { layer: 'flat', sc: 0.9 });
+            w.put('target', dl[0], dl[1], { dx: -0.45, dz: 0.15 }); w.put('bucket_arrows', dl[0], dl[1], { dx: 0.6, dz: 0.5 });
+            w.put('weaponrack', dl[0], dl[1], { dx: 0.1, dz: -0.65 });
+            claim(dl[0], dl[1]);
+        }
+    }
+    // festival stage on the (mirrored) north-east lawn — the pack's stage pieces were still idle
+    const stg = takeIn((q) => q[2] >= 3 && q[2] <= 4 && (ang(q[3]) > 318 || ang(q[3]) < 12));
+    if (stg) {
+        w.put(['building_stage_A', 'building_stage_B', 'building_stage_C'][Math.floor(rng() * 3)], stg[0], stg[1]);
+        w.put('flag_' + team, stg[0], stg[1], { dx: 0.85, dz: 0.5 });
+        claim(stg[0], stg[1]);
+    }
     let nf = 0;
     for (const q of inside) {                                                            // fields in the (mirrored) north band, ring 5
         const a2 = ang(q[3]);

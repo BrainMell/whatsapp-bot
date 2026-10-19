@@ -359,7 +359,32 @@ function buildWorld(state, cel = null) {
                 if (d < bd) { bd = d; best = keyOf(c, r) + ',' + e; }
             }
         }
-        w.layFenceEdges(inside, { gateAt: (c, r, e) => `${c},${r},${e}` === best });
+        // the hunting walk's gate into the woods (LAYOUT v3 law: lanes terminate at
+        // destinations — the west walk ends at the palisade, so the fence gets a REAL
+        // gate piece there instead of a mute fence line, owner "diverse gates" 2026-10-19)
+        let walkGate = null;
+        {
+            const we = K.hexWorld(...hc(2, LAYOUT.hunting.walkY));
+            let wc = null, wd = 1e9;
+            for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+                if (!inside(c, r) || ringDist(c, r) !== FAR_R - 1 || w.cell[r][c].water) continue;
+                const ww = K.hexWorld(c, r), d = Math.hypot(ww.x - we.x, ww.z - we.z);
+                if (d < wd) { wd = d; wc = [c, r]; }
+            }
+            if (wc && (!best || keyOf(wc[0], wc[1]) !== best.split(',').slice(0, 2).join(','))) {
+                let bn = null, bx = 1e9;                                   // gate on the edge opening west into the woods
+                for (let e = 0; e < 6; e++) {
+                    const nb = K.neighbor(wc[0], wc[1], e);
+                    if (inside(nb[0], nb[1])) continue;
+                    const nk = w.at(nb[0], nb[1]);
+                    if (!nk || nk.water || nk.river) continue;
+                    const nx = K.hexWorld(nb[0], nb[1]).x;
+                    if (nx < bx) { bx = nx; bn = e; }
+                }
+                if (bn != null) walkGate = `${wc[0]},${wc[1]},${bn}`;
+            }
+        }
+        w.layFenceEdges(inside, { gateAt: (c, r, e) => `${c},${r},${e}` === best || `${c},${r},${e}` === walkGate });
         if (best && K.hasSprite('struct_gate_90', 'iso')) {                   // the village entrance: a stone gatehouse spanning the palisade gap
             const [gc, gr, ge] = best.split(',').map(Number); const nbG = K.neighbor(gc, gr, ge);
             const a0 = K.hexWorld(gc, gr), a1 = K.hexWorld(nbG[0], nbG[1]);
@@ -422,7 +447,8 @@ function buildWorld(state, cel = null) {
             const story = FARM ? (farmGrain ? 'grain' : 'grove') : 'caravan';
             for (const [c, r] of [[sc0, sr0], ...[0, 1, 2, 3, 4, 5].map((d) => K.neighbor(sc0, sr0, d))]) {
                 if (!freeCell(c, r) || n >= 5) continue;
-                if (story === 'grain') w.put('building_grain', c, r, { sc: 1.0 });
+                if (story === 'grain' && n === 0) w.put(K.houseName(rng, biome, { view: 'iso', farm: true, kinds: ['barn'] }) || 'house_barn_red', c, r, { sc: 1.12, flip: flip() });   // the farm gets its barn (unused pack asset)
+                else if (story === 'grain') w.put('building_grain', c, r, { sc: 1.0 });
                 else if (story === 'grove') w.put(SMALL_TREES[Math.floor(rng() * 4)], c, r, { sc: 0.85, flip: flip() });
                 else if (n === 0) { w.put('tent', c, r, { sc: 1.25 }); w.put('crate_A_big', c, r, { dx: 1.0, dz: 0.8 }); }
                 else if (n === 1) w.put('resource_stone', c, r, { dx: 0.3, dz: 0.2 });
