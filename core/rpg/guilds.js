@@ -135,6 +135,14 @@ async function loadGuilds() {
             emblem: g.emblem || { icon: null, color: '#FFD700' },
         };
 
+        // FIX (2026-10-19): rebuild the guildOwners index from each guild
+        // doc's leader field. The System.guild_system copy can go stale (QA
+        // wipes, partial saves, the @lid migration) and isGuildOwner() keys
+        // off it - a missing entry made the REAL leader hit "Only the guild
+        // leader can set the emblem" after every restart. g.leader is the
+        // source of truth; syncGuildSystem() below persists the rebuild.
+        if (g.leader) globalGuildData.guildOwners[g.leader] = g.guildId;
+
         // Clean up memberGuilds - make sure every member is mapped
         for (const m of members) {
           if (!globalGuildData.memberGuilds[m]) {
@@ -928,11 +936,60 @@ async function setMemberRole(ownerJid, targetJid, newRole) {
 }
 
 function isGuildOwner(userJid) {
+  if (!userJid) return false;
+  const info = globalGuildData;
   // 💡 QA FIX: check direct + loose match for LID/phone format tolerance
-  if (globalGuildData.guildOwners[userJid]) return true;
+  if (info.guildOwners[userJid]) return true;
   const phone = userJid.split('@')[0];
-  for (const jid of Object.keys(globalGuildData.guildOwners)) {
+  for (const jid of Object.keys(info.guildOwners)) {
     if (jid.split('@')[0] === phone || jid.includes(phone) || userJid.includes(jid.split('@')[0])) return true;
+  }
+  let resolver = null;
+  try { resolver = require('../utils/lidResolver'); } catch (e) { resolver = null; }
+  // FIX (2026-10-19): the guildOwners index can go stale between loads -
+  // compare every indexed owner against the sender through canonicalRankKey
+  // so an @lid stored leader still matches an @s.whatsapp.net sender and
+  // vice versa. The index itself is rebuilt in loadGuilds().
+  if (resolver) {
+    try {
+      const canon = resolver.canonicalRankKey(userJid);
+      if (canon) {
+        for (const [jid, gName] of Object.entries(info.guildOwners)) {
+          if (gName && resolver.canonicalRankKey(jid) === canon) return true;
+        }
+      }
+    } catch (e) { /* fall through to the per-guild check below */ }
+  }
+  // Final authority: the stored leader of the user's OWN guild. Probe
+  // memberGuilds with every JID form we can derive for the sender (@lid,
+  // phone, canonical, resolved) so a leader whose messages arrive in the
+  // other format still resolves to their membership.
+  const memberKeys = [userJid];
+  if (resolver) {
+    try {
+      const canon = resolver.canonicalRankKey(userJid);
+      if (canon) memberKeys.push(canon);
+      const mapping = resolver.getMapping(userJid);
+      if (mapping && mapping.lid) memberKeys.push(mapping.lid + '@lid');
+      if (mapping && mapping.phone) memberKeys.push(mapping.phone + '@s.whatsapp.net');
+      const resolved = resolver.resolveJid(userJid);
+      if (resolved) memberKeys.push(resolved);
+    } catch (e) { /* raw jid is still in memberKeys */ }
+  }
+  for (const key of memberKeys) {
+    const gName = info.memberGuilds[key];
+    const guild = gName ? info.guilds[gName] : null;
+    if (!guild || !guild.owner) continue;
+    if (guild.owner === userJid || memberKeys.includes(guild.owner)) return true;
+    if (resolver) {
+      try {
+        if (resolver.canonicalRankKey(guild.owner) === resolver.canonicalRankKey(userJid)) return true;
+        if (resolver.resolveJid(guild.owner) === userJid) return true;
+        if (resolver.resolveJid(userJid) === guild.owner) return true;
+      } catch (e) { /* digit match below is the net */ }
+    }
+    const op = guild.owner.split('@')[0];
+    if (op === phone || guild.owner.includes(phone) || userJid.includes(op)) return true;
   }
   return false;
 }
