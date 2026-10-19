@@ -35,6 +35,10 @@ const {
   runPowerscaleCommand,
   sendCard,
 } = require('./utils/powerscale');
+// 🎧 LIST-FIRST audio (owner 2026-10-19): searches show a numbered
+// title/author/length list; a numeric reply plays that exact video via the
+// Go service URL-mode. Legacy single-shot chain stays as fallback.
+const audioPicker = require('./utils/audioPicker');
 const classSystem = require('./rpg/classSystem');
 
 // Global map to track connection health of bot instances
@@ -10639,7 +10643,32 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                         });
                       }
                       return;
-                    } else {
+                    }
+                    // 🎧 LIST-FIRST audio pick (owner 2026-10-19): a number while
+                    // an audio pick list is up selects that song — the Go
+                    // service URL-mode downloads the EXACT video, no re-search
+                    // guessing. Session stays alive until TTL so the user can
+                    // switch picks ("actually 2 instead").
+                    if (audioPicker.hasPendingAudioSelection(chatId)) {
+                      await sock.sendMessage(chatId, { react: { text: "⏳", key: m.key } });
+                      const pick = audioPicker.resolveAudioPick(chatId, numOnly[1]);
+                      if (!pick.ok) {
+                        if (pick.reason === "expired") {
+                          await sock.sendMessage(chatId, { react: { text: "⌛", key: m.key } });
+                          return await sock.sendMessage(chatId, { text: BOT_MARKER + "🎧 That pick list expired — search again." });
+                        }
+                        if (pick.reason === "searching") {
+                          return await sock.sendMessage(chatId, { text: BOT_MARKER + "🎧 Still searching — one moment, then reply with your number." });
+                        }
+                        await sock.sendMessage(chatId, { react: { text: "🔢", key: m.key } });
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + `🎧 Pick a number between 1-${pick.max}.` });
+                      }
+                      await sock.sendMessage(chatId, { react: { text: "🎵", key: m.key } });
+                      // exact-video download + send (Go URL-mode inside)
+                      await handleAudioCommand(sock, chatId, pick.videoUrl, m);
+                      return;
+                    }
+                    {
                     const idx = parseInt(numOnly[1], 10);
                     let cached = null;
                     const quotedId = getQuotedMessageId(m);
@@ -10707,7 +10736,7 @@ _💡 Reply with another number from your search list!_`.trim();
                       );
                       return;
                     }
-                    } // end else (no pending powerscale)
+                    } // end (no pending powerscale / audio)
                   }
 
                   // ── CORE COMMAND INTERCEPT ──────────────────
@@ -12753,6 +12782,24 @@ _💡 Reply with another number from your search list!_`.trim();
                         await handleAudioCommand(sock, chatId, themeQuery, m);
                         return;
                       }
+                      // v3.1 bypass: a pasted YouTube URL plays exactly that
+                      // video — no pick list in between.
+                      if (/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)/i.test(query)) {
+                        await handleAudioCommand(sock, chatId, query, m);
+                        return;
+                      }
+                      // 🎧 LIST-FIRST (owner 2026-10-19): numbered candidates
+                      // (title / author / length), the reply number picks the
+                      // song. Legacy chain only when YouTube lists nothing —
+                      // Deezer/Saavn/SoundCloud-only songs must still play.
+                      const listed = await audioPicker.runAudioSearch(
+                        sock,
+                        chatId,
+                        query,
+                        m,
+                        { botMarker: BOT_MARKER, prefix: currentPrefix },
+                      );
+                      if (listed) return;
                       await handleAudioCommand(sock, chatId, query, m);
                       return;
                     }
