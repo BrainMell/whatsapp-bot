@@ -168,3 +168,8 @@ use them). Old scripts pointing at the scrapped renderers were removed.
 
 QA: `node scripts/qa_continents.js` — geometry against the chart masks, markers and
 hamlets on land, determinism, name resolution both ways.
+
+## 2026-10-19 — life layer v2, houses, Mines/Med Bay, wider citadel
+- `scripts/kingdom3d/houses.py`: procedural 3D houses (7 kinds x roof colours, `K.houseName`) + dedicated Mines (cave / timber / deep headframe) and Med Bay (tent / infirmary / sanatorium) models. Rebake just these: `KK_ONLY=house_,struct_ [KK_YAW=45] python3 -I scripts/kingdom3d/bake_kingdom_sprites.py`.
+- `core/rpg/ambient.js`: loop-safe birds with shadows, villagers on roads, sailboats; 20-frame (2 s) loops.
+- Guild citadel wall moved from ring 4 to ring 6 (`WALL_RING`): six corner towers, market, well, fields, orchard, up to 24 member cottages spread over rings 2-5.

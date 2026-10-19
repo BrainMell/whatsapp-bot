@@ -69,7 +69,7 @@ const ARCH = {
 
 // ── layout (hex coords, odd-r) ────────────────────────────────────────────
 const step = (c, r, dir, n) => { let p = [c, r]; for (let i = 0; i < n; i++) p = K.neighbor(p[0], p[1], dir); return p; };
-const WALL_RING = 4;
+const WALL_RING = 6;          // the citadel covers a wide district: wall on ring 6 (was 4)
 // build plots: five numbered sites on the ring-3 band (training/treasury own the E/W ones)
 const SLOT = {
     hall: [CC, CR],
@@ -139,7 +139,7 @@ function buildWorld(state) {
     let S = null;
     if (land) {
         // land biomes: ragged haze-edged silhouette, lakes/lava pools, optional river (no sea)
-        S = KT.shape(w, { seed, biome, CC, CR, keepR: 5, wallRing: WALL_RING, angleDeg, cdist });
+        S = KT.shape(w, { seed, biome, CC, CR, keepR: WALL_RING + 1, wallRing: WALL_RING, angleDeg, cdist });
         riverCells = S.riverCells;
     } else {
         // ── island silhouette (per-guild noise) ──
@@ -279,20 +279,46 @@ function buildWorld(state) {
     // ── numbered build plots ──
     for (const p of GUILD_PLOTS) { plotMarker(p.c, p.r, String(p.id)); claim(p.c, p.r); }
 
-    // ── member hamlet: one cottage per member (cap 12 on the plots' inner band) ──
-    const hamlet = [];
-    for (let d = 1; d <= 3; d++) for (const [c, r] of K.ring(CC, CR, d)) {
-        if (used.has(key(c, r)) || !w.inb(c, r) || w.cell[r][c].water) continue;
-        const a = angleDeg(c, r);
-        if (a > 20 && a < 160) hamlet.push([c, r, d]);            // the southern half faces the viewer
+    // ── corner towers on the six wall corners (the ring is now wide enough to read as a fortress) ──
+    for (let d = 0; d < 6; d++) {
+        const [tcc, trr] = step(CC, CR, d, WALL_RING);
+        if (!w.inb(tcc, trr) || w.cell[trr][tcc].water) continue;
+        w.put(B('tower_A'), tcc, trr, { sc: 0.78, sort: 0.5 });
     }
-    hamlet.sort((a, b) => (a[2] - b[2]) * 2 + (rng() - 0.5));
-    const homeN = Math.min(members, 12, hamlet.length);
-    for (let i = 0; i < homeN; i++) {
+
+    // ── the district inside the walls: market, well, fields, orchard, then one cottage per member (cap 24) ──
+    const inside = [];
+    for (let d = 1; d < WALL_RING; d++) for (const [c, r] of K.ring(CC, CR, d)) {
+        if (used.has(key(c, r)) || !w.inb(c, r) || w.cell[r][c].water || w.cell[r][c].river) continue;
+        inside.push([c, r, d, angleDeg(c, r)]);
+    }
+    const takeIn = (pred) => { const i = inside.findIndex((q) => !used.has(key(q[0], q[1])) && pred(q)); if (i < 0) return null; return inside[i]; };
+    const mk = takeIn((q) => q[2] === 4 && q[3] > 20 && q[3] < 80);                      // market square, south-east
+    if (mk) { w.put('building_dirt', mk[0], mk[1], { layer: 'flat' }); w.put(B('market'), mk[0], mk[1]); claim(mk[0], mk[1]); }
+    const wl = takeIn((q) => q[2] === 4 && q[3] > 100 && q[3] < 160);                    // well, south-west
+    if (wl) { w.put(B('well'), wl[0], wl[1]); w.put('barrel', wl[0], wl[1], { dx: 0.5, dz: 0.3 }); claim(wl[0], wl[1]); }
+    let nf = 0;
+    for (const q of inside) {                                                            // fields on the north side, ring 5
+        if (nf >= 5 || used.has(key(q[0], q[1])) || q[2] < 5 || q[3] < 215 || q[3] > 325) continue;
+        if (rng() < 0.55) { w.put('building_grain', q[0], q[1], { layer: 'flat' }); claim(q[0], q[1]); nf++; }
+    }
+    const hamlet = inside.filter((q) => !used.has(key(q[0], q[1])) && (q[3] > 20 && q[3] < 160 ? q[2] >= 1 : q[2] >= 4));
+    for (const q of hamlet) q.k = Math.abs(q[2] - 4) * 0.7 + rng() * 2.4;                // spread over rings 3-5, not a clump at the keep
+    hamlet.sort((a, b) => a.k - b.k);
+    const placed = [];
+    const homeN = Math.min(members, 24, hamlet.length);   // (spacing may place fewer on a small guild map)
+    for (let i = 0, got = 0; got < homeN && i < hamlet.length; i++) {
         const [c, r] = hamlet[i];
-        w.put(K.houseName(rng, w.biome || 'isle', { view: 'top', shop: false }) || B(i % 3 === 1 ? 'home_B' : 'home_A'), c, r, { flip: i % 2 === 1 });   // 7 procedural house kinds, roofs per realm
+        if (placed.some(([pc, pr]) => K.hexDist(pc, pr, c, r) < 2)) continue;           // keep a lane of air between cottages
+        placed.push([c, r]); got++;
+        w.put(K.houseName(rng, w.biome || 'isle', { view: 'top', shop: i % 5 === 0 }) || B(i % 3 === 1 ? 'home_B' : 'home_A'), c, r, { flip: i % 2 === 1 });
+        if (hamlet[i][2] >= 4 && rng() < 0.5) w.put(['barrel', 'crate_A_small', 'sack', 'bucket_water'][Math.floor(rng() * 4)], c, r, { dx: 0.6, dz: 0.5 });
         claim(c, r);
-        if (i < 6) { const wcH = K.hexWorld(c, r); smokeAnchors.push({ x: wcH.x + (i % 2 ? -0.35 : 0.35), z: wcH.z + 0.1, h: 1.65 }); }
+        if (got <= 8) { const wcH = K.hexWorld(c, r); smokeAnchors.push({ x: wcH.x + (i % 2 ? -0.35 : 0.35), z: wcH.z + 0.1, h: 1.65 }); }
+    }
+    for (const q of inside) {                                                            // orchard / garden trees in the gaps
+        if (used.has(key(q[0], q[1])) || q[2] < 3 || rng() > 0.3) continue;
+        w.put(['trees_A_medium', 'trees_B_medium', 'tree_single_A', 'tree_single_B'][Math.floor(rng() * 4)], q[0], q[1], { flip: rng() < 0.5, sc: 0.85 }); claim(q[0], q[1]);
     }
 
     // ── the wilds (outside the wall) ──
