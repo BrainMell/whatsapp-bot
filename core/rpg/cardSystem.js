@@ -14,6 +14,16 @@ const path    = require('path');
 const axios   = require('axios');
 const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
 
+// BUILD MARKER (47-k5, 2026-10-19): proves which build the RUNNING process
+// loaded. Incident 47-k5: a pm2 restart fired inside a git-reset window
+// (18:08:02-18:10:02) so the process served the pre-fix cardSystem all day
+// while the disk file was already fixed. If the file mtime printed below is
+// NEWER than the process start time in future logs -> stale-process incident.
+try {
+  const __buildMtime = fs.statSync(__filename).mtime.toISOString();
+  console.log(`[cardSystem] BUILD einfo-v3 (8d806270a) loaded | pid=${process.pid} | file mtime=${__buildMtime} | loaded at ${new Date().toISOString()}`);
+} catch (e) { console.log('[cardSystem] BUILD marker stat failed: ' + e.message); }
+
 // ── Mongoose Models ──────────────────────────────────────────────────────────
 const CardStat   = require('../models/CardStat');
 const UserCard   = require('../models/UserCard');
