@@ -597,10 +597,105 @@ function paintConfetti(ctx, W, H, t, seed, k) {
     ctx.restore();
 }
 
+// ── landing celebrate (owner 2026-10-19: "the building should fall in and when it touches
+// down it should be a confetti explosion from that source") — staged + deterministic:
+//   t < LAND_TD   the upgraded building drops onto its plot (gravity ease-in, ground shadow
+//                 grows as it closes), the scene build omitted it so the plot reads empty
+//   t = LAND_TD   squash frame + dust ring + soft gold flash
+//   t > LAND_TD   confetti BURSTS radially FROM the building (source-based, iso-compressed,
+//                 gravity droop) — not the card-wide rain
+// `fall` = { name, wx, wz, sc, flip, dx, dz } — the main sprite of the celebrated structure,
+// recorded by the scene build. Returns false when it cannot draw → caller falls back to rain.
+const LAND_TD = 0.42;
+async function paintLanding(ctx, w, W, H, t, seed, k, fall) {
+    const meta = spriteMeta(fall.name, w.viewKey);
+    if (!meta) return false;
+    const img = await loadSprite(biomeFile(meta.file, w.biome, w.viewKey), w.viewKey);
+    if (!img) return false;
+    const shImg = meta.sh ? await loadSprite(biomeFile(meta.sh.file, w.biome, w.viewKey), w.viewKey) : null;
+    const X = w.proj(fall.wx, fall.wz, 0).x;
+    const Y = w.proj(fall.wx, fall.wz, 0).y;
+    const DROP = Math.max(H * 0.45, 300);
+    const u = Math.max(0, Math.min(1, t / LAND_TD));
+    const landed = t >= LAND_TD;
+    const yOff = landed ? 0 : -(1 - u * u) * DROP;                    // gravity ease-in
+    const drawIt = (m, image, px, py, sc, flip, alpha, sx = 1, sy = 1) => {
+        const axpx = (flip ? (m.w - m.ax) : m.ax) * k * sc;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+        ctx.translate(px + axpx, py);
+        if (flip) ctx.scale(-1, 1);
+        ctx.scale(sx, sy);
+        ctx.drawImage(image, -m.ax * k * sc, -m.ay * k * sc, m.w * k * sc, m.h * k * sc);
+        ctx.restore();
+    };
+    // ground shadow: small + faint high up, full + firm at touchdown (and for the rest of the loop)
+    if (shImg && t < LAND_TD) drawIt(meta.sh, shImg, X, Y, fall.sc * (1 + 0.4 * (1 - u)), fall.flip, 0.14 + 0.5 * u);
+    else if (shImg) drawIt(meta.sh, shImg, X, Y, fall.sc, fall.flip, 0.62);
+    // the building itself (drawn every frame — the scene has no copy of it)
+    {
+        let sx = 1, sy = 1;
+        if (landed && t < LAND_TD + 0.07) {                            // touchdown squash, easing back
+            const q = Math.sin(Math.PI * (t - LAND_TD) / 0.07);
+            sx = 1 + 0.10 * q; sy = 1 - 0.12 * q;
+        }
+        drawIt(meta, img, X, Y + yOff, fall.sc, fall.flip, 1, sx, sy);
+    }
+    if (landed) {
+        // dust ring + soft flash at touchdown
+        const dph = (t - LAND_TD + 0.02) / 0.16;
+        if (dph > 0 && dph < 1) {
+            ctx.save();
+            ctx.globalAlpha = (1 - dph) * 0.55;
+            ctx.strokeStyle = '#cbb98a'; ctx.lineWidth = Math.max(2, (3.5 - 2.5 * dph) * k * 2);
+            ctx.beginPath(); ctx.ellipse(X, Y, (26 + dph * 150) * k * 2, (11 + dph * 62) * k * 2, 0, 0, Math.PI * 2); ctx.stroke();
+            ctx.globalAlpha = (1 - dph) * 0.30;
+            ctx.beginPath(); ctx.ellipse(X, Y, (12 + dph * 90) * k * 2, (5 + dph * 36) * k * 2, 0, 0, Math.PI * 2); ctx.stroke();
+            ctx.restore();
+        }
+        const fph = (t - LAND_TD) / 0.06;
+        if (fph >= 0 && fph < 1) {
+            ctx.save();
+            const g = ctx.createRadialGradient(X, Y, 0, X, Y, (70 + fph * 170) * k * 2);
+            g.addColorStop(0, 'rgba(255,243,196,' + (0.38 * (1 - fph)).toFixed(3) + ')');
+            g.addColorStop(1, 'rgba(255,243,196,0)');
+            ctx.fillStyle = g;
+            ctx.fillRect(X - 260 * k * 2, Y - 200 * k * 2, 520 * k * 2, 400 * k * 2);
+            ctx.restore();
+        }
+        // THE BURST — confetti explodes radially from the building, then droops and fades
+        if (t > LAND_TD + 0.02) {
+            const age = (t - LAND_TD) / (1 - LAND_TD);
+            const spread = 1 - Math.pow(1 - Math.min(1, age * 1.5), 2);       // fast out, ease-off
+            ctx.save();
+            for (let i = 0; i < 76; i++) {
+                const r1 = mulberry32(seed + 101 + i)(), r2 = mulberry32(seed + 331 + i)(), r3 = mulberry32(seed + 551 + i)();
+                const ang = r1 * Math.PI * 2;
+                const dist = (110 + r3 * 310) * k * 2 * spread * (0.3 + 0.7 * r2);
+                const gx = X + Math.cos(ang) * dist;
+                const gy = Y + Math.sin(ang) * dist * 0.5                      // iso-compressed vertical spread
+                    + age * age * 210 * k * 2 * (0.35 + r3 * 0.65)              // gravity droop
+                    - (1 - Math.min(1, age * 4)) * 40 * k * 2 * r2;             // initial up-kick
+                const alpha = Math.max(0, 1 - age * 1.02);
+                if (alpha <= 0.03) continue;
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = CONFETTI_COLS[i % CONFETTI_COLS.length];
+                const s = (11 + r3 * 13) * k * 2;
+                ctx.translate(gx, gy); ctx.rotate((t * 4 + r1 * 7) * Math.PI * 2);
+                ctx.fillRect(-s / 2, -s / 4, s, s / 2);
+                ctx.restore();
+            }
+            ctx.restore();
+        }
+    }
+    return true;
+}
+
 module.exports = {
     houseName,
     getView, DIR_ISO, biomeFile, biomeInfo,
-    hexLine, hexPath, paintBackdrop, roundRect, paintConfetti,
+    hexLine, hexPath, paintBackdrop, roundRect, paintConfetti, paintLanding,
     HexWorld, hexWorld, neighbor, dirTo, ring, hexDist, mulberry32, hashStr,
     hasSprite, spriteMeta, loadSprite, tables, DIR, manifest, popcount, rotMask, SQ3,
 };

@@ -273,7 +273,7 @@ async function cmdBuild(ctx, rec, args) {
             economy.addMoney(ctx.senderJid, lv1.price, `Base: refund ${lv1.name}`);
             return ctx.reply('🔥 The builders returned your ZENI (ledger write failed). Nothing was lost — try again.');
         }
-        return viewBase(ctx, { celebrate: true, hint: `The *${lv1.name}* rises on plot #${plot.id}!` });
+        return viewBase(ctx, { celebrate: { type: st.type, x: st.x, y: st.y, level: st.level }, hint: `The *${lv1.name}* rises on plot #${plot.id}!` });
     } finally {
         opLocks.delete(ctx.senderJid);
     }
@@ -312,7 +312,7 @@ async function cmdUpgrade(ctx, rec, args) {
             economy.addMoney(ctx.senderJid, next.price, `Base: refund upgrade ${d.name}`);
             return ctx.reply('🔥 The ledger refused the deed — your ZENI was returned. Try again.');
         }
-        return viewBase(ctx, { celebrate: true, hint: `The *${d.name}* is now *${next.name}* (Lv.${next.level})!` });
+        return viewBase(ctx, { celebrate: { type: st.type, x: st.x, y: st.y, level: next.level }, hint: `The *${d.name}* is now *${next.name}* (Lv.${next.level})!` });
     } finally {
         opLocks.delete(ctx.senderJid);
     }

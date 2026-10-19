@@ -150,6 +150,24 @@ function footprintCells(st, def) {
     for (let i = 0; i < def.fw; i++) for (let j = 0; j < def.fh; j++) out.push(hc(st.x + i, st.y + j));
     return out;
 }
+
+// main sprite of a structure at a level — the one that drops in on a landing celebrate
+// (owner 2026-10-19: "the building should fall in"). null → no fall (pond pier: burst only).
+function mainSpriteOf(st, lvl, team) {
+    const T = st.type;
+    if (T === 'house') return lvl === 1 ? { name: 'building_home_A_' + team, sc: 1.55 } : { name: 'building_home_B_' + team, sc: lvl === 2 ? 1.75 : 2.05 };
+    if (T === 'blacksmith') return { name: 'building_blacksmith_' + team, sc: lvl === 1 ? 1.35 : lvl === 2 ? 1.65 : 1.95 };
+    if (T === 'medbay') {
+        if (K.hasSprite('struct_med_tent', 'iso')) return { name: ['struct_med_tent', 'struct_med_infirmary', 'struct_med_sanatorium'][lvl - 1], sc: lvl === 1 ? 1.9 : lvl === 2 ? 1.65 : 1.5 };
+        return lvl === 1 ? { name: 'tent', sc: 2.1 } : { name: 'building_church_' + team, sc: lvl === 2 ? 1.35 : 1.8 };
+    }
+    if (T === 'alchemy') return lvl === 1 ? { name: 'barrel', sc: 1.6 } : { name: 'building_tavern_' + team, sc: lvl === 2 ? 1.5 : 1.9 };
+    if (T === 'mines') {
+        if (K.hasSprite('struct_mine_cave', 'iso')) return { name: ['struct_mine_cave', 'struct_mine_timber', 'struct_mine_deep'][lvl - 1], sc: lvl === 1 ? 1.95 : lvl === 2 ? 1.7 : 1.45, dx: 0.5, dz: 0.7 };
+        return { name: 'building_mine_' + team, sc: lvl === 1 ? 1.35 : lvl === 2 ? 1.6 : 1.85 };
+    }
+    return null;
+}
 function centroid(cells) {
     let x = 0, z = 0;
     for (const [c, r] of cells) { const w = K.hexWorld(c, r); x += w.x; z += w.z; }
@@ -184,7 +202,7 @@ const WILDS = {
 const ROCKS = 'ABCDE';
 const FAR_R = 12;                                       // fence ring radius (hex cells) around the village green
 
-function buildWorld(state) {
+function buildWorld(state, cel = null) {
     const seedStr = state.owner || 'base';
     const seed = hashStr(seedStr);
     const rng = mulberry32(seed);
@@ -482,6 +500,7 @@ function buildWorld(state) {
 
     // ── structures ──
     const roadWorld = roadList.map(([c, r]) => K.hexWorld(c, r));
+    let fall = null;
     const facing = (cen) => {                                          // sprites bake one facade; mirror it toward the nearest street
         let best = null, bd = 1e9;
         for (const rw of roadWorld) { const d = Math.hypot(rw.x - cen.x, rw.z - cen.z); if (d < bd) { bd = d; best = rw; } }
@@ -496,6 +515,13 @@ function buildWorld(state) {
         const cen = centroid(cells);
         const ff = facing(cen);
         info.push({ st, def, lvl, cen });
+        if (cel && st.type === cel.type && st.x === cel.x && st.y === cel.y) {
+            // the celebrated structure is OMITTED from the scene (plot reads empty); its main
+            // sprite goes to the frame overlay, which drops it in from the sky (paintLanding)
+            const ms = mainSpriteOf(st, lvl, team);
+            if (ms) fall = { name: ms.name, wx: cen.x + (ms.dx || 0), wz: cen.z + (ms.dz || 0), sc: ms.sc, flip: ff };
+            continue;
+        }
         if (st.type !== 'hunting') w.put('building_dirt', 0, 0, { wx: cen.x, wz: cen.z, layer: 'flat', sc: def.fw >= 3 ? 1.9 : 1.2 });
         const P = (n, o = {}) => w.put(n, 0, 0, { wx: cen.x, wz: cen.z, ...(o.dx == null && o.dz == null && !('flip' in o) && (n.startsWith('building_') || n.startsWith('struct_')) ? { flip: ff } : {}), ...o });
         switch (st.type) {
@@ -576,7 +602,7 @@ function buildWorld(state) {
     // water / lava cells (animated in renderFrame)
     const waterCells = [];
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (w.cell[r][c].tile === 'hex_water') waterCells.push([c, r]);
-    return { w, info, plots, team, biome, realm, waterCells };
+    return { w, info, plots, team, biome, realm, waterCells, fall };
 }
 
 function plotOverlay(ctx, w, cen, id, k) {
@@ -625,12 +651,13 @@ function plaque(ctx, x, y, title, sub, k) {
 // ── scene cache (static art, no HUD / animation) ──
 const _scenes = new Map();
 const SCENE_MAX = 3;
-async function buildScene(state) {
+async function buildScene(state, opts = {}) {
     ensureFonts();
-    const key0 = hashStr(JSON.stringify(['v11-life', state.owner, state.structures, state.freePlots, realmBiome(state)]));
+    const cel = (opts.celebrate && typeof opts.celebrate === 'object') ? opts.celebrate : null;
+    const key0 = hashStr(JSON.stringify(['v11-life', state.owner, state.structures, state.freePlots, realmBiome(state), cel || '']));
     const hit = _scenes.get(key0);
     if (hit) { _scenes.delete(key0); _scenes.set(key0, hit); return hit; }
-    const { w, info, plots, team, biome, realm, waterCells } = buildWorld(state);
+    const { w, info, plots, team, biome, realm, waterCells, fall } = buildWorld(state, cel);
     // fixed card: the village green sits slightly above centre, the over-sized grid fills every pixel
     const focus = centroid([hc(7, 7), hc(8, 7), hc(7, 8), hc(8, 8)]);
     w.layoutFixed(CARD_W, CARD_H, focus.x, focus.z, CARD_W / 2, CARD_H * 0.47);
@@ -666,7 +693,7 @@ async function buildScene(state) {
     const sway = await ambient.swayTrees(w);                         // tree sprites for the wind shuffle
     const walkers = ambient.buildWalkers(w, seed, { n: 10, maxY: CARD_H - 190 });
     const boats = ambient.buildBoats(water, seed, k);
-    const scene = { terrain, objects, W: CARD_W, H: CARD_H, w, k, smoke, biome, realm, water, sway, walkers, boats, seed };
+    const scene = { terrain, objects, W: CARD_W, H: CARD_H, w, k, smoke, biome, realm, water, sway, walkers, boats, seed, fall };
     _scenes.set(key0, scene);
     while (_scenes.size > SCENE_MAX) _scenes.delete(_scenes.keys().next().value);
     return scene;
@@ -678,7 +705,7 @@ async function buildScene(state) {
 //  owner 2026-10-19 "bring it to life" pass, shared code in ./ambient)
 // ═══════════════════════════════════════════════════════════════════════════
 async function renderFrame(state, frame, opts = {}) {
-    const sc = await buildScene(state);
+    const sc = await buildScene(state, opts);
     // animated (mp4) frames are composed at reduced size: the clip is a half-res preview anyway and this halves the per-frame cost
     const as = opts.encoder === 'raw' ? ANIM_SCALE : 1;
     const out = require('canvas').createCanvas(Math.round(sc.W * as / 2) * 2, Math.round(sc.H * as / 2) * 2);
@@ -716,7 +743,14 @@ async function renderFrame(state, frame, opts = {}) {
         ambient.drawButterflies(ctx, sc.W, sc.H, t, seed);       // garden flutter
         ambient.drawTint(ctx, sc.W, sc.H, t);                    // warm/cool breathing
     }
-    if (opts.celebrate) K.paintConfetti(ctx, sc.W, sc.H, t, seed, sc.k);   // build/upgrade celebration
+    if (opts.celebrate) {
+        // owner 2026-10-19: the building falls in and the confetti explodes FROM it —
+        // landing celebrate when the frame knows the target, card-wide rain otherwise
+        const cel = (opts.celebrate && typeof opts.celebrate === 'object') ? opts.celebrate : null;
+        if (!(cel && sc.fall && await K.paintLanding(ctx, sc.w, sc.W, sc.H, t, seed, sc.k, sc.fall))) {
+            K.paintConfetti(ctx, sc.W, sc.H, t, seed, sc.k);
+        }
+    }
     drawHud(ctx, state, opts, sc.W, sc.H);
     if (opts.encoder === 'raw') return { raw: out.toBuffer('raw'), w: out.width, h: out.height };
     if (opts.returnCanvas) return out;
@@ -803,7 +837,7 @@ function cachePut(map, k, out) {
 const _renderCache = new Map();
 const CACHE_TTL = 10 * 60 * 1000;
 function stateHash(state, opts = {}) {
-    return hashStr(JSON.stringify(['v11-iso-life', state.owner, realmBiome(state), state.structures, state.freePlots, opts.hint || '', opts.static ? 1 : 0]));
+    return hashStr(JSON.stringify(['v11-iso-life', state.owner, realmBiome(state), state.structures, state.freePlots, opts.hint || '', opts.static ? 1 : 0, opts.celebrate ? JSON.stringify(opts.celebrate) : '']));
 }
 
 async function renderBaseImage(state, opts = {}) {

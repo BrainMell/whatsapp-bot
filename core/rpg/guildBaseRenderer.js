@@ -118,7 +118,30 @@ function angleDeg(c, r) { // 0=E, 90=S(down), 180=W, 270=N
 const cdist = (c, r) => K.hexDist(CC, CR, c, r);
 const key = (c, r) => `${c},${r}`;
 
-function buildWorld(state) {
+// main sprite of a guild facility at a level — the one that drops in on a landing celebrate
+// (owner 2026-10-19). null → no fall (treasury crates: burst only).
+function guildMainSprite(kind, lvl, team) {
+    if (kind === 'hall') {
+        if (lvl === 1) return { name: 'building_tower_A_' + team, sc: 1.0 };
+        if (lvl === 2) return { name: 'building_tower_A_' + team, sc: 1.0, dx: 0.35, dz: -0.1 };
+        if (lvl === 3) return { name: 'building_barracks_' + team, sc: 1 };
+        return { name: 'building_castle_' + team, sc: 1 };
+    }
+    if (kind === 'training') {
+        if (lvl === 1) return { name: 'tent', sc: 1 };
+        if (lvl <= 4) return { name: 'building_archeryrange_' + team, sc: 1 };
+        return { name: 'building_barracks_' + team, sc: 1 };
+    }
+    if (kind === 'treasury') {
+        if (lvl === 1) return null;
+        if (lvl === 2) return { name: 'building_home_B_' + team, sc: 1 };
+        if (lvl === 3) return { name: 'building_market_' + team, sc: 1 };
+        return { name: 'building_church_' + team, sc: 1 };
+    }
+    return null;
+}
+
+function buildWorld(state, cel = null) {
     const seed = hashStr(state.name || 'guild');
     const rng = mulberry32(seed);
 
@@ -245,7 +268,16 @@ function buildWorld(state) {
 
     // ── CASTLE (hall) ──
     const castle = [CC, CR];
-    if (hall === 0) {
+    let fall = null;
+    const fallAt = (kind, lvl, cell) => {                              // record the celebrated facility's main sprite
+        const ms = guildMainSprite(kind, lvl, team);
+        if (!ms) return;
+        const wc = K.hexWorld(cell[0], cell[1]);
+        fall = { name: ms.name, wx: wc.x + (ms.dx || 0), wz: wc.z + (ms.dz || 0), sc: ms.sc || 1, flip: false };
+    };
+    if (cel && cel.building === 'hall' && hall > 0) {
+        fallAt('hall', hall, castle);                                  // omitted from the scene — the overlay drops it in
+    } else if (hall === 0) {
         plotMarker(CC, CR, 'HALL');
         w.put('building_scaffolding', CC, CR, { sc: 0.9 });
     } else {
@@ -264,7 +296,8 @@ function buildWorld(state) {
 
     // ── TRAINING ──
     const [tc, tr] = SLOT.training;
-    if (train === 0) plotMarker(tc, tr, 'TRAINING');
+    if (cel && cel.building === 'training' && train > 0) fallAt('training', train, [tc, tr]);
+    else if (train === 0) plotMarker(tc, tr, 'TRAINING');
     else {
         w.put('building_dirt', tc, tr, { layer: 'flat' });
         const sat = freeNbrs(tc, tr);
@@ -282,7 +315,8 @@ function buildWorld(state) {
 
     // ── TREASURY ──
     const [vc, vr] = SLOT.treasury;
-    if (treas === 0) plotMarker(vc, vr, 'TREASURY');
+    if (cel && cel.building === 'treasury' && treas > 0) fallAt('treasury', treas, [vc, vr]);
+    else if (treas === 0) plotMarker(vc, vr, 'TREASURY');
     else {
         w.put('building_dirt', vc, vr, { layer: 'flat' });
         const sat = freeNbrs(vc, vr);
@@ -400,7 +434,7 @@ function buildWorld(state) {
         else if (x < 0.36) w.put('building_well_' + team, c, r);
     }
 
-    return { w, castle, gateCell, hall, train, treas, team, smokeAnchors };
+    return { w, castle, gateCell, hall, train, treas, team, smokeAnchors, fall };
 }
 
 // ── overlays ──
@@ -478,16 +512,17 @@ function drawBanner(ctx, x, y, k, flagCol, flagD, icon, t) {
 const _scenes = new Map();
 const SCENE_MAX = 4;
 function sceneKey(state, opts) {
-    return hashStr(JSON.stringify(['guild-life1', state.name, state.level, state.archetype, state.buildings, state.memberCount, state.emblemColor, state.emblemIcon, state.biome, state.continent]));
+    return hashStr(JSON.stringify(['guild-life1', state.name, state.level, state.archetype, state.buildings, state.memberCount, state.emblemColor, state.emblemIcon, state.biome, state.continent, (opts && opts.celebrate && typeof opts.celebrate === 'object') ? opts.celebrate : '']));
 }
 
-async function buildScene(state) {
+async function buildScene(state, opts = {}) {
     ensureFonts();
-    const key0 = sceneKey(state);
+    const key0 = sceneKey(state, opts);
     const hit = _scenes.get(key0);
     if (hit) { _scenes.delete(key0); _scenes.set(key0, hit); return hit; }
 
-    const { w, castle, hall, train, treas, team, gateCell, smokeAnchors } = buildWorld(state);
+    const cel = (opts.celebrate && typeof opts.celebrate === 'object') ? opts.celebrate : null;
+    const { w, castle, hall, train, treas, team, gateCell, smokeAnchors, fall } = buildWorld(state, cel);
     const pad = { top: 190, bottom: 190, left: 36, right: 36 };
     // keep the card size and castle framing of the old 17x15 layout, but let the (larger) grid fill every pixel of it
     const ref = new K.HexWorld(OLD_COLS, OLD_ROWS, { scale: SCALE, biome: w.biome });
@@ -538,7 +573,7 @@ async function buildScene(state) {
     const walkers = ambient.buildWalkers(w, seed, { n: 9, maxY: H - 190 });   // villagers on the roads
     const boats = ambient.buildBoats(water, seed, k);                     // wilds trees for the wind shuffle
     const smoke = smokeAnchors.map((a) => { const p = w.proj(a.x, a.z + 0.35, a.h); return { x: p.x, y: p.y, smoky: false }; });
-    const scene = { canvas, W, H, w, banner: { x: bpos.x, y: bpos.y, flagCol, flagD: archC.flagD, icon: state.emblemIcon || '' }, k, biome: w.biome, realm: w.biome, water, sway, walkers, boats, smoke, seed };
+    const scene = { canvas, W, H, w, banner: { x: bpos.x, y: bpos.y, flagCol, flagD: archC.flagD, icon: state.emblemIcon || '' }, k, biome: w.biome, realm: w.biome, water, sway, walkers, boats, smoke, seed, fall };
     _scenes.set(key0, scene);
     while (_scenes.size > SCENE_MAX) _scenes.delete(_scenes.keys().next().value);
     return scene;
@@ -549,7 +584,7 @@ async function buildScene(state) {
 // ═══════════════════════════════════════════════════════════════════════════
 const ANIM_SCALE = parseFloat(process.env.RENDER_GUILD_ANIM_SCALE || '0.62') || 0.62;
 async function renderFrame(state, frame, opts = {}) {
-    const sc = await buildScene(state);
+    const sc = await buildScene(state, opts);
     // animated (mp4) frames compose at reduced size — same trick as the homestead renderer
     const as = opts.encoder === 'raw' ? ANIM_SCALE : 1;
     const out = require('canvas').createCanvas(Math.round(sc.W * as / 2) * 2, Math.round(sc.H * as / 2) * 2);
@@ -590,7 +625,15 @@ async function renderFrame(state, frame, opts = {}) {
         ambient.drawButterflies(ctx, sc.W, sc.H, t, seed);       // garden flutter
         ambient.drawTint(ctx, sc.W, sc.H, t);                    // warm/cool breathing
     }
-    if (opts.celebrate) K.paintConfetti(ctx, sc.W, sc.H, t, hashStr(state.name || 'guild'), sc.k);   // upgrade celebration
+    if (opts.celebrate) {
+        // owner 2026-10-19: the upgraded facility falls in and the confetti explodes FROM it —
+        // landing celebrate when the frame knows the target, card-wide rain otherwise
+        const cel = (opts.celebrate && typeof opts.celebrate === 'object') ? opts.celebrate : null;
+        const celSeed = hashStr(state.name || 'guild');
+        if (!(cel && sc.fall && await K.paintLanding(ctx, sc.w, sc.W, sc.H, t, celSeed, sc.k, sc.fall))) {
+            K.paintConfetti(ctx, sc.W, sc.H, t, celSeed, sc.k);
+        }
+    }
     drawHud(ctx, state, opts, sc.W, sc.H);
     if (opts.encoder === 'raw') return { raw: out.toBuffer('raw'), w: out.width, h: out.height };
     if (opts.returnCanvas) return out;
@@ -727,7 +770,7 @@ function cachePut(map, k, out) {
 const _renderCache = new Map();
 const CACHE_TTL = 10 * 60 * 1000;
 function stateHash(state, opts = {}) {
-    return hashStr(JSON.stringify(['v12-life', state.name, state.biome || '', state.continent || '', state.level, state.archetype, state.buildings, state.memberCount, state.memberCap, state.emblemColor, state.emblemIcon, state.motto, opts.hint || '', opts.static === true ? 1 : 0]));
+    return hashStr(JSON.stringify(['v12-life', state.name, state.biome || '', state.continent || '', state.level, state.archetype, state.buildings, state.memberCount, state.memberCap, state.emblemColor, state.emblemIcon, state.motto, opts.hint || '', opts.static === true ? 1 : 0, opts.celebrate ? JSON.stringify(opts.celebrate) : '']));
 }
 
 async function renderGuildBaseImage(state, opts = {}) {

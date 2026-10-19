@@ -21996,7 +21996,7 @@ Admins can:
                               emblemIcon: _g.emblem?.icon || '',
                               motto: _g.motto || '',
                               continent: _g.continent || '',
-                            }, { static: false, celebrate: true, hint: `${buildingId.toUpperCase()} rises!` });
+                            }, { static: false, celebrate: { building: String(buildingId).toLowerCase() }, hint: `${buildingId.toUpperCase()} rises!` });
                             if (_media && _media.buffer && _media.buffer.length > 100) {
                               const _cap = BOT_MARKER + `🎉 *${_ug}* — the *${buildingId}* works rise!`;
                               if (_media.contentType === 'video/mp4') await sock.sendMessage(chatId, { video: _media.buffer, gifPlayback: true, caption: _cap });
