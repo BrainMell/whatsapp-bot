@@ -404,6 +404,22 @@ function buildWorld(state, cel = null) {
         w.put('flag_' + team, stg[0], stg[1], { dx: 0.85, dz: 0.5 });
         claim(stg[0], stg[1]);
     }
+    // ── the quarry yard: the pack's own mine (walkway-into-rocks) INSIDE the walls ──
+    // owner 2026-10-19: "Move the cave inside the base, it should replace the existing
+    // mines" — the ridge-foot working site is gone (kingdomTerrain populate no longer
+    // places it); the cave is a district feature tucked against the back rampart, with
+    // the same dressed look the owner signed off on (ore-hoist, ladder, stone pile).
+    const qy = takeIn((q) => q[2] >= 4 && q[3] > 195 && q[3] < 345)            // back band behind the keep
+        || takeIn((q) => q[2] >= 3 && q[3] > 195 && q[3] < 345)
+        || takeIn((q) => q[2] >= 3);
+    if (qy) {
+        w.put('building_dirt', qy[0], qy[1], { layer: 'flat' });
+        w.put(B('mine'), qy[0], qy[1]);
+        w.put('building_scaffolding', qy[0], qy[1], { dx: -0.85, dz: 0.32, sc: 0.85, flip: rng() < 0.5 });
+        w.put('ladder', qy[0], qy[1], { dx: 0.55, dz: 0.85, sc: 0.9 });
+        w.put('resource_stone', qy[0], qy[1], { dx: -0.35, dz: 1.05, sc: 0.9 });
+        claim(qy[0], qy[1]);
+    }
     let nf = 0;
     for (const q of inside) {                                                            // fields in the (mirrored) north band, ring 5
         const a2 = ang(q[3]);
