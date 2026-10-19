@@ -168,6 +168,14 @@ function buildWorld(state, cel = null) {
     const train = Math.max(0, Math.min(5, parseInt((state.buildings || {}).training, 10) || 0));
     const treas = Math.max(0, Math.min(5, parseInt((state.buildings || {}).treasury, 10) || 0));
     const members = Math.max(0, Math.min(40, parseInt(state.memberCount, 10) || 0));
+    // hall-tier evolution (owner 2026-10-19: "if someone upgrades their guild hall the base
+    // becomes progressively larger and more impressive, stone roads instead of dirt, larger
+    // double layered walls ... when it's max level it becomes a full blown city"):
+    //   lv2 cobbles the gate avenue · lv3 paves every street + tower banners
+    //   lv4 raises a second curtain wall (ring 8, six bastions, own gatehouse) with an
+    //      expansion belt between the walls · lv5 is the full city: cobbled grand ward,
+    //      banner monument, market day, and the district fills with citizens' homes.
+    const TIER = { stoneRoads: hall >= 3, doubleWalls: hall >= 4, fullCity: hall >= 5 };
 
     const biome = KT.pickBiome(state);
     const land = true;                      // every biome (incl. the coastal 'isle') comes from the terrain generator
@@ -175,12 +183,24 @@ function buildWorld(state, cel = null) {
     const used = new Set();                 // cells claimed by structures/props
     const claim = (c, r) => used.add(key(c, r));
     const smokeAnchors = [];                // hearth anchors for the animated smoke (world coords)
+    // ── helpers for placing buildings (declared early: the hall-tier wall pass uses B) ──
+    const B = (name) => `building_${name}_${team}`;
+    const nbrs = (c, r) => [0, 1, 2, 3, 4, 5].map((d) => K.neighbor(c, r, d)).filter(([a, b]) => w.inb(a, b));
+    const freeNbrs = (c, r, maxD = 3) => nbrs(c, r).filter(([a, b]) => !used.has(key(a, b)) && !w.cell[b][a].water && !w.cell[b][a].river && cdist(a, b) <= maxD)
+        .sort((p, q) => cdist(q[0], q[1]) - cdist(p[0], p[1]));
+    const plotMarker = (c, r, tag) => {
+        w.put('building_dirt', c, r, { layer: 'flat' });
+        w.put('crate_A_small', c, r, { dx: -0.55, dz: 0.25 });
+        w.put('ladder', c, r, { dx: 0.45, dz: -0.2 });
+        w.put('resource_lumber', c, r, { dx: 0.35, dz: 0.45 });
+        w.overlay((ctx, p, k) => plotOverlay(ctx, w, c, r, tag, k), c, r);
+    };
 
     let riverCells = [];
     let S = null;
     if (land) {
         // land biomes: ragged haze-edged silhouette, lakes/lava pools, optional river (no sea)
-        S = KT.shape(w, { seed, biome, CC, CR, keepR: WALL_RING + 1, wallRing: WALL_RING, angleDeg, cdist });
+        S = KT.shape(w, { seed, biome, CC, CR, keepR: WALL_RING + (TIER.doubleWalls ? 3 : 1), wallRing: WALL_RING, angleDeg, cdist });
         riverCells = S.riverCells;
     } else {
         // ── island silhouette (per-guild noise) ──
@@ -229,14 +249,36 @@ function buildWorld(state, cel = null) {
     if (postern && key(postern[0], postern[1]) !== key(gateCell[0], gateCell[1])) gateSet.add(key(postern[0], postern[1]));
     for (const [c, r] of ringCells) claim(c, r);
     w.layWall(ringCells, { closed: true, gates: gateSet, outside: true });
+    // the south world-road leaves through the gate: compute its cells now so the outer
+    // curtain (hall 4+) can drop its own gate exactly on the line
+    const outRoadCells = K.hexLine(gateCell[0], gateCell[1], CC, Math.min(ROWS - 2, CR + (TIER.doubleWalls ? 10 : 8))).slice(1);
+    // hall 4+ "larger double layered walls": a second curtain two rings out with six
+    // bastions and its own gatehouse on the south road; the belt between the walls
+    // becomes the city's expansion ward (see the suburb pass below)
+    if (TIER.doubleWalls) {
+        const outerCells = K.ring(CC, CR, WALL_RING + 2);
+        const outerGate = outRoadCells.find(([c, r]) => cdist(c, r) === WALL_RING + 2)
+            || outerCells.filter(([, r]) => r >= CR + WALL_RING + 1).sort((a, b) => Math.abs(a[0] - CC) - Math.abs(b[0] - CC))[0];
+        const outerGateSet = new Set([key(outerGate[0], outerGate[1])]);
+        for (const [c, r] of outerCells) claim(c, r);
+        w.layWall(outerCells, { closed: true, gates: outerGateSet, outside: true });
+        if (K.hasSprite('struct_gate_0', 'top')) w.put('struct_gate_0', outerGate[0], outerGate[1], { sc: 1.15, sort: 0.6 });
+        w.put('flag_' + team, outerGate[0], outerGate[1], { dx: -0.95, dz: 0.55, h: 0 });
+        w.put('flag_' + team, outerGate[0], outerGate[1], { dx: 0.95, dz: 0.55, h: 0 });
+        for (let d = 0; d < 6; d++) {
+            const [tc, tr] = step(CC, CR, d, WALL_RING + 2);
+            if (!w.inb(tc, tr) || w.cell[tr][tc].water) continue;
+            w.put(B('tower_A'), tc, tr, { sc: 0.7, sort: 0.5 });
+            if (TIER.fullCity) w.put('flag_' + team, tc, tr, { h: 1.5, sc: 0.72 });
+        }
+    }
 
     // ── roads: gate → castle avenue + spur to each facility/plot + road out of the gate ──
     const mainRoad = K.hexLine(gateCell[0], gateCell[1], CC, CR);
     const roadSet = new Set();
     const addRoad = (cells) => { for (const [c, r] of cells) { if (!w.inb(c, r) || w.cell[r][c].water || w.cell[r][c].wall && key(c, r) !== key(gateCell[0], gateCell[1])) continue; roadSet.add(key(c, r)); } };
     addRoad(mainRoad.slice(1));                                           // inside the walls (gate cell stays a wall piece)
-    const outRoad = K.hexLine(gateCell[0], gateCell[1], CC, Math.min(ROWS - 2, CR + 8)).slice(1);
-    for (const [c, r] of outRoad) {
+    for (const [c, r] of outRoadCells) {
         if (!w.inb(c, r) || w.cell[r][c].water || w.cell[r][c].void) break;
         if (w.cell[r][c].river) { if (!land) break; w.cell[r][c].crossRoad = true; continue; }   // land biomes: bridge it
         roadSet.add(key(c, r));
@@ -257,19 +299,16 @@ function buildWorld(state, cel = null) {
 
     for (const k of roadSet) { const [c, r] = k.split(',').map(Number); claim(c, r); }
     claim(CC, CR);
-
-    // ── helpers for placing buildings ──
-    const B = (name) => `building_${name}_${team}`;
-    const nbrs = (c, r) => [0, 1, 2, 3, 4, 5].map((d) => K.neighbor(c, r, d)).filter(([a, b]) => w.inb(a, b));
-    const freeNbrs = (c, r, maxD = 3) => nbrs(c, r).filter(([a, b]) => !used.has(key(a, b)) && !w.cell[b][a].water && !w.cell[b][a].river && cdist(a, b) <= maxD)
-        .sort((p, q) => cdist(q[0], q[1]) - cdist(p[0], p[1]));
-    const plotMarker = (c, r, tag) => {
-        w.put('building_dirt', c, r, { layer: 'flat' });
-        w.put('crate_A_small', c, r, { dx: -0.55, dz: 0.25 });
-        w.put('ladder', c, r, { dx: 0.45, dz: -0.2 });
-        w.put('resource_lumber', c, r, { dx: 0.35, dz: 0.45 });
-        w.overlay((ctx, p, k) => plotOverlay(ctx, w, c, r, tag, k), c, r);
-    };
+    // hall-tier paving (owner 2026-10-19: "stone roads instead of dirt") — the gate avenue
+    // is cobbled from the Bailey on (hall 2), every street from the Stone Castle on (hall 3)
+    if (hall >= 2) {
+        const aveSet = new Set(mainRoad.slice(1).map(([c, r]) => key(c, r)));
+        for (const k of roadSet) {
+            const [c, r] = k.split(',').map(Number);
+            if (!w.cell[r][c].road) continue;
+            if (hall >= 3 || aveSet.has(k)) w.underlay((ctx, p2, kk) => cobbleOverlay(ctx, w, c, r, kk), c, r);
+        }
+    }
 
     // ── CASTLE (hall) ──
     const castle = [CC, CR];
@@ -349,6 +388,7 @@ function buildWorld(state, cel = null) {
         const [tcc, trr] = step(CC, CR, d, WALL_RING);
         if (!w.inb(tcc, trr) || w.cell[trr][tcc].water) continue;
         w.put(B('tower_A'), tcc, trr, { sc: 0.78, sort: 0.5 });
+        if (hall >= 3) w.put('flag_' + team, tcc, trr, { h: 1.5, sc: 0.75 });   // tower banners once the town is stone-built
     }
 
     // ── the district inside the walls: market, well, fields, orchard, then one cottage per member (cap 24) ──
@@ -387,6 +427,28 @@ function buildWorld(state, cel = null) {
             claim(gb2[0], gb2[1]);
         }
     }
+    // ── the grand ward (max hall, owner 2026-10-19 "full blown city"): cobbled forecourt
+    // with benches before the keep, a banner monument on the avenue axis, and market day ──
+    if (TIER.fullCity) {
+        for (const q of inside) {
+            if (used.has(key(q[0], q[1])) || q[2] > 2 || q[3] < 40 || q[3] > 140) continue;
+            w.underlay((ctx, p2, kk) => cobbleOverlay(ctx, w, q[0], q[1], kk), q[0], q[1]);
+            const x = rng();
+            if (x < 0.3) w.put('crate_long_empty', q[0], q[1], { dx: -0.4, dz: 0.4, sc: 0.8 });
+            else if (x < 0.5) w.put('barrel', q[0], q[1], { dx: 0.45, dz: 0.3 });
+            claim(q[0], q[1]);
+        }
+        const mn = takeIn((q) => q[2] === 3 && q[3] > 70 && q[3] < 110);          // monument beside the avenue
+        if (mn) {
+            w.put(B('tower_base'), mn[0], mn[1], { sc: 0.78 });
+            w.put('flag_' + team, mn[0], mn[1], { h: 1.15, sc: 0.85 });
+            claim(mn[0], mn[1]);
+        }
+        if (mk) {                                                                 // market day: two extra stalls
+            w.put('crate_long_B', mk[0], mk[1], { dx: -1.55, dz: -0.5 }); w.put('pallet', mk[0], mk[1], { dx: 1.5, dz: -0.35 });
+            w.put('sack', mk[0], mk[1], { dx: -0.4, dz: 1.45 });
+        }
+    }
     // drill lawn: even before the training ground is built, targets and arrow buckets sit out on the green
     if (train < 2) {
         const dl = takeIn((q) => q[2] >= 3 && q[2] <= 5 && ang(q[3]) > 14 && ang(q[3]) < 70);
@@ -420,6 +482,44 @@ function buildWorld(state, cel = null) {
         w.put('resource_stone', qy[0], qy[1], { dx: -0.35, dz: 1.05, sc: 0.9 });
         claim(qy[0], qy[1]);
     }
+    // ── the expansion belt (double walls, hall 4+): the city outgrew its inner curtain —
+    // cottages front the south road between the walls, a tavern joins at max hall, and
+    // paddocks/gardens fill the rest of the ward ──
+    if (TIER.doubleWalls) {
+        const belt = [];
+        for (const [c, r] of K.ring(CC, CR, WALL_RING + 1)) {
+            if (used.has(key(c, r)) || !w.inb(c, r) || w.cell[r][c].water || w.cell[r][c].river || w.cell[r][c].wall) continue;
+            belt.push([c, r, angleDeg(c, r)]);
+        }
+        belt.sort((a, b) => Math.abs(((a[2] - 90 + 540) % 360) - 180) - Math.abs(((b[2] - 90 + 540) % 360) - 180));   // south first
+        const beltPlaced = [];
+        const wantHomes = TIER.fullCity ? 5 + Math.floor(rng() * 2) : 3 + Math.floor(rng() * 2);
+        for (const [c, r, a] of belt) {
+            if (beltPlaced.length >= wantHomes) break;
+            if (a < 15 || a > 165) continue;                                              // cottages front the south road
+            if (beltPlaced.some(([pc, pr]) => K.hexDist(pc, pr, c, r) < 2)) continue;
+            w.put(K.houseName(rng, w.biome || 'isle', { view: 'top', weights: HW, shop: TIER.fullCity && beltPlaced.length === 1 }) || B(beltPlaced.length % 2 ? 'home_B' : 'home_A'), c, r, { flip: rng() < 0.5 });
+            const wcB = K.hexWorld(c, r); smokeAnchors.push({ x: wcB.x + 0.3, z: wcB.z + 0.1, h: 1.6 });
+            beltPlaced.push([c, r]); claim(c, r);
+        }
+        if (TIER.fullCity) {                                                              // a roadside tavern serves the outer ward
+            const tv = belt.find(([c, r, a]) => !used.has(key(c, r)) && a > 25 && a < 155 && !beltPlaced.some(([pc, pr]) => K.hexDist(pc, pr, c, r) < 2));
+            if (tv) {
+                w.put(B('tavern'), tv[0], tv[1], { sc: 0.95 });
+                const wcT = K.hexWorld(tv[0], tv[1]); smokeAnchors.push({ x: wcT.x, z: wcT.z + 0.2, h: 2.0 });
+                claim(tv[0], tv[1]);
+            }
+        }
+        for (const [c, r] of belt) {                                                      // the rest of the belt: paddocks and gardens
+            if (used.has(key(c, r))) continue;
+            const x = rng();
+            if (x < 0.34) w.put('building_grain', c, r, { layer: 'flat' });
+            else if (x < 0.5) w.put(['trees_A_medium', 'tree_single_A', 'tree_single_B'][Math.floor(rng() * 3)], c, r, { flip: rng() < 0.5, sc: 0.85 });
+            else if (x < 0.58) w.put('barrel', c, r, { dx: 0.3 });
+            else continue;
+            claim(c, r);
+        }
+    }
     let nf = 0;
     for (const q of inside) {                                                            // fields in the (mirrored) north band, ring 5
         const a2 = ang(q[3]);
@@ -440,6 +540,20 @@ function buildWorld(state, cel = null) {
         claim(c, r);
         if (got <= 8) { const wcH = K.hexWorld(c, r); smokeAnchors.push({ x: wcH.x + (i % 2 ? -0.35 : 0.35), z: wcH.z + 0.1, h: 1.65 }); }
     }
+    // max hall: the district fills with citizens' homes beyond the member hamlet — a
+    // full blown city has people, not just plot markers (seeded mix, shops every third)
+    if (TIER.fullCity) {
+        let gotX = 0;
+        for (const q of inside) {
+            if (gotX >= 6) break;
+            if (used.has(key(q[0], q[1])) || q[2] < 3) continue;
+            if (placed.some(([pc, pr]) => K.hexDist(pc, pr, q[0], q[1]) < 2)) continue;
+            placed.push([q[0], q[1]]); gotX++;
+            w.put(K.houseName(rng, w.biome || 'isle', { view: 'top', weights: HW, shop: gotX % 3 === 0 }) || B('home_A'), q[0], q[1], { flip: rng() < 0.5 });
+            if (gotX <= 4) { const wcX = K.hexWorld(q[0], q[1]); smokeAnchors.push({ x: wcX.x + (gotX % 2 ? -0.35 : 0.35), z: wcX.z + 0.1, h: 1.65 }); }
+            claim(q[0], q[1]);
+        }
+    }
     for (const q of inside) {                                                            // orchard / garden trees in the gaps
         if (used.has(key(q[0], q[1])) || q[2] < 3 || rng() > orchardP) continue;
         w.put(['trees_A_medium', 'trees_B_medium', 'tree_single_A', 'tree_single_B'][Math.floor(rng() * 4)], q[0], q[1], { flip: rng() < 0.5, sc: 0.85 }); claim(q[0], q[1]);
@@ -453,7 +567,7 @@ function buildWorld(state, cel = null) {
         outer.push([c, r]);
     }
     const TREES = ['trees_A_large', 'trees_B_large', 'trees_A_medium', 'trees_B_medium'];
-    if (land) KT.populate(S, w, { used, claim, B, team, key, cdist, angleDeg, wallRing: WALL_RING });
+    if (land) KT.populate(S, w, { used, claim, B, team, key, cdist, angleDeg, wallRing: WALL_RING + (TIER.doubleWalls ? 2 : 0) });
     else {
     let mine = null, mill = null, windmill = null, lighthouse = null, fieldsN = 0, farmHome = false;
     for (const [c, r] of outer) {
@@ -509,6 +623,32 @@ function buildWorld(state, cel = null) {
 }
 
 // ── overlays ──
+function cobbleOverlay(ctx, w, c, r, k) {
+    // stone paving drawn UNDER every object on a road / forecourt cell (hall-tier law,
+    // owner 2026-10-19: "stone roads instead of dirt") — warm-gray slab with seeded
+    // cobbles, clipped to the cell polygon so it can never bleed into neighbours
+    const rnd = mulberry32(hashStr(`cobble:${c},${r}`));
+    ctx.save();
+    const poly = w.cellPoly(c, r, 0.015);
+    ctx.beginPath();
+    poly.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+    ctx.closePath();
+    ctx.clip();
+    ctx.fillStyle = 'rgba(158,150,138,0.96)';
+    ctx.fill();
+    const cx = poly.reduce((a, p) => a + p.x, 0) / 6, cy = poly.reduce((a, p) => a + p.y, 0) / 6;
+    let ext = 0;
+    for (const p of poly) ext = Math.max(ext, Math.hypot(p.x - cx, p.y - cy));
+    for (let i = 0; i < 12; i++) {
+        const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd()) * ext * 0.82;
+        ctx.fillStyle = rnd() < 0.5 ? 'rgba(190,181,164,0.9)' : 'rgba(132,124,112,0.88)';
+        ctx.beginPath();
+        ctx.ellipse(cx + Math.cos(a) * d, cy + Math.sin(a) * d * 0.82, (3 + rnd() * 3.4) * (ext / 40), (2.4 + rnd() * 2.8) * (ext / 40), rnd() * 3, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+}
+
 function plotOverlay(ctx, w, c, r, tag, k) {
     ctx.save();
     ctx.setLineDash([14 * k * 2, 9 * k * 2]);
@@ -554,28 +694,57 @@ function plaque(ctx, x, y, title, sub, k) {
 }
 
 function drawBanner(ctx, x, y, k, flagCol, flagD, icon, t) {
-    // pole + waving cloth above the castle roofline, emblem on the cloth
-    const poleH = 86 * k * 2, cw = 70 * k * 2, ch = 46 * k * 2;
+    // the guild EMBLEM crowns the castle (owner 2026-10-19: "by guild banner I ment the
+    // guild emblem, it ahould be the thing onto of the castle") — a heraldic shield on a
+    // short mast at the keep peak, flanked by two small waving pennants so the top of
+    // the keep still moves on the animated card.
+    const k2 = k * 2;
+    const mastH = 22 * k2, sw = 74 * k2, sh = 92 * k2;
     ctx.save();
-    ctx.strokeStyle = '#3a2a18'; ctx.lineWidth = Math.max(2, 3.5 * k * 2);
-    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - poleH); ctx.stroke();
-    ctx.fillStyle = '#e8c15a'; ctx.beginPath(); ctx.arc(x, y - poleH - 3 * k * 2, 4.5 * k * 2, 0, Math.PI * 2); ctx.fill();
-    const top = y - poleH + 2 * k * 2;
-    ctx.beginPath();
-    const wv = (u) => Math.sin(u * 6 + t * Math.PI * 2) * 3.5 * k * 2 * u;
-    ctx.moveTo(x, top);
-    for (let u = 0; u <= 1.001; u += 0.1) ctx.lineTo(x + u * cw, top + wv(u));
-    for (let u = 1; u >= -0.001; u -= 0.1) ctx.lineTo(x + u * cw, top + ch + wv(u));
-    ctx.closePath();
-    const g = ctx.createLinearGradient(x, top, x + cw, top + ch);
+    ctx.strokeStyle = '#3a2a18'; ctx.lineWidth = Math.max(2, 3.2 * k2);
+    // the mast dips behind the keep's roof mass so the crest reads as planted on the
+    // castle (works across every hall's keep shape — no per-level anchor tuning)
+    ctx.beginPath(); ctx.moveTo(x, y + 26 * k2); ctx.lineTo(x, y - mastH); ctx.stroke();
+    const topY = y - mastH - sh;
+    // flanking pennants fly from the shield's shoulders (drawn first, shield covers the roots)
+    const penn = (sx, dir) => {
+        const py = topY + 10 * k2, pw = 36 * k2, ph = 17 * k2;
+        ctx.beginPath();
+        const wv = (u) => Math.sin(u * 5 + t * Math.PI * 2 + (dir > 0 ? 0.9 : 2.4)) * 2.8 * k2 * u;
+        ctx.moveTo(sx, py);
+        for (let u = 0; u <= 1.001; u += 0.2) ctx.lineTo(sx + dir * u * pw, py + wv(u));
+        for (let u = 1; u >= -0.001; u -= 0.2) ctx.lineTo(sx + dir * u * pw, py + ph + wv(u));
+        ctx.closePath();
+        const g2 = ctx.createLinearGradient(sx, py, sx + dir * pw, py + ph);
+        g2.addColorStop(0, flagCol); g2.addColorStop(1, flagD);
+        ctx.fillStyle = g2; ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = Math.max(1, 1.2 * k2); ctx.stroke();
+    };
+    penn(x - sw * 0.46, -1); penn(x + sw * 0.46, 1);
+    // heater shield: emblemColor field, gold trim, inner light border, emblem glyph large
+    const shield = (w0, y0, h0) => {
+        ctx.beginPath();
+        ctx.moveTo(x - w0 / 2, y0);
+        ctx.lineTo(x + w0 / 2, y0);
+        ctx.quadraticCurveTo(x + w0 / 2, y0 + h0 * 0.55, x, y0 + h0);
+        ctx.quadraticCurveTo(x - w0 / 2, y0 + h0 * 0.55, x - w0 / 2, y0);
+        ctx.closePath();
+    };
+    shield(sw, topY, sh);
+    const g = ctx.createLinearGradient(x, topY, x, topY + sh);
     g.addColorStop(0, flagCol); g.addColorStop(1, flagD);
     ctx.fillStyle = g; ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = Math.max(1, 1.4 * k * 2); ctx.stroke();
+    ctx.strokeStyle = '#e8c15a'; ctx.lineWidth = Math.max(2, 3.4 * k2); ctx.stroke();
+    shield(sw - 9 * k2, topY + 4.5 * k2, sh - 7 * k2);
+    ctx.strokeStyle = 'rgba(255,244,208,0.5)'; ctx.lineWidth = Math.max(1, 1.6 * k2); ctx.stroke();
     if (icon) {
         ctx.fillStyle = '#fff4d0'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.font = `${Math.round(24 * k * 2)}px "Noto Sans", sans-serif`;
-        ctx.fillText(String(icon).slice(0, 2), x + cw * 0.5, top + ch * 0.52 + wv(0.5));
+        ctx.font = `${Math.round(36 * k2)}px "Noto Sans", sans-serif`;
+        ctx.fillText(String(icon).slice(0, 2), x, topY + sh * 0.4);
     }
+    // gold finial on the mast tip
+    ctx.fillStyle = '#e8c15a';
+    ctx.beginPath(); ctx.arc(x, topY - 4 * k2, 4.2 * k2, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
 }
 

@@ -163,6 +163,9 @@ function mainSpriteOf(st, lvl, team) {
     }
     if (T === 'alchemy') return lvl === 1 ? { name: 'barrel', sc: 1.6 } : { name: 'building_tavern_' + team, sc: lvl === 2 ? 1.5 : 1.9 };
     if (T === 'mines') {
+        // the pack's own cave (rock face + walkway-into-rocks) IS the mine — owner 2026-10-19:
+        // "For the player base not just the guild base" (it replaces the struct_mine family)
+        if (K.hasSprite('building_mine_' + team, 'iso')) return { name: 'building_mine_' + team, sc: lvl === 1 ? 1.55 : lvl === 2 ? 1.75 : 1.95, dx: 0.1, dz: 0.15 };
         if (K.hasSprite('struct_mine_cave', 'iso')) return { name: ['struct_mine_cave', 'struct_mine_timber', 'struct_mine_deep'][lvl - 1], sc: lvl === 1 ? 1.95 : lvl === 2 ? 1.7 : 1.45, dx: 0.5, dz: 0.7 };
         return { name: 'building_mine_' + team, sc: lvl === 1 ? 1.35 : lvl === 2 ? 1.6 : 1.85 };
     }
@@ -589,17 +592,21 @@ function buildWorld(state, cel = null) {
                 else if (lvl === 2) { P('building_tavern_' + team, { sc: 1.5 }); P('barrel', { dx: 1.5, dz: 1.0 }); P('crate_B_small', { dx: -1.4, dz: 1.0 }); }
                 else { P('building_tavern_' + team, { sc: 1.9 }); P('building_windmill_' + team, { dx: -2.1, dz: -0.2, sc: 0.95 }); P('barrel', { dx: 1.8, dz: 1.1 }); P('crate_B_small', { dx: 0.9, dz: 1.7 }); }
                 break;
-            case 'mines':                                                 // dedicated models: cave mouth → timber mine → deep mine with headframe
-                if (K.hasSprite('struct_mine_cave', 'iso')) {
+            case 'mines':                                                 // the pack cave (walkway-into-rocks) is THE mine at every level —
+                // owner 2026-10-19: "Move the cave inside the base ... For the player base not just the guild base".
+                // The worksite GROWS with the level: bare cave → ladder + cart → full ore-hoist yard.
+                if (K.hasSprite('building_mine_' + team, 'iso')) {
+                    P(B('mine'), { sc: lvl === 1 ? 1.55 : lvl === 2 ? 1.75 : 1.95, dx: 0.1, dz: 0.15 });
+                    P('resource_stone', { dx: 1.7, dz: 1.3 });
+                    if (lvl >= 2) { P('ladder', { dx: -1.25, dz: 0.55, sc: 0.9 }); P('wheelbarrow', { dx: 1.15, dz: 1.85 }); }
+                    if (lvl >= 3) { P('building_scaffolding', { dx: -1.4, dz: 0.3, sc: 0.9, flip: true }); P('resource_lumber', { dx: 0.45, dz: 1.95 }); P('crate_long_A', { dx: -1.9, dz: 1.15 }); }
+                    break;
+                }
+                if (K.hasSprite('struct_mine_cave', 'iso')) {              // legacy fallback if the pack sprite ever goes missing
                     P(['struct_mine_cave', 'struct_mine_timber', 'struct_mine_deep'][lvl - 1], { sc: lvl === 1 ? 1.95 : lvl === 2 ? 1.7 : 1.45, dx: 0.5, dz: 0.7 });
-                    if (lvl >= 2) { P(B('mine'), { dx: -1.45, dz: -0.7, sc: 0.95 }); P('ladder', { dx: -0.8, dz: -0.15, sc: 0.85 }); }  // pack's own mine (rock face + walkway) as the second shaft once worked
-                    P('resource_stone', { dx: 2.0, dz: 1.8 }); if (lvl >= 2) P('wheelbarrow', { dx: -1.2, dz: 2.0 });
-                    if (lvl >= 3) { P('resource_lumber', { dx: 0.3, dz: 2.0 }); P('crate_long_A', { dx: -2.0, dz: 0.9 }); }
                     break;
                 }
                 P('building_mine_' + team, { sc: lvl === 1 ? 1.35 : lvl === 2 ? 1.6 : 1.85 });
-                if (lvl >= 2) { P('resource_stone', { dx: 1.2, dz: 0.9 }); P('wheelbarrow', { dx: -1.1, dz: 0.9 }); }
-                if (lvl >= 3) { P('resource_lumber', { dx: 0.2, dz: 1.5 }); P('crate_long_A', { dx: -1.6, dz: 0.6 }); }
                 break;
             case 'pond': {                                              // the lakeside boardwalk: a pier out over the water
                 const [sc1, sr1] = hc(st.x + def.fw - 1, st.y + def.fh - 1);

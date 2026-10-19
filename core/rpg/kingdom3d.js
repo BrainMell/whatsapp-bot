@@ -192,6 +192,7 @@ class HexWorld {
         }
         this.objs = [];   // {name,x,z,y,flip,sc,layer,sort}
         this.overlays = []; // {fn(ctx, proj)} drawn after objects (labels etc.)
+        this.underlays = []; // {fn(ctx, proj)} drawn right after the terrain — cell-ground art (stone paving) under every object
     }
     inb(c, r) { return c >= 0 && r >= 0 && c < this.cols && r < this.rows; }
     at(c, r) { return this.inb(c, r) ? this.cell[r][c] : null; }
@@ -317,6 +318,7 @@ class HexWorld {
         });
     }
     overlay(fn, c, r, o = {}) { const w = hexWorld(c, r); this.overlays.push({ fn, x: w.x + (o.dx || 0), z: w.z + (o.dz || 0), y: o.h || 0 }); }
+    underlay(fn, c, r, o = {}) { const w = hexWorld(c, r); this.underlays.push({ fn, x: w.x + (o.dx || 0), z: w.z + (o.dz || 0), y: o.h || 0 }); }
 
     // ── camera: world (x,z) is rotated by the view yaw first (0 for the top-down guild view) ──
     rot(x, z) { const v = this.view; return v.yaw ? { x: v.cy * x + v.sy * z, z: -v.sy * x + v.cy * z } : { x, z }; }
@@ -435,6 +437,8 @@ class HexWorld {
         };
         // 1. terrain, back to front
         if (doTerrain) for (const t of tiles) await drawSpr(t.m, t.m.file, t.m.ax, t.m.ay, t.p.x, t.p.y, 1, false, 1);
+        // 1.5 underlays — cell-ground art (stone paving) under every shadow/object
+        for (const ov of this.underlays) { const p = this.proj(ov.x, ov.z, ov.y); ov.fn(ctx, p, k); }
         if (!doObjects) return;
         // 2. shadows
         for (const o of sorted) {
