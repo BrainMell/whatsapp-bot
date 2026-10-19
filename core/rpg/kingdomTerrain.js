@@ -198,9 +198,17 @@ function populate(S, w, o) {
     const freeNear = (c, r, maxD) => [0, 1, 2, 3, 4, 5].map((dd) => K.neighbor(c, r, dd)).filter(([a, b]) => w.inb(a, b) && !o.used.has(o.key(a, b)) && !w.cell[b][a].water && !w.cell[b][a].river && !w.cell[b][a].void && o.cdist(a, b) <= maxD);
     const placed = {};
 
-    // mine at the foot of the nearest mountain (or hill)
+    // mine at the foot of the nearest mountain (or hill) — dressed as a working site (owner 2026-10-19:
+    // "there literally is a mines like model with a walk way leading into some rocks" — give it the ore-hoist, ladder + stone pile)
     const ridge = (stats.mountain.length ? stats.mountain : stats.hill).slice().sort((a, b) => o.cdist(a[0], a[1]) - o.cdist(b[0], b[1]));
-    for (const [c, r] of ridge) { const f = freeNear(c, r, 9)[0]; if (f) { w.put(o.B('mine'), f[0], f[1]); o.claim(f[0], f[1]); placed.mine = f; break; } }
+    for (const [c, r] of ridge) {
+        const f = freeNear(c, r, 9)[0]; if (!f) continue;
+        w.put(o.B('mine'), f[0], f[1]);
+        w.put('building_scaffolding', f[0], f[1], { dx: -0.85, dz: 0.32, sc: 0.85, flip: rng() < 0.5 });
+        w.put('ladder', f[0], f[1], { dx: 0.55, dz: 0.85, sc: 0.9 });
+        w.put('resource_stone', f[0], f[1], { dx: -0.35, dz: 1.05, sc: 0.9 });
+        o.claim(f[0], f[1]); placed.mine = f; break;
+    }
     // lumber mill beside a forest
     if (par.lumber && stats.forest.length) for (const [c, r] of stats.forest) { const f = freeNear(c, r, 7)[0]; if (f) { w.put(o.B('lumbermill'), f[0], f[1]); o.claim(f[0], f[1]); placed.lumber = f; break; } }
     // watermill on the river

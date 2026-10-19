@@ -592,6 +592,7 @@ function buildWorld(state, cel = null) {
             case 'mines':                                                 // dedicated models: cave mouth → timber mine → deep mine with headframe
                 if (K.hasSprite('struct_mine_cave', 'iso')) {
                     P(['struct_mine_cave', 'struct_mine_timber', 'struct_mine_deep'][lvl - 1], { sc: lvl === 1 ? 1.95 : lvl === 2 ? 1.7 : 1.45, dx: 0.5, dz: 0.7 });
+                    if (lvl >= 2) { P(B('mine'), { dx: -1.45, dz: -0.7, sc: 0.95 }); P('ladder', { dx: -0.8, dz: -0.15, sc: 0.85 }); }  // pack's own mine (rock face + walkway) as the second shaft once worked
                     P('resource_stone', { dx: 2.0, dz: 1.8 }); if (lvl >= 2) P('wheelbarrow', { dx: -1.2, dz: 2.0 });
                     if (lvl >= 3) { P('resource_lumber', { dx: 0.3, dz: 2.0 }); P('crate_long_A', { dx: -2.0, dz: 0.9 }); }
                     break;
