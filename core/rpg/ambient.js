@@ -221,7 +221,9 @@ function drawBirds(ctx, W, H, t, seed) {
 }
 
 // ── villagers: tiny figures strolling along the roads (ping-pong over 1-3 road cells, one stroll per loop) ──
+// owner call (2026-10-19): walkers off — remove the people, keep the birds (boats/smoke/sway untouched)
 function buildWalkers(w, seed, { n = 8, maxY = Infinity } = {}) {
+    return [];                                                       // villagers disabled; drawWalkers no-ops on empty
     const rnd = K.mulberry32(seed + 5200);
     const key = (c, r) => c + ',' + r;
     const cells = new Map();
