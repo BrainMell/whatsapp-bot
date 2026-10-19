@@ -246,3 +246,244 @@ def make_house(kind, roof):
     else:
         raise KeyError(kind)
     return m.build()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  STRUCTURES: dedicated models for the player-base Mines and Med Bay (3 levels each)
+#  baked as struct_<name>; author size ≈ 1.2-2.0 units wide (the base places them at sc≈1 on a dirt pad)
+# ═══════════════════════════════════════════════════════════════════════════
+import random
+
+ROCK = (146, 146, 158)
+ROCK_D = (108, 108, 122)
+ROCK_L = (178, 178, 190)
+CAVE = (26, 22, 26)
+ORE_G = (232, 190, 72)
+ORE_B = (96, 176, 232)
+CLOTH = (246, 244, 240)
+CLOTH_D = (226, 222, 214)
+CROSS = (214, 52, 52)
+SOIL = (122, 86, 58)
+LEAF = (74, 156, 74)
+LAMP = (255, 214, 110)
+WALL_W = (250, 247, 240)
+
+
+def _mix(col, f):
+    return tuple(max(0, min(255, v * f)) for v in col)
+
+
+def _boulder(m, cx, cz, tiers, n=8, seed=1, col=ROCK):
+    """faceted rock mound: tiers = [(y, radius), ...] bottom→top; last tier closes with a flat cap."""
+    rnd = random.Random(seed)
+    rings = []
+    for (y, r) in tiers:
+        rings.append([(cx + r * (0.82 + rnd.random() * 0.36) * math.cos(2 * math.pi * i / n), y,
+                       cz + r * (0.82 + rnd.random() * 0.36) * math.sin(2 * math.pi * i / n)) for i in range(n)])
+    ctr = (cx, tiers[len(tiers) // 2][0], cz)
+    for k in range(len(rings) - 1):
+        for i in range(n):
+            j = (i + 1) % n
+            sh = (1.08, 0.94, 1.0, 0.9)[(i + k) % 4]
+            c = _mix(col, sh) if k < len(rings) - 2 else _mix(ROCK_L, sh)
+            m.poly([rings[k][i], rings[k][j], rings[k + 1][j], rings[k + 1][i]], c, ctr)
+    m.poly(rings[-1], _mix(ROCK_L, 1.05), ctr)
+
+
+def _disc(m, x, y, z, r, th, n, col, rim):
+    """vertical disc facing +z (winch wheel)."""
+    pts_f = [(x + r * math.cos(2 * math.pi * i / n), y + r * math.sin(2 * math.pi * i / n), z + th) for i in range(n)]
+    pts_b = [(p[0], p[1], z - th) for p in pts_f]
+    ctr = (x, y, z)
+    m.poly(pts_f, col, ctr); m.poly(pts_b, col, ctr)
+    for i in range(n):
+        j = (i + 1) % n
+        m.poly([pts_f[i], pts_f[j], pts_b[j], pts_b[i]], rim, ctr)
+
+
+def _ore(m, x, z, y0=0.0, s=1.0, gold=True):
+    for dx, dz, hh in ((0, 0, 0.07), (0.07, 0.03, 0.05), (-0.06, 0.05, 0.045)):
+        m.box(x + dx * s - 0.05 * s, x + dx * s + 0.05 * s, y0, y0 + hh * s * 1.6, z + dz * s - 0.05 * s, z + dz * s + 0.05 * s, ORE_G if gold else ORE_B)
+    m.box(x - 0.03 * s, x + 0.03 * s, y0 + 0.07 * s, y0 + 0.1 * s, z - 0.02 * s, z + 0.03 * s, ROCK_D)
+
+
+def _cart(m, x, z, load=True):
+    m.box(x - 0.15, x + 0.15, 0.07, 0.2, z - 0.1, z + 0.1, TIMBER)
+    m.box(x - 0.17, x + 0.17, 0.18, 0.21, z - 0.12, z + 0.12, TIMBER_D)
+    for wx in (-0.11, 0.11):
+        for wz in (-0.11, 0.11):
+            m.box(x + wx - 0.035, x + wx + 0.035, 0.0, 0.08, z + wz - 0.015, z + wz + 0.015, STONE_D)
+    if load:
+        m.box(x - 0.12, x + 0.12, 0.2, 0.27, z - 0.07, z + 0.07, ORE_G)
+        m.box(x - 0.05, x + 0.08, 0.27, 0.32, z - 0.04, z + 0.05, ORE_B)
+
+
+def _rails(m, x, z0, z1):
+    for dx in (-0.09, 0.09):
+        m.box(x + dx - 0.012, x + dx + 0.012, 0.012, 0.035, z0, z1, STONE)
+    n = int((z1 - z0) / 0.1)
+    for i in range(n + 1):
+        zz = z0 + i * (z1 - z0) / max(1, n)
+        m.box(x - 0.14, x + 0.14, 0.0, 0.016, zz - 0.014, zz + 0.014, TIMBER_D)
+
+
+def _adit(m, x, w, z_front, h=0.36):
+    """timber-framed cave mouth cut into the mound front."""
+    m.box(x - w / 2, x + w / 2, 0.0, h, z_front - 0.12, z_front, CAVE)
+    for sx in (-1, 1):
+        m.box(x + sx * (w / 2 + 0.025) - 0.03, x + sx * (w / 2 + 0.025) + 0.03, 0.0, h + 0.05, z_front - 0.03, z_front + 0.07, TIMBER)
+    m.box(x - w / 2 - 0.07, x + w / 2 + 0.07, h, h + 0.07, z_front - 0.03, z_front + 0.08, TIMBER_D)
+
+
+def _lantern(m, x, y, z):
+    m.box(x - 0.012, x + 0.012, y + 0.04, y + 0.12, z - 0.012, z + 0.012, TIMBER_D)
+    m.box(x - 0.03, x + 0.03, y - 0.03, y + 0.04, z - 0.03, z + 0.03, LAMP)
+
+
+def _cross(m, x, y, z, s=0.1, thick=0.022, col=CROSS, depth=0.012):
+    m.box(x - s * 0.34, x + s * 0.34, y - s, y + s, z, z + depth, col)
+    m.box(x - s, x + s, y - s * 0.34, y + s * 0.34, z, z + depth, col)
+
+
+def _bed(m, x, z, blanket=(92, 140, 210)):
+    m.box(x - 0.1, x + 0.1, 0.03, 0.07, z - 0.18, z + 0.18, TIMBER)
+    m.box(x - 0.09, x + 0.09, 0.07, 0.1, z - 0.17, z + 0.17, CLOTH)
+    m.box(x - 0.09, x + 0.09, 0.1, 0.125, z - 0.02, z + 0.17, blanket)
+    for sx in (-0.09, 0.09):
+        for sz in (-0.17, 0.17):
+            m.box(x + sx - 0.012, x + sx + 0.012, 0.0, 0.04, z + sz - 0.012, z + sz + 0.012, TIMBER_D)
+
+
+def _herb_bed(m, x0, x1, z0, z1, rows=3):
+    m.box(x0, x1, 0.0, 0.05, z0, z1, TIMBER)
+    m.box(x0 + 0.02, x1 - 0.02, 0.04, 0.06, z0 + 0.02, z1 - 0.02, SOIL)
+    for i in range(rows):
+        xx = x0 + (x1 - x0) * (i + 0.5) / rows
+        for zz in (z0 + (z1 - z0) * 0.3, z0 + (z1 - z0) * 0.7):
+            m.box(xx - 0.025, xx + 0.025, 0.06, 0.12 + 0.02 * ((i + int(zz * 10)) % 2), zz - 0.025, zz + 0.025, LEAF if i % 2 else _mix(LEAF, 1.15))
+            m.box(xx - 0.008, xx + 0.008, 0.1, 0.15, zz - 0.008, zz + 0.008, (240, 120, 150) if (i % 2) else (250, 220, 90))
+
+
+def _tent(m, x0, x1, z0, z1, h, cloth, flap=True):
+    """ridge-along-x tent with striped cloth, open front gable with a red cross."""
+    zm = (z0 + z1) / 2
+    ctr = ((x0 + x1) / 2, h / 2, zm)
+    nb = 5
+    for zs in (z0, z1):
+        for b in range(nb):
+            f0, f1 = b / nb, (b + 1) / nb
+            za = zs + (zm - zs) * f0; zb = zs + (zm - zs) * f1
+            m.poly([(x0 - 0.04, h * f0, za), (x1 + 0.04, h * f0, za), (x1 + 0.04, h * f1, zb), (x0 - 0.04, h * f1, zb)],
+                   cloth if b % 2 == 0 else _mix(cloth, 0.93), ctr)
+    for xx in (x0, x1):
+        m.poly([(xx, 0, z0), (xx, 0, z1), (xx, h, zm)], CLOTH_D, ctr)
+    m.box(x0 - 0.05, x1 + 0.05, h - 0.01, h + 0.025, zm - 0.02, zm + 0.02, TIMBER_D)             # ridge pole
+    for xx in (x0 - 0.05, x1 + 0.05):
+        m.box(xx - 0.015, xx + 0.015, 0.0, h + 0.07, zm - 0.015, zm + 0.015, TIMBER_D)             # end poles
+    return zm
+
+
+def make_struct(name):
+    m = Mesh()
+    if name == 'mine_cave':                    # lvl 1: cave mouth in a rock mound, lantern + ore pile
+        _boulder(m, 0.0, -0.18, [(0, 0.88), (0.3, 0.74), (0.55, 0.5), (0.7, 0.26)], seed=3)
+        _boulder(m, -0.62, 0.0, [(0, 0.28), (0.18, 0.22), (0.3, 0.1)], n=6, seed=8)
+        _adit(m, 0.0, 0.36, 0.64)
+        _lantern(m, -0.26, 0.28, 0.72)
+        _ore(m, 0.52, 0.72, s=1.1)
+        _ore(m, -0.5, 0.82, s=0.8, gold=False)
+        m.box(0.3, 0.44, 0.0, 0.05, 0.42, 0.52, STONE_D)
+    elif name == 'mine_timber':                # lvl 2: timber-framed adit under a shed roof, rails + ore cart
+        _boulder(m, 0.0, -0.3, [(0, 1.0), (0.38, 0.86), (0.7, 0.6), (0.9, 0.3)], n=9, seed=5)
+        _boulder(m, 0.78, -0.1, [(0, 0.3), (0.2, 0.24), (0.34, 0.12)], n=6, seed=11)
+        m.gable(-0.36, 0.36, 0.45, 0.85, 0.5, 0.68, ROOFS['brown'], TIMBER, over=0.06, axis='x', trim=TIMBER_D)
+        for sx in (-0.33, 0.33):
+            for sz in (0.5, 0.82):
+                m.box(sx - 0.03, sx + 0.03, 0.0, 0.5, sz - 0.03, sz + 0.03, TIMBER)
+        m.box(-0.27, 0.27, 0.0, 0.36, 0.4, 0.55, CAVE)
+        m.box(-0.3, 0.3, 0.36, 0.44, 0.52, 0.6, TIMBER_D)
+        _lantern(m, -0.2, 0.3, 0.88)
+        _rails(m, 0.0, 0.85, 1.55)
+        _cart(m, 0.0, 1.15)
+        _ore(m, 0.6, 0.95, s=1.2); _ore(m, -0.62, 1.0, s=1.0, gold=False)
+        m.box(0.42, 0.5, 0.0, 0.34, 0.9, 0.93, TIMBER_D); m.box(0.4, 0.62, 0.3, 0.4, 0.89, 0.935, HAY)   # signpost
+    elif name == 'mine_deep':                  # lvl 3: headframe tower with winch wheel, shed, tracks, crystals
+        _boulder(m, 0.1, -0.5, [(0, 1.15), (0.42, 1.0), (0.82, 0.7), (1.08, 0.36)], n=10, seed=7)
+        _boulder(m, -0.95, -0.1, [(0, 0.34), (0.22, 0.27), (0.4, 0.13)], n=6, seed=12)
+        for sx in (-0.2, 0.2):                                              # four-post headframe
+            for sz in (0.2, 0.6):
+                m.box(sx - 0.035, sx + 0.035, 0.0, 1.32, sz - 0.035, sz + 0.035, TIMBER)
+        for yy in (0.35, 0.72, 1.08):
+            m.box(-0.23, 0.23, yy, yy + 0.04, 0.17, 0.23, TIMBER_D); m.box(-0.23, 0.23, yy, yy + 0.04, 0.57, 0.63, TIMBER_D)
+            m.box(-0.23, -0.17, yy, yy + 0.04, 0.17, 0.63, TIMBER_D); m.box(0.17, 0.23, yy, yy + 0.04, 0.17, 0.63, TIMBER_D)
+        m.box(-0.28, 0.28, 1.32, 1.38, 0.12, 0.68, TIMBER_D)
+        m.gable(-0.3, 0.3, 0.14, 0.66, 1.38, 1.52, ROOFS['brown'], TIMBER, over=0.05, axis='x', trim=TIMBER_D)
+        _disc(m, 0.0, 1.0, 0.7, 0.19, 0.018, 8, TIMBER, STONE_D)             # winch wheel
+        m.box(-0.012, 0.012, 0.5, 1.0, 0.7, 0.714, STONE_D)                  # rope
+        m.box(-0.05, 0.05, 0.42, 0.5, 0.688, 0.74, ORE_G)                    # bucket
+        m.box(-0.34, 0.34, 0.0, 0.05, 0.1, 0.72, STONE_D)                    # shaft collar
+        # side shed
+        m.box(0.62, 1.08, 0.0, 0.3, 0.25, 0.72, TIMBER)
+        m.gable(0.62, 1.08, 0.25, 0.72, 0.3, 0.52, ROOFS['slate'], TIMBER, over=0.06, axis='z', trim=TIMBER_D)
+        m.box(0.76, 0.94, 0.0, 0.22, 0.72, 0.735, CAVE)
+        _rails(m, 0.0, 0.8, 1.6); _cart(m, 0.0, 1.2)
+        _ore(m, -0.62, 0.9, s=1.3); _ore(m, 0.5, 1.2, s=1.1, gold=False); _ore(m, -0.8, 1.2, s=0.9)
+        for cx, cz, hh in ((-0.45, 0.55, 0.22), (-0.55, 0.62, 0.15)):       # crystal shards
+            m.box(cx - 0.03, cx + 0.03, 0.0, hh, cz - 0.03, cz + 0.03, ORE_B)
+        _lantern(m, -0.36, 0.42, 0.8); _lantern(m, 0.4, 0.42, 0.8)
+    elif name == 'med_tent':                   # lvl 1: striped medic tent, red cross, cots
+        zm = _tent(m, -0.5, 0.5, -0.38, 0.38, 0.62, CLOTH)
+        m.poly([(-0.5, 0.0, 0.0), (-0.5, 0.0, 0.0), (-0.5, 0.0, 0.0)], CLOTH, (0, 0, 0)) if False else None
+        m.box(-0.18, 0.18, 0.0, 0.34, 0.37, 0.4, CAVE)                       # open flap
+        _cross(m, 0.0, 0.5, 0.385, s=0.07, depth=0.012)
+        _bed(m, 0.62, 0.25); _bed(m, 0.62, -0.18, blanket=(210, 130, 130))
+        m.box(-0.66, -0.62, 0.0, 1.0, 0.5, 0.53, TIMBER_D)                   # flag pole
+        m.box(-0.62, -0.4, 0.78, 0.98, 0.5, 0.52, CLOTH); _cross(m, -0.51, 0.88, 0.52, s=0.06)
+        _herb_bed(m, -0.55, -0.1, 0.5, 0.75, rows=3)
+        m.box(0.3, 0.42, 0.0, 0.1, 0.5, 0.62, TIMBER)                        # supply crate
+    elif name == 'med_infirmary':              # lvl 2: white infirmary, red roof, cross sign, herb garden
+        x0, x1, z0, z1, he = -0.62, 0.62, -0.34, 0.34, 0.42
+        _plinth(m, x0, x1, z0, z1)
+        m.box(x0, x1, 0.045, he, z0, z1, WALL_W)
+        m.gable(x0, x1, z0, z1, he, 0.92, ROOFS['red'], WALL_W, axis='x', trim=TIMBER)
+        m.box(-0.14, 0.14, 0.62, 0.9, z1 - 0.01, z1 + 0.02, WALL_W)           # front dormer
+        m.gable(-0.17, 0.17, z1 - 0.1, z1 + 0.1, 0.62, 0.8, ROOFS['red'], WALL_W, over=0.03, axis='z', trim=TIMBER)
+        _cross(m, 0.0, 0.7, z1 + 0.025, s=0.08)
+        _door(m, 0.0, z1, w=0.16, h=0.24, col=(240, 236, 228))
+        _cross(m, -0.42, 0.28, z1, s=0.07, depth=0.014)
+        for wx in (-0.3, 0.3, 0.48, -0.5):
+            if abs(wx) > 0.44 or abs(wx) < 0.25:
+                continue
+            _window(m, wx, 0.24, z1, w=0.09, h=0.12)
+        _window(m, 0.45, 0.24, z1, w=0.09, h=0.12); _window(m, -0.28, 0.24, z1, w=0.09, h=0.12)
+        _chimney(m, 0.42, -0.1, 0.62, 1.0)
+        m.box(-0.12, 0.12, 0.0, 0.03, z1 + 0.02, z1 + 0.14, STONE)
+        _herb_bed(m, -0.7, -0.25, 0.56, 0.86, rows=3); _herb_bed(m, 0.25, 0.7, 0.56, 0.86, rows=3)
+        m.box(0.72, 0.84, 0.0, 0.12, 0.1, 0.26, TIMBER); m.box(0.72, 0.84, 0.12, 0.16, 0.1, 0.26, (92, 140, 210))   # water trough
+    elif name == 'med_sanatorium':             # lvl 3: central hall + tower, two wings, fountain courtyard
+        _plinth(m, -0.95, 0.95, -0.3, 0.3)
+        for (xa, xb) in ((-0.95, -0.4), (0.4, 0.95)):                        # wings
+            m.box(xa, xb, 0.045, 0.4, -0.3, 0.3, WALL_W)
+            m.gable(xa, xb, -0.3, 0.3, 0.4, 0.8, ROOFS['red'], WALL_W, axis='x', trim=TIMBER)
+            _window(m, (xa + xb) / 2 - 0.12, 0.22, 0.3, w=0.09, h=0.12); _window(m, (xa + xb) / 2 + 0.12, 0.22, 0.3, w=0.09, h=0.12)
+        m.box(-0.4, 0.4, 0.045, 0.62, -0.34, 0.34, WALL_W)                    # central hall, taller
+        m.gable(-0.4, 0.4, -0.34, 0.34, 0.62, 1.1, ROOFS['red'], WALL_W, axis='z', trim=TIMBER)
+        m.box(-0.14, 0.14, 0.62, 1.0, 0.0, 0.3, WALL_W)                       # tower
+        m.box(-0.17, 0.17, 1.0, 1.06, -0.03, 0.33, TIMBER_D)
+        m.gable(-0.15, 0.15, 0.0, 0.3, 1.06, 1.3, ROOFS['red'], WALL_W, over=0.05, axis='x', trim=TIMBER)
+        _cross(m, 0.0, 0.84, 0.305, s=0.09, depth=0.014)
+        _door(m, 0.0, 0.34, w=0.18, h=0.28, col=(240, 236, 228))
+        _cross(m, 0.0, 0.5, 0.34, s=0.07, depth=0.012)
+        m.box(-0.14, 0.14, 0.0, 0.03, 0.36, 0.5, STONE); m.box(-0.18, 0.18, 0.0, 0.015, 0.5, 0.58, STONE)
+        _window(m, -0.26, 0.3, 0.34, w=0.08, h=0.13); _window(m, 0.26, 0.3, 0.34, w=0.08, h=0.13)
+        _chimney(m, -0.7, -0.1, 0.6, 1.0); _chimney(m, 0.7, -0.1, 0.6, 1.0)
+        for sx in (-1, 1):                                                    # herb beds + fountain
+            _herb_bed(m, sx * 0.55 - 0.25, sx * 0.55 + 0.25, 0.5, 0.82, rows=4)
+        m.prism(0.15, 0.0, 0.07, 8, STONE); m.prism(0.1, 0.07, 0.1, 8, (92, 150, 220))
+        m.box(-0.012, 0.012, 0.07, 0.24, 0.0 - 0.012 + 0.0, 0.012, STONE)
+    else:
+        raise KeyError(name)
+    return m.build()
+
+
+STRUCTS = ['mine_cave', 'mine_timber', 'mine_deep', 'med_tent', 'med_infirmary', 'med_sanatorium']

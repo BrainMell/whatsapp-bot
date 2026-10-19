@@ -467,7 +467,7 @@ function buildWorld(state) {
         const ff = facing(cen);
         info.push({ st, def, lvl, cen });
         if (st.type !== 'hunting') w.put('building_dirt', 0, 0, { wx: cen.x, wz: cen.z, layer: 'flat', sc: def.fw >= 3 ? 1.9 : 1.2 });
-        const P = (n, o = {}) => w.put(n, 0, 0, { wx: cen.x, wz: cen.z, ...(o.dx == null && o.dz == null && !('flip' in o) && n.startsWith('building_') ? { flip: ff } : {}), ...o });
+        const P = (n, o = {}) => w.put(n, 0, 0, { wx: cen.x, wz: cen.z, ...(o.dx == null && o.dz == null && !('flip' in o) && (n.startsWith('building_') || n.startsWith('struct_')) ? { flip: ff } : {}), ...o });
         switch (st.type) {
             case 'house':
                 if (lvl === 1) { P('building_home_A_' + team, { sc: 1.55 }); P('building_well_' + team, { dx: 1.5, dz: 0.9 }); P('crate_A_small', { dx: -1.4, dz: 1.0 }); }
@@ -479,7 +479,12 @@ function buildWorld(state) {
                 else if (lvl === 2) { P('building_blacksmith_' + team, { sc: 1.65 }); P('weaponrack', { dx: -1.4, dz: 0.9 }); P('resource_stone', { dx: 1.5, dz: 0.9 }); }
                 else { P('building_blacksmith_' + team, { sc: 1.95 }); P('weaponrack', { dx: -1.8, dz: 1.0 }); P('resource_stone', { dx: 1.7, dz: 1.0 }); P('wheelbarrow', { dx: 1.0, dz: 1.7 }); P('barrel', { dx: -0.8, dz: 1.6 }); }
                 break;
-            case 'medbay':
+            case 'medbay':                                                // dedicated models: medic tent → infirmary → sanatorium
+                if (K.hasSprite('struct_med_tent', 'iso')) {
+                    P(['struct_med_tent', 'struct_med_infirmary', 'struct_med_sanatorium'][lvl - 1], { sc: lvl === 1 ? 1.9 : lvl === 2 ? 1.65 : 1.5 });
+                    P('bucket_water', { dx: -1.5, dz: 1.0 }); if (lvl === 3) P('flag_' + team, { dx: 1.7, dz: 1.1 });
+                    break;
+                }
                 if (lvl === 1) { P('tent', { sc: 2.1 }); P('sack', { dx: 1.3, dz: 0.9 }); P('bucket_water', { dx: -1.3, dz: 0.9 }); }
                 else if (lvl === 2) { P('building_church_' + team, { sc: 1.35 }); P('tent', { dx: 1.7, dz: 0.8, sc: 1.2 }); P('bucket_water', { dx: -1.5, dz: 0.9 }); }
                 else { P('building_church_' + team, { sc: 1.8 }); P('building_well_' + team, { dx: 1.8, dz: 1.0 }); P('flag_' + team, { dx: -1.6, dz: 1.0 }); }
@@ -489,7 +494,13 @@ function buildWorld(state) {
                 else if (lvl === 2) { P('building_tavern_' + team, { sc: 1.5 }); P('barrel', { dx: 1.5, dz: 1.0 }); P('crate_B_small', { dx: -1.4, dz: 1.0 }); }
                 else { P('building_tavern_' + team, { sc: 1.9 }); P('building_windmill_' + team, { dx: -2.1, dz: -0.2, sc: 0.95 }); P('barrel', { dx: 1.8, dz: 1.1 }); P('crate_B_small', { dx: 0.9, dz: 1.7 }); }
                 break;
-            case 'mines':
+            case 'mines':                                                 // dedicated models: cave mouth → timber mine → deep mine with headframe
+                if (K.hasSprite('struct_mine_cave', 'iso')) {
+                    P(['struct_mine_cave', 'struct_mine_timber', 'struct_mine_deep'][lvl - 1], { sc: lvl === 1 ? 1.95 : lvl === 2 ? 1.7 : 1.45, dx: 0.5, dz: 0.7 });
+                    P('resource_stone', { dx: 2.0, dz: 1.8 }); if (lvl >= 2) P('wheelbarrow', { dx: -1.2, dz: 2.0 });
+                    if (lvl >= 3) { P('resource_lumber', { dx: 0.3, dz: 2.0 }); P('crate_long_A', { dx: -2.0, dz: 0.9 }); }
+                    break;
+                }
                 P('building_mine_' + team, { sc: lvl === 1 ? 1.35 : lvl === 2 ? 1.6 : 1.85 });
                 if (lvl >= 2) { P('resource_stone', { dx: 1.2, dz: 0.9 }); P('wheelbarrow', { dx: -1.1, dz: 0.9 }); }
                 if (lvl >= 3) { P('resource_lumber', { dx: 0.2, dz: 1.5 }); P('crate_long_A', { dx: -1.6, dz: 0.6 }); }

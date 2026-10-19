@@ -120,6 +120,8 @@ def job(task):
         base = make_dock(path[5:])
     elif path.startswith('house:'):
         base = houses.make_house(*path[6:].split(':'))
+    elif path.startswith('struct:'):
+        base = houses.make_struct(path[7:])
     else:
         base = load_model(path, _atlas)
     model = transform(base, yaw=yaw)                    # logical orientation (edge signatures)
@@ -135,7 +137,7 @@ def job(task):
         entry['sh'] = dict(file=name + '_sh.png', w=m['w'], h=m['h'], ax=round(m['ax'], 2), ay=round(m['ay'], 2))
     if kind == 'tile' and yaw is not None:
         entry['edges'] = edge_classes(model)
-    if kind == 'piece' and not path.startswith(('dock:', 'house:')):
+    if kind == 'piece' and not path.startswith(('dock:', 'house:', 'struct:')):
         entry['conn'] = piece_conn(model)
     entry['kind'] = kind
     return name, entry
@@ -170,9 +172,11 @@ def main():
     for kd, roofs in houses.HOUSES.items():                  # procedural houses, every roof colour
         for rf in roofs:
             tasks.append((f'house:{kd}:{rf}', f'house_{kd}_{rf}', 0.0, 'object'))
+    for sn in houses.STRUCTS:                                 # dedicated Mines / Med Bay models
+        tasks.append((f'struct:{sn}', f'struct_{sn}', 0.0, 'object'))
     only = os.environ.get('KK_ONLY')                          # e.g. KK_ONLY=house_  -> bake just those, merge into manifest
     if only:
-        tasks = [t for t in tasks if t[1].startswith(only)]
+        tasks = [t for t in tasks if t[1].startswith(tuple(only.split(',')))]
     t0 = time.time()
     print(f'baking {len(tasks)} sprites -> {OUT}')
     manifest = dict(S=S, pitch=CAM_PITCH, yaw=CAM_YAW, sprites={})
