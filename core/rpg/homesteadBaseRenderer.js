@@ -194,6 +194,25 @@ function buildWorld(state) {
     const coastal = realm === 'isle';
     const WP = WILDS[biome];
     const B = (n) => `building_${n}_${team}`;
+
+    // ── per-base macro profile (owner brief 2026-10-19: bases on the same continent must not be twins) ──
+    // Claude-method (traced: seeded kind + realm-appropriate palettes + spread-not-clump): every
+    // choice below is a SEEDED pick from curated LEGAL variants. The street plan, gate law and
+    // facade law stay canonical (v4 invariants) — only the scenery compass story and the village
+    // texture (house kinds, yard dressing, farm story) re-roll per owner seed. Stable per base.
+    const FARM = biome === 'coast' || biome === 'wildwood';
+    const mir = rng() < 0.5;                                              // scenery mirror E/W (layout untouched)
+    const MX = (gx) => (mir ? (N - 1) - gx : gx);
+    const LAKE_C = [[16, 2], [15, 3], [17, 1]][Math.floor(rng() * 3)];    // lake nook in the (mirrored) NE quadrant
+    const KIND_PROFILES = {
+        village: null,                                                                    // default weights
+        farmstead: { barn: 2.4, hut: 1.8, cottage: 1.2, townhouse: 0.4, stone: 0.6, tudor: 0.9, shop: 0.4 },
+        town: { townhouse: 2.4, shop: 2.0, cottage: 0.8, stone: 1.0, tudor: 1.3, hut: 0.3, barn: 0 },
+        hill: { stone: 2.4, tudor: 1.4, cottage: 1.2, townhouse: 0.5, hut: 0.8, barn: 0, shop: 0.4 },
+    };
+    const HW = KIND_PROFILES[Object.keys(KIND_PROFILES)[Math.floor(rng() * 4)]];
+    const yardTheme = Math.floor(rng() * 3);
+    const farmGrain = FARM && rng() < 0.72;                               // grain field vs tree grove
     const w = new K.HexWorld(COLS, ROWS, { scale: SCALE, biome: realm, oobWater: coastal, view: 'iso' });
     const used = new Set();
     const claim = (c, r) => used.add(keyOf(c, r));
@@ -208,22 +227,22 @@ function buildWorld(state) {
     if (coastal) {
         for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
             const gx = c - M, gy = r - M;
-            if ((gx - (N - 1)) + (gy - 8) * 0.5 > 1.5 + 2.2 * coastN(c, r)) w.cell[r][c].water = true;
+            if ((MX(gx) - (N - 1)) + (gy - 8) * 0.5 > 1.5 + 2.2 * coastN(c, r)) w.cell[r][c].water = true;
         }
     }
-    // ── the lake NE of the village (the pond structure's pier runs out into it) ──
-    const [lc, lr] = hc(16, 2);
+    // ── the lake in the (per-base mirrored) NE nook — the pond pier is forced over water so any nook works ──
+    const [lc, lr] = hc(MX(LAKE_C[0]), LAKE_C[1]);
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
         const d = K.hexDist(lc, lr, c, r);
         if (d <= 2 || (d === 3 && rng() < 0.55)) { const k = w.cell[r][c]; k.water = true; k.lake = true; }
     }
     if (coastal) {                                      // the lake is joined to the ocean by a channel
-        const [tc, tr] = hc(23, 4);
+        const [tc, tr] = hc(MX(23), 4);
         for (const [c, r] of K.hexLine(lc, lr, tc, tr)) if (inCells(c, r)) w.cell[r][c].water = true;
     } else if (biome !== 'desert') {                    // a stream wanders off the lake to the edge of the world
         let cur = [lc, lr];
         const [tc, tr] = hc(34, -22);
-        const way = [hc(22 + Math.floor(rng() * 4), -2 + Math.floor(rng() * 4)), hc(28 + Math.floor(rng() * 4), -12 + Math.floor(rng() * 4)), [tc, tr]];
+        const way = [hc(MX(22 + Math.floor(rng() * 4)), -2 + Math.floor(rng() * 4)), hc(MX(28 + Math.floor(rng() * 4)), -12 + Math.floor(rng() * 4)), [tc, tr]];
         for (const nx of way) {
             for (const [c, r] of K.hexLine(cur[0], cur[1], nx[0], nx[1])) if (inCells(c, r) && !w.cell[r][c].water) w.cell[r][c].river = true;
             cur = nx;
@@ -342,7 +361,6 @@ function buildWorld(state) {
 
     // ── ambient village life (cottages that face the street, yards, fields, orchards) ──
     const cottageSpots = [];
-    const FARM = biome === 'coast' || biome === 'wildwood';
     const freeCell = (c, r) => { const k = w.at(c, r); return !!k && !k.water && !k.river && !k.coast && !k.road && !used.has(keyOf(c, r)); };
     const gridOK = (c, r) => { const gx = c - M, gy = r - M; return inGrid(gx, gy) && !inZ(mz, gx, gy) && !inZ(hz, gx, gy) && gx < 15; };
     const cands = [];
@@ -352,7 +370,12 @@ function buildWorld(state) {
     }
     for (let i = cands.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [cands[i], cands[j]] = [cands[j], cands[i]]; }
     const want = Math.min(14, 8 + sts.length * 2);
-    const YARD = [['barrel', 0.9, 0.7], ['crate_A_small', -0.9, 0.7], ['bucket_water', 0.8, -0.6], ['wheelbarrow', -0.8, 0.8], ['sack', 0.6, 0.9], ['resource_lumber', -0.9, -0.5], ['crate_open', 0.9, 0.6], ['pallet', -0.7, 0.8]];
+    const YARD_THEMES = [
+        [['barrel', 0.9, 0.7], ['crate_A_small', -0.9, 0.7], ['bucket_water', 0.8, -0.6], ['wheelbarrow', -0.8, 0.8], ['sack', 0.6, 0.9], ['resource_lumber', -0.9, -0.5], ['crate_open', 0.9, 0.6], ['pallet', -0.7, 0.8]],
+        [['crate_A_small', 0.9, 0.7], ['crate_open', -0.9, 0.7], ['sack', 0.8, -0.6], ['crate_B_small', -0.8, 0.8], ['pallet', 0.6, 0.9], ['barrel', -0.9, -0.5], ['crate_long_A', 0.9, 0.6], ['crate_A_big', -0.7, 0.8]],
+        [['bucket_water', 0.9, 0.7], ['barrel', -0.9, 0.7], ['resource_lumber', 0.8, -0.6], ['wheelbarrow', -0.8, 0.8], ['crate_long_A', 0.6, 0.9], ['sack', -0.9, -0.5], ['crate_B_small', 0.9, 0.6], ['pallet', -0.7, 0.8]],
+    ];
+    const YARD = YARD_THEMES[yardTheme];
     for (const cd of cands) {
         if (cottageSpots.length >= want) break;
         if (!freeCell(cd.c, cd.r)) continue;
@@ -364,20 +387,22 @@ function buildWorld(state) {
         const useB = rng() < 0.35;
         const hut = rng() < 0.18;
         w.put('building_dirt', cd.c, cd.r, { layer: 'flat', sc: 0.85 });
-        w.put(hut ? 'tent' : (K.houseName(rng, biome, { view: 'iso' }) || (useB ? B('home_B') : B('home_A'))), cd.c, cd.r, { sc: hut ? 1.2 : 1.12 + rng() * 0.12, flip: west });
+        w.put(hut ? 'tent' : (K.houseName(rng, biome, { view: 'iso', weights: HW }) || (useB ? B('home_B') : B('home_A'))), cd.c, cd.r, { sc: hut ? 1.2 : 1.12 + rng() * 0.12, flip: west });
         for (let i = 0; i < 2; i++) { const y = YARD[Math.floor(rng() * YARD.length)]; w.put(y[0], cd.c, cd.r, { dx: y[1], dz: y[2] }); }
         if (rng() < 0.5) w.put(SMALL_TREES[Math.floor(rng() * 4)], cd.c, cd.r, { dx: -1.1, dz: -0.9, sc: 0.85 });
     }
     // farm patch (grain) by the SE lane, or a caravan camp where there is no soil
     {
         const seedCells = [];
-        for (let gy = 11; gy < 15; gy++) for (let gx = 10; gx < 15; gx++) { const [c, r] = hc(gx, gy); if (freeCell(c, r)) seedCells.push([c, r]); }
+        for (let gy = 11; gy < 15; gy++) for (let gx = 10; gx < 15; gx++) { const [c, r] = hc(MX(gx), gy); if (freeCell(c, r)) seedCells.push([c, r]); }
         if (seedCells.length) {
             const [sc0, sr0] = seedCells[Math.floor(rng() * seedCells.length)];
             let n = 0;
+            const story = FARM ? (farmGrain ? 'grain' : 'grove') : 'caravan';
             for (const [c, r] of [[sc0, sr0], ...[0, 1, 2, 3, 4, 5].map((d) => K.neighbor(sc0, sr0, d))]) {
                 if (!freeCell(c, r) || n >= 5) continue;
-                if (FARM) w.put('building_grain', c, r, { sc: 1.0 });
+                if (story === 'grain') w.put('building_grain', c, r, { sc: 1.0 });
+                else if (story === 'grove') w.put(SMALL_TREES[Math.floor(rng() * 4)], c, r, { sc: 0.85, flip: flip() });
                 else if (n === 0) { w.put('tent', c, r, { sc: 1.25 }); w.put('crate_A_big', c, r, { dx: 1.0, dz: 0.8 }); }
                 else if (n === 1) w.put('resource_stone', c, r, { dx: 0.3, dz: 0.2 });
                 else continue;
@@ -402,7 +427,7 @@ function buildWorld(state) {
         if (!freeCell(c, r) || !gridOK(c, r) || cottageSpots.some((q) => K.hexDist(q.c, q.r, c, r) < 3) || K.hexDist(c, r, pc, pr) < 3) continue;
         cottageSpots.push({ c, r, rc: base.rc, rr: base.rr }); claim(c, r);
         w.put('building_dirt', c, r, { layer: 'flat', sc: 0.85 });
-        w.put(K.houseName(rng, biome, { view: 'iso', farm: FARM, shop: false }) || (rng() < 0.5 ? B('home_A') : B('home_B')), c, r, { sc: 1.08 + rng() * 0.1, flip: rng() < 0.5 });
+        w.put(K.houseName(rng, biome, { view: 'iso', farm: FARM, shop: false, weights: HW }) || (rng() < 0.5 ? B('home_A') : B('home_B')), c, r, { sc: 1.08 + rng() * 0.1, flip: rng() < 0.5 });
         const y = YARD[Math.floor(rng() * YARD.length)]; w.put(y[0], c, r, { dx: y[1], dz: y[2] });
         for (let dd = 0; dd < 6; dd++) { const [fc, fr] = K.neighbor(c, r, dd); if (FARM && freeCell(fc, fr) && gridOK(fc, fr) && rng() < 0.35) { w.put('building_grain', fc, fr, { sc: 1.0 }); claim(fc, fr); } }
     }
@@ -425,12 +450,12 @@ function buildWorld(state) {
         if (k.water || k.coast || k.road || used.has(keyOf(c, r))) continue;
         const gx = c - M, gy = r - M, x = rng();
         const rd = ringDist(c, r);
-        if (inGrid(gx, gy) && inZ(mz, gx, gy)) {                      // quarry hills (NW)
+        if (inGrid(gx, gy) && inZ(mz, MX(gx), gy)) {                      // quarry hills (NW, mirrored per base)
             if (x < 0.62) { w.put(['mountain_A_grass_trees', 'mountain_B_grass', 'mountain_C_grass_trees', 'mountain_A'][Math.floor(rng() * 4)], c, r, { flip: flip() }); claim(c, r); }
             else if (x < 0.82) rock(c, r);
             continue;
         }
-        if (inGrid(gx, gy) && inZ(hz, gx, gy)) {                      // hunting woods (W)
+        if (inGrid(gx, gy) && inZ(hz, MX(gx), gy)) {                      // hunting woods (W, mirrored per base)
             if (x < 0.72) { w.put(TREES[Math.floor(rng() * 4)], c, r, { flip: flip() }); claim(c, r); }
             continue;
         }

@@ -480,7 +480,12 @@ function houseName(rng, biome, o = {}) {
     for (const n of Object.keys(man)) { const m = /^house_([a-z]+)_([a-z]+)$/.exec(n); if (m) (byKind[m[1]] = byKind[m[1]] || []).push(m[2]); }
     const kinds = Object.keys(byKind).filter((k) => !o.kinds || o.kinds.includes(k));
     if (!kinds.length) return null;
-    const wt = (k) => (k === 'barn' ? (o.farm ? 1.4 : 0) : k === 'shop' ? (o.shop === false ? 0 : HOUSE_KIND_W.shop) : (HOUSE_KIND_W[k] == null ? 1 : HOUSE_KIND_W[k]));
+    const wt = (k) => {
+        if (k === 'barn' && !o.farm) return 0;                      // farm gate stays hard
+        if (k === 'shop' && o.shop === false) return 0;
+        if (o.weights && o.weights[k] != null) return o.weights[k]; // per-base kind profile (uniqueness pass)
+        return k === 'barn' ? 1.4 : k === 'shop' ? HOUSE_KIND_W.shop : (HOUSE_KIND_W[k] == null ? 1 : HOUSE_KIND_W[k]);
+    };
     let tot = 0; for (const k of kinds) tot += wt(k);
     if (tot <= 0) return null;
     let x = rng() * tot, kind = kinds[0];

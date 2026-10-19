@@ -121,6 +121,24 @@ const key = (c, r) => `${c},${r}`;
 function buildWorld(state) {
     const seed = hashStr(state.name || 'guild');
     const rng = mulberry32(seed);
+
+    // ── per-guild macro profile (owner brief 2026-10-19: guilds on the same continent must not be twins) ──
+    // Claude-method: the district's compass story (market / well / field band / hamlet band) mirrors
+    // E/W as a unit, and the cottage kind mix + field/orchard density re-roll per guild seed. Walls,
+    // gate, roads and the citadel stay canonical — realm palettes still constrain every sprite.
+    const mir = rng() < 0.5;
+    const ang = (a) => (mir ? (360 - a) % 360 : a);                       // compass mirror around the N-S axis
+    const KIND_PROFILES = {
+        village: null,                                                                    // default weights
+        market: { townhouse: 2.2, shop: 2.2, cottage: 1.0, stone: 0.8, tudor: 1.2, hut: 0.3, barn: 0 },
+        farmstead: { barn: 2.2, cottage: 1.4, hut: 1.4, townhouse: 0.4, stone: 0.7, tudor: 0.9, shop: 0.3 },
+        stonecourt: { stone: 2.4, cottage: 1.1, tudor: 1.3, townhouse: 0.7, hut: 0.5, barn: 0, shop: 0.4 },
+    };
+    const HW = KIND_PROFILES[Object.keys(KIND_PROFILES)[Math.floor(rng() * 4)]];
+    const fieldsWant = 3 + Math.floor(rng() * 4);                         // 3..6 grain patches in the field band
+    const orchardP = 0.18 + rng() * 0.22;                                 // gap-tree density
+    const shopEvery = 4 + Math.floor(rng() * 4);                          // every Nth cottage may be a shop
+
     const arch = ARCH[state.archetype] ? state.archetype : 'ADVENTURER';
     const team = ARCH[arch].team;
     const hall = Math.max(0, Math.min(5, parseInt((state.buildings || {}).hall, 10) || 0));
@@ -293,16 +311,17 @@ function buildWorld(state) {
         inside.push([c, r, d, angleDeg(c, r)]);
     }
     const takeIn = (pred) => { const i = inside.findIndex((q) => !used.has(key(q[0], q[1])) && pred(q)); if (i < 0) return null; return inside[i]; };
-    const mk = takeIn((q) => q[2] === 4 && q[3] > 20 && q[3] < 80);                      // market square, south-east
+    const mk = takeIn((q) => q[2] === 4 && ang(q[3]) > 20 && ang(q[3]) < 80);            // market square, (mirrored) south-east
     if (mk) { w.put('building_dirt', mk[0], mk[1], { layer: 'flat' }); w.put(B('market'), mk[0], mk[1]); claim(mk[0], mk[1]); }
-    const wl = takeIn((q) => q[2] === 4 && q[3] > 100 && q[3] < 160);                    // well, south-west
+    const wl = takeIn((q) => q[2] === 4 && ang(q[3]) > 100 && ang(q[3]) < 160);          // well, (mirrored) south-west
     if (wl) { w.put(B('well'), wl[0], wl[1]); w.put('barrel', wl[0], wl[1], { dx: 0.5, dz: 0.3 }); claim(wl[0], wl[1]); }
     let nf = 0;
-    for (const q of inside) {                                                            // fields on the north side, ring 5
-        if (nf >= 5 || used.has(key(q[0], q[1])) || q[2] < 5 || q[3] < 215 || q[3] > 325) continue;
+    for (const q of inside) {                                                            // fields in the (mirrored) north band, ring 5
+        const a2 = ang(q[3]);
+        if (nf >= fieldsWant || used.has(key(q[0], q[1])) || q[2] < 5 || a2 < 215 || a2 > 325) continue;
         if (rng() < 0.55) { w.put('building_grain', q[0], q[1], { layer: 'flat' }); claim(q[0], q[1]); nf++; }
     }
-    const hamlet = inside.filter((q) => !used.has(key(q[0], q[1])) && (q[3] > 20 && q[3] < 160 ? q[2] >= 1 : q[2] >= 4));
+    const hamlet = inside.filter((q) => !used.has(key(q[0], q[1])) && (ang(q[3]) > 20 && ang(q[3]) < 160 ? q[2] >= 1 : q[2] >= 4));
     for (const q of hamlet) q.k = Math.abs(q[2] - 4) * 0.7 + rng() * 2.4;                // spread over rings 3-5, not a clump at the keep
     hamlet.sort((a, b) => a.k - b.k);
     const placed = [];
@@ -311,13 +330,13 @@ function buildWorld(state) {
         const [c, r] = hamlet[i];
         if (placed.some(([pc, pr]) => K.hexDist(pc, pr, c, r) < 2)) continue;           // keep a lane of air between cottages
         placed.push([c, r]); got++;
-        w.put(K.houseName(rng, w.biome || 'isle', { view: 'top', shop: i % 5 === 0 }) || B(i % 3 === 1 ? 'home_B' : 'home_A'), c, r, { flip: i % 2 === 1 });
+        w.put(K.houseName(rng, w.biome || 'isle', { view: 'top', weights: HW, shop: i % shopEvery === 0 }) || B(i % 3 === 1 ? 'home_B' : 'home_A'), c, r, { flip: i % 2 === 1 });
         if (hamlet[i][2] >= 4 && rng() < 0.5) w.put(['barrel', 'crate_A_small', 'sack', 'bucket_water'][Math.floor(rng() * 4)], c, r, { dx: 0.6, dz: 0.5 });
         claim(c, r);
         if (got <= 8) { const wcH = K.hexWorld(c, r); smokeAnchors.push({ x: wcH.x + (i % 2 ? -0.35 : 0.35), z: wcH.z + 0.1, h: 1.65 }); }
     }
     for (const q of inside) {                                                            // orchard / garden trees in the gaps
-        if (used.has(key(q[0], q[1])) || q[2] < 3 || rng() > 0.3) continue;
+        if (used.has(key(q[0], q[1])) || q[2] < 3 || rng() > orchardP) continue;
         w.put(['trees_A_medium', 'trees_B_medium', 'tree_single_A', 'tree_single_B'][Math.floor(rng() * 4)], q[0], q[1], { flip: rng() < 0.5, sc: 0.85 }); claim(q[0], q[1]);
     }
 
