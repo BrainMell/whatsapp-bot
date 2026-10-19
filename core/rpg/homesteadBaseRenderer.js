@@ -323,6 +323,11 @@ function buildWorld(state) {
             }
         }
         w.layFenceEdges(inside, { gateAt: (c, r, e) => `${c},${r},${e}` === best });
+        if (best && K.hasSprite('struct_gate_90', 'iso')) {                   // the village entrance: a stone gatehouse spanning the palisade gap
+            const [gc, gr, ge] = best.split(',').map(Number); const nbG = K.neighbor(gc, gr, ge);
+            const a0 = K.hexWorld(gc, gr), a1 = K.hexWorld(nbG[0], nbG[1]);
+            w.put('struct_gate_' + [30, 90, 150, 30, 90, 150][ge], 0, 0, { wx: (a0.x + a1.x) / 2, wz: (a0.z + a1.z) / 2, sc: 1.35, sort: 0.6 });
+        }
         w.put('flag_' + team, ...(best ? best.split(',').slice(0, 2).map(Number) : [0, 0]), { dx: -1.0, dz: 0.6 });
         w.put('flag_' + team, ...(best ? best.split(',').slice(0, 2).map(Number) : [0, 0]), { dx: 1.0, dz: 0.6 });
         for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (ringDist(c, r) === FAR_R - 1 || ringDist(c, r) === FAR_R) claim(c, r);

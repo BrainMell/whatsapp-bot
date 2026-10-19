@@ -364,6 +364,12 @@ function buildWorld(state) {
     if (shore.length) { lighthouse = shore[Math.floor(rng() * shore.length)]; w.put(B('tower_B'), lighthouse[0], lighthouse[1], { sc: 0.9 }); }
     }
 
+    // the citadel entrance: a stone gatehouse over the south gate, flanked by torches and the guild banner
+    if (K.hasSprite('struct_gate_0', 'top')) {
+        w.put('struct_gate_0', gateCell[0], gateCell[1], { sc: 1.5, sort: 0.6 });
+        w.put('barrel', gateCell[0], gateCell[1], { dx: 1.35, dz: 0.8 }); w.put('crate_A_small', gateCell[0], gateCell[1], { dx: -1.35, dz: 0.85 });
+    }
+
     // gate flags + garden props inside the walls
     w.put('flag_' + team, gateCell[0], gateCell[1], { dx: -1.0, dz: 0.55, h: 0 });
     w.put('flag_' + team, gateCell[0], gateCell[1], { dx: 1.0, dz: 0.55, h: 0 });

@@ -481,9 +481,34 @@ def make_struct(name):
             _herb_bed(m, sx * 0.55 - 0.25, sx * 0.55 + 0.25, 0.5, 0.82, rows=4)
         m.prism(0.15, 0.0, 0.07, 8, STONE); m.prism(0.1, 0.07, 0.1, 8, (92, 150, 220))
         m.box(-0.012, 0.012, 0.07, 0.24, 0.0 - 0.012 + 0.0, 0.012, STONE)
+    elif name == 'gate_arch':                  # village / citadel gatehouse: two crenellated towers, lintel arch, open doors, banner
+        span = 0.58
+        for sx in (-1, 1):
+            x0, x1 = (sx * span - 0.15, sx * span + 0.15)
+            m.box(x0 - 0.02, x1 + 0.02, 0, 0.07, -0.3, 0.3, STONE_D)
+            m.box(x0, x1, 0.07, 1.0, -0.26, 0.26, STONE)
+            for yy in (0.3, 0.52, 0.74):
+                m.box(x0, x1, yy, yy + 0.014, 0.26, 0.272, STONE_D)
+            m.box(x0 - 0.035, x1 + 0.035, 1.0, 1.07, -0.3, 0.3, STONE_D)             # machicolation band
+            for cx in (x0 - 0.01, (x0 + x1) / 2 - 0.02, x1 - 0.05):                  # merlons
+                for cz in (-0.27, 0.0, 0.24):
+                    m.box(cx, cx + 0.06, 1.07, 1.15, cz, cz + 0.06, STONE)
+            m.box(sx * span - 0.035, sx * span + 0.035, 0.52, 0.64, 0.262, 0.285, CAVE)   # arrow slit
+            m.box(sx * span - 0.012, sx * span + 0.012, 0.66, 0.82, 0.3, 0.318, TIMBER_D); m.box(sx * span - 0.03, sx * span + 0.03, 0.8, 0.88, 0.296, 0.324, LAMP)   # lantern bracket
+        m.box(-span + 0.12, span - 0.12, 0.6, 0.86, -0.22, 0.22, STONE)               # lintel over the road
+        m.box(-span + 0.12, span - 0.12, 0.54, 0.6, -0.2, 0.2, TIMBER_D)
+        m.box(-span + 0.12, span - 0.12, 0.86, 0.92, -0.25, 0.25, STONE_D)
+        for cx in (-0.34, -0.1, 0.14):
+            m.box(cx, cx + 0.07, 0.92, 1.0, -0.2, 0.2, STONE)
+        m.box(-span + 0.15, span - 0.15, 0.0, 0.54, -0.02, 0.02, CAVE)                  # shadowed passage
+        for sx in (-1, 1):                                                              # doors swung open against the passage walls
+            m.box(sx * (span - 0.17) - 0.012, sx * (span - 0.17) + 0.012, 0.0, 0.5, -0.2, 0.2, DOOR)
+        m.box(-0.2, 0.2, 0.34, 0.6, 0.22, 0.232, ROOFS['red'])                          # banner hanging over the arch
+        m.poly([(-0.2, 0.34, 0.232), (0.2, 0.34, 0.232), (0.0, 0.25, 0.232)], ROOFS['red'], (0, 0.4, 0))
+        _cross(m, 0.0, 0.5, 0.232, s=0.06, col=(250, 235, 190), depth=0.008)
     else:
         raise KeyError(name)
     return m.build()
 
 
-STRUCTS = ['mine_cave', 'mine_timber', 'mine_deep', 'med_tent', 'med_infirmary', 'med_sanatorium']
+STRUCTS = ['gate_arch', 'mine_cave', 'mine_timber', 'mine_deep', 'med_tent', 'med_infirmary', 'med_sanatorium']

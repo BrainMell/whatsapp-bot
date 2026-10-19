@@ -172,8 +172,12 @@ def main():
     for kd, roofs in houses.HOUSES.items():                  # procedural houses, every roof colour
         for rf in roofs:
             tasks.append((f'house:{kd}:{rf}', f'house_{kd}_{rf}', 0.0, 'object'))
-    for sn in houses.STRUCTS:                                 # dedicated Mines / Med Bay models
-        tasks.append((f'struct:{sn}', f'struct_{sn}', 0.0, 'object'))
+    for sn in houses.STRUCTS:                                 # dedicated Mines / Med Bay / gatehouse models
+        if sn == 'gate_arch':                                 # gatehouse: baked at yaw 0/30/90/150 (hex-edge tangents are 30 mod 60)
+            for gy in (0, 30, 90, 150):
+                tasks.append((f'struct:{sn}', f'struct_gate_{gy}', float(gy), 'object'))
+        else:
+            tasks.append((f'struct:{sn}', f'struct_{sn}', 0.0, 'object'))
     only = os.environ.get('KK_ONLY')                          # e.g. KK_ONLY=house_  -> bake just those, merge into manifest
     if only:
         tasks = [t for t in tasks if t[1].startswith(tuple(only.split(',')))]
