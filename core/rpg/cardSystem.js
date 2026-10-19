@@ -2557,6 +2557,25 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
     eventMode = true;
     query = query.substring(6).trim();
   }
+  // FIX (2026-10-19): `einfo <query> | <anime>` delegates here as
+  // [query, anime, 'event'] - joined, the trailing 'event' lands AFTER the
+  // pipe and the block above never saw it, so eventMode stayed false and
+  // the search fell through to the generic card search. The keyword can
+  // ride on the anime side too - strip it there as well.
+  if (animeFilter) {
+    if (animeFilter.includes(' event')) {
+      eventMode = true;
+      animeFilter = animeFilter.replace(' event', '').trim();
+    }
+    if (animeFilter.startsWith('event ')) {
+      eventMode = true;
+      animeFilter = animeFilter.substring(6).trim();
+    }
+    if (animeFilter === 'event') {
+      eventMode = true;
+      animeFilter = null;
+    }
+  }
 
   if (!query && !eventMode) return sendUsage(reply, `${p} info`, `${p} info <card_name or id> | [anime]`, `${p} info Winry | fullmetal alchemist`);
 
@@ -2612,13 +2631,19 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
     }
 
     let msg = `🎁 *EVENT CARD SEARCH* 🎁\n`;
-    msg += `📦 Found ${results.length} event card${results.length === 1 ? '' : 's'}:\n\n`;
-    results.forEach(c => {
+    msg += `📦 Found ${results.length} event card${results.length === 1 ? '' : 's'}${results.length > 40 ? ' (showing first 40)' : ''}:\n\n`;
+    // FIX (2026-10-19): uncapped listing - Summer/Valentines/Chinese New Year
+    // are 600+ cards each, a 35k+ char wall. Cap at 40 like the generic
+    // search caps at 15, and teach the `| <anime>` narrowing instead.
+    results.slice(0, 40).forEach(c => {
       // 💡 FIX (2026-10-08): this line printed animeName as the Event. That
       // was only "correct" while the data bug held (animeName holding the
       // event name); with real series data it must read eventName.
-      msg += `▫️ *${c.cardName}* (T${c.tier})\n   ➥ ID: \`${c.id}\` | Event: _${c.eventName || c.animeName}_\n`;
+      msg += `▫️ *${c.cardName}* (T${c.tier})\n   ➥ ID: \`${c.id}\` | Event: _${c.eventName || c.animeName}_ \u2014 _${c.animeName || '?'}_\n`;
     });
+    if (results.length > 40) {
+      msg += `\n_…and ${results.length - 40} more. Narrow it: \`${p} einfo ${query} | <anime>_\n`;
+    }
     msg += `\n💡 Use \`${p} info <id>\` to see full details.`;
     return reply(msg);
   }
@@ -4656,27 +4681,29 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       if (!isCardMod) return reply('❌ Event card lookup is for moderators and above only.'), true;
       const einfoQuery = args.join(' ').trim();
       if (!einfoQuery) {
-        // No args → list all event cards
+        // No args → category summary. FIX (2026-10-19): this used to list
+        // every event card line by line - at 3296 cards that is a ~160k
+        // char message and WhatsApp rejects texts over 65k, so the owner
+        // got NOTHING. Categories + counts fit in one screen; drill in
+        // with `einfo <category>`.
         const eventCards = getInst().EVENT_CARDS || [];
         if (eventCards.length === 0) {
           return reply(`📭 No event cards exist in the database.`), true;
         }
-        let listMsg = `🎁 *EVENT CARDS - ${eventCards.length} in database*\n\n`;
-        listMsg += `Usage: \`${p} einfo <name or id>\`\n\n`;
-        // Group by event name for readability
         const byEvent = {};
         eventCards.forEach(c => {
           const ev = c.eventName || c.animeName || 'Unknown Event';
           if (!byEvent[ev]) byEvent[ev] = [];
           byEvent[ev].push(c);
         });
+        let listMsg = `🎁 *EVENT CARDS - ${eventCards.length} in ${Object.keys(byEvent).length} categories*\n\n`;
+        listMsg += `▫️ \`${p} einfo <category>\` \u2014 browse one (e.g. \`${p} einfo halloween\`)\n`;
+        listMsg += `▫️ \`${p} einfo <anime>\` \u2014 all events for a series\n`;
+        listMsg += `▫️ \`${p} einfo <category> | <anime>\` \u2014 combine both\n\n`;
         for (const [ev, cards] of Object.entries(byEvent)) {
-          listMsg += `📺 *${ev}* (${cards.length} cards)\n`;
-          cards.forEach(c => {
-            listMsg += `  ▫️ ${c.cardName} (T${c.tier}) - \`${c.id}\`\n   _${c.animeName}_\n`;
-          });
-          listMsg += `\n`;
+          listMsg += `📺 *${ev}* \u2014 ${cards.length} cards\n`;
         }
+        listMsg += `\n_ℹ️ Category or anime search shows the first 40 hits - narrow with \`| <anime>\`._`;
         return reply(listMsg), true;
       }
 
