@@ -22,6 +22,7 @@ const path = require('path');
 const os = require('os');
 const K = require('./kingdom3d');
 const mediaCache = require('./mediaCache');
+const ambient = require('./ambient');   // shared life layer (owner 2026-10-19: "bring it to life")
 
 const N = 16;                 // base tiles per side (saved-structure grid)
 const M = 15;                 // wilderness margin (hex cells) around the grid — big enough to over-cover the diagonal card
@@ -578,38 +579,14 @@ function plaque(ctx, x, y, title, sub, k) {
     ctx.restore();
 }
 
-// ── old water art (two glint frames, 64x32) → white glint masks for the animated water / lava ──
-let _glints = null;
-async function glints() {
-    if (_glints) return _glints;
-    const { createCanvas, loadImage } = require('canvas');
-    const out = [];
-    for (const f of ['base_water_0.png', 'base_water_1.png']) {
-        try {
-            const img = await loadImage(path.join(ASSETS, f));
-            const c = createCanvas(img.width, img.height), x = c.getContext('2d');
-            x.drawImage(img, 0, 0);
-            const d = x.getImageData(0, 0, c.width, c.height);
-            for (let i = 0; i < d.data.length; i += 4) {
-                const lum = (d.data[i] + d.data[i + 1] + d.data[i + 2]) / 3;
-                const a = d.data[i + 3];
-                if (a > 20 && lum > 135) { d.data[i] = d.data[i + 1] = d.data[i + 2] = 255; d.data[i + 3] = Math.min(255, (lum - 120) * 2); }
-                else d.data[i + 3] = 0;                                    // keep ONLY the bright glints, drop the diamond fill
-            }
-            x.putImageData(d, 0, 0);
-            out.push(c);
-        } catch (e) { /* no glints: water just stays still */ }
-    }
-    _glints = out;
-    return out;
-}
+// ── old water glint masks + the boosted water animation now live in ./ambient ──
 
 // ── scene cache (static art, no HUD / animation) ──
 const _scenes = new Map();
 const SCENE_MAX = 3;
 async function buildScene(state) {
     ensureFonts();
-    const key0 = hashStr(JSON.stringify(['v10', state.owner, state.structures, state.freePlots, realmBiome(state)]));
+    const key0 = hashStr(JSON.stringify(['v11-life', state.owner, state.structures, state.freePlots, realmBiome(state)]));
     const hit = _scenes.get(key0);
     if (hit) { _scenes.delete(key0); _scenes.set(key0, hit); return hit; }
     const { w, info, plots, team, biome, realm, waterCells } = buildWorld(state);
@@ -641,43 +618,21 @@ async function buildScene(state) {
         const poly = w.cellPoly(c, r, -0.2);
         const cx = poly.reduce((a, p) => a + p.x, 0) / 6, cy = poly.reduce((a, p) => a + p.y, 0) / 6;
         if (cx < -80 || cx > CARD_W + 80 || cy < -80 || cy > CARD_H + 80) continue;
-        water.push({ poly, cx, cy, h: hashStr(`${c},${r}`) });
+        let shore = false;                                           // touches land → ripple rings
+        for (let d = 0; d < 6 && !shore; d++) { const nb = K.neighbor(c, r, d); const nk = w.at(nb[0], nb[1]); if (nk && !nk.water && !nk.river) shore = true; }
+        water.push({ poly, cx, cy, h: hashStr(`${c},${r}`), shore });
     }
-    const scene = { terrain, objects, W: CARD_W, H: CARD_H, w, k, smoke, biome, realm, water, seed };
+    const sway = await ambient.swayTrees(w);                         // tree sprites for the wind shuffle
+    const scene = { terrain, objects, W: CARD_W, H: CARD_H, w, k, smoke, biome, realm, water, sway, seed };
     _scenes.set(key0, scene);
     while (_scenes.size > SCENE_MAX) _scenes.delete(_scenes.keys().next().value);
     return scene;
 }
 
-function animateWater(ctx, sc, t, G) {
-    const lava = sc.realm === 'volcanic', ice = sc.realm === 'tundra';
-    const cellW = 1.9 * 96 * sc.k;                                   // glint tile ≈ one cell wide
-    ctx.save();
-    for (const cell of sc.water) {
-        const ph = (t + (cell.h % 997) / 997) % 1;
-        ctx.save();
-        ctx.beginPath(); cell.poly.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.closePath(); ctx.clip();
-        if (lava) {                                                  // molten pulse
-            ctx.globalCompositeOperation = 'lighter';
-            ctx.globalAlpha = 0.16 + 0.16 * Math.sin(ph * Math.PI * 2);
-            const g = ctx.createRadialGradient(cell.cx, cell.cy, 2, cell.cx, cell.cy, cellW * 0.7);
-            g.addColorStop(0, 'rgba(255,190,70,1)'); g.addColorStop(1, 'rgba(255,70,0,0)');
-            ctx.fillStyle = g; ctx.fillRect(cell.cx - cellW, cell.cy - cellW, cellW * 2, cellW * 2);
-        }
-        if (G && G.length) {
-            const g = G[Math.floor(ph * 4) % G.length];                // two old-water frames, cycled
-            const drift = Math.sin(ph * Math.PI * 2) * 5 * sc.k * 2;
-            ctx.globalCompositeOperation = lava ? 'lighter' : 'source-over';
-            ctx.globalAlpha = lava ? 0.5 : ice ? 0.35 : 0.6;
-            ctx.drawImage(g, cell.cx - cellW / 2 + drift, cell.cy - cellW / 4, cellW, cellW / 2);
-        }
-        ctx.restore();
-    }
-    ctx.restore();
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
-//  FRAME RENDER (frame 0 = static card; frames animate water/lava + smoke + fireflies)
+//  FRAME RENDER (frame 0 = static card; frames animate water/lava + smoke +
+//  fireflies + tree sway + birds + butterflies + cloud shadows + tint — the
+//  owner 2026-10-19 "bring it to life" pass, shared code in ./ambient)
 // ═══════════════════════════════════════════════════════════════════════════
 async function renderFrame(state, frame, opts = {}) {
     const sc = await buildScene(state);
@@ -689,9 +644,10 @@ async function renderFrame(state, frame, opts = {}) {
     ctx.imageSmoothingQuality = 'low';
     const t = (frame || 0) / FRAMES;
     ctx.drawImage(sc.terrain, 0, 0);
-    if (opts.animate || frame > 0) animateWater(ctx, sc, t, await glints());
+    if (opts.animate || frame > 0) ambient.animateWater(ctx, sc, t, await ambient.glints());
     ctx.drawImage(sc.objects, 0, 0);
     const seed = sc.seed;
+        ambient.drawSway(ctx, sc.sway, t);                       // trees shuffle in the wind
     if (opts.animate || frame > 0) {
         ctx.save();
         for (const s of sc.smoke) {                              // chimney / forge smoke puffs
@@ -710,6 +666,10 @@ async function renderFrame(state, frame, opts = {}) {
             ctx.beginPath(); ctx.arc(sc.W * (0.06 + 0.88 * r1), sc.H * (0.2 + 0.6 * r2) - ph * 12, 1.6 + (i % 3), 0, Math.PI * 2); ctx.fill();
         }
         ctx.restore();
+        ambient.drawCloudShadows(ctx, sc.W, sc.H, t, seed);      // slow light drift over the land
+        ambient.drawBirds(ctx, sc.W, sc.H, t, seed);             // flocks crossing the sky
+        ambient.drawButterflies(ctx, sc.W, sc.H, t, seed);       // garden flutter
+        ambient.drawTint(ctx, sc.W, sc.H, t);                    // warm/cool breathing
     }
     if (opts.celebrate) K.paintConfetti(ctx, sc.W, sc.H, t, seed, sc.k);   // build/upgrade celebration
     drawHud(ctx, state, opts, sc.W, sc.H);
@@ -798,7 +758,7 @@ function cachePut(map, k, out) {
 const _renderCache = new Map();
 const CACHE_TTL = 10 * 60 * 1000;
 function stateHash(state, opts = {}) {
-    return hashStr(JSON.stringify(['v10-iso', state.owner, realmBiome(state), state.structures, state.freePlots, opts.hint || '', opts.static ? 1 : 0]));
+    return hashStr(JSON.stringify(['v11-iso-life', state.owner, realmBiome(state), state.structures, state.freePlots, opts.hint || '', opts.static ? 1 : 0]));
 }
 
 async function renderBaseImage(state, opts = {}) {

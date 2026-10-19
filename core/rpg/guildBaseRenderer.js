@@ -24,6 +24,7 @@ const os = require('os');
 const K = require('./kingdom3d');
 const KT = require('./kingdomTerrain');
 const mediaCache = require('./mediaCache');
+const ambient = require('./ambient');   // shared life layer (owner 2026-10-19: "the guild card should also be a gif")
 
 const FRAMES = 14, FRAME_MS = 110;
 const COLS = 23, ROWS = 31, CC = 11, CR = 15;   // oversized grid: terrain runs past every edge of the card, castle on (11,15)
@@ -132,6 +133,7 @@ function buildWorld(state) {
     const w = new K.HexWorld(COLS, ROWS, { scale: SCALE, biome, oobWater: !land });
     const used = new Set();                 // cells claimed by structures/props
     const claim = (c, r) => used.add(key(c, r));
+    const smokeAnchors = [];                // hearth anchors for the animated smoke (world coords)
 
     let riverCells = [];
     let S = null;
@@ -230,6 +232,7 @@ function buildWorld(state) {
         w.put('building_scaffolding', CC, CR, { sc: 0.9 });
     } else {
         w.put('building_dirt', CC, CR, { layer: 'flat' });
+        { const wcC = K.hexWorld(CC, CR); smokeAnchors.push({ x: wcC.x + 0.4, z: wcC.z - 0.2, h: hall >= 4 ? 3.9 : 2.2 }); }
         if (hall === 1) { w.put(B('tower_A'), CC, CR, { sc: 1.0 }); w.put('fence_wood_straight@0', CC, CR, { dz: 0.85 }); }
         if (hall === 2) { w.put(B('tower_base'), CC, CR, { dx: -0.55, dz: 0.2 }); w.put(B('tower_A'), CC, CR, { dx: 0.35, dz: -0.1 }); }
         if (hall === 3) w.put(B('barracks'), CC, CR);
@@ -289,6 +292,7 @@ function buildWorld(state) {
         const [c, r] = hamlet[i];
         w.put(B(i % 3 === 1 ? 'home_B' : 'home_A'), c, r, { flip: i % 2 === 1 });
         claim(c, r);
+        if (i < 6) { const wcH = K.hexWorld(c, r); smokeAnchors.push({ x: wcH.x + (i % 2 ? -0.35 : 0.35), z: wcH.z + 0.1, h: 1.65 }); }
     }
 
     // ── the wilds (outside the wall) ──
@@ -345,7 +349,7 @@ function buildWorld(state) {
         else if (x < 0.36) w.put('building_well_' + team, c, r);
     }
 
-    return { w, castle, gateCell, hall, train, treas, team };
+    return { w, castle, gateCell, hall, train, treas, team, smokeAnchors };
 }
 
 // ── overlays ──
@@ -423,7 +427,7 @@ function drawBanner(ctx, x, y, k, flagCol, flagD, icon, t) {
 const _scenes = new Map();
 const SCENE_MAX = 4;
 function sceneKey(state, opts) {
-    return hashStr(JSON.stringify([state.name, state.level, state.archetype, state.buildings, state.memberCount, state.emblemColor, state.emblemIcon, state.biome, state.continent]));
+    return hashStr(JSON.stringify(['guild-life1', state.name, state.level, state.archetype, state.buildings, state.memberCount, state.emblemColor, state.emblemIcon, state.biome, state.continent]));
 }
 
 async function buildScene(state) {
@@ -432,7 +436,7 @@ async function buildScene(state) {
     const hit = _scenes.get(key0);
     if (hit) { _scenes.delete(key0); _scenes.set(key0, hit); return hit; }
 
-    const { w, castle, hall, train, treas, team, gateCell } = buildWorld(state);
+    const { w, castle, hall, train, treas, team, gateCell, smokeAnchors } = buildWorld(state);
     const pad = { top: 190, bottom: 190, left: 36, right: 36 };
     // keep the card size and castle framing of the old 17x15 layout, but let the (larger) grid fill every pixel of it
     const ref = new K.HexWorld(OLD_COLS, OLD_ROWS, { scale: SCALE, biome: w.biome });
@@ -468,7 +472,20 @@ async function buildScene(state) {
     const roofH = [0, 2.3, 2.2, 2.0, 4.1, 4.1][hall] || 2.5;
     const bpos = w.proj(wc.x, wc.z, roofH + 0.1);
 
-    const scene = { canvas, W, H, w, banner: { x: bpos.x, y: bpos.y, flagCol, flagD: archC.flagD, icon: state.emblemIcon || '' }, k };
+    // ── life layer inputs (owner 2026-10-19 "bring it to life") ──
+    const water = [];
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+        if (w.cell[r][c].tile !== 'hex_water') continue;
+        const poly = w.cellPoly(c, r, -0.2);
+        const cx = poly.reduce((a, p) => a + p.x, 0) / 6, cy = poly.reduce((a, p) => a + p.y, 0) / 6;
+        if (cx < -80 || cx > W + 80 || cy < -80 || cy > H + 80) continue;
+        let shore = false;                                       // touches land → ripple rings
+        for (let d = 0; d < 6 && !shore; d++) { const nb = K.neighbor(c, r, d); const nk = w.at(nb[0], nb[1]); if (nk && !nk.water && !nk.river && !nk.void) shore = true; }
+        water.push({ poly, cx, cy, h: hashStr(`${c},${r}`), shore });
+    }
+    const sway = await ambient.swayTrees(w);                     // wilds trees for the wind shuffle
+    const smoke = smokeAnchors.map((a) => { const p = w.proj(a.x, a.z + 0.35, a.h); return { x: p.x, y: p.y, smoky: false }; });
+    const scene = { canvas, W, H, w, banner: { x: bpos.x, y: bpos.y, flagCol, flagD: archC.flagD, icon: state.emblemIcon || '' }, k, biome: w.biome, realm: w.biome, water, sway, smoke, seed };
     _scenes.set(key0, scene);
     while (_scenes.size > SCENE_MAX) _scenes.delete(_scenes.keys().next().value);
     return scene;
@@ -477,19 +494,33 @@ async function buildScene(state) {
 // ═══════════════════════════════════════════════════════════════════════════
 //  FRAME RENDER (frame 0 = the static card)
 // ═══════════════════════════════════════════════════════════════════════════
+const ANIM_SCALE = parseFloat(process.env.RENDER_GUILD_ANIM_SCALE || '0.62') || 0.62;
 async function renderFrame(state, frame, opts = {}) {
     const sc = await buildScene(state);
-    const out = require('canvas').createCanvas(sc.W, sc.H);
+    // animated (mp4) frames compose at reduced size — same trick as the homestead renderer
+    const as = opts.encoder === 'raw' ? ANIM_SCALE : 1;
+    const out = require('canvas').createCanvas(Math.round(sc.W * as / 2) * 2, Math.round(sc.H * as / 2) * 2);
     const ctx = out.getContext('2d');
+    if (as !== 1) ctx.scale(out.width / sc.W, out.height / sc.H);
+    ctx.imageSmoothingQuality = 'low';
     ctx.drawImage(sc.canvas, 0, 0);
     const t = (frame || 0) / FRAMES;
     // waving banner over the keep
     if (sc.banner) drawBanner(ctx, sc.banner.x, sc.banner.y, sc.k, sc.banner.flagCol, sc.banner.flagD, sc.banner.icon, t);
     if (opts.animate || frame > 0) {
-        // sea glints + drifting fireflies around the keep
         const seed = hashStr(state.name || 'guild');
+        ambient.animateWater(ctx, sc, t, await ambient.glints());   // lakes/lava shimmer + sparkles + shore ripples
+        ambient.drawSway(ctx, sc.sway, t);                          // wilds trees shuffle
         ctx.save();
-        for (let i = 0; i < 26; i++) {
+        for (const s of sc.smoke) {                              // hearth smoke over the keep + hamlet
+            for (let i = 0; i < 4; i++) {
+                const ph = (t + i / 4) % 1;
+                ctx.globalAlpha = 0.5 * (1 - ph);
+                ctx.fillStyle = s.smoky ? '#6b6b73' : '#d8d8de';
+                ctx.beginPath(); ctx.arc(s.x + Math.sin(ph * 5 + i) * 4 * sc.k * 2 + ph * 6, s.y - ph * 42 * sc.k * 2, (3 + ph * 7) * sc.k * 2, 0, Math.PI * 2); ctx.fill();
+            }
+        }
+        for (let i = 0; i < 26; i++) {                           // fireflies around the keep
             const r1 = mulberry32(seed + 900 + i)(), r2 = mulberry32(seed + 1900 + i)();
             const ph = (t + r1) % 1;
             ctx.globalAlpha = 0.7 * Math.sin(ph * Math.PI);
@@ -499,6 +530,10 @@ async function renderFrame(state, frame, opts = {}) {
             ctx.fill();
         }
         ctx.restore();
+        ambient.drawCloudShadows(ctx, sc.W, sc.H, t, seed);      // slow light drift
+        ambient.drawBirds(ctx, sc.W, sc.H, t, seed);             // flocks crossing
+        ambient.drawButterflies(ctx, sc.W, sc.H, t, seed);       // garden flutter
+        ambient.drawTint(ctx, sc.W, sc.H, t);                    // warm/cool breathing
     }
     if (opts.celebrate) K.paintConfetti(ctx, sc.W, sc.H, t, hashStr(state.name || 'guild'), sc.k);   // upgrade celebration
     drawHud(ctx, state, opts, sc.W, sc.H);
@@ -637,7 +672,7 @@ function cachePut(map, k, out) {
 const _renderCache = new Map();
 const CACHE_TTL = 10 * 60 * 1000;
 function stateHash(state, opts = {}) {
-    return hashStr(JSON.stringify(['v11-realms', state.name, state.biome || '', state.continent || '', state.level, state.archetype, state.buildings, state.memberCount, state.memberCap, state.emblemColor, state.emblemIcon, state.motto, opts.hint || '', opts.static === false ? 0 : 1]));
+    return hashStr(JSON.stringify(['v12-life', state.name, state.biome || '', state.continent || '', state.level, state.archetype, state.buildings, state.memberCount, state.memberCap, state.emblemColor, state.emblemIcon, state.motto, opts.hint || '', opts.static === true ? 1 : 0]));
 }
 
 async function renderGuildBaseImage(state, opts = {}) {
@@ -645,9 +680,10 @@ async function renderGuildBaseImage(state, opts = {}) {
     const hit = _renderCache.get(k);
     if (hit && (Date.now() - hit.ts) < CACHE_TTL) return hit;
     const out = await mediaCache.cached('guildbase', k, async () => {
-        // static card (default): composite once → JPEG
-        if (opts.static !== false) return encodeOut(await renderFrame(state, 0, { ...opts, returnCanvas: true }));
-        // animated bake (celebrate): banner wave + sea glints, raw frames → ffmpeg
+        // static card only when explicitly asked (opts.static === true): composite once → JPEG
+        if (opts.static === true) return encodeOut(await renderFrame(state, 0, { ...opts, returnCanvas: true }));
+        // animated card (DEFAULT — owner 2026-10-19: "the guild card should also be a gif"):
+        // water shimmer + sparkles + sway + smoke + birds + tint + banner wave, raw frames → ffmpeg
         try {
             const frames = [];
             for (let f = 0; f < FRAMES; f++) {
