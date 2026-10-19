@@ -171,38 +171,171 @@ function drawSway(ctx, list, t) {
     }
 }
 
-// ── birds: two V-flocks + two loners crossing the card, 3 wingbeats per loop ──
-function birdShape(ctx, x, y, s, flap) {
+// ── birds: V-flocks + loners crossing the card, with soft ground shadows ──
+//    Loop-safe: every bird crosses the card exactly ONCE per loop (u = (t + phase) % 1), so frame 13 → frame 0 has no
+//    jump; wingbeats are an integer count per loop. Sized from the card width so they read in a WhatsApp preview.
+function birdShape(ctx, x, y, s, flap, lw) {
     const lift = flap * s * 0.95;
     ctx.beginPath();
     ctx.moveTo(x - s, y - lift);
     ctx.quadraticCurveTo(x - s * 0.35, y + s * 0.28, x, y);
     ctx.quadraticCurveTo(x + s * 0.35, y + s * 0.28, x + s, y - lift);
-    ctx.lineWidth = Math.max(1, s * 0.42);
+    ctx.lineWidth = lw || Math.max(1.4, s * 0.38);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.stroke();
 }
 function drawBirds(ctx, W, H, t, seed) {
     const rnd = (i) => K.mulberry32(seed + 4100 + i)();
-    ctx.save();
-    ctx.strokeStyle = 'rgba(30,32,42,0.82)';
+    const u0 = W * 0.0042;                                           // base wing span unit (~6 px on a 1800 px card)
     const flocks = [
-        { y: H * (0.09 + rnd(1) * 0.10), n: 4, sp: 0.5 + rnd(2) * 0.2, dir: 1, s: 3.2 + rnd(3) * 1.4, ph: rnd(4) },
-        { y: H * (0.20 + rnd(5) * 0.12), n: 3, sp: 0.42 + rnd(6) * 0.18, dir: -1, s: 2.8 + rnd(7) * 1.2, ph: rnd(8) },
+        { y: H * (0.10 + rnd(1) * 0.10), n: 5, dir: 1, s: u0 * (1.0 + rnd(3) * 0.25), ph: rnd(4), beats: 4 },
+        { y: H * (0.24 + rnd(5) * 0.12), n: 3, dir: -1, s: u0 * (1.0 + rnd(7) * 0.25), ph: rnd(8), beats: 3 },
+        { y: H * (0.42 + rnd(9) * 0.14), n: 1, dir: 1, s: u0 * 1.25, ph: rnd(10), beats: 3 },
+        { y: H * (0.58 + rnd(11) * 0.12), n: 2, dir: -1, s: u0 * 1.1, ph: rnd(12), beats: 4 },
     ];
+    const birds = [];
     for (const f of flocks) {
         for (let i = 0; i < f.n; i++) {
-            const u = (t * f.sp + i * 0.045 + f.ph) % 1;
-            const x = (f.dir > 0 ? (-0.18 + u * 1.36) * W : (1.18 - u * 1.36) * W) - f.dir * i * f.s * 3.2;
-            const y = f.y + Math.sin(u * Math.PI * 2 + i * 0.9) * H * 0.012 + i * f.s * 2.0;
-            birdShape(ctx, x, y, f.s, Math.sin(t * Math.PI * 2 * 3 + i * 1.9 + f.ph * 6));
+            const row = Math.ceil(i / 2), side = i % 2 ? 1 : -1;     // V formation: leader first, pairs trailing back
+            const u = (t + f.ph) % 1;
+            const lead = (-0.12 + u * 1.24) * W;
+            const x = f.dir > 0 ? lead - row * f.s * 3.4 : W - lead + row * f.s * 3.4;
+            const y = f.y + (i ? side * row * f.s * 1.9 : 0) + Math.sin(u * Math.PI * 2 + i * 0.9) * H * 0.010;
+            birds.push({ x, y, s: f.s * (i ? 0.92 : 1), flap: Math.sin(t * Math.PI * 2 * f.beats + i * 1.7 + f.ph * 6.28), dir: f.dir });
         }
     }
-    for (let i = 0; i < 2; i++) {                                    // slow loners, lower
-        const sp = 0.3 + rnd(10 + i) * 0.1, dir = i ? -1 : 1, ph = rnd(12 + i);
-        const u = (t * sp + ph) % 1;
-        const x = dir > 0 ? (-0.15 + u * 1.3) * W : (1.15 - u * 1.3) * W;
-        const y = H * (0.34 + rnd(14 + i) * 0.2) + Math.sin(u * Math.PI * 2) * 8;
-        birdShape(ctx, x, y, 2.5, Math.sin(t * Math.PI * 2 * 3 + i * 2.4));
+    ctx.save();
+    for (const b of birds) {                                         // shadows first: flat, faint, thrown down-right onto the land
+        if (b.x < -20 || b.x > W + 20) continue;
+        ctx.strokeStyle = 'rgba(8,12,24,0.20)';
+        birdShape(ctx, b.x + b.s * 5.5, b.y + b.s * 11, b.s * 0.8, b.flap * 0.55, Math.max(1.2, b.s * 0.3));
+    }
+    for (const b of birds) {
+        if (b.x < -20 || b.x > W + 20) continue;
+        ctx.strokeStyle = 'rgba(255,255,255,0.28)';                  // pale halo so they read over dark forest
+        birdShape(ctx, b.x, b.y, b.s, b.flap, Math.max(2.4, b.s * 0.62));
+        ctx.strokeStyle = 'rgba(28,30,40,0.92)';
+        birdShape(ctx, b.x, b.y, b.s, b.flap);
+    }
+    ctx.restore();
+}
+
+// ── villagers: tiny figures strolling along the roads (ping-pong over 1-3 road cells, one stroll per loop) ──
+function buildWalkers(w, seed, { n = 8, maxY = Infinity } = {}) {
+    const rnd = K.mulberry32(seed + 5200);
+    const key = (c, r) => c + ',' + r;
+    const cells = new Map();
+    for (let r = 0; r < w.rows; r++) for (let c = 0; c < w.cols; c++) {
+        const k = w.cell[r][c];
+        if (!k.road || k.water || k.river || k.void) continue;
+        const hw = K.hexWorld(c, r), p = w.proj(hw.x, hw.z, 0.04);
+        if (p.x < 40 || p.x > w.W - 40 || p.y < 60 || p.y > Math.min(w.H - 60, maxY)) continue;
+        cells.set(key(c, r), { c, r, x: p.x, y: p.y });
+    }
+    const nbrs = (cl) => {
+        const out = [], a = w.cell[cl.r][cl.c];
+        for (let d = 0; d < 6; d++) {
+            const [nc, nr] = K.neighbor(cl.c, cl.r, d), nb = cells.get(key(nc, nr));
+            if (!nb) continue;
+            const b = w.cell[nr][nc];
+            if (a.links != null && b.links != null && !((a.links >> d) & 1)) continue;   // explicit street layout: follow the links
+            out.push(nb);
+        }
+        return out;
+    };
+    const all = [...cells.values()].filter((cl) => nbrs(cl).length);
+    const out = [];
+    const TUNICS = ['#c4453a', '#3f78c4', '#d9a73a', '#4a9a5c', '#8b5aa8', '#d0703a'];
+    for (let i = 0; i < n && all.length; i++) {
+        let cur = all[Math.floor(rnd() * all.length)], prev = null;
+        const pts = [{ x: cur.x, y: cur.y }];
+        const steps = 1 + Math.floor(rnd() * 3);
+        for (let s2 = 0; s2 < steps; s2++) {
+            const opts = nbrs(cur).filter((q) => q !== prev);
+            const nx = (opts.length ? opts : nbrs(cur))[Math.floor(rnd() * (opts.length || nbrs(cur).length))];
+            if (!nx) break;
+            pts.push({ x: nx.x, y: nx.y }); prev = cur; cur = nx;
+        }
+        if (pts.length < 2) continue;
+        let len = 0; const seg = [];
+        for (let q = 1; q < pts.length; q++) { const d = Math.hypot(pts[q].x - pts[q - 1].x, pts[q].y - pts[q - 1].y); seg.push(d); len += d; }
+        out.push({ pts, seg, len, ph: rnd(), tunic: TUNICS[i % TUNICS.length], hair: rnd() < 0.5 ? '#3a2a1c' : '#8a5a2a', beats: 6 + (i % 3) * 2 });
+    }
+    return out;
+}
+function drawWalkers(ctx, list, t, k) {
+    if (!list || !list.length) return;
+    const U = k * 2;                                                 // 1 at the 0.5 bake scale
+    ctx.save();
+    for (const wk of list) {
+        const u = 0.5 - 0.5 * Math.cos(Math.PI * 2 * (t + wk.ph));   // 0→1→0, smooth turn-arounds, loops exactly
+        const du = Math.sin(Math.PI * 2 * (t + wk.ph));               // sign = travel direction
+        let d = u * wk.len, x = wk.pts[0].x, y = wk.pts[0].y;
+        for (let q = 0; q < wk.seg.length; q++) {
+            if (d <= wk.seg[q] || q === wk.seg.length - 1) { const f = Math.min(1, d / wk.seg[q]); x = wk.pts[q].x + (wk.pts[q + 1].x - wk.pts[q].x) * f; y = wk.pts[q].y + (wk.pts[q + 1].y - wk.pts[q].y) * f; break; }
+            d -= wk.seg[q];
+        }
+        const step = Math.sin(t * Math.PI * 2 * wk.beats + wk.ph * 9);
+        const bob = Math.abs(step) * 1.4 * U;
+        ctx.fillStyle = 'rgba(0,0,0,0.22)';
+        ctx.beginPath(); ctx.ellipse(x, y + 1 * U, 4.2 * U, 1.7 * U, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#3b2c22'; ctx.lineWidth = 1.7 * U; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(x - 1.1 * U, y - 4.2 * U - bob * 0.3); ctx.lineTo(x - 1.1 * U + step * 2.0 * U * Math.sign(du || 1), y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x + 1.1 * U, y - 4.2 * U - bob * 0.3); ctx.lineTo(x + 1.1 * U - step * 2.0 * U * Math.sign(du || 1), y); ctx.stroke();
+        ctx.fillStyle = wk.tunic;
+        ctx.beginPath(); ctx.moveTo(x - 3 * U, y - 4 * U - bob); ctx.lineTo(x + 3 * U, y - 4 * U - bob); ctx.lineTo(x + 2.2 * U, y - 10 * U - bob); ctx.lineTo(x - 2.2 * U, y - 10 * U - bob); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#f0c9a0';
+        ctx.beginPath(); ctx.arc(x, y - 12.4 * U - bob, 2.5 * U, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = wk.hair;
+        ctx.beginPath(); ctx.arc(x, y - 13.2 * U - bob, 2.6 * U, Math.PI, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+}
+
+// ── boats: little sailboats drifting between open-water cells (ping-pong, bobbing, with a wake) ──
+function buildBoats(water, seed, k, { max = 2 } = {}) {
+    if (!water || water.length < 5) return [];
+    const cellW = 1.9 * 96 * k, rnd = K.mulberry32(seed + 5600);
+    const interior = water.filter((c) => !c.shore && c.cx > 80 && c.cy > 100);
+    const pool = interior.length >= 4 ? interior : water;
+    const out = [], used = new Set();
+    for (let tries = 0; tries < 60 && out.length < max; tries++) {
+        const a = pool[Math.floor(rnd() * pool.length)];
+        if (used.has(a)) continue;
+        const nb = pool.filter((b) => b !== a && Math.hypot(b.cx - a.cx, b.cy - a.cy) < cellW * 1.25 && !used.has(b));
+        if (!nb.length) continue;
+        const b = nb[Math.floor(rnd() * nb.length)];
+        used.add(a); used.add(b);
+        out.push({ a, b, ph: rnd(), hull: ['#8a5a36', '#a8452f', '#4a6fa0'][out.length % 3], sail: out.length % 2 ? '#f4efe0' : '#fff7e8' });
+    }
+    return out;
+}
+function drawBoats(ctx, list, t, k) {
+    if (!list || !list.length) return;
+    const U = k * 2;
+    ctx.save();
+    for (const bt of list) {
+        ctx.save();
+        const u = 0.5 - 0.5 * Math.cos(Math.PI * 2 * (t + bt.ph));
+        const dir = Math.sign(Math.sin(Math.PI * 2 * (t + bt.ph))) || 1;
+        const x = bt.a.cx + (bt.b.cx - bt.a.cx) * u, y = bt.a.cy + (bt.b.cy - bt.a.cy) * u;
+        const face = (bt.b.cx - bt.a.cx) * dir >= 0 ? 1 : -1;
+        const bob = Math.sin(t * Math.PI * 2 * 3 + bt.ph * 6) * 1.3 * U, roll = Math.sin(t * Math.PI * 2 * 2 + bt.ph * 5) * 0.05;
+        const speed = Math.abs(Math.sin(Math.PI * 2 * (t + bt.ph)));
+        ctx.strokeStyle = `rgba(255,255,255,${(0.5 * speed).toFixed(3)})`; ctx.lineWidth = 1.6 * U; ctx.lineCap = 'round';   // wake
+        ctx.beginPath(); ctx.moveTo(x - face * 9 * U, y + 3.5 * U); ctx.lineTo(x - face * (17 + 7 * speed) * U, y + 2 * U); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x - face * 9 * U, y + 5.5 * U); ctx.lineTo(x - face * (15 + 6 * speed) * U, y + 6.5 * U); ctx.stroke();
+        ctx.translate(x, y + bob); ctx.rotate(roll); ctx.scale(face, 1);
+        ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.beginPath(); ctx.ellipse(1 * U, 5 * U, 11 * U, 2.4 * U, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = bt.hull;                                                                                             // hull
+        ctx.beginPath(); ctx.moveTo(-10 * U, 0); ctx.lineTo(11 * U, 0); ctx.lineTo(7 * U, 5 * U); ctx.lineTo(-7 * U, 5 * U); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(-9 * U, 0, 19 * U, 1.2 * U);
+        ctx.strokeStyle = '#4a3322'; ctx.lineWidth = 1.5 * U;                                                                // mast
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -16 * U); ctx.stroke();
+        ctx.fillStyle = bt.sail;                                                                                             // sail
+        ctx.beginPath(); ctx.moveTo(1 * U, -15 * U); ctx.quadraticCurveTo(9 * U, -8 * U, 8 * U, -1.5 * U); ctx.lineTo(1 * U, -1.5 * U); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#e8dfc8'; ctx.beginPath(); ctx.moveTo(-1 * U, -13 * U); ctx.lineTo(-7 * U, -2.5 * U); ctx.lineTo(-1 * U, -2.5 * U); ctx.closePath(); ctx.fill();
+        ctx.restore();
     }
     ctx.restore();
 }
@@ -258,4 +391,4 @@ function drawTint(ctx, W, H, t) {
     ctx.fillRect(0, 0, W, H);
 }
 
-module.exports = { glints, animateWater, swayTrees, drawSway, drawBirds, drawButterflies, drawCloudShadows, drawTint };
+module.exports = { buildWalkers, drawWalkers, buildBoats, drawBoats, glints, animateWater, swayTrees, drawSway, drawBirds, drawButterflies, drawCloudShadows, drawTint };

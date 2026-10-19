@@ -20,6 +20,7 @@ from multiprocessing import Pool
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import houses  # noqa: E402  (procedural cottages: houses.py)
 from kk_raster import (Atlas, load_model, transform, render, crop_alpha,  # noqa: E402
                        sample_top_color, PITCH)
 
@@ -115,7 +116,12 @@ def job(task):
     path, name, yaw, kind = task
     if _atlas is None:
         _atlas = Atlas(os.path.join(PACK, 'Textures', 'hexagons_medieval.png'))
-    base = make_dock(path[5:]) if path.startswith('dock:') else load_model(path, _atlas)
+    if path.startswith('dock:'):
+        base = make_dock(path[5:])
+    elif path.startswith('house:'):
+        base = houses.make_house(*path[6:].split(':'))
+    else:
+        base = load_model(path, _atlas)
     model = transform(base, yaw=yaw)                    # logical orientation (edge signatures)
     cam = transform(base, yaw=yaw + CAM_YAW) if CAM_YAW else model
     is_obj = kind != 'tile'
@@ -129,7 +135,7 @@ def job(task):
         entry['sh'] = dict(file=name + '_sh.png', w=m['w'], h=m['h'], ax=round(m['ax'], 2), ay=round(m['ay'], 2))
     if kind == 'tile' and yaw is not None:
         entry['edges'] = edge_classes(model)
-    if kind == 'piece' and not path.startswith('dock:'):
+    if kind == 'piece' and not path.startswith(('dock:', 'house:')):
         entry['conn'] = piece_conn(model)
     entry['kind'] = kind
     return name, entry
@@ -161,9 +167,17 @@ def main():
         for kd in ('straight', 'end'):
             for r in range(6):
                 tasks.append((f'dock:{kd}', f'dock_{kd}@{r}', 60.0 * r, 'piece'))
+    for kd, roofs in houses.HOUSES.items():                  # procedural houses, every roof colour
+        for rf in roofs:
+            tasks.append((f'house:{kd}:{rf}', f'house_{kd}_{rf}', 0.0, 'object'))
+    only = os.environ.get('KK_ONLY')                          # e.g. KK_ONLY=house_  -> bake just those, merge into manifest
+    if only:
+        tasks = [t for t in tasks if t[1].startswith(only)]
     t0 = time.time()
     print(f'baking {len(tasks)} sprites -> {OUT}')
     manifest = dict(S=S, pitch=CAM_PITCH, yaw=CAM_YAW, sprites={})
+    if only and os.path.exists(os.path.join(OUT, 'manifest.json')):
+        manifest = json.load(open(os.path.join(OUT, 'manifest.json')))
     with Pool(int(os.environ.get("KK_PROCS","2"))) as pool:
         for i, (name, entry) in enumerate(pool.imap_unordered(job, tasks, chunksize=4)):
             manifest['sprites'][name] = entry

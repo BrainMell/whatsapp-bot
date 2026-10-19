@@ -26,7 +26,7 @@ const KT = require('./kingdomTerrain');
 const mediaCache = require('./mediaCache');
 const ambient = require('./ambient');   // shared life layer (owner 2026-10-19: "the guild card should also be a gif")
 
-const FRAMES = 14, FRAME_MS = 110;
+const FRAMES = 20, FRAME_MS = 100;   // 2 s loop (birds cross the card once per loop)
 const COLS = 23, ROWS = 31, CC = 11, CR = 15;   // oversized grid: terrain runs past every edge of the card, castle on (11,15)
 const OLD_COLS = 17, OLD_ROWS = 15, OLD_CC = 8, OLD_CR = 7;   // the framing the card was designed around
 const SCALE = parseFloat(process.env.RENDER_GUILD_SCALE || '0.5') || 0.5;
@@ -290,7 +290,7 @@ function buildWorld(state) {
     const homeN = Math.min(members, 12, hamlet.length);
     for (let i = 0; i < homeN; i++) {
         const [c, r] = hamlet[i];
-        w.put(B(i % 3 === 1 ? 'home_B' : 'home_A'), c, r, { flip: i % 2 === 1 });
+        w.put(K.houseName(rng, w.biome || 'isle', { view: 'top', shop: false }) || B(i % 3 === 1 ? 'home_B' : 'home_A'), c, r, { flip: i % 2 === 1 });   // 7 procedural house kinds, roofs per realm
         claim(c, r);
         if (i < 6) { const wcH = K.hexWorld(c, r); smokeAnchors.push({ x: wcH.x + (i % 2 ? -0.35 : 0.35), z: wcH.z + 0.1, h: 1.65 }); }
     }
@@ -317,7 +317,7 @@ function buildWorld(state) {
         } else if (a >= 20 && a <= 130 && d <= 6) {                   // south-east: farmland
             if (fieldsN < 5 && x < 0.55) { w.put('building_grain', c, r, { layer: 'flat' }); fieldsN++; claim(c, r); }
             else if (!windmill && x < 0.7) { windmill = [c, r]; w.put(B('windmill'), c, r); claim(c, r); }
-            else if (!farmHome && x < 0.85) { farmHome = true; w.put(B('home_A'), c, r, { flip: true }); claim(c, r); }
+            else if (!farmHome && x < 0.85) { farmHome = true; w.put(K.houseName(rng, w.biome || 'isle', { view: 'top', farm: true, kinds: ['barn', 'cottage'] }) || B('home_A'), c, r, { flip: true }); claim(c, r); }
         } else if (x < 0.4) {                                         // everywhere else: sparse copses
             w.put(TREES[2 + Math.floor(rng() * 2)], c, r, { flip: rng() < 0.5 }); claim(c, r);
         }
@@ -483,9 +483,11 @@ async function buildScene(state) {
         for (let d = 0; d < 6 && !shore; d++) { const nb = K.neighbor(c, r, d); const nk = w.at(nb[0], nb[1]); if (nk && !nk.water && !nk.river && !nk.void) shore = true; }
         water.push({ poly, cx, cy, h: hashStr(`${c},${r}`), shore });
     }
-    const sway = await ambient.swayTrees(w);                     // wilds trees for the wind shuffle
+    const sway = await ambient.swayTrees(w);
+    const walkers = ambient.buildWalkers(w, seed, { n: 9, maxY: H - 190 });   // villagers on the roads
+    const boats = ambient.buildBoats(water, seed, k);                     // wilds trees for the wind shuffle
     const smoke = smokeAnchors.map((a) => { const p = w.proj(a.x, a.z + 0.35, a.h); return { x: p.x, y: p.y, smoky: false }; });
-    const scene = { canvas, W, H, w, banner: { x: bpos.x, y: bpos.y, flagCol, flagD: archC.flagD, icon: state.emblemIcon || '' }, k, biome: w.biome, realm: w.biome, water, sway, smoke, seed };
+    const scene = { canvas, W, H, w, banner: { x: bpos.x, y: bpos.y, flagCol, flagD: archC.flagD, icon: state.emblemIcon || '' }, k, biome: w.biome, realm: w.biome, water, sway, walkers, boats, smoke, seed };
     _scenes.set(key0, scene);
     while (_scenes.size > SCENE_MAX) _scenes.delete(_scenes.keys().next().value);
     return scene;
@@ -511,6 +513,8 @@ async function renderFrame(state, frame, opts = {}) {
         const seed = hashStr(state.name || 'guild');
         ambient.animateWater(ctx, sc, t, await ambient.glints());   // lakes/lava shimmer + sparkles + shore ripples
         ambient.drawSway(ctx, sc.sway, t);                          // wilds trees shuffle
+        ambient.drawBoats(ctx, sc.boats, t, sc.k);                  // sailboats on the lakes
+        ambient.drawWalkers(ctx, sc.walkers, t, sc.k);              // villagers strolling the roads
         ctx.save();
         for (const s of sc.smoke) {                              // hearth smoke over the keep + hamlet
             for (let i = 0; i < 4; i++) {

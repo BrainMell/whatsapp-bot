@@ -27,7 +27,7 @@ const ambient = require('./ambient');   // shared life layer (owner 2026-10-19: 
 const N = 16;                 // base tiles per side (saved-structure grid)
 const M = 15;                 // wilderness margin (hex cells) around the grid — big enough to over-cover the diagonal card
 const COLS = N + 2 * M, ROWS = N + 2 * M;
-const FRAMES = 14, FRAME_MS = 110;
+const FRAMES = 20, FRAME_MS = 100;   // 2 s loop (birds cross the card once per loop)
 const SCALE = parseFloat(process.env.RENDER_BASE_SCALE || '0.44') || 0.44;
 const ANIM_SCALE = parseFloat(process.env.RENDER_BASE_ANIM_SCALE || '0.62') || 0.62;
 const CARD_W = 1960, CARD_H = 1420;   // fixed card; terrain over-covers it (no floating diorama)
@@ -359,7 +359,7 @@ function buildWorld(state) {
         const useB = rng() < 0.35;
         const hut = rng() < 0.18;
         w.put('building_dirt', cd.c, cd.r, { layer: 'flat', sc: 0.85 });
-        w.put(hut ? 'tent' : (useB ? B('home_B') : B('home_A')), cd.c, cd.r, { sc: hut ? 1.2 : 0.95 + rng() * 0.12, flip: west });
+        w.put(hut ? 'tent' : (K.houseName(rng, biome, { view: 'iso' }) || (useB ? B('home_B') : B('home_A'))), cd.c, cd.r, { sc: hut ? 1.2 : 1.12 + rng() * 0.12, flip: west });
         for (let i = 0; i < 2; i++) { const y = YARD[Math.floor(rng() * YARD.length)]; w.put(y[0], cd.c, cd.r, { dx: y[1], dz: y[2] }); }
         if (rng() < 0.5) w.put(SMALL_TREES[Math.floor(rng() * 4)], cd.c, cd.r, { dx: -1.1, dz: -0.9, sc: 0.85 });
     }
@@ -397,7 +397,7 @@ function buildWorld(state) {
         if (!freeCell(c, r) || !gridOK(c, r) || cottageSpots.some((q) => K.hexDist(q.c, q.r, c, r) < 3) || K.hexDist(c, r, pc, pr) < 3) continue;
         cottageSpots.push({ c, r, rc: base.rc, rr: base.rr }); claim(c, r);
         w.put('building_dirt', c, r, { layer: 'flat', sc: 0.85 });
-        w.put(rng() < 0.5 ? B('home_A') : B('home_B'), c, r, { sc: 0.92 + rng() * 0.1, flip: rng() < 0.5 });
+        w.put(K.houseName(rng, biome, { view: 'iso', farm: FARM, shop: false }) || (rng() < 0.5 ? B('home_A') : B('home_B')), c, r, { sc: 1.08 + rng() * 0.1, flip: rng() < 0.5 });
         const y = YARD[Math.floor(rng() * YARD.length)]; w.put(y[0], c, r, { dx: y[1], dz: y[2] });
         for (let dd = 0; dd < 6; dd++) { const [fc, fr] = K.neighbor(c, r, dd); if (FARM && freeCell(fc, fr) && gridOK(fc, fr) && rng() < 0.35) { w.put('building_grain', fc, fr, { sc: 1.0 }); claim(fc, fr); } }
     }
@@ -623,7 +623,9 @@ async function buildScene(state) {
         water.push({ poly, cx, cy, h: hashStr(`${c},${r}`), shore });
     }
     const sway = await ambient.swayTrees(w);                         // tree sprites for the wind shuffle
-    const scene = { terrain, objects, W: CARD_W, H: CARD_H, w, k, smoke, biome, realm, water, sway, seed };
+    const walkers = ambient.buildWalkers(w, seed, { n: 10, maxY: CARD_H - 190 });
+    const boats = ambient.buildBoats(water, seed, k);
+    const scene = { terrain, objects, W: CARD_W, H: CARD_H, w, k, smoke, biome, realm, water, sway, walkers, boats, seed };
     _scenes.set(key0, scene);
     while (_scenes.size > SCENE_MAX) _scenes.delete(_scenes.keys().next().value);
     return scene;
@@ -647,8 +649,10 @@ async function renderFrame(state, frame, opts = {}) {
     if (opts.animate || frame > 0) ambient.animateWater(ctx, sc, t, await ambient.glints());
     ctx.drawImage(sc.objects, 0, 0);
     const seed = sc.seed;
-        ambient.drawSway(ctx, sc.sway, t);                       // trees shuffle in the wind
     if (opts.animate || frame > 0) {
+        ambient.drawSway(ctx, sc.sway, t);                       // trees shuffle in the wind
+        ambient.drawBoats(ctx, sc.boats, t, sc.k);               // sailboats on the lake / sea
+        ambient.drawWalkers(ctx, sc.walkers, t, sc.k);           // villagers strolling the lanes
         ctx.save();
         for (const s of sc.smoke) {                              // chimney / forge smoke puffs
             for (let i = 0; i < 4; i++) {

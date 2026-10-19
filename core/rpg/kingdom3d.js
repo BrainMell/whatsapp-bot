@@ -461,6 +461,35 @@ class HexWorld {
     }
 }
 
+
+// ── procedural houses (scripts/kingdom3d/houses.py): sprites are house_<kind>_<roof> ──
+const HOUSE_KIND_W = { cottage: 3, townhouse: 2, tudor: 2, stone: 1.6, roundhut: 1, shop: 0.7, barn: 0 };
+const HOUSE_ROOFS = {   // roof preference per biome / realm key (guild biomes + player-base realms)
+    desert: ['orange', 'thatch', 'red', 'brown'], sunscorch: ['orange', 'thatch', 'red', 'brown'],
+    tundra: ['slate', 'blue', 'red', 'plum'], frostreach: ['slate', 'blue', 'red', 'plum'],
+    volcanic: ['slate', 'brown', 'red', 'plum'], ashlands: ['slate', 'brown', 'red', 'plum'],
+    highlands: ['moss', 'green', 'red', 'thatch', 'orange'], wildwood: ['moss', 'green', 'red', 'thatch', 'orange'],
+    isle: ['blue', 'red', 'green', 'orange', 'plum'], coast: ['blue', 'red', 'green', 'orange', 'plum'],
+};
+/** pick a house sprite name for `biome` (seeded by rng). o: {view, farm (allow barns), shop, kinds:[...]}. null if none baked. */
+function houseName(rng, biome, o = {}) {
+    const vk = o.view === 'iso' ? 'iso' : 'top';
+    const man = getView(vk).man.sprites;
+    const prefs = HOUSE_ROOFS[biome] || [];
+    const byKind = {};
+    for (const n of Object.keys(man)) { const m = /^house_([a-z]+)_([a-z]+)$/.exec(n); if (m) (byKind[m[1]] = byKind[m[1]] || []).push(m[2]); }
+    const kinds = Object.keys(byKind).filter((k) => !o.kinds || o.kinds.includes(k));
+    if (!kinds.length) return null;
+    const wt = (k) => (k === 'barn' ? (o.farm ? 1.4 : 0) : k === 'shop' ? (o.shop === false ? 0 : HOUSE_KIND_W.shop) : (HOUSE_KIND_W[k] == null ? 1 : HOUSE_KIND_W[k]));
+    let tot = 0; for (const k of kinds) tot += wt(k);
+    if (tot <= 0) return null;
+    let x = rng() * tot, kind = kinds[0];
+    for (const k of kinds) { x -= wt(k); if (x <= 0) { kind = k; break; } }
+    const roofs = byKind[kind], good = roofs.filter((r) => prefs.includes(r));
+    const pool = good.length ? good : roofs;
+    return `house_${kind}_${pool[Math.floor(rng() * pool.length) % pool.length]}`;
+}
+
 /** straight hex line between two cells (inclusive), as [[c,r],...] */
 function hexLine(c1, r1, c2, r2) {
     const toCube = (c, r) => { const x = c - (r - (r & 1)) / 2; return [x, -x - r, r]; };
@@ -564,6 +593,7 @@ function paintConfetti(ctx, W, H, t, seed, k) {
 }
 
 module.exports = {
+    houseName,
     getView, DIR_ISO, biomeFile, biomeInfo,
     hexLine, hexPath, paintBackdrop, roundRect, paintConfetti,
     HexWorld, hexWorld, neighbor, dirTo, ring, hexDist, mulberry32, hashStr,
