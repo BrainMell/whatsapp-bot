@@ -7058,6 +7058,13 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
   // Generate incremental combat image if action just happened
   if (lastTurnInfo) {
     try {
+      // 💡 INSURANCE v3 (2026-10-20): the warLog flag is stamped at the
+      // turnInfo build site (5452) — but any turnInfo that reaches here
+      // without it (rebuilt/partial paths) would render the FULL log even
+      // for .j combat log OFF chats. Stamp it if missing.
+      if (lastTurnInfo.warLog === undefined && state.chatId) {
+        lastTurnInfo.warLog = !combatIntegration.isWarLogOff(state.chatId);
+      }
       // 💡 FIX 2026-07-31: Race the combat image generation against a 10s
       // timeout. If the Go service is slow/unresponsive, skip the image
       // and just send the text caption. This prevents one slow image

@@ -12417,14 +12417,26 @@ _💡 Reply with another number from your search list!_`.trim();
                       // turn header (full grid + narration hidden). Persisted
                       // in the shared system KV so it survives restarts and
                       // applies across jake/joker/subaru.
+                      // 💡 FIX v3 (2026-10-20): `log off` / `log on` args were
+                      // silently IGNORED (bare flip only) — owner ran
+                      // `.j combat log on` and it turned the log OFF. Explicit
+                      // args now set the state directly; bare = flip.
                       if (action === "log") {
                         const ci = require('./rpg/combatIntegration');
-                        const nowOn = ci.setWarLogOff(chatId, !ci.isWarLogOff(chatId));
+                        const logArg = String(combatTarget || '').trim().toLowerCase();
+                        let nowOn;
+                        if (["off", "false", "0", "no"].includes(logArg)) {
+                          nowOn = ci.setWarLogOff(chatId, true);
+                        } else if (["on", "true", "1", "yes"].includes(logArg)) {
+                          nowOn = ci.setWarLogOff(chatId, false);
+                        } else {
+                          nowOn = ci.setWarLogOff(chatId, !ci.isWarLogOff(chatId));
+                        }
                         await sock.sendMessage(chatId, {
                           text: BOT_MARKER +
                             (nowOn
-                              ? `⚔️ *WAR LOG ON* — full battle grid + narration is back.`
-                              : `⚔️ *WAR LOG OFF* — premium battles: images only, captions minimal. Run \`${botConfig.getPrefix()} combat log\` again to bring the log back.`),
+                              ? `⚔️ *WAR LOG ON* — full battle log for THIS chat.`
+                              : `⚔️ *WAR LOG OFF* — premium battles for THIS chat: images + damage only. Run \`${botConfig.getPrefix()} combat log\` again to bring the log back.`),
                         });
                         return;
                       }

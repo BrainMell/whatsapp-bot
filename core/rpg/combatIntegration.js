@@ -394,24 +394,47 @@ function generateTurnCaption(players, enemies, turnInfo) {
     // turn. When the chat toggled logs OFF (.j combat log), the battle goes
     // premium-minimal: image stays, caption collapses to the bare header.
     if (turnInfo && turnInfo.warLog === false) {
-        // 💡 Owner tweak v2 (2026-10-20): premium mode keeps the DAMAGE —
-        // "the combat log toggle should leave the damage done, like total
-        // damage done from both enemies when they make an action". The
-        // total dealt by this action (summed across every enemy hit, incl.
-        // AoE) rides under the bare header. Logs stay off; numbers stay on.
+        // 💡 Owner tweak v3 (2026-10-20): premium log-OFF = the owner's exact
+        // sketch — what was used, the total damage, who died. NOTHING else:
+        //   ⚔️ *TURN 1*
+        //   🪓 Mellow-San used Rampage
+        //   -697 DAMAGE 💢
+        //   Crystal Corrupted defeated!
+        // Damage is summed across EVERY enemy hit (AoE incl.); heals show as
+        // +N HP; misses as 💨 MISS; defeat/fall lines ride under the damage.
         const logs = Array.isArray(turnInfo.actionLog) ? turnInfo.actionLog.map(String) : [];
         let dmgTotal = 0;
+        let healTotal = 0;
         let sawMiss = false;
+        const defeats = [];
         for (const s of logs) {
             const m = s.match(/([\d][\d,]*)\s+(?:\w+\s+)?damage/i);
             if (m) dmgTotal += Number(m[1].replace(/,/g, '')) || 0;
+            const h = s.match(/\+?\s*([\d][\d,]*)\s+HP restored/i) || s.match(/heals?\s+(?:\w+\s+)?(?:for\s+)?([\d][\d,]*)/i);
+            if (h) healTotal += Number(h[1].replace(/,/g, '')) || 0;
             if (/💨|\bMISS|EVADES|missed/i.test(s)) sawMiss = true;
+            if (/defeated|defeats|has fallen|slain|sacrifices|fled/i.test(s)) defeats.push(warlogClean(s));
         }
         if (!dmgTotal && Number(turnInfo.damage) > 0) dmgTotal = Math.floor(Number(turnInfo.damage));
+        if (!healTotal && Number(turnInfo.healing) > 0) healTotal = Math.floor(Number(turnInfo.healing));
         const crit = turnInfo.isCrit || /CRIT/i.test(logs.join(' '));
+        // "Mellow used <skill>" — structured actor+action first (clean skill
+        // name, no animation emojis); fall back to the first narration line.
+        const actorName = warlogClean(turnInfo.actor?.name || '');
+        const actionName = warlogClean(turnInfo?.action?.name || '');
+        const actorIcon = turnInfo.actor?.class?.icon || '';
+        let usedLine = '';
+        if (actorName && actionName && actionName !== '?') {
+            usedLine = `${actorIcon ? actorIcon + ' ' : ''}${actorName} used ${actionName}`;
+        } else if (logs.length > 0) {
+            usedLine = warlogClean(logs[0]);
+        }
         let out = `⚔️ *TURN ${turnInfo.turnNumber || '?'}*`;
-        if (dmgTotal > 0) out += `\n💥 ${dmgTotal.toLocaleString('en-US')} DMG${crit ? ' 💢' : ''}`;
+        if (usedLine) out += `\n${usedLine}`;
+        if (dmgTotal > 0) out += `\n-${dmgTotal.toLocaleString('en-US')} DAMAGE${crit ? ' 💢' : ''}`;
+        else if (healTotal > 0) out += `\n+${healTotal.toLocaleString('en-US')} HP`;
         else if (sawMiss) out += `\n💨 MISS`;
+        for (const d of defeats) out += `\n${d}`;
         return out;
     }
     const toStr = (n) => Number(n || 0).toLocaleString('en-US');

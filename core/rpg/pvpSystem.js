@@ -1673,16 +1673,19 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
         imageResult = null;
     }
     
-    // 💡 STYLE A WAR LOG (2026-10-20 owner pick): mono HP grid, '>' marks
-    // the acting duelist, action result as » flow lines. Toggle-aware:
-    // .j combat log OFF ⇒ premium-minimal round, but the DAMAGE STAYS
-    // (owner tweak v2: "leave the damage done" — numbers stay, prose goes).
+    // 💡 STYLE A WAR LOG (2026-10-20 owner pick): mono grid, '>' marks the
+    // acting duelist, action result as » flow lines. Toggle-aware: log OFF ⇒
+    // owner's premium sketch — "X used <skill>" + "-N DAMAGE", then prompt.
+    const usedWhat = action === 'attack'
+        ? `attacked ${opponent.name}`
+        : `used ${abilityObj?.name || warlogClean(action)}`;
     let statusMsg = isWarLogOff(chatId)
         ? `⚔️ *PVP ROUND ${duel.round}*` +
+          `\n${currentPlayer.name} ${usedWhat}` +
           (missed
               ? `\n💨 MISS`
               : damage > 0
-                ? `\n💥 ${Number(damage).toLocaleString('en-US')} DMG${isCrit ? ' 💢' : ''}`
+                ? `\n-${Number(damage).toLocaleString('en-US')} DAMAGE${isCrit ? ' 💢' : ''}`
                 : '') +
           `\n\n🎯 *@${economy.getDisplayName(nextPlayer.jid)}* - It's your turn!`
         : `⚔️ *WAR LOG* · PVP ROUND ${duel.round}\n` +

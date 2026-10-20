@@ -56,24 +56,29 @@ check('narration keeps the effects (defeated/overkill/crit)', c1.includes('Corps
 check('no markup asterisks inside fence', !fenceParts[1].includes('*'));
 check('no Style C glyphs (🆚/▰/▱/↳)', !c1.includes('🆚') && !c1.includes('▰') && !c1.includes('▱') && !c1.includes('↳'));
 
-// ─── Case 2: PREMIUM mode (warLog=false) — damage STAYS ───
+// ─── Case 2: PREMIUM mode (warLog=false) — owner's v3 sketch format ───
 const c2 = generateTurnCaption(players, enemies, { ...ti1, warLog: false });
-console.log('--- CASE 2: premium (logs OFF) — damage stays ---\n' + c2 + '\n');
-check('premium = header + total damage + crit', c2 === '⚔️ *TURN 18*\n💥 7,866 DMG 💢');
+console.log('--- CASE 2: premium (logs OFF) — sketch format ---\n' + c2 + '\n');
+check('premium = header + used + DAMAGE + defeat', c2 === '⚔️ *TURN 18*\n🧑 PINK DILDO used Corpse Explosion\n-7,866 DAMAGE 💢\nGLOOM BRUTE defeated!');
 check('premium has no fence/grid/prose', !c2.includes('```') && !c2.includes('»') && !c2.includes('WAR LOG'));
 
-// Case 2b: AoE across BOTH enemies — totals are summed
+// Case 2b: AoE across BOTH enemies — one summed -DAMAGE line
 const ti2b = { ...ti1, actionLog: ['PINK DILDO: uses Corpse Explosion!', 'VOID CORRUPTED takes 7,866 damage!', 'GLOOM BRUTE takes 2,500 damage!'], isCrit: false };
 const c2b = generateTurnCaption(players, enemies, { ...ti2b, warLog: false });
-check('AoE damage summed across both enemies (10,366)', c2b === '⚔️ *TURN 18*\n💥 10,366 DMG');
+check('AoE damage summed (−10,366 DAMAGE)', c2b === '⚔️ *TURN 18*\n🧑 PINK DILDO used Corpse Explosion\n-10,366 DAMAGE');
 
-// Case 2c: heal-only turn — no damage line, bare header
+// Case 2c: heal-only turn — +N HP, no damage line
 const c2c = generateTurnCaption(players, enemies, { turnNumber: 7, actor: players[0], action: { name: 'Heal' }, actionLog: ['PINK DILDO: uses Heal!', '💚 +500 HP restored!'], warLog: false });
-check('heal-only turn stays bare header', c2c === '⚔️ *TURN 7*');
+check('heal turn shows +N HP', c2c === '⚔️ *TURN 7*\n🧑 PINK DILDO used Heal\n+500 HP');
 
 // Case 2d: miss turn — MISS marker
 const c2d = generateTurnCaption(players, enemies, { turnNumber: 9, actor: players[0], action: { name: 'Basic Attack' }, actionLog: ['💨 MISS! The attack whiffed!'], warLog: false });
-check('missed turn shows 💨 MISS', c2d === '⚔️ *TURN 9*\n💨 MISS');
+check('missed turn shows 💨 MISS', c2d === '⚔️ *TURN 9*\n🧑 PINK DILDO used Basic Attack\n💨 MISS');
+
+// Case 2e: defeat via 'has fallen' wording rides through with emoji intact
+const ti2e = { ...ti1, actionLog: ['PINK DILDO: uses Judgment!', 'VOID CORRUPTED takes 7,866 damage!', '💀 Crystal Corrupted has been defeated!'], damage: 7866, isCrit: false };
+const c2e = generateTurnCaption(players, enemies, { ...ti2e, warLog: false });
+check('has-been-defeated line preserved', c2e.endsWith('💀 Crystal Corrupted has been defeated!'));
 
 // ─── Case 3: structured fallback (no actionLog) ───
 const ti3 = {
