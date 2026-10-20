@@ -11353,6 +11353,28 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
+                    // 🧪 47-l5: `.j facetest [filter]` — TEMP owner-facing
+                    // sprite-orientation audit (owner 2026-10-20: "Add a
+                    // temp test command that spams the gc with every class
+                    // sprite in an environment facing right, so that I can
+                    // visually inspect which ones aren't, add the class
+                    // name as a caption and some info so that ik which one
+                    // to tell you"). Renders EVERY unique class sprite
+                    // (CLASS_SPRITE_SETS, deduped) in an abyss environment
+                    // through the SAME pipeline transform the scenes use
+                    // (playerArtFlipFor) — anything still facing LEFT in
+                    // its render is a mis-tabled file. TEMPORARY: remove
+                    // this block + core/utils/faceAudit.js when the audit
+                    // closes. Owner-gated like `.j fx`.
+                    if (primaryCmd === "facetest") {
+                      if (!isOwner) {
+                        return reply(BOT_MARKER + "❌ owner only.");
+                      }
+                      const faceAudit = require("./utils/faceAudit");
+                      await faceAudit.handleCommand(sock, chatId, m, cmdArgs.slice(1), BOT_MARKER, reply);
+                      return;
+                    }
+
                     // 💡 .g instances - cross-instance health check
                     // Shows the status of ALL bot instances (self + siblings)
                     // by reading their heartbeats from the shared System collection.
