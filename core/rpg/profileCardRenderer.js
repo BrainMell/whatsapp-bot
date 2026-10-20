@@ -160,7 +160,7 @@ const CLASS_SPRITE_SETS = {
   TYCOON: ['tycoon.png'],
   CHRONOMANCER: ['timelord (1).png', 'timelord (2).png', 'timelord (3).png', 'timelord (4).png', 'timelord (5).png'],
   TIMELORD: ['timelord (1).png', 'timelord (2).png', 'timelord (3).png', 'timelord (4).png', 'timelord (5).png'],
-  SAMURAI: ['samuri (1).png', 'samuri (2).png', 'samuri (3).png', 'samuri (4).png', 'samuri (5).png', 'samuri (6).png', 'samuri (7).png', 'samuri (8).png', 'samuri (9).png', 'samuri (10).png', 'samuri (11).png'],
+  SAMURAI: ['samuri (1).png', 'samuri (2).png', 'samuri (3).png', 'samuri (4).png', 'samuri (5).png', 'samuri (6).png', 'samuri (7).png', 'samuri (8).png', 'samuri (9).png', 'samuri (10).png'],
   GOD_HAND: ['God_hand (1).png', 'God_hand (2).png'],
   DRAGONSLAYER: ['warrior1.png', 'warrior2.png', 'warrior3.png', 'warrior4.png'],
   REAPER: ['necromancer.png'],
