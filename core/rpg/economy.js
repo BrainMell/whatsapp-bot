@@ -421,7 +421,26 @@ function leafDiff(ours, base) {
 }
 
 // NEW: Save specific user to MongoDB (Background Sync)
+// ── 47-l1 SAVE MUTEX ── concurrent saveUser() calls for the SAME user
+// (explicit save + the scheduleSave debounce flush, or two queued flushes)
+// used to interleave at their await points; with composited counters both
+// would diff against the same not-yet-stamped baseline and $inc the delta
+// TWICE ($set was idempotent, $inc is not). Serialize per resolved user:
+// every save re-reads the freshest baseline the previous one stamped.
+const saveChains = new Map(); // resolvedUserId -> promise tail
 async function saveUser(userId) {
+    let key;
+    try { key = resolveJidHelper(userId); } catch (e) { key = String(userId); }
+    const prev = saveChains.get(key) || Promise.resolve();
+    const run = prev.then(() => {}, () => {}).then(() => saveUserInner(userId));
+    saveChains.set(key, run);
+    try {
+        await run;
+    } finally {
+        if (saveChains.get(key) === run) saveChains.delete(key);
+    }
+}
+async function saveUserInner(userId) {
     // 💡 FIX (tester issue a335e9): saveUser never resolved the JID, while
     // getUser DOES. For LID/phone JID mismatches, getUser returned the
     // canonical cached object (so in-memory edits like cardStyle worked)

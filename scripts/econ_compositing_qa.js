@@ -112,6 +112,15 @@ function runSibling(step, jid) {
     dbDoc = await User.findOne({ userId: jid2 }).lean();
     check('P3 addMoney(+250) after adoption → wallet 4750', dbDoc.wallet === 4750, dbDoc.wallet);
 
+    // ════ P4 — CONCURRENT saves must not double-apply (47-l1 save mutex) ════
+    // pre-fix: two overlapping saveUser calls both diffed +100 against the
+    // same not-yet-stamped baseline → $inc applied twice (caught live when
+    // the scheduleSave debounce flush raced the QA's explicit save).
+    economy.addMoney(jid2, 100, 'CompositingQA concurrent');
+    await Promise.all([economy.saveUser(jid2), economy.saveUser(jid2)]);
+    dbDoc = await User.findOne({ userId: jid2 }).lean();
+    check('P4 concurrent saves apply the +100 delta ONCE → 4850', dbDoc.wallet === 4850, dbDoc.wallet);
+
     console.log('[qa] sibling readback:');
     runSibling('verify_readback', jid2);
 
