@@ -313,104 +313,104 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
     // No subcommand - show detailed help
     if (!sub || sub === 'help') {
         return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `🎛️ *GM ADMIN CONSOLE - FULL GUIDE*\n\n` +
-                `_Mod-only RPG moderation toolkit. RPG Mods, Global Mods, and Owner only._\n\n` +
+            text: BOT_MARKER + `🎛️ *MOD CONSOLE - FULL GUIDE*\n\n` +
+                `_Mod-only RPG moderation toolkit. Runs as \`.j mod <command>\` (or the \`.j sandbox <sub>\` alias). RPG Mods, Global Mods, and Owner only._\n\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
                 `🎯 *HOW TO TARGET PLAYERS*\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
                 `All commands accept a target. 3 ways to specify:\n` +
-                `1️⃣ **@mention** - tag the player: \`${prefix} admin setlevel @friend 50\`\n` +
-                `2️⃣ **Reply** - reply to their message: \`${prefix} admin setlevel 50\`\n` +
-                `3️⃣ **Self** - no mention/reply = targets YOU: \`${prefix} admin setlevel 50\`\n\n` +
+                `1️⃣ **@mention** - tag the player: \`${prefix} mod setlevel @friend 50\`\n` +
+                `2️⃣ **Reply** - reply to their message: \`${prefix} mod setlevel 50\`\n` +
+                `3️⃣ **Self** - no mention/reply = targets YOU: \`${prefix} mod setlevel 50\`\n\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
                 `👤 *PLAYER MANAGEMENT*\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
-                `• \`${prefix} admin setlevel <@user> <1-100>\`\n` +
+                `• \`${prefix} mod setlevel <@user> <1-100>\`\n` +
                 `  Sets level directly. Recalculates XP + grants stat points.\n` +
-                `  Example: \`${prefix} admin setlevel 75\` (sets YOUR level to 75)\n\n` +
-                `• \`${prefix} admin setstat <@user> <stat> <value>\`\n` +
+                `  Example: \`${prefix} mod setlevel 75\` (sets YOUR level to 75)\n\n` +
+                `• \`${prefix} mod setstat <@user> <stat> <value>\`\n` +
                 `  Sets an individual stat (hp, atk, def, mag, spd, luck, crit).\n` +
-                `  Example: \`${prefix} admin setstat @friend hp 5000\`\n\n` +
-                `• \`${prefix} admin setwallet <@user> <amount>\`\n` +
+                `  Example: \`${prefix} mod setstat @friend hp 5000\`\n\n` +
+                `• \`${prefix} mod setwallet <@user> <amount>\`\n` +
                 `  Sets wallet balance directly (overwrites current).\n` +
-                `  Example: \`${prefix} admin setwallet 1000000\`\n\n` +
-                `• \`${prefix} admin giveitem <@user> <item_name> [qty]\`\n` +
+                `  Example: \`${prefix} mod setwallet 1000000\`\n\n` +
+                `• \`${prefix} mod giveitem <@user> <item_name> [qty]\`\n` +
                 `  Gives items by name (resolves automatically). Default qty = 1.\n` +
-                `  Example: \`${prefix} admin giveitem @friend legendary_enhancement_stone 10\`\n\n` +
-                `• \`${prefix} admin takeitem <@user> <item_name> [qty]\`\n` +
+                `  Example: \`${prefix} mod giveitem @friend legendary_enhancement_stone 10\`\n\n` +
+                `• \`${prefix} mod takeitem <@user> <item_name> [qty]\`\n` +
                 `  Removes items from inventory.\n\n` +
-                `• \`${prefix} admin giveskill <@user> <skill_name> [level]\`\n` +
+                `• \`${prefix} mod giveskill <@user> <skill_name> [level]\`\n` +
                 `  Grants any skill regardless of class/level requirements.\n` +
-                `  Example: \`${prefix} admin giveskill @friend meteor 3\`\n\n` +
-                `• \`${prefix} admin revokeskill <@user> <skill_name>\`\n` +
+                `  Example: \`${prefix} mod giveskill @friend meteor 3\`\n\n` +
+                `• \`${prefix} mod revokeskill <@user> <skill_name>\`\n` +
                 `  Removes a skill from the player.\n\n` +
-                `• \`${prefix} admin resetplayer <@user>\`\n` +
+                `• \`${prefix} mod resetplayer <@user>\`\n` +
                 `  Resets all stats to 0 and revokes all skills. Refunds stat points.\n` +
                 `  Keeps level, wallet, and items.\n\n` +
-                `• \`${prefix} admin forceevolve <@user> <class_name>\`\n` +
+                `• \`${prefix} mod forceevolve <@user> <class_name>\`\n` +
                 `  Force-evolves to any class, bypassing all requirements.\n` +
-                `  Example: \`${prefix} admin forceevolve @friend Warlord\`\n\n` +
-                `• \`${prefix} admin givepoints <@user> <amount>\`\n` +
+                `  Example: \`${prefix} mod forceevolve @friend Warlord\`\n\n` +
+                `• \`${prefix} mod givepoints <@user> <amount>\`\n` +
                 `  Grants STAT points (for HP/ATK/DEF allocation).\n\n` +
-                `• \`${prefix} admin setskillpoints <@user> <amount>\`\n` +
+                `• \`${prefix} mod setskillpoints <@user> <amount>\`\n` +
                 `  Sets RPG SKILL points directly (for ability tree).\n\n` +
-                `• \`${prefix} admin giveskillpoints <@user> <amount>\`\n` +
+                `• \`${prefix} mod giveskillpoints <@user> <amount>\`\n` +
                 `  Adds RPG SKILL points (does NOT overwrite).\n\n` +
-                `• \`${prefix} admin fightenemy <bossId|name>\`\n` +
-                `  Fight any boss for testing. Use \`admin enemy list\` to find IDs.\n\n` +
-                `• \`${prefix} admin givezeni <@user> <amount>\`\n` +
+                `• \`${prefix} mod fightenemy <bossId|name>\`\n` +
+                `  Fight any boss for testing. Use \`mod enemy list\` to find IDs.\n\n` +
+                `• \`${prefix} mod givezeni <@user> <amount>\`\n` +
                 `  Adds Zeni to wallet (does NOT overwrite - adds to existing).\n\n` +
-                `• \`${prefix} admin setrank <@user> <F|E|D|C|B|A|S|SS|SSS|GOD>\`\n` +
+                `• \`${prefix} mod setrank <@user> <F|E|D|C|B|A|S|SS|SSS|GOD>\`\n` +
                 `  Sets adventurer rank directly.\n\n` +
-                `• \`${prefix} admin unstick <@user>\`\n` +
+                `• \`${prefix} mod unstick <@user>\`\n` +
                 `  Clears stuck combat state (pendingActions, combatProcessing).\n` +
                 `  Use when someone is locked out of combat.\n\n` +
-                `• \`${prefix} admin inspect <@user>\`\n` +
+                `• \`${prefix} mod inspect <@user>\`\n` +
                 `  Full character inspection: stats, equipment, skills, wallet, rank.\n\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
                 `🔧 *CONTENT TOOLS*\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
-                `• \`${prefix} admin createskill\`\n` +
+                `• \`${prefix} mod createskill\`\n` +
                 `  Sends a fill-in-the-blank template. Reply to it with the filled\n` +
                 `  version to create a real skill in the skill tree.\n\n` +
-                `• \`${prefix} admin createclass\`\n` +
+                `• \`${prefix} mod createclass\`\n` +
                 `  Same template pattern for creating a new class.\n\n` +
-                `• \`${prefix} admin disableskill <skill_name>\`\n` +
+                `• \`${prefix} mod disableskill <skill_name>\`\n` +
                 `  Disables a skill (players can't learn it, equipped ones no-op).\n\n` +
-                `• \`${prefix} admin enableskill <skill_name>\`\n` +
+                `• \`${prefix} mod enableskill <skill_name>\`\n` +
                 `  Re-enables a disabled skill.\n\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
                 `👹 *ENEMY EDITOR (NEW)*\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
-                `• \`${prefix} admin enemy list\`\n` +
+                `• \`${prefix} mod enemy list\`\n` +
                 `  Lists all bosses with HP/ATK/DEF/XP/Gold.\n\n` +
-                `• \`${prefix} admin enemy info <bossId>\`\n` +
+                `• \`${prefix} mod enemy info <bossId>\`\n` +
                 `  Full stat block for one boss. Use list to find IDs.\n\n` +
-                `• \`${prefix} admin enemy setstat <bossId> <stat> <value>\`\n` +
+                `• \`${prefix} mod enemy setstat <bossId> <stat> <value>\`\n` +
                 `  Edit any stat (hp/atk/def/mag/spd/luck/crit). Applies immediately.\n\n` +
-                `• \`${prefix} admin enemy sethp|setatk|setdef <bossId> <value>\`\n` +
+                `• \`${prefix} mod enemy sethp|setatk|setdef <bossId> <value>\`\n` +
                 `  Shortcuts for the most-edited stats.\n\n` +
-                `• \`${prefix} admin enemy setxp <bossId> <value>\`\n` +
+                `• \`${prefix} mod enemy setxp <bossId> <value>\`\n` +
                 `  Set XP reward.\n\n` +
-                `• \`${prefix} admin enemy setgold <bossId> <min> <max>\`\n` +
+                `• \`${prefix} mod enemy setgold <bossId> <min> <max>\`\n` +
                 `  Set gold reward range.\n\n` +
-                `• \`${prefix} admin enemy reset\`\n` +
+                `• \`${prefix} mod enemy reset\`\n` +
                 `  Discards all runtime edits, reloads from source.\n\n` +
                 `_Edits are in-memory only - a restart reverts them. For permanent changes, edit classEncounters.js._\n\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
                 `⚡ *ENEMY SKILL EDITOR (NEW)*\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
-                `• \`${prefix} admin enemyskills [archetype]\`\n` +
+                `• \`${prefix} mod enemyskills [archetype]\`\n` +
                 `  Lists all 63 monster skills across 12 archetypes with IDs.\n\n` +
-                `• \`${prefix} admin enemyskill info <archetype> <skillId>\`\n` +
+                `• \`${prefix} mod enemyskill info <archetype> <skillId>\`\n` +
                 `  Full skill details (cost, level req, type, chain).\n\n` +
-                `• \`${prefix} admin enemyskill setcost <arch> <skillId> <value>\`\n` +
+                `• \`${prefix} mod enemyskill setcost <arch> <skillId> <value>\`\n` +
                 `  Edit skill mana cost.\n\n` +
-                `• \`${prefix} admin enemyskill setlevel <arch> <skillId> <level>\`\n` +
+                `• \`${prefix} mod enemyskill setlevel <arch> <skillId> <level>\`\n` +
                 `  Edit skill level requirement.\n\n` +
-                `• \`${prefix} admin enemyskill setname <arch> <skillId> <name>\`\n` +
+                `• \`${prefix} mod enemyskill setname <arch> <skillId> <name>\`\n` +
                 `  Edit skill display name.\n\n` +
-                `• \`${prefix} admin enemyskill reset\`\n` +
+                `• \`${prefix} mod enemyskill reset\`\n` +
                 `  Reload all monster skills from source.\n\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
                 `🧪 *SANDBOX MODE (FULL RPG TESTING)*\n` +
@@ -418,32 +418,32 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 `Fully stacked test character - Lv100, GOD rank, 1B Zeni, all trials done.\n` +
                 `When ON, ALL your commands use the sandbox account. Your real account is safe.\n\n` +
                 `*CORE:*\n` +
-                `• \`${prefix} admin sandbox on\` - activate (swap to sandbox character)\n` +
-                `• \`${prefix} admin sandbox off\` - deactivate (save + restore real account)\n` +
-                `• \`${prefix} admin sandbox\` - show status (active/inactive + stats)\n` +
-                `• \`${prefix} admin sandbox save\` - save sandbox data without turning off\n` +
-                `• \`${prefix} admin sandbox reset\` - wipe to fresh stacked state\n\n` +
+                `• \`${prefix} mod sandbox on\` - activate (swap to sandbox character)\n` +
+                `• \`${prefix} mod sandbox off\` - deactivate (save + restore real account)\n` +
+                `• \`${prefix} mod sandbox\` - show status (active/inactive + stats)\n` +
+                `• \`${prefix} mod sandbox save\` - save sandbox data without turning off\n` +
+                `• \`${prefix} mod sandbox reset\` - wipe to fresh stacked state\n\n` +
                 `*COMBAT:*\n` +
-                `• \`${prefix} admin godmode on/off\` - 99999 dmg per hit, 0 dmg taken\n` +
-                `• \`${prefix} admin sandbox fightboss <bossId>\` - fight any boss\n\n` +
+                `• \`${prefix} mod godmode on/off\` - 99999 dmg per hit, 0 dmg taken\n` +
+                `• \`${prefix} mod sandbox fightboss <bossId>\` - fight any boss\n\n` +
                 `*CLASS & SKILLS:*\n` +
-                `• \`${prefix} admin sandbox evolve <class>\` - switch to ANY class + unlock all skills\n` +
-                `• \`${prefix} admin sandbox giveskillsall\` - unlock ALL skills from ALL classes\n` +
-                `• \`${prefix} admin sandbox giveskill <skill> [level]\` - grant a specific skill\n\n` +
+                `• \`${prefix} mod sandbox evolve <class>\` - switch to ANY class + unlock all skills\n` +
+                `• \`${prefix} mod sandbox giveskillsall\` - unlock ALL skills from ALL classes\n` +
+                `• \`${prefix} mod sandbox giveskill <skill> [level]\` - grant a specific skill\n\n` +
                 `*STATS:*\n` +
-                `• \`${prefix} admin sandbox maxstats\` - set all stats to 99999/9999\n` +
-                `• \`${prefix} admin sandbox setlevel <1-100>\`\n` +
-                `• \`${prefix} admin sandbox setrank <F-SSS|GOD>\`\n` +
-                `• \`${prefix} admin sandbox setstat <stat> <value>\`\n\n` +
+                `• \`${prefix} mod sandbox maxstats\` - set all stats to 99999/9999\n` +
+                `• \`${prefix} mod sandbox setlevel <1-100>\`\n` +
+                `• \`${prefix} mod sandbox setrank <F-SSS|GOD>\`\n` +
+                `• \`${prefix} mod sandbox setstat <stat> <value>\`\n\n` +
                 `*ECONOMY:*\n` +
-                `• \`${prefix} admin sandbox setwallet <amount>\`\n` +
-                `• \`${prefix} admin sandbox givezeni <amount>\`\n\n` +
+                `• \`${prefix} mod sandbox setwallet <amount>\`\n` +
+                `• \`${prefix} mod sandbox givezeni <amount>\`\n\n` +
                 `*INVENTORY:*\n` +
-                `• \`${prefix} admin sandbox giveall\` - grant 99× all stones, keys + every equipment\n` +
-                `• \`${prefix} admin sandbox giveitem <item> [qty]\`\n` +
-                `• \`${prefix} admin sandbox clearinv\` - clear sandbox inventory\n` +
-                `• \`${prefix} admin sandbox unequipall\` - unequip all equipment\n` +
-                `• \`${prefix} admin sandbox setclass <name>\`\n\n` +
+                `• \`${prefix} mod sandbox giveall\` - grant 99× all stones, keys + every equipment\n` +
+                `• \`${prefix} mod sandbox giveitem <item> [qty]\`\n` +
+                `• \`${prefix} mod sandbox clearinv\` - clear sandbox inventory\n` +
+                `• \`${prefix} mod sandbox unequipall\` - unequip all equipment\n` +
+                `• \`${prefix} mod sandbox setclass <name>\`\n\n` +
                 `_Auto-saves after every command. Data persists in separate DB collection._\n\n` +
                 `━━━━━━━━━━━━━━━━━━━\n` +
                 `🎭 *MAIN-ACCOUNT CLASS SWITCH*\n` +
@@ -464,7 +464,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const { target, remaining } = _parsed;
         const level = parseAdminNumber(remaining[0]);
         if (!level || level < 1 || level > 100) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin setlevel <@user> <1-100>\`` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod setlevel <@user> <1-100>\`` });
         }
         const user = economy.getUser(target);
         if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ User not found.' });
@@ -496,7 +496,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const value = parseAdminNumber(remaining[1]);
         const validStats = ['hp', 'atk', 'def', 'mag', 'spd', 'luck', 'crit'];
         if (!target || !validStats.includes(statName) || isNaN(value)) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin setstat <@user> <hp|atk|def|mag|spd|luck|crit> <value>\`` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod setstat <@user> <hp|atk|def|mag|spd|luck|crit> <value>\`` });
         }
         const user = economy.getUser(target);
         if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ User not found.' });
@@ -527,7 +527,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const { target, remaining } = _parsed;
         const amount = parseAdminNumber(remaining[0]);
         if (!target || !Number.isSafeInteger(amount) || amount < 0) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin setwallet <@user> <amount>\`` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod setwallet <@user> <amount>\`` });
         }
         const user = economy.getUser(target);
         if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ User not found.' });
@@ -548,7 +548,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         if (!_parsed) return;
         const { target, remaining } = _parsed;
         if (!target || remaining.length < 1) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin give <@user> <thing> [qty|level|tier]\`\n\nAuto-detects:\n  • Summon species (bat, slime, mushroom, ...) → gives summon\n  • Rune type (POWER, EFFICIENCY, FROST_CONVERSION, ...) → gives rune\n  • Otherwise → gives inventory item\n\nExamples:\n  \`${prefix} admin give @user bat 5\` (bat summon, level 5)\n  \`${prefix} admin give @user POWER GREATER\` (Power rune, Greater tier)\n  \`${prefix} admin give @user health_potion 5\` (5 health potions)` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod give <@user> <thing> [qty|level|tier]\`\n\nAuto-detects:\n  • Summon species (bat, slime, mushroom, ...) → gives summon\n  • Rune type (POWER, EFFICIENCY, FROST_CONVERSION, ...) → gives rune\n  • Otherwise → gives inventory item\n\nExamples:\n  \`${prefix} mod give @user bat 5\` (bat summon, level 5)\n  \`${prefix} mod give @user POWER GREATER\` (Power rune, Greater tier)\n  \`${prefix} mod give @user health_potion 5\` (5 health potions)` });
         }
         const query = remaining[0];
         const extra1 = remaining[1] || '';
@@ -645,7 +645,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         }
         const itemQuery = parts.join(' ');
         if (!target || !itemQuery) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin giveitem <@user> <item_name> [qty]\`` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod giveitem <@user> <item_name> [qty]\`` });
         }
         const item = resolveItem(itemQuery);
         if (!item) {
@@ -658,7 +658,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         ]);
         if (SPECIAL_RPG_OBJECTS.has(item.id.toLowerCase())) {
             return await sock.sendMessage(chatId, {
-                text: BOT_MARKER + `❌ Cannot give special RPG object \`${item.id}\` via giveitem.\n\nUse the dedicated command instead:\n  • \`${prefix} admin givesummon <@user> <species> [level]\`\n  • \`${prefix} admin giverune <@user> <type> [tier]\`\n  • \`${prefix} admin forceevolve <@user> <class>\`\n  • \`${prefix} admin giveskill <@user> <skill> [level]\``
+                text: BOT_MARKER + `❌ Cannot give special RPG object \`${item.id}\` via giveitem.\n\nUse the dedicated command instead:\n  • \`${prefix} mod givesummon <@user> <species> [level]\`\n  • \`${prefix} mod giverune <@user> <type> [tier]\`\n  • \`${prefix} mod forceevolve <@user> <class>\`\n  • \`${prefix} mod giveskill <@user> <skill> [level]\``
             });
         }
         const result = economy.addItem(target, item.id, qty);
@@ -676,7 +676,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         if (!_parsed) return;
         const { target, remaining } = _parsed;
         if (!target || remaining.length < 1) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin givesummon <@user> <species> [level]\`\nExample: \`${prefix} admin givesummon @user bat 5\`\n\nUse \`${prefix} summon codex\` to see all species.` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod givesummon <@user> <species> [level]\`\nExample: \`${prefix} mod givesummon @user bat 5\`\n\nUse \`${prefix} summon codex\` to see all species.` });
         }
         let species = remaining[0];
         let level = 1;
@@ -709,7 +709,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         if (!_parsed) return;
         const { target, remaining } = _parsed;
         if (!target || remaining.length < 1) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin giverune <@user> <type> [tier]\`\nExample: \`${prefix} admin giverune @user POWER GREATER\`\n\nTypes: POWER, EFFICIENCY, FOCUS, ENDURANCE, PIERCE, FROST_CONVERSION, WET, STAR, etc.\nTiers: LESSER, NORMAL, GREATER, ABYSSAL (default: NORMAL).` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod giverune <@user> <type> [tier]\`\nExample: \`${prefix} mod giverune @user POWER GREATER\`\n\nTypes: POWER, EFFICIENCY, FOCUS, ENDURANCE, PIERCE, FROST_CONVERSION, WET, STAR, etc.\nTiers: LESSER, NORMAL, GREATER, ABYSSAL (default: NORMAL).` });
         }
         let type = remaining[0].toUpperCase();
         let tier = 'NORMAL';
@@ -752,7 +752,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         }
         const itemQuery = parts.join(' ');
         if (!target || !itemQuery) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin takeitem <@user> <item_name> [qty]\`` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod takeitem <@user> <item_name> [qty]\`` });
         }
         const item = resolveItem(itemQuery);
         if (!item) {
@@ -782,7 +782,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         }
         const skillName = parts.join(' ');
         if (!target || !skillName) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin giveskill <@user> <skill_name> [level]\`` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod giveskill <@user> <skill_name> [level]\`` });
         }
         const skill = resolveSkill(skillName);
         if (!skill) {
@@ -807,7 +807,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const { target, remaining } = _parsed;
         const skillName = remaining.join(' ').trim();
         if (!target || !skillName) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin revokeskill <@user> <skill_name>\`` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod revokeskill <@user> <skill_name>\`` });
         }
         const skill = resolveSkill(skillName);
         if (!skill) {
@@ -833,7 +833,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         if (!_parsed) return;
         const { target } = _parsed;
         if (!target) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin resetplayer <@user>\`` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod resetplayer <@user>\`` });
         }
         const user = economy.getUser(target);
         if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ User not found.' });
@@ -860,7 +860,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const { target, remaining } = _parsed;
         const className = remaining.join(' ').trim();
         if (!target || !className) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin forceevolve <@user> <class_name>\`` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod forceevolve <@user> <class_name>\`` });
         }
         const targetClass = resolveClass(className);
         if (!targetClass) {
@@ -885,7 +885,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const { target, remaining } = _parsed;
         const amount = parseAdminNumber(remaining[0]);
         if (!target || !Number.isSafeInteger(amount) || amount <= 0) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin givepoints <@user> <amount>\`` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod givepoints <@user> <amount>\`` });
         }
         const user = economy.getUser(target);
         if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ User not found.' });
@@ -906,7 +906,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const { target, remaining } = _parsed;
         const amount = parseAdminNumber(remaining[0]);
         if (!target || !Number.isSafeInteger(amount) || amount <= 0) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin givezeni <@user> <amount>\`\nAmounts accept plain numbers and separators: \`100\`, \`5,000\`, \`5k\`` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod givezeni <@user> <amount>\`\nAmounts accept plain numbers and separators: \`100\`, \`5,000\`, \`5k\`` });
         }
         const user = economy.getUser(target);
         if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ User not found.' });
@@ -927,7 +927,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const rank = (remaining[0] || '').toUpperCase();
         const validRanks = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'GOD'];
         if (!target || !validRanks.includes(rank)) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin setrank <@user> <F|E|D|C|B|A|S|SS|SSS|GOD>\`` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod setrank <@user> <F|E|D|C|B|A|S|SS|SSS|GOD>\`` });
         }
         const user = economy.getUser(target);
         if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ User not found.' });
@@ -946,7 +946,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         if (!_parsed) return;
         const { target } = _parsed;
         if (!target) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin unstick <@user>\`` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod unstick <@user>\`` });
         }
         const guildAdventure = require('../rpg/guildAdventure');
         const chatIdState = chatId;
@@ -980,7 +980,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         if (!_parsed) return;
         const { target } = _parsed;
         if (!target) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin inspect <@user>\`` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod inspect <@user>\`` });
         }
         const user = economy.getUser(target);
         if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ User not found.' });
@@ -1032,7 +1032,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
     if (sub === 'disableskill') {
         const skillName = args.slice(1).join(' ').trim();
         if (!skillName) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin disableskill <skill_name>\`` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod disableskill <skill_name>\`` });
         }
         const skill = resolveSkill(skillName);
         if (!skill) {
@@ -1057,7 +1057,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
     if (sub === 'enableskill') {
         const skillName = args.slice(1).join(' ').trim();
         if (!skillName) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin enableskill <skill_name>\`` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod enableskill <skill_name>\`` });
         }
         const skill = resolveSkill(skillName);
         if (!skill) {
@@ -1145,8 +1145,8 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 }
                 msg += `\n`;
             }
-            msg += `_Edit with: \`${prefix} admin enemy setstat <bossId> <stat> <value>\`_\n`;
-            msg += `_Reset all edits: \`${prefix} admin enemy reset\`_`;
+            msg += `_Edit with: \`${prefix} mod enemy setstat <bossId> <stat> <value>\`_\n`;
+            msg += `_Reset all edits: \`${prefix} mod enemy reset\`_`;
             return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
         }
 
@@ -1163,13 +1163,13 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
         // ── enemy info <bossId> ──
         if (enemySub === 'info') {
-            if (!bossId) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin enemy info <bossId>\`` });
+            if (!bossId) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod enemy info <bossId>\`` });
             let boss = null;
             for (const pool of Object.values(BOSS_ENCOUNTERS)) {
                 const found = pool.find(b => b.id === bossId);
                 if (found) { boss = found; break; }
             }
-            if (!boss) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Boss \`${bossId}\` not found. Use \`${prefix} admin enemy list\` to see IDs.` });
+            if (!boss) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Boss \`${bossId}\` not found. Use \`${prefix} mod enemy list\` to see IDs.` });
             let msg = `${boss.icon} *${boss.name}*\n🆔 \`${boss.id}\`\n\n`;
             msg += `📊 *Stats:*\n`;
             for (const [stat, val] of Object.entries(boss.stats)) {
@@ -1180,7 +1180,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             msg += `🎯 Level Range: ${(boss.levelRange?.[0] || '?')}-${(boss.levelRange?.[1] || '?')}\n`;
             if (boss.skills) msg += `⚡ Skills: ${boss.skills.join(', ')}\n`;
             if (boss.phases) msg += `🎭 Phases: ${boss.phases.join(' → ')}\n`;
-            msg += `\n_Edit: \`${prefix} admin enemy setstat ${boss.id} <stat> <value>\`_`;
+            msg += `\n_Edit: \`${prefix} mod enemy setstat ${boss.id} <stat> <value>\`_`;
             return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
         }
 
@@ -1189,7 +1189,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             const statName = (args[3] || '').toLowerCase();
             const value = parseInt(args[4]);
             if (!bossId || !statName || isNaN(value)) {
-                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin enemy setstat <bossId> <hp|atk|def|mag|spd|luck|crit> <value>\`` });
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod enemy setstat <bossId> <hp|atk|def|mag|spd|luck|crit> <value>\`` });
             }
             let boss = null;
             for (const pool of Object.values(BOSS_ENCOUNTERS)) {
@@ -1204,7 +1204,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             const oldValue = boss.stats[statName] || 0;
             boss.stats[statName] = value;
             return await sock.sendMessage(chatId, {
-                text: BOT_MARKER + `✅ *BOSS STAT UPDATED*\n\n${boss.icon} *${boss.name}*\n📊 ${statName.toUpperCase()}: ${oldValue} → *${value}*\n\n_Applies immediately to all new encounters. Use \`${prefix} admin enemy reset\` to revert._`
+                text: BOT_MARKER + `✅ *BOSS STAT UPDATED*\n\n${boss.icon} *${boss.name}*\n📊 ${statName.toUpperCase()}: ${oldValue} → *${value}*\n\n_Applies immediately to all new encounters. Use \`${prefix} mod enemy reset\` to revert._`
             });
         }
 
@@ -1214,7 +1214,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             const statName = statMap[enemySub];
             const value = parseInt(args[3]);
             if (!bossId || isNaN(value)) {
-                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin enemy ${enemySub} <bossId> <value>\`` });
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod enemy ${enemySub} <bossId> <value>\`` });
             }
             let boss = null;
             for (const pool of Object.values(BOSS_ENCOUNTERS)) {
@@ -1232,7 +1232,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         // ── enemy setxp <bossId> <value> ──
         if (enemySub === 'setxp') {
             const value = parseInt(args[3]);
-            if (!bossId || isNaN(value)) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin enemy setxp <bossId> <value>\`` });
+            if (!bossId || isNaN(value)) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod enemy setxp <bossId> <value>\`` });
             let boss = null;
             for (const pool of Object.values(BOSS_ENCOUNTERS)) {
                 const found = pool.find(b => b.id === bossId);
@@ -1250,7 +1250,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         if (enemySub === 'setgold') {
             const min = parseInt(args[3]);
             const max = parseInt(args[4]);
-            if (!bossId || isNaN(min) || isNaN(max)) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin enemy setgold <bossId> <min> <max>\`` });
+            if (!bossId || isNaN(min) || isNaN(max)) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod enemy setgold <bossId> <min> <max>\`` });
             let boss = null;
             for (const pool of Object.values(BOSS_ENCOUNTERS)) {
                 const found = pool.find(b => b.id === bossId);
@@ -1264,7 +1264,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             });
         }
 
-        return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown enemy subcommand: \`${enemySub}\`\nUse \`${prefix} admin enemy list\` to see bosses.` });
+        return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown enemy subcommand: \`${enemySub}\`\nUse \`${prefix} mod enemy list\` to see bosses.` });
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1294,8 +1294,8 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 }
                 msg += `\n`;
             }
-            msg += `_Edit: \`${prefix} admin enemyskill info <arch> <skillId>\`\n_`;
-            msg += `_Reset: \`${prefix} admin enemyskill reset\`_`;
+            msg += `_Edit: \`${prefix} mod enemyskill info <arch> <skillId>\`\n_`;
+            msg += `_Reset: \`${prefix} mod enemyskill reset\`_`;
             return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
         }
 
@@ -1308,9 +1308,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         // ── enemyskill info <arch> <skillId> ──
         if (skillSub === 'info') {
             if (!archetype || !skillId) {
-                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin enemyskill info <archetype> <skillId>\`\n\nExample: \`${prefix} admin enemyskill info TANK harden\`` });
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod enemyskill info <archetype> <skillId>\`\n\nExample: \`${prefix} mod enemyskill info TANK harden\`` });
             }
-            if (!arch) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Archetype \`${archetype}\` not found. Use \`${prefix} admin enemyskills\` to see all.` });
+            if (!arch) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Archetype \`${archetype}\` not found. Use \`${prefix} mod enemyskills\` to see all.` });
             const skill = arch.skills[skillId];
             if (!skill) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Skill \`${skillId}\` not found in ${archetype}.` });
 
@@ -1324,9 +1324,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             msg += `📝 Message: _${skill.msg}_\n`;
             if (skill.cooldown) msg += `⏳ Cooldown: ${skill.cooldown}\n`;
             if (skill.nextSkill) msg += `🔗 Chains to: \`${skill.nextSkill}\`\n`;
-            msg += `\n_Edit cost: \`${prefix} admin enemyskill setcost ${archetype} ${skillId} <value>\`\n_`;
-            msg += `_Edit level req: \`${prefix} admin enemyskill setlevel ${archetype} ${skillId} <level>\`\n_`;
-            msg += `_Edit name: \`${prefix} admin enemyskill setname ${archetype} ${skillId} <new name>\`_`;
+            msg += `\n_Edit cost: \`${prefix} mod enemyskill setcost ${archetype} ${skillId} <value>\`\n_`;
+            msg += `_Edit level req: \`${prefix} mod enemyskill setlevel ${archetype} ${skillId} <level>\`\n_`;
+            msg += `_Edit name: \`${prefix} mod enemyskill setname ${archetype} ${skillId} <new name>\`_`;
             return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
         }
 
@@ -1334,7 +1334,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         if (skillSub === 'setcost') {
             const value = parseInt(args[4]);
             if (!arch || !skillId || isNaN(value) || value < 0) {
-                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin enemyskill setcost <archetype> <skillId> <value>\`` });
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod enemyskill setcost <archetype> <skillId> <value>\`` });
             }
             const skill = arch.skills[skillId];
             if (!skill) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Skill \`${skillId}\` not found in ${archetype}.` });
@@ -1347,7 +1347,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         if (skillSub === 'setlevel') {
             const value = parseInt(args[4]);
             if (!arch || !skillId || isNaN(value) || value < 1) {
-                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin enemyskill setlevel <archetype> <skillId> <level>\`` });
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod enemyskill setlevel <archetype> <skillId> <level>\`` });
             }
             const skill = arch.skills[skillId];
             if (!skill) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Skill \`${skillId}\` not found in ${archetype}.` });
@@ -1360,7 +1360,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         if (skillSub === 'setname') {
             const newName = args.slice(4).join(' ');
             if (!arch || !skillId || !newName) {
-                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin enemyskill setname <archetype> <skillId> <new name>\`` });
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod enemyskill setname <archetype> <skillId> <new name>\`` });
             }
             const skill = arch.skills[skillId];
             if (!skill) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Skill \`${skillId}\` not found in ${archetype}.` });
@@ -1379,7 +1379,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown enemyskill subcommand. Use \`${prefix} admin enemyskills\` to list all.` });
+        return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown enemyskill subcommand. Use \`${prefix} mod enemyskills\` to list all.` });
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1391,7 +1391,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const { target, remaining } = _parsed;
         const amount = parseAdminNumber(remaining[0]);
         if (!target || !Number.isSafeInteger(amount) || amount < 0) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin setskillpoints <@user> <amount>\`\n\n_Sets RPG skill points (used to unlock abilities). Use \`givepoints\` for stat points._` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod setskillpoints <@user> <amount>\`\n\n_Sets RPG skill points (used to unlock abilities). Use \`givepoints\` for stat points._` });
         }
         const user = economy.getUser(target);
         if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ User not found.' });
@@ -1411,7 +1411,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const { target, remaining } = _parsed;
         const amount = parseAdminNumber(remaining[0]);
         if (!target || !Number.isSafeInteger(amount) || amount <= 0) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin giveskillpoints <@user> <amount>\`` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod giveskillpoints <@user> <amount>\`` });
         }
         const user = economy.getUser(target);
         if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ User not found.' });
@@ -1428,13 +1428,13 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
     // ── FIGHT ANY ENEMY (mod testing tool) ───────────────────────────────
     // .g admin fightenemy <bossId|enemyName>
     // Starts a solo trial fight against a specific boss. Used for testing
-    // enemy stats after editing them with `admin enemy setstat`.
+    // enemy stats after editing them with `mod enemy setstat`.
     // ═══════════════════════════════════════════════════════════════════════
     if (sub === 'fightenemy') {
         const query = args.slice(1).join(' ').trim();
         if (!query) {
             return await sock.sendMessage(chatId, {
-                text: BOT_MARKER + `❌ Usage: \`${prefix} admin fightenemy <bossId|name>\`\n\nExample: \`${prefix} admin fightenemy LEVIATHAN\`\nExample: \`${prefix} admin fightenemy ancient_dragon_boss\`\n\n_Use \`${prefix} admin enemy list\` to see all boss IDs._`
+                text: BOT_MARKER + `❌ Usage: \`${prefix} mod fightenemy <bossId|name>\`\n\nExample: \`${prefix} mod fightenemy LEVIATHAN\`\nExample: \`${prefix} mod fightenemy ancient_dragon_boss\`\n\n_Use \`${prefix} mod enemy list\` to see all boss IDs._`
             });
         }
 
@@ -1472,7 +1472,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
 
             if (!bossId) {
-                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Enemy "${query}" not found.\nUse \`${prefix} admin enemy list\` to see all boss IDs.` });
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Enemy "${query}" not found.\nUse \`${prefix} mod enemy list\` to see all boss IDs.` });
             }
 
             // Start a TRIAL-mode adventure with this boss
@@ -1525,7 +1525,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 const engine = require('../engine');
                 const sb = await engine.enableSandbox(senderJid, senderName);
                 return await sock.sendMessage(chatId, {
-                    text: BOT_MARKER + `🧪 *SANDBOX MODE ON*\n\nYou are now using your sandbox test character.\n\n📊 Level: ${sb.progression?.level || 1}\n🏷️ Class: ${sb.class || 'FIGHTER'}\n💰 Wallet: ${(sb.wallet || 0).toLocaleString()} Zeni\n\n_All commands (.char, .bank, .solo, etc.) now use the sandbox account._\n_Use \`${prefix} admin sandbox off\` to return to your real account._`
+                    text: BOT_MARKER + `🧪 *SANDBOX MODE ON*\n\nYou are now using your sandbox test character.\n\n📊 Level: ${sb.progression?.level || 1}\n🏷️ Class: ${sb.class || 'FIGHTER'}\n💰 Wallet: ${(sb.wallet || 0).toLocaleString()} Zeni\n\n_All commands (.char, .bank, .solo, etc.) now use the sandbox account._\n_Use \`${prefix} mod sandbox off\` to return to your real account._`
                 });
             } catch (e) {
                 return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed to enable sandbox: ${e.message}` });
@@ -1539,7 +1539,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 const result = await engine.disableSandbox(senderJid);
                 if (result) {
                     return await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + `✅ *SANDBOX MODE OFF*\n\nYou are back on your real account. Sandbox data has been saved.\n\n_Use \`${prefix} admin sandbox on\` to test again, or \`${prefix} admin sandbox reset\` to wipe._`
+                        text: BOT_MARKER + `✅ *SANDBOX MODE OFF*\n\nYou are back on your real account. Sandbox data has been saved.\n\n_Use \`${prefix} mod sandbox on\` to test again, or \`${prefix} mod sandbox reset\` to wipe._`
                     });
                 } else {
                     return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Sandbox mode is not currently active.` });
@@ -1565,9 +1565,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 msg += `🏦 Bank: ${(sb.bank || 0).toLocaleString()} Zeni\n`;
                 msg += `💎 Skill Points: ${sb.skillPoints || 0}\n`;
                 msg += `🔄 Resets: ${sb.resetCount || 0}\n\n`;
-                msg += `_Toggle: \`${prefix} admin sandbox on/off\`_\n`;
-                msg += `_Save: \`${prefix} admin sandbox save\`_\n`;
-                msg += `_Reset: \`${prefix} admin sandbox reset\`_`;
+                msg += `_Toggle: \`${prefix} mod sandbox on/off\`_\n`;
+                msg += `_Save: \`${prefix} mod sandbox save\`_\n`;
+                msg += `_Reset: \`${prefix} mod sandbox reset\`_`;
                 return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
             } catch (e) {
                 return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed to load sandbox: ${e.message}` });
@@ -1580,7 +1580,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 const engine = require('../engine');
                 const sandboxJid = engine.getSandboxJid(senderJid);
                 if (!sandboxJid) {
-                    return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Sandbox mode is not active. Use \`${prefix} admin sandbox on\` first.` });
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Sandbox mode is not active. Use \`${prefix} mod sandbox on\` first.` });
                 }
                 const economy = require('../rpg/economy');
                 const sandboxUser = economy.economyData.get(sandboxJid);
@@ -1647,7 +1647,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 const engine = require('../engine');
                 const sandboxJid = engine.getSandboxJid(senderJid);
                 if (!sandboxJid) {
-                    return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Sandbox mode is not active. Use \`${prefix} admin sandbox on\` first.` });
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Sandbox mode is not active. Use \`${prefix} mod sandbox on\` first.` });
                 }
                 const economy = require('../rpg/economy');
                 const inventorySystem = require('../rpg/inventorySystem');
@@ -1689,7 +1689,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 const engine = require('../engine');
                 const sandboxJid = engine.getSandboxJid(senderJid);
                 if (!sandboxJid) {
-                    return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Sandbox mode is not active. Use \`${prefix} admin sandbox on\` first.` });
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Sandbox mode is not active. Use \`${prefix} mod sandbox on\` first.` });
                 }
                 const className = args.slice(2).join(' ').trim();
                 if (!className) {
@@ -1700,7 +1700,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                         .map(c => `${c.icon} ${c.name} (\`${c.id}\`)`)
                         .join('\n');
                     return await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + `🧬 *SANDBOX EVOLVE*\n\nUsage: \`${prefix} admin sandbox evolve <class name or ID>\`\n\n*Available Classes:*\n${classList}`
+                        text: BOT_MARKER + `🧬 *SANDBOX EVOLVE*\n\nUsage: \`${prefix} mod sandbox evolve <class name or ID>\`\n\n*Available Classes:*\n${classList}`
                     });
                 }
                 const targetClass = resolveClass(className);
@@ -1761,7 +1761,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         if (sandboxSub === 'setlevel') {
             const level = parseInt(args[2]);
             if (!level || level < 1 || level > 100) {
-                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin sandbox setlevel <1-100>\`` });
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod sandbox setlevel <1-100>\`` });
             }
             try {
                 await AdminSandbox.getOrCreate(senderJid, senderName);
@@ -1788,7 +1788,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         if (sandboxSub === 'setclass') {
             const className = args[2];
             if (!className) {
-                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin sandbox setclass <class name or ID>\`` });
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod sandbox setclass <class name or ID>\`` });
             }
             const cls = resolveClass(className);
             if (!cls) {
@@ -1829,7 +1829,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         if (sandboxSub === 'setwallet') {
             const amount = parseAdminNumber(args[2]);
             if (!Number.isSafeInteger(amount) || amount < 0) {
-                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin sandbox setwallet <amount>\`` });
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod sandbox setwallet <amount>\`` });
             }
             try {
                 await AdminSandbox.getOrCreate(senderJid, senderName);
@@ -1844,7 +1844,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         if (sandboxSub === 'givezeni') {
             const amount = parseAdminNumber(args[2]);
             if (!Number.isSafeInteger(amount) || amount <= 0) {
-                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin sandbox givezeni <amount>\`` });
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod sandbox givezeni <amount>\`` });
             }
             try {
                 const sb = await AdminSandbox.getOrCreate(senderJid, senderName);
@@ -1862,7 +1862,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             const value = parseInt(args[3]);
             const validStats = ['hp', 'atk', 'def', 'mag', 'spd', 'luck', 'crit'];
             if (!validStats.includes(statName) || isNaN(value)) {
-                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin sandbox setstat <${validStats.join('|')}> <value>\`` });
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod sandbox setstat <${validStats.join('|')}> <value>\`` });
             }
             try {
                 await AdminSandbox.getOrCreate(senderJid, senderName);
@@ -1885,7 +1885,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             const itemName = args[2];
             const qty = parseInt(args[3]) || 1;
             if (!itemName) {
-                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin sandbox giveitem <item_name> [qty]\`` });
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod sandbox giveitem <item_name> [qty]\`` });
             }
             const item = resolveItem(itemName);
             if (!item) {
@@ -1909,7 +1909,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             const skillName = args[2];
             const skillLvl = parseInt(args[3]) || 1;
             if (!skillName) {
-                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin sandbox giveskill <skill_name> [level]\`` });
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod sandbox giveskill <skill_name> [level]\`` });
             }
             const skill = resolveSkill(skillName);
             if (!skill) {
@@ -1928,7 +1928,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown sandbox subcommand: \`${sandboxSub}\`\nUse \`${prefix} admin sandbox\` to see status.` });
+        return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown sandbox subcommand: \`${sandboxSub}\`\nUse \`${prefix} mod sandbox\` to see status.` });
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1953,7 +1953,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             return await sock.sendMessage(chatId, { text: BOT_MARKER + '⚡ *GODMODE OFF*\n\nCombat damage normalized.' });
         }
         const isActive = global.godModeUsers && global.godModeUsers.has(sandboxJid || senderJid);
-        return await sock.sendMessage(chatId, { text: BOT_MARKER + `⚡ *GODMODE: ${isActive ? '🟢 ON' : '🔴 OFF'}*\n\n_Toggle: \`${prefix} admin godmode on/off\`_` });
+        return await sock.sendMessage(chatId, { text: BOT_MARKER + `⚡ *GODMODE: ${isActive ? '🟢 ON' : '🔴 OFF'}*\n\n_Toggle: \`${prefix} mod godmode on/off\`_` });
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -2031,7 +2031,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
     if (sub === 'sandbox' && (args[1] || '').toLowerCase() === 'fightboss') {
         const bossQuery = args.slice(2).join(' ').trim();
         if (!bossQuery) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} admin sandbox fightboss <bossId|name>\`\n\nExample: \`${prefix} admin sandbox fightboss LEVIATHAN\`` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod sandbox fightboss <bossId|name>\`\n\nExample: \`${prefix} mod sandbox fightboss LEVIATHAN\`` });
         }
         // Delegate to the existing fightenemy command
         args[1] = 'fightenemy';
@@ -2044,7 +2044,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         // Fall through to the existing fightenemy handler above by re-checking
         // Actually, the fightenemy handler is earlier in the function. We need
         // to NOT fall through to unknown subcommand. Just return a redirect message.
-        return await sock.sendMessage(chatId, { text: BOT_MARKER + `💡 Use \`${prefix} admin fightenemy ${args[2] || '<bossId>'}\` to fight a boss.\n\n_Or enable sandbox first with \`${prefix} admin sandbox on\` then use \`${prefix} solo\` to test combat._` });
+        return await sock.sendMessage(chatId, { text: BOT_MARKER + `💡 Use \`${prefix} mod fightenemy ${args[2] || '<bossId>'}\` to fight a boss.\n\n_Or enable sandbox first with \`${prefix} mod sandbox on\` then use \`${prefix} solo\` to test combat._` });
     }
 
     // ── UNKNOWN SUBCOMMAND ──────────────────────────────────────────────────

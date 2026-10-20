@@ -7191,8 +7191,18 @@ ${targetCategory}`;
           // `sandbox`, `createclass`, `givezeni` - not the full invocation
           // path. The real invocation form lives in the explain view
           // (`.j mod <command>`) and in the footer hint below.
+          // 💡 47-l4 (owner: mod commands don't have short descriptions
+          // like regular ones): category views now show a terse desc per
+          // command, word-boundary-trimmed so captions stay under budget.
+          const shortDesc = (s) => {
+            const t = String(s || '').replace(/\s+/g, ' ').trim();
+            if (t.length <= 26) return t;
+            const cut = t.slice(0, 26);
+            const sp = cut.lastIndexOf(' ');
+            return (sp > 12 ? cut.slice(0, sp) : cut) + '…';
+          };
           cat.commands.forEach((c) => {
-            catMsg += `➤ \`${c.cmd}\`\n`;
+            catMsg += `➤ \`${c.cmd}\` — ${shortDesc(c.short || c.desc)}\n`;
           });
           catMsg += `\n➤ Type \`${prefix} mod <command>\` for details.`;
           catMsg += `\n➤ Type \`${prefix} mod\` to go back.`;
@@ -11280,7 +11290,7 @@ _💡 Reply with another number from your search list!_`.trim();
                     const isModUser = isOwner || isGlobalMod(senderJid) || isRpgMod(senderJid) || isCardsMod(senderJid) || overrideUsers.has(senderJid) ||
                       (cardSystem && cardSystem.getInst && cardSystem.getInst().modJids && cardSystem.getInst().modJids.has(senderJid));
 
-                    if (primaryCmd === "mod") {
+                    if (primaryCmd === "mod" || primaryCmd === "admin") {
                       if (!isModUser) {
                         return reply(BOT_MARKER + '❌ This command is for moderators and above only.\n\n_If you believe this is an error, contact a bot owner._');
                       }
@@ -11315,6 +11325,18 @@ _💡 Reply with another number from your search list!_`.trim();
                       } else {
                         return reply(BOT_MARKER + '❌ GM admin subcommands require RPG Mod or higher.');
                       }
+                    }
+
+                    // 🧪 47-l4: `.j sandbox <sub>` — standalone alias for
+                    // `.j mod sandbox <sub>` (owner 2026-10-20: ".j sandbox on
+                    // doesn't even work"). Same gate, same console.
+                    if (primaryCmd === "sandbox") {
+                      if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
+                        return reply(BOT_MARKER + '❌ Sandbox tools are for RPG Mods and above.');
+                      }
+                      const adminConsole = require('./commands/adminConsole');
+                      await adminConsole.handleAdmin(sock, chatId, senderJid, cmdArgs, m, BOT_MARKER, botConfig.getPrefix(), getMentionOrReply);
+                      return;
                     }
 
                     // 🧪 .fx — WhatsApp feature experiments (owner research
