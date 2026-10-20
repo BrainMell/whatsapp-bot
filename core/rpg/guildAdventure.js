@@ -5360,26 +5360,9 @@ async function promptPlayerAction(sock, player, sessionKey) {
     });
   }
 
-  msg += `\n*ACTIONS:*\n`;
-  msg += `⚔️ \`${botConfig.getPrefix()} combat atk <#>\`\n`;
-  msg += `✨ \`${botConfig.getPrefix()} combat skill <#>\`\n`;
-  msg += `🎒 \`${botConfig.getPrefix()} combat item <#>\`\n`;
-  msg += `🛡️ \`${botConfig.getPrefix()} combat def\`\n`;
-
-  if (usableItems.length > 0) {
-    msg += `\n*BAG:*\n`;
-    usableItems.slice(0, 3).forEach((item, i) => {
-      const info = {
-        ...lootSystem.getItemInfo(item.id),
-        ...(CONSUMABLES[item.id] || {})
-      };
-      msg += `${i + 1}. ${info.name} x${item.quantity}\n`;
-    });
-    if (usableItems.length > 3)
-      msg += `...+${usableItems.length - 3} more (${botConfig.getPrefix()} combat item)\n`;
-  } else {
-    msg += `_No usable items_\n`;
-  }
+  // 💡 VETERAN MODE (owner 2026-10-20): ACTIONS command hints + BAG listing
+  // are GONE from the prompt — veteran players already know the commands.
+  // The prompt keeps: YOUR TURN header, own HP/EN, status effects, enemies.
 
   try {
     await sock.sendMessage(state.chatId, { text: msg });
@@ -5463,6 +5446,10 @@ async function performAction(sock, player, action, sessionKey) {
     damage: 0,
     healing: 0,
     effects: [],
+    // 💡 WAR LOG toggle (2026-10-20): .j combat log per-chat preference rides
+    // the turnInfo into every renderer (regular + abyss + RUINS share this
+    // object via nextTurn's lastTurnInfo) — false ⇒ premium minimal caption.
+    warLog: !combatIntegration.isWarLogOff(state.chatId),
   };
 
   if (action.type === "attack") {

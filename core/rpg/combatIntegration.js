@@ -5,6 +5,11 @@
 const combatImageGen = require('./combatImageGenerator');
 const botConfig = require('../../botConfig');
 const fs = require('fs');
+// 💡 WAR LOG toggle storage (2026-10-20): per-chat preference in the shared
+// system KV — read is a pure in-memory cache hit (no DB on the hot path),
+// writes persist to MongoDB. "log" toggles stay effective across restarts
+// and across sibling instances (jake/joker/subaru) via the _shared_ key.
+const system = require('../utils/system');
 
 // ==========================================
 // 🎨 COMBAT SCENE RENDERING
@@ -275,6 +280,41 @@ const WARLOG_NAME_W = 12;   // fighter-name column width
 const WARLOG_HP_W = 13;     // right-aligned "cur/max" field width
 const WARLOG_DIV = '─'.repeat(30);
 
+// ─── WAR LOG toggle (owner: "toggle rpg command that turns off logs and
+// make the battle as premium as possible") ───
+// OFF ⇒ battle image stays, caption collapses to the bare turn header.
+// Default is ON (full grid + narration) — veterans opt OUT per chat.
+const WARLOG_OFF_KEY = '_shared_warlog_off';
+let _warlogOffCache = null;
+
+function getWarLogOffSet() {
+    if (_warlogOffCache) return _warlogOffCache;
+    try {
+        _warlogOffCache = new Set(system.get(WARLOG_OFF_KEY, []));
+    } catch (e) {
+        _warlogOffCache = new Set();
+    }
+    return _warlogOffCache;
+}
+
+function isWarLogOff(chatId) {
+    if (!chatId) return false;
+    return getWarLogOffSet().has(chatId);
+}
+
+function setWarLogOff(chatId, off) {
+    if (!chatId) return false;
+    const s = getWarLogOffSet();
+    if (off) s.add(chatId); else s.delete(chatId);
+    _warlogOffCache = s; // keep the same Set instance cached
+    try {
+        system.set(WARLOG_OFF_KEY, Array.from(s)); // async persist, cache-first
+    } catch (e) {
+        console.error('[WarLog] failed to persist toggle:', e.message);
+    }
+    return !off; // returns the NEW state: true = logs ON
+}
+
 function warlogClean(text) {
     // Never let a name/line break the ``` fence or smuggle markup asterisks.
     return String(text ?? '?').replace(/[`*]/g, '').trim() || '?';
@@ -295,7 +335,9 @@ function warlogBar(cur, max, len = 8) {
 }
 
 function warlogRow(prefix, name, cur, max) {
-    return `${prefix}${warlogClean(name).slice(0, WARLOG_NAME_W).padEnd(WARLOG_NAME_W)} ${warlogBar(cur, max)} ${warlogHP(cur, max)}`;
+    // 💡 Owner tweak (2026-10-20): HP bars + energy are OUT of the war log —
+    // the grid is just prefix + name + right-aligned HP. Cleaner, premium.
+    return `${prefix}${warlogClean(name).slice(0, WARLOG_NAME_W).padEnd(WARLOG_NAME_W)} ${warlogHP(cur, max)}`;
 }
 
 function warlogBlock(lines) {
@@ -306,8 +348,11 @@ function generateTurnCaption(players, enemies, turnInfo) {
     // 💡 STYLE A "WAR LOG" (owner pick, 2026-10-20): the per-turn narration
     // that used to go out as a separate text bubble (guildAdventure
     // performAction) rides INSIDE the battle-image caption — ONE message per
-    // turn: bold header, then the ``` mono fence with the fighter grid,
-    // energy readout and the » action log.
+    // turn. When the chat toggled logs OFF (.j combat log), the battle goes
+    // premium-minimal: image stays, caption collapses to the bare header.
+    if (turnInfo && turnInfo.warLog === false) {
+        return `⚔️ *TURN ${turnInfo.turnNumber || '?'}*`;
+    }
     const toStr = (n) => Number(n || 0).toLocaleString('en-US');
 
     let caption = `⚔️ *WAR LOG* · TURN ${turnInfo.turnNumber || '?'}\n`;
@@ -327,20 +372,7 @@ function generateTurnCaption(players, enemies, turnInfo) {
         const maxHp = Math.max(1, Math.floor(e.stats?.maxHp ?? 1));
         block.push(warlogRow(hp <= 0 ? '†' : ' ', e.name, hp, maxHp));
     }
-
-    // Energy readout — free-form line (flow data, safe to wrap).
-    const living = (Array.isArray(players) ? players : []).filter(p => {
-        if (!p) return false;
-        const hp = Math.max(0, Math.floor(p.stats?.hp ?? p.currentHP ?? 0));
-        return hp > 0 && (p.stats?.maxEnergy ?? p.maxEnergy ?? 0) > 0;
-    });
-    if (living.length > 0) {
-        block.push('⚡ ' + living.map(p => {
-            const en = Math.max(0, Math.floor(p.stats?.energy ?? 0));
-            const maxEn = Math.max(1, Math.floor(p.stats?.maxEnergy ?? p.maxEnergy ?? 1));
-            return `${warlogClean(p.name)} ${Math.round((en / maxEn) * 100)}%`;
-        }).join(' · '));
-    }
+    // 💡 Owner tweak: the ⚡ EN readout line is gone (energy out of the war log).
 
     // » action log: narration lines captured from performAction via
     // turnInfo.actionLog (full fidelity — procs, OVERKILL, kills all ride
@@ -534,4 +566,7 @@ module.exports = {
     WARLOG_DIV,
     WARLOG_NAME_W,
     WARLOG_HP_W,
+    // 💡 WAR LOG toggle (.j combat log)
+    isWarLogOff,
+    setWarLogOff,
 };

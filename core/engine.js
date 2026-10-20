@@ -12411,6 +12411,24 @@ _💡 Reply with another number from your search list!_`.trim();
                       const action = cmdArgs[1];
                       const combatTarget = cmdArgs.slice(2).join(" ");
 
+                      // ⚔️ WAR LOG toggle (owner 2026-10-20): `.j combat log`
+                      // flips the per-chat battle-log preference. OFF = premium
+                      // battles: images stay, captions collapse to the bare
+                      // turn header (full grid + narration hidden). Persisted
+                      // in the shared system KV so it survives restarts and
+                      // applies across jake/joker/subaru.
+                      if (action === "log") {
+                        const ci = require('./rpg/combatIntegration');
+                        const nowOn = ci.setWarLogOff(chatId, !ci.isWarLogOff(chatId));
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER +
+                            (nowOn
+                              ? `⚔️ *WAR LOG ON* — full battle grid + narration is back.`
+                              : `⚔️ *WAR LOG OFF* — premium battles: images only, captions minimal. Run \`${botConfig.getPrefix()} combat log\` again to bring the log back.`),
+                        });
+                        return;
+                      }
+
                       // PvP Duel Intercept: If there is an active PvP duel and the sender is a player in it
                       const pvpDuel = pvpSystem.getDuel(chatId);
                       // ⚔️ RUINS DUELS (owner spec §15): duels inside a Guild War

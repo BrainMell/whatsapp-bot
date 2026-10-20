@@ -16,7 +16,7 @@ const botConfig = require('../../botConfig');
 const combatImageGenerator = require('./combatImageGenerator');
 // 💡 STYLE A WAR LOG (2026-10-20): duel text shares the battle-caption grid
 // helpers — one source of truth for the mono-table geometry.
-const { warlogClean, warlogHP, warlogBar, warlogRow, warlogBlock, WARLOG_DIV, WARLOG_NAME_W } = require('./combatIntegration');
+const { warlogClean, warlogHP, warlogRow, warlogBlock, WARLOG_DIV, isWarLogOff } = require('./combatIntegration');
 const inventorySystem = require('./inventorySystem');
 const lootSystem = require('./lootSystem');
 
@@ -234,21 +234,13 @@ function renderDuelistStatus(player, sideIcon) {
     ];
 }
 
-// 💡 STYLE A WAR LOG (2026-10-20): one duelist's EN sub-row for the mono grid
-// — label '· EN' padded into the name column so both columns stay aligned.
-function warlogEnRow(p) {
-    return ` ${'· EN'.padEnd(WARLOG_NAME_W)} ${warlogBar(p.energy, p.maxEnergy)} ${warlogHP(p.energy, p.maxEnergy)}`;
-}
-
-// 💡 STYLE A WAR LOG: the full duel grid — '>' marks the acting duelist,
-// status effects + action lines ride as free-form » flow lines under the
-// rule (wrapping costs nothing there).
+// 💡 STYLE A WAR LOG (2026-10-20): duel grid — owner tweak: HP bars + EN
+// sub-rows are OUT of the war log (energy included). '>' marks the acting
+// duelist, status effects + action lines ride as free-form » flow lines.
 function warlogDuelBlock(acting, other, flowLines) {
     const block = [
         warlogRow('>', acting.name, acting.hp, acting.maxHp),
-        warlogEnRow(acting),
         warlogRow(' ', other.name, other.hp, other.maxHp),
-        warlogEnRow(other),
         WARLOG_DIV,
     ];
     const fx = [acting, other]
@@ -590,9 +582,7 @@ async function acceptChallenge(sock, chatId, targetJid) {
         `${header}${modeTag}\n` +
         warlogBlock([
             warlogRow(mark(orderFirst), orderFirst.name, orderFirst.hp, orderFirst.maxHp),
-            warlogEnRow(orderFirst),
             warlogRow(mark(orderSecond), orderSecond.name, orderSecond.hp, orderSecond.maxHp),
-            warlogEnRow(orderSecond),
             WARLOG_DIV,
             `» ${orderFirst.name} (Lv.${orderFirst.level} ${duelClass(orderFirst)}) vs ${orderSecond.name} (Lv.${orderSecond.level} ${duelClass(orderSecond)})`,
             `» Turn order by SPD: ${orderFirst.name} → ${orderSecond.name}`,
@@ -903,14 +893,14 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
             imageResult = null;
         }
         
-        // 💡 STYLE A WAR LOG (2026-10-20 owner pick): mono HP/EN grid, '>'
-        // marks the acting duelist, status log as » flow lines — same family
-        // as the battle-image captions.
-        let roundMsg = `⚔️ *WAR LOG* · PVP ROUND ${duel.round}\n` +
-                        warlogDuelBlock(currentPlayer, opponent, statusLog) +
-                        `\n🎯 *@${economy.getDisplayName(nextPlayer.jid)}* - It's your turn!\n` +
-                        `🗡️ \`${botConfig.getPrefix()} combat attack\`　🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
-                        `🎒 \`${botConfig.getPrefix()} combat item\`　🏃 \`${botConfig.getPrefix()} combat flee\``;
+        // 💡 STYLE A WAR LOG (2026-10-20 owner pick): mono HP grid, '>' marks
+        // the acting duelist, status log as » flow lines. With the chat's
+        // .j combat log toggle OFF: premium-minimal round (header + prompt).
+        let roundMsg = isWarLogOff(chatId)
+            ? `⚔️ *PVP ROUND ${duel.round}*\n\n🎯 *@${economy.getDisplayName(nextPlayer.jid)}* - It's your turn!`
+            : `⚔️ *WAR LOG* · PVP ROUND ${duel.round}\n` +
+              warlogDuelBlock(currentPlayer, opponent, statusLog) +
+              `\n🎯 *@${economy.getDisplayName(nextPlayer.jid)}* - It's your turn!`;
 
         return {
             success: true,
@@ -1683,13 +1673,14 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
         imageResult = null;
     }
     
-    // 💡 STYLE A WAR LOG (2026-10-20 owner pick): mono HP/EN grid, '>' marks
-    // the acting duelist, action result as » flow lines — battle-caption family.
-    let statusMsg = `⚔️ *WAR LOG* · PVP ROUND ${duel.round}\n` +
-                    warlogDuelBlock(currentPlayer, opponent, String(actionResult || '').split('\n')) +
-                    `\n🎯 *@${economy.getDisplayName(nextPlayer.jid)}* - It's your turn!\n` +
-                    `🗡️ \`${botConfig.getPrefix()} combat attack\`　🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
-                    `🎒 \`${botConfig.getPrefix()} combat item\`　🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Deducts 20% XP, 50% Wallet, and 1 random item!)*`;
+    // 💡 STYLE A WAR LOG (2026-10-20 owner pick): mono HP grid, '>' marks
+    // the acting duelist, action result as » flow lines. Toggle-aware:
+    // .j combat log OFF ⇒ premium-minimal round (header + prompt only).
+    let statusMsg = isWarLogOff(chatId)
+        ? `⚔️ *PVP ROUND ${duel.round}*\n\n🎯 *@${economy.getDisplayName(nextPlayer.jid)}* - It's your turn!`
+        : `⚔️ *WAR LOG* · PVP ROUND ${duel.round}\n` +
+          warlogDuelBlock(currentPlayer, opponent, String(actionResult || '').split('\n')) +
+          `\n🎯 *@${economy.getDisplayName(nextPlayer.jid)}* - It's your turn!`;
 
     return {
         success: true,
