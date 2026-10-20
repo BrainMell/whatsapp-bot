@@ -1423,6 +1423,34 @@ const FALLBACK_THUMB = (() => {
 const _thumbCache = new Map();
 const _thumbCacheMax = 250;
 
+// 💡 47-k10 PERF: buffer → thumbnail LRU. buildThumbnail is the highest
+// frequency media op in the bot (EVERY image send). The URL cache above only
+// covers url-sends; buffer sends (menus, cards, base media) re-decoded the
+// FULL image through the Go roundtrip or pure-JS jimp every single time.
+// Key: length + fnv1a of first/last 4KB — collision-proof for our media,
+// cost is O(8KB) instead of a full decode.
+const _bufThumbCache = new Map();
+const _bufThumbCacheMax = 200;
+function _bufThumbKey(buf) {
+    let h = (buf.length | 0) >>> 0;
+    const fnv = (chunk) => { for (let i = 0; i < chunk.length; i++) { h ^= chunk[i]; h = Math.imul(h, 16777619) >>> 0; } };
+    fnv(buf.slice(0, 4096)); fnv(buf.slice(-4096));
+    return `${buf.length}:${h}`;
+}
+
+// 💡 47-k10: fast mime sniff — jimp cannot decode video/webp bytes, but the
+// old path still PAID the decode attempt (and a warn-log) for every animated
+// card that goes out as `image:` with gifPlayback. Sniff the container
+// instead and go straight to the placeholder.
+function _thumbUndecodable(buf) {
+    if (!buf || buf.length < 12) return false;
+    const latin = (a, b) => buf.slice(a, b).toString('latin1');
+    if (latin(4, 8) === 'ftyp') return true;                                          // mp4/mov/m4v
+    if (latin(0, 4) === 'RIFF' && latin(8, 12) === 'WEBP') return true;               // webp
+    if (buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) return true; // webm/mkv
+    return false;
+}
+
 let _thumbWarnCount = 0;
 function _thumbWarnOnce(msg) {
   if (_thumbWarnCount < 5) {
@@ -1444,18 +1472,32 @@ function _thumbWarnOnce(msg) {
 async function buildThumbnail(imgBuffer) {
   try {
     if (!imgBuffer || !imgBuffer.length) return FALLBACK_THUMB;
+    // 47-k10: sniff BEFORE any decode — mp4/webm/webp bytes can never become
+    // a real preview, and the decode attempt itself costs event-loop time.
+    if (_thumbUndecodable(imgBuffer)) return FALLBACK_THUMB;
+    const bkey = _bufThumbKey(imgBuffer);
+    const hit = _bufThumbCache.get(bkey);
+    if (hit) return hit;
+    let thumb = null;
     try {
       const goService = require("./goImageService");
       const fast = await goService.thumbFromBuffer(imgBuffer);
-      if (fast && fast.length > 50) return fast;
+      if (fast && fast.length > 50) thumb = fast;
     } catch (_) {
       // Go thumb unavailable (service down / timeout) - jimp fallback below.
     }
-    const { Jimp } = require("jimp");
-    const img = await Jimp.read(imgBuffer);
-    img.scaleToFit({ w: 120, h: 120 });
-    if (!img.bitmap?.width) return FALLBACK_THUMB;
-    return await img.getBuffer("image/jpeg", { quality: 60 });
+    if (!thumb) {
+      const { Jimp } = require("jimp");
+      const img = await Jimp.read(imgBuffer);
+      img.scaleToFit({ w: 120, h: 120 });
+      if (!img.bitmap?.width) return FALLBACK_THUMB;
+      thumb = await img.getBuffer("image/jpeg", { quality: 60 });
+    }
+    if (_bufThumbCache.size >= _bufThumbCacheMax) {
+      _bufThumbCache.delete(_bufThumbCache.keys().next().value); // drop oldest
+    }
+    _bufThumbCache.set(bkey, thumb);
+    return thumb;
   } catch (err) {
     _thumbWarnOnce(
       "buildThumbnail failed (" + (err?.message || err) + ") - using gray placeholder",

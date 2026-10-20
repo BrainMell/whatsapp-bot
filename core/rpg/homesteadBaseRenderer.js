@@ -22,6 +22,7 @@ const path = require('path');
 const os = require('os');
 const K = require('./kingdom3d');
 const mediaCache = require('./mediaCache');
+const { encodeRawStreamMp4 } = require('../utils/bakeStream');   // 47-k10: streaming bake — one frame alive at a time
 const ambient = require('./ambient');   // shared life layer (owner 2026-10-19: "bring it to life")
 
 const N = 16;                 // base tiles per side (saved-structure grid)
@@ -936,10 +937,17 @@ async function renderBaseImage(state, opts = {}) {
     if (hit && (Date.now() - hit.ts) < CACHE_TTL) return hit;
     const out = await mediaCache.cached('base', k, async () => {
         if (opts.static) return encodeOut(await renderFrame(state, 0, { ...opts, returnCanvas: true }));
+        // STREAMING BAKE (47-k10, Task-37 pattern): feed ffmpeg's stdin AS
+        // frames render — the old loop held all 20 raw BGRA frames (~100MB+)
+        // before the encode started; now one frame lives at a time and the
+        // encode overlaps the render. Byte-identical encode output.
         try {
-            const frames = [];
-            for (let f = 0; f < FRAMES; f++) { frames.push(await renderFrame(state, f, { ...opts, encoder: 'raw', animate: true })); await breath(); }
-            const mp4 = await encodeFramesToMp4(frames);
+            const f0 = await renderFrame(state, 0, { ...opts, encoder: 'raw', animate: true });
+            await breath();
+            const mp4 = await encodeRawStreamMp4({
+                first: f0, count: FRAMES, frameMs: FRAME_MS, tmpPrefix: 'base',
+                next: async (f) => { const fr = await renderFrame(state, f, { ...opts, encoder: 'raw', animate: true }); await breath(); return fr; },
+            });
             if (mp4 && mp4.length > 1000) return { buffer: mp4, contentType: 'video/mp4' };
         } catch (e) { console.error('[baseRenderer] mp4 encode failed, JPEG fallback:', e.message); }
         return encodeOut(await renderFrame(state, 0, { ...opts, returnCanvas: true }));

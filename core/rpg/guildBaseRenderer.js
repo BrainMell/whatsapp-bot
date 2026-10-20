@@ -24,6 +24,7 @@ const os = require('os');
 const K = require('./kingdom3d');
 const KT = require('./kingdomTerrain');
 const mediaCache = require('./mediaCache');
+const { encodeRawStreamMp4 } = require('../utils/bakeStream');   // 47-k10: streaming bake — one frame alive at a time
 const ambient = require('./ambient');   // shared life layer (owner 2026-10-19: "the guild card should also be a gif")
 
 const FRAMES = 20, FRAME_MS = 100;   // 2 s loop (birds cross the card once per loop)
@@ -1022,13 +1023,16 @@ async function renderGuildBaseImage(state, opts = {}) {
         if (opts.static === true) return encodeOut(await renderFrame(state, 0, { ...opts, returnCanvas: true }));
         // animated card (DEFAULT — owner 2026-10-19: "the guild card should also be a gif"):
         // water shimmer + sparkles + sway + smoke + birds + tint + banner wave, raw frames → ffmpeg
+        // STREAMING BAKE (47-k10, Task-37 pattern): feed ffmpeg's stdin AS frames
+        // render — the old loop held all 20 raw BGRA frames before encoding; now
+        // one frame lives at a time and the encode overlaps the render.
         try {
-            const frames = [];
-            for (let f = 0; f < FRAMES; f++) {
-                frames.push(await renderFrame(state, f, { ...opts, encoder: 'raw', animate: true }));
-                await breath();
-            }
-            const mp4 = await encodeFramesToMp4(frames);
+            const f0 = await renderFrame(state, 0, { ...opts, encoder: 'raw', animate: true });
+            await breath();
+            const mp4 = await encodeRawStreamMp4({
+                first: f0, count: FRAMES, frameMs: FRAME_MS, tmpPrefix: 'guild',
+                next: async (f) => { const fr = await renderFrame(state, f, { ...opts, encoder: 'raw', animate: true }); await breath(); return fr; },
+            });
             if (mp4 && mp4.length > 1000) return { buffer: mp4, contentType: 'video/mp4' };
         } catch (e) {
             console.error('[guildBaseRenderer] mp4 encode failed, JPEG fallback:', e.message);

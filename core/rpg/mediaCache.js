@@ -63,6 +63,9 @@ function pathsFor(kind, key) {
     };
 }
 
+// 47-k10: in-flight produce dedup (see cached() below)
+const _inflight = new Map();
+
 async function touch(f) {
     try { const n = new Date(); await fs.promises.utimes(f, n, n); } catch (e) { /* best-effort */ }
 }
@@ -122,23 +125,34 @@ async function cached(kind, key, produce, journal, qopts) {
     const run = (qopts && typeof qopts === 'object')
         ? () => renderQueue.run(String(qopts.label || `bake:${kind}`), produce, { timeoutMs: Math.max(5000, qopts.timeoutMs || 90000) })
         : produce;
-    const out = await run();
-    if (out && out.buffer && out.contentType
-        && out.buffer.length > MIN_SIZE && out.buffer.length < 8 * 1024 * 1024) {
-        try {
-            await fs.promises.mkdir(dir, { recursive: true });
-            const tmpData = `${data}.${process.pid}.tmp`;
-            const tmpMeta = `${meta}.${process.pid}.tmp`;
-            await fs.promises.writeFile(tmpData, out.buffer);
-            await fs.promises.writeFile(tmpMeta, JSON.stringify({ ct: out.contentType, ...(journal !== undefined ? { j: journal } : {}) }));
-            await Promise.all([
-                fs.promises.rename(tmpData, data),
-                fs.promises.rename(tmpMeta, meta),
-            ]);
-            trim(kind);
-        } catch (e) { /* cache write is best-effort; the media still ships */ }
-    }
-    return out;
+    // 47-k10: in-flight dedup — two callers asking for the SAME state while a
+    // bake is running (user view racing the renderWarmer replay, two members
+    // opening the same guild) share ONE produce instead of queueing two
+    // identical 10-19s bakes back to back.
+    const dkey = `${kind}:${key}`;
+    const cur = _inflight.get(dkey);
+    if (cur) return cur;
+    const p = (async () => {
+        const out = await run();
+        if (out && out.buffer && out.contentType
+            && out.buffer.length > MIN_SIZE && out.buffer.length < 8 * 1024 * 1024) {
+            try {
+                await fs.promises.mkdir(dir, { recursive: true });
+                const tmpData = `${data}.${process.pid}.tmp`;
+                const tmpMeta = `${meta}.${process.pid}.tmp`;
+                await fs.promises.writeFile(tmpData, out.buffer);
+                await fs.promises.writeFile(tmpMeta, JSON.stringify({ ct: out.contentType, ...(journal !== undefined ? { j: journal } : {}) }));
+                await Promise.all([
+                    fs.promises.rename(tmpData, data),
+                    fs.promises.rename(tmpMeta, meta),
+                ]);
+                trim(kind);
+            } catch (e) { /* cache write is best-effort; the media still ships */ }
+        }
+        return out;
+    })();
+    _inflight.set(dkey, p);
+    try { return await p; } finally { _inflight.delete(dkey); }
 }
 
 /**

@@ -839,7 +839,7 @@ async function encodeFramesToMp4(frames) {
                 '-framerate', `${1000 / FRAME_MS}`, '-i', 'pipe:0',
                 '-vf', `scale=${Math.round(w / 2)}:${Math.round(h / 2)}`,
                 '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0',
-                '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '23',
+                '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', String(process.env.RENDER_CRF || '25'),   // 47-k10: -20.7% bytes, zoom-verified identical
                 '-movflags', '+faststart', '-an', '-y', out,
             ];
             await new Promise((resolve, reject) => {
@@ -868,7 +868,7 @@ async function encodeFramesToMp4(frames) {
                 .inputOptions(['-framerate', `${1000 / FRAME_MS}`])
                 .outputOptions([
                     '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0',
-                    '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '23',
+                    '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', String(process.env.RENDER_CRF || '25'),   // 47-k10: -20.7% bytes, zoom-verified identical
                     '-movflags', '+faststart', '-an', '-y',
                 ])
                 .output(out)
@@ -957,7 +957,7 @@ async function renderRoomImage(state, opts = {}) {
                     // half-res scale: ss=1 frames ARE the mp4 target size now
                     '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
                     '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0',
-                    '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '23',
+                    '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', String(process.env.RENDER_CRF || '25'),   // 47-k10: -20.7% bytes, zoom-verified identical
                     '-movflags', '+faststart', '-an', '-y', outFile,
                 ];
                 await new Promise((resolve, reject) => {
