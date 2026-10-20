@@ -421,7 +421,17 @@ async function buyItem(sock, chatId, senderJid, input) {
 
         if (nonRollbackable.includes(item.type)) {
             // Deduct FIRST, then apply effect
-            const paid = economy.removeMoney(senderJid, item.cost, `Bought ${item.id}`);
+            let paid = economy.removeMoney(senderJid, item.cost, `Bought ${item.id}`);
+            if (!paid) {
+                // 💡 47-l1 (owner 2026-10-20 "wtf is this?"): multi-bot wallet
+                // contention can leave this process's cached balance seconds
+                // behind the DB — a valid buy died on a stale read. Re-pull
+                // the doc from MongoDB once and retry before failing.
+                try {
+                    await economy.reloadUserFromDB(senderJid);
+                    paid = economy.removeMoney(senderJid, item.cost, `Bought ${item.id}`);
+                } catch (e) { /* fall through to the failure path */ }
+            }
             if (!paid) {
                 await sock.sendMessage(chatId, {
                     text: `❌ Purchase failed: insufficient funds (your wallet may have changed).`
@@ -431,7 +441,15 @@ async function buyItem(sock, chatId, senderJid, input) {
             // Effect was already applied above - if we reach here, payment succeeded.
         } else {
             // EQUIPMENT: can be rolled back if payment fails
-            const paid = economy.removeMoney(senderJid, item.cost, `Bought ${item.id}`);
+            let paid = economy.removeMoney(senderJid, item.cost, `Bought ${item.id}`);
+            if (!paid) {
+                // 💡 47-l1: same stale-cache retry as above — one DB-fresh
+                // attempt before we roll the item back and fail the buy.
+                try {
+                    await economy.reloadUserFromDB(senderJid);
+                    paid = economy.removeMoney(senderJid, item.cost, `Bought ${item.id}`);
+                } catch (e) { /* fall through to the failure path */ }
+            }
             if (!paid) {
                 try {
                     await inventorySystem.removeItem(senderJid, item.id, 1);

@@ -1053,6 +1053,14 @@ async function loadTokenEventState() {
 
 const TOKEN_SPAWNS_PER_TOKEN  = 10;  // §2: 1 token per 10 cards
 const TOKEN_CMDS_PER_TOKEN    = 15;  // §3: 1 token per 15 eligible commands
+// 💡 47-l1 (owner 2026-10-20: "card tokens are spawning in even when people
+// aren't claiming cards???? recently all received tokens"): the §3 hidden
+// layer pays every 15th eligible command — tokens with zero claims, which
+// reads as tokens spawning from nowhere. Owner wants tokens tied to
+// claiming, so the command layer ships OFF (§2 claim drops unaffected —
+// a claimed token-bearing spawn still pays). Flip to true to restore the
+// Oct-8 spec behavior.
+const TOKEN_CMD_LAYER_ENABLED = false;
 const TOKEN_SPAWN_COUNTER_KEY = 'card_token_spawn_counters_v1';
 const TOKEN_CMD_COUNTER_KEY   = 'card_token_cmd_counters_v1';
 
@@ -4360,7 +4368,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   // mod/management commands excluded. Fire-and-forget: never blocks or
   // fails the command, and grants are announced with a mechanic-free
   // one-liner (§4 compliant - no rates, no probability, no hints).
-  if (!TOKEN_CMD_EXCLUDED.has(cmd)) {
+  if (TOKEN_CMD_LAYER_ENABLED && !TOKEN_CMD_EXCLUDED.has(cmd)) {
     noteEligibleCommand(senderJid)
       .then((notify) => {
         if (notify && inst.sock_ref) {

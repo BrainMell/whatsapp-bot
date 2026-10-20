@@ -200,6 +200,16 @@ function saveEconomy() {
 // so sibling writes are always visible to this compare.
 const syncMeta = new Map(); // cacheKey -> { syncedAt: Date|null, baseJson: string }
 const META_STRIP = ['_id', '__v', 'createdAt', 'updatedAt'];
+// ── 47-l1 COMPOSITING COUNTER LEAVES ──
+// These three top-level scalars are mutated concurrently by EVERY bot
+// instance sharing the DB (joker buys/withdraws on box2 while subaru/jake
+// pay quiz rewards on box1 — Settlement ledger shows both bots interleaved
+// on the same wallets). A plain leaf $set from a stale snapshot reverts a
+// sibling's newer balance (owner 2026-10-20: Akon's withdraw credit
+// evaporated, wallet 6,500 -> 1,500 while the bank debit stuck). These
+// leaves move as DELTAS ($inc) instead of absolute $set so concurrent
+// credits/debits compose exactly the way the money moved in the real world.
+const COMPOSITING_COUNTER_LEAVES = ['wallet', 'bank', 'eventTokens'];
 function stripMeta(doc) {
     const out = {};
     for (const k of Object.keys(doc)) {
@@ -445,6 +455,23 @@ async function saveUser(userId) {
         let payload = stripMeta(data);
         let merged = false;
         const meta = syncMeta.get(resolvedId) || syncMeta.get(canonicalId) || null;
+        // ── 47-l1 COMPOSITED COUNTERS: capture OUR OWN deltas BEFORE the ──
+        // three-way merge. Post-merge payload carries the sibling's live
+        // values for leaves we never touched — diffing those against the
+        // baseline would read as "we moved it" and double-apply the
+        // sibling's movement. Deltas must come from the pre-merge cache.
+        const counterDeltas = {};
+        if (meta && meta.syncedAt) {
+            let base0 = {};
+            try { base0 = JSON.parse(meta.baseJson || '{}'); } catch (e) { base0 = {}; }
+            for (const k of COMPOSITING_COUNTER_LEAVES) {
+                const ours = Number(data ? data[k] : undefined);
+                const was = Number(base0[k]);
+                if (Number.isFinite(ours) && Number.isFinite(was) && ours !== was) {
+                    counterDeltas[k] = Math.round(ours) - Math.round(was);
+                }
+            }
+        }
         if (meta && meta.syncedAt) {
             const live = await User.findOne({ userId: canonicalId }).lean();
             if (live && live.updatedAt instanceof Date && live.updatedAt.getTime() > meta.syncedAt.getTime()) {
@@ -484,6 +511,7 @@ async function saveUser(userId) {
         let writeSet;
         let unsetSet = {};
         let base = {};
+        const incSet = {}; // 47-l1: composited counter deltas ($inc)
         if (meta) {
             try { base = JSON.parse(meta.baseJson || '{}'); } catch (e) { base = {}; }
             // 2026-10-15: leaf-level diff — write ONLY the dot-paths this
@@ -500,18 +528,60 @@ async function saveUser(userId) {
             // sibling contention, so this stays safe.
             writeSet = deepStripUndefined(payload); // 🧯 2026-10-17: never let undefined reach $set (Mongo stores it as null — see deepStripUndefined note)
         }
+        // ── 47-l1: COMPOSITED COUNTERS — delta, not absolute ──
+        // A counter we moved may ALSO have been moved by a sibling between
+        // our baseline and now. $set would plant OUR stale absolute (the
+        // evaporation class); $inc(ours − base) applies just our movement on
+        // top of whatever is live in the DB. counterDeltas was captured from
+        // the pre-merge cache, so adoption values can never leak into it.
+        for (const k of COMPOSITING_COUNTER_LEAVES) {
+            if (!(k in writeSet)) continue;
+            if (k in counterDeltas) {
+                delete writeSet[k];
+                if (counterDeltas[k] !== 0) incSet[k] = counterDeltas[k];
+            } else if (Object.prototype.hasOwnProperty.call(base, k)
+                       && Number.isFinite(Number(base[k]))
+                       && Number.isFinite(Number(payload[k]))) {
+                // changed only via merge-adoption of the sibling's live
+                // value → the $set would be a no-op anyway; skip the write
+                // so the live value (plus any sibling delta racing us) stands.
+                delete writeSet[k];
+            } // else: no numeric baseline for k → keep the plain $set
+        }
         const updateDoc = { $set: { ...writeSet, updatedAt: now } };
+        if (Object.keys(incSet).length) updateDoc.$inc = incSet;
         if (Object.keys(unsetSet).length) updateDoc.$unset = unsetSet;
         const after = await User.findOneAndUpdate(
             { userId: canonicalId },
             updateDoc,
             { upsert: true, returnDocument: 'after' }
         );
+        // 47-l1: the DB truth for composited counters = live value + every
+        // sibling's delta — which can differ from our payload. Adopt the
+        // post-write values for the cache and the next baseline so both
+        // track the DB instead of our snapshot.
+        const counterTruth = {};
+        if (after && typeof after === 'object') {
+            for (const k of Object.keys(incSet)) {
+                const v = after[k];
+                if (Number.isFinite(v)) {
+                    if (v < 0) {
+                        // concurrent $inc raced a spend below zero — clamp
+                        await User.updateOne({ userId: canonicalId }, { $set: { [k]: 0 } });
+                        counterTruth[k] = 0;
+                        console.log(`⚠️ [economy] composited counter ${k} went negative for ${canonicalId} — clamped to 0`);
+                    } else {
+                        counterTruth[k] = v;
+                    }
+                }
+            }
+        }
+        const stampDoc = { ...payload, ...counterTruth, updatedAt: (after && after.updatedAt instanceof Date) ? after.updatedAt : now };
         // our next save's baseline = the doc AS WRITTEN, so a later sibling
         // write is detected against THIS point and our own writes never
         // register as "stale" to ourselves
-        stampSyncMeta(resolvedId, { ...payload, updatedAt: (after && after.updatedAt instanceof Date) ? after.updatedAt : now });
-        if (canonicalId !== resolvedId) stampSyncMeta(canonicalId, { ...payload, updatedAt: (after && after.updatedAt instanceof Date) ? after.updatedAt : now });
+        stampSyncMeta(resolvedId, stampDoc);
+        if (canonicalId !== resolvedId) stampSyncMeta(canonicalId, stampDoc);
 
         if (merged) {
             // refresh the cache IN PLACE (object identity preserved —
@@ -522,6 +592,12 @@ async function saveUser(userId) {
                 delete data[k];
             }
             Object.assign(data, payload);
+        }
+        // 47-l1: cache adopt — even on the fast path (no merge) the $inc may
+        // have landed on a live value a sibling moved between our read and
+        // write; adopt DB truth so balance reads never lie about money.
+        for (const k of Object.keys(counterTruth)) {
+            data[k] = counterTruth[k];
         }
     } catch (err) {
         console.error(`❌ Failed to save user ${resolvedId}:`, err.message);
