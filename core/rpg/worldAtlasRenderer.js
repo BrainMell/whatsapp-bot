@@ -17,6 +17,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 const K = require('./kingdom3d');
 const C = require('./continents');
+const renderQueue = require('../utils/renderQueue');   // 47-k9: atlas bakes join the one-at-a-time queue
 
 const CHART_W = 864, CHART_H = 1210;                          // map space ↔ chart pixels (masks are traced from the chart)
 const MX0 = 58, MX1 = 810, MY0 = 175, MY1 = 868;              // the chart's drawable ocean area
@@ -270,7 +271,16 @@ function realmLabelPos(t, key, markers) {
 
 // ── composition ───────────────────────────────────────────────────────────────
 const _memo = new Map();
+// 47-k9: route the actual composition through the shared render queue —
+// 2026-10-20 03:11Z: `.j world` + `.j base` + `.j guild` landed together and
+// three unqueued canvas jobs pushed RSS through the pm2 430M ceiling on a
+// 952MB box (memory kill mid-command, no JS stack). Memo hits pay only a
+// fast queue slot; a queue rejection → null → caller's legacy-chart fallback.
 async function renderWorldAtlas(o = {}) {
+    return renderQueue.run('bake:world-atlas', () => renderWorldAtlasUnqueued(o), { timeoutMs: 60000 });
+}
+
+async function renderWorldAtlasUnqueued(o = {}) {
     try {
         fonts();
         const guilds = (o.guilds || []).filter((g) => g && (g.name || g.guildName)).map(normGuild)

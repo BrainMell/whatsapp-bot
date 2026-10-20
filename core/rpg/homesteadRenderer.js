@@ -986,7 +986,7 @@ async function renderRoomImage(state, opts = {}) {
             console.error('[homesteadRenderer] mp4 encode failed, JPEG fallback:', e.message);
         }
         return encodeOut(await renderFrame(state, 0, { ...opts, returnCanvas: true }));  // fallback card
-    });
+    }, null, { label: 'bake:room', timeoutMs: 90000 });   // 47-k9: serialize through renderQueue — concurrent .j bakes pm2-killed the box (2026-10-20 03:11Z); no journal (room replays come from .j base house views)
     cachePut(_renderCache, key, out);
     return out;
 }

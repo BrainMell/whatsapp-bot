@@ -943,7 +943,8 @@ async function renderBaseImage(state, opts = {}) {
             if (mp4 && mp4.length > 1000) return { buffer: mp4, contentType: 'video/mp4' };
         } catch (e) { console.error('[baseRenderer] mp4 encode failed, JPEG fallback:', e.message); }
         return encodeOut(await renderFrame(state, 0, { ...opts, returnCanvas: true }));
-    }, { state, opts: { hint: opts.hint, celebrate: opts.celebrate } });   // 47-k8c: journal for renderWarmer (post-deploy re-bake; `static` stripped so replays take the default mp4 path)
+    }, { state, opts: { hint: opts.hint, celebrate: opts.celebrate } },   // 47-k8c: journal for renderWarmer (post-deploy re-bake; `static` stripped so replays take the default mp4 path)
+    { label: 'bake:base', timeoutMs: 90000 });   // 47-k9: serialize through renderQueue — concurrent .j bakes pm2-killed the box (2026-10-20 03:11Z)
     cachePut(_renderCache, k, out);
     return out;
 }

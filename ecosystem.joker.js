@@ -11,6 +11,16 @@
 // malloc retention (glibc arenas; combat spam 400 cmds/day, card bursts).
 // Fix: MALLOC_ARENA_MAX=2 + 16MB trim threshold (return free pages to OS),
 // cap 380M->430M for burst headroom (box has ~448MB avail + reclaimable cache).
+// round-22 (2026-10-20T03:1xZ): pm2 memory kills AGAIN, this time mid-`.j` bake.
+// Owner fired `.j world` + `.j base` + `.j guild` back to back; the three
+// unqueued canvas bakes (base alone peaked rss=433MB > this 430M cap!) got
+// the process SIGINT'd mid-command twice in 25 minutes (boots 03:08:39 /
+// 03:11:58). Two-part fix: (a) 47-k9 serializes base/guildbase/room/atlas
+// bakes through renderQueue (no more N-concurrent bake stacking), and (b)
+// this cap rises 430M->520M — a single cold bake legitimately peaks ~435MB,
+// so 430M left zero headroom even WITH serialization. 520M still keeps node
+// + ffmpeg + OS well inside 952MB + 2G swap; the RenderQ hard floor (140MB
+// MemAvailable) remains the real OOM guard.
 module.exports = {
   apps: [{
     name: 'wa-joker',
@@ -19,7 +29,7 @@ module.exports = {
     exec_mode: 'fork',
     instances: 1,
     autorestart: true,
-    max_memory_restart: '430M',
+    max_memory_restart: '520M',
     exp_backoff_restart_delay: 100,
     max_restarts: 20,
     min_uptime: '30s',

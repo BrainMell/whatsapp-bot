@@ -19,6 +19,15 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+// 47-k9: optional render-queue gate for heavy bakes. The 2026-10-20 03:11Z
+// incident: owner fired `.j world` + `.j base` + `.j guild` back to back and
+// THREE 20-frame bakes ran concurrently (nothing in core/rpg went through
+// renderQueue.run except abilityCards) — RSS 424MB vs the pm2 430M cap on a
+// 952MB box → pm2 memory kill mid-command, zero JS stack, "it just crashed".
+// Queued bakes serialize one-at-a-time; every command-level caller already
+// has a text/charter/legacy fallback for QueueFullError/MemoryGateError.
+const renderQueue = require('../utils/renderQueue');
+
 const repoRoot = path.join(__dirname, '..', '..');
 const ROOT = process.env.QA_MODE
     ? path.join(os.tmpdir(), 'qa-media-cache')
@@ -77,7 +86,7 @@ async function trim(kind) {
 }
 
 /**
- * cached(kind, key, produce, journal) → { buffer, contentType }
+ * cached(kind, key, produce, journal, qopts) → { buffer, contentType }
  *   hit:  { buffer, contentType, cached: true }   (disk read, milliseconds)
  *   miss: runs produce() once, stores the result, returns it unchanged.
  *
@@ -87,8 +96,14 @@ async function trim(kind) {
  * change with CODE_VER, so the journaled state+opts are the only way to know
  * WHAT to re-bake under the new key without a user having to stare at a
  * 13-second cold view first. Null / absent journal = entry not replayable.
+ *
+ * `qopts` (optional, 47-k9): `{ label, timeoutMs }` — when present, produce()
+ * runs inside renderQueue.run (one bake at a time, memory-gated). Heavy
+ * callers (base / guildbase / room) pass it; absent = direct produce()
+ * exactly as before (backward compatible). Rejections propagate to the
+ * command layer's existing fallbacks.
  */
-async function cached(kind, key, produce, journal) {
+async function cached(kind, key, produce, journal, qopts) {
     key = `${CODE_VER}_${key}`; // code-version prefix — see CODE-VERSIONED note above
     const { dir, data, meta } = pathsFor(kind, key);
     try {
@@ -104,7 +119,10 @@ async function cached(kind, key, produce, journal) {
         }
     } catch (e) { /* fall through to produce */ }
 
-    const out = await produce();
+    const run = (qopts && typeof qopts === 'object')
+        ? () => renderQueue.run(String(qopts.label || `bake:${kind}`), produce, { timeoutMs: Math.max(5000, qopts.timeoutMs || 90000) })
+        : produce;
+    const out = await run();
     if (out && out.buffer && out.contentType
         && out.buffer.length > MIN_SIZE && out.buffer.length < 8 * 1024 * 1024) {
         try {
