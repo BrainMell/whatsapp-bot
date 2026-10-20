@@ -173,3 +173,8 @@ hamlets on land, determinism, name resolution both ways.
 - `scripts/kingdom3d/houses.py`: procedural 3D houses (7 kinds x roof colours, `K.houseName`) + dedicated Mines (cave / timber / deep headframe) and Med Bay (tent / infirmary / sanatorium) models. Rebake just these: `KK_ONLY=house_,struct_ [KK_YAW=45] python3 -I scripts/kingdom3d/bake_kingdom_sprites.py`.
 - `core/rpg/ambient.js`: loop-safe birds with shadows, villagers on roads, sailboats; 20-frame (2 s) loops.
 - Guild citadel wall moved from ring 4 to ring 6 (`WALL_RING`): six corner towers, market, well, fields, orchard, up to 24 member cottages spread over rings 2-5.
+
+## 2026-10-20 — world atlas + player-base tiers
+- `.j world` / `guild map` now render `core/rpg/worldAtlasRenderer.js`: crisp 3D-hex Aldafold, every guild's castle + emblem plate on its realm, roster strip. `continentMapRenderer.renderContinentMap` delegates to it (legacy painted chart kept as fallback). Guild `continent`/`marker` are persisted (Guild model, loadGuilds, syncGuild).
+- Player base village tier = the Home's level: lv2 adds six corner watchtowers on the palisade; lv3 replaces the palisade with a stone curtain wall (laid in dry runs round lakes) with gate and banner towers.
+- Guild base tiers (hall 2-5) live in `guildBaseRenderer.js` (cobbles, second curtain, full city).

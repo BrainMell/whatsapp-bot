@@ -387,8 +387,39 @@ function buildWorld(state, cel = null) {
                 if (bn != null) walkGate = `${wc[0]},${wc[1]},${bn}`;
             }
         }
-        w.layFenceEdges(inside, { gateAt: (c, r, e) => `${c},${r},${e}` === best || `${c},${r},${e}` === walkGate });
-        if (best && K.hasSprite('struct_gate_90', 'iso')) {                   // the village entrance: a stone gatehouse spanning the palisade gap
+        // village tier = the home's level (owner 2026-10-19/20: the base grows more impressive as it is upgraded):
+        // lv2 = corner watchtowers on the palisade, lv3 = the palisade becomes a STONE wall ring with towers.
+        const homeSt = (state.structures || []).find((x) => x.type === 'house');
+        const vTier = Math.max(1, Math.min(3, (homeSt && homeSt.level) || 1));
+        const ringCells = K.ring(centreCell[0], centreCell[1], FAR_R - 1);
+        const dry = ([c, r]) => w.inb(c, r) && !w.cell[r][c].water && !w.cell[r][c].river;
+        let stoneWall = false;
+        if (vTier >= 3 && ringCells.length > 6 && best) {
+            // lay the stone curtain in contiguous DRY runs (a lake or river breaks the ring into arcs)
+            const gc2 = best.split(',').slice(0, 2).join(',');
+            const start = ringCells.findIndex((x) => !dry(x));
+            const rot = start < 0 ? ringCells : ringCells.slice(start).concat(ringCells.slice(0, start));
+            const runs = []; let cur = [];
+            for (const x of rot) { if (dry(x)) cur.push(x); else if (cur.length) { runs.push(cur); cur = []; } }
+            if (cur.length) runs.push(cur);
+            if (start < 0) runs.splice(0, runs.length, ringCells);
+            for (const run of runs) {
+                if (run.length < 3) continue;
+                w.layWall(run, { closed: start < 0, gates: new Set([gc2]), outside: true });
+            }
+            stoneWall = true;
+        } else {
+            w.layFenceEdges(inside, { gateAt: (c, r, e) => `${c},${r},${e}` === best || `${c},${r},${e}` === walkGate });
+        }
+        if (vTier >= 2 && ringCells.length > 6) {
+            for (let i = 0; i < 6; i++) {
+                const [tc, tr] = ringCells[Math.floor(i * ringCells.length / 6)];
+                if (!w.inb(tc, tr) || w.cell[tr][tc].water) continue;
+                w.put('building_tower_A_' + team, tc, tr, { sc: vTier >= 3 ? 1.15 : 0.85, sort: 0.5 });
+                if (vTier >= 3) w.put('flag_' + team, tc, tr, { dx: 0.3, dz: -0.2, h: 1.4, sc: 0.7 });
+            }
+        }
+        if (!stoneWall && best && K.hasSprite('struct_gate_90', 'iso')) {                   // the village entrance: a stone gatehouse spanning the palisade gap
             const [gc, gr, ge] = best.split(',').map(Number); const nbG = K.neighbor(gc, gr, ge);
             const a0 = K.hexWorld(gc, gr), a1 = K.hexWorld(nbG[0], nbG[1]);
             // sprite yaw must equal MINUS the edge's world tangent (the bake yaws the model
