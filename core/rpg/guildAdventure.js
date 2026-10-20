@@ -348,9 +348,9 @@ const GAME_CONFIG = {
   REGISTRATION_TIME: 120000,
   SHOP_TIME: 90000,
   VOTE_TIME: 60000,
-  COMBAT_TURN_TIME: 600000,
-  BREAK_TIME: 10000, // Reduced from 60s for better flow
-  ENEMY_TURN_TIME: 5000,
+  COMBAT_TURN_TIME: 240000, // 💡 RPG OPT PASS (2026-10-20): was 600000 — a 10-minute group turn window read as "the game froze"; 4 min still gives slow players room (solo stays 120s)
+  BREAK_TIME: 6000, // 💡 RPG OPT PASS (2026-10-20): was 10000
+  ENEMY_TURN_TIME: 2000, // 💡 RPG OPT PASS (2026-10-20): was 5000 — enemy text is roundLog-buffered and flushed as ONE message at the next player prompt, so the old 5s delay was pure dead air per enemy per round
   PERMADEATH_MULTIPLIER: 2.5,
 };
 
@@ -2295,6 +2295,47 @@ function raceWithTimeout(promise, ms, label) {
   });
   return Promise.race([Promise.resolve(promise), timeout]).finally(() => clearTimeout(timer));
 }
+
+// 💡 RPG OPTIMISATION PASS (2026-10-20 owner: "multiple victory messages" +
+// "enemy turn takes forever"): a wedged Baileys send used to produce BOTH
+// messages — the race timed out, the TEXT fallback fired immediately, and the
+// original image send completed minutes later = duplicate victory cards.
+// sendMediaBounded races the send; on timeout it waits a GRACE window for the
+// in-flight send to settle (Baileys queues usually drain late, they don't
+// fail). Settled late = image arrived, NO fallback. Still wedged after grace
+// = exactly one text fallback. One message, every time.
+async function sendMediaBounded(sock, chatId, payload, opts = {}) {
+  const ms = opts.ms || 20000;      // fast-ack window
+  const grace = opts.grace || 10000; // extra wait for a late settle
+  const label = opts.label || 'media';
+  let settled = false; // settled SUCCESSFULLY (image will arrive)
+  const sendP = (async () => {
+    await sock.sendMessage(chatId, payload);
+    settled = true;
+  })();
+  try {
+    await raceWithTimeout(sendP, ms, `send.${label}`);
+    return { ok: true, late: false };
+  } catch (e) {
+    // Wedged (or failed) past the fast-ack window: give the in-flight send
+    // one grace window to drain before falling back (prevents the duplicate
+    // card). A FAST FAILURE resolves this race instantly → fallback fires
+    // immediately (the image is definitively not coming); a hard wedge waits
+    // out the grace in case Baileys drains late.
+    await Promise.race([sendP.catch(() => {}), new Promise((r) => setTimeout(r, grace))]);
+    if (settled) return { ok: true, late: true };
+    console.warn(`[Quest] ${label} send wedged >${(ms + grace) / 1000}s — text fallback`);
+    // 💡 The fallback must NEVER block the caller: if the socket is so dead
+    // that even the text send wedges, awaiting it would re-create the exact
+    // freeze this helper exists to prevent. Fire it, never await it.
+    sock.sendMessage(chatId, { text: opts.fallbackText || captionOf(payload) })
+      .catch(() => {});
+    return { ok: false, late: false };
+  }
+}
+function captionOf(payload) {
+  return (payload && (payload.caption || payload.text)) || '';
+}
 setInterval(() => {
     const now = Date.now();
     let swept = 0;
@@ -2322,6 +2363,22 @@ setInterval(() => {
                     swept++;
                     console.log(`🧹 [GameStates] Reaped wedged combat ${key} (inCombat but nothing armed, idle >30min).`);
                 }
+            } else if (state.combatProcessing && state.lastLoopTick && (now - state.lastLoopTick) > STALE_STATE_TIMEOUT_MS) {
+                // 💡 RPG OPT PASS (2026-10-20): the turn loop stamps lastLoopTick
+                // every iteration, and a LIVE loop can never go 30min without a
+                // tick (longest single wait = the 4-min player window). If
+                // combatProcessing is stuck true AND no tick for 30min, the
+                // loop is wedged on an unbounded await — it used to leak the
+                // state forever (the __armed check above saw combatProcessing
+                // and skipped). Reap it; the fight is unrecoverable anyway.
+                state.inCombat = false;
+                state.active = false;
+                if (state.timers) {
+                    Object.values(state.timers).forEach((t) => { if (t) clearTimeout(t); });
+                }
+                gameStates.delete(key);
+                swept++;
+                console.log(`🧹 [GameStates] Reaped WEDGED turn-loop ${key} (combatProcessing stuck, no loop tick >30min).`);
             }
             continue;
         }
@@ -4689,31 +4746,36 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   }
 
   if (scene.success) {
+    // 💡 RPG OPT PASS (2026-10-20): bounded send — the old mediaError catch
+    // fired a text fallback immediately on a send error; a wedged-then-drained
+    // send made the image AND the text both arrive (duplicate battle-start
+    // messages). sendMediaBounded = one message, every time.
+    const startCap = scene.caption || "⚔️ Combat Started!";
     try {
       if (scene.buffer) {
-        await sock.sendMessage(state.chatId, {
+        await sendMediaBounded(sock, state.chatId, {
           image: scene.buffer,
           caption: scene.caption,
-        });
+        }, { label: 'combatStart', fallbackText: startCap });
       } else if (scene.imagePath && fs.existsSync(scene.imagePath)) {
-        await sock.sendMessage(state.chatId, {
+        await sendMediaBounded(sock, state.chatId, {
           image: fs.readFileSync(scene.imagePath),
           caption: scene.caption,
-        });
+        }, { label: 'combatStart', fallbackText: startCap });
         // Clean up temp file
         setTimeout(() => {
           if (fs.existsSync(scene.imagePath)) fs.unlinkSync(scene.imagePath);
         }, 10000);
       } else {
         await sock.sendMessage(state.chatId, {
-          text: scene.caption || "⚔️ Combat Started!",
+          text: startCap,
         });
       }
     } catch (mediaError) {
       console.error("Media upload failed in startCombat:", mediaError.message);
       try {
         await sock.sendMessage(state.chatId, {
-          text: scene.caption || "⚔️ Combat Started!",
+          text: startCap,
         });
       } catch (err) {
         console.error("Fallback text failed in startCombat:", err.message);
@@ -4832,6 +4894,11 @@ async function processCombatTurn(sock, sessionKey) {
         );
         return;
       }
+      // 💡 RPG OPT PASS (2026-10-20): liveness stamp for the state reaper —
+      // a LIVE loop can never go 30min without ticking (longest single wait
+      // = the 4-min player window), so a stale stamp + combatProcessing stuck
+      // = wedged loop the reaper can now safely reap (see the sweeper).
+      state.lastLoopTick = Date.now();
       // Reset justDied flags
       state.players.forEach((p) => (p.justDied = false));
       state.enemies.forEach((e) => (e.justDied = false));
@@ -5171,14 +5238,35 @@ async function processCombatTurn(sock, sessionKey) {
         continue;
       }
 
+      // 💡 RPG OPT PASS (2026-10-20, owner "enemy turn takes forever"): every
+      // nested await in an enemy/summon action (applyAbilityEffect, handleDeath,
+      // loot DB writes in endCombat, Baileys sends) is unbounded — one wedged
+      // await used to leave this promise UNRESOLVED and the whole fight froze
+      // forever ("enemy turn takes forever" glitch). Race each automated turn
+      // with a 90s watchdog: a legit turn finishes in <20s worst-case; on
+      // watchdog the fight ADVANCES instead of freezing. A late-resolving
+      // zombie turn at most applies its own effects once — same risk the
+      // old code had, minus the permanent freeze.
       if (activeActor.isEnemy) {
         // AI Turn
-        await performEnemyAction(sock, activeActor, sessionKey);
+        await Promise.race([
+          performEnemyAction(sock, activeActor, sessionKey),
+          new Promise((r) => setTimeout(() => {
+            console.warn(`[Quest] ⏱️ enemy turn watchdog fired for ${activeActor?.name || '?'} (${sessionKey}) — advancing`);
+            r();
+          }, 90000)),
+        ]);
         // The loop continues because performEnemyAction resolved
       } else if (activeActor.isSummon) {
         // 💡 Phase 2: Summon AI Turn - personality-driven behavior,
         // loyalty decay, behavior tracking, optional betrayal.
-        await summonAI.performSummonAction(sock, activeActor, sessionKey);
+        await Promise.race([
+          summonAI.performSummonAction(sock, activeActor, sessionKey),
+          new Promise((r) => setTimeout(() => {
+            console.warn(`[Quest] ⏱️ summon turn watchdog fired for ${activeActor?.name || '?'} (${sessionKey}) — advancing`);
+            r();
+          }, 90000)),
+        ]);
       } else if (activeActor.isTutorialAlly) {
         // 💡 Phase B (2026-10-04): TUTORIAL GROUP quest - fake party members
         // auto-act after a short beat instead of waiting for input that will
@@ -5322,7 +5410,17 @@ async function promptPlayerAction(sock, player, sessionKey) {
         !state.pendingActions[player.jid]
       ) {
         try {
-          await performAction(sock, player, { type: "defend" }, sessionKey);
+          // 💡 RPG OPT PASS (2026-10-20): race the auto-defend with a 60s
+          // watchdog — performAction contains unbounded awaits (sends, loot
+          // DB, endCombat hooks) and if it wedged, resolve() below never ran
+          // and the whole fight froze (same family as the enemy-turn freeze).
+          await Promise.race([
+            performAction(sock, player, { type: "defend" }, sessionKey),
+            new Promise((r) => setTimeout(() => {
+              console.warn(`[Quest] ⏱️ AFK auto-defend watchdog fired for ${player?.name || '?'} — advancing`);
+              r();
+            }, 60000)),
+          ]);
         } catch (err) {
           console.error("Error in combat timeout defend:", err.message);
         }
@@ -6985,25 +7083,30 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
         try {
           // 💡 NEW 2026-07-29: Detect MP4 vs PNG and send accordingly.
           // The animated combat endpoint returns video/mp4 with VFX + sprite reactions.
+          // 💡 RPG OPT PASS (2026-10-20): sends are BOUNDED via sendMediaBounded —
+          // a wedged Baileys send used to hang the turn loop forever, and the
+          // msgErr catch below then fired a text DUPLICATE when the send
+          // finally drained. Now: late settle = image only, no dup; hard
+          // wedge >30s = exactly one text fallback inside the helper.
           const mimeType = scene.mimeType || 'image/png';
           if (scene.buffer && mimeType === 'video/mp4') {
             // Send as WhatsApp video (mp4 H.264, plays inline)
-            await sock.sendMessage(state.chatId, {
+            await sendMediaBounded(sock, state.chatId, {
               video: scene.buffer,
               caption: scene.caption,
               mimetype: 'video/mp4',
               gifPlayback: false,  // MP4 should play as video, not GIF
-            });
+            }, { label: 'turnVideo' });
           } else if (scene.buffer) {
-            await sock.sendMessage(state.chatId, {
+            await sendMediaBounded(sock, state.chatId, {
               image: scene.buffer,
               caption: scene.caption,
-            });
+            }, { label: 'turnImage' });
           } else if (scene.imagePath && fs.existsSync(scene.imagePath)) {
-            await sock.sendMessage(state.chatId, {
+            await sendMediaBounded(sock, state.chatId, {
               image: fs.readFileSync(scene.imagePath),
               caption: scene.caption,
-            });
+            }, { label: 'turnImage' });
             setTimeout(() => {
               if (fs.existsSync(scene.imagePath))
                 fs.unlinkSync(scene.imagePath);
@@ -7012,13 +7115,15 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
             await sock.sendMessage(state.chatId, { text: scene.caption });
           }
         } catch (msgErr) {
+          // 💡 RPG OPT PASS (2026-10-20): NO text fallback here anymore —
+          // sendMediaBounded already handled the wedge with its own single
+          // fallback (and suppresses it when the image settles late). The
+          // old immediate text send produced the "double victory/turn
+          // message" reports when the image drained late.
           console.error(
-            "Failed to send turn image message in nextTurn:",
+            "Turn image send failed in nextTurn:",
             msgErr.message,
           );
-          try {
-            await sock.sendMessage(state.chatId, { text: scene.caption });
-          } catch {}
         }
       } else {
         // ⚔️ PROMPT GUARANTEE (owner live-test reports #5/#7/#8, 2026-10-07:
@@ -8656,11 +8761,11 @@ async function endCombat(sock, victory, sessionKey, expectedGen) {
             playerSpriteIndex: Math.max(0, Math.floor(Number(state.players[0].spriteIndex) || 0)),
           });
           if (__clrBuf && __clrBuf.length > 100) {
-            await raceWithTimeout(
-              sock.sendMessage(state.chatId, { image: __clrBuf, caption }),
-              20000, 'abyssCleared.send',
-            );
-            endScreenSent = true;
+            // 💡 RPG OPT PASS (2026-10-20): bounded send with late-settle
+            // detection — the old race+catch let a drained-late image AND the
+            // bottom text fallback BOTH arrive (duplicate CLEARED cards).
+            await sendMediaBounded(sock, state.chatId, { image: __clrBuf, caption }, { label: 'abyssCleared' });
+            endScreenSent = true; // helper owns the single-fallback contract
           }
         }
         // abyss defeat: no image here — FALLEN card comes from the death path
@@ -8680,15 +8785,18 @@ async function endCombat(sock, victory, sessionKey, expectedGen) {
         // 💡 WATCHDOG: a wedged Baileys send used to stall the whole
         // end-of-combat flow forever (defeat card "never spawns"). Now the
         // send is raced; on timeout the text caption below still goes out.
-        await raceWithTimeout(
-          sock.sendMessage(state.chatId, {
-            image: endResult.buffer,
-            caption: caption,
-            mimetype: 'image/jpeg'
-          }),
-          20000, 'endScreen.send',
-        );
-        endScreenSent = true;
+        // 💡 RPG OPT PASS (2026-10-20, owner "multiple victory messages"):
+        // the old race→fallback produced BOTH messages when the wedged send
+        // drained late (text fired at 20s, image arrived later). The helper
+        // waits a 10s grace for the in-flight send before falling back, so
+        // exactly ONE victory card arrives — image if it settled (even late),
+        // text only if it truly never will.
+        await sendMediaBounded(sock, state.chatId, {
+          image: endResult.buffer,
+          caption: caption,
+          mimetype: 'image/jpeg'
+        }, { label: 'endScreen' });
+        endScreenSent = true; // helper owns the single-fallback contract
       }
       END_DEBUG(`endCombat endScreen done sent=${endScreenSent}`);
     }
