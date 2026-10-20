@@ -20,7 +20,7 @@ const path = require('path');
 const K = require('./kingdom3d');
 
 const DIR = path.join(__dirname, '..', 'rpgasset', 'kingdom3d');
-const COUNT = 10;
+const COUNT = 14;
 
 let _done = false;
 function register() {
