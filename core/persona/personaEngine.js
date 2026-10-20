@@ -299,16 +299,38 @@ async function buildTurn({ chatId, senderName, text, isAmbient }) {
         : userText,
     },
   ];
-  const callOpts = () => ({
-    model: deps.modelFn(userText.length) || undefined,
-    messages,
-    temperature: 1.05,
-    max_completion_tokens: 300,
-  });
+  const callOpts = (over = {}) => {
+    const o = {
+      model: deps.modelFn(userText.length) || undefined,
+      messages,
+      temperature: 1.05,
+      max_completion_tokens: 768,
+      ...over,
+    };
+    // gpt-oss models are REASONING models — cap the thinking so the token
+    // budget actually reaches the visible reply (empty-content guard after
+    // the owner 2026-10-20 "Joker isn't responding" incident: the old 300
+    // budget could be fully consumed by reasoning → content '' → silent null)
+    if (String(o.model || '').includes('gpt-oss')) o.reasoning_effort = 'low';
+    return o;
+  };
+  // one call; if the model burned the whole completion budget on reasoning
+  // and returned empty content, retry ONCE with a much bigger headroom
+  const callWithHeadroom = async () => {
+    const r1 = await deps.smartGroqCall(callOpts());
+    const c1 = r1?.choices?.[0]?.message?.content || '';
+    if (c1.trim()) return c1;
+    console.error(
+      '[persona] empty completion (model=' +
+        (deps.modelFn(userText.length) || '?') +
+        ') — retrying once with 2048 headroom',
+    );
+    const r2 = await deps.smartGroqCall(callOpts({ max_completion_tokens: 2048 }));
+    return r2?.choices?.[0]?.message?.content || '';
+  };
   let raw = '';
   try {
-    const first = await deps.smartGroqCall(callOpts());
-    raw = first?.choices?.[0]?.message?.content || '';
+    raw = await callWithHeadroom();
   } catch (e) {
     console.error('[persona] generation failed:', e.message);
     return null; // silentRetryTurn will re-run the whole turn
@@ -330,8 +352,7 @@ async function buildTurn({ chatId, senderName, text, isAmbient }) {
         : `[You couldn't find anything useful. Answer casually, or say you're not sure.]`,
     });
     try {
-      const second = await deps.smartGroqCall(callOpts());
-      raw = second?.choices?.[0]?.message?.content || '';
+      raw = await callWithHeadroom();
     } catch (e) {
       console.error('[persona] tool-round generation failed:', e.message);
       return null;
@@ -342,7 +363,12 @@ async function buildTurn({ chatId, senderName, text, isAmbient }) {
   if (isAmbient && SILENT_RE.test(raw)) return null;
   SILENT_RE.lastIndex = 0;
   const clean = cleanReplyText(raw);
-  if (!clean) return null;
+  if (!clean) {
+    console.error(
+      '[persona] reply cleaned to nothing (rawLen=' + raw.length + ') — staying quiet',
+    );
+    return null;
+  }
   const replies = chunkText(clean);
   if (!replies.length) return null;
   return { replies, usedSearch: !!parsed.search };
@@ -425,16 +451,23 @@ async function humanSend(sock, chatId, replies, opts = {}) {
 // L6: whole-turn silent retries — generation + tools + send, retried up to
 // 2 extra times in the background. Returns null after the last failure; the
 // caller NEVER tells the user.
-async function silentRetryTurn(fn) {
-  let lastErr = null;
+async function silentRetryTurn(fn, opts = {}) {
+  // retryOnNull: the DIRECT path treats an empty turn as a failure worth
+  // retrying (owner: "try again 2 more times in the background"). Ambient
+  // keeps the default false — [SILENT] there is a legitimate answer, not a
+  // malfunction, and re-rolling it would burn API calls.
+  const retryOnNull = !!opts.retryOnNull;
   for (let attempt = 0; attempt <= TURN_RETRIES; attempt++) {
     try {
-      return await fn();
+      const r = await fn();
+      if (r || !retryOnNull) return r;
+      console.error(
+        '[persona] turn empty (background retry ' + (attempt + 1) + '/' + (TURN_RETRIES + 1) + ')',
+      );
     } catch (e) {
-      lastErr = e;
       console.error('[persona] turn failed (background retry ' + (attempt + 1) + '/' + (TURN_RETRIES + 1) + '):', e?.message);
-      if (attempt < TURN_RETRIES) await sleep(TURN_BACKOFF_MS[attempt] || 1500);
     }
+    if (attempt < TURN_RETRIES) await sleep(TURN_BACKOFF_MS[attempt] || 1500);
   }
   return null;
 }

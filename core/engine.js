@@ -5214,13 +5214,18 @@ What to do:
     // same rotating Groq caller + shared KV. The search tool reuses the .j
     // google parsers over keyless backends (Bing RSS → DDG-lite → Wikipedia)
     // so the persona can "look stuff up" without touching Brave/quota paths.
-    personaEngine.initPersona({
+    const _personaReady = personaEngine.initPersona({
       botName: botConfig.getBotName(),
       system,
       smartGroqCall,
       modelFn: (len) => selectModel(len, false),
       searchFn: personaEngine.makeKeylessSearcher(aiOverview, axios),
     });
+    console.log(
+      _personaReady
+        ? `✅ [persona] engine ready for ${botConfig.getBotName()}`
+        : `⚠️ [persona] init failed — persona stays silent (missing deps)`,
+    );
 
     // --- FFMPEG Path ---
     // Detect FFmpeg path (support both Windows and Linux)
@@ -33456,13 +33461,15 @@ _(or reply to their message)_
                     // chunked short sends, and SILENT failure handling
                     // ("instead of telling the user, try again 2 more times in
                     // the background" — both on generation and on every send).
-                    const _turn = await personaEngine.silentRetryTurn(() =>
-                      personaEngine.buildTurn({
-                        chatId,
-                        senderName: m.pushName || "someone",
-                        text: promptWithReply,
-                        isAmbient: false,
-                      }),
+                    const _turn = await personaEngine.silentRetryTurn(
+                      () =>
+                        personaEngine.buildTurn({
+                          chatId,
+                          senderName: m.pushName || "someone",
+                          text: promptWithReply,
+                          isAmbient: false,
+                        }),
+                      { retryOnNull: true }, // an empty direct turn is a failure — retry it
                     );
 
                     if (!_turn || !_turn.replies || !_turn.replies.length) {
