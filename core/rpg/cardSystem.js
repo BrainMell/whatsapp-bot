@@ -1327,6 +1327,100 @@ async function generateEShopDeckImage() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  ESHOP FLEX VIEW — one WhatsApp message PER card, full art, big & visible
+//  (owner 2026-10-20: ".j eshop 1-16 should show the cards individually
+//   for ppl to see")
+//  Accepted inputs: `eshop 3` | `eshop 2-7` | `eshop 1 - 16` | `eshop all`
+//                   | `eshop flex` (all) | `eshop flex 1-16`
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Pure range parser so QA can hammer it without touching a live instance.
+ * "3" → {start:3,end:3} · "2-7" → {start:2,end:7} · "16-3" → {start:3,end:16}
+ * Out-of-bounds / garbage → null. Slots are hard-bounded 1..16 (deck size).
+ */
+function parseEshopFlexToken(tok) {
+  if (tok === undefined || tok === null) return null;
+  const m = /^\s*(\d{1,2})\s*(?:[-–—]\s*(\d{1,2}))?\s*$/.exec(String(tok));
+  if (!m) return null;
+  const a = parseInt(m[1], 10);
+  const b = m[2] ? parseInt(m[2], 10) : a;
+  if (isNaN(a) || isNaN(b) || a < 1 || b > 16) return null;
+  return a <= b ? { start: a, end: b } : { start: b, end: a };
+}
+
+// Flood guard: a 1-16 flex bursts up to 17 messages, so keep a per-chat
+// cooldown. Single card views share it — cheap protection against
+// `.j eshop 3` spam loops too. Only set when cards will actually send,
+// so an empty-range miss doesn't burn the cooldown.
+const ESHOP_FLEX_COOLDOWN_MS = 15000;
+const eshopFlexLastRun = new Map(); // chatId -> ts
+
+async function eshopFlexView(senderJid, reply, chatId, startSlot, endSlot) {
+  const p = P();
+  const inst = getInst();
+  const now = Date.now();
+  if (now - (eshopFlexLastRun.get(chatId) || 0) < ESHOP_FLEX_COOLDOWN_MS) {
+    return reply(`⏳  _Flex view just ran here — give it a few seconds_`);
+  }
+
+  const entries = [];
+  for (let s = startSlot; s <= endSlot; s++) {
+    const e = inst.eshopDeck[s - 1];
+    if (e) entries.push({ slot: s, ...e });
+  }
+  if (entries.length === 0) {
+    const label = startSlot === endSlot ? `SLOT ${startSlot}` : `SLOTS ${startSlot}-${endSlot}`;
+    return reply(`📭  *NOTHING IN ${label}*\n\n🎪 ⟢ _No event cards there right now_\n\n💡 ⟢ _Browse everything with_ \`${p} eshop\``);
+  }
+
+  eshopFlexLastRun.set(chatId, now);
+
+  const sock = inst.sock_ref;
+  if (!sock || typeof sock.sendMessage !== 'function') {
+    return reply('⚠️  _Bot is reconnecting — try again in a moment_');
+  }
+
+  // Header first — instant feedback while card media streams out
+  const tokenBalance = economy.getTokens(senderJid);
+  const eventActive = await isTokenEventActive();
+  const rangeLabel = startSlot === endSlot ? `${startSlot}` : `${startSlot}-${endSlot}`;
+  const header = `🎪 *EVENT SHOP — FLEX VIEW* 🎪\n` +
+    `━━━━━━━━━━━━━━━\n` +
+    `🎫 Your Tokens: *${tokenBalance}*\n` +
+    `📊 Event Status: ${eventActive ? '🟢 ACTIVE' : '🔴 INACTIVE'}\n` +
+    `🃏 Showing *${entries.length}* card${entries.length === 1 ? '' : 's'} (slot${startSlot === endSlot ? '' : 's'} ${rangeLabel})\n\n` +
+    `🛒 Buy one: \`${p} eshop buy <slot>\``;
+  try { await reply(header); } catch (e) { /* header is cosmetic — cards matter more */ }
+
+  const failed = [];
+  for (const entry of entries) {
+    try {
+      // Same fetch contract as every other single-card path (spawn/summon/info)
+      const res = await axios.get(entry.imageUrl, { responseType: 'arraybuffer', timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+      const buf = Buffer.from(res.data);
+      if (!buf || buf.length < 100) throw new Error('empty media');
+      const caption = `🃏 *#${entry.slot}* — ${entry.cardName} (T${entry.tier})\n` +
+        `📺 ${entry.anime || '—'}\n` +
+        `🎫 ${entry.price} tokens\n` +
+        `🛒 Buy: \`${p} eshop buy ${entry.slot}\``;
+      // Universal magic-sniffing sender: PNG/JPEG → image, GIF → animated
+      // image, WebM/MP4 → gifPlayback video (same behavior everywhere)
+      await sendCardMedia(sock, chatId, buf, caption);
+    } catch (err) {
+      console.error(`[eShop] flex slot ${entry.slot} failed:`, err.message);
+      failed.push(entry.slot);
+    }
+    // Gentle pacing — 16 media uploads in one burst trips WA rate limits
+    if (entries.length > 1) await new Promise(r => setTimeout(r, 1200));
+  }
+
+  if (failed.length) {
+    return reply(`⚠️  _Couldn't load slot${failed.length === 1 ? '' : 's'} ${failed.join(', ')} — try again in a moment_`);
+  }
+}
+
 /**
  * Search for event cards by name and/or anime.
  * Used by `info <name> event | <anime>`.
@@ -2887,6 +2981,28 @@ async function cmdEShop(senderJid, reply, chatId, args = [], isMod = false) {
   // ── DECK TRADING (old eshop, now under `eshop deck`) ──
   if (sub === 'deck') {
     return cmdEShopDeckTrading(senderJid, reply, chatId, args.slice(1), isMod);
+  }
+
+  // ── FLEX VIEW (owner 2026-10-20: "eshop 1-16 should show the cards
+  //    individually for ppl to see") ──
+  // `eshop 3` | `eshop 2-7` | `eshop 1 - 16` | `eshop all` |
+  // `eshop flex` (= 1-16) | `eshop flex 4-8`
+  let flexTok = null;
+  if (sub === 'flex') {
+    flexTok = args[1] || '1-16';
+  } else if (sub === 'all') {
+    flexTok = '1-16';
+  } else if (sub && (args[1] === '-' || args[1] === '–' || args[1] === '—')) {
+    flexTok = `${sub}-${args[2] || ''}`; // "1 - 16" arrived as three argv tokens
+  } else if (sub && parseEshopFlexToken(sub)) {
+    flexTok = sub;
+  }
+  if (flexTok) {
+    const range = parseEshopFlexToken(flexTok);
+    if (!range) {
+      return reply(`❌  *BAD RANGE*\n\n⌨️ ⟢ _Usage:_ \`${p} eshop <slot | range>\`\n🃏 ⟢ _e.g._ \`${p} eshop 3\` _or_ \`${p} eshop 1-16\` _(slots run 1-16)_`);
+    }
+    return eshopFlexView(senderJid, reply, chatId, range.start, range.end);
   }
 
   // ── DEFAULT: Show the token event eShop (4x4 grid image) ──
@@ -5535,6 +5651,8 @@ module.exports = {
   isTokenEventActive, startTokenEvent, stopTokenEvent,
   eshopAddCard, eshopRemoveCard, eshopSetPrice, eshopBuy,
   generateEShopDeckImage, searchEventCards,
+  parseEshopFlexToken, eshopFlexView, // eShop flex view (QA hooks, 2026-10-20)
+  cmdEShop, getInst, sendCardMedia, // QA hooks: routing + mock-sock injection + magic-sniff coverage (2026-10-20)
   loadTokenEventState, loadEShopDeck,
   // 💡 Spawn interval configuration exports
   setSpawnInterval, getSpawnIntervalInfo, loadSpawnInterval, restartSpawnTimer,
