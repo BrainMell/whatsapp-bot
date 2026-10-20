@@ -64,6 +64,7 @@ const { Sticker, StickerTypes } = require("wa-sticker-formatter");
 const stickerPack = require("./utils/stickerPack"); // native WhatsApp sticker packs (.j s -p)
 const quoteCard = require("./utils/quoteCard"); // .j quote <text> → quote card image (2026-10-12)
 const aiOverview = require("./utils/aiOverview"); // .j google <question> → web-grounded AI-overview answer (2026-10-12)
+const personaEngine = require("./persona/personaEngine"); // 💡 PROJECT REALGUY (owner 2026-10-20): layered humanization — ambient triggers, memory, tools ([SEARCH:]/[REMEMBER:]), typing-presence sends, silent retries
 const mapCard = require("./utils/mapCard"); // .j wmap <place> → real-world map card + Google Maps link (2026-10-12; renamed from `.j map` per owner so the RPG world atlas keeps `map`)
 const spaceCard = require("./utils/spaceCard"); // .j umap <object> → universe card: NASA imagery/facts + video when available (owner 2026-10-12 14:33Z: "make this but for the universe")
 const { parseHTML } = require("linkedom");
@@ -5208,6 +5209,19 @@ What to do:
     }
 
     console.log(`✅ Groq API initialized with ${GROQ_API_KEYS.length} key(s)`);
+
+    // 💡 PROJECT REALGUY (owner 2026-10-20): wire the persona engine to the
+    // same rotating Groq caller + shared KV. The search tool reuses the .j
+    // google parsers over keyless backends (Bing RSS → DDG-lite → Wikipedia)
+    // so the persona can "look stuff up" without touching Brave/quota paths.
+    personaEngine.initPersona({
+      botName: botConfig.getBotName(),
+      system,
+      smartGroqCall,
+      modelFn: (len) => selectModel(len, false),
+      searchFn: personaEngine.makeKeylessSearcher(aiOverview, axios),
+    });
+
     // --- FFMPEG Path ---
     // Detect FFmpeg path (support both Windows and Linux)
     const FFMPEG_PATH =
@@ -31232,9 +31246,10 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                     }
                     enabledChats.add(chatId);
                     saveEnabledChats();
+                    // 💡 REALGUY: confirmation in the persona's own voice
                     const replyText =
                       BOT_MARKER +
-                      `🤖 ${botConfig.getBotName()} AI is now *enabled* in this ${isDM ? "DM" : "chat"}!`;
+                      `yo — ${botConfig.getBotName()} is active in this ${isDM ? "chat" : "group"} now. mention me, reply to me, or just talk — I'll jump in 🫡`;
                     await sock.sendMessage(chatId, { text: replyText });
                     return;
                   }
@@ -31257,7 +31272,7 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `🤖 ${botConfig.getBotName()} AI is now *disabled* in this ${isDM ? "DM" : "chat"}!`,
+                        `aight, I'm out of this ${isDM ? "chat" : "group"} — ping me with ${botConfig.getPrefix()}on when you want me back 🫡`,
                     });
                     return;
                   }
@@ -33195,7 +33210,36 @@ _(or reply to their message)_
                   const isDM = !chatId.endsWith("@g.us");
                   const isBotEnabled = enabledChats.has(chatId);
 
-                  if (!isBotEnabled || !hasTrigger) return;
+                  if (!isBotEnabled) return;
+
+                  // 💡 PROJECT REALGUY (owner 2026-10-20): feed EVERY text
+                  // message in enabled chats to the persona's ambient-awareness
+                  // buffer — the bot "hears" the group even when it stays quiet.
+                  try {
+                    personaEngine.observe({
+                      chatId,
+                      who: m.pushName || economy.getDisplayName(senderJid) || "someone",
+                      text: String(cleanTxt || txt || ""),
+                      ts: Date.now(),
+                    });
+                  } catch (e) {}
+
+                  // 💡 REALGUY ambient layer: with no direct trigger the
+                  // persona may still "feel like" chiming in (small random roll,
+                  // per-chat cooldowns + caps). Fully silent on any failure —
+                  // never an error message, just background retries (owner spec).
+                  if (!hasTrigger) {
+                    personaEngine
+                      .maybeAmbientChime({
+                        sock,
+                        chatId,
+                        isGroup: !isDM,
+                        senderName: m.pushName || "someone",
+                        text: String(cleanTxt || txt || ""),
+                      })
+                      .catch(() => {});
+                    return;
+                  }
 
                   // --- Return by Death Logic for Subaru ---
                   if (botConfig.getBotName().toLowerCase() === "subaru") {
@@ -33391,38 +33435,60 @@ _(or reply to their message)_
                     const _cKey = `${chatId}_${_normP}`;
                     const _hit = aiResponseCache.get(_cKey);
                     if (_hit && Date.now() - _hit.ts < AI_CACHE_TTL_MS) {
-                      await reply(BOT_MARKER + _hit.reply);
+                      // 💡 REALGUY: cached answers go out with the same human
+                      // cadence (typing presence + delays + chunks).
+                      await personaEngine.humanSend(
+                        sock,
+                        chatId,
+                        personaEngine.chunkText(_hit.reply),
+                        {},
+                      );
                       return;
                     }
 
                     // extract info from the message
                     //await autoExtractInfo(prompt, senderJid);
 
-                    // get AI response
-                    const aiReply = await askAI(
-                      senderJid,
-                      promptWithReply,
-                      mentionedJids,
-                      chatId,
-                      m.pushName,
+                    // 💡 PROJECT REALGUY (owner 2026-10-20): the persona turn
+                    // replaces the bare askAI() call — tools it can call when
+                    // it feels like it ([SEARCH:] via .j google's keyless
+                    // backends, [REMEMBER:] → Mongo KV), human typing cadence,
+                    // chunked short sends, and SILENT failure handling
+                    // ("instead of telling the user, try again 2 more times in
+                    // the background" — both on generation and on every send).
+                    const _turn = await personaEngine.silentRetryTurn(() =>
+                      personaEngine.buildTurn({
+                        chatId,
+                        senderName: m.pushName || "someone",
+                        text: promptWithReply,
+                        isAmbient: false,
+                      }),
                     );
 
-                    // store valid response in cache
-                    if (aiReply && aiReply.trim().length > 0) {
-                      aiResponseCache.set(_cKey, { reply: aiReply, ts: Date.now() });
-                    }
-
-                    if (!aiReply || aiReply.trim().length === 0) {
-                      console.log("⚠️️ AI returned empty response, skipping...");
+                    if (!_turn || !_turn.replies || !_turn.replies.length) {
+                      console.log(
+                        "⚠️ persona turn empty after silent retries — staying quiet (owner: never tell the user)",
+                      );
                       return;
                     }
 
+                    // store valid response in cache (joined, for identical asks)
+                    aiResponseCache.set(_cKey, {
+                      reply: _turn.replies.join("\n"),
+                      ts: Date.now(),
+                    });
+
                     const mood = await detectMood(prompt);
                     const stickerPath = getRandomSticker(mood);
-                    const replyText = BOT_MARKER + aiReply;
 
-                    // send text response
-                    await reply(replyText);
+                    // send the reply the human way (presence → typing delay →
+                    // chunks → paused; every send silently retried x2 more)
+                    await personaEngine.humanSend(
+                      sock,
+                      chatId,
+                      _turn.replies,
+                      { quoteM: isReplyToBot ? m : null },
+                    );
 
                     // Determine sticker probability based on mood
                     const stickerChance = mood === "neutral" ? 0.15 : 0.40;
@@ -33441,8 +33507,11 @@ _(or reply to their message)_
                       }
                     }
                   } catch (err) {
-                    console.error("❌ AI error:", err.message);
-                    await reply(`🤖 AI didn't respond - try again!`);
+                    // 💡 owner 2026-10-20: NEVER tell the user a message failed.
+                    // silentRetryTurn + silentSend already retried everything
+                    // 2 extra times each in the background — if we land here,
+                    // stay quiet and log for the owner only.
+                    console.error("❌ AI error (persona path, silent):", err.message);
                   }
                 } catch (err) {
                   if (
