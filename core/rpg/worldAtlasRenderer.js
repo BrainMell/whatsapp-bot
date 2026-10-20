@@ -18,6 +18,7 @@
 const K = require('./kingdom3d');
 const C = require('./continents');
 const renderQueue = require('../utils/renderQueue');   // 47-k9: atlas bakes join the one-at-a-time queue
+const { emojiFont } = require('./emojiFont');           // 2026-10-20: emblem emoji glyphs (owner 'number boxes' bug)
 
 const CHART_W = 864, CHART_H = 1210;                          // map space ↔ chart pixels (masks are traced from the chart)
 const MX0 = 58, MX1 = 810, MY0 = 175, MY1 = 868;              // the chart's drawable ocean area
@@ -208,7 +209,7 @@ async function drawEmblem(ctx, g, x, y, R, crest) {
     if (!crest) {
         const glyph = g.icon || (g.name.match(/[A-Za-z0-9]/) || ['?'])[0].toUpperCase();
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        if (g.icon) { ctx.fillStyle = '#fff4d0'; ctx.font = `${Math.round(R * 1.15)}px "Noto Sans", sans-serif`; ctx.fillText(glyph.slice(0, 2), x, y - R * 0.12); }
+        if (g.icon) { ctx.fillStyle = '#fff4d0'; ctx.font = emojiFont(glyph, R * 1.15); ctx.fillText(glyph.slice(0, 2), x, y - R * 0.12); }
         else { ctx.font = `${Math.round(R * 1.2)}px "Cinzel Deco B", "Cinzel", serif`; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(30,14,6,0.85)'; ctx.strokeText(glyph, x, y - R * 0.1); ctx.fillStyle = '#fff4d0'; ctx.fillText(glyph, x, y - R * 0.1); }
     }
     sp(); ctx.strokeStyle = 'rgba(255,244,208,0.55)'; ctx.lineWidth = 1; ctx.stroke();

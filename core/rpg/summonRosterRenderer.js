@@ -25,6 +25,7 @@ const fs = require('fs');
 const summonSprites = require('./summonSprites');
 const summonSystem = require('./summonSystem');
 const registry = require('./summonRegistry');
+const { emojiFont, fillTextMixed } = require('./emojiFont');   // 2026-10-20: emoji glyphs (owner 'number boxes' bug)
 
 // Register fonts
 const FONTS_DIR = path.join(__dirname, '..', 'rpgasset', 'fonts');
@@ -498,7 +499,7 @@ async function drawSummonCard(ctx, summon, user, x, y, w, h, index) {
     } catch (e) {
       // Draw placeholder
       ctx.fillStyle = elementCfg.color;
-      ctx.font = `32px "${FONT_REG}", monospace`;
+      ctx.font = emojiFont(species?.icon || '🐉', 32, `"${FONT_REG}", monospace`);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(species?.icon || '🐉', portraitX + portraitSize / 2, portraitY + portraitSize / 2);
@@ -506,7 +507,7 @@ async function drawSummonCard(ctx, summon, user, x, y, w, h, index) {
   } else {
     // Draw emoji icon as placeholder
     ctx.fillStyle = elementCfg.color;
-    ctx.font = `32px "${FONT_REG}", monospace`;
+    ctx.font = emojiFont(species?.icon || '🐉', 32, `"${FONT_REG}", monospace`);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(species?.icon || '🐉', portraitX + portraitSize / 2, portraitY + portraitSize / 2);
@@ -621,7 +622,7 @@ async function renderDetailCard(summon, user) {
   ctx.font = `bold 24px "${FONT_BOLD}", monospace`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(`${species?.icon || '🐉'} ${name}`, W / 2, 55);
+  fillTextMixed(ctx, `${species?.icon || '🐉'} ${name}`, W / 2, 55);
 
   // ── Sprite portrait (large) ──
   const portraitSize = 200;
@@ -647,14 +648,14 @@ async function renderDetailCard(summon, user) {
       ctx.drawImage(img, portraitX + (portraitSize - dw) / 2, portraitY + (portraitSize - dh) / 2, dw, dh);
     } catch (e) {
       ctx.fillStyle = elementCfg.color;
-      ctx.font = `80px "${FONT_REG}", monospace`;
+      ctx.font = emojiFont(species?.icon || '🐉', 80, `"${FONT_REG}", monospace`);
       ctx.textAlign = 'center';
       ctx.fillText(species?.icon || '🐉', portraitX + portraitSize / 2, portraitY + portraitSize / 2 + 30);
     }
   } else {
     // No sprite - draw emoji fallback
     ctx.fillStyle = elementCfg.color;
-    ctx.font = `80px "${FONT_REG}", monospace`;
+    ctx.font = emojiFont(species?.icon || '🐉', 80, `"${FONT_REG}", monospace`);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(species?.icon || '🐉', portraitX + portraitSize / 2, portraitY + portraitSize / 2 + 30);
@@ -725,7 +726,7 @@ async function renderDetailCard(summon, user) {
   if (echo) {
     ctx.fillStyle = 'rgba(255,255,255,0.7)';
     ctx.font = `14px "${FONT_REG}", monospace`;
-    ctx.fillText(`${echo.icon} Echo`, 40, bottomY + 50);
+    fillTextMixed(ctx, `${echo.icon} Echo`, 40, bottomY + 50);
     ctx.fillStyle = '#4FC3F7';
     ctx.fillText(echo.name, 130, bottomY + 50);
     ctx.fillStyle = 'rgba(255,255,255,0.5)';

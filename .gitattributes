@@ -96,3 +96,10 @@ core/rpgasset/kingdom3d/biomes/*/*.png -filter -diff -merge -text
 # kingdom3d diagonal-iso (player base) sprites: plain git blobs too
 core/rpgasset/kingdom3d_iso/*.png -filter -diff -merge -text
 core/rpgasset/kingdom3d_iso/biomes/*/*.png -filter -diff -merge -text
+
+# 2026-10-20 emblem emoji font: must be real bytes everywhere (reset --hard
+# deploys on the boxes would otherwise serve an LFS pointer; emojiFont.js'
+# magic-byte check would refuse to register it and map emblems hexbox again —
+# owner 2026-10-20 'emoji emblems show on the maps as weird number boxes')
+core/rpgasset/fonts/NotoEmoji-Regular.ttf -filter -diff -merge -text
+core/rpgasset/fonts/NotoEmoji-Regular.ttf -text

@@ -13,6 +13,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 const fs = require('fs');
 const C = require('./continents');
+const { emojiFont } = require('./emojiFont');   // 2026-10-20: emblem emoji glyphs (owner 'number boxes' bug)
 
 const SC = 1.25;                                    // output scale over the 864×1210 chart
 let _img = null;
@@ -75,7 +76,7 @@ function drawPin(ctx, x, y, { color, icon, initial, name }) {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const glyph = icon || initial;
     ctx.fillStyle = icon ? '#2B1A0C' : '#FFF6DC';
-    ctx.font = icon ? '20px sans-serif' : 'bold 20px "Cinzel", serif';
+    ctx.font = icon ? emojiFont(icon, 20, 'sans-serif') : 'bold 20px "Cinzel", serif';
     if (!icon) { ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(40,20,10,0.8)'; ctx.strokeText(glyph, x, ey + 1); }
     ctx.fillText(glyph, x, ey + 1);
 

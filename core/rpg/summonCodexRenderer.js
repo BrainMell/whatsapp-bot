@@ -11,6 +11,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const { emojiFont } = require('./emojiFont');   // 2026-10-20: emoji glyphs (owner 'number boxes' bug)
 
 let _canvas = null;
 function getCanvas() { if (!_canvas) _canvas = require('canvas'); return _canvas; }
@@ -193,7 +194,7 @@ async function renderCodexPage(registry, page = 1, filter = 'all') {
       // Fallback: species emoji icon (consistent with roster renderer)
       // Use 40px font for emoji to fit nicely in 80×80 portrait
       ctx.fillStyle = elementColor;
-      ctx.font = `40px "${FONT_REG}", "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
+      ctx.font = emojiFont(species.icon || '🐉', 40, `"${FONT_REG}", sans-serif`);
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(species.icon || '🐉', portraitX + portraitSize / 2, portraitY + portraitSize / 2);
     }

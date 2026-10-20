@@ -89,3 +89,10 @@ Attribution for third-party art shipped with the bot / image services.
   don't fit the map's KayKit hex art). No code references them now; the PNGs remain
   box-provisioned only (never committed) in case the markers return re-styled. Lords Mobile
   is an IGG trademark; render-only, non-commercial fan use.
+
+## Noto Emoji (`core/rpgasset/fonts/NotoEmoji-Regular.ttf`)
+- Google Noto Emoji, monochrome (variable font, default wght 400 instance file), SIL Open Font License 1.1.
+- © Google LLC. OFL text: https://openfontlicense.org
+- Shipped 2026-10-20 (owner: "emoji emblems show on the maps as weird number boxes"): the render
+  boxes had no emoji font, so guild emblem glyphs hexboxed; this font is registered per-process by
+  `core/rpg/emojiFont.js` and installed system-wide on both boxes by the deploy step.

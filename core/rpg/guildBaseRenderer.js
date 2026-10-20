@@ -26,6 +26,7 @@ const KT = require('./kingdomTerrain');
 const mediaCache = require('./mediaCache');
 const { encodeRawStreamMp4 } = require('../utils/bakeStream');   // 47-k10: streaming bake — one frame alive at a time
 const ambient = require('./ambient');   // shared life layer (owner 2026-10-19: "the guild card should also be a gif")
+const { emojiFont } = require('./emojiFont');   // 2026-10-20: emblem emoji glyphs (owner 'number boxes' bug)
 
 const FRAMES = 20, FRAME_MS = 100;   // 2 s loop (birds cross the card once per loop)
 const COLS = 23, ROWS = 31, CC = 11, CR = 15;   // oversized grid: terrain runs past every edge of the card, castle on (11,15)
@@ -740,7 +741,7 @@ function drawBanner(ctx, x, y, k, flagCol, flagD, icon, t) {
     ctx.strokeStyle = 'rgba(255,244,208,0.5)'; ctx.lineWidth = Math.max(1, 1.6 * k2); ctx.stroke();
     if (icon) {
         ctx.fillStyle = '#fff4d0'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.font = `${Math.round(36 * k2)}px "Noto Sans", sans-serif`;
+        ctx.font = emojiFont(String(icon).slice(0, 2), 36 * k2);
         ctx.fillText(String(icon).slice(0, 2), x, topY + sh * 0.4);
     }
     // gold finial on the mast tip
