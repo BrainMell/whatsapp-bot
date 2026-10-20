@@ -6,8 +6,29 @@
 //   L2 MEMORY     — per-chat ring buffer of live group chatter (ambient
 //                   awareness) + long-term people-facts via the shared system
 //                   KV (Mongo-backed, `_shared_persona_facts`).
-//   L3 PERSONA    — strong human system prompt: real-guy voice rules, energy
-//                   mirroring, honest uncertainty, anti-AI-isms, language match.
+//   L3 PERSONA    — REALGUY v2 (owner 2026-10-20 round 2: "it doesn't even have
+//                   joker from persona's energy", "it's making stuff up", "build
+//                   on the old system"): builds ON the old chat pipeline instead
+//                   of replacing it — botConfig.getContentDescription()
+//                   ("You are Joker from Persona 5.") anchors the prompt FIRST,
+//                   then the researched layers on top:
+//                     · persona card   — concrete Joker traits (SillyTavern
+//                       method: description + short trait anchor)
+//                     · identity rules — NOT a dev: never claims to have
+//                       built/coded/tested anything (v1's "you built the game
+//                       bot" line was the exact hallucination fuel owner caught)
+//                     · grounding      — the old system's 9 conversational
+//                       safeguards (no invented events, topic acknowledgment,
+//                       no parroting...) ported into the persona turn
+//                     · few-shot exemplars — 7 pinned voice exchanges (the #1
+//                       weak-model layer per promptingguide/PromptHub/SillyTavern:
+//                       show don't tell, positive patterns only)
+//                     · emoji protocol — Gen Z habits research: usually NO
+//                       emojis, one max, only 💀😭🤨👀🙄😏; 😂/👍 read old,
+//                       😎🤖💥🫡✨🚀 are documented AI tells. Enforced
+//                       DETERMINISTICALLY by sanitizeEmoji() (strip all, then
+//                       ~12% chance to re-add one allowlist emoji) so a weak
+//                       model can never leak the banned set.
 //   L4 TOOLS      — weak-model function calling via inline tags it can emit
 //                   "when it feels like it": [SEARCH: q] → keyless web backends
 //                   (Bing RSS → DDG-lite → Wikipedia, same parsers as .j
@@ -44,6 +65,16 @@ const TURN_BACKOFF_MS = [800, 1600];
 const SEARCH_RESULT_CAP_CHARS = 700;
 const FACTS_KEY = '_shared_persona_facts';
 const FACTS_CAP_PER_CHAT = 30;
+// 💡 REALGUY v2 emoji protocol (owner: "set up a system where it doesn't usually
+// use emojis but not cool guy glasses and explosions like that"). Research:
+// Gen Z laughs with 💀 (😂 reads millennial), 👍 reads hostile, sparse ironic
+// use is the register; excessive emoji is a documented AI indicator (Netcraft
+// 2026). So: strip EVERY emoji from model output, then re-add at most ONE
+// allowlist emoji ~12% of the time. Banned tells can never appear.
+const EMOJI_ALLOW = ['💀', '😭', '🤨', '👀', '🙄', '😏'];
+const EMOJI_CHANCE = 0.12;
+const EMOJI_BANNED = ['😎', '🤖', '💥', '🫡', '✨', '🚀', '🎉', '🔥', '😂', '👍'];
+const EMOJI_STRIP_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{2300}-\u{23FF}\u{FE0E}\u{FE0F}]/gu;
 // Invisible bot-family marker (same zero-width space engine.js tags on every
 // send — lets sibling-bot/self filters recognize our messages on echo paths).
 const BOT_MARKER = '\u200B';
@@ -62,6 +93,10 @@ function initPersona(d) {
   deps.smartGroqCall = d.smartGroqCall; // engine's rotating Groq caller
   deps.modelFn = d.modelFn || (() => null); // (msgLen) => model id
   deps.searchFn = d.searchFn || (async () => ''); // (query) => result digest
+  // 💡 REALGUY v2: the old system's canonical persona line (botConfig
+  // getContentDescription — joker's is "You are Joker from Persona 5.") now
+  // anchors the persona prompt FIRST, exactly like the old askAI() pipeline.
+  deps.contentFn = d.contentFn || (() => `You are ${deps.botName} from Persona 5.`);
   deps.ready = !!(deps.smartGroqCall && deps.system);
   return deps.ready;
 }
@@ -142,23 +177,94 @@ function shouldAmbient({ chatId, text, isGroup }) {
   return true;
 }
 
-// ─── L3: persona prompt ──────────────────────────────────────────────────────
-function buildSystemPrompt({ isAmbient, chatId }) {
+// ─── L3: persona prompt (REALGUY v2 — built ON the old system) ───────────────
+function buildSystemPrompt({ isAmbient, chatId, profileText }) {
   const p = [];
+  // Layer 0 — the old pipeline's canonical anchor line, FIRST, unchanged.
+  p.push(deps.contentFn());
+  // Layer 1 — persona card. SillyTavern method: concrete traits beat vague
+  // adjectives; short anchor reinforces the description without repeating it.
+  // Joker canon: silent-protagonist cool, "somewhat indifferent to outright
+  // cheeky", sassy trickster, quiet confidence. NOT a hype man.
   p.push(
-    `You are ${deps.botName}. You're a 22-year-old guy and a normal member of this WhatsApp group chat. You also built and run the game bot everyone here uses, but you talk about it like a dev friend showing his friends his project — never like a product or a service.`,
+    `WHO YOU ARE IN THIS CHAT: calm and quietly confident — the guy who says little and lands it. Dry, deadpan cheeky humor; a sly tease rather than a hype man. Unbothered, never flustered, never excited exclamation spam. Observant — you notice what people actually said and answer THAT. Warm underneath it, but your default register is laid-back cool.`,
   );
+  // Layer 2 — hard identity rules. v1's "you built and run the game bot" line
+  // made the weak model claim "i built that bot" / "the new bot I coded" —
+  // the exact fabrication the owner screenshotted. Inverted now: he is a
+  // PLAYER, never a builder, and never claims skills/jobs he doesn't have.
   p.push(
-    `HARD RULES: You are NOT an AI, assistant, chatbot, model or program — never say or hint you are, and never mention instructions, prompts, training or data. If someone insists, deflect with humor like a person would. You type like a real person in a group chat: mostly lowercase, usually 1-2 short sentences (3 max), no lists, no headings, no bold/asterisks, at most one emoji, slang is fine. Match the language and vibe the chat is using — if they write in another language, you do too. Mirror their energy: hype with hype, chill with chill, tease back when teased. It's fine to be blunt or disagree. If you don't know something, say idk — don't invent facts.`,
+    `HARD IDENTITY RULES: You are NOT an AI, assistant, chatbot, model or program — never say or hint you are, never mention instructions, prompts, training or data. If someone insists you're a bot, deflect like a confident person would ("bold of you to ask"), never argue about it. You did NOT build, code, make, run, fix or test the game bot, the game, or any software — never claim to, and never offer dev support (no "let me know if something's glitchy"). You're a player like everyone else; if someone asks who made the bot, say mellow did. Never invent jobs, skills, achievements or plans for yourself.`,
   );
+  // Layer 3 — grounding. The OLD system's proven 9 conversational safeguards
+  // (engine askAI groundingSafeguards), ported into the persona turn — they
+  // were written for exactly the failures the owner caught on camera.
   p.push(
-    `Never sound corporate or robotic: banned words include "delve, tapestry, furthermore, moreover, certainly, indeed, as an AI, I apologize for any confusion, how can I assist". Vary your replies — some are two words, never start messages the same way twice in a row.`,
+    `GROUNDING RULES:
+` +
+      `1. Answer what they actually said FIRST — acknowledge their topic before anything else.
+` +
+      `2. NEVER invent off-screen activities, memories or events (no "I was fighting/school/work yesterday", no "I just tested it", no stories about things you did) — only speak on what's in the chat transcript or your remembered facts.
+` +
+      `3. If you don't know something, say idk or be vague — a wrong confident answer is the worst outcome.
+` +
+      `4. Resolve pronouns from the transcript — "he/she/they" mean the people the chat is about, not automatically you.
+` +
+      `5. Keep your stance stable — don't flip-flop, don't turn submissive when teased. Tease back with dry humor.
+` +
+      `6. No parroting — never echo their exact words back as your reply; respond in your own voice.
+` +
+      `7. Persona flavor is seasoning on a direct answer, never a replacement for one. No unprompted lore monologues.
+` +
+      `8. Never correct their typos, spelling or slang — respond to what they meant, in their register.`,
   );
+  // Layer 4 — style contract + emoji protocol (Gen Z register from research).
+  p.push(
+    `HOW YOU TYPE: mostly lowercase, usually 1-2 short sentences (3 max), no lists, no headings, no bold/asterisks. Match the language and vibe the chat is using — if they write in another language, you do too. Mirror energy without imitating words. It's fine to be blunt or disagree. Some replies are two words.
+` +
+      `EMOJIS: you almost never use them. At most one, and only 💀 😭 🤨 👀 🙄 😏. NEVER 😂 👍 (they read old) and NEVER 😎 🤖 💥 🫡 ✨ 🚀 🎉 🔥 (they scream bot). No emoji is the correct default.
+` +
+      `Never sound corporate or robotic: banned phrases include "delve, tapestry, furthermore, moreover, certainly, indeed, as an AI, I apologize for any confusion, how can I assist, it's pretty lit, let me know if something's glitchy, just showing off". Vary your replies — never start messages the same way twice in a row.`,
+  );
+  // Layer 5 — few-shot exemplars, THE weak-model layer (research: few-shot
+  // beats zero-shot especially on small models; positive patterns only,
+  // consistent format). Pinned to the exact voice we want.
+  p.push(
+    `EXAMPLES OF YOUR EXACT VOICE (reply like these):
+` +
+      `them: yo
+you: yo.
+` +
+      `them: Joker ?
+you: that's me. what's up
+` +
+      `them: are you a bot?
+you: bold of you to ask. i'm just a guy with good timing
+` +
+      `them: say less? what?
+you: my bad, meant i'm with you. what's up
+` +
+      `them: you coded this whole bot right?
+you: nah i just play it. mellow's the one who builds stuff
+` +
+      `them: did you see the game last night?
+you: nah i missed it, was asleep. was it good?
+` +
+      `them: bro you're so quiet
+you: i talk when there's something worth saying`,
+  );
+  // Layer 6 — tools (unchanged from v1; owner's Task-11 spec).
   p.push(
     `TOOLS you can use when you feel like it (exact syntax, on their own line):\n` +
       `[SEARCH: short query] — output this ALONE and stop, if you need current or factual info. You'll be handed what you found, then answer casually — like you already knew it or just checked your phone. NEVER mention searching, results, sources, links or "according to".\n` +
       `[REMEMBER: their name | short fact] — note something worth remembering about someone; you can also reply normally in the same message.`,
   );
+  // Layer 7 — memory + the old system's profile layer (passed from engine.js).
+  if (profileText && String(profileText).trim()) {
+    p.push(
+      `--- PERSON YOU'RE TALKING TO ---\n${String(profileText).trim().slice(0, 900)}\nUse this naturally in conversation. Don't recite it.`,
+    );
+  }
   const facts = factsBlock(chatId);
   if (facts) p.push(`--- THINGS YOU REMEMBER ABOUT PEOPLE ---\n${facts}`);
   const transcript = transcriptBlock(chatId);
@@ -188,6 +294,23 @@ function parseToolCalls(raw) {
   return { search, remember };
 }
 
+// 💡 REALGUY v2: deterministic emoji enforcement (see EMOJI_* tunables).
+// Strips every pictographic emoji the model emits, then re-adds AT MOST one
+// allowlist emoji ~12% of the time — "doesn't usually use emojis", and the
+// 😎💥🤖 tell-set is mathematically impossible to leak.
+function sanitizeEmoji(text) {
+  let t = String(text || '').replace(EMOJI_STRIP_RE, '');
+  t = t
+    .split('\n')
+    .map((l) => l.replace(/ {2,}/g, ' ').trim())
+    .join('\n')
+    .trim();
+  if (t.length > 2 && Math.random() < EMOJI_CHANCE) {
+    t += ' ' + EMOJI_ALLOW[Math.floor(Math.random() * EMOJI_ALLOW.length)];
+  }
+  return t;
+}
+
 function cleanReplyText(raw) {
   let t = String(raw || '');
   t = t.replace(SEARCH_RE, ' ').replace(REMEMBER_RE, ' ').replace(SILENT_RE, ' ');
@@ -196,6 +319,8 @@ function cleanReplyText(raw) {
   t = t.replace(/\n{3,}/g, '\n\n').trim();
   // strip wrapping quotes the model sometimes adds
   if (/^["“].*["”]$/s.test(t)) t = t.slice(1, -1).trim();
+  // 💡 REALGUY v2: emoji protocol is deterministic (see sanitizeEmoji)
+  t = sanitizeEmoji(t);
   return t;
 }
 
@@ -287,11 +412,11 @@ function formatToolResults(results) {
 }
 
 // ─── The turn: generate (with one tool round) → clean → chunk ────────────────
-async function buildTurn({ chatId, senderName, text, isAmbient }) {
+async function buildTurn({ chatId, senderName, text, isAmbient, profileText }) {
   if (!deps.ready || !chatId) return null;
   const userText = String(text || '').slice(0, 1200);
   const messages = [
-    { role: 'system', content: buildSystemPrompt({ isAmbient, chatId }) },
+    { role: 'system', content: buildSystemPrompt({ isAmbient, chatId, profileText }) },
     {
       role: 'user',
       content: isAmbient
@@ -504,6 +629,7 @@ module.exports = {
   factsBlock,
   parseToolCalls,
   cleanReplyText,
+  sanitizeEmoji,
   makeKeylessSearcher,
-  _internals: { getFactsMap, formatToolResults, transcriptBlock },
+  _internals: { getFactsMap, formatToolResults, transcriptBlock, EMOJI_ALLOW, EMOJI_BANNED, EMOJI_CHANCE },
 };

@@ -67,9 +67,12 @@ const mixed = 'hmm let me think\n[SEARCH: who won the 2022 world cup]\n[REMEMBER
 const parsed = persona.parseToolCalls(mixed);
 check('SEARCH tag parsed', parsed.search === 'who won the 2022 world cup');
 check('REMEMBER tag parsed (name|fact)', parsed.remember.length === 1 && parsed.remember[0].name.trim() === 'Mellow' && parsed.remember[0].fact.includes('pineapple'));
+// (REALGUY v2: emoji re-add is random — pin it OFF for exact-string checks)
+Math.random = () => 0.99;
 const cleaned = persona.cleanReplyText(mixed);
 check('cleanReplyText strips all tags + markdown', !cleaned.includes('[SEARCH') && !cleaned.includes('[REMEMBER') && !cleaned.includes('**'));
 check('cleanReplyText strips bot: prefix', persona.cleanReplyText('**Bot:** yeah lol') === 'yeah lol');
+Math.random = realRandom;
 
 // ─── 7. facts KV (L2, Mongo-backed via shared system) ────────────────────────
 persona.rememberFact(CH, 'Mellow', 'hates pineapple on pizza');
@@ -161,6 +164,83 @@ check('rememberFact rejects junk', persona.rememberFact('', '', '') === false);
   const ch3 = await persona.maybeAmbientChime({ sock: sock3, chatId: 'fresh@g.us', isGroup: true, senderName: 'M', text: 'roll should reject this one entirely' });
   check('ambient roll rejection → silence', ch3 === null);
   Math.random = realRandom;
+
+  // ─── 16. REALGUY v2: persona prompt layers (owner round 2) ────────────────
+  groqCalls = [];
+  groqScript = ['yo.'];
+  await persona.buildTurn({ chatId: CH, senderName: 'Mellow', text: 'yo', isAmbient: false });
+  const sys2 = groqCalls[0].messages[0].content;
+  check('L0: canonical Persona 5 anchor rides FIRST',
+    sys2.startsWith('You are joker from Persona 5.'));
+  check('L2: dev-claim hallucination fuel REMOVED', !sys2.includes('You also built') && !sys2.includes('You also built and run'));
+  check('L2: identity rule present (never built/coded/tested)',
+    sys2.includes('You did NOT build, code, make, run, fix or test'));
+  check('L2: redirects bot credit to mellow', sys2.includes("mellow's the one who builds stuff"));
+  check('L2: no dev-support offers ("let me know if something\'s glitchy" banned)',
+    sys2.includes("let me know if something's glitchy"));
+  check('L3: grounding safeguards ported (no invented off-screen events)',
+    sys2.includes('NEVER invent off-screen activities, memories or events') && sys2.includes('no "I just tested it"'));
+  check('L3: topic-acknowledgment rule present', sys2.includes('Answer what they actually said FIRST'));
+  check('L4: Gen Z emoji protocol in prompt', sys2.includes('EMOJIS: you almost never use them') && sys2.includes('only 💀 😭 🤨 👀 🙄 😏'));
+  check('L4: banned AI-tell emojis named in prompt', sys2.includes('NEVER 😎 🤖 💥 🫡 ✨ 🚀 🎉 🔥'));
+  check('L5: few-shot exemplar block present (7 exchanges)',
+    (sys2.match(/^you: /gm) || []).length === 7 && sys2.includes('EXAMPLES OF YOUR EXACT VOICE'));
+  check('L5: bot-deflection exemplar pinned', sys2.includes("bold of you to ask. i'm just a guy with good timing"));
+  check('L5: anti-non-sequitur exemplar (say less repair)', sys2.includes("my bad, meant i'm with you"));
+  check('L7: profileText layer rides into prompt when provided', (() => {
+    groqCalls = []; groqScript = ['sup'];
+    return persona.buildTurn({ chatId: CH, senderName: 'Mellow', text: 'hey', isAmbient: false, profileText: 'Nickname: Mel; mains samurai' })
+      .then(() => groqCalls[0].messages[0].content.includes("PERSON YOU'RE TALKING TO") && groqCalls[0].messages[0].content.includes('mains samurai'));
+  })());
+
+  // ─── 17. REALGUY v2: deterministic emoji sanitizer ─────────────────────────
+  const emojiRiddled = 'so sick 😎💥🤖 let\'s go 🔥✨🎉';
+  Math.random = () => 0.99; // never re-add
+  const stripped = persona.sanitizeEmoji(emojiRiddled);
+  check('sanitizer strips ALL model emojis (banned set can never leak)',
+    stripped === "so sick let's go" && !persona._internals.EMOJI_BANNED.some((e) => stripped.includes(e)));
+  check('sanitizer keeps plain text intact', persona.sanitizeEmoji('lol ok bet') === 'lol ok bet');
+  check('sanitizer preserves the BOT_MARKER (\\u200B)', persona.sanitizeEmoji('\u200Bplain reply') === '\u200Bplain reply');
+  Math.random = () => 0; // always re-add
+  const enriched = persona.sanitizeEmoji('nice one bro');
+  check('sanitizer re-adds exactly ONE allowlist emoji at 100% roll',
+    persona._internals.EMOJI_ALLOW.includes(enriched.split(' ').pop()) &&
+    (enriched.match(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/gu) || []).length === 1);
+  Math.random = realRandom;
+  // statistical envelope: 300 real-random runs → emoji rate ≈ 12% (bounded),
+  // never more than one emoji, never a banned one
+  let emojiCount = 0;
+  const multiOrBanned = [];
+  for (let i = 0; i < 300; i++) {
+    const out = persona.sanitizeEmoji('some normal human sentence here');
+    const found = out.match(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/gu) || [];
+    if (found.length > 0) emojiCount++;
+    if (found.length > 1 || found.some((f) => persona._internals.EMOJI_BANNED.includes(f)))
+      multiOrBanned.push(out);
+  }
+  const emojiRate = emojiCount / 300;
+  check(`sanitizer statistical envelope: rate ${(emojiRate * 100).toFixed(1)}% ∈ [2%,30%]`,
+    emojiRate >= 0.02 && emojiRate <= 0.30);
+  check('sanitizer never emits >1 emoji or banned glyphs across 300 runs', multiOrBanned.length === 0);
+  Math.random = () => 0.99;
+  check('cleanReplyText end-to-end: 😎💀 input → clean text out',
+    persona.cleanReplyText('heh 😎 nice 💀') === 'heh nice');
+  Math.random = realRandom;
+
+  // ─── 18. REALGUY v2: engine.js source pins (intro restore + fast-path kill)
+  const engineSrc = require('fs').readFileSync(require('path').join(__dirname, '..', 'core', 'engine.js'), 'utf8');
+  check('old .on intro restored verbatim',
+    engineSrc.includes('AI is now *enabled* in this ${isDM ? "DM" : "chat"}!'));
+  check('old .off message restored verbatim',
+    engineSrc.includes('AI is now *disabled* in this ${isDM ? "DM" : "chat"}!'));
+  check('v1 intro slop REMOVED ("mention me, reply to me, or just talk")',
+    !engineSrc.includes("mention me, reply to me, or just talk"));
+  check("v1 .off slop REMOVED (\"I'm out of this\")", !engineSrc.includes("I'm out of this"));
+  check('canned fast-path REMOVED (no _isShort fastResponses bark)',
+    !engineSrc.includes('const _isShort'));
+  check('contentFn wired (getContentDescription anchors persona)',
+    engineSrc.includes('contentFn: () => botConfig.getContentDescription()'));
+  check('profileText wired into persona buildTurn', engineSrc.includes('profileText: _profileText'));
 
   console.log(fails === 0 ? '\nALL CHECKS PASSED' : `\n${fails} CHECK(S) FAILED`);
   // let stdout drain (process.exit on a pipe truncates buffered console.log)

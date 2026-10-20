@@ -5220,6 +5220,9 @@ What to do:
       smartGroqCall,
       modelFn: (len) => selectModel(len, false),
       searchFn: personaEngine.makeKeylessSearcher(aiOverview, axios),
+      // 💡 REALGUY v2: the old pipeline's canonical persona line anchors the
+      // prompt FIRST again ("You are Joker from Persona 5.")
+      contentFn: () => botConfig.getContentDescription(),
     });
     console.log(
       _personaReady
@@ -31251,10 +31254,12 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                     }
                     enabledChats.add(chatId);
                     saveEnabledChats();
-                    // 💡 REALGUY: confirmation in the persona's own voice
+                    // 💡 REALGUY v2 (owner 2026-10-21: "use the old intro message,
+                    // wtf is this slop"): the v1 persona-voice confirmation is
+                    // gone — restore the classic system message verbatim.
                     const replyText =
                       BOT_MARKER +
-                      `yo — ${botConfig.getBotName()} is active in this ${isDM ? "chat" : "group"} now. mention me, reply to me, or just talk — I'll jump in 🫡`;
+                      `🤖 ${botConfig.getBotName()} AI is now *enabled* in this ${isDM ? "DM" : "chat"}!`;
                     await sock.sendMessage(chatId, { text: replyText });
                     return;
                   }
@@ -31274,10 +31279,12 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                     }
                     enabledChats.delete(chatId);
                     saveEnabledChats();
+                    // 💡 REALGUY v2: classic disabled message restored (pairs
+                    // with the restored .on intro above)
                     await sock.sendMessage(chatId, {
                       text:
                         BOT_MARKER +
-                        `aight, I'm out of this ${isDM ? "chat" : "group"} — ping me with ${botConfig.getPrefix()}on when you want me back 🫡`,
+                        `🤖 ${botConfig.getBotName()} AI is now *disabled* in this ${isDM ? "DM" : "chat"}!`,
                     });
                     return;
                   }
@@ -33416,24 +33423,13 @@ _(or reply to their message)_
                     if (Date.now() - _lastAiCall < AI_COOLDOWN_MS) return;
                     aiUserCooldowns.set(_ck, Date.now());
 
-                    // --- API Conservation: short-message fast-path (skip API) ---
-                    const _pWords = prompt.trim().split(/\s+/);
-                    const _isShort = _pWords.length <= 2 && !prompt.includes('?') && !(mentionedJids && mentionedJids.length);
-                    if (_isShort && Math.random() < 0.6) {
-                      const _qr = botConfig.getFastResponses();
-                      await reply(BOT_MARKER + _qr[Math.floor(Math.random() * _qr.length)]);
-                      
-                      // Also occasionally send a sticker with the fast response
-                      const fastMood = await detectMood(prompt);
-                      const fastStickerPath = getRandomSticker(fastMood);
-                      const fastStickerChance = fastMood === "neutral" ? 0.15 : 0.40;
-                      if (fastStickerPath && fs.existsSync(fastStickerPath) && Math.random() < fastStickerChance) {
-                        try {
-                          await sock.sendMessage(chatId, { sticker: fs.readFileSync(fastStickerPath) });
-                        } catch (e) {}
-                      }
-                      return;
-                    }
+                    // 💡 REALGUY v2 (owner 2026-10-21): the old canned fast-path
+                    // (≤2 words → 60% chance of a random fastResponses bark) is
+                    // GONE — it's what answered "Yo joker" with "say less." and
+                    // made him look broken. Direct messages now always get a
+                    // real reply; the persona's few-shot exemplars keep short
+                    // prompts producing short replies, and the 8s cooldown +
+                    // response cache below still guard API spend.
 
                     // --- API Conservation: 5-min response cache ---
                     const _normP = promptWithReply.toLowerCase().trim().replace(/\s+/g, ' ');
@@ -33461,6 +33457,20 @@ _(or reply to their message)_
                     // chunked short sends, and SILENT failure handling
                     // ("instead of telling the user, try again 2 more times in
                     // the background" — both on generation and on every send).
+                    // 💡 REALGUY v2: the old system's user-profile layer rides
+                    // along too (same formatProfileForAI text askAI() used).
+                    let _profileText = "";
+                    try {
+                      if (
+                        typeof loadUserProfile === "function" &&
+                        typeof formatProfileForAI === "function"
+                      ) {
+                        const _up = loadUserProfile(senderJid);
+                        if (_up)
+                          _profileText =
+                            formatProfileForAI(_up, senderJid) || "";
+                      }
+                    } catch (e) {}
                     const _turn = await personaEngine.silentRetryTurn(
                       () =>
                         personaEngine.buildTurn({
@@ -33468,6 +33478,7 @@ _(or reply to their message)_
                           senderName: m.pushName || "someone",
                           text: promptWithReply,
                           isAmbient: false,
+                          profileText: _profileText,
                         }),
                       { retryOnNull: true }, // an empty direct turn is a failure — retry it
                     );
