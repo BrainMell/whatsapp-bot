@@ -176,6 +176,84 @@
      "name": "Hunting Gate"
     }
    ]
+  },
+  {
+   "id": "market",
+   "name": "Market",
+   "fw": 3,
+   "fh": 3,
+   "levels": [
+    {
+     "level": 1,
+     "sprite": "base_market_l1",
+     "price": 14000,
+     "name": "Market Stall"
+    },
+    {
+     "level": 2,
+     "sprite": "base_market_l2",
+     "price": 22000,
+     "name": "Trading Post"
+    },
+    {
+     "level": 3,
+     "sprite": "base_market_l3",
+     "price": 36000,
+     "name": "Grand Bazaar"
+    }
+   ]
+  },
+  {
+   "id": "barracks",
+   "name": "Summons Barracks",
+   "fw": 3,
+   "fh": 3,
+   "levels": [
+    {
+     "level": 1,
+     "sprite": "base_barracks_l1",
+     "price": 18000,
+     "name": "Barracks"
+    },
+    {
+     "level": 2,
+     "sprite": "base_barracks_l2",
+     "price": 26000,
+     "name": "War Camp"
+    },
+    {
+     "level": 3,
+     "sprite": "base_barracks_l3",
+     "price": 42000,
+     "name": "War Citadel"
+    }
+   ]
+  },
+  {
+   "id": "guildhall",
+   "name": "Guild Hall",
+   "fw": 3,
+   "fh": 3,
+   "levels": [
+    {
+     "level": 1,
+     "sprite": "base_guildhall_l1",
+     "price": 25000,
+     "name": "Guild Banner"
+    },
+    {
+     "level": 2,
+     "sprite": "base_guildhall_l2",
+     "price": 35000,
+     "name": "Guild Hall"
+    },
+    {
+     "level": 3,
+     "sprite": "base_guildhall_l3",
+     "price": 50000,
+     "name": "Grand Guild Hall"
+    }
+   ]
   }
  ]
 }

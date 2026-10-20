@@ -174,6 +174,11 @@ function mainSpriteOf(st, lvl, team) {
         if (K.hasSprite('struct_mine_cave', 'iso')) return { name: ['struct_mine_cave', 'struct_mine_timber', 'struct_mine_deep'][lvl - 1], sc: lvl === 1 ? 1.95 : lvl === 2 ? 1.7 : 1.45, dx: 0.5, dz: 0.7 };
         return { name: 'building_mine_' + team, sc: lvl === 1 ? 1.35 : lvl === 2 ? 1.6 : 1.85 };
     }
+    if (T === 'market')                                         // owner 2026-10-20: "a market model from the clash assets"
+        return lvl === 1 ? { name: 'house_shop_' + team, sc: 1.5 } : { name: 'building_market_' + team, sc: lvl === 2 ? 1.55 : 1.9 };
+    if (T === 'barracks') return { name: 'building_barracks_' + team, sc: lvl === 1 ? 1.4 : lvl === 2 ? 1.65 : 1.95 };
+    if (T === 'guildhall')                                      // your guild's seat: banner → hall → castle
+        return lvl === 1 ? { name: 'coc_flag_rally', sc: 1.15 } : { name: lvl === 2 ? 'building_church_' + team : 'building_castle_' + team, sc: lvl === 2 ? 1.55 : 1.6 };
     return null;
 }
 function centroid(cells) {
@@ -257,10 +262,33 @@ function buildWorld(state, cel = null) {
         }
     }
     // ── the lake in the (per-base mirrored) NE nook — the pond pier is forced over water so any nook works ──
+    // owner 2026-10-20 ("fix the pond generation, the angles should be different depending"): the old
+    // fill was a fixed round hexDist blob — every base's pond read as the SAME circle. The lake is now
+    // a SEEDED rotated superellipse: each base rolls its own bearing, elongation and ragged shoreline,
+    // so ponds point different directions on different bases.
     const [lc, lr] = hc(MX(LAKE_C[0]), LAKE_C[1]);
+    const LW = K.hexWorld(lc, lr);
+    const lakeAng = rng() * Math.PI;                              // bearing of the long axis (per base)
+    const lakeStretch = 1.25 + rng() * 0.95;                      // 1.25x .. 2.2x elongation
+    const lakeR = 3.4 + rng() * 0.8;                              // mean radius in world units
+    const lakeCos = Math.cos(lakeAng), lakeSin = Math.sin(lakeAng);
+    const lakeEdge = (c, r) => vnoise(seed + 911, c * 0.55, r * 0.55) * 1.1 - 0.55;
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-        const d = K.hexDist(lc, lr, c, r);
-        if (d <= 2 || (d === 3 && rng() < 0.55)) { const k = w.cell[r][c]; k.water = true; k.lake = true; }
+        const Wp = K.hexWorld(c, r);
+        const dxc = Wp.x - LW.x, dzc = Wp.z - LW.z;
+        if (Math.abs(dxc) > 8 || Math.abs(dzc) > 8) continue;     // cheap pre-cull
+        const rx = (dxc * lakeCos - dzc * lakeSin) / lakeStretch; // long axis → rotated x
+        const rz = dxc * lakeSin + dzc * lakeCos;
+        if (Math.sqrt(rx * rx + rz * rz) <= lakeR + lakeEdge(c, r)) { const kk = w.cell[r][c]; kk.water = true; kk.lake = true; }
+    }
+    // pier guarantee: the pond boardwalk extends off the plot's SE corner — keep that line water.
+    // (implicit when the lake was a fixed blob; a rotated/stretched lake can swing away from it)
+    {
+        const [pc0, pr0] = hc(LAYOUT.pond.x + LAYOUT.pond.fw - 1, LAYOUT.pond.y + LAYOUT.pond.fh - 1);
+        for (let i = 0; i <= 4; i++) {
+            const kk = w.at(pc0 + i, pr0);
+            if (kk) { kk.water = true; kk.lake = true; kk.river = false; }
+        }
     }
     if (coastal) {                                      // the lake is joined to the ocean by a channel
         const [tc, tr] = hc(MX(23), 4);
@@ -531,6 +559,26 @@ function buildWorld(state, cel = null) {
         }
     }
 
+    // ── the hunting camp (owner 2026-10-20: "you'll have to make the hunting grounds") ──
+    // the west woods were just trees — now they hold a real hunter's camp: archery
+    // target, canvas tent, torch line, sometimes a weapon rack. Placed BEFORE the
+    // wilds fill so the claimed cells stay clear of forest overgrowth.
+    {
+        const hzp = LAYOUT.hunting.zone;
+        const campProp = (name, gx, gy, o = {}) => {
+            const [cc, rr] = hc(MX(hzp.x + gx), hzp.y + gy);
+            if (!w.inb(cc, rr)) return;
+            const kk = w.cell[rr][cc];
+            if (kk.water || kk.coast || kk.road || used.has(keyOf(cc, rr))) return;
+            w.put(name, cc, rr, { flip: flip(), ...o });
+            claim(cc, rr);
+        };
+        campProp('target', 1, 5 + Math.floor(rng() * 2), { sc: 1.15 });        // archery butt in a clearing
+        campProp('tent', 2, 7 + Math.floor(rng() * 2), { sc: 1.05 });          // the hunter's canvas
+        campProp('coc_torch', 0, 6 + Math.floor(rng() * 3), { sc: 0.9 });      // torch by the path
+        if (rng() < 0.55) campProp('weaponrack', 3, 11 + Math.floor(rng() * 2), { sc: 0.9 });
+    }
+
     // ── fill the rest of the grid with biome wilds (village green = light, inside the palisade; far field = heavy) ──
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
         const k = w.cell[r][c];
@@ -651,6 +699,21 @@ function buildWorld(state, cel = null) {
                     break;
                 }
                 P('building_mine_' + team, { sc: lvl === 1 ? 1.35 : lvl === 2 ? 1.6 : 1.85 });
+                break;
+            case 'market':                                                // the Clash market pack (owner 2026-10-20)
+                if (lvl === 1) { P('house_shop_' + team, { sc: 1.5 }); P('crate_open', { dx: 1.5, dz: 0.9 }); P('barrel', { dx: -1.4, dz: 1.0 }); P('sack', { dx: 1.2, dz: -0.8 }); }
+                else if (lvl === 2) { P('building_market_' + team, { sc: 1.55 }); P('crate_A_small', { dx: 1.6, dz: 0.9 }); P('barrel', { dx: -1.5, dz: 1.1 }); P('sack', { dx: -0.9, dz: -1.2 }); P('wheelbarrow', { dx: 0.9, dz: 1.8, sc: 0.9 }); }
+                else { P('building_market_' + team, { sc: 1.9 }); P('crate_A_big', { dx: 1.7, dz: 0.9 }); P('crate_B_big', { dx: -1.7, dz: 1.0 }); P('barrel', { dx: -1.2, dz: -1.3 }); P('sack', { dx: 1.0, dz: -1.5 }); P('coc_flag_rally', { dx: -2.2, dz: 0.2, sc: 0.85 }); P('wheelbarrow', { dx: 1.1, dz: 1.9, sc: 0.95 }); }
+                break;
+            case 'barracks':                                              // the summons muster yard
+                if (lvl === 1) { P('building_barracks_' + team, { sc: 1.4 }); P('weaponrack', { dx: 1.5, dz: 0.9 }); P('target', { dx: -1.5, dz: 1.0, sc: 0.95 }); }
+                else if (lvl === 2) { P('building_barracks_' + team, { sc: 1.65 }); P('weaponrack', { dx: 1.6, dz: 1.0 }); P('target', { dx: -1.6, dz: 1.1, sc: 1.0 }); P('tent', { dx: 0.9, dz: -1.6, sc: 0.9 }); P('coc_torch', { dx: -0.9, dz: -1.5, sc: 0.9 }); }
+                else { P('building_barracks_' + team, { sc: 1.95 }); P('weaponrack', { dx: 1.8, dz: 1.0 }); P('target', { dx: -1.8, dz: 1.2, sc: 1.05 }); P('coc_flag_rally', { dx: -2.3, dz: -0.2, sc: 0.9 }); P('coc_statue_mighty', { dx: 2.2, dz: -0.4, sc: 0.6 }); P('coc_torch', { dx: 0.8, dz: -1.7, sc: 0.95 }); }
+                break;
+            case 'guildhall':                                             // your guild's seat — banner → hall → castle
+                if (lvl === 1) { P('coc_flag_rally', { sc: 1.15 }); P('tent', { dx: 1.3, dz: 1.1, sc: 1.0 }); P('barrel', { dx: -1.3, dz: 0.9 }); P('coc_torch', { dx: -1.1, dz: -1.2, sc: 0.9 }); }
+                else if (lvl === 2) { P('building_church_' + team, { sc: 1.55 }); P('coc_flag_rally', { dx: 1.9, dz: 0.6, sc: 0.85 }); P('barrel', { dx: -1.5, dz: 1.0 }); P('coc_torch', { dx: -1.2, dz: -1.1, sc: 0.9 }); }
+                else { P('building_castle_' + team, { sc: 1.6 }); P('flag_' + team, { dx: 2.0, dz: 0.4, sc: 0.9 }); P('coc_statue_dragon', { dx: -2.1, dz: 0.6, sc: 0.6, flip: true }); P('coc_torch', { dx: 0.9, dz: -1.7, sc: 0.95 }); }
                 break;
             case 'pond': {                                              // the lakeside boardwalk: a pier out over the water
                 const [sc1, sr1] = hc(st.x + def.fw - 1, st.y + def.fh - 1);
@@ -957,4 +1020,93 @@ async function renderBaseImage(state, opts = {}) {
     return out;
 }
 
-module.exports = { LAYOUT, N, FRAMES, renderFrame, renderBaseImage, encodeFramesToMp4, structDef, structures };
+// ═══════════════════════════════════════════════════════════════════════════
+//  STRUCTURE CLOSE-UP (owner 2026-10-20: ".j base <index> … zoomed in … wire
+//  it all up") — ONE structure, big: the SAME seeded world as the base map,
+//  camera tight on the structure's centroid, static overlay plate at the
+//  bottom. Overlay content is derived from (type, level) ONLY so the bake
+//  cache stays hot for the whole base — per-user numbers (energy, hunt
+//  counters, guild stats) go in the command caption, not the art.
+// ═══════════════════════════════════════════════════════════════════════════
+const STRUCT_ZOOM = { 2: 2.35, 3: 1.55 };            // final scale by footprint width (map scale is 0.44)
+const STRUCT_PANEL = {
+    house: { emoji: '🏠', flavor: 'Your hearth and home on the village green.', cta: 'base house — step inside' },
+    mines: { emoji: '⛏️', flavor: 'The quarry works day and night — strike the veins.', cta: 'mine — dig for ores' },
+    pond: { emoji: '🎣', flavor: 'Still water, fat fish — the boardwalk is ready.', cta: 'base upgrade pond — richer waters' },
+    hunting: { emoji: '🏹', flavor: 'Game aplenty beyond the gate — camp is struck.', cta: 'hunt — take the hunt' },
+    blacksmith: { emoji: '⚒️', flavor: 'Forge, repair, enhance — the anvil never cools.', cta: 'blacksmith — the anvil' },
+    medbay: { emoji: '⚕️', flavor: 'Quiet hands and clean linen mend what claws break.', cta: 'clinic — get healed' },
+    alchemy: { emoji: '⚗️', flavor: 'Bubbles, powders, recipes best not asked about.', cta: 'brew — the cauldron' },
+    market: { emoji: '🏪', flavor: 'Stalls, scales and honest(ish) prices.', cta: 'shop — browse the wares' },
+    barracks: { emoji: '🛡️', flavor: 'Your summons muster here, ready to march.', cta: 'summons — open the roster' },
+    guildhall: { emoji: '🏰', flavor: 'The charter-stone of your guild stands here.', cta: 'guild — guild matters' },
+};
+
+function drawStructurePlate(ctx, W, H, def, lv, team, k) {
+    const meta = STRUCT_PANEL[def.id] || { emoji: '🏗️', flavor: def.name, cta: 'base info — the ledger' };
+    const Hh = 168, x0 = 30, y0 = H - Hh - 26, Wp = W - 60;
+    ctx.save();
+    ctx.fillStyle = 'rgba(24,17,10,0.9)'; K.roundRect(ctx, x0, y0, Wp, Hh, 14); ctx.fill();
+    ctx.strokeStyle = '#a67c2e'; ctx.lineWidth = 2.5; K.roundRect(ctx, x0 + 4, y0 + 4, Wp - 8, Hh - 8, 10); ctx.stroke();
+    ctx.strokeStyle = 'rgba(166,124,46,0.35)'; ctx.lineWidth = 1; K.roundRect(ctx, x0 + 9, y0 + 9, Wp - 18, Hh - 18, 8); ctx.stroke();
+    ctx.textBaseline = 'middle';
+    // title row: emoji + NAME — level form (Lv.N)
+    ctx.textAlign = 'left';
+    ctx.font = '34px "Cinzel Deco", Cinzel'; ctx.fillStyle = '#ecd9a6';
+    ctx.fillText(`${meta.emoji} ${def.name}`, x0 + 26, y0 + 40);
+    ctx.font = '19px Cinzel'; ctx.fillStyle = '#c9a65a';
+    ctx.fillText(`${lv.name} · Lv.${lv.level}`, x0 + 26, y0 + 74);
+    // level pips (right)
+    const maxLv = def.levels.length;
+    for (let i = 0; i < maxLv; i++) {
+        const px = x0 + Wp - 40 - (maxLv - 1 - i) * 30;
+        ctx.beginPath(); ctx.arc(px, y0 + 40, 9, 0, Math.PI * 2);
+        ctx.fillStyle = i < lv.level ? '#e0b45c' : 'rgba(232,213,163,0.18)'; ctx.fill();
+        ctx.strokeStyle = '#a67c2e'; ctx.lineWidth = 1.5; ctx.stroke();
+    }
+    // flavor + CTA
+    ctx.font = '20px Medieval'; ctx.fillStyle = '#cbb98a';
+    ctx.fillText(meta.flavor, x0 + 26, y0 + 108);
+    ctx.font = '19px Medieval'; ctx.fillStyle = '#e6c87a';
+    ctx.fillText(`▸ ${meta.cta}`, x0 + 26, y0 + 138);
+    ctx.restore();
+}
+
+async function renderStructureCard(state, opts = {}) {
+    const type = String(opts.type || '');
+    const def = structDef(type);
+    if (!def) throw new Error(`unknown structure type: ${type}`);
+    const k = hashStr(JSON.stringify(['basestruct-v2', state.owner, state.structures, state.freePlots, realmBiome(state), type, opts.index]));
+    const hit = _renderCache.get(k);
+    if (hit && (Date.now() - hit.ts) < CACHE_TTL) return hit;
+    const out = await mediaCache.cached('basecard', k, async () => {
+        // the SAME seeded world the map draws — the close-up matches the map 1:1
+        const world = buildWorld(state, null);
+        const w = world.w;
+        let entry = Number.isInteger(opts.index) ? world.info.find((it) => it.st === (state.structures || [])[opts.index]) : null;
+        if (!entry) entry = world.info.find((it) => it.st.type === type);
+        if (!entry) throw new Error(`structure ${type} not present in this base`);
+        const lv = entry.def.levels.find((l) => l.level === entry.lvl) || entry.def.levels[0];
+        // camera: tight on the centroid; the pond pulls focus toward its pier
+        const zoom = type === 'guildhall' ? 1.42 : (STRUCT_ZOOM[entry.def.fw] || 1.55);   // guildhall: slightly wider — the castle sprite is tall
+        const focusDx = type === 'pond' ? 1.4 : 0;
+        const focusDz = type === 'hunting' ? -1.6 : 0.5;   // hunting: pull north so the woods + camp share the frame
+        w.scale = zoom;
+        w.layoutFixed(CARD_W, CARD_H, entry.cen.x + focusDx, entry.cen.z + focusDz, CARD_W / 2, CARD_H * (type === 'guildhall' ? 0.48 : 0.46));
+        const seed = hashStr(state.owner || 'base');
+        const bi = (K.biomeInfo('iso').biomes || {})[world.realm];
+        const bd = world.realm === 'isle' ? { top: '#cfe8ef', mid: '#8fc7b2', bot: '#3f7a5c' } : bi ? { top: bi.backdrop[0], mid: bi.backdrop[1], bot: bi.backdrop[2] } : { top: '#356f6a', mid: '#1f4a4c', bot: '#0d2527' };
+        const { createCanvas } = require('canvas');
+        const terrain = createCanvas(CARD_W, CARD_H), tctx = terrain.getContext('2d');
+        await w.draw(tctx, { phase: 'terrain', drawBackdrop: (c2) => { const g = c2.createLinearGradient(0, 0, 0, CARD_H); g.addColorStop(0, bd.top); g.addColorStop(0.5, bd.mid); g.addColorStop(1, bd.bot); c2.fillStyle = g; c2.fillRect(0, 0, CARD_W, CARD_H); } });
+        const objects = createCanvas(CARD_W, CARD_H), octx = objects.getContext('2d');
+        await w.draw(octx, { phase: 'objects' });
+        tctx.drawImage(objects, 0, 0);
+        drawStructurePlate(tctx, CARD_W, CARD_H, entry.def, lv, world.team, zoom);
+        return encodeOut(terrain);
+    }, { state, opts: { type, index: opts.index } }, { label: 'bake:base', timeoutMs: 90000 });
+    cachePut(_renderCache, k, out);
+    return out;
+}
+
+module.exports = { LAYOUT, N, FRAMES, renderFrame, renderBaseImage, renderStructureCard, encodeFramesToMp4, structDef, structures, buildWorld }; // buildWorld: QA hook (pond-variety probe, 2026-10-20)
