@@ -12654,9 +12654,7 @@ _💡 Reply with another number from your search list!_`.trim();
                           const __buf = await cmr.renderContinentMap({});
                           const __cap = BOT_MARKER +
                             `🌍 *ALDAFOLD* — the mortal world of the First World.\n` +
-                            `_Every guild claims its charter-stone here; member bases grow from that land._\n\n` +
-                            continentsLib.chooserText(botConfig.getPrefix()) +
-                            `\n\n🌙 The wider cosmology — First World, World Beyond, Afterlife, Abyss — \`${botConfig.getPrefix()} world cosmology\``;
+                            `_Every guild claims its charter-stone here; member bases grow from that land._`;
                           if (__buf && __buf.length > 100) await sock.sendMessage(chatId, { image: __buf, caption: __cap }, { quoted: m });
                           else await sock.sendMessage(chatId, { text: __cap }, { quoted: m });
                           return;
