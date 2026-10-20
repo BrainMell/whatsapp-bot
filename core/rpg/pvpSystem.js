@@ -553,7 +553,6 @@ async function acceptChallenge(sock, chatId, targetJid) {
 
     let startMsg =
         `${header}${modeTag}\n` +
-        `-----------\n` +
         `${orderIcon(orderFirst)} *${orderFirst.name}* \`Lv.${orderFirst.level}\` (${duelClass(orderFirst)})\n` +
         `   ❤️ [${duelHpBar(orderFirst.hp, orderFirst.maxHp)}] \`${Math.max(0, Math.floor(orderFirst.hp))}/${Math.floor(orderFirst.maxHp)}\` HP · ⚡ [${duelHpBar(orderFirst.energy, orderFirst.maxEnergy)}] \`${Math.floor(orderFirst.energy)}/${Math.floor(orderFirst.maxEnergy)}\` EN\n` +
         `${orderIcon(orderSecond)} *${orderSecond.name}* \`Lv.${orderSecond.level}\` (${duelClass(orderSecond)})\n` +
@@ -570,7 +569,6 @@ async function acceptChallenge(sock, chatId, targetJid) {
 
     startMsg += `\n⚔️ *Order:* ${orderIcon(orderFirst)} ${orderFirst.name} → ${orderIcon(orderSecond)} ${orderSecond.name} _by SPD_` +
         `\n\n🎯 *${duelState.players[duelState.turn].name}* claims the initiative!\n` + // 💡 FIX 2026-08-18: was hardcoded to p1.name even when turn=1 (P2 has higher SPD)
-        `-----------\n` +
         `⏳ _Awaiting first action..._\n` +
         `🗡️ \`${botConfig.getPrefix()} combat attack\`\n` +
         `🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
@@ -875,15 +873,15 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
             imageResult = null;
         }
         
-        const statusMsg = statusLog.join('\n');
-        // 💡 REDESIGN 2026-09-11: raid-style ASCII UI with both duelists' bars.
-        let roundMsg = `⚔️ *PVP DUEL · ROUND ${duel.round}*\n` +
-                        `-----------\n` +
-                        `${statusMsg}\n\n` +
+        const statusMsg = statusLog.map(l => `↳ ${l}`).join('\n');
+        // 💡 STYLE C VS-PANEL (2026-10-20 owner pick): same family as the
+        // battle-image captions — 🆚 header, fighter bars, ↳ action lines.
+        // No `-----------` dividers; spacing does the separation.
+        let roundMsg = `🆚 *PVP DUEL · ROUND ${duel.round}*\n` +
                         renderDuelistStatus(currentPlayer, '🔴').join('\n') + '\n' +
-                        renderDuelistStatus(opponent, '🔵').join('\n') + '\n\n' +
+                        renderDuelistStatus(opponent, '🔵').join('\n') + '\n' +
+                        (statusMsg ? `\n${statusMsg}\n` : '\n') +
                         `🎯 *@${economy.getDisplayName(nextPlayer.jid)}* - It's your turn!\n` +
-                        `-----------\n` +
                         `🗡️ \`${botConfig.getPrefix()} combat attack\`　🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
                         `🎒 \`${botConfig.getPrefix()} combat item\`　🏃 \`${botConfig.getPrefix()} combat flee\``;
 
@@ -1658,14 +1656,14 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
         imageResult = null;
     }
     
-    // 💡 REDESIGN 2026-09-11: raid-style ASCII UI with both duelists' bars.
-    let statusMsg = `⚔️ *PVP DUEL · ROUND ${duel.round}*\n` +
-                    `-----------\n` +
-                    `${actionResult}\n\n` +
+    // 💡 STYLE C VS-PANEL (2026-10-20 owner pick): bars first, then the ↳
+    // action lines — mirrors the battle-image caption family, no dividers.
+    const actionLogStr = String(actionResult || '').split('\n').map(s => s.trim()).filter(Boolean).map(l => `↳ ${l}`).join('\n');
+    let statusMsg = `🆚 *PVP DUEL · ROUND ${duel.round}*\n` +
                     renderDuelistStatus(currentPlayer, '🔴').join('\n') + '\n' +
-                    renderDuelistStatus(opponent, '🔵').join('\n') + '\n\n' +
+                    renderDuelistStatus(opponent, '🔵').join('\n') + '\n' +
+                    (actionLogStr ? `\n${actionLogStr}\n` : '\n') +
                     `🎯 *@${economy.getDisplayName(nextPlayer.jid)}* - It's your turn!\n` +
-                    `-----------\n` +
                     `🗡️ \`${botConfig.getPrefix()} combat attack\`　🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
                     `🎒 \`${botConfig.getPrefix()} combat item\`　🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Deducts 20% XP, 50% Wallet, and 1 random item!)*`;
 
@@ -1974,7 +1972,6 @@ async function finishDuel(chatId, duel, winner, loser) {
     }
 
     let msg = `🏆 *DUEL RESULT* 🏆\n`;
-    msg += `-----------\n`;
     msg += `👑 *Winner:* ${winner.name}\n`;
     msg += `💀 *Defeated:* ${loser.name}\n\n`;
     msg += `🎁 *Rewards:*\n`;
