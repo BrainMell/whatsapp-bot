@@ -315,6 +315,7 @@ class HexWorld {
         this.objs.push({
             name, x: w.x + (o.dx || 0), z: w.z + (o.dz || 0), y: o.h || 0,
             flip: !!o.flip, sc: o.sc || 1, layer: o.layer || 'obj', sort: o.sort || 0, alpha: o.alpha == null ? 1 : o.alpha,
+            biome: o.biome || null,
         });
     }
     overlay(fn, c, r, o = {}) { const w = hexWorld(c, r); this.overlays.push({ fn, x: w.x + (o.dx || 0), z: w.z + (o.dz || 0), y: o.h || 0 }); }
@@ -417,16 +418,16 @@ class HexWorld {
             const w = hexWorld(c, r);
             const p = this.proj(w.x, w.z, kc.h || 0);
             if (!onCard(p)) continue;
-            tiles.push({ m, p, d: this.rot(w.x, w.z) });
+            tiles.push({ m, p, d: this.rot(w.x, w.z), b: kc.biome || null });
         }
         if (V.yaw) tiles.sort((a, b) => (a.d.z - b.d.z) || (a.d.x - b.d.x));
         const sorted = [...this.objs].sort((a, b) => (this.depth(a.x, a.z) - this.depth(b.x, b.z)) || (a.sort - b.sort) || (a.x - b.x));
         const files = new Set();
-        if (doTerrain) for (const t of tiles) files.add(bf(t.m.file));
-        if (doObjects) for (const o of sorted) { const m = spriteMeta(o.name, vk); if (!m) continue; files.add(bf(m.file)); if (m.sh) files.add(m.sh.file); }
+        if (doTerrain) for (const t of tiles) files.add(biomeFile(t.m.file, t.b || this.biome, vk));
+        if (doObjects) for (const o of sorted) { const m = spriteMeta(o.name, vk); if (!m) continue; files.add(biomeFile(m.file, o.biome || this.biome, vk)); if (m.sh) files.add(m.sh.file); }
         await Promise.all([...files].map((f) => loadSprite(f, vk)));
-        const drawSpr = async (m, file, ax, ay, X, Y, sc, flip, alpha) => {
-            const img = await loadSprite(file === m.file ? bf(file) : file, vk);
+        const drawSpr = async (m, file, ax, ay, X, Y, sc, flip, alpha, bio) => {
+            const img = await loadSprite(file === m.file ? biomeFile(file, bio || this.biome, vk) : file, vk);
             if (!img) return;
             const w = m.w * k * sc, h = m.h * k * sc;
             const dx = X - (flip ? (m.w - ax) : ax) * k * sc, dy = Y - ay * k * sc;
@@ -436,7 +437,7 @@ class HexWorld {
             if (alpha < 1) ctx.globalAlpha = 1;
         };
         // 1. terrain, back to front
-        if (doTerrain) for (const t of tiles) await drawSpr(t.m, t.m.file, t.m.ax, t.m.ay, t.p.x, t.p.y, 1, false, 1);
+        if (doTerrain) for (const t of tiles) await drawSpr(t.m, t.m.file, t.m.ax, t.m.ay, t.p.x, t.p.y, 1, false, 1, t.b);
         // 1.5 underlays — cell-ground art (stone paving) under every shadow/object
         for (const ov of this.underlays) { const p = this.proj(ov.x, ov.z, ov.y); ov.fn(ctx, p, k); }
         if (!doObjects) return;
@@ -452,13 +453,13 @@ class HexWorld {
             if (o.layer !== 'flat') continue;
             const m = spriteMeta(o.name, vk); const p = this.proj(o.x, o.z, o.y);
             if (!onCard(p)) continue;
-            await drawSpr(m, m.file, m.ax, m.ay, p.x, p.y, o.sc, o.flip, o.alpha);
+            await drawSpr(m, m.file, m.ax, m.ay, p.x, p.y, o.sc, o.flip, o.alpha, o.biome);
         }
         for (const o of sorted) {
             if (o.layer === 'flat') continue;
             const m = spriteMeta(o.name, vk); const p = this.proj(o.x, o.z, o.y);
             if (!onCard(p)) continue;
-            await drawSpr(m, m.file, m.ax, m.ay, p.x, p.y, o.sc, o.flip, o.alpha);
+            await drawSpr(m, m.file, m.ax, m.ay, p.x, p.y, o.sc, o.flip, o.alpha, o.biome);
         }
         // 4. overlays (labels, banners)
         for (const ov of this.overlays) { const p = this.proj(ov.x, ov.z, ov.y); ov.fn(ctx, p, k); }

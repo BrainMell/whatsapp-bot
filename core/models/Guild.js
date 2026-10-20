@@ -45,6 +45,16 @@ const GuildSchema = new mongoose.Schema({
         treasury: { level: { type: Number, default: 0 }, name: { type: String, default: 'Treasury' } }
     },
 
+    // 🌍 realm (continent) the guild chose + the charter-stone marker on the Aldafold map (core/rpg/continents.js).
+    // Without these in the schema Mongoose strict mode stripped them on every syncGuild() write, so a guild's
+    // chosen realm reverted to the name-hash default after each restart.
+    continent: { type: String, default: null },
+    marker: {
+        x: { type: Number, default: null },
+        y: { type: Number, default: null },
+        region: { type: String, default: null }
+    },
+
     // Keep legacy upgrades field for backward-compat reads
     upgrades: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} },
 

@@ -133,6 +133,9 @@ async function loadGuilds() {
             loans: g.loans || [],
             lastInterestPayout: g.lastInterestPayout || null,
             emblem: g.emblem || { icon: null, color: '#FFD700' },
+            // 🌍 realm + charter-stone marker (persisted since 2026-10-20; legacy docs fall back to the name-hash realm)
+            ...(g.continent ? { continent: g.continent } : {}),
+            ...(g.marker && typeof g.marker.x === 'number' && typeof g.marker.y === 'number' ? { marker: { x: g.marker.x, y: g.marker.y, region: g.marker.region || null } } : {}),
         };
 
         // FIX (2026-10-19): rebuild the guildOwners index from each guild
@@ -249,6 +252,8 @@ async function syncGuild(guildName) {
                 loans: g.loans || [],
                 lastInterestPayout: g.lastInterestPayout || null,
                 emblem: g.emblem || { icon: null, color: '#FFD700' },
+                ...(g.continent ? { continent: g.continent } : {}),
+                ...(g.marker && typeof g.marker.x === 'number' ? { marker: g.marker } : {}),
                 recruits: g.recruits || []
             },
             { upsert: true }

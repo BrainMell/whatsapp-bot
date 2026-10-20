@@ -89,7 +89,7 @@ function drawPin(ctx, x, y, { color, icon, initial, name }) {
     ctx.restore();
 }
 
-async function renderContinentMap(o = {}) {
+async function renderLegacyChart(o = {}) {
     try {
         const { createCanvas } = require('canvas');
         fonts();
@@ -121,4 +121,27 @@ async function renderContinentMap(o = {}) {
     }
 }
 
-module.exports = { renderContinentMap };
+/** every registered guild as plain records ({name, continent, marker, emblem, type, buildings, members}) */
+function allGuilds() {
+    try {
+        const info = require('./guilds').getGuildInfo();
+        return Object.entries((info && info.guilds) || {}).map(([name, rec]) => ({ ...rec, name }));
+    } catch (e) { return []; }
+}
+
+/** The world atlas: crisp 3D-hex Aldafold with EVERY guild's castle + emblem on its charter-stone
+ *  (core/rpg/worldAtlasRenderer.js). o.guildName highlights the viewer's guild; o.guilds overrides the roster.
+ *  Falls back to the old painted chart if the atlas cannot render. */
+async function renderContinentMap(o = {}) {
+    try {
+        const guilds = Array.isArray(o.guilds) ? o.guilds : allGuilds();
+        if (o.guildName && o.guild && !guilds.some((g) => g.name === o.guildName)) guilds.push({ ...o.guild, name: o.guildName });
+        const buf = await require('./worldAtlasRenderer').renderWorldAtlas({ guilds, highlight: o.guildName || null });
+        if (buf && buf.length > 1000) return buf;
+    } catch (e) {
+        try { console.error('[continentMapRenderer] atlas failed, legacy chart:', e.message); } catch (_) { /* noop */ }
+    }
+    return renderLegacyChart(o);
+}
+
+module.exports = { renderContinentMap, renderLegacyChart, allGuilds };
