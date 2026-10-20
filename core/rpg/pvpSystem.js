@@ -876,6 +876,7 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
         duel.turn = 1 - duel.turn;
         if (duel.turn === 0) duel.round++;
         duel.lastAction = Date.now();
+        duel.lastHit = null; // 🔴 stun/freeze passes never flash last turn's hit
         
         // Energy regen
         currentPlayer.energy = Math.min(currentPlayer.maxEnergy, currentPlayer.energy + PVP_ENERGY_REGEN);
@@ -1649,6 +1650,13 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
     if (duel.turn === 0) duel.round++;
     duel.lastAction = Date.now();
 
+    // 🔴 HIT FLASH (owner 2026-10-20): carry THIS action's hit into the static
+    // duel card — the Go renderer flashes the hit receiver red when damage > 0.
+    // duel.lastHit is cleared on no-hit turns so a flash never lingers.
+    duel.lastHit = (damage > 0 || missed)
+        ? { damage, isCrit, missed, heal: healing, skillName: abilityObj ? abilityObj.name : 'attack', element: (abilityObj && abilityObj.element) || 'physical' }
+        : null;
+
     // Energy regen for attacker
     currentPlayer.energy = Math.min(currentPlayer.maxEnergy, currentPlayer.energy + PVP_ENERGY_REGEN);
 
@@ -2072,13 +2080,16 @@ async function generateDuelImage(duel) {
                 attackerSide: 'player',
                 attackerIndex: duel.turn || 0,
                 targetSide: 'player',
-                targetIndex: 1 - (duel.turn || 0),
-                skillName: '',
-                element: 'physical',
-                damage: 0,
-                isCrit: false,
-                missed: false,
-                heal: 0,
+                // 🔴 HIT FLASH: after the turn advance, duel.turn holds the
+                // duelist who just TOOK the hit — that's who flashes red.
+                // (attackerIndex above stays the next actor for the crystal.)
+                targetIndex: duel.turn || 0,
+                skillName: String((duel.lastHit && duel.lastHit.skillName) || ''),
+                element: String((duel.lastHit && duel.lastHit.element) || 'physical'),
+                damage: Math.max(0, Math.floor(Number((duel.lastHit && duel.lastHit.damage) || 0))),
+                isCrit: Boolean(duel.lastHit && duel.lastHit.isCrit),
+                missed: Boolean(duel.lastHit && duel.lastHit.missed),
+                heal: Math.max(0, Math.floor(Number((duel.lastHit && duel.lastHit.heal) || 0))),
             },
         }
     );
