@@ -575,7 +575,7 @@ async function acceptChallenge(sock, chatId, targetJid) {
 
     // 💡 STYLE A: summons ride as a » flow line inside the fence.
     const summonLines = (!isSummonDuel && duelState.summons && duelState.summons.length > 0)
-        ? [`» 🐉 SUMMONS: ` + duelState.summons.map(s => `${warlogClean(s.name)} (${Math.floor(s.currentHP)}/${Math.floor(s.maxHP)})`).join(', ')]
+        ? [`» 🐉 SUMMONS: ` + duelState.summons.map(s => `${warlogClean(s.name)}`).join(', ')] // 💡 owner tweak v2: summon HP totals out of combat text
         : [];
 
     let startMsg =
@@ -1675,9 +1675,16 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
     
     // 💡 STYLE A WAR LOG (2026-10-20 owner pick): mono HP grid, '>' marks
     // the acting duelist, action result as » flow lines. Toggle-aware:
-    // .j combat log OFF ⇒ premium-minimal round (header + prompt only).
+    // .j combat log OFF ⇒ premium-minimal round, but the DAMAGE STAYS
+    // (owner tweak v2: "leave the damage done" — numbers stay, prose goes).
     let statusMsg = isWarLogOff(chatId)
-        ? `⚔️ *PVP ROUND ${duel.round}*\n\n🎯 *@${economy.getDisplayName(nextPlayer.jid)}* - It's your turn!`
+        ? `⚔️ *PVP ROUND ${duel.round}*` +
+          (missed
+              ? `\n💨 MISS`
+              : damage > 0
+                ? `\n💥 ${Number(damage).toLocaleString('en-US')} DMG${isCrit ? ' 💢' : ''}`
+                : '') +
+          `\n\n🎯 *@${economy.getDisplayName(nextPlayer.jid)}* - It's your turn!`
         : `⚔️ *WAR LOG* · PVP ROUND ${duel.round}\n` +
           warlogDuelBlock(currentPlayer, opponent, String(actionResult || '').split('\n')) +
           `\n🎯 *@${economy.getDisplayName(nextPlayer.jid)}* - It's your turn!`;

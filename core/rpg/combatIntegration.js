@@ -335,9 +335,52 @@ function warlogBar(cur, max, len = 8) {
 }
 
 function warlogRow(prefix, name, cur, max) {
-    // 💡 Owner tweak (2026-10-20): HP bars + energy are OUT of the war log —
-    // the grid is just prefix + name + right-aligned HP. Cleaner, premium.
-    return `${prefix}${warlogClean(name).slice(0, WARLOG_NAME_W).padEnd(WARLOG_NAME_W)} ${warlogHP(cur, max)}`;
+    // 💡 Owner tweak v2 (2026-10-20): health totals are OUT of the war log
+    // entirely — "no pink dildo 1000/10000, [just] pink dildo did corpse
+    // explosion". Rows are now prefix + name only ('>' marks the acting
+    // duelist in PvP). The cur/max args are accepted but IGNORED for
+    // call-site compatibility (pvpSystem duel grid + start card pass them).
+    return `${prefix}${warlogClean(name).slice(0, WARLOG_NAME_W)}`;
+}
+
+// 💡 Owner tweak v2 (2026-10-20): premium log-OFF mode still shows the
+// DAMAGE done ("the combat log toggle should leave the damage done — total
+// damage done from both enemies when they make an action"). Enemy action
+// texts collapse to damage numbers + effect lines; the prose goes away:
+//   "👾 *X* attacks Mellow-San for 💥 1,204 damage! (CRIT!)"
+//     → "👾 X → Mellow-San 💥 1,204 DMG 💢"
+//   "💥 👾 Mellow-San takes 2,331 damage! 💥 *CRITICAL HIT!*"
+//     → "💥 👾 Mellow-San 2,331 DMG 💢"
+// Kill / proc / warning / evade / heal lines pass through UNTOUCHED — they
+// are the "effects" the owner wants the log reduced to. Unknown prose also
+// passes through (compression is best-effort, never lossy on effects).
+function compactCombatText(text) {
+    const fmt = (n) => (Number(n) || 0).toLocaleString('en-US');
+    const out = [];
+    for (let line of String(text ?? '').split('\n')) {
+        line = line.trim();
+        if (!line) continue;
+        let m = line.match(/^(.+?)\s+attacks\s+(.+?)\s+but\s+(?:💨\s*)?(?:MISSES|EVADES)/i);
+        if (m) {
+            out.push(`${m[1]} → ${m[2]} 💨 MISS`.replace(/[ *]+/g, ' ').trim());
+            continue;
+        }
+        m = line.match(/^(.+?)\s+attacks\s+(.+?)\s+for\s+(?:💥\s*)?([\d][\d,]*)\s+(?:\w+\s+)?damage/i);
+        if (m) {
+            const crit = /CRIT/i.test(line);
+            out.push(`${m[1]} → ${m[2]} 💥 ${fmt(m[3].replace(/,/g, ''))} DMG${crit ? ' 💢' : ''}`.replace(/[ *]+/g, ' ').trim());
+            continue;
+        }
+        m = line.match(/^(.+?)\s+takes\s+([\d][\d,]*)\s+(?:\w+\s+)?damage/i);
+        if (m) {
+            const crit = /CRIT/i.test(line);
+            const who = m[1].replace(/^💥\s*/, ''); // line may already lead with 💥
+            out.push(`💥 ${who} ${fmt(m[2].replace(/,/g, ''))} DMG${crit ? ' 💢' : ''}`.replace(/[ *]+/g, ' ').trim());
+            continue;
+        }
+        out.push(line);
+    }
+    return out.join('\n');
 }
 
 function warlogBlock(lines) {
@@ -351,28 +394,37 @@ function generateTurnCaption(players, enemies, turnInfo) {
     // turn. When the chat toggled logs OFF (.j combat log), the battle goes
     // premium-minimal: image stays, caption collapses to the bare header.
     if (turnInfo && turnInfo.warLog === false) {
-        return `⚔️ *TURN ${turnInfo.turnNumber || '?'}*`;
+        // 💡 Owner tweak v2 (2026-10-20): premium mode keeps the DAMAGE —
+        // "the combat log toggle should leave the damage done, like total
+        // damage done from both enemies when they make an action". The
+        // total dealt by this action (summed across every enemy hit, incl.
+        // AoE) rides under the bare header. Logs stay off; numbers stay on.
+        const logs = Array.isArray(turnInfo.actionLog) ? turnInfo.actionLog.map(String) : [];
+        let dmgTotal = 0;
+        let sawMiss = false;
+        for (const s of logs) {
+            const m = s.match(/([\d][\d,]*)\s+(?:\w+\s+)?damage/i);
+            if (m) dmgTotal += Number(m[1].replace(/,/g, '')) || 0;
+            if (/💨|\bMISS|EVADES|missed/i.test(s)) sawMiss = true;
+        }
+        if (!dmgTotal && Number(turnInfo.damage) > 0) dmgTotal = Math.floor(Number(turnInfo.damage));
+        const crit = turnInfo.isCrit || /CRIT/i.test(logs.join(' '));
+        let out = `⚔️ *TURN ${turnInfo.turnNumber || '?'}*`;
+        if (dmgTotal > 0) out += `\n💥 ${dmgTotal.toLocaleString('en-US')} DMG${crit ? ' 💢' : ''}`;
+        else if (sawMiss) out += `\n💨 MISS`;
+        return out;
     }
     const toStr = (n) => Number(n || 0).toLocaleString('en-US');
 
     let caption = `⚔️ *WAR LOG* · TURN ${turnInfo.turnNumber || '?'}\n`;
 
     const block = [];
-    // Party rows — co-op lists every member; the fallen stay with a † mark.
-    for (const p of (Array.isArray(players) ? players : [])) {
-        if (!p) continue;
-        const hp = Math.max(0, Math.floor(p.stats?.hp ?? p.currentHP ?? 0));
-        const maxHp = Math.max(1, Math.floor(p.stats?.maxHp ?? p.maxHp ?? 1));
-        block.push(warlogRow(hp <= 0 ? '†' : ' ', p.name, hp, maxHp));
-    }
-    // Enemy rows — pack fights show every enemy; dead ones keep the † mark.
-    for (const e of (Array.isArray(enemies) ? enemies : [])) {
-        if (!e) continue;
-        const hp = Math.max(0, Math.floor(e.stats?.hp ?? 0));
-        const maxHp = Math.max(1, Math.floor(e.stats?.maxHp ?? 1));
-        block.push(warlogRow(hp <= 0 ? '†' : ' ', e.name, hp, maxHp));
-    }
-    // 💡 Owner tweak: the ⚡ EN readout line is gone (energy out of the war log).
+    // 💡 Owner tweak v2 (2026-10-20): HP totals are OUT of the war log —
+    // "no pink dildo 1000/10000, [just] pink dildo did corpse explosion".
+    // The party/enemy mono rows are GONE; fighter HP lives in the battle
+    // image (unchanged) and the YOUR TURN prompt. The fence now carries
+    // ONLY the effects: the » narration lines (actions, damage, procs,
+    // kills). The ⚡ EN readout line is already gone (v1 tweak).
 
     // » action log: narration lines captured from performAction via
     // turnInfo.actionLog (full fidelity — procs, OVERKILL, kills all ride
@@ -402,11 +454,10 @@ function generateTurnCaption(players, enemies, turnInfo) {
         // Caption budget guard (WhatsApp media captions ~1024 chars precedent).
         const CAP = 8;
         const shown = lines.length > CAP ? [...lines.slice(0, CAP), `… +${lines.length - CAP} more`] : lines;
-        block.push(WARLOG_DIV, ...shown.map(l => `» ${l}`));
-    } else {
-        block.push(WARLOG_DIV);
+        block.push(...shown.map(l => `» ${l}`));
+        caption += warlogBlock(block);
     }
-    caption += warlogBlock(block);
+    // No narration at all → bare header, no empty fence.
     return caption;
 }
 
@@ -569,4 +620,6 @@ module.exports = {
     // 💡 WAR LOG toggle (.j combat log)
     isWarLogOff,
     setWarLogOff,
+    // 💡 Owner tweak v2: premium log-OFF damage-only compression
+    compactCombatText,
 };

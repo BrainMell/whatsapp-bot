@@ -1,4 +1,5 @@
-// QA harness — Style A WAR LOG generateTurnCaption + toggle (no DB, no network).
+// QA harness — Style A WAR LOG v2 (owner tweak: HP totals OUT, premium keeps
+// damage) — generateTurnCaption + toggle + compactCombatText. No DB, no net.
 // Run: node scripts/qa_style_a_caption.js
 let combatIntegration;
 try {
@@ -7,13 +8,15 @@ try {
   console.error('LOAD FAIL:', e.message);
   process.exit(1);
 }
-const { generateTurnCaption, warlogRow, warlogHP, warlogBlock, WARLOG_DIV, WARLOG_NAME_W, WARLOG_HP_W, isWarLogOff, setWarLogOff } = combatIntegration;
+const { generateTurnCaption, warlogRow, warlogHP, warlogBlock, WARLOG_DIV, WARLOG_NAME_W, WARLOG_HP_W, isWarLogOff, setWarLogOff, compactCombatText } = combatIntegration;
 
 let fails = 0;
 const check = (label, cond) => {
   console.log(`${cond ? 'PASS' : 'FAIL'}  ${label}`);
   if (!cond) fails++;
 };
+// HP-total pattern: "12,818/14,255" — the thing the owner banned.
+const HP_PAIR = /\d[\d,]*\/\d[\d,]*/;
 
 const players = [
   { name: 'PINK DILDO', class: { icon: '🧑' }, stats: { hp: 12818, maxHp: 14255, energy: 8669, maxEnergy: 9859 } },
@@ -24,7 +27,7 @@ const enemies = [
   { name: 'VOID WISP', stats: { hp: 0, maxHp: 8000 } },
 ];
 
-// ─── Case 1: merged narration path (logs ON, default) ───
+// ─── Case 1: merged narration path (logs ON, default) — effects only ───
 const ti1 = {
   turnNumber: 18,
   actor: players[0],
@@ -38,30 +41,39 @@ const ti1 = {
   damage: 7866, isCrit: true,
 };
 const c1 = generateTurnCaption(players, enemies, ti1);
-console.log('--- CASE 1: merged narration (logs ON) ---\n' + c1 + '\n');
+console.log('--- CASE 1: war log, effects only (logs ON) ---\n' + c1 + '\n');
 
 const fenceParts = c1.split('```');
 check('header is WAR LOG · TURN 18', c1.startsWith('⚔️ *WAR LOG* · TURN 18\n'));
 check('exactly one mono fence (2 fence marks)', fenceParts.length === 3);
-const inner = fenceParts[1].split('\n');
-check('dead party member has † mark', inner.some(l => l.startsWith('†') && l.includes('0/9,000')));
-check('dead enemy has † mark', inner.filter(l => l.startsWith('†')).length === 2);
-check('NO HP bars in grid (owner tweak)', !c1.includes('█') && !c1.includes('░'));
-check('NO energy readout (owner tweak)', !c1.includes('⚡'));
-check('divider inside fence', inner.some(l => l === WARLOG_DIV));
-check('action lines use » prefix', inner.filter(l => l.startsWith('» ')).length === 4);
+const inner = fenceParts[1].split('\n').filter(l => l.length > 0);
+check('NO HP totals anywhere (owner tweak v2)', !HP_PAIR.test(c1));
+check('NO grid rows — party/enemy HP lines gone', !inner.some(l => l.includes('PINK DILDO') && !l.startsWith('» ')));
+check('NO bars/energy/† grid glyphs', !c1.includes('█') && !c1.includes('░') && !c1.includes('⚡') && !c1.includes('†'));
+check('NO divider (rows gone → no separator)', !inner.some(l => l === WARLOG_DIV));
+check('all 4 action lines use » prefix inside fence', inner.length === 4 && inner.every(l => l.startsWith('» ')));
+check('narration keeps the effects (defeated/overkill/crit)', c1.includes('Corpse Explosion') && c1.includes('defeated') && c1.includes('OVERKILL'));
 check('no markup asterisks inside fence', !fenceParts[1].includes('*'));
 check('no Style C glyphs (🆚/▰/▱/↳)', !c1.includes('🆚') && !c1.includes('▰') && !c1.includes('▱') && !c1.includes('↳'));
-// alignment: grid rows (before divider) must be exactly 27 cols (prefix1+name12+sp+HP13)
-const divIdx = inner.indexOf(WARLOG_DIV);
-const gridOnly = inner.slice(0, divIdx).filter(l => l.length > 0 && !l.startsWith('⚡'));
-check(`all ${gridOnly.length} grid rows exactly 27 chars`, gridOnly.every(l => l.length === 27));
 
-// ─── Case 2: PREMIUM mode (toggle OFF via turnInfo.warLog=false) ───
+// ─── Case 2: PREMIUM mode (warLog=false) — damage STAYS ───
 const c2 = generateTurnCaption(players, enemies, { ...ti1, warLog: false });
-console.log('--- CASE 2: premium mode (logs OFF) ---\n' + c2 + '\n');
-check('premium caption is bare turn header', c2 === '⚔️ *TURN 18*');
-check('premium has no fence/grid/narration', !c2.includes('```') && !c2.includes('»') && !c2.includes('WAR LOG'));
+console.log('--- CASE 2: premium (logs OFF) — damage stays ---\n' + c2 + '\n');
+check('premium = header + total damage + crit', c2 === '⚔️ *TURN 18*\n💥 7,866 DMG 💢');
+check('premium has no fence/grid/prose', !c2.includes('```') && !c2.includes('»') && !c2.includes('WAR LOG'));
+
+// Case 2b: AoE across BOTH enemies — totals are summed
+const ti2b = { ...ti1, actionLog: ['PINK DILDO: uses Corpse Explosion!', 'VOID CORRUPTED takes 7,866 damage!', 'GLOOM BRUTE takes 2,500 damage!'], isCrit: false };
+const c2b = generateTurnCaption(players, enemies, { ...ti2b, warLog: false });
+check('AoE damage summed across both enemies (10,366)', c2b === '⚔️ *TURN 18*\n💥 10,366 DMG');
+
+// Case 2c: heal-only turn — no damage line, bare header
+const c2c = generateTurnCaption(players, enemies, { turnNumber: 7, actor: players[0], action: { name: 'Heal' }, actionLog: ['PINK DILDO: uses Heal!', '💚 +500 HP restored!'], warLog: false });
+check('heal-only turn stays bare header', c2c === '⚔️ *TURN 7*');
+
+// Case 2d: miss turn — MISS marker
+const c2d = generateTurnCaption(players, enemies, { turnNumber: 9, actor: players[0], action: { name: 'Basic Attack' }, actionLog: ['💨 MISS! The attack whiffed!'], warLog: false });
+check('missed turn shows 💨 MISS', c2d === '⚔️ *TURN 9*\n💨 MISS');
 
 // ─── Case 3: structured fallback (no actionLog) ───
 const ti3 = {
@@ -73,6 +85,7 @@ const ti3 = {
 const c3 = generateTurnCaption([players[0]], [enemies[0]], ti3);
 check('fallback verb SLASHES (sword)', c3.includes('SLASHES with'));
 check('fallback dmg line »', c3.includes('» 💥 1,200 damage!'));
+check('fallback also HP-free', !HP_PAIR.test(c3));
 
 // ─── Case 4: 12-line log → capped at 8 + more ───
 const ti4 = { turnNumber: 22, actor: players[0], action: { name: 'Chaos Chain' }, actionLog: Array.from({ length: 12 }, (_, i) => `line ${i + 1}`) };
@@ -80,14 +93,14 @@ const c4 = generateTurnCaption(players, enemies, ti4);
 const arrows = (c4.match(/» /g) || []).length;
 check(`cap: ${arrows} » lines (expect 9 = 8 + "+4 more")`, arrows === 9 && c4.includes('+4 more'));
 
-// ─── Case 5: hostile inputs + extreme widths ───
+// ─── Case 5: hostile inputs — name-only rows ───
 const c5row1 = warlogRow(' ', 'Bad`Name*X_y', 999999, 1234567);
 const c5row2 = warlogRow('†', 'VOID CORRUPTED', 0, 9999999);
 check('backtick stripped (fence safety)', !c5row1.includes('`'));
 check('asterisk stripped', !c5row1.includes('*'));
 check('underscore preserved', c5row1.includes('X_y'));
-check('huge HP no-commas fallback, row ≤ 28', c5row1.length <= 28 && c5row1.includes('999999/1234567'));
-check('long name truncated, dead row = 27', c5row2.length === 27 && c5row2.startsWith('†VOID CORRUPT'));
+check('HP args ignored — name-only row', c5row1 === ' BadNameX_y' && !/\d/.test(c5row1));
+check('dead prefix + long name truncated', c5row2 === '†VOID CORRUPT');
 
 // ─── Case 6: WAR LOG toggle round-trip (in-memory cache, no DB needed) ───
 const TCHAT = 'qa-toggle-chat@s.whatsapp.net';
@@ -95,16 +108,44 @@ const before = isWarLogOff(TCHAT);
 const nowOn = setWarLogOff(TCHAT, !before);
 check('toggle flips state', isWarLogOff(TCHAT) === !before && nowOn === before);
 const ti6a = { ...ti1, warLog: !isWarLogOff(TCHAT) };
-check('flag derives from toggle (off ⇒ premium)', generateTurnCaption(players, enemies, ti6a).includes('TURN 18') && !generateTurnCaption(players, enemies, ti6a).includes('```'));
+check('flag derives from toggle (off ⇒ premium)', generateTurnCaption(players, enemies, ti6a).startsWith('⚔️ *TURN 18*') && !generateTurnCaption(players, enemies, ti6a).includes('```'));
 setWarLogOff(TCHAT, before); // restore
 check('toggle restores', isWarLogOff(TCHAT) === before);
 check('empty chatId defaults to logs ON', isWarLogOff('') === false);
 
-// ─── Case 7: geometry ───
+// ─── Case 7: geometry helpers (kept for PvP/start-card callers) ───
 check('warlogHP field = 13', warlogHP(12818, 14255) === '12,818/14,255' && warlogHP(12818, 14255).length === WARLOG_HP_W);
-check('warlogHP zero-pad', warlogHP(0, 9000) === '      0/9,000');
 check('warlogBlock drops null lines', warlogBlock(['a', null, 'b']) === '```\na\nb\n```');
 check('name width constant = 12', WARLOG_NAME_W === 12);
+
+// ─── Case 8: compactCombatText (premium enemy sends) ───
+const x1 = compactCombatText('👾 *GLOOM BRUTE* attacks Mellow-San for 💥 1,204 damage! (CRIT!)');
+console.log('--- CASE 8: compactCombatText ---');
+console.log('attack  → ' + x1);
+check('attack line → actor → target 💥 N DMG 💢', x1 === '👾 GLOOM BRUTE → Mellow-San 💥 1,204 DMG 💢');
+
+const x2 = compactCombatText('👾 GLOOM BRUTE uses *Earthquake*!\n\n💥 👾 Mellow-San takes 2,331 damage! 💥 *CRITICAL HIT!*\n💀 Mellow-San has been defeated!');
+console.log('skill   → ' + x2.split('\n').join(' ⏎ '));
+const x2lines = x2.split('\n');
+check('skill opener kept (uses Earthquake)', x2lines[0] === '👾 GLOOM BRUTE uses *Earthquake*!');
+check('no double 💥 on takes-line', x2lines[1] === '💥 👾 Mellow-San 2,331 DMG 💢');
+check('kill line passes through', x2lines[2] === '💀 Mellow-San has been defeated!');
+
+const x3 = compactCombatText('👾 *VOID WISP* attacks Bob but 💨 MISSES!');
+check('attack miss line', x3 === '👾 VOID WISP → Bob 💨 MISS');
+
+const x4 = compactCombatText('🔥 GLOOM BRUTE takes 15 burn damage!\n🌵 THORNS! Mellow reflects 61 damage back!\n⚡ *OVERKILL!* +50 Zeni execution bonus!');
+console.log('mixed   → ' + x4.split('\n').join(' ⏎ '));
+const x4lines = x4.split('\n');
+check('DOT tick compacted (burn damage)', x4lines[0] === '💥 🔥 GLOOM BRUTE 15 DMG');
+check('effect prose passes through (thorns)', x4lines[1] === '🌵 THORNS! Mellow reflects 61 damage back!');
+check('overkill line passes through', x4lines[2] === '⚡ *OVERKILL!* +50 Zeni execution bonus!');
+
+const x5 = compactCombatText('🛡️ Guardian intercepts 500 damage for Mellow-San!\n\n');
+check('intercept line untouched, blanks dropped', x5 === '🛡️ Guardian intercepts 500 damage for Mellow-San!');
+
+const x6 = compactCombatText('⚔️↩️ COUNTER! Mellow retaliates for 350 damage!');
+check('counter line untouched (effect)', x6 === '⚔️↩️ COUNTER! Mellow retaliates for 350 damage!');
 
 console.log(fails === 0 ? '\nALL CHECKS PASSED' : `\n${fails} CHECK(S) FAILED`);
 process.exit(fails === 0 ? 0 : 1);

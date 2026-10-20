@@ -6244,7 +6244,10 @@ async function performEnemyAction(sock, enemy, sessionKey) {
           if (abilityRes && abilityRes.message) {
             // 💡 TICKET #b4c0ff: the "UNLEASHES" telegraph above already
             // announced the enemy + skill once - don't repeat it here.
-            const fullMsg = statusPrefix + abilityRes.message.trim();
+            // 💡 Owner tweak v2: log-OFF ⇒ compress to damage + effects.
+            const fullMsg = combatIntegration.isWarLogOff(chatId)
+                ? combatIntegration.compactCombatText(statusPrefix + abilityRes.message.trim())
+                : statusPrefix + abilityRes.message.trim();
             try { await sock.sendMessage(chatId, { text: fullMsg }); } catch (e) {}
           }
           setTimeout(() => resolve(), turnDelay);
@@ -6298,7 +6301,10 @@ async function performEnemyAction(sock, enemy, sessionKey) {
             // 💡 TICKET #b4c0ff: single announcement - the charge-release
             // telegraph above already named the enemy, so this is the
             // breakdown only.
-            const fullMsg = statusPrefix + abilityRes.message.trim();
+            // 💡 Owner tweak v2: log-OFF ⇒ compress to damage + effects.
+            const fullMsg = combatIntegration.isWarLogOff(chatId)
+                ? combatIntegration.compactCombatText(statusPrefix + abilityRes.message.trim())
+                : statusPrefix + abilityRes.message.trim();
             let sentImmediately = false;
             try {
               await sock.sendMessage(chatId, { text: fullMsg });
@@ -6405,7 +6411,10 @@ async function performEnemyAction(sock, enemy, sessionKey) {
           // message (the "Abyssal Singularity displayed twice" report).
           // The breakdown message is now sent as-is: one announcement, then
           // the damage lines.
-          const fullMsg = abilityRes.message.trim();
+          // 💡 Owner tweak v2: log-OFF ⇒ compress to damage + effects.
+          const fullMsg = combatIntegration.isWarLogOff(chatId)
+              ? combatIntegration.compactCombatText(abilityRes.message.trim())
+              : abilityRes.message.trim();
           let sentImmediately = false;
           try {
             await sock.sendMessage(chatId, { text: fullMsg });
@@ -6663,7 +6672,13 @@ async function performEnemyAction(sock, enemy, sessionKey) {
         ? state.pendingStatusMsg + "\n"
         : "";
       state.pendingStatusMsg = null;
-      const fullEnemyMsg = (enemyStatusPrefix ? enemyStatusPrefix + '\n' : '') + resultMsg;
+      // 💡 Owner tweak v2 (2026-10-20): .j combat log OFF ⇒ the enemy attack
+      // collapses to the damage + effect lines ("leave the damage done —
+      // total damage done from both enemies when they make an action").
+      const rawEnemyMsg = (enemyStatusPrefix ? enemyStatusPrefix + '\n' : '') + resultMsg;
+      const fullEnemyMsg = combatIntegration.isWarLogOff(chatId)
+          ? combatIntegration.compactCombatText(rawEnemyMsg)
+          : rawEnemyMsg;
 
       // 💡 BUG FIX: Send the enemy's default-attack message IMMEDIATELY.
       // Previously this was only pushed to roundLog (flushed at the start
