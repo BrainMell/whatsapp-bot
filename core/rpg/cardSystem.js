@@ -24,6 +24,12 @@ try {
   console.log(`[cardSystem] BUILD einfo-v3 (8d806270a) loaded | pid=${process.pid} | file mtime=${__buildMtime} | loaded at ${new Date().toISOString()}`);
 } catch (e) { console.log('[cardSystem] BUILD marker stat failed: ' + e.message); }
 
+// 47-k8c: background cache warmer — after a deploy every .j base/guild render
+// is invalidated (CODE_VER key change), so the first viewers eat the full
+// 13s/6s bake. renderWarmer journals each bake's state and replays them
+// ~45s after boot. Optional: failures here must never affect card loading.
+try { require('./renderWarmer').schedule(); } catch (e) { console.log('[cardSystem] renderWarmer not scheduled: ' + e.message); }
+
 // ── Mongoose Models ──────────────────────────────────────────────────────────
 const CardStat   = require('../models/CardStat');
 const UserCard   = require('../models/UserCard');

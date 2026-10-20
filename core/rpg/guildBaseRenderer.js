@@ -1034,7 +1034,7 @@ async function renderGuildBaseImage(state, opts = {}) {
             console.error('[guildBaseRenderer] mp4 encode failed, JPEG fallback:', e.message);
         }
         return encodeOut(await renderFrame(state, 0, { ...opts, returnCanvas: true }));
-    });
+    }, { state, opts: { hint: opts.hint, celebrate: opts.celebrate } });   // 47-k8c: journal for renderWarmer (post-deploy re-bake; `static` stripped so replays take the default mp4 path)
     cachePut(_renderCache, k, out);
     return out;
 }

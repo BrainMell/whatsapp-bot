@@ -77,11 +77,18 @@ async function trim(kind) {
 }
 
 /**
- * cached(kind, key, produce) → { buffer, contentType }
+ * cached(kind, key, produce, journal) → { buffer, contentType }
  *   hit:  { buffer, contentType, cached: true }   (disk read, milliseconds)
  *   miss: runs produce() once, stores the result, returns it unchanged.
+ *
+ * `journal` (optional, must be plain JSON-able) is recorded INSIDE the meta
+ * file (`{ct, j}`) so it lives and dies with its cache entry (trim() unlinks
+ * both). renderWarmer.js reads these back after a code deploy: stateHash keys
+ * change with CODE_VER, so the journaled state+opts are the only way to know
+ * WHAT to re-bake under the new key without a user having to stare at a
+ * 13-second cold view first. Null / absent journal = entry not replayable.
  */
-async function cached(kind, key, produce) {
+async function cached(kind, key, produce, journal) {
     key = `${CODE_VER}_${key}`; // code-version prefix — see CODE-VERSIONED note above
     const { dir, data, meta } = pathsFor(kind, key);
     try {
@@ -89,7 +96,8 @@ async function cached(kind, key, produce) {
             fs.promises.readFile(meta, 'utf8').catch(() => null),
             fs.promises.readFile(data).catch(() => null),
         ]);
-        const ct = metaRaw ? (JSON.parse(metaRaw) || {}).ct : null;
+        const mt = metaRaw ? (JSON.parse(metaRaw) || {}) : null;
+        const ct = mt ? mt.ct : null;
         if (ct && buf && buf.length > MIN_SIZE) {
             touch(data);
             return { buffer: buf, contentType: ct, cached: true };
@@ -104,7 +112,7 @@ async function cached(kind, key, produce) {
             const tmpData = `${data}.${process.pid}.tmp`;
             const tmpMeta = `${meta}.${process.pid}.tmp`;
             await fs.promises.writeFile(tmpData, out.buffer);
-            await fs.promises.writeFile(tmpMeta, JSON.stringify({ ct: out.contentType }));
+            await fs.promises.writeFile(tmpMeta, JSON.stringify({ ct: out.contentType, ...(journal !== undefined ? { j: journal } : {}) }));
             await Promise.all([
                 fs.promises.rename(tmpData, data),
                 fs.promises.rename(tmpMeta, meta),
@@ -115,4 +123,30 @@ async function cached(kind, key, produce) {
     return out;
 }
 
-module.exports = { cached };
+/**
+ * listJournal(kind) → newest-first [{ hash, j, metaPath, fresh, mtime }]
+ * One entry per cache meta that carries a journal, regardless of which
+ * CODE_VER wrote it. `fresh` = the entry's media already exists under the
+ * CURRENT CODE_VER (nothing to re-bake); renderWarmer replays the rest.
+ */
+function listJournal(kind) {
+    const dir = path.join(ROOT, kind);
+    let files = [];
+    try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.json')); } catch (e) { return []; }
+    const cur = `${CODE_VER}_`;
+    const out = [];
+    for (const f of files) {
+        let meta = null;
+        try { meta = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); } catch (e) { continue; }
+        if (!meta || meta.j === undefined || meta.j === null) continue;
+        const hash = f.startsWith(cur) ? f.slice(cur.length, -5) : f.slice(f.indexOf('_') + 1, -5);
+        let mtime = 0;
+        try { mtime = fs.statSync(path.join(dir, f)).mtimeMs; } catch (e) { /* keep 0 */ }
+        out.push({ hash, j: meta.j, metaPath: path.join(dir, f),
+            fresh: fs.existsSync(path.join(dir, cur + hash + '.data')), mtime });
+    }
+    out.sort((a, b) => b.mtime - a.mtime);
+    return out;
+}
+
+module.exports = { cached, listJournal };
