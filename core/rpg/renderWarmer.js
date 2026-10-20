@@ -31,6 +31,14 @@ const GAP_MS = 500;
 
 let _ran = false;
 
+/** retire a consumed journal entry: unlink its meta + data pair, best-effort.
+ *  The old-CODE_VER media can never be hit again (CODE_VER moves forward on
+ *  every deploy), and on success the journal now lives in the new meta. */
+function dropOld(e) {
+    try { fs.unlinkSync(e.metaPath); } catch (e2) { /* already gone */ }
+    try { fs.unlinkSync(e.metaPath.replace(/\.json$/, '.data')); } catch (e2) { /* pair cleanup is cosmetic */ }
+}
+
 async function warmOnce() {
     if (_ran) return;
     _ran = true;
@@ -51,11 +59,15 @@ async function warmOnce() {
         for (const e of entries) {
             if (Date.now() - t0 > DEADLINE_MS) break;
             try {
-                await k.render(e.j);
+                const out = await k.render(e.j);
                 n++; baked++;
+                // success → the journal now lives in the current-CODE_VER meta (mediaCache
+                // carries it forward on every bake), so the old meta is a dead duplicate
+                // that would otherwise be re-listed as stale on EVERY future boot. Drop it.
+                dropOld(e);
             } catch (err) {
                 dead++;
-                try { fs.unlinkSync(e.metaPath); } catch (e2) { /* journal dies with its meta */ }
+                dropOld(e);
                 console.log(`[renderWarmer] ${k.kind} replay failed (stale journal dropped): ${String(err.message).slice(0, 120)}`);
             }
             await SLEEP(GAP_MS);
