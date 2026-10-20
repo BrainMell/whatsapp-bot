@@ -20,6 +20,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const { fillTextMixed } = require('./emojiFont');   // 2026-10-20: gear glyph color bitmap (owner 'use colors not hex code')
 
 let _canvas = null;
 function getCanvas() {
@@ -419,7 +420,7 @@ async function renderAbilityInspectCard(payload) {
       ctx.textAlign = 'center';
       ctx.font = '15px Cinzel';
       ctx.fillStyle = payload.requiresText ? C.goldBright : C.dim;
-      ctx.fillText(payload.requiresText ? `⛭ REQUIRES  ·  ${payload.requiresText}` : '⛭ REQUIREMENT  ·  NONE — INNATE', W / 2, reqY);
+      fillTextMixed(ctx, payload.requiresText ? `⚙️ REQUIRES  ·  ${payload.requiresText}` : '⚙️ REQUIREMENT  ·  NONE — INNATE', W / 2, reqY);
 
       // ── rune sockets panel ──
       const sockets = Array.isArray(payload.sockets) ? payload.sockets : [];

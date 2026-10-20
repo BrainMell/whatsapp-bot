@@ -502,7 +502,7 @@ async function drawSummonCard(ctx, summon, user, x, y, w, h, index) {
       ctx.font = emojiFont(species?.icon || '🐉', 32, `"${FONT_REG}", monospace`);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(species?.icon || '🐉', portraitX + portraitSize / 2, portraitY + portraitSize / 2);
+      fillTextMixed(ctx, species?.icon || '🐉', portraitX + portraitSize / 2, portraitY + portraitSize / 2);
     }
   } else {
     // Draw emoji icon as placeholder
@@ -510,7 +510,7 @@ async function drawSummonCard(ctx, summon, user, x, y, w, h, index) {
     ctx.font = emojiFont(species?.icon || '🐉', 32, `"${FONT_REG}", monospace`);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(species?.icon || '🐉', portraitX + portraitSize / 2, portraitY + portraitSize / 2);
+    fillTextMixed(ctx, species?.icon || '🐉', portraitX + portraitSize / 2, portraitY + portraitSize / 2);
   }
 
   ctx.textBaseline = 'alphabetic';
@@ -650,7 +650,7 @@ async function renderDetailCard(summon, user) {
       ctx.fillStyle = elementCfg.color;
       ctx.font = emojiFont(species?.icon || '🐉', 80, `"${FONT_REG}", monospace`);
       ctx.textAlign = 'center';
-      ctx.fillText(species?.icon || '🐉', portraitX + portraitSize / 2, portraitY + portraitSize / 2 + 30);
+      fillTextMixed(ctx, species?.icon || '🐉', portraitX + portraitSize / 2, portraitY + portraitSize / 2 + 30);
     }
   } else {
     // No sprite - draw emoji fallback
@@ -658,7 +658,7 @@ async function renderDetailCard(summon, user) {
     ctx.font = emojiFont(species?.icon || '🐉', 80, `"${FONT_REG}", monospace`);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(species?.icon || '🐉', portraitX + portraitSize / 2, portraitY + portraitSize / 2 + 30);
+    fillTextMixed(ctx, species?.icon || '🐉', portraitX + portraitSize / 2, portraitY + portraitSize / 2 + 30);
   }
 
   // ── Info panel (right side) ──

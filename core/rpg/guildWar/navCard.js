@@ -11,6 +11,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { fillTextMixed } = require('../emojiFont');   // 2026-10-20: fog glyph color bitmap (owner 'use colors not hex code')
 
 const PAL = {
     parchment: '#EADDC4', parchmentDeep: '#E1D1AF',
@@ -250,7 +251,7 @@ async function renderNavCard(opts = {}) {
             } else {
                 ctx.fillStyle = PAL.fog;
                 ctx.font = '30px serif';
-                ctx.fillText('🌫️', px, py - 2);
+                fillTextMixed(ctx, '🌫️', px, py - 2);
                 ctx.font = '17px "Cinzel"';
                 ctx.fillText('UNCHARTED', px, py + 28);
                 ctx.font = '13px "IM Fell Italic"';

@@ -24,6 +24,7 @@ const path = require('path');
 const os = require('os');
 const isoShadow = require('./isoShadow');
 const mediaCache = require('./mediaCache');
+const { fillTextMixed } = require('./emojiFont');   // 2026-10-20: astral emoji color bitmaps (owner 'use colors not hex code')
 
 // ── world constants ──
 const SS = 2;               // supersample (device px per art px)
@@ -1160,7 +1161,7 @@ async function renderInventoryCard(rec, opts = {}) {
     const comfort = (rec.placed || []).reduce((s, p) => s + ((itemDef(p.item) || {}).comfort || 0), 0);
     ctx.font = '22px Cinzel';
     ctx.fillStyle = '#7ec8a0';
-    ctx.fillText(`♥ ${comfort} comfort   •   📍 ${placedRows.length} placed   •   📦 ${storedRows.length} storage`, W / 2, 196);
+    fillTextMixed(ctx, `♥ ${comfort} comfort   •   📍 ${placedRows.length} placed   •   📦 ${storedRows.length} storage`, W / 2, 196);
 
     const slice = rows.slice((page - 1) * ROWS_PER_PAGE, page * ROWS_PER_PAGE);
     const y0 = 236, rh = 64;
@@ -1175,7 +1176,7 @@ async function renderInventoryCard(rec, opts = {}) {
             ctx.font = '17px Medieval';
             ctx.fillStyle = '#c9a25e';
             ctx.textAlign = 'center';
-            ctx.fillText(row.placed ? '— 📍 PLACED IN YOUR ROOM —' : '— 📦 IN STORAGE —', W / 2, y + 10);
+            fillTextMixed(ctx, row.placed ? '— 📍 PLACED IN YOUR ROOM —' : '— 📦 IN STORAGE —', W / 2, y + 10);
         }
         const rowY = y + 34;
         // row plate

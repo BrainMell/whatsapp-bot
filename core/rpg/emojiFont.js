@@ -1,34 +1,35 @@
 'use strict';
 // ═══════════════════════════════════════════════════════════════════════════
-//  emojiFont.js — ship a real emoji font with the repo (2026-10-20)
+//  emojiFont.js — emoji-aware canvas text helpers (color, not hexcode)
 // ═══════════════════════════════════════════════════════════════════════════
-//  OWNER BUG: "some emoji emblems show on the various maps as weird number
-//  boxes". Root cause: every map renderer drew guild emblem emoji through a
-//  Latin font stack (`"Noto Sans", sans-serif`). "Noto Sans" does not exist
-//  on the render boxes — fontconfig substitutes DejaVu Sans, which covers a
-//  handful of BMP symbols (⚜ ⚔ render!) but has NO astral emoji, so canvas
-//  drew the codepoint as a hex NUMBER BOX (👁 → [01F441]). Box2 — the only
-//  box with a paired bot right now — has ZERO emoji fonts installed; Box1
-//  happened to have one, which is why the bug looked box-dependent.
+//  OWNER BUG 1 (2026-10-20 10:47Z): "some emoji emblems show on the various
+//  maps as weird number boxes" — map renderers drew emblem emoji through a
+//  "Noto Sans" stack that doesn't exist on the boxes; fontconfig substituted
+//  DejaVu (covers ⚜ ⚔ but no astral emoji) and canvas painted raw codepoints
+//  as HEX NUMBER BOXES (👁 → [01F441]).
 //
-//  FIX, two layers:
-//    1. Ship Noto Emoji (monochrome, OFL) in core/rpgasset/fonts and register
-//       it per-process here — draw sites become independent of system fonts.
-//       .gitattributes carries a -filter exception: `git reset --hard` deploys
-//       must NEVER re-stub this file as an LFS pointer (same trap as the
-//       runic font, which hexboxed rune tiles the exact same way).
-//    2. The same TTF is installed system-wide on both boxes (deploy step), so
-//       any canvas draw NOT going through this helper still resolves a real
-//       emoji glyph via fontconfig fallback.
+//  OWNER BUG 2 (2026-10-20 11:31Z, this file): "Use colors not hex code cus
+//  who tf knows hex codes dude?" — the first fix shipped monochrome Noto
+//  Emoji. Owner wants the familiar COLORED emoji. On-box probes the same
+//  day proved canvas 3.2.3 can never draw colored emoji from fonts: emoji
+//  glyph resolution bypasses registerFont entirely, and CBDT color bitmaps
+//  come out as alpha-mask silhouettes tinted by fillStyle (red fill → solid
+//  red silhouette, zero native hues).
 //
-//  Monochrome was a deliberate pick: node-canvas/FreeType cannot tint CBDT
-//  color bitmaps with fillStyle, and the game's heraldry wants single-colour
-//  glyphs anyway (cream on shield, gold on parchment).
+//  So emoji runs are now painted as COLOR BITMAPS: core/rpg/emojiBitmap.js
+//  parses the shipped NotoColorEmoji (OFL) CBDT table into per-emoji PNGs
+//  and we ctx.drawImage them at text metrics (baseline-true placement, same
+//  1.245em advance the mono font had). fillStyle is intentionally ignored
+//  for emoji runs — that IS the feature. The monochrome font remains the
+//  fallback (color font missing/corrupt), and the system-wide install
+//  (deploy step) still covers canvas draws that don't go through here.
 // ═══════════════════════════════════════════════════════════════════════════
 const fs = require('fs');
 const path = require('path');
+const eb = require('./emojiBitmap');
 
 const FONT_PATH = path.join(__dirname, '..', 'rpgasset', 'fonts', 'NotoEmoji-Regular.ttf');
+const COLOR_FONT_PATH = path.join(__dirname, '..', 'rpgasset', 'fonts', 'NotoColorEmoji.ttf');
 const FAMILY = 'Noto Emoji';
 // Extended_Pictographic covers every emoji base char; VS16 / ZWJ / keycap cap
 // are forced into the emoji run so multi-codepoint sequences stay together.
@@ -56,11 +57,24 @@ function ensureEmojiFont() {
     return _state === 1;
 }
 
+let _colorState = 0; // 0 = untried, 1 = parsed, -1 = failed
+function colorEmojiReady() {
+    if (_colorState !== 0) return _colorState === 1;
+    _colorState = eb.ready(COLOR_FONT_PATH) ? 1 : -1;
+    return _colorState === 1;
+}
+
+function imageCtor() {
+    try { return require('canvas').Image || null; } catch (_) { return null; }
+}
+
 function hasPictographic(s) { return PICTO_RE.test(String(s || '')); }
 
 // Font string for a glyph that MAY be emoji: use the shipped emoji family
 // when the string carries pictographs and the font registered; otherwise the
 // caller's base stack is returned untouched (ASCII initials etc.).
+// NOTE: with the color bitmap pipeline active this only steers the mono
+// FALLBACK path (and pure-text measure); bitmap draws set their own metrics.
 function emojiFont(str, px, base) {
     const b = base || '"Noto Sans", sans-serif';
     return hasPictographic(str) && ensureEmojiFont()
@@ -69,17 +83,53 @@ function emojiFont(str, px, base) {
 }
 
 // Draw a possibly-mixed string ("🐉 Pyro") advancing across emoji/text runs,
-// each with the right family. Honours ctx.textAlign center/right by
-// measuring the whole string first. Returns the total advance width.
+// each with the right rendering path: emoji runs paint as color bitmaps via
+// emojiBitmap (fallback: shipped mono family), text runs keep ctx.font.
+// Honours ctx.textAlign center/right by measuring the whole string first,
+// and ctx.textBaseline for bitmap placement. Returns the total advance width.
 // Pure-text strings take the plain fillText path (zero behaviour change).
 function fillTextMixed(ctx, str, x, y) {
     const s = String(str == null ? '' : str);
-    if (!hasPictographic(s) || !ensureEmojiFont()) {
+    if (!hasPictographic(s)) {
         ctx.fillText(s, x, y);
         return ctx.measureText(s).width;
     }
     const m = /(\d+(\.\d+)?)px/.exec(ctx.font);
-    const px = m ? m[1] : '16';
+    const px = m ? parseFloat(m[1]) : 16;
+    const color = colorEmojiReady();
+    const img = color ? imageCtor() : null;
+    const runs = color ? eb.splitRuns(s) : monoRuns(s);
+    const baseFont = ctx.font;
+
+    const widths = runs.map(([t, e]) => {
+        if (e && color) return eb.measure(t, px);
+        ctx.font = e ? `${Math.round(px)}px "${FAMILY}"` : baseFont;
+        return ctx.measureText(t).width;
+    });
+    const total = widths.reduce((a, b) => a + b, 0);
+
+    let sx = x;
+    if (ctx.textAlign === 'center') sx = x - total / 2;
+    else if (ctx.textAlign === 'right') sx = x - total;
+    const prevAlign = ctx.textAlign;
+    ctx.textAlign = 'left';
+    let cx = sx;
+    runs.forEach(([t, e], i) => {
+        if (e && color && img) {
+            cx += eb.draw(ctx, t, cx, y, px, img);
+        } else {
+            ctx.font = e ? `${Math.round(px)}px "${FAMILY}"` : baseFont;
+            ctx.fillText(t, cx, y);
+            cx += widths[i];
+        }
+    });
+    ctx.font = baseFont;
+    ctx.textAlign = prevAlign;
+    return total;
+}
+
+// Fallback run split (mono path — same semantics as the 51b3a8e version).
+function monoRuns(s) {
     const runs = [];
     let cur = '', curP = null;
     for (const ch of s) {
@@ -88,29 +138,10 @@ function fillTextMixed(ctx, str, x, y) {
         else { runs.push([cur, curP]); cur = ch; curP = p; }
     }
     if (cur) runs.push([cur, curP]);
-    const baseFont = ctx.font;
-    const runFont = (p) => (p ? `${px}px "${FAMILY}"` : baseFont);
-    let total = 0;
-    const widths = runs.map(([t, p]) => {
-        ctx.font = runFont(p);
-        const w = ctx.measureText(t).width;
-        total += w;
-        return w;
-    });
-    let sx = x;
-    if (ctx.textAlign === 'center') sx = x - total / 2;
-    else if (ctx.textAlign === 'right') sx = x - total;
-    const prevAlign = ctx.textAlign;
-    ctx.textAlign = 'left';
-    let cx = sx;
-    runs.forEach(([t, p], i) => {
-        ctx.font = runFont(p);
-        ctx.fillText(t, cx, y);
-        cx += widths[i];
-    });
-    ctx.font = baseFont;
-    ctx.textAlign = prevAlign;
-    return total;
+    return runs;
 }
 
-module.exports = { ensureEmojiFont, hasPictographic, emojiFont, fillTextMixed, FAMILY, FONT_PATH };
+module.exports = {
+    ensureEmojiFont, colorEmojiReady, hasPictographic, emojiFont, fillTextMixed,
+    FAMILY, FONT_PATH, COLOR_FONT_PATH
+};

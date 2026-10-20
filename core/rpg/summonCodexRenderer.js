@@ -11,7 +11,7 @@
 
 const path = require('path');
 const fs = require('fs');
-const { emojiFont } = require('./emojiFont');   // 2026-10-20: emoji glyphs (owner 'number boxes' bug)
+const { emojiFont, fillTextMixed } = require('./emojiFont');   // 2026-10-20: emoji glyphs; color bitmaps (owner 'use colors not hex code')
 
 let _canvas = null;
 function getCanvas() { if (!_canvas) _canvas = require('canvas'); return _canvas; }
@@ -196,7 +196,7 @@ async function renderCodexPage(registry, page = 1, filter = 'all') {
       ctx.fillStyle = elementColor;
       ctx.font = emojiFont(species.icon || '🐉', 40, `"${FONT_REG}", sans-serif`);
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(species.icon || '🐉', portraitX + portraitSize / 2, portraitY + portraitSize / 2);
+      fillTextMixed(ctx, species.icon || '🐉', portraitX + portraitSize / 2, portraitY + portraitSize / 2);
     }
 
     // Name

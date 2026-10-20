@@ -13,7 +13,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 const fs = require('fs');
 const C = require('./continents');
-const { emojiFont } = require('./emojiFont');   // 2026-10-20: emblem emoji glyphs (owner 'number boxes' bug)
+const { emojiFont, fillTextMixed } = require('./emojiFont');   // 2026-10-20: emblem emoji glyphs; color bitmaps (owner 'use colors not hex code')
 
 const SC = 1.25;                                    // output scale over the 864×1210 chart
 let _img = null;
@@ -78,7 +78,7 @@ function drawPin(ctx, x, y, { color, icon, initial, name }) {
     ctx.fillStyle = icon ? '#2B1A0C' : '#FFF6DC';
     ctx.font = icon ? emojiFont(icon, 20, 'sans-serif') : 'bold 20px "Cinzel", serif';
     if (!icon) { ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(40,20,10,0.8)'; ctx.strokeText(glyph, x, ey + 1); }
-    ctx.fillText(glyph, x, ey + 1);
+    fillTextMixed(ctx, glyph, x, ey + 1);
 
     // name tag under the tip
     ctx.font = '13px "Cinzel", serif';

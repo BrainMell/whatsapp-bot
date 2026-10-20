@@ -96,3 +96,14 @@ Attribution for third-party art shipped with the bot / image services.
 - Shipped 2026-10-20 (owner: "emoji emblems show on the maps as weird number boxes"): the render
   boxes had no emoji font, so guild emblem glyphs hexboxed; this font is registered per-process by
   `core/rpg/emojiFont.js` and installed system-wide on both boxes by the deploy step.
+
+## Noto Color Emoji (`core/rpgasset/fonts/NotoColorEmoji.ttf`)
+- Google Noto Color Emoji (CBDT bitmap color font), SIL Open Font License 1.1
+  ("OFL with Font Exception" — bitmap rendering/embedding permitted).
+- © Google LLC. OFL text: https://openfontlicense.org
+- Shipped 2026-10-20 (owner: "use colors not hex code"): node-canvas 3.2.3 cannot
+  draw colored emoji from any font (probe: CBDT bitmaps render as fillStyle-tinted
+  silhouettes and emoji glyph resolution bypasses registerFont), so
+  `core/rpg/emojiBitmap.js` parses this font's CBLC/CBDT tables and the emoji runs
+  are painted as its native color PNG strikes via `ctx.drawImage`. The monochrome
+  Noto Emoji above remains the fallback path.

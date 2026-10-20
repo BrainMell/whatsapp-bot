@@ -103,3 +103,9 @@ core/rpgasset/kingdom3d_iso/biomes/*/*.png -filter -diff -merge -text
 # owner 2026-10-20 'emoji emblems show on the maps as weird number boxes')
 core/rpgasset/fonts/NotoEmoji-Regular.ttf -filter -diff -merge -text
 core/rpgasset/fonts/NotoEmoji-Regular.ttf -text
+# 2026-10-20 color emblem emoji (owner 'use colors not hex code'): the CBDT
+# color font must be real bytes everywhere — emojiBitmap.js magic-byte check
+# would refuse an LFS pointer and emblem draws would fall back to monochrome
+# (or hexbox on boxes with no system emoji font)
+core/rpgasset/fonts/NotoColorEmoji.ttf -filter -diff -merge -text
+core/rpgasset/fonts/NotoColorEmoji.ttf -text
