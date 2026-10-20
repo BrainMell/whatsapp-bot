@@ -14,9 +14,15 @@ const OUT = process.argv[2] || '/tmp/baseqa';
             { type: 'mines', level: levels.mines, x: L.mines.x, y: L.mines.y },
             { type: 'pond', level: 2, x: L.pond.x, y: L.pond.y },
             { type: 'hunting', level: 1, x: L.hunting.x, y: L.hunting.y },
+            ...(levels.full ? [
+                { type: 'blacksmith', level: 3, x: 8, y: 1 },      // plot 1: forge torch + lv3 Great Forge
+                { type: 'alchemy', level: 3, x: 13, y: 7 },        // plot 2: wizard statue + Observatory
+                { type: 'medbay', level: 3, x: 4, y: 5 },          // plot 3: sanatorium
+            ] : []),
         ],
+        freePlots: levels.full ? [{ id: 4, x: 2, y: 13, fw: 3, fh: 3, free: true, built: null }] : [],
     });
-    for (const lv of [{ house: 1, mines: 1 }, { house: 2, mines: 2 }, { house: 3, mines: 3 }]) {
+    for (const lv of [{ house: 1, mines: 1 }, { house: 2, mines: 2 }, { house: 3, mines: 3, full: true }]) {
         const t0 = Date.now();
         const out = await R.renderBaseImage(mk(lv), { static: true });
         const f = `${OUT}/base_h${lv.house}_m${lv.mines}.jpg`;
