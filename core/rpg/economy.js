@@ -330,8 +330,15 @@ function threeWayMerge(ours, base, theirs) {
         if (!same) mergedFlat[path] = flatO[path]; // genuinely changed by us → ours wins
     }
     // empty-object clears by us: ours.p = {} wipes theirs' p.* leaves
+    // 47-l1: ONLY A REAL CLEAR wipes — ours must differ from the baseline.
+    // A born-empty object (baseline {} too) is not "we cleared this" — the
+    // old wipe erased a sibling's additions from a cache that simply had
+    // nothing yet (QA A5: activeEffects full_restore vanished on refresh).
     for (const path of Object.keys(flatO)) {
         if (isPlainEmpty(flatO[path])) {
+            // 47-l1: baseline was empty too → born-empty object, not a clear
+            // → leave theirs' subleaves alone
+            if (isPlainEmpty(flatB[path])) continue;
             for (const tp of Object.keys(mergedFlat)) if (tp.startsWith(path + '.')) delete mergedFlat[tp];
             mergedFlat[path] = {};
         }
@@ -558,12 +565,17 @@ async function saveUserInner(userId) {
             if (k in counterDeltas) {
                 delete writeSet[k];
                 if (counterDeltas[k] !== 0) incSet[k] = counterDeltas[k];
-            } else if (Object.prototype.hasOwnProperty.call(base, k)
+            } else if (merged
+                       && Object.prototype.hasOwnProperty.call(base, k)
                        && Number.isFinite(Number(base[k]))
                        && Number.isFinite(Number(payload[k]))) {
                 // changed only via merge-adoption of the sibling's live
                 // value → the $set would be a no-op anyway; skip the write
                 // so the live value (plus any sibling delta racing us) stands.
+                // ⚠️ gated on `merged`: without a real merge there IS no
+                // adoption — a plain fast-path save (e.g. runtime-created
+                // user with a null syncedAt baseline) must keep its $set,
+                // else the edit is silently dropped (QA A7 regression).
                 delete writeSet[k];
             } // else: no numeric baseline for k → keep the plain $set
         }
