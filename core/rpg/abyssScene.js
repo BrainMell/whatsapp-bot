@@ -38,12 +38,13 @@ const ENEMY_DIR = path.join(RPGASSET, 'enemies');
 const ENEMY_ABYSS_DIR = path.join(ENEMY_DIR, 'abyss');          // new sprites, by NAME
 const ENV_ABYSS_DIR = path.join(RPGASSET, 'environment', 'abyss'); // boss-room hall pool
 const ENV_ABYSS_REG_DIR = path.join(ENV_ABYSS_DIR, 'regular');     // regular-encounter side-stage pool
-// 🕳️ round-13 (owner 02:56Z image brief): the NEW abyss bestiary — 20
-// image-3-family sprites (violet/crimson pixel demons). Lives in its own
-// subdir so resolveEnemyArt's by-name check at the enemies/abyss/ ROOT can
-// never see it (the mob and boss pools share 10 ids — a root-level
-// `<id>.png` would leak into the FROZEN boss composition).
-const ENEMY_BESTIARY_DIR = path.join(ENEMY_ABYSS_DIR, 'regular_bestiary');
+// 💡 ROUND-21 (owner 2026-10-20: "purge all the A.I generated enemies you
+// made"): the round-13 AI-generated dusk bestiary (20 image-edit sprites in
+// enemies/abyss/regular_bestiary/) is DELETED from the repo and from the
+// renderer assets. Regular encounters render from the game's OWN collected
+// sprite sheets again via ABYSS_SPRITE_MAP → resolveEnemyArt (same chain the
+// boss path uses). The side path is kept as a function so the layout code is
+// untouched — it just resolves through the classic pool now.
 const UI_DIR = path.join(RPGASSET, 'ui');
 
 const W = 1200, H = 900;      // encounter scene canvas (matches roomScene — HUD transplant)
@@ -154,38 +155,10 @@ const ABYSS_ART_OVERRIDES = {};
 // amalgamation art even for the 10 shared ids. Files live in
 // enemies/abyss/regular_bestiary/ and are audited sprites (transparent,
 // abyss-graded, per-sprite facing recorded in ENEMY_FACING).
-const ABYSS_REGULAR_ART = {
-    MUTATED_HOUND: 'mutated_hound.png',
-    SHADOW_STALKER: 'shadow_stalker.png',
-    VENOM_SPIDER: 'venom_spider.png',
-    VOID_CORRUPTED: 'void_corrupted.png',
-    BLOOD_REAVER: 'blood_reaver.png',
-    VOID_HARBINGER: 'void_harbinger.png',
-    MUTATED_OVERSEER: 'mutated_overseer.png',
-    INFECTED_COLOSSUS: 'infected_colossus.png',
-    CORRUPTED_GUARDIAN: 'corrupted_guardian.png',
-    ELDER_CHAOS: 'elder_chaos.png',
-    PRIMORDIAL_CHAOS: 'primordial_chaos.png',
-    ELEMENTAL_ARCHON: 'elemental_archon.png',
-    VOID_TITAN: 'void_titan.png',
-    ABYSSAL_GOD: 'abyssal_god.png',
-    // round-13 new ids (image-3 homages: Gloom Brute / Crawler / Void Wraith)
-    GLOOM_BRUTE: 'gloom_brute.png',
-    DUSK_CRAWLER: 'dusk_crawler.png',
-    NIGHT_WRAITH: 'night_wraith.png',
-    CRIMSON_DEVOURER: 'crimson_devourer.png',
-    HOLLOW_SERAPH: 'hollow_seraph.png',
-    ABYSS_WEAVER: 'abyss_weaver.png',
-};
+// (round-21 purge: the ABYSS_REGULAR_ART by-name bestiary map was removed —
+// every regular encounter now resolves through the classic sheet pool.)
 function resolveEnemyArtRegular(enemy) {
-    const id = enemyIdOf(enemy);
-    if (id && ABYSS_REGULAR_ART[id]) {
-        const f = ABYSS_REGULAR_ART[id];
-        if (fs.existsSync(path.join(ENEMY_BESTIARY_DIR, f))) {
-            return { dir: ENEMY_BESTIARY_DIR, file: f };
-        }
-    }
-    return resolveEnemyArt(enemy);   // fallback chain unchanged (variants etc.)
+    return resolveEnemyArt(enemy);   // classic pool chain (ABYSS_SPRITE_MAP → sheets)
 }
 function enemyIdOf(enemy) {
     const raw = String((enemy && (enemy.bossId || enemy.id)) || '');
@@ -430,18 +403,12 @@ const ENEMY_FACES_LEFT = new Set(['SHADOW_STALKER', 'ELDER_CHAOS']);  // hybride
 // rendered staring AWAY from the hero (archon's crested helm, brute's single
 // eye, overseer's eye pair, all right-of-center). Corrected:
 const ENEMY_FACING = {
-    // audited 'L' (side-profile heads — verified on the bisector zoom sheet):
-    MUTATED_HOUND: 'L', SHADOW_STALKER: 'L', ABYSSAL_GOD: 'L', DUSK_CRAWLER: 'L',
-    CRIMSON_DEVOURER: 'L', ABYSS_WEAVER: 'L',
-    // round-15: regenerated in the grim dusk family, art delivered LEFT-facing
-    VOID_HARBINGER: 'L', CORRUPTED_GUARDIAN: 'L',
-    // round-15 bisector audit: natively RIGHT-facing → MUST flip to face hero
-    ELEMENTAL_ARCHON: 'R', GLOOM_BRUTE: 'R', MUTATED_OVERSEER: 'R',
-    // accuracy rows (unflipped art anyway — flip only fires on 'R'):
-    BLOOD_REAVER: 'L', INFECTED_COLOSSUS: 'L', VOID_TITAN: 'L',
-    // audited 'F' (front-facing — never flipped):
-    VENOM_SPIDER: 'F', VOID_CORRUPTED: 'F', ELDER_CHAOS: 'F',
-    PRIMORDIAL_CHAOS: 'F', NIGHT_WRAITH: 'F', HOLLOW_SERAPH: 'F',
+    // 💡 ROUND-21 purge: the round-13/15 facing rows audited the DELETED AI
+    // bestiary art. The classic sheet pool is front-facing battle frames
+    // (round-20 single-frame audit: only hybrides (1) has a real directional
+    // bias, natively LEFT) — so exactly one row survives, for the one id that
+    // resolves to hybrides (1).png via ABYSS_SPRITE_MAP:
+    SHADOW_STALKER: 'L',
 };
 function enemyNativeFacing(id) {
     const key = String(id || '').toUpperCase();

@@ -10178,82 +10178,81 @@ async function executeEncounter(sock, groq, encounterType, sessionKey) {
 
           // Resolve sprite filename - mirror the Go BossNameSprites map
           // so the splash shows the same image the combat scene will use.
-          // 💡 ROUND-19 (owner 2026-10-10 14:06Z: "These robot enemies keep
-          // being used as the only boss Sprites ... Where's the diverse boss
-          // sprite tree??"): the old map pointed nearly every boss at the
-          // boss_N mecha-spider family — Mutation Prime (C) and Primordial
-          // Chaos (A) rendered as near-twin robot spiders. The map now draws
-          // from the round-13 dusk bestiary (20 creatures, owner-approved
-          // style) with THEMATIC assignments: namesakes stay namesakes
-          // (ELDER CHAOS → elder_chaos, VOID TITAN → void_titan, SHADOW
-          // STALKER → shadow_stalker …), fire bosses burn red, wraiths haunt
-          // frost, seraphs take the heavens — and ONLY the genuinely
-          // mechanical bosses (CLOCKWORK TITAN, MECH GOD) keep robot art.
+          // 💡 ROUND-21 (owner 2026-10-20: "purge all the A.I generated
+          // enemies you made"): the round-13 dusk bestiary was AI-generated
+          // art — it is GONE (files deleted from both repos + renderer
+          // assets). The map now draws from the owner's OWN collected
+          // sprite packs (calamaties / midlevelbosses / highlevelbosses /
+          // mutated / hybrides / earth / fire / ice / water singles) with
+          // THEMATIC assignments that keep round-19's diversity ruling:
+          // fire bosses burn red, wraiths haunt frost, golems take earth,
+          // leviathans swim — and ONLY the genuinely mechanical bosses
+          // (CLOCKWORK TITAN, MECH GOD) keep robot art. Zero AI art.
           // Values mirror pkg/combat/sprites.go BossNameSprites 1:1 (combat
           // scene is the source of truth) — one audit, both pipelines.
           const BOSS_SPLASH_SPRITES = {
             // ═══ S/SS/SSS-rank dungeon bosses ═══
-            "PRIMORDIAL CHAOS": "primordial_chaos.png",
-            "ELDER CHAOS": "elder_chaos.png",
-            "VOID TITAN": "void_titan.png",
-            "ABYSSAL GOD": "abyssal_god.png",
-            "MUTATION PRIME": "venom_spider.png",
-            "ELEMENTAL ARCHON": "elemental_archon.png",
+            "PRIMORDIAL CHAOS": "calamaties (2).png",
+            "ELDER CHAOS": "calamaties (1).png",
+            "VOID TITAN": "calamaties (3).png",
+            "ABYSSAL GOD": "calamaties (5).png",
+            "MUTATION PRIME": "mutated (2).png",
+            "ELEMENTAL ARCHON": "highlevelbosses (10).png",
             // ═══ Mid-level bosses ═══
-            "THE INFECTED COLOSSUS": "infected_colossus.png",
-            "INFECTED COLOSSUS": "infected_colossus.png",
-            "MUTATED OVERSEER": "mutated_overseer.png",
-            "CORRUPTED GUARDIAN": "corrupted_guardian.png",
-            "STONE HULK": "gloom_brute.png",
-            "CRYSTAL CORRUPTED": "void_corrupted.png",
-            "EARTH WARDEN": "abyss_weaver.png",
-            "FROST GHOUL": "night_wraith.png",
-            "GLACIAL BEAST": "mutated_hound.png",
+            "THE INFECTED COLOSSUS": "midlevelbosses (1).png",
+            "INFECTED COLOSSUS": "midlevelbosses (1).png",
+            "MUTATED OVERSEER": "mutated (4).png",
+            "CORRUPTED GUARDIAN": "midlevelbosses (2).png",
+            "STONE HULK": "earth (1).png",
+            "CRYSTAL CORRUPTED": "hybrides (3).png",
+            "EARTH WARDEN": "earth (2).png",
+            "FROST GHOUL": "ice (1).png",
+            "GLACIAL BEAST": "ice (2).png",
             // ═══ High-level bosses ═══
-            "MAGMA BRUTE": "crimson_devourer.png",
-            "HELLFIRE DEMON": "void_harbinger.png",
-            "ABYSSAL HORROR": "shadow_stalker.png",
-            "TSUNAMI WALKER": "dusk_crawler.png",
-            "BLIZZARD WRAITH": "night_wraith.png",
-            "GRAVEYARD LORD": "void_harbinger.png",
-            "SHADOW LORD": "shadow_stalker.png",
+            "MAGMA BRUTE": "fire (5).png",
+            "HELLFIRE DEMON": "fire (7).png",
+            "ABYSSAL HORROR": "hybrides (2).png",
+            "TSUNAMI WALKER": "water (4).png",
+            "BLIZZARD WRAITH": "ice (3).png",
+            "GRAVEYARD LORD": "mutated (3).png",
+            "SHADOW LORD": "hybrides (1).png",
             // ═══ Dragon bosses ═══
-            "IGNEEL THE FIRE KING": "crimson_devourer.png",
-            "ANCIENT DRAGON": "crimson_devourer.png",
-            "ETERNAL DRAGON": "void_harbinger.png",
-            "ELDER FLAME": "elemental_archon.png",
+            "IGNEEL THE FIRE KING": "fire (8).png",
+            "ANCIENT DRAGON": "fire (11).png",
+            "ETERNAL DRAGON": "water (6).png",
+            "ELDER FLAME": "fire (6).png",
             // ═══ Trial bosses ═══
-            "ARCANE SENTINEL": "corrupted_guardian.png",
-            "LICH KING": "night_wraith.png",
-            "SHADOW STALKER": "shadow_stalker.png",
-            "VOID ASSASSIN": "void_harbinger.png",
-            "IRON BODY GRANDMASTER": "blood_reaver.png",
-            "ANCIENT WURM": "dusk_crawler.png",
-            "SOUL EATER": "hollow_seraph.png",
-            "ABYSSAL WHISPER": "abyss_weaver.png",
-            "ELEMENTAL PRIMORDIAL": "elemental_archon.png",
-            "PRIME ELEMENT": "elemental_archon.png",
-            "VOID NECROMANCER": "void_corrupted.png",
-            "CHRONOS WARDEN": "corrupted_guardian.png",
-            "TIME EATER": "crimson_devourer.png",
-            "HEAVENLY GUARDIAN": "hollow_seraph.png",
-            "SERAPHIM PRIME": "hollow_seraph.png",
-            "FOREST ANCESTOR": "abyss_weaver.png",
-            "GAIA SENTINEL": "infected_colossus.png",
-            "GOLDEN GOLEM": "gloom_brute.png",
-            "TREASURE HOARDER": "abyss_weaver.png",
-            "SOUND REAPER": "void_harbinger.png",
-            "MAESTRO OF VOID": "void_corrupted.png",
+            "ARCANE SENTINEL": "highlevelbosses (11).png",
+            "LICH KING": "mutated (5).png",
+            "SHADOW STALKER": "hybrides (1).png",
+            "VOID ASSASSIN": "hybrides (4).png",
+            "IRON BODY GRANDMASTER": "midlevelbosses (3).png",
+            "ANCIENT WURM": "earth (3).png",
+            "SOUL EATER": "mutated (6).png",
+            "ABYSSAL WHISPER": "highlevelbosses (12).png",
+            "ELEMENTAL PRIMORDIAL": "highlevelbosses (10).png",
+            "PRIME ELEMENT": "highlevelbosses (13).png",
+            "VOID NECROMANCER": "hybrides (5).png",
+            "CHRONOS WARDEN": "highlevelbosses (7).png",
+            "TIME EATER": "midlevelbosses (4).png",
+            "HEAVENLY GUARDIAN": "midlevelbosses (5).png",
+            "SERAPHIM PRIME": "midlevelbosses (6).png",
+            "FOREST ANCESTOR": "earth (4).png",
+            "GAIA SENTINEL": "earth (5).png",
+            "GOLDEN GOLEM": "midlevelbosses (7).png",
+            "TREASURE HOARDER": "calamaties (6).png",
+            "SOUND REAPER": "mutated (7).png",
+            "MAESTRO OF VOID": "hybrides (6).png",
             // genuinely mechanical bosses keep the mecha family
             "CLOCKWORK TITAN": "boss_0_S.png",
             "MECH GOD": "boss_3_S.png",
-            "DEMON LORD": "void_harbinger.png",
-            "PRIMORDIAL EVIL": "primordial_chaos.png",
-            "LEVIATHAN": "crimson_devourer.png",
-            "LEVIATHAN SPAWN ALPHA": "dusk_crawler.png",
-            "INFERNAL OVERLORD": "crimson_devourer.png",
-            "PRIMORDIAL FLAME": "elemental_archon.png",
-            "PERMAFROST TITAN": "void_titan.png",
+            "DEMON LORD": "hybrides (7).png",
+            "PRIMORDIAL EVIL": "calamaties (2).png",
+            "LEVIATHAN": "water (7).png",
+            "LEVIATHAN SPAWN ALPHA": "water (4).png",
+            "INFERNAL OVERLORD": "fire (5).png",
+            "PRIMORDIAL FLAME": "fire (8).png",
+            "PERMAFROST TITAN": "ice (2).png",
           };
           const splashSprite = BOSS_SPLASH_SPRITES[bossNameUpper] || "calamaties (1).png";
 

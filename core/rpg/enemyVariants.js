@@ -104,6 +104,17 @@ const ABYSS_SPRITE_MAP = {
     CORRUPTED_GUARDIAN: 66,   // midlevelbosses (2).png
     MUTATED_OVERSEER: 78,     // mutated (7).png
     INFERNO_LORD: 43,         // fire (7).png
+    // 💡 ROUND-21 (owner 2026-10-20: "purge all the A.I generated enemies"):
+    // the round-13 ids kept their pools but lost their AI art with the
+    // bestiary purge — they now resolve onto the classic sheet pool too
+    // (indexes verified against the C-locale enemies/ listing, same math as
+    // the rows above: png-only readdir order, abyss/ subdir excluded).
+    GLOOM_BRUTE: 67,          // midlevelbosses (3).png
+    DUSK_CRAWLER: 76,         // mutated (5).png
+    NIGHT_WRAITH: 63,         // ice (3).png
+    CRIMSON_DEVOURER: 44,     // fire (8).png
+    HOLLOW_SERAPH: 59,        // hybrides (6).png
+    ABYSS_WEAVER: 39,         // earth (5).png
 };
 
 /** Resolve the render index for an abyss enemy id (fallback: a stable
