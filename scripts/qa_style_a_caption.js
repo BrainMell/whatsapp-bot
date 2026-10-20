@@ -152,5 +152,32 @@ check('intercept line untouched, blanks dropped', x5 === '🛡️ Guardian inter
 const x6 = compactCombatText('⚔️↩️ COUNTER! Mellow retaliates for 350 damage!');
 check('counter line untouched (effect)', x6 === '⚔️↩️ COUNTER! Mellow retaliates for 350 damage!');
 
+// ─── Case 9: YOUR TURN hints builder (log ON = noob learning mode) ───
+// Owner round 4: the Task-7 veteran strip hit EVERYONE — hints must ride the
+// .j combat log toggle instead (ON = ACTIONS+BAG visible, OFF = stripped).
+const HPFX = 'P!';
+const h1 = combatIntegration.buildTurnHints(HPFX, [
+  { name: 'Blood Herb', quantity: 3 },
+  { name: 'Fire Bomb', quantity: 2 },
+  { name: 'Elixir', quantity: 1 },
+]);
+console.log('--- CASE 9: buildTurnHints (log ON = noob mode) ---\n' + h1);
+check('ACTIONS header + all 4 command hints', h1.includes('*ACTIONS:*')
+  && h1.includes('`P! combat atk <#>`')
+  && h1.includes('`P! combat skill <#>`')
+  && h1.includes('`P! combat item <#>`')
+  && h1.includes('`P! combat def`'));
+check('BAG lists top-3 items with xN', h1.includes('*BAG:*')
+  && h1.includes('1. Blood Herb x3')
+  && h1.includes('2. Fire Bomb x2')
+  && h1.includes('3. Elixir x1'));
+const h2 = combatIntegration.buildTurnHints(HPFX, [
+  { name: 'A', quantity: 1 }, { name: 'B', quantity: 1 }, { name: 'C', quantity: 1 },
+  { name: 'D', quantity: 1 }, { name: 'E', quantity: 1 },
+]);
+check('>3 items capped at 3 + "+2 more" overflow', !h2.includes('D') && h2.includes('...+2 more (P! combat item)'));
+check('empty bag → _No usable items_', combatIntegration.buildTurnHints(HPFX, []).includes('_No usable items_'));
+check('non-array bag safe (defensive)', combatIntegration.buildTurnHints(HPFX, null).includes('_No usable items_'));
+
 console.log(fails === 0 ? '\nALL CHECKS PASSED' : `\n${fails} CHECK(S) FAILED`);
 process.exit(fails === 0 ? 0 : 1);

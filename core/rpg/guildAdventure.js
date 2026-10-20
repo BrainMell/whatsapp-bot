@@ -5360,9 +5360,21 @@ async function promptPlayerAction(sock, player, sessionKey) {
     });
   }
 
-  // 💡 VETERAN MODE (owner 2026-10-20): ACTIONS command hints + BAG listing
-  // are GONE from the prompt — veteran players already know the commands.
-  // The prompt keeps: YOUR TURN header, own HP/EN, status effects, enemies.
+  // 💡 TOGGLE-AWARE PROMPT (owner fix round 4, 2026-10-20): the Task-7
+  // "veteran prompt" stripped ACTIONS+BAG for EVERYONE — wrong. .j combat
+  // log IS the noob/veteran switch: log ON (noob mode, default) KEEPS the
+  // command hints + BAG so new players can learn the commands; log OFF
+  // (veteran) gets the stripped prompt (header, own HP/EN, statuses, enemies).
+  if (!combatIntegration.isWarLogOff(state.chatId)) {
+    const bagItems = usableItems.map((item) => {
+      const info = {
+        ...lootSystem.getItemInfo(item.id),
+        ...(CONSUMABLES[item.id] || {})
+      };
+      return { name: info.name, quantity: item.quantity };
+    });
+    msg += combatIntegration.buildTurnHints(botConfig.getPrefix(), bagItems);
+  }
 
   try {
     await sock.sendMessage(state.chatId, { text: msg });

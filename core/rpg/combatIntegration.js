@@ -387,6 +387,33 @@ function warlogBlock(lines) {
     return '```\n' + lines.filter(l => l !== undefined && l !== null).join('\n') + '\n```';
 }
 
+// 💡 Owner fix round 4 (2026-10-20): the ACTIONS command hints + BAG listing
+// that the Task-7 "veteran prompt" stripped UNCONDITIONALLY. Owner's model:
+// .j combat log IS the noob/veteran switch — log ON (noob mode, default)
+// KEEPS the hints so new players can learn the commands; log OFF (veteran)
+// drops them. Pure string builder so the QA harness can pin the format.
+// usableItems = pre-resolved [{ name, quantity }] (caller merges
+// lootSystem.getItemInfo + CONSUMABLES, exactly like the pre-Task-7 block).
+function buildTurnHints(prefix, usableItems) {
+    let out = `\n*ACTIONS:*\n`;
+    out += `⚔️ \`${prefix} combat atk <#>\`\n`;
+    out += `✨ \`${prefix} combat skill <#>\`\n`;
+    out += `🎒 \`${prefix} combat item <#>\`\n`;
+    out += `🛡️ \`${prefix} combat def\`\n`;
+    const items = Array.isArray(usableItems) ? usableItems : [];
+    if (items.length > 0) {
+        out += `\n*BAG:*\n`;
+        items.slice(0, 3).forEach((item, i) => {
+            out += `${i + 1}. ${item.name} x${item.quantity}\n`;
+        });
+        if (items.length > 3)
+            out += `...+${items.length - 3} more (${prefix} combat item)\n`;
+    } else {
+        out += `_No usable items_\n`;
+    }
+    return out;
+}
+
 function generateTurnCaption(players, enemies, turnInfo) {
     // 💡 STYLE A "WAR LOG" (owner pick, 2026-10-20): the per-turn narration
     // that used to go out as a separate text bubble (guildAdventure
@@ -645,4 +672,6 @@ module.exports = {
     setWarLogOff,
     // 💡 Owner tweak v2: premium log-OFF damage-only compression
     compactCombatText,
+    // 💡 Owner fix round 4: YOUR TURN ACTIONS+BAG hints (log-ON noob mode)
+    buildTurnHints,
 };
