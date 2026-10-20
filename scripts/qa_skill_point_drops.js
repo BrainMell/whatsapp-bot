@@ -47,10 +47,10 @@ const asJoker = (fn) => botConfig.storage.run(cfgFor('Joker'), fn);
 function sectionA() {
   console.log("\n── A. drop ladder + rules ──");
   const drop = guildAdventure.getDungeonSkillPointDrop;
-  ok("S-rank pays 3", drop("S", { victory: true }) === 3);
-  ok("SS-rank pays 4", drop("SS", { victory: true }) === 4);
-  ok("SSS-rank pays 5", drop("SSS", { victory: true }) === 5);
-  ok("GOD pays 5", drop("GOD", { victory: true }) === 5);
+  ok("S-rank pays 5", drop("S", { victory: true }) === 5);
+  ok("SS-rank pays 7", drop("SS", { victory: true }) === 7);
+  ok("SSS-rank pays 10", drop("SSS", { victory: true }) === 10);
+  ok("GOD pays 10", drop("GOD", { victory: true }) === 10);
   ok("DRAGON pays 2", drop("DRAGON", { victory: true }) === 2);
   ok("A pays 2", drop("A", { victory: true }) === 2);
   ok("B pays 2", drop("B", { victory: true }) === 2);
@@ -58,7 +58,7 @@ function sectionA() {
   ok("D pays 1", drop("D", { victory: true }) === 1);
   ok("E pays 0", drop("E", { victory: true }) === 0);
   ok("F pays 0", drop("F", { victory: true }) === 0);
-  ok("lowercase rank accepted", drop("sss", { victory: true }) === 5);
+  ok("lowercase rank accepted", drop("sss", { victory: true }) === 10);
   ok("unknown rank pays 0", drop("XYZ", { victory: true }) === 0);
   ok("defeat/flee pays 0", drop("SSS", { victory: false }) === 0);
   ok("fallen player pays 0", drop("SSS", { victory: true, isDead: true }) === 0);
@@ -66,7 +66,7 @@ function sectionA() {
   ok("tutorial never pays", drop("SSS", { victory: true, mode: "TUTORIAL" }) === 0);
   ok("tutorial group never pays", drop("SSS", { victory: true, mode: "TUTORIAL_GROUP" }) === 0);
   ok("table matches ladder", JSON.stringify(guildAdventure.DUNGEON_SKILL_POINT_DROPS) ===
-    JSON.stringify({ F: 0, E: 0, D: 1, C: 1, B: 2, A: 2, S: 3, SS: 4, SSS: 5, DRAGON: 2, GOD: 5 }));
+    JSON.stringify({ F: 0, E: 0, D: 1, C: 1, B: 2, A: 2, S: 5, SS: 7, SSS: 10, DRAGON: 2, GOD: 10 }));
 }
 
 // ── B. e2e through the REAL endAdventure ────────────────────────────────────
@@ -119,9 +119,9 @@ async function sectionB() {
     const log = [];
     await asJoker(() => G.endAdventure(mockSock(log), key, true));
     const u = economy.economyData.get(P1);
-    ok("SSS victory credits +5 SP (10 → 15)", u.skillPoints === 15, `got ${u.skillPoints}`);
+    ok("SSS victory credits +5 SP (10 → 20)", u.skillPoints === 20, `got ${u.skillPoints}`);
     const text = log.map((m) => m.content.text || m.content.caption || '').join('\n');
-    ok("summary line shows the drop", text.includes('🔮 Skill Points: +5'), text.slice(-400));
+    ok("summary line shows the drop", text.includes('🔮 Skill Points: +10'), text.slice(-400));
     ok("victory header present", text.includes('QUEST COMPLETE'));
     ok("state cleaned up", !G.gameStates.has(key));
   }
@@ -195,7 +195,7 @@ async function sectionB() {
     const log = [];
     await asJoker(() => G.endAdventure(mockSock(log), key, true));
     const u = economy.economyData.get(P1);
-    ok("undefined wallet gets exactly the drop", u.skillPoints === 3, `got ${u.skillPoints}`);
+    ok("undefined wallet gets exactly the drop", u.skillPoints === 5, `got ${u.skillPoints}`);
   }
 }
 

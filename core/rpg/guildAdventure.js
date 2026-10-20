@@ -10710,11 +10710,12 @@ async function processVotes(sock, encounter, sessionKey) {
 // same wallet the skill tree spends from (additive-safe: the reset refund
 // adds spent points and ensureSkillPointsInitialized only fires when the
 // field is undefined, so nothing overwrites the drop).
-//   S/SS/SSS = 3/4/5 — the owner's "3 to 5 from high tier dungeons"
-//   GOD = 5 (endgame vault), DRAGON = 2 (special mid-tier lair)
+//   2026-10-20 OWNER ORDER: "make it an average of 5 to 10 per High
+//   ranking dungeons" -> S/SS/SSS = 5/7/10 (avg 7.3, inside the band)
+//   GOD = 10 (endgame vault stays above SSS), DRAGON = 2 (special mid-tier lair)
 //   F/E = 0 (low ranks level fast — 1 SP/level already flows there)
 const DUNGEON_SKILL_POINT_DROPS = {
-  F: 0, E: 0, D: 1, C: 1, B: 2, A: 2, S: 3, SS: 4, SSS: 5, DRAGON: 2, GOD: 5,
+  F: 0, E: 0, D: 1, C: 1, B: 2, A: 2, S: 5, SS: 7, SSS: 10, DRAGON: 2, GOD: 10,
 };
 
 /**
