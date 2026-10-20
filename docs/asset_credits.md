@@ -83,7 +83,9 @@ Attribution for third-party art shipped with the bot / image services.
   (desaturated/darkened) to sit in the Aldafold palette. This project is non-commercial fan
   work; Clash of Clans is a Supercell trademark, this project is not affiliated with or
   endorsed by Supercell.
-- The world atlas guild-castle markers (`core/rpgasset/kingdom3d/lm_castle_*.png`) are rendered
-  from Lords Mobile model rips; they are **provisioned per-box and never committed** (see
-  .gitignore) — regenerable via scripts/render_lm_markers.py. Lords Mobile is an IGG trademark;
-  render-only, non-commercial fan use.
+- Lords Mobile model renders (`core/rpgasset/kingdom3d/lm_castle_*.png`, regenerable via
+  scripts/render_lm_markers.py + bake_lm_manifest.py) were tried as per-guild atlas castle
+  markers in 47-k8 and **rolled back in 47-k8b** (owner 2026-10-20: the baked 3D dioramas
+  don't fit the map's KayKit hex art). No code references them now; the PNGs remain
+  box-provisioned only (never committed) in case the markers return re-styled. Lords Mobile
+  is an IGG trademark; render-only, non-commercial fan use.

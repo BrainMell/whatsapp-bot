@@ -17,7 +17,6 @@
 // ═══════════════════════════════════════════════════════════════════════════
 const K = require('./kingdom3d');
 const C = require('./continents');
-const LMC = require('./lmCastleSprites');
 
 const CHART_W = 864, CHART_H = 1210;                          // map space ↔ chart pixels (masks are traced from the chart)
 const MX0 = 58, MX1 = 810, MY0 = 175, MY1 = 868;              // the chart's drawable ocean area
@@ -71,24 +70,12 @@ function normGuild(g) {
     const place = C.placementOf(name, g);
     const realm = C.get(place.continent);
     const e = g.emblem || {};
-    // charter order (owner 47-k8: unique castle per guild, next guild wraps to the top) — the
-    // leader's join date is the founding moment; guilds without one sort after, alphabetically.
-    const lead = Array.isArray(g.members) && g.members[0] && g.members[0].joinedAt;
-    const ct = lead instanceof Date ? lead.getTime() : Date.parse(lead || '');
     return {
         name, realm: realm.key, biome: realm.biome, marker: place.marker, region: place.marker.region,
         color: /^#[0-9a-fA-F]{3,8}$/.test(e.color || '') ? e.color : null, icon: String(e.icon || '').trim(), img: e.img || null,
         type: TEAM[g.type] ? g.type : 'ADVENTURER', hall: hallLevel(g), members: Array.isArray(g.members) ? g.members.length : (parseInt(g.memberCount, 10) || 1),
-        level: g.level || 1, charter: Number.isFinite(ct) ? ct : 0, castleVariant: null,
+        level: g.level || 1,
     };
-}
-
-/** charter-order cycle assignment: founding order picks markers 1..N, the next guild wraps to marker 1 */
-function assignCastleVariants(guilds) {
-    LMC.register();
-    const order = [...guilds].sort((a, b) => (a.charter - b.charter) || a.name.localeCompare(b.name));
-    order.forEach((g, i) => { g.castleVariant = LMC.variantFor(i); });
-    return guilds;
 }
 
 // ── terrain ───────────────────────────────────────────────────────────────────
@@ -174,9 +161,7 @@ async function buildTerrain(guilds) {
         const wc = worldOf(m.x, m.y);
         const B = (n) => `building_${n}_${team}`;
         const at = (name, dx, dz, o = {}) => w.put(name, 0, 0, { wx: wc.x + dx, wz: wc.z + dz, biome: bio, ...o });
-        const sc = 1.5 + g.hall * 0.1;
-        const lm = g.castleVariant && K.hasSprite(g.castleVariant, 'top') ? g.castleVariant : null;
-        at('building_dirt', 0, 0.1, { layer: 'flat', sc: lm ? (2.0 + g.hall * 0.16) : (1.7 + g.hall * 0.15), biome: null });
+        at('building_dirt', 0, 0.1, { layer: 'flat', sc: 1.7 + g.hall * 0.15, biome: null });
         const rng = hamletRng(g.name);
         const nHouse = Math.min(g.members - 1, 4 + g.hall * 2, 14);
         for (let i = 0; i < nHouse; i++) {
@@ -184,15 +169,7 @@ async function buildTerrain(guilds) {
             const hn = K.houseName(rng, C.get(g.realm).biome, { view: 'top', shop: false });
             if (hn) at(hn, Math.cos(a) * rr, Math.sin(a) * rr * 0.75, { sc: 1.05, flip: rng() < 0.5 });
         }
-        if (lm) {
-            // unique realm citadel (LM marker render) — the diorama carries its own towers, so no KayKit flankers
-            const lsc = 1.0 + g.hall * 0.14;
-            at(lm, 0, 0, { sc: lsc });
-            if (g.hall >= 5) at('flag_' + team, 1.9, 1.6, { sc: 1.3 });
-            const lmeta = K.spriteMeta(lm, 'top');
-            castles.push({ g, x: m.x, y: m.y, topY: m.y - (lmeta ? lmeta.ay * k * lsc : 60), hall: g.hall });
-            continue;
-        }
+        const sc = 1.5 + g.hall * 0.1;
         const model = ['tower_A', 'tower_base', 'barracks', 'castle', 'castle'][g.hall - 1];
         if (g.hall === 2) at(B('tower_A'), 0.4, -0.1, { sc });
         at(B(model), g.hall === 2 ? -0.35 : 0, 0, { sc });
@@ -296,10 +273,10 @@ const _memo = new Map();
 async function renderWorldAtlas(o = {}) {
     try {
         fonts();
-        const guilds = assignCastleVariants((o.guilds || []).filter((g) => g && (g.name || g.guildName)).map(normGuild)
-            .sort((a, b) => a.marker.y - b.marker.y));                                  // back-to-front
+        const guilds = (o.guilds || []).filter((g) => g && (g.name || g.guildName)).map(normGuild)
+            .sort((a, b) => a.marker.y - b.marker.y);                                   // back-to-front
         const hi = o.highlight || null;
-        const key = K.hashStr(JSON.stringify([guilds.map((g) => [g.name, g.marker, g.hall, Math.min(g.members, 15), g.icon, g.color, g.type, g.img ? g.img.length : 0, g.castleVariant]), hi]));
+        const key = K.hashStr(JSON.stringify([guilds.map((g) => [g.name, g.marker, g.hall, Math.min(g.members, 15), g.icon, g.color, g.type, g.img ? g.img.length : 0]), hi]));
         if (_memo.has(key)) return _memo.get(key);
 
         const { createCanvas } = require('canvas');
