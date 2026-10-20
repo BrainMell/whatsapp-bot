@@ -239,9 +239,9 @@ function generateStartCaption(players, enemies, encounterInfo) {
     };
     const rankBadge = rankColors[encounterInfo.rank] || '⬜';
     
-    // 💡 STYLE C (2026-10-20): no `-----------` dividers anywhere in combat
-    // text — the VS-PANEL family uses spacing instead of rule lines.
-    let caption = `⚔️ *BATTLE COMMENCES!* ⚔️\n`;
+    // 💡 STYLE A (2026-10-20): WAR LOG family header; no `-----------` dividers
+    // anywhere in combat text.
+    let caption = `⚔️ *WAR LOG* · BATTLE COMMENCES\n`;
     
     if (encounterInfo.turnOrderStr) {
         caption += `${encounterInfo.turnOrderStr}\n\n`;
@@ -259,48 +259,93 @@ function generateStartCaption(players, enemies, encounterInfo) {
     return caption;
 }
 
+// ==========================================
+// 📈 WAR LOG GRID HELPERS (STYLE A, 2026-10-20)
+// ==========================================
+// 💡 STYLE A "WAR LOG" (owner pick, 2026-10-20 — replaces the same-day
+// Style C VS-PANEL skin): all column-shaped data lives inside a WhatsApp
+// ``` monospace fence — the ONLY true fixed-width surface on every phone.
+// Grid: prefix(1) + name(12) + [█░ bar](10) + HP(13, right-aligned) =
+// 38 mono chars, comfortably inside phone code-block width. NO emoji inside
+// the aligned columns (emoji render double-width and shred the grid — dead
+// fighters get the single-width † mark instead). Flow data (energy,
+// narration) is free-form `» ` lines where wrapping costs nothing.
+
+const WARLOG_NAME_W = 12;   // fighter-name column width
+const WARLOG_HP_W = 13;     // right-aligned "cur/max" field width
+const WARLOG_DIV = '─'.repeat(30);
+
+function warlogClean(text) {
+    // Never let a name/line break the ``` fence or smuggle markup asterisks.
+    return String(text ?? '?').replace(/[`*]/g, '').trim() || '?';
+}
+
+function warlogHP(cur, max) {
+    const c = Math.max(0, Math.floor(Number(cur) || 0));
+    const m = Math.max(1, Math.floor(Number(max) || 1));
+    let s = `${c.toLocaleString('en-US')}/${m.toLocaleString('en-US')}`;
+    if (s.length > WARLOG_HP_W) s = `${c}/${m}`; // 6-digit fallback, no commas
+    return s.padStart(WARLOG_HP_W);
+}
+
+function warlogBar(cur, max, len = 8) {
+    const safeMax = Number(max) > 0 ? Number(max) : 1;
+    const filled = Math.max(0, Math.min(len, Math.round((Math.max(0, Number(cur) || 0) / safeMax) * len)));
+    return `[${'█'.repeat(filled)}${'░'.repeat(len - filled)}]`;
+}
+
+function warlogRow(prefix, name, cur, max) {
+    return `${prefix}${warlogClean(name).slice(0, WARLOG_NAME_W).padEnd(WARLOG_NAME_W)} ${warlogBar(cur, max)} ${warlogHP(cur, max)}`;
+}
+
+function warlogBlock(lines) {
+    return '```\n' + lines.filter(l => l !== undefined && l !== null).join('\n') + '\n```';
+}
+
 function generateTurnCaption(players, enemies, turnInfo) {
-    // 💡 STYLE C "VS PANEL" (owner pick, 2026-10-20 session): the per-turn
-    // narration that used to go out as a separate text bubble (guildAdventure
-    // performAction) now rides INSIDE the battle-image caption — ONE message
-    // per turn: 🆚 header, fighter bars, then the ↳ action log. WhatsApp text
-    // is proportional-font, so NO box-drawing borders and no bare column
-    // alignment — bars use the proven [▰▱] bracket form from the raid UI
-    // family (promptPlayerAction / renderDuelistStatus), which stays aligned
-    // on every phone width.
+    // 💡 STYLE A "WAR LOG" (owner pick, 2026-10-20): the per-turn narration
+    // that used to go out as a separate text bubble (guildAdventure
+    // performAction) rides INSIDE the battle-image caption — ONE message per
+    // turn: bold header, then the ``` mono fence with the fighter grid,
+    // energy readout and the » action log.
     const toStr = (n) => Number(n || 0).toLocaleString('en-US');
-    const bar = (cur, max, len = 10) => {
-        const safeMax = Number(max) > 0 ? Number(max) : 1;
-        const filled = Math.max(0, Math.min(len, Math.round((Math.max(0, Number(cur) || 0) / safeMax) * len)));
-        return '▰'.repeat(filled) + '▱'.repeat(len - filled);
-    };
 
-    let caption = `🆚 *TURN ${turnInfo.turnNumber || '?'}*\n`;
+    let caption = `⚔️ *WAR LOG* · TURN ${turnInfo.turnNumber || '?'}\n`;
 
-    // Party lines — co-op lists every member; fallen fighters stay visible.
+    const block = [];
+    // Party rows — co-op lists every member; the fallen stay with a † mark.
     for (const p of (Array.isArray(players) ? players : [])) {
         if (!p) continue;
         const hp = Math.max(0, Math.floor(p.stats?.hp ?? p.currentHP ?? 0));
         const maxHp = Math.max(1, Math.floor(p.stats?.maxHp ?? p.maxHp ?? 1));
-        const en = Math.max(0, Math.floor(p.stats?.energy ?? 0));
-        const maxEn = Math.max(1, Math.floor(p.stats?.maxEnergy ?? p.maxEnergy ?? 1));
-        const dead = hp <= 0;
-        caption += `${dead ? '🕯️' : (p.class?.icon || '🧑')} *${p.name}* [${bar(hp, maxHp)}] \`${toStr(hp)}/${toStr(maxHp)}\` HP ⚡${Math.round((en / maxEn) * 100)}%\n`;
+        block.push(warlogRow(hp <= 0 ? '†' : ' ', p.name, hp, maxHp));
     }
-
-    // Enemy lines — pack fights show every enemy; dead ones stay with 💀.
+    // Enemy rows — pack fights show every enemy; dead ones keep the † mark.
     for (const e of (Array.isArray(enemies) ? enemies : [])) {
         if (!e) continue;
         const hp = Math.max(0, Math.floor(e.stats?.hp ?? 0));
         const maxHp = Math.max(1, Math.floor(e.stats?.maxHp ?? 1));
-        const dead = hp <= 0;
-        caption += `${dead ? '💀' : '👾'} *${e.name}* [${bar(hp, maxHp)}] \`${toStr(hp)}/${toStr(maxHp)}\` HP ${Math.round((hp / maxHp) * 100)}%\n`;
+        block.push(warlogRow(hp <= 0 ? '†' : ' ', e.name, hp, maxHp));
     }
 
-    // ↳ action block: narration lines captured from performAction via
+    // Energy readout — free-form line (flow data, safe to wrap).
+    const living = (Array.isArray(players) ? players : []).filter(p => {
+        if (!p) return false;
+        const hp = Math.max(0, Math.floor(p.stats?.hp ?? p.currentHP ?? 0));
+        return hp > 0 && (p.stats?.maxEnergy ?? p.maxEnergy ?? 0) > 0;
+    });
+    if (living.length > 0) {
+        block.push('⚡ ' + living.map(p => {
+            const en = Math.max(0, Math.floor(p.stats?.energy ?? 0));
+            const maxEn = Math.max(1, Math.floor(p.stats?.maxEnergy ?? p.maxEnergy ?? 1));
+            return `${warlogClean(p.name)} ${Math.round((en / maxEn) * 100)}%`;
+        }).join(' · '));
+    }
+
+    // » action log: narration lines captured from performAction via
     // turnInfo.actionLog (full fidelity — procs, OVERKILL, kills all ride
     // along), or the compact structured fallback when no log was attached.
-    let lines = (Array.isArray(turnInfo.actionLog) ? turnInfo.actionLog : []).map(l => String(l).trim()).filter(Boolean);
+    let lines = (Array.isArray(turnInfo.actionLog) ? turnInfo.actionLog : []).map(l => warlogClean(l)).filter(l => l !== '?');
     if (lines.length === 0 && turnInfo.action) {
         const actor = turnInfo.actor;
         const actionName = turnInfo?.action?.name || '';
@@ -308,25 +353,28 @@ function generateTurnCaption(players, enemies, turnInfo) {
         let actionVerb = actor?.isEnemy ? 'unleashes' : 'uses';
         if (isBasicAttack && actor?.equipment?.main_hand) {
             const wName = (actor.equipment.main_hand.name || '').toLowerCase();
-            if (/hammer|club|mace|maul/.test(wName)) actionVerb = '🔨 *SMASHES* with';
-            else if (/sword|blade|sabre|falchion/.test(wName)) actionVerb = '⚔️ *SLASHES* with';
-            else if (/dagger|knife|spear|lance/.test(wName)) actionVerb = '🗡️ *PIERCES* with';
-            else if (/staff|wand|rod/.test(wName)) actionVerb = '🔮 *CASTS* via';
-            else if (/bow|crossbow/.test(wName)) actionVerb = '🏹 *SHOOTS* with';
+            if (/hammer|club|mace|maul/.test(wName)) actionVerb = '🔨 SMASHES with';
+            else if (/sword|blade|sabre|falchion/.test(wName)) actionVerb = '⚔️ SLASHES with';
+            else if (/dagger|knife|spear|lance/.test(wName)) actionVerb = '🗡️ PIERCES with';
+            else if (/staff|wand|rod/.test(wName)) actionVerb = '🔮 CASTS via';
+            else if (/bow|crossbow/.test(wName)) actionVerb = '🏹 SHOOTS with';
         }
-        lines.push(`⚡ *${actor?.name}* ${actionVerb} *${actionName}*!`);
-        if (Number(turnInfo.damage) > 0) lines.push(`💥 *-${toStr(turnInfo.damage)}* damage!`);
-        if (Number(turnInfo.healing) > 0) lines.push(`💚 *+${toStr(turnInfo.healing)}* HP restored!`);
-        if (turnInfo.isCrit) lines.push(`💢 ★ *CRITICAL HIT!* ★`);
-        if (turnInfo.missed) lines.push(`💨 *MISS!* The attack whiffed!`);
-        if (turnInfo.effects?.length > 0) lines.push(`✨ ${turnInfo.effects.join(' · ')}`);
+        lines.push(`${warlogClean(actor?.name)} ${actionVerb} ${warlogClean(actionName)}!`);
+        if (Number(turnInfo.damage) > 0) lines.push(`💥 ${toStr(turnInfo.damage)} damage!`);
+        if (Number(turnInfo.healing) > 0) lines.push(`💚 +${toStr(turnInfo.healing)} HP restored!`);
+        if (turnInfo.isCrit) lines.push(`💢 CRITICAL HIT!`);
+        if (turnInfo.missed) lines.push(`💨 MISS! The attack whiffed!`);
+        if (turnInfo.effects?.length > 0) lines.push(`✨ ${turnInfo.effects.map(e => warlogClean(e)).join(' · ')}`);
     }
     if (lines.length > 0) {
         // Caption budget guard (WhatsApp media captions ~1024 chars precedent).
         const CAP = 8;
         const shown = lines.length > CAP ? [...lines.slice(0, CAP), `… +${lines.length - CAP} more`] : lines;
-        caption += `\n${shown.map(l => `↳ ${l}`).join('\n')}\n`;
+        block.push(WARLOG_DIV, ...shown.map(l => `» ${l}`));
+    } else {
+        block.push(WARLOG_DIV);
     }
+    caption += warlogBlock(block);
     return caption;
 }
 
@@ -477,4 +525,13 @@ module.exports = {
     generateCombatScene,
     createMiniBar,
     createHPBar,
+    // 💡 STYLE A WAR LOG grid helpers (shared with pvpSystem duels)
+    warlogClean,
+    warlogHP,
+    warlogBar,
+    warlogRow,
+    warlogBlock,
+    WARLOG_DIV,
+    WARLOG_NAME_W,
+    WARLOG_HP_W,
 };

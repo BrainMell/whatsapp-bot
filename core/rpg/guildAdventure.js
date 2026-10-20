@@ -6078,8 +6078,8 @@ async function performAction(sock, player, action, sessionKey) {
   // 💡 MERGE 2026-10-20 (owner: "what if the first message is gone and it's
   // just the image with the caption? But with a lil more data?"): the separate
   // narration text send is GONE. The lines ride into the battle-image caption
-  // via turnInfo.actionLog → combatIntegration.generateTurnCaption (Style C
-  // VS-PANEL: 🆚 header + fighter bars + ↳ action log). The "always visible"
+  // via turnInfo.actionLog → combatIntegration.generateTurnCaption (Style A
+  // WAR LOG: ``` mono HP grid + » action log). The "always visible"
   // guarantee still holds: render failure degrades to the caption text
   // (nextTurn fallbacks) and send wedges degrade to captionOf(payload)
   // (sendMediaBounded) — same enriched data, now one message instead of two.

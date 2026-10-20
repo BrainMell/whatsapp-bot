@@ -14,6 +14,9 @@ const progression = require('./progression');
 const skillTree = require('./skillTree');
 const botConfig = require('../../botConfig');
 const combatImageGenerator = require('./combatImageGenerator');
+// 💡 STYLE A WAR LOG (2026-10-20): duel text shares the battle-caption grid
+// helpers — one source of truth for the mono-table geometry.
+const { warlogClean, warlogHP, warlogBar, warlogRow, warlogBlock, WARLOG_DIV, WARLOG_NAME_W } = require('./combatIntegration');
 const inventorySystem = require('./inventorySystem');
 const lootSystem = require('./lootSystem');
 
@@ -229,6 +232,34 @@ function renderDuelistStatus(player, sideIcon) {
         `${sideIcon} *${player.name}*${getPlayerEffectsString(player)} [${duelHpBar(hp, maxHp)}] \`${hp}/${maxHp}\` HP`,
         `⚡ [${duelHpBar(en, maxEn)}] \`${en}/${maxEn}\` EN`,
     ];
+}
+
+// 💡 STYLE A WAR LOG (2026-10-20): one duelist's EN sub-row for the mono grid
+// — label '· EN' padded into the name column so both columns stay aligned.
+function warlogEnRow(p) {
+    return ` ${'· EN'.padEnd(WARLOG_NAME_W)} ${warlogBar(p.energy, p.maxEnergy)} ${warlogHP(p.energy, p.maxEnergy)}`;
+}
+
+// 💡 STYLE A WAR LOG: the full duel grid — '>' marks the acting duelist,
+// status effects + action lines ride as free-form » flow lines under the
+// rule (wrapping costs nothing there).
+function warlogDuelBlock(acting, other, flowLines) {
+    const block = [
+        warlogRow('>', acting.name, acting.hp, acting.maxHp),
+        warlogEnRow(acting),
+        warlogRow(' ', other.name, other.hp, other.maxHp),
+        warlogEnRow(other),
+        WARLOG_DIV,
+    ];
+    const fx = [acting, other]
+        .map(p => { const s = getPlayerEffectsString(p); return s && s.trim() ? `${warlogClean(p.name)} ${s.trim()}` : null; })
+        .filter(Boolean);
+    if (fx.length > 0) block.push(`» ${fx.join(' · ')}`);
+    for (const l of (flowLines || [])) {
+        const c = warlogClean(String(l));
+        if (c && c !== '?') block.push(`» ${c}`);
+    }
+    return warlogBlock(block);
 }
 
 // ─── PvP Balance Constants ────────────────────
@@ -539,37 +570,36 @@ async function acceptChallenge(sock, chatId, targetJid) {
         ? `🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Summon loses 10 loyalty!)*`
         : `🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Deducts 20% XP, 10% Wallet (max 5K), and 1 random item!)*`;
 
-    // 💡 REDESIGN 2026-09-11 (owner directive #2): the duel START message now
-    // mirrors the RAID battle text UI exactly - same divider, same ▰▱ HP/EN
-    // bars per fighter (renderDuelistStatus), same ⚔️ Order line - except it
-    // lists the 2 duelists instead of the party. The previous session only
-    // restyled the per-ROUND message and missed this START block entirely,
-    // which is why duels still opened with the plain `HP: 90/90` layout.
+    // 💡 STYLE A WAR LOG (2026-10-20): the duel opens with the mono war-log
+    // table (same family as the battle-image captions) — HP/EN grid in a ```
+    // fence, '>' on the fighter holding the initiative, order/Lv/class as »
+    // flow lines. Replaces the 2026-09-11 raid-style listing.
     const duelClass = (p) => p.class?.name || (isSummonDuel ? p.archetype : 'Fighter');
     const p1Faster = (p1.stats?.spd || 0) >= (p2.stats?.spd || 0);
     const orderFirst = p1Faster ? p1 : p2;
     const orderSecond = p1Faster ? p2 : p1;
-    const orderIcon = (p) => (p === p1 ? '🔴' : '🔵');
+    const acting = duelState.players[duelState.turn];
+    const mark = (p) => (p === acting ? '>' : ' ');
+
+    // 💡 STYLE A: summons ride as a » flow line inside the fence.
+    const summonLines = (!isSummonDuel && duelState.summons && duelState.summons.length > 0)
+        ? [`» 🐉 SUMMONS: ` + duelState.summons.map(s => `${warlogClean(s.name)} (${Math.floor(s.currentHP)}/${Math.floor(s.maxHP)})`).join(', ')]
+        : [];
 
     let startMsg =
         `${header}${modeTag}\n` +
-        `${orderIcon(orderFirst)} *${orderFirst.name}* \`Lv.${orderFirst.level}\` (${duelClass(orderFirst)})\n` +
-        `   ❤️ [${duelHpBar(orderFirst.hp, orderFirst.maxHp)}] \`${Math.max(0, Math.floor(orderFirst.hp))}/${Math.floor(orderFirst.maxHp)}\` HP · ⚡ [${duelHpBar(orderFirst.energy, orderFirst.maxEnergy)}] \`${Math.floor(orderFirst.energy)}/${Math.floor(orderFirst.maxEnergy)}\` EN\n` +
-        `${orderIcon(orderSecond)} *${orderSecond.name}* \`Lv.${orderSecond.level}\` (${duelClass(orderSecond)})\n` +
-        `   ❤️ [${duelHpBar(orderSecond.hp, orderSecond.maxHp)}] \`${Math.max(0, Math.floor(orderSecond.hp))}/${Math.floor(orderSecond.maxHp)}\` HP · ⚡ [${duelHpBar(orderSecond.energy, orderSecond.maxEnergy)}] \`${Math.floor(orderSecond.energy)}/${Math.floor(orderSecond.maxEnergy)}\` EN\n`;
-
-    // Show deployed summons (player mode only - summon mode IS the summons)
-    if (!isSummonDuel && duelState.summons && duelState.summons.length > 0) {
-        startMsg += `\n🐉 *SUMMONS DEPLOYED:*\n`;
-        for (const s of duelState.summons) {
-            const owner = duelState.players[s.summonerIndex || 0];
-            startMsg += `${owner === p1 ? '🔴' : '🔵'} ${s.icon || '🐉'} ${s.name} (HP: ${Math.floor(s.currentHP)}/${Math.floor(s.maxHP)})\n`;
-        }
-    }
-
-    startMsg += `\n⚔️ *Order:* ${orderIcon(orderFirst)} ${orderFirst.name} → ${orderIcon(orderSecond)} ${orderSecond.name} _by SPD_` +
-        `\n\n🎯 *${duelState.players[duelState.turn].name}* claims the initiative!\n` + // 💡 FIX 2026-08-18: was hardcoded to p1.name even when turn=1 (P2 has higher SPD)
-        `⏳ _Awaiting first action..._\n` +
+        warlogBlock([
+            warlogRow(mark(orderFirst), orderFirst.name, orderFirst.hp, orderFirst.maxHp),
+            warlogEnRow(orderFirst),
+            warlogRow(mark(orderSecond), orderSecond.name, orderSecond.hp, orderSecond.maxHp),
+            warlogEnRow(orderSecond),
+            WARLOG_DIV,
+            `» ${orderFirst.name} (Lv.${orderFirst.level} ${duelClass(orderFirst)}) vs ${orderSecond.name} (Lv.${orderSecond.level} ${duelClass(orderSecond)})`,
+            `» Turn order by SPD: ${orderFirst.name} → ${orderSecond.name}`,
+            ...summonLines,
+            `» ${acting.name} claims the initiative!`,
+        ]) +
+        `\n⏳ _Awaiting first action..._\n` +
         `🗡️ \`${botConfig.getPrefix()} combat attack\`\n` +
         `🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
         (isSummonDuel
@@ -873,15 +903,12 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
             imageResult = null;
         }
         
-        const statusMsg = statusLog.map(l => `↳ ${l}`).join('\n');
-        // 💡 STYLE C VS-PANEL (2026-10-20 owner pick): same family as the
-        // battle-image captions — 🆚 header, fighter bars, ↳ action lines.
-        // No `-----------` dividers; spacing does the separation.
-        let roundMsg = `🆚 *PVP DUEL · ROUND ${duel.round}*\n` +
-                        renderDuelistStatus(currentPlayer, '🔴').join('\n') + '\n' +
-                        renderDuelistStatus(opponent, '🔵').join('\n') + '\n' +
-                        (statusMsg ? `\n${statusMsg}\n` : '\n') +
-                        `🎯 *@${economy.getDisplayName(nextPlayer.jid)}* - It's your turn!\n` +
+        // 💡 STYLE A WAR LOG (2026-10-20 owner pick): mono HP/EN grid, '>'
+        // marks the acting duelist, status log as » flow lines — same family
+        // as the battle-image captions.
+        let roundMsg = `⚔️ *WAR LOG* · PVP ROUND ${duel.round}\n` +
+                        warlogDuelBlock(currentPlayer, opponent, statusLog) +
+                        `\n🎯 *@${economy.getDisplayName(nextPlayer.jid)}* - It's your turn!\n` +
                         `🗡️ \`${botConfig.getPrefix()} combat attack\`　🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
                         `🎒 \`${botConfig.getPrefix()} combat item\`　🏃 \`${botConfig.getPrefix()} combat flee\``;
 
@@ -1326,13 +1353,13 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
 
         let fleeMsg = `🏃 *${currentPlayer.name}* has fled from the duel!\n\n` +
                       `⚠️ *Flee Penalties Applied to ${currentPlayer.name}:*\n` +
-                      `   ↳ ⭐ XP Lost: \`-${xpLost}\` XP (capped at level minimum)\n` +
-                      `   ↳ 💵 Wallet Lost: \`-${ZENI}${moneyLost.toLocaleString()}\` (50% of wallet)\n` +
-                      `   ↳ 🎒 Item Lost: \`${itemLostName}\` (random item from bag)\n\n` +
+                      `   » ⭐ XP Lost: \`-${xpLost}\` XP (capped at level minimum)\n` +
+                      `   » 💵 Wallet Lost: \`-${ZENI}${moneyLost.toLocaleString()}\` (50% of wallet)\n` +
+                      `   » 🎒 Item Lost: \`${itemLostName}\` (random item from bag)\n\n` +
                       `👑 *Winner:* *${opponent.name}* by forfeit!\n` +
                       `🎁 *Rewards for ${opponent.name}:*\n` +
-                      `   ↳ ${rewardMsg}\n` +
-                      `   ↳ ⭐ +${xpGain} XP` +
+                      `   » ${rewardMsg}\n` +
+                      `   » ⭐ +${xpGain} XP` +
                       (duel._bountyClaimMsg || '');
 
         // 🎴 2026-09-12 (owner: "no card on forfeit"): forfeit endings render
@@ -1656,14 +1683,11 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
         imageResult = null;
     }
     
-    // 💡 STYLE C VS-PANEL (2026-10-20 owner pick): bars first, then the ↳
-    // action lines — mirrors the battle-image caption family, no dividers.
-    const actionLogStr = String(actionResult || '').split('\n').map(s => s.trim()).filter(Boolean).map(l => `↳ ${l}`).join('\n');
-    let statusMsg = `🆚 *PVP DUEL · ROUND ${duel.round}*\n` +
-                    renderDuelistStatus(currentPlayer, '🔴').join('\n') + '\n' +
-                    renderDuelistStatus(opponent, '🔵').join('\n') + '\n' +
-                    (actionLogStr ? `\n${actionLogStr}\n` : '\n') +
-                    `🎯 *@${economy.getDisplayName(nextPlayer.jid)}* - It's your turn!\n` +
+    // 💡 STYLE A WAR LOG (2026-10-20 owner pick): mono HP/EN grid, '>' marks
+    // the acting duelist, action result as » flow lines — battle-caption family.
+    let statusMsg = `⚔️ *WAR LOG* · PVP ROUND ${duel.round}\n` +
+                    warlogDuelBlock(currentPlayer, opponent, String(actionResult || '').split('\n')) +
+                    `\n🎯 *@${economy.getDisplayName(nextPlayer.jid)}* - It's your turn!\n` +
                     `🗡️ \`${botConfig.getPrefix()} combat attack\`　🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
                     `🎒 \`${botConfig.getPrefix()} combat item\`　🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Deducts 20% XP, 50% Wallet, and 1 random item!)*`;
 
@@ -1975,8 +1999,8 @@ async function finishDuel(chatId, duel, winner, loser) {
     msg += `👑 *Winner:* ${winner.name}\n`;
     msg += `💀 *Defeated:* ${loser.name}\n\n`;
     msg += `🎁 *Rewards:*\n`;
-    msg += `   ↳ ${rewardMsg}\n`;
-    msg += `   ↳ ⭐ +${xpGain} XP\n` + bountyClaimMsg;
+    msg += `   » ${rewardMsg}\n`;
+    msg += `   » ⭐ +${xpGain} XP\n` + bountyClaimMsg;
 
     // 💡 NEW 2026-09-12: PORTRAIT duel result card (lamoot family, 600x1000).
     // Non-fatal: any render failure falls back to the text-only result above.
