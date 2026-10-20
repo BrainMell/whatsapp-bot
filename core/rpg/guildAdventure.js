@@ -5638,13 +5638,12 @@ async function performAction(sock, player, action, sessionKey) {
           delete state.pendingActions[player.jid];
 
           if (await checkCombatEnd(sock, state, sessionKey)) {
-            // 💡 Send message BEFORE ending combat so player always sees result
+            // 💡 MERGE 2026-10-20: the standalone kill-text send is gone — the
+            // kill narration (OVERKILL bonus + defeated lines) rides the
+            // kill-turn image caption via turnInfo.actionLog (Style C).
+            // Order seen by the chat: victory card → kill image w/ caption.
             try {
-              await sock.sendMessage(state.chatId, { text: resultMsg });
-            } catch (e) {}
-
-            // 💡 Always show the turn image, even on a one-shot kill, before the victory screen
-            try {
+              turnInfo.actionLog = String(resultMsg || '').split('\n').map(s => s.trim()).filter(Boolean);
               await nextTurn(sock, turnInfo, sessionKey);
             } catch (e) {}
 
@@ -6076,10 +6075,14 @@ async function performAction(sock, player, action, sessionKey) {
     }
   }
 
-  // Send player action result as text so it's always visible
-  try {
-    await sock.sendMessage(state.chatId, { text: resultMsg });
-  } catch (e) {}
+  // 💡 MERGE 2026-10-20 (owner: "what if the first message is gone and it's
+  // just the image with the caption? But with a lil more data?"): the separate
+  // narration text send is GONE. The lines ride into the battle-image caption
+  // via turnInfo.actionLog → combatIntegration.generateTurnCaption (Style C
+  // VS-PANEL: 🆚 header + fighter bars + ↳ action log). The "always visible"
+  // guarantee still holds: render failure degrades to the caption text
+  // (nextTurn fallbacks) and send wedges degrade to captionOf(payload)
+  // (sendMediaBounded) — same enriched data, now one message instead of two.
   state.combatHistory.push(resultMsg);
 
   // Clear action after it is executed
@@ -6091,6 +6094,9 @@ async function performAction(sock, player, action, sessionKey) {
   }
 
   // Process the turn image update BEFORE resolving so state is consistent
+  // 💡 MERGE 2026-10-20: attach the narration before rendering so the caption
+  // carries the full action log (Style C).
+  turnInfo.actionLog = String(resultMsg || '').split('\n').map(s => s.trim()).filter(Boolean);
   try {
     await nextTurn(sock, turnInfo, sessionKey);
   } catch (err) {

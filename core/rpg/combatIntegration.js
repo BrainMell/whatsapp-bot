@@ -239,8 +239,9 @@ function generateStartCaption(players, enemies, encounterInfo) {
     };
     const rankBadge = rankColors[encounterInfo.rank] || '⬜';
     
+    // 💡 STYLE C (2026-10-20): no `-----------` dividers anywhere in combat
+    // text — the VS-PANEL family uses spacing instead of rule lines.
     let caption = `⚔️ *BATTLE COMMENCES!* ⚔️\n`;
-    caption += `-----------\n`;
     
     if (encounterInfo.turnOrderStr) {
         caption += `${encounterInfo.turnOrderStr}\n\n`;
@@ -259,47 +260,73 @@ function generateStartCaption(players, enemies, encounterInfo) {
 }
 
 function generateTurnCaption(players, enemies, turnInfo) {
-    const actor = turnInfo.actor;
-    
-    // Dynamic action verb based on weapon/actor type.
-    // ⚠️ FIX 2026-07-17: only use weapon-flavored verbs (SMASHES/SLASHES/PIERCES/
-    // CASTS/SHOOTS) for *basic attacks*. For named skills (Tactical Strike,
-    // Cleave, Fireball, etc.) the verb should be neutral "uses" - otherwise
-    // a player with a spear-equipped weapon would see "PIERCES with Fireball"
-    // which makes no sense and led to user reports of "everything pierces".
-    // The skill itself determines its own behavior; the weapon is irrelevant
-    // when a skill is being cast.
-    let actionVerb = actor?.isEnemy ? 'unleashes' : 'uses';
-    const actionName = turnInfo?.action?.name || '';
-    const isBasicAttack = (
-        actionName === 'Basic Attack' ||
-        actionName === 'Failed Attack' ||
-        actionName === 'Missed Attack'
-    );
-    if (isBasicAttack && actor?.equipment?.main_hand) {
-        const wName = (actor.equipment.main_hand.name || '').toLowerCase();
-        if (/hammer|club|mace|maul/.test(wName)) actionVerb = '🔨 *SMASHES* with';
-        else if (/sword|blade|sabre|falchion/.test(wName)) actionVerb = '⚔️ *SLASHES* with';
-        else if (/dagger|knife|spear|lance/.test(wName)) actionVerb = '🗡️ *PIERCES* with';
-        else if (/staff|wand|rod/.test(wName)) actionVerb = '🔮 *CASTS* via';
-        else if (/bow|crossbow/.test(wName)) actionVerb = '🏹 *SHOOTS* with';
+    // 💡 STYLE C "VS PANEL" (owner pick, 2026-10-20 session): the per-turn
+    // narration that used to go out as a separate text bubble (guildAdventure
+    // performAction) now rides INSIDE the battle-image caption — ONE message
+    // per turn: 🆚 header, fighter bars, then the ↳ action log. WhatsApp text
+    // is proportional-font, so NO box-drawing borders and no bare column
+    // alignment — bars use the proven [▰▱] bracket form from the raid UI
+    // family (promptPlayerAction / renderDuelistStatus), which stays aligned
+    // on every phone width.
+    const toStr = (n) => Number(n || 0).toLocaleString('en-US');
+    const bar = (cur, max, len = 10) => {
+        const safeMax = Number(max) > 0 ? Number(max) : 1;
+        const filled = Math.max(0, Math.min(len, Math.round((Math.max(0, Number(cur) || 0) / safeMax) * len)));
+        return '▰'.repeat(filled) + '▱'.repeat(len - filled);
+    };
+
+    let caption = `🆚 *TURN ${turnInfo.turnNumber || '?'}*\n`;
+
+    // Party lines — co-op lists every member; fallen fighters stay visible.
+    for (const p of (Array.isArray(players) ? players : [])) {
+        if (!p) continue;
+        const hp = Math.max(0, Math.floor(p.stats?.hp ?? p.currentHP ?? 0));
+        const maxHp = Math.max(1, Math.floor(p.stats?.maxHp ?? p.maxHp ?? 1));
+        const en = Math.max(0, Math.floor(p.stats?.energy ?? 0));
+        const maxEn = Math.max(1, Math.floor(p.stats?.maxEnergy ?? p.maxEnergy ?? 1));
+        const dead = hp <= 0;
+        caption += `${dead ? '🕯️' : (p.class?.icon || '🧑')} *${p.name}* [${bar(hp, maxHp)}] \`${toStr(hp)}/${toStr(maxHp)}\` HP ⚡${Math.round((en / maxEn) * 100)}%\n`;
     }
-    
-    let caption = `🎮 *TURN ${turnInfo.turnNumber || '?'}*\n`;
-    caption += `-----------\n`;
-    
-    // Action summary
-    if (turnInfo.action) {
-        caption += `⚡ *${actor?.name}* ${actionVerb} *${turnInfo.action.name}*!\n`;
-        if (turnInfo.damage > 0) caption += `💥 *-${turnInfo.damage}* damage!\n`;
-        if (turnInfo.healing > 0) caption += `💚 *+${turnInfo.healing}* HP restored!\n`;
-        if (turnInfo.isCrit) caption += `💢 ★ *CRITICAL HIT!* ★\n`;
-        if (turnInfo.missed) caption += `💨 *MISS!* The attack whiffed!\n`;
-        if (turnInfo.effects?.length > 0) caption += `✨ ${turnInfo.effects.join(' · ')}\n`;
-        caption += `\n`;
+
+    // Enemy lines — pack fights show every enemy; dead ones stay with 💀.
+    for (const e of (Array.isArray(enemies) ? enemies : [])) {
+        if (!e) continue;
+        const hp = Math.max(0, Math.floor(e.stats?.hp ?? 0));
+        const maxHp = Math.max(1, Math.floor(e.stats?.maxHp ?? 1));
+        const dead = hp <= 0;
+        caption += `${dead ? '💀' : '👾'} *${e.name}* [${bar(hp, maxHp)}] \`${toStr(hp)}/${toStr(maxHp)}\` HP ${Math.round((hp / maxHp) * 100)}%\n`;
     }
-    
-    caption += `⏳ _Next action loading..._`;
+
+    // ↳ action block: narration lines captured from performAction via
+    // turnInfo.actionLog (full fidelity — procs, OVERKILL, kills all ride
+    // along), or the compact structured fallback when no log was attached.
+    let lines = (Array.isArray(turnInfo.actionLog) ? turnInfo.actionLog : []).map(l => String(l).trim()).filter(Boolean);
+    if (lines.length === 0 && turnInfo.action) {
+        const actor = turnInfo.actor;
+        const actionName = turnInfo?.action?.name || '';
+        const isBasicAttack = actionName === 'Basic Attack' || actionName === 'Failed Attack' || actionName === 'Missed Attack';
+        let actionVerb = actor?.isEnemy ? 'unleashes' : 'uses';
+        if (isBasicAttack && actor?.equipment?.main_hand) {
+            const wName = (actor.equipment.main_hand.name || '').toLowerCase();
+            if (/hammer|club|mace|maul/.test(wName)) actionVerb = '🔨 *SMASHES* with';
+            else if (/sword|blade|sabre|falchion/.test(wName)) actionVerb = '⚔️ *SLASHES* with';
+            else if (/dagger|knife|spear|lance/.test(wName)) actionVerb = '🗡️ *PIERCES* with';
+            else if (/staff|wand|rod/.test(wName)) actionVerb = '🔮 *CASTS* via';
+            else if (/bow|crossbow/.test(wName)) actionVerb = '🏹 *SHOOTS* with';
+        }
+        lines.push(`⚡ *${actor?.name}* ${actionVerb} *${actionName}*!`);
+        if (Number(turnInfo.damage) > 0) lines.push(`💥 *-${toStr(turnInfo.damage)}* damage!`);
+        if (Number(turnInfo.healing) > 0) lines.push(`💚 *+${toStr(turnInfo.healing)}* HP restored!`);
+        if (turnInfo.isCrit) lines.push(`💢 ★ *CRITICAL HIT!* ★`);
+        if (turnInfo.missed) lines.push(`💨 *MISS!* The attack whiffed!`);
+        if (turnInfo.effects?.length > 0) lines.push(`✨ ${turnInfo.effects.join(' · ')}`);
+    }
+    if (lines.length > 0) {
+        // Caption budget guard (WhatsApp media captions ~1024 chars precedent).
+        const CAP = 8;
+        const shown = lines.length > CAP ? [...lines.slice(0, CAP), `… +${lines.length - CAP} more`] : lines;
+        caption += `\n${shown.map(l => `↳ ${l}`).join('\n')}\n`;
+    }
     return caption;
 }
 
