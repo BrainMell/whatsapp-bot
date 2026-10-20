@@ -13,7 +13,7 @@ const OUT = process.argv[2] || '/tmp/atlas', N = parseInt(process.argv[3] || '14
     for (let i = 0; i < N; i++) {
         const c = C.CONTINENTS[i % 5];
         guilds.push({ name: names[i], continent: c.key, type: ['ADVENTURER', 'MERCHANT', 'RESEARCH'][i % 3], emblem: { icon: icons[i], color: colors[i % colors.length] },
-            members: new Array(2 + (i * 3) % 14).fill('x'), buildings: { hall: { level: 1 + (i * 2) % 5 } } });
+            members: [{ joinedAt: new Date(Date.now() - (N - i) * 86400000).toISOString() }].concat(new Array(1 + (i * 3) % 14).fill('x')), buildings: { hall: { level: 1 + (i * 2) % 5 } } });
     }
     const t0 = Date.now();
     const buf = await renderWorldAtlas({ guilds, highlight: names[0] });

@@ -73,3 +73,17 @@ Attribution for third-party art shipped with the bot / image services.
 - Card UI (wood / gold / parchment): "RPG GUI construction kit" by Lamoot
   (OpenGameArt, CC-BY-SA 3.0).
 - Fonts: Cinzel, Cinzel Decorative (OFL), MedievalSharp (OFL), Inter (OFL).
+
+## Clash-style building sprites (47-k8, 2026-10-20)
+
+- `core/rpgasset/kingdom3d_iso/coc_*.png` (gold-mine ladder `coc_mine_l1..l3`, banners, statues,
+  skulls, torch): derived from **ClashKingAssets** — https://github.com/ClashKingInc/ClashKingAssets
+  (sourced from Supergroup's Clash of Clans game art), repository licensed **GPL-3.0** and
+  explicitly inviting reuse with attribution. Files were trimmed, rescaled and re-graded
+  (desaturated/darkened) to sit in the Aldafold palette. This project is non-commercial fan
+  work; Clash of Clans is a Supercell trademark, this project is not affiliated with or
+  endorsed by Supercell.
+- The world atlas guild-castle markers (`core/rpgasset/kingdom3d/lm_castle_*.png`) are rendered
+  from Lords Mobile model rips; they are **provisioned per-box and never committed** (see
+  .gitignore) — regenerable via scripts/render_lm_markers.py. Lords Mobile is an IGG trademark;
+  render-only, non-commercial fan use.

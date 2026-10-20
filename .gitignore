@@ -81,3 +81,6 @@ core/data/quiz_audio_cache/
 
 # baked render media disk cache (2026-10-16): runtime-generated mp4/png per stateHash, survives deploys as untracked, never tracked
 media_cache/
+
+# 47-k8: Lords Mobile marker renders — derived from game assets, box-provisioned only, never committed
+core/rpgasset/kingdom3d/lm_castle_*

@@ -163,6 +163,10 @@ function mainSpriteOf(st, lvl, team) {
     }
     if (T === 'alchemy') return lvl === 1 ? { name: 'barrel', sc: 1.6 } : { name: 'building_tavern_' + team, sc: lvl === 2 ? 1.5 : 1.9 };
     if (T === 'mines') {
+        // 47-k8 (owner: "implement some of the Clash assets ... make it fit in"): Clash-grade gold-mine
+        // ladder on the SAME worksite — wooden hut → stone mine → deep dark seam (tinted to the palette,
+        // GPLv3 credit in docs/asset_credits.md). KayKit cave stays as the fallback below.
+        if (K.hasSprite('coc_mine_l1', 'iso')) return { name: 'coc_mine_l' + lvl, sc: lvl === 1 ? 1.05 : lvl === 2 ? 1.15 : 1.25, dx: 0.1, dz: 0.15 };
         // the pack's own cave (rock face + walkway-into-rocks) IS the mine — owner 2026-10-19:
         // "For the player base not just the guild base" (it replaces the struct_mine family)
         if (K.hasSprite('building_mine_' + team, 'iso')) return { name: 'building_mine_' + team, sc: lvl === 1 ? 1.55 : lvl === 2 ? 1.75 : 1.95, dx: 0.1, dz: 0.15 };
@@ -520,6 +524,7 @@ function buildWorld(state, cel = null) {
             if (n > 26 || rng() > 0.2) continue;
             const k = w.at(c, r); if (!k || k.river || k.water) continue;
             const gx = c - M, gy = r - M; if (!inGrid(gx, gy)) continue;
+            if (rng() < 0.16) { w.put(rng() < 0.5 ? 'coc_flag_rally' : 'coc_flag_pirate', c, r, { dx: (rng() < 0.5 ? -1 : 1) * 0.9, dz: (rng() - 0.5) * 0.5, sc: 0.8 }); n++; continue; }   // 47-k8: the odd Clash banner along the lanes
             w.put(fur[Math.floor(rng() * fur.length)], c, r, { dx: (rng() < 0.5 ? -1 : 1) * 0.85, dz: (rng() - 0.5) * 0.6, sc: 0.9 });
             n++;
         }
@@ -601,12 +606,12 @@ function buildWorld(state, cel = null) {
             case 'house':
                 if (lvl === 1) { P('building_home_A_' + team, { sc: 1.55 }); P('building_well_' + team, { dx: 1.5, dz: 0.9 }); P('crate_A_small', { dx: -1.4, dz: 1.0 }); }
                 else if (lvl === 2) { P('building_home_B_' + team, { sc: 1.75 }); P('building_well_' + team, { dx: 1.7, dz: 1.0 }); P('crate_A_small', { dx: -1.5, dz: 0.8 }); P('barrel', { dx: -1.0, dz: 1.6 }); }
-                else { P('building_home_B_' + team, { sc: 2.05 }); P('building_home_A_' + team, { dx: -2.0, dz: 0.5, sc: 0.95, flip: true }); P('building_well_' + team, { dx: 1.8, dz: 1.2 }); P('flag_' + team, { dx: 0.9, dz: 1.5 }); P('wheelbarrow', { dx: -0.3, dz: 1.9 }); }
+                else { P('building_home_B_' + team, { sc: 2.05 }); P('building_home_A_' + team, { dx: -2.0, dz: 0.5, sc: 0.95, flip: true }); P('building_well_' + team, { dx: 1.8, dz: 1.2 }); P('flag_' + team, { dx: 0.9, dz: 1.5 }); P('wheelbarrow', { dx: -0.3, dz: 1.9 }); P('coc_statue_dragon', { dx: 2.3, dz: 2.0, sc: 0.62, flip: true }); }
                 break;
             case 'blacksmith':
                 if (lvl === 1) { P('building_blacksmith_' + team, { sc: 1.35 }); P('crate_A_small', { dx: 1.3, dz: 0.8 }); P('resource_stone', { dx: -1.2, dz: 0.9 }); }
                 else if (lvl === 2) { P('building_blacksmith_' + team, { sc: 1.65 }); P('weaponrack', { dx: -1.4, dz: 0.9 }); P('resource_stone', { dx: 1.5, dz: 0.9 }); }
-                else { P('building_blacksmith_' + team, { sc: 1.95 }); P('weaponrack', { dx: -1.8, dz: 1.0 }); P('resource_stone', { dx: 1.7, dz: 1.0 }); P('wheelbarrow', { dx: 1.0, dz: 1.7 }); P('barrel', { dx: -0.8, dz: 1.6 }); }
+                else { P('building_blacksmith_' + team, { sc: 1.95 }); P('weaponrack', { dx: -1.8, dz: 1.0 }); P('resource_stone', { dx: 1.7, dz: 1.0 }); P('wheelbarrow', { dx: 1.0, dz: 1.7 }); P('barrel', { dx: -0.8, dz: 1.6 }); P('coc_torch', { dx: 0.7, dz: -1.5, sc: 0.85 }); }
                 break;
             case 'medbay':                                                // dedicated models: medic tent → infirmary → sanatorium
                 if (K.hasSprite('struct_med_tent', 'iso')) {
@@ -621,11 +626,18 @@ function buildWorld(state, cel = null) {
             case 'alchemy':
                 if (lvl === 1) { P('barrel', { sc: 1.6 }); P('bucket_water', { dx: 1.2, dz: 0.8 }); P('crate_open', { dx: -1.2, dz: 0.8 }); }
                 else if (lvl === 2) { P('building_tavern_' + team, { sc: 1.5 }); P('barrel', { dx: 1.5, dz: 1.0 }); P('crate_B_small', { dx: -1.4, dz: 1.0 }); }
-                else { P('building_tavern_' + team, { sc: 1.9 }); P('building_windmill_' + team, { dx: -2.1, dz: -0.2, sc: 0.95 }); P('barrel', { dx: 1.8, dz: 1.1 }); P('crate_B_small', { dx: 0.9, dz: 1.7 }); }
+                else { P('building_tavern_' + team, { sc: 1.9 }); P('building_windmill_' + team, { dx: -2.1, dz: -0.2, sc: 0.95 }); P('barrel', { dx: 1.8, dz: 1.1 }); P('crate_B_small', { dx: 0.9, dz: 1.7 }); P('coc_statue_wizard', { dx: 2.2, dz: 0.3, sc: 0.65 }); }
                 break;
-            case 'mines':                                                 // the pack cave (walkway-into-rocks) is THE mine at every level —
-                // owner 2026-10-19: "Move the cave inside the base ... For the player base not just the guild base".
-                // The worksite GROWS with the level: bare cave → ladder + cart → full ore-hoist yard.
+            case 'mines':                                                 // the worksite GROWS with the level —
+                // 47-k8: Clash gold-mine ladder leads (hut → stone → deep seam) with the old cave yard as fallback.
+                if (K.hasSprite('coc_mine_l1', 'iso')) {
+                    P('coc_mine_l' + lvl, { sc: lvl === 1 ? 1.05 : lvl === 2 ? 1.15 : 1.25, dx: 0.1, dz: 0.15 });
+                    P('resource_stone', { dx: 1.7, dz: 1.3 });
+                    P('coc_torch', { dx: -1.55, dz: 1.15, sc: 0.85, flip: true });
+                    if (lvl >= 2) P('wheelbarrow', { dx: 1.35, dz: 1.95, sc: 0.9 });
+                    if (lvl >= 3) { P('coc_skull_hog', { dx: -1.95, dz: 0.5, sc: 0.95 }); P('crate_long_A', { dx: 1.9, dz: 0.7 }); }
+                    break;
+                }
                 if (K.hasSprite('building_mine_' + team, 'iso')) {
                     P(B('mine'), { sc: lvl === 1 ? 1.55 : lvl === 2 ? 1.75 : 1.95, dx: 0.1, dz: 0.15 });
                     P('resource_stone', { dx: 1.7, dz: 1.3 });
