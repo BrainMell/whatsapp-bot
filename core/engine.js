@@ -1451,6 +1451,59 @@ function _thumbUndecodable(buf) {
     return false;
 }
 
+// 💡 47-k11 (owner: "the thumbnail for all the new maps and bases are white,
+// like broken"): every ANIMATED .j card (base / guild / room) is an mp4 sent
+// as { video, gifPlayback } — and the sendMessage patch below stamped the
+// 24x24 light-gray FALLBACK_THUMB onto EVERY video send since 09-14, so
+// WhatsApp's bubble preview was a stretched near-white square while the card
+// itself played fine. ffmpeg IS on this box (the bakers use it) — extract the
+// REAL frame 0 at thumb size instead. One extraction per unique buffer
+// (same _bufThumbCache LRU as buildThumbnail; mediaCache disk hits re-serve
+// the SAME bytes, so warm cards are pure cache hits), in-flight promise
+// shared between concurrent sends of the same media. Never throws.
+const _videoThumbInflight = new Map();
+async function videoFirstFrameThumb(buf) {
+  try {
+    if (!Buffer.isBuffer(buf) || buf.length < 1000) return FALLBACK_THUMB;
+    if (buf.slice(4, 8).toString("latin1") !== "ftyp") return FALLBACK_THUMB; // mp4/mov only
+    const bkey = _bufThumbKey(buf);
+    const hit = _bufThumbCache.get(bkey);
+    if (hit) return hit;
+    const busy = _videoThumbInflight.get(bkey);
+    if (busy) return busy;
+    const job = (async () => {
+      const gfs = require("fs"), gpath = require("path"), gos = require("os");
+      const { execFile } = require("child_process");
+      const dir = gfs.mkdtempSync(gpath.join(gos.tmpdir(), "vthumb-"));
+      try {
+        const inP = gpath.join(dir, "in.mp4");
+        const outP = gpath.join(dir, "f0.jpg");
+        gfs.writeFileSync(inP, buf);
+        await new Promise((resolve, reject) => {
+          const t = setTimeout(() => reject(new Error("ffmpeg frame timeout (6s)")), 6000);
+          execFile(process.env.FFMPEG_PATH || "ffmpeg",
+            ["-ss", "00:00:00", "-i", inP, "-y", "-vframes", "1", "-vf", "scale=120:-2", outP],
+            (err) => { clearTimeout(t); err ? reject(err) : resolve(); });
+        });
+        const jpg = gfs.readFileSync(outP);
+        if (!jpg || jpg.length < 50) return FALLBACK_THUMB;
+        if (_bufThumbCache.size >= _bufThumbCacheMax) {
+          _bufThumbCache.delete(_bufThumbCache.keys().next().value);
+        }
+        _bufThumbCache.set(bkey, jpg);
+        return jpg;
+      } finally {
+        try { gfs.rmSync(dir, { recursive: true, force: true }); } catch (_) { /* best-effort */ }
+      }
+    })();
+    _videoThumbInflight.set(bkey, job);
+    try { return await job; } finally { _videoThumbInflight.delete(bkey); }
+  } catch (e) {
+    _thumbWarnOnce("videoFirstFrameThumb failed (" + (e?.message || e) + ") - gray placeholder");
+    return FALLBACK_THUMB;
+  }
+}
+
 let _thumbWarnCount = 0;
 function _thumbWarnOnce(msg) {
   if (_thumbWarnCount < 5) {
@@ -1474,7 +1527,15 @@ async function buildThumbnail(imgBuffer) {
     if (!imgBuffer || !imgBuffer.length) return FALLBACK_THUMB;
     // 47-k10: sniff BEFORE any decode — mp4/webm/webp bytes can never become
     // a real preview, and the decode attempt itself costs event-loop time.
-    if (_thumbUndecodable(imgBuffer)) return FALLBACK_THUMB;
+    // 47-k11: EXCEPT mp4 still deserves a REAL preview — the animated cards
+    // also go out as `image:` with gifPlayback in some lanes (abyss card at
+    // engine.js ~23736) — extract frame 0 instead of stamping gray.
+    if (_thumbUndecodable(imgBuffer)) {
+      if (imgBuffer.slice(4, 8).toString("latin1") === "ftyp") {
+        return await videoFirstFrameThumb(imgBuffer);
+      }
+      return FALLBACK_THUMB;
+    }
     const bkey = _bufThumbKey(imgBuffer);
     const hit = _bufThumbCache.get(bkey);
     if (hit) return hit;
@@ -7915,7 +7976,11 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     if (content && !content.jpegThumbnail && content.image) {
                       content.jpegThumbnail = await buildThumbnailSmart(content.image);
                     } else if (content && !content.jpegThumbnail && content.video) {
-                      content.jpegThumbnail = FALLBACK_THUMB;
+                      // 47-k11: REAL frame-0 preview for mp4 videos (the animated
+                      // .j cards) — the 24x24 gray placeholder read as a WHITE
+                      // broken thumbnail in-chat (owner 2026-10-20). Non-buffer /
+                      // non-mp4 video falls back to the gray placeholder inside.
+                      content.jpegThumbnail = await videoFirstFrameThumb(content.video);
                     }
                   } catch (_) {
                     // NEVER block or crash a send over a thumbnail problem.
