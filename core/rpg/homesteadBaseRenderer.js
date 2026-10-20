@@ -177,8 +177,6 @@ function mainSpriteOf(st, lvl, team) {
     if (T === 'market')                                         // owner 2026-10-20: "a market model from the clash assets"
         return lvl === 1 ? { name: 'house_shop_' + team, sc: 1.5 } : { name: 'building_market_' + team, sc: lvl === 2 ? 1.55 : 1.9 };
     if (T === 'barracks') return { name: 'building_barracks_' + team, sc: lvl === 1 ? 1.4 : lvl === 2 ? 1.65 : 1.95 };
-    if (T === 'guildhall')                                      // your guild's seat: banner → hall → castle
-        return lvl === 1 ? { name: 'coc_flag_rally', sc: 1.15 } : { name: lvl === 2 ? 'building_church_' + team : 'building_castle_' + team, sc: lvl === 2 ? 1.55 : 1.6 };
     return null;
 }
 function centroid(cells) {
@@ -710,11 +708,6 @@ function buildWorld(state, cel = null) {
                 else if (lvl === 2) { P('building_barracks_' + team, { sc: 1.65 }); P('weaponrack', { dx: 1.6, dz: 1.0 }); P('target', { dx: -1.6, dz: 1.1, sc: 1.0 }); P('tent', { dx: 0.9, dz: -1.6, sc: 0.9 }); P('coc_torch', { dx: -0.9, dz: -1.5, sc: 0.9 }); }
                 else { P('building_barracks_' + team, { sc: 1.95 }); P('weaponrack', { dx: 1.8, dz: 1.0 }); P('target', { dx: -1.8, dz: 1.2, sc: 1.05 }); P('coc_flag_rally', { dx: -2.3, dz: -0.2, sc: 0.9 }); P('coc_statue_mighty', { dx: 2.2, dz: -0.4, sc: 0.6 }); P('coc_torch', { dx: 0.8, dz: -1.7, sc: 0.95 }); }
                 break;
-            case 'guildhall':                                             // your guild's seat — banner → hall → castle
-                if (lvl === 1) { P('coc_flag_rally', { sc: 1.15 }); P('tent', { dx: 1.3, dz: 1.1, sc: 1.0 }); P('barrel', { dx: -1.3, dz: 0.9 }); P('coc_torch', { dx: -1.1, dz: -1.2, sc: 0.9 }); }
-                else if (lvl === 2) { P('building_church_' + team, { sc: 1.55 }); P('coc_flag_rally', { dx: 1.9, dz: 0.6, sc: 0.85 }); P('barrel', { dx: -1.5, dz: 1.0 }); P('coc_torch', { dx: -1.2, dz: -1.1, sc: 0.9 }); }
-                else { P('building_castle_' + team, { sc: 1.6 }); P('flag_' + team, { dx: 2.0, dz: 0.4, sc: 0.9 }); P('coc_statue_dragon', { dx: -2.1, dz: 0.6, sc: 0.6, flip: true }); P('coc_torch', { dx: 0.9, dz: -1.7, sc: 0.95 }); }
-                break;
             case 'pond': {                                              // the lakeside boardwalk: a pier out over the water
                 const [sc1, sr1] = hc(st.x + def.fw - 1, st.y + def.fh - 1);
                 const len = lvl === 1 ? 2 : lvl === 2 ? 3 : 4;
@@ -1039,7 +1032,6 @@ const STRUCT_PANEL = {
     alchemy: { emoji: '⚗️', flavor: 'Bubbles, powders, recipes best not asked about.', cta: 'brew — the cauldron' },
     market: { emoji: '🏪', flavor: 'Stalls, scales and honest(ish) prices.', cta: 'shop — browse the wares' },
     barracks: { emoji: '🛡️', flavor: 'Your summons muster here, ready to march.', cta: 'summons — open the roster' },
-    guildhall: { emoji: '🏰', flavor: 'The charter-stone of your guild stands here.', cta: 'guild — guild matters' },
 };
 
 function drawStructurePlate(ctx, W, H, def, lv, team, k) {
@@ -1088,11 +1080,11 @@ async function renderStructureCard(state, opts = {}) {
         if (!entry) throw new Error(`structure ${type} not present in this base`);
         const lv = entry.def.levels.find((l) => l.level === entry.lvl) || entry.def.levels[0];
         // camera: tight on the centroid; the pond pulls focus toward its pier
-        const zoom = type === 'guildhall' ? 1.42 : (STRUCT_ZOOM[entry.def.fw] || 1.55);   // guildhall: slightly wider — the castle sprite is tall
+        const zoom = STRUCT_ZOOM[entry.def.fw] || 1.55;
         const focusDx = type === 'pond' ? 1.4 : 0;
         const focusDz = type === 'hunting' ? -1.6 : 0.5;   // hunting: pull north so the woods + camp share the frame
         w.scale = zoom;
-        w.layoutFixed(CARD_W, CARD_H, entry.cen.x + focusDx, entry.cen.z + focusDz, CARD_W / 2, CARD_H * (type === 'guildhall' ? 0.48 : 0.46));
+        w.layoutFixed(CARD_W, CARD_H, entry.cen.x + focusDx, entry.cen.z + focusDz, CARD_W / 2, CARD_H * 0.46);
         const seed = hashStr(state.owner || 'base');
         const bi = (K.biomeInfo('iso').biomes || {})[world.realm];
         const bd = world.realm === 'isle' ? { top: '#cfe8ef', mid: '#8fc7b2', bot: '#3f7a5c' } : bi ? { top: bi.backdrop[0], mid: bi.backdrop[1], bot: bi.backdrop[2] } : { top: '#356f6a', mid: '#1f4a4c', bot: '#0d2527' };

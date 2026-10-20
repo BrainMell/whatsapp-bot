@@ -106,6 +106,28 @@ async function connectDB() {
     await cardSystem.eshopFlexView('qa@s.whatsapp.net', reply, 'qa:flex@chat', start, end);
     check('re-run within 15s blocked (no extra sends)', /Flex view just ran/.test(replies[replies.length - 1] || '') && sent.length === before);
 
+    // ── §3b single-card view = card + caption ONLY ───────────────────────
+    // owner 2026-10-20: ".j eshop <id> sends one message then another? It should
+    // only send the card with its caption" — no header text, no cooldown refusal
+    console.log('\n── §3b single-card = card only, no header ──');
+    {
+        const realGet = axios.get;
+        axios.get = async () => ({ data: Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, ...Array(128).fill(0)]) }); // JPEG magic, deterministic
+        const r1 = [];
+        const s0 = sent.length;   // §2's mock sock is still inst.sock_ref — it records into `sent`
+        const slot = filled[0];
+        await cardSystem.eshopFlexView('qa@s.whatsapp.net', (t) => r1.push(String(t)), 'qa:single@chat', slot, slot);
+        const m1 = sent.slice(s0).filter(x => x.content && (x.content.image || x.content.video));
+        check('single: exactly one media message, ZERO text replies', m1.length === 1 && r1.length === 0, `${m1.length} media + ${r1.length} replies: ${JSON.stringify(r1[0] || '').slice(0, 60)}`);
+        const cap1 = String((m1[0] && m1[0].content && m1[0].content.caption) || '');
+        check('single: caption carries slot# + buy hint', cap1.includes(`#${slot}`) && cap1.includes(`eshop buy ${slot}`), cap1.slice(0, 90));
+        // immediate second peek right after a bulk run must NOT hit the cooldown
+        const r2 = [];
+        await cardSystem.eshopFlexView('qa@s.whatsapp.net', (t) => r2.push(String(t)), 'qa:single2@chat', filled[1] || filled[0], filled[1] || filled[0]);
+        check('single: no cooldown right after a bulk flex (2 media now)', !/Flex view just ran/.test(r2[0] || '') && sent.slice(s0).length === 2, JSON.stringify(r2[0] || '').slice(0, 60));
+        axios.get = realGet;
+    }
+
     // ── §4 empty range ───────────────────────────────────────────────────
     console.log('\n── §4 empty range ──');
     const emptySlot = Array.from({ length: 16 }, (_, i) => i + 1).find(n => !filled.includes(n));

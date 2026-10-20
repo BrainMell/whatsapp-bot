@@ -392,9 +392,9 @@ const COMMAND_REGISTRY = {
     { cmd: 'waifu', desc: 'Get a random beautiful waifu image.', usage: 'waifu' },
     { cmd: 'fish', desc: 'Go scavenging at the coast for rare fish and shards.', usage: 'fish' },
     { cmd: 'hunt', desc: 'Track and capture wilderness animals for profit.', usage: 'hunt' },
-    { cmd: 'base', desc: 'Your outdoor base map: mines, pond, hunting grounds, market, barracks, guild hall.', usage: 'base' },
+    { cmd: 'base', desc: 'Your outdoor base map: mines, pond, hunting grounds, market, barracks.', usage: 'base' },
     { cmd: 'base <#id|name>', desc: 'Open a structure — zoomed card + its live stats and commands.', usage: 'base 3 | base mines | base barracks' },
-    { cmd: 'base build', desc: 'Construct a structure on a free plot.', usage: 'base build <blacksmith|medbay|alchemy|market|barracks|guildhall> [plot#]' },
+    { cmd: 'base build', desc: 'Construct a structure on a free plot.', usage: 'base build <blacksmith|medbay|alchemy|market|barracks> [plot#]' },
     { cmd: 'base upgrade', desc: 'Upgrade a structure to its next form.', usage: 'base upgrade <type|#id>' }
   ],
   GAMES: [

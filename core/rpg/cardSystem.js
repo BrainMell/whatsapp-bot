@@ -1369,7 +1369,9 @@ async function eshopFlexView(senderJid, reply, chatId, startSlot, endSlot) {
   const p = P();
   const inst = getInst();
   const now = Date.now();
-  if (now - (eshopFlexLastRun.get(chatId) || 0) < ESHOP_FLEX_COOLDOWN_MS) {
+  const single = startSlot === endSlot;
+  // only the bulk burst gets throttled — a one-card peek is a normal 1-message view
+  if (!single && now - (eshopFlexLastRun.get(chatId) || 0) < ESHOP_FLEX_COOLDOWN_MS) {
     return reply(`⏳  _Flex view just ran here — give it a few seconds_`);
   }
 
@@ -1383,24 +1385,28 @@ async function eshopFlexView(senderJid, reply, chatId, startSlot, endSlot) {
     return reply(`📭  *NOTHING IN ${label}*\n\n🎪 ⟢ _No event cards there right now_\n\n💡 ⟢ _Browse everything with_ \`${p} eshop\``);
   }
 
-  eshopFlexLastRun.set(chatId, now);
+  if (!single) eshopFlexLastRun.set(chatId, now);
 
   const sock = inst.sock_ref;
   if (!sock || typeof sock.sendMessage !== 'function') {
     return reply('⚠️  _Bot is reconnecting — try again in a moment_');
   }
 
-  // Header first — instant feedback while card media streams out
-  const tokenBalance = economy.getTokens(senderJid);
-  const eventActive = await isTokenEventActive();
-  const rangeLabel = startSlot === endSlot ? `${startSlot}` : `${startSlot}-${endSlot}`;
-  const header = `🎪 *EVENT SHOP — FLEX VIEW* 🎪\n` +
-    `━━━━━━━━━━━━━━━\n` +
-    `🎫 Your Tokens: *${tokenBalance}*\n` +
-    `📊 Event Status: ${eventActive ? '🟢 ACTIVE' : '🔴 INACTIVE'}\n` +
-    `🃏 Showing *${entries.length}* card${entries.length === 1 ? '' : 's'} (slot${startSlot === endSlot ? '' : 's'} ${rangeLabel})\n\n` +
-    `🛒 Buy one: \`${p} eshop buy <slot>\``;
-  try { await reply(header); } catch (e) { /* header is cosmetic — cards matter more */ }
+  // Header only for multi-card bursts (instant feedback while media streams out).
+  // A single-card view sends JUST the card with its caption — owner 2026-10-20:
+  // "it sends one message then another? It should only send the card with its caption"
+  if (!single) {
+    const tokenBalance = economy.getTokens(senderJid);
+    const eventActive = await isTokenEventActive();
+    const rangeLabel = `${startSlot}-${endSlot}`;
+    const header = `🎪 *EVENT SHOP — FLEX VIEW* 🎪\n` +
+      `━━━━━━━━━━━━━━━\n` +
+      `🎫 Your Tokens: *${tokenBalance}*\n` +
+      `📊 Event Status: ${eventActive ? '🟢 ACTIVE' : '🔴 INACTIVE'}\n` +
+      `🃏 Showing *${entries.length}* cards (slots ${rangeLabel})\n\n` +
+      `🛒 Buy one: \`${p} eshop buy <slot>\``;
+    try { await reply(header); } catch (e) { /* header is cosmetic — cards matter more */ }
+  }
 
   const failed = [];
   for (const entry of entries) {

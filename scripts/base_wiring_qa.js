@@ -45,8 +45,8 @@ const QA_JID = 'qa-base@s.whatsapp.net';
     // ── §1 structures catalog ──
     console.log('\n── §1 structures catalog ──');
     const S = renderer.structures().structures;
-    check('10 structure types', S.length === 10, `got ${S.length}: ${S.map((s) => s.id).join(',')}`);
-    for (const t of ['market', 'barracks', 'guildhall']) {
+    check('9 structure types', S.length === 9, `got ${S.length}: ${S.map((s) => s.id).join(',')}`);
+    for (const t of ['market', 'barracks']) {
         const d = renderer.structDef(t);
         check(`${t}: 3 levels w/ prices`, !!d && d.levels.length === 3 && d.levels.every((l) => l.price > 0 && l.sprite && l.name));
     }
@@ -96,10 +96,9 @@ const QA_JID = 'qa-base@s.whatsapp.net';
         { type: 'hunting', level: 1, x: renderer.LAYOUT.hunting.x, y: renderer.LAYOUT.hunting.y },
         { type: 'market', level: 1, x: 8, y: 1 },
         { type: 'barracks', level: 2, x: 13, y: 7 },
-        { type: 'guildhall', level: 3, x: 4, y: 5 },
     ];
     const cardState = { owner: 'QA Base Owner', structures: st, freePlots: [] };
-    for (const t of ['mines', 'pond', 'hunting', 'market', 'barracks', 'guildhall']) {
+    for (const t of ['mines', 'pond', 'hunting', 'market', 'barracks']) {
         try {
             const out = await renderer.renderStructureCard(cardState, { type: t, index: st.findIndex((s) => s.type === t) });
             const jpeg = out && out.buffer && out.buffer[0] === 0xFF && out.buffer[1] === 0xD8;
@@ -116,7 +115,6 @@ const QA_JID = 'qa-base@s.whatsapp.net';
     await Base.updateOne({ userId: QA_JID }, { $push: { structures: [
         { uid: 'qa-mkt', type: 'market', level: 1, x: 8, y: 1 },
         { uid: 'qa-brk', type: 'barracks', level: 2, x: 13, y: 7 },
-        { uid: 'qa-gld', type: 'guildhall', level: 3, x: 4, y: 5 },
     ] } });
     const rec2 = await baseBuilder.loadBase(QA_JID);
 
@@ -177,13 +175,9 @@ const QA_JID = 'qa-base@s.whatsapp.net';
         check('barracks: card sent', !!m && /Barracks|Summons/i.test(String((m && m.content.caption) || '')));
         check('barracks: summons roster opened after the card', sent.length + replies.length >= 2, `${sent.length} sends + ${replies.length} replies`);
     }
-    // guildhall (#7): guildless charter line (QA jid has no guild)
-    {
-        const { ctx, sent } = mkCtx();
-        await baseBuilder.enterStructure(ctx, '7');
-        const m = lastMedia({ sent });
-        check('guildhall: guildless charter line + .j guild CTA', /charter hangs blank/.test(String((m && m.content.caption) || '')) && /\.j guild/.test(String((m && m.content.caption) || '')));
-    }
+    // guildhall RETIRED (owner 2026-10-20: undo the guild hall close-up) — the
+    // catalog no longer has it and loadBase silently strips any legacy record
+    check('guildhall retired from the catalog', !renderer.structDef('guildhall'));
 
     // ── cleanup ──
     await Base.deleteOne({ userId: QA_JID }).catch(() => {});

@@ -190,7 +190,7 @@ async function viewBase(ctx, opts = {}) {
         `🪧 Free plots: ${plots.filter((p) => p.free).map((p) => p.id).join(', ') || 'none'}\n\n` +
         `_${ctx.prefix} base <#id> — open a structure (zoomed)_\n` +
         `_${ctx.prefix} base house 1 — enter your house_\n` +
-        `_${ctx.prefix} base build <blacksmith|medbay|alchemy|market|barracks|guildhall> [plot#]_\n` +
+        `_${ctx.prefix} base build <blacksmith|medbay|alchemy|market|barracks> [plot#]_\n` +
         `_${ctx.prefix} base upgrade <type|#id> • ${ctx.prefix} base info_`;
     try {
         if (media.contentType === 'video/mp4') {
@@ -282,18 +282,6 @@ async function enterStructure(ctx, idArg) {
             wired = () => require('../commands/summonCommands').handleCommand(
                 ctx.sock, ctx.chatId, ctx.senderJid, economy.getDisplayName(ctx.senderJid), [], ctx.m);
             break;
-        case 'guildhall': {
-            const g = state.guild;
-            if (g) {
-                lines.push(`🏰 *${g.name}* — ${String(g.type || 'ADVENTURER').toUpperCase()} • Lv.${g.level || 1}`);
-                lines.push(`👥 ${(g.members || []).length} members • 💰 ${(g.balance || 0).toLocaleString()} ZENI bank`);
-                if (g.motto) lines.push(`💬 _${String(g.motto).slice(0, 60)}_`);
-            } else {
-                lines.push(`🌫️ Your charter hangs blank — you stand guildless.`);
-            }
-            lines.push(`▸ \`${ctx.prefix} guild\` — guild matters • \`${ctx.prefix} guild emblem\` — the crest`);
-            break;
-        }
         case 'blacksmith':
             lines.push(`▸ \`${ctx.prefix} blacksmith\` — repair & enhance gear`);
             break;
@@ -335,7 +323,7 @@ async function enterStructure(ctx, idArg) {
 // ═══════════════════════════════════════════════════════════════════════════
 // BUILD / UPGRADE (§7/8) — atomic purchase, identical compensation contract
 // ═══════════════════════════════════════════════════════════════════════════
-const BUILDABLE = ['blacksmith', 'medbay', 'alchemy', 'market', 'barracks', 'guildhall'];
+const BUILDABLE = ['blacksmith', 'medbay', 'alchemy', 'market', 'barracks'];
 
 async function cmdBuild(ctx, rec, args) {
     const type = String(args[0] || '').toLowerCase();
