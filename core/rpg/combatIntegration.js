@@ -12,6 +12,13 @@ const fs = require('fs');
 
 async function renderCombatStart(players, enemies, encounterInfo) {
     try {
+        // 💡 DUNGEON FAST-LANE (2026-10-20 owner: "dungeons are very inconsistent,
+        // make it fast and lightweight"): static combat renders are 1-3s jobs that
+        // must NOT wait behind slow GIF/roster renders in the shared _enqueue
+        // semaphore. Queued lane measured: busy queue -> up to 20s waitMs -> the
+        // caller's 10s race fires -> text-only fallback = the classic
+        // "sometimes image, sometimes text" dungeon roulette. PvP duels already
+        // bypass (see generateCombatImageDirect history); dungeons now do too.
         const result = await combatImageGen.generateCombatImage(players, enemies, {
             rank: encounterInfo.rank,
             floor: encounterInfo.floor || 0,
@@ -19,7 +26,8 @@ async function renderCombatStart(players, enemies, encounterInfo) {
             // 💡 Phase 7: Pass summons through to the Go service
             summons: encounterInfo.summons || [],
             // ⚔️ ruins encounter scene: square map panel replaces Options_menu
-            encounter: encounterInfo.encounter || undefined
+            encounter: encounterInfo.encounter || undefined,
+            bypassQueue: true
         });
         return result;
     } catch (error) {
@@ -57,7 +65,11 @@ async function renderCombatTurn(players, enemies, turnInfo, options = {}) {
                 floor: options.floor || 0,
                 backgroundPath: options.backgroundPath,
                 summons: options.summons || [],
-                action: animAction  // null if no actionable attack
+                action: animAction,  // null if no actionable attack
+                // 💡 DUNGEON FAST-LANE (2026-10-20): turn renders take the direct
+                // express lane (1-3s) instead of queueing behind GIF renders —
+                // same rationale as renderCombatStart above.
+                bypassQueue: true
             }
         );
         return result;
@@ -206,6 +218,9 @@ async function renderCombatEnd(players, enemies, victory, rewards = null, option
                 background: String(options.backgroundPath
                     ? options.backgroundPath.split(/[\\/]/).pop()
                     : 'env1.png'),
+                // 💡 DUNGEON FAST-LANE (2026-10-20): the victory/defeat card is the
+                // payoff moment — it must not wait behind GIF renders in the queue.
+                bypassQueue: true
             }
         );
     } catch (error) {

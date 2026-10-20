@@ -247,7 +247,12 @@ async function generateEndScreenImage(text, options = {}) {
             background: String(options.background || ''),
             caption: String(options.caption || '')
         };
-        const imageBuffer = await goService.generateCombatEndScreen(payload);
+        // 💡 DUNGEON FAST-LANE (2026-10-20): honor bypassQueue so the victory/
+        // defeat card skips the shared render semaphore (see combatIntegration).
+        const imageBuffer = await goService.generateCombatEndScreen(
+            payload,
+            { bypassQueue: Boolean(options.bypassQueue) },
+        );
         return { success: true, buffer: imageBuffer };
     } catch (error) {
         console.error('❌ End screen generation failed:', error.message);

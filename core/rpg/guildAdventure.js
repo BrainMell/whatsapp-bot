@@ -4742,7 +4742,10 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   // pipeline; every other combat cadence constant is 2.5-10s. A short
   // beat (4s) gives players a moment to read the scene without feeling
   // like the enemy went AFK.
-  const startDelay = state.solo ? 0 : 4000;
+  // 💡 DUNGEON FAST-LANE (2026-10-20): first-turn beat 4000 -> 2500 for group
+  // fights. Still a readable pause after the scene lands, but the party no
+  // longer stares at the START card an extra 1.5s before anything moves.
+  const startDelay = state.solo ? 0 : 2500;
   // 💡 COMBAT RESUME (2026-10-14: group + auto extension of the 2026-10-11
   // solo contract): snapshot the fight the moment it starts so a restart
   // mid-first-turn still leaves a resume point (refreshed every action below).
@@ -5068,7 +5071,11 @@ async function processCombatTurn(sock, sessionKey) {
               state.pendingStatusMsg = annExpireMsgs.join("\n");
             }
             await nextTurn(sock, null, sessionKey);
-            await new Promise((r) => setTimeout(r, state.solo ? 1000 : 2500));
+            // 💡 DUNGEON FAST-LANE (2026-10-20): AI-turn pacing 1000/2500 -> 800/1500.
+            // The gap exists so consecutive AI/skip turns don't flood the chat;
+            // 1500ms keeps that guarantee while cutting ~40% dead time per
+            // boss-cast round in group fights.
+            await new Promise((r) => setTimeout(r, state.solo ? 800 : 1500));
             continue;
           }
         }
@@ -5158,7 +5165,9 @@ async function processCombatTurn(sock, sessionKey) {
           sessionKey,
         );
         // Wait a brief moment so skipped turns don't spam instantly and crash
-        await new Promise((r) => setTimeout(r, state.solo ? 1000 : 2500));
+        // 💡 DUNGEON FAST-LANE (2026-10-20): skip-turn pacing 1000/2500 -> 800/1500
+        // (same anti-spam guarantee, less dead air — see the boss-cast site).
+        await new Promise((r) => setTimeout(r, state.solo ? 800 : 1500));
         continue;
       }
 
@@ -7751,11 +7760,38 @@ async function clearGroupSnapshot(sessionKeyOrChatId) {
 // 💡 Dispatchers: the shared hook points (fight start, after every completed
 // action, quest stop, quest end) call THESE — one call site covers solo AND
 // group fights with zero duplicated wiring.
+//
+// 💡 DUNGEON FAST-LANE (2026-10-20 owner: "dungeons are very inconsistent,
+// make it fast and lightweight"): snapshot saves used to stack — every player
+// action fired an un-coalesced fire-and-forget findOneAndUpdate, so a fast
+// 6-player fight kept several parallel Mongo writes per session alive at once
+// (wasted connections + racing last-write wins). Now: while one write drains
+// for a sessionKey, new requests only mark that session dirty; exactly ONE
+// tail save (250ms later) captures whatever landed meanwhile. State is always
+// re-read at write time, so the tail save can never persist stale data.
+const _snapshotInFlight = new Set();
+const _snapshotDirty = new Set();
 async function saveCombatSnapshot(sessionKey) {
   const state = gameStates.get(sessionKey);
   if (!state) return;
-  if (_soloSnapshotEligible(state)) return saveSoloSnapshot(sessionKey);
-  if (_groupSnapshotEligible(state)) return saveGroupSnapshot(sessionKey);
+  const isSoloFight = _soloSnapshotEligible(state);
+  if (!isSoloFight && !_groupSnapshotEligible(state)) return;
+  if (_snapshotInFlight.has(sessionKey)) {
+    _snapshotDirty.add(sessionKey);
+    return;
+  }
+  _snapshotInFlight.add(sessionKey);
+  try {
+    if (isSoloFight) await saveSoloSnapshot(sessionKey);
+    else await saveGroupSnapshot(sessionKey);
+  } finally {
+    _snapshotInFlight.delete(sessionKey);
+  }
+  if (_snapshotDirty.has(sessionKey)) {
+    _snapshotDirty.delete(sessionKey);
+    // Tail save: capture any action that landed while the first write drained.
+    setTimeout(() => { saveCombatSnapshot(sessionKey).catch(() => {}); }, 250);
+  }
 }
 
 async function clearCombatSnapshot(stateOrKey) {
@@ -10611,28 +10647,32 @@ async function endAdventure(sock, sessionKey, victory = true) {
   const __narrT0 = Date.now();
   try {
     if (state.smartGroqCall) {
-      END_DEBUG(`endAdventure narration via smartGroqCall (20s watchdog)`);
+      END_DEBUG(`endAdventure narration via smartGroqCall (6s watchdog)`);
       // 💡 WATCHDOG 2026-10-07: the raw narration call can stall far longer
       // than any user cares to wait (groq-sdk = 60s timeout x3 SDK retries,
       // then engine retries x3 keys = up to 9 MINUTES of dead silence, and
       // a fully hung socket defeats even that). Race it; on timeout use the
       // standard fallback narration so the completion card still goes out.
+      // 💡 DUNGEON FAST-LANE (2026-10-20): 20s -> 6s. The narration is FLAVOR
+      // text gating the completion card — Groq answers in 1-3s normally, so a
+      // 6s watchdog keeps the real narration in the fast path while the
+      // quest finale can no longer sit 20s in dead air on a stall.
       const completion = await raceWithTimeout(
         state.smartGroqCall({
           messages: [{ role: "system", content: prompt }],
           model: "openai/gpt-oss-120b",
         }),
-        20000, 'endAdventure.narration',
+        6000, 'endAdventure.narration',
       );
       narration = completion.choices[0].message.content;
     } else if (state.groq) {
-      END_DEBUG(`endAdventure narration via raw groq client (20s watchdog)`);
+      END_DEBUG(`endAdventure narration via raw groq client (6s watchdog)`);
       const completion = await raceWithTimeout(
         state.groq.chat.completions.create({
           messages: [{ role: "system", content: prompt }],
           model: "openai/gpt-oss-120b",
         }),
-        20000, 'endAdventure.narration',
+        6000, 'endAdventure.narration',
       );
       narration = completion.choices[0].message.content;
     } else {

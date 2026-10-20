@@ -537,12 +537,34 @@ class GoImageService {
    * for the new gradient + rewards panel end screen. The text-only path is still
    * supported as a fallback (just pass {text}).
    */
-  async generateCombatEndScreen(payload) {
+  async generateCombatEndScreen(payload, opts = {}) {
     // Backward-compat: accept a plain string
     if (typeof payload === 'string') payload = { text: payload };
     // 💡 2026-09-14 PERF: fmt=jpeg - the end cards render ~800KB-1MB as PNG;
     // JPEG q90 is 4-6x smaller so WhatsApp upload (the dominant latency)
     // drops accordingly. Callers must send mimetype image/jpeg.
+    // 💡 DUNGEON FAST-LANE (2026-10-20): opts.bypassQueue posts DIRECT to the
+    // endpoint (same pattern as generateCombatImageDirect) so a dungeon's
+    // victory/defeat card never waits behind slow GIF renders in _enqueue.
+    // Mirrors the PvP express-lane rationale: static renders are 1-3s jobs.
+    if (opts.bypassQueue) {
+      const startTime = Date.now();
+      try {
+        const axios = require('axios');
+        const baseURL = this.client.defaults.baseURL;
+        const response = await axios.post(baseURL + '/api/combat/endscreen?fmt=jpeg', payload, {
+          responseType: 'arraybuffer',
+          timeout: 20000,
+          headers: { 'Content-Type': 'application/json' },
+        });
+        const buffer = Buffer.from(response.data);
+        console.log(`[GoService] Combat endscreen (direct): ${buffer.length} bytes in ${((Date.now() - startTime) / 1000).toFixed(2)}s`);
+        return buffer;
+      } catch (error) {
+        console.error('[GoService] Combat endscreen (direct) FAILED:', error.message);
+        throw error;
+      }
+    }
     return this._enqueue(async () => {
       try {
         const response = await this.client.post(
