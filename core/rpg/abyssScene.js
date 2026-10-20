@@ -2607,7 +2607,7 @@ module.exports = {
     bgForEncounter, liveEntities, BG_META, coverTransform,
     enemyIdOf, resolveEnemyArt, resolveEnemyArtRegular, resolveSummonArt,
     enemyNativeFacing, playerArtFlipFor, PLAYER_ART_FACES_LEFT, PLAYER_ART_FACES_NEVER,
-    ABYSS_REGULAR_ART, ENEMY_FACING, ABYSS_ART_OVERRIDES,
+    ENEMY_FACING, ABYSS_ART_OVERRIDES,
     isBossFloorMirror,
     HIT_TINT, HIT_GLOW,
     isAnimatedCard: (b) => { try { return require('../utils/gif89a').isGifBuffer(b); } catch (e) { return false; } },
