@@ -26,7 +26,9 @@ const KT = require('./kingdomTerrain');
 const mediaCache = require('./mediaCache');
 const { encodeRawStreamMp4 } = require('../utils/bakeStream');   // 47-k10: streaming bake — one frame alive at a time
 const ambient = require('./ambient');   // shared life layer (owner 2026-10-19: "the guild card should also be a gif")
-const { emojiFont, fillTextMixed } = require('./emojiFont');   // 2026-10-20: emblem emoji glyphs; color bitmaps 2026-10-20 (owner 'use colors not hex code')
+const emojiFontMod = require('./emojiFont');   // 2026-10-20: emblem emoji glyphs; color bitmaps 2026-10-20 (owner 'use colors not hex code')
+const { emojiFont, fillTextMixed } = emojiFontMod;
+const emojiBitmap = require('./emojiBitmap');   // 2026-10-20 12:20Z: big emblem bitmaps for the castle close-up card
 
 const FRAMES = 20, FRAME_MS = 100;   // 2 s loop (birds cross the card once per loop)
 const COLS = 23, ROWS = 31, CC = 11, CR = 15;   // oversized grid: terrain runs past every edge of the card, castle on (11,15)
@@ -1045,4 +1047,124 @@ async function renderGuildBaseImage(state, opts = {}) {
     return out;
 }
 
-module.exports = { GUILD_STRUCTS, GUILD_PLOTS, ARCH, FRAMES, renderFrame, renderGuildBaseImage, encodeFramesToMp4 };
+// ═══════════════════════════════════════════════════════════════════════════
+//  EMBLEM CLOSE-UP CARD (owner 2026-10-20 12:20Z: "If someone does .j guild
+//  emblem and they already have an emblem show an image of their castle
+//  zoomed in with the emblem really big and visible")
+//
+//  Zooms the cached kingdom scene into the keep and crowns it with a LARGE
+//  heraldic shield: uploaded image emblems paint inside the shield (cover
+//  fit — same priority they get on every card), emoji emblems paint as the
+//  color bitmap at ~300px. Static JPEG, no HUD, no animation — this card is
+//  about the crest. Rides the same scene cache + renderQueue as the base
+//  card, so a close-up costs ~nothing after the first render.
+// ═══════════════════════════════════════════════════════════════════════════
+const _emblemCards = new Map();
+async function renderGuildEmblemCard(state, opts = {}) {
+    const imgKey = state.emblemImg ? hashStr(state.emblemImg) : 0;
+    const key = hashStr(JSON.stringify(['emblem-closeup-v1', state.name, state.biome || '', state.continent || '', state.level, state.archetype, state.buildings, state.emblemColor, state.emblemIcon, imgKey, (opts.celebrate && typeof opts.celebrate === 'object') ? opts.celebrate : '']));
+    const hit = _emblemCards.get(key);
+    if (hit && (Date.now() - hit.ts) < CACHE_TTL) return hit;
+    const out = await mediaCache.cached('guildemblem', key, async () => {
+        const sc = await buildScene(state, opts);
+        const OUT = 1080;
+        const canvas = require('canvas').createCanvas(OUT, OUT);
+        const ctx = canvas.getContext('2d');
+
+        // ── zoom crop: the castle keep fills the lower two-thirds of the card ──
+        const bx = sc.banner.x, by = sc.banner.y;          // castle roof point (scene px)
+        let CS = Math.max(560, Math.min(sc.W, sc.H) * 0.55);   // scene-px crop side
+        CS = Math.min(CS, sc.W, sc.H);
+        const Z = OUT / CS;                                 // zoom factor
+        let cropX = bx - (OUT * 0.5) / Z;
+        let cropY = by - (OUT * 0.62) / Z;                  // roof at 62% height: keep body below, shield room above
+        cropX = Math.max(0, Math.min(cropX, sc.W - CS));
+        cropY = Math.max(0, Math.min(cropY, sc.H - CS));
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(sc.canvas, cropX, cropY, CS, CS, 0, 0, OUT, OUT);
+
+        const rx = Math.round((bx - cropX) * Z);
+        const ry = Math.round((by - cropY) * Z);            // roof point in output px
+
+        const archC = ARCH[state.archetype] || ARCH.ADVENTURER;
+        const flagCol = (state.emblemColor && /^#[0-9a-fA-F]{3,8}$/.test(state.emblemColor)) ? state.emblemColor : archC.flag;
+        const flagD = archC.flagD;
+
+        // ── mast planted behind the keep's roof mass (same trick as drawBanner:
+        // dips behind the roof so the crest reads as grown out of the castle) ──
+        let MAST = 92;
+        const SW = 430, SH = 540;
+        let topY = ry - MAST - SH;
+        if (topY < 26) { MAST = Math.max(30, ry - 26 - SH); topY = ry - MAST - SH; }
+        ctx.save();
+        ctx.strokeStyle = '#3a2a18';
+        ctx.lineWidth = 12;
+        ctx.beginPath(); ctx.moveTo(rx, ry + 30); ctx.lineTo(rx, topY + SH * 0.55); ctx.stroke();
+
+        // heater shield with a soft drop shadow, gold trim + inner light border
+        const shield = (w0, y0, h0, cx0) => {
+            ctx.beginPath();
+            ctx.moveTo(cx0 - w0 / 2, y0);
+            ctx.lineTo(cx0 + w0 / 2, y0);
+            ctx.quadraticCurveTo(cx0 + w0 / 2, y0 + h0 * 0.55, cx0, y0 + h0);
+            ctx.quadraticCurveTo(cx0 - w0 / 2, y0 + h0 * 0.55, cx0 - w0 / 2, y0);
+            ctx.closePath();
+        };
+        ctx.shadowColor = 'rgba(12,8,4,0.55)';
+        ctx.shadowBlur = 34;
+        ctx.shadowOffsetY = 14;
+        shield(SW, topY, SH, rx);
+        const g = ctx.createLinearGradient(rx, topY, rx, topY + SH);
+        g.addColorStop(0, flagCol); g.addColorStop(1, flagD);
+        ctx.fillStyle = g; ctx.fill();
+        ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+        ctx.strokeStyle = '#e8c15a'; ctx.lineWidth = 8; ctx.stroke();
+        shield(SW - 20, topY + 10, SH - 16, rx);
+        ctx.strokeStyle = 'rgba(255,244,208,0.5)'; ctx.lineWidth = 3; ctx.stroke();
+
+        // ── the crest itself: uploaded image first (cards give it priority),
+        // else the emoji as a ~300px COLOR bitmap (owner: "use colors") ──
+        let drewImg = false;
+        if (state.emblemImg) {
+            try {
+                const b64 = String(state.emblemImg).split(',')[1] || '';
+                const buf = Buffer.from(b64, 'base64');
+                if (buf.length > 128) {
+                    const img = new (require('canvas').Image)();
+                    img.src = buf;
+                    ctx.save();
+                    shield(SW - 34, topY + 16, SH - 30, rx);
+                    ctx.clip();
+                    const side = Math.min(SW, SH) - 90;
+                    const ix = rx - side / 2, iy = topY + 16 + (SH - 30 - side) / 2;
+                    ctx.drawImage(img, ix, iy, side, side);
+                    ctx.restore();
+                    drewImg = true;
+                }
+            } catch (e) { drewImg = false; }
+        }
+        const icon = state.emblemIcon ? String(state.emblemIcon).slice(0, 2) : '';
+        if (!drewImg && icon) {
+            let drew = false;
+            if (emojiFontMod.colorEmojiReady() && emojiBitmap.measure(icon, 300) > 0) {
+                ctx.font = '300px "' + emojiFontMod.FAMILY + '"';
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                fillTextMixed(ctx, icon, rx, topY + SH * 0.42);   // color bitmap path
+                drew = true;
+            }
+            if (!drew) {   // mono fallback (color font missing / glyph absent)
+                ctx.fillStyle = '#fff4d0';
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.font = emojiFont(icon, 214);
+                ctx.fillText(icon, rx, topY + SH * 0.42);
+            }
+        }
+        ctx.restore();
+        return encodeOut(canvas);
+    }, null, { label: 'bake:guildbase', timeoutMs: 90000 });   // serialize with the other kingdom bakes (47-k9 lesson)
+    cachePut(_emblemCards, key, out);
+    return out;
+}
+
+module.exports = { GUILD_STRUCTS, GUILD_PLOTS, ARCH, FRAMES, renderFrame, renderGuildBaseImage, renderGuildEmblemCard, encodeFramesToMp4 };

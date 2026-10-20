@@ -22565,9 +22565,6 @@ Admins can:
                         if (!userGuild) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c You are not in a guild.' });
                         }
-                        if (!guilds.isGuildOwner(senderJid)) {
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Only the guild leader can set the emblem.' });
-                        }
                         const guild = guilds.getGuild(userGuild);
                         if (!guild) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Guild not found.' });
@@ -22612,6 +22609,52 @@ Admins can:
                         const ownImg = emblemFindImg(emblemCore);
                         const quotedImg = quotedCore ? emblemFindImg(emblemUnwrap(quotedCore)) : null;
                         const srcImg = ownImg || quotedImg || null;
+
+                        // 👑 2026-10-20 12:20Z owner: bare `.guild emblem` with an emblem
+                        // ALREADY set is a VIEW any member may run — the castle close-up
+                        // card (keep zoomed in, crest huge). Setting/clearing stays
+                        // leader-only via the gate right below this branch.
+                        if (!sub && !srcImg && (guild.emblem?.img || guild.emblem?.icon)) {
+                          try {
+                            const gbr = require('./rpg/guildBaseRenderer');
+                            const _em = await gbr.renderGuildEmblemCard({
+                              name: userGuild,
+                              level: guild.level || 1,
+                              archetype: String(guild.type || 'ADVENTURER').toUpperCase(),
+                              buildings: {
+                                hall: (guild.buildings?.hall?.level) || 0,
+                                training: (guild.buildings?.training?.level) || 0,
+                                treasury: (guild.buildings?.treasury?.level) || 0,
+                              },
+                              memberCount: (guild.members || []).length,
+                              emblemColor: guild.emblem?.color || '',
+                              emblemIcon: guild.emblem?.icon || '',
+                              emblemImg: guild.emblem?.img || '',
+                              motto: guild.motto || '',
+                              continent: guild.continent || '',
+                            });
+                            const _P = botConfig.getPrefix();
+                            await sock.sendMessage(chatId, {
+                              image: _em.buffer,
+                              caption: BOT_MARKER + '\ud83d\udee1\ufe0f *' + userGuild + '* — castle crest\n\n'
+                                + '\u270f\ufe0f Change it: send a pic captioned `' + _P + ' guild emblem`, or `' + _P + ' guild emblem <emoji> #hexColor`\n'
+                                + '\ud83d\uddd1\ufe0f Remove it: `' + _P + ' guild emblem clear`',
+                            });
+                          } catch (_ve) {
+                            console.error('[guild] emblem close-up render failed:', _ve?.message || _ve);
+                            return sock.sendMessage(chatId, {
+                              text: BOT_MARKER + '\ud83c\udfa8 *GUILD EMBLEM*\n\n'
+                                + `\u2022 Send an image with caption \`${botConfig.getPrefix()} guild emblem\` - it becomes the crest on the guild card\n`
+                                + `\u2022 \`${botConfig.getPrefix()} guild emblem <emoji> [#hexColor]\` - emoji emblem (e.g. \ud83d\udc09 #FF5500)\n`
+                                + `\u2022 \`${botConfig.getPrefix()} guild emblem clear\` - remove the emblem`,
+                            });
+                          }
+                          return;
+                        }
+
+                        if (!guilds.isGuildOwner(senderJid)) {
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '\u274c Only the guild leader can set the emblem.' });
+                        }
                         const wantsUpload = !sub || sub === 'set' || sub === 'upload';
                         const wantsClear = sub === 'clear' || sub === 'remove';
 
@@ -22717,15 +22760,23 @@ Admins can:
                             await guilds.syncGuild(userGuild);
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '\u2705 Uploaded emblem cleared - the emoji emblem shows again.' });
                           }
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + '\u2139\ufe0f No uploaded emblem to clear.' });
+                          // 2026-10-20 12:20Z owner: the close-up card tells members to
+                          // `clear` to REMOVE - make that true for emoji crests too, not
+                          // just uploaded pictures (an emoji emblem was permanent before).
+                          if (guild.emblem?.icon) {
+                            guild.emblem.icon = null;
+                            await guilds.syncGuild(userGuild);
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + '\u2705 Emblem removed - the castle flies no crest. Set a new one anytime: `' + botConfig.getPrefix() + ' guild emblem <emoji>` or a pictured upload.' });
+                          }
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + '\u2139\ufe0f No emblem to clear.' });
                         }
 
                         if (!sub) {
                           return sock.sendMessage(chatId, {
                             text: BOT_MARKER + '\ud83c\udfa8 *GUILD EMBLEM*\n\n'
                               + `\u2022 Send an image with caption \`${botConfig.getPrefix()} guild emblem\` - it becomes the crest on the guild card\n`
-                              + `\u2022 \`${botConfig.getPrefix()} guild emblem <emoji> [h<hexColor>\` - emoji emblem (e.g. \ud83d\udc09 #FF5500)\n`
-                              + `\u2022 \`${botConfig.getPrefix()} guild emblem clear\` - remove the uploaded image`,
+                              + `\u2022 \`${botConfig.getPrefix()} guild emblem <emoji> [#hexColor]\` - emoji emblem (e.g. \ud83d\udc09 #FF5500)\n`
+                              + `\u2022 \`${botConfig.getPrefix()} guild emblem clear\` - remove the emblem`,
                           });
                         }
 
