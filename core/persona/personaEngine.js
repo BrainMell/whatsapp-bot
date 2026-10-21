@@ -424,7 +424,7 @@ function buildSystemPrompt({ isAmbient, chatId, profileText, speakerJid }) {
   // Layer 4.5 — context mechanics (owner: "I respond to a card and it replies
   // weirdly, getting references wrong"). Teaches the quote-prefix and cards.
   p.push(
-    `READING MESSAGES: sometimes a message starts with [Replying to someone's message: "..."] — that's the message they're replying to, not their own words. people share game cards and screenshots here; react to what the card or caption actually shows like a player who's seen it, and don't invent extra details about it.`,
+    `READING MESSAGES: sometimes a message starts with [Replying to someone's message: "..."] — that's the message they're replying to, not their own words. If the name in that prefix isn't you and nobody tagged you, they're talking to EACH OTHER — don't answer like they meant you. people share game cards and screenshots here; react to what the card or caption actually shows like a player who's seen it, and don't invent extra details about it.`,
   );
   // Layer 4.75 — emoji protocol (Gen Z research, kept from v2).
   p.push(
@@ -497,7 +497,7 @@ you: i try`,
   }
   if (isAmbient) {
     p.push(
-      `--- AMBIENT MODE ---\nNobody said your name. You're just lurking. Reply ONLY if you genuinely have something good to add (a joke, an answer, a take) — one short message, no @tags. If you have nothing worth saying, output exactly [SILENT] and nothing else.`,
+      `--- AMBIENT MODE ---\nNobody said your name. You're just lurking. Most chatter here is people talking to EACH OTHER — that's fine, stay out of it unless you genuinely have something good to add (a joke, an answer, a take). If the message was clearly aimed at someone else (a reply to another person, or they tagged someone), that thread isn't yours — [SILENT]. One short message when you do speak, no @tags. If you have nothing worth saying, output exactly [SILENT] and nothing else.`,
     );
   }
   return p.join('\n\n');
@@ -639,16 +639,19 @@ function formatToolResults(results) {
 }
 
 // ─── The turn: generate (with one tool round) → clean → chunk ────────────────
-async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profileText }) {
+async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profileText, addresseeHint }) {
   if (!deps.ready || !chatId) return null;
   const userText = String(text || '').slice(0, 1200);
+  // 💡 REALGUY v4: ambient turns carry addressee context so the model can
+  // tell when a message was aimed at someone else (owner complaint).
+  const ambientLead = isAmbient
+    ? `${senderName || 'someone'} just said: ${userText}${addresseeHint ? `\n(context: ${addresseeHint})` : ''}`
+    : userText;
   const messages = [
     { role: 'system', content: buildSystemPrompt({ isAmbient, chatId, profileText, speakerJid: senderJid }) },
     {
       role: 'user',
-      content: isAmbient
-        ? `${senderName || 'someone'} just said: ${userText}`
-        : userText,
+      content: ambientLead,
     },
   ];
   const callOpts = (over = {}) => {
@@ -848,11 +851,13 @@ async function silentRetryTurn(fn, opts = {}) {
 
 // L1 one-shot: roll the ambient dice, and if they hit, run a fully silent
 // ambient turn (generate → maybe [SILENT] → human send). Fire-and-forget.
-async function maybeAmbientChime({ sock, chatId, isGroup, senderName, senderJid, text }) {
+// 💡 REALGUY v4: engine already refuses to roll on reply-to-human threads;
+// addresseeHint (tagged-someone-else) flows into the prompt as extra context.
+async function maybeAmbientChime({ sock, chatId, isGroup, senderName, senderJid, text, addresseeHint }) {
   try {
     if (!shouldAmbient({ chatId, text, isGroup })) return null;
     const turn = await silentRetryTurn(() =>
-      buildTurn({ chatId, senderName, senderJid, text, isAmbient: true }),
+      buildTurn({ chatId, senderName, senderJid, text, isAmbient: true, addresseeHint }),
     );
     if (!turn || !turn.replies || !turn.replies.length) return null;
     await humanSend(sock, chatId, turn.replies, {});

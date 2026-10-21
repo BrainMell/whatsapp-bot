@@ -33236,15 +33236,36 @@ _(or reply to their message)_
                   // 2. Reply Check — same digits-only compare on the quoted
                   // participant (replies to the bot's messages quote its LID
                   // in LID groups, its phone JID elsewhere).
-                  const quotedParticipant =
-                    waContextInfo?.participant ||
-                    (waContextInfo?.quotedMessage ? chatId : null);
+                  // 💡 REALGUY v4: dropped the old `|| chatId` fallback — it fed
+                  // 19-digit GROUP ids into the digits compare (dead weight at
+                  // best, wrong-identity hazard at worst). Replies always carry
+                  // contextInfo.participant in practice.
+                  const quotedParticipant = waContextInfo?.participant || null;
                   const _quotedDigits = quotedParticipant
                     ? _digitsOf(quotedParticipant)
                     : null;
                   const isReplyToBot = _quotedDigits
                     ? _botIdDigits.includes(_quotedDigits)
                     : false;
+
+                  // 2b. Addressee evidence — is this message clearly aimed at
+                  // SOMEONE ELSE? 💡 REALGUY v4 (owner: "I don't think the
+                  // chatbot can tell when someone is talking to someone
+                  // else"): WhatsApp gives two hard signals of "not your
+                  // thread" — the message REPLY-QUOTES another human, or it
+                  // @-tags someone who isn't the bot. The name trigger and the
+                  // ambient chime must both respect these; @mention and
+                  // reply-to-bot stay unconditional (explicit address).
+                  const quotedIsHuman =
+                    !!waContextInfo?.quotedMessage &&
+                    !!quotedParticipant &&
+                    !isReplyToBot;
+                  const _mentionsOtherHuman = (
+                    waContextInfo?.mentionedJid || []
+                  ).some((j) => {
+                    const d = _digitsOf(j);
+                    return d && !_botIdDigits.includes(d);
+                  });
 
                   // 3. Name Check (Ensure it's a whole word to avoid accidental triggers)
                   const botName = botConfig.getBotName().toLowerCase();
@@ -33259,17 +33280,33 @@ _(or reply to their message)_
                     nameRegex.test(lowerTxt) ||
                     (_mentionFragmentRe && _mentionFragmentRe.test(txt));
 
+                  // 💡 REALGUY v4: a bare name mention is the WEAKEST address
+                  // signal — it can be third-person talk ABOUT the bot ("joker
+                  // is trash", said to a friend). When the message is clearly
+                  // pointed elsewhere (reply-quoting another human, or @-tagging
+                  // someone who isn't the bot), don't fire on the name alone.
+                  const isNameTrigger =
+                    isBotNameMention && !quotedIsHuman && !_mentionsOtherHuman;
+
                   const hasTrigger =
-                    isBotMentioned || isReplyToBot || isBotNameMention;
+                    isBotMentioned || isReplyToBot || isNameTrigger;
 
                   // 💡 REALGUY v2.5: observability — the owner kept hitting
                   // "the bot ignores messages" issues we couldn't see in the
                   // logs. One line per triggered turn: type + chat + who.
+                  // 💡 REALGUY v4: suppressed name-triggers are logged too —
+                  // this bug class was invisible twice before it got logging.
                   if (hasTrigger) {
                     console.log(
                       `🎯 [AI] trigger=${
                         isBotMentioned ? "mention" : isReplyToBot ? "reply" : "name"
                       } chat=${chatId} from=${m.pushName || senderJid}`,
+                    );
+                  } else if (isBotNameMention) {
+                    console.log(
+                      `🤫 [AI] name-trigger suppressed (aimed elsewhere: ${
+                        quotedIsHuman ? "replying to another person" : "tagged someone else"
+                      }) chat=${chatId} from=${m.pushName || senderJid}`,
                     );
                   }
 
@@ -33304,17 +33341,27 @@ _(or reply to their message)_
                   // persona may still "feel like" chiming in (small random roll,
                   // per-chat cooldowns + caps). Fully silent on any failure —
                   // never an error message, just background retries (owner spec).
+                  // 💡 REALGUY v4 (owner: "can't tell when someone is talking to
+                  // someone else"): a reply-quote of ANOTHER HUMAN is the
+                  // loudest "not talking to you" signal WhatsApp has — the
+                  // ambient dice never even roll on those threads. The addressee
+                  // hint still reaches the prompt so the model knows the vibe.
                   if (!hasTrigger) {
-                    personaEngine
-                      .maybeAmbientChime({
-                        sock,
-                        chatId,
-                        isGroup: !isDM,
-                        senderName: m.pushName || "someone",
-                        senderJid, // 💡 REALGUY v2.5: ambient turns get identity too
-                        text: String(cleanTxt || txt || ""),
-                      })
-                      .catch(() => {});
+                    if (!quotedIsHuman) {
+                      personaEngine
+                        .maybeAmbientChime({
+                          sock,
+                          chatId,
+                          isGroup: !isDM,
+                          senderName: m.pushName || "someone",
+                          senderJid, // 💡 REALGUY v2.5: ambient turns get identity too
+                          text: String(cleanTxt || txt || ""),
+                          addresseeHint: _mentionsOtherHuman
+                            ? "they tagged someone else in this message — that thread is theirs"
+                            : null,
+                        })
+                        .catch(() => {});
+                    }
                     return;
                   }
 
