@@ -1325,6 +1325,43 @@ function removeTokens(userId, amount) {
   return true;
 }
 
+// 💡 47-l2 (owner 2026-10-21: "haven't seen anyone get an event token even
+// when they claimed alot of cards"): eventTokens are the CARD-EVENT
+// sub-economy — earned by claiming spawns, spent at the card eShop — and
+// neither requires RPG registration. The strict getTokens/addTokens/
+// removeTokens gate on registered===true, and only 129 of 2739 users are
+// registered, so the claim-path grant silently no-op'd for most players and
+// the claim message still said "+1 Event Token! (Total: 0)". These variants
+// keep every other guard (doc via getOrCreateUser, amount floor, balance
+// check, scheduled save) minus the registration gate. Wallet/bank stay gated.
+function getEventTokens(userId) {
+  const resolvedId = resolveJidHelper(userId);
+  const user = economyData.get(resolvedId);
+  return user ? (user.eventTokens || 0) : 0;
+}
+
+function addEventTokens(userId, amount) {
+  const user = getOrCreateUser(userId);
+  if (!user) return false;
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) return false;
+  user.eventTokens = (user.eventTokens || 0) + val;
+  scheduleSave(userId);
+  return true;
+}
+
+function removeEventTokens(userId, amount) {
+  const resolvedId = resolveJidHelper(userId);
+  const user = economyData.get(resolvedId);
+  if (!user) return false;
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) return false;
+  if ((user.eventTokens || 0) < val) return false;
+  user.eventTokens -= val;
+  scheduleSave(userId);
+  return true;
+}
+
 // 💡 2026-10-08 requirements doc §1/§11: GLOBAL event-token wipe.
 // economy users live in an in-memory Map with scheduled saves - a bare
 // User.updateMany would be silently resurrected by the next pending save
@@ -3213,6 +3250,9 @@ module.exports = {
   getTokens,
   addTokens,
   removeTokens,
+  getEventTokens,   // 💡 47-l2: token sub-economy (no registration gate)
+  addEventTokens,
+  removeEventTokens,
   resetAllTokens,
 
   // Rank Mission System

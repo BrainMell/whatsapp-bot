@@ -958,12 +958,20 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
     let isTokenSpawn = false;
     const eventActiveNow = await isTokenEventActive();
     if (eventActiveNow) {
-      const count = (inst.tokenSpawnCounters.get(targetGroup) || 0) + 1;
+      // 💡 47-l2 (owner 2026-10-21: "haven't seen anyone get an event token even
+      // when they claimed alot of cards"): the map key MUST be safeCounterKey
+      // here too. loadTokenRateCounters() stores sanitized keys (dots stripped
+      // for Mongo), but this lookup used the RAW group jid — so after every
+      // restart get('@g.us') missed the stored '@g_us' key and every group's
+      // counter silently restarted from 0. With the cmd layer OFF (47-l1) that
+      // made tokens essentially never drop.
+      const gKey = safeCounterKey(targetGroup);
+      const count = (inst.tokenSpawnCounters.get(gKey) || 0) + 1;
       if (count >= TOKEN_SPAWNS_PER_TOKEN) {
-        inst.tokenSpawnCounters.set(targetGroup, 0);
+        inst.tokenSpawnCounters.set(gKey, 0);
         isTokenSpawn = true;
       } else {
-        inst.tokenSpawnCounters.set(targetGroup, count);
+        inst.tokenSpawnCounters.set(gKey, count);
       }
       persistTokenSpawnCounters();
     }
@@ -1143,11 +1151,15 @@ function safeCounterKey(jid) {
 async function persistTokenSpawnCounters() {
   const inst = getInst();
   try {
-    const obj = {};
-    for (const [g, c] of inst.tokenSpawnCounters) obj[safeCounterKey(g)] = c;
+    // 💡 47-l2: merge per-key instead of replacing the whole value object.
+    // All three bots share this System doc — the old wholesale $set let every
+    // jake/subaru spawn erase joker's group counters (and vice versa).
+    if (inst.tokenSpawnCounters.size === 0) return;
+    const set = {};
+    for (const [g, c] of inst.tokenSpawnCounters) set[`value.${safeCounterKey(g)}`] = c;
     await System.findOneAndUpdate(
       { key: TOKEN_SPAWN_COUNTER_KEY },
-      { $set: { value: obj } },
+      { $set: set },
       { upsert: true }
     );
   } catch (e) { console.error('[TokenRate] Failed to persist spawn counters:', e.message); }
@@ -1156,11 +1168,14 @@ async function persistTokenSpawnCounters() {
 async function persistTokenCmdCounters() {
   const inst = getInst();
   try {
-    const obj = {};
-    for (const [u, c] of inst.tokenCmdCounters) obj[safeCounterKey(u)] = c;
+    // 💡 47-l2: same merge fix as persistTokenSpawnCounters — shared doc,
+    // per-key $set so bots don't clobber each other's progress.
+    if (inst.tokenCmdCounters.size === 0) return;
+    const set = {};
+    for (const [u, c] of inst.tokenCmdCounters) set[`value.${safeCounterKey(u)}`] = c;
     await System.findOneAndUpdate(
       { key: TOKEN_CMD_COUNTER_KEY },
-      { $set: { value: obj } },
+      { $set: set },
       { upsert: true }
     );
   } catch (e) { console.error('[TokenRate] Failed to persist cmd counters:', e.message); }
@@ -1196,18 +1211,22 @@ async function noteEligibleCommand(senderJid) {
   const inst = getInst();
   try {
     if (!(await isTokenEventActive())) return null;
-    const count = (inst.tokenCmdCounters.get(senderJid) || 0) + 1;
+    // 💡 47-l2: same sanitized-key discipline as the spawn counters — the
+    // loaded keys are safeCounterKey form, the lookup must match or restarts
+    // reset per-user progression.
+    const uKey = safeCounterKey(senderJid);
+    const count = (inst.tokenCmdCounters.get(uKey) || 0) + 1;
     if (count >= TOKEN_CMDS_PER_TOKEN) {
-      inst.tokenCmdCounters.set(senderJid, 0);
+      inst.tokenCmdCounters.set(uKey, 0);
       persistTokenCmdCounters(); // async fire-and-forget write, errors logged inside
-      economy.addTokens(senderJid, 1);
-      const balance = economy.getTokens(senderJid);
+      economy.addEventTokens(senderJid, 1); // 💡 47-l2: registration-gate-free grant
+      const balance = economy.getEventTokens(senderJid);
       console.log(`[CardSystem][${botConfig.getBotId()}] 🎫 Hidden cmd-token granted to ${senderJid} (total ${balance})`);
       // §4-compliant message: tells the player they got a token, reveals
       // NOTHING about rates, probability or the mechanic.
       return `🎫 ${economy.getDisplayName(senderJid)} found an *Event Token!* (Total: ${balance})`;
     }
-    inst.tokenCmdCounters.set(senderJid, count);
+    inst.tokenCmdCounters.set(uKey, count);
     // Persist lazily every 5 steps so restarts don't lose too much progress
     if (count % 5 === 0) persistTokenCmdCounters();
   } catch (e) {
@@ -1323,7 +1342,7 @@ async function eshopBuy(senderJid, slot) {
     return { success: false, message: `❌ Slot ${slot} is empty.` };
   }
 
-  const balance = economy.getTokens(senderJid);
+  const balance = economy.getEventTokens(senderJid); // 💡 47-l2: no registration gate
   if (balance < entry.price) {
     return {
       success: false,
@@ -1332,7 +1351,7 @@ async function eshopBuy(senderJid, slot) {
   }
 
   // Deduct tokens
-  const deducted = economy.removeTokens(senderJid, entry.price);
+  const deducted = economy.removeEventTokens(senderJid, entry.price); // 💡 47-l2
   if (!deducted) {
     return { success: false, message: '❌ Failed to deduct tokens. Try again.' };
   }
@@ -1352,7 +1371,7 @@ async function eshopBuy(senderJid, slot) {
     const copyNumber = (updatedStat && updatedStat.totalCirculation) || (stat.totalCirculation + 1);
     await UserCard.create({ userId: senderJid, cardId: entry.cardId, copyNumber });
 
-    const newBalance = economy.getTokens(senderJid);
+    const newBalance = economy.getEventTokens(senderJid); // 💡 47-l2
     return {
       success: true,
       message: `✅ *PURCHASE COMPLETE!*\n\n` +
@@ -1364,7 +1383,7 @@ async function eshopBuy(senderJid, slot) {
     };
   } catch (err) {
     // Roll back the token deduction if card grant failed
-    economy.addTokens(senderJid, entry.price);
+    economy.addEventTokens(senderJid, entry.price); // 💡 47-l2: refund bypasses the gate too
     console.error('[eShop Buy Error]', err);
     return { success: false, message: '❌ Purchase failed - tokens refunded.' };
   }
@@ -1456,7 +1475,7 @@ async function eshopFlexView(senderJid, reply, chatId, startSlot, endSlot) {
   // A single-card view sends JUST the card with its caption — owner 2026-10-20:
   // "it sends one message then another? It should only send the card with its caption"
   if (!single) {
-    const tokenBalance = economy.getTokens(senderJid);
+    const tokenBalance = economy.getEventTokens(senderJid); // 💡 47-l2
     const eventActive = await isTokenEventActive();
     const rangeLabel = `${startSlot}-${endSlot}`;
     const header = `🎪 *EVENT SHOP — FLEX VIEW* 🎪\n` +
@@ -1718,8 +1737,8 @@ async function cmdClaim(args, senderJid, reply, chatId) {
     try {
       const eventActive = await isTokenEventActive();
       if (eventActive && spawn.hasToken) {
-        economy.addTokens(senderJid, 1);
-        const balance = economy.getTokens(senderJid);
+        economy.addEventTokens(senderJid, 1); // 💡 47-l2: registration-gate-free grant
+        const balance = economy.getEventTokens(senderJid);
         tokenMsg = `\n\n🎫 +1 *Event Token!* (Total: ${balance})\n_Spend them with \`${P()} eshop\`._`;
       }
     } catch (tokenErr) {
@@ -3122,7 +3141,7 @@ async function cmdEShop(senderJid, reply, chatId, args = [], isMod = false) {
   // Generate and send the 4x4 grid image
   const imageBuffer = await generateEShopDeckImage();
   if (imageBuffer) {
-    const tokenBalance = economy.getTokens(senderJid);
+    const tokenBalance = economy.getEventTokens(senderJid); // 💡 47-l2
     const eventActive = await isTokenEventActive();
     const caption = `🎁 *EVENT SHOP* 🎁\n` +
       `━━━━━━━━━━━━━━━\n` +
@@ -3139,7 +3158,7 @@ async function cmdEShop(senderJid, reply, chatId, args = [], isMod = false) {
 
   // Fallback: text list if image generation failed
   let msg = `🎁 *EVENT SHOP* 🎁\n`;
-  msg += `🎫 Your Tokens: *${economy.getTokens(senderJid)}*\n\n`;
+  msg += `🎫 Your Tokens: *${economy.getEventTokens(senderJid)}*\n\n`; // 💡 47-l2
   inst.eshopDeck.forEach((entry, i) => {
     if (entry) {
       msg += `*${i + 1}.* ${entry.cardName} (T${entry.tier})\n   🎫 Price: ${entry.price} tokens\n   📺 ${entry.anime}\n\n`;
@@ -4648,7 +4667,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       return true;
 
     case 'tokens':
-      const tokenBal = economy.getTokens(senderJid);
+      const tokenBal = economy.getEventTokens(senderJid); // 💡 47-l2
       const eventActive = await isTokenEventActive();
       return reply(
         `🎫 *EVENT TOKENS* 🎫\n` +
@@ -5388,10 +5407,10 @@ async function cmdTrc(senderJid, reply, args, m) {
   if (isNaN(amount) || amount < 1) {
     return reply(`❌ Invalid amount. Usage: \`${p} trc @player <amount>\``);
   }
-  const currentBal = economy.getTokens(targetJid);
+  const currentBal = economy.getEventTokens(targetJid); // 💡 47-l2: mod tools work on unregistered holders too
   const toRemove = Math.min(amount, currentBal);
   if (toRemove <= 0) return reply(`❌ That player has 0 tokens.`);
-  economy.removeTokens(targetJid, toRemove);
+  economy.removeEventTokens(targetJid, toRemove);
   const displayName = economy.getDisplayName(targetJid) || targetJid.split('@')[0];
   return reply(`🎫 *TOKEN REMOVAL*\n\n👤 Player: ${displayName}\n💸 Removed: *${toRemove} tokens*\n💰 Remaining: *${currentBal - toRemove} tokens*`);
 }
@@ -5661,10 +5680,12 @@ async function cmdTokenReset(senderJid, reply, args = []) {
   // economy-level reset that clears BOTH the cache and the DB layer.
   const memoryHolders = await economy.resetAllTokens();
   // Reset the hidden per-user command counters too so progression restarts clean.
+  // 💡 47-l2: persist fns now MERGE per-key (cross-bot safety) and no-op on an
+  // empty map — so an explicit doc wipe is required to actually clear them.
   getInst().tokenCmdCounters.clear();
   getInst().tokenSpawnCounters.clear();
-  await persistTokenCmdCounters();
-  await persistTokenSpawnCounters();
+  await System.updateOne({ key: TOKEN_CMD_COUNTER_KEY }, { $set: { value: {} } });
+  await System.updateOne({ key: TOKEN_SPAWN_COUNTER_KEY }, { $set: { value: {} } });
   console.log(`[CardSystem][${botConfig.getBotId()}] GLOBAL TOKEN RESET by ${senderJid}: ${memoryHolders} memory holders wiped`);
   return reply(
     `🧹  *GLOBAL TOKEN RESET DONE*\n\n` +
@@ -5862,5 +5883,21 @@ module.exports = {
 // can drive the card search internals without the full bot runtime.
 if (process.env.CARD_DIAG === '1') {
   module.exports.__diag = { cmdInfo, cmdCS, cmdCi, cmdSeries, _nameTokens, _cardMatchesTokens, _cardRelevance };
+}
+
+// 💡 47-l2: env-guarded QA surface for the token-rate counter machinery
+// (restart-survival + cross-bot merge semantics). No behavior change in prod.
+if (process.env.CARD_DIAG === '1') {
+  module.exports.__tokenQA = {
+    safeCounterKey,
+    loadTokenRateCounters, persistTokenSpawnCounters, persistTokenCmdCounters,
+    noteEligibleCommand,
+    counters: () => ({
+      spawn: [...getInst().tokenSpawnCounters.entries()],
+      cmd: [...getInst().tokenCmdCounters.entries()],
+    }),
+    clearCounters: () => { getInst().tokenSpawnCounters.clear(); getInst().tokenCmdCounters.clear(); },
+    setEventActive: (v) => { getInst().tokenEventActive = !!v; },
+  };
 }
 
