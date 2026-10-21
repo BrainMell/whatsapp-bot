@@ -36,6 +36,10 @@ const CardStat   = require('../models/CardStat');
 const UserCard   = require('../models/UserCard');
 const CardMarket = require('../models/CardMarket');
 const CardDeck   = require('../models/CardDeck');
+// 💡 TASK 15C (owner 2026-10-21: "removes all of someone's cards and make a back
+// up of his so that you can place it back"): every Super RC wipe now snapshots
+// the full collection into cardBackups BEFORE deleting — restorable via .j unsrc.
+const CardBackup = require('../models/CardBackup');
 // 💡 RESTART-SAFE SPAWNS (2026-10-08): persist unclaimed spawns so a bot
 // restart/deploy no longer erases them ("cards randomly disappearing").
 const CardSpawn  = require('../models/CardSpawn');
@@ -1126,6 +1130,7 @@ const TOKEN_CMD_EXCLUDED = new Set([
   'claim', 'cardmod', 'cards', 'event', 'setprice', 'spawn', 'espawn',
   'reloadcards', 'einfo', 'spawnset', 'spawninfo', 'trc', 'ci', 'rc', 'erc',
   'info', 'endauction', 'setauctiongc', 't2edeck', 'tokenreset', 'src', 'tokenlb', 'tlb',
+  'unsrc', 'restorecards', // Task 15c: backup restore (mod management, never token-eligible)
 ]);
 
 // MongoDB field names can't contain '.' or '$' on old versions - sanitize JIDs
@@ -5120,10 +5125,18 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       return true;
 
     // §12: Super RC - wipe a user's entire collection. Card-mod exclusive,
-    // two-step (preview → confirm).
+    // two-step (preview → confirm). Task 15c: auto-backups before every wipe.
     case 'src':
       if (!isCardMod) return reply('❌ Only card moderators and above can run a Super RC.'), true;
       await cmdSuperRc(senderJid, reply, args, m);
+      return true;
+
+    // 💡 TASK 15C: undo a Super RC — restore the latest backup for a user.
+    // Card-mod exclusive (same tier as the wipe it reverses).
+    case 'unsrc':
+    case 'restorecards':
+      if (!isCardMod) return reply('❌ Only card moderators and above can restore card backups.'), true;
+      await cmdRestoreCards(senderJid, reply, args, m);
       return true;
 
     // §5: event-token leaderboard. Public.
@@ -5666,6 +5679,14 @@ async function cmdTokenReset(senderJid, reply, args = []) {
  *   .j src @user          → preview what will be deleted
  *   .j src @user confirm  → execute the wipe
  * Cleans up: UserCards, custom decks, active market listings/auctions.
+ *
+ * 💡 TASK 15C (owner 2026-10-21: "removes all of someone's cards and make a
+ * back up of his so that you can place it back"): BEFORE deleting, the full
+ * collection (across ALL owner identity forms — Task 15 ownerOf merge) is
+ * snapshotted into the cardBackups collection with original _ids/userIds
+ * preserved. Restore any wipe with `.j unsrc @user`. The chat reply stays
+ * dramatic on purpose (owner's prank tooling); the backup id goes to the
+ * console log so the operator always has the recovery handle.
  */
 async function cmdSuperRc(senderJid, reply, args = [], m = {}) {
   const p = P();
@@ -5675,9 +5696,13 @@ async function cmdSuperRc(senderJid, reply, args = [], m = {}) {
   }
   const confirm = args.map(a => a.toLowerCase()).includes('confirm');
 
-  const totalCards = await UserCard.countDocuments({ userId: mentioned });
-  const deckCount = await CardDeck.countDocuments({ userId: mentioned });
-  const activeListings = await CardMarket.countDocuments({ sellerId: mentioned, status: 'active' });
+  // 💡 TASK 15: wipe across ALL identity forms so a split collection can't
+  // survive on a second jid form (phone vs @lid).
+  const ownerFilter = await ownerOf(mentioned);
+  const variants = await cardOwnerVariants(mentioned);
+  const totalCards = await UserCard.countDocuments(ownerFilter);
+  const deckCount = await CardDeck.countDocuments(ownerFilter);
+  const activeListings = await CardMarket.countDocuments({ sellerId: { $in: variants }, status: 'active' });
 
   if (totalCards === 0 && deckCount === 0 && activeListings === 0) {
     return reply(`📭  *NOTHING TO WIPE*\n\n👤 ⟢ _@${economy.getDisplayName(mentioned)} has no cards, decks, or market listings_`, { mentions: [mentioned] });
@@ -5696,17 +5721,37 @@ async function cmdSuperRc(senderJid, reply, args = [], m = {}) {
     );
   }
 
+  // 💡 TASK 15C: snapshot EVERYTHING before touching a single row — original
+  // _ids and per-row userIds preserved, so the restore is byte-identical.
+  const backupRows = totalCards > 0 ? await UserCard.find(ownerFilter).lean() : [];
+  let backupId = null;
+  try {
+    const backupDoc = await CardBackup.create({
+      targetJid: mentioned,
+      variants,
+      cardCount: backupRows.length,
+      deckCount,
+      rows: backupRows,
+      wipedBy: senderJid,
+    });
+    backupId = String(backupDoc._id);
+  } catch (e) {
+    // A failed backup must NEVER let a wipe proceed blind — abort loudly.
+    console.log(`[CardSystem][${botConfig.getBotId()}] SUPER RC ABORT for ${mentioned}: backup failed: ${e.message}`);
+    return reply(`❌  *SUPER RC ABORTED*\n\n🛡️ ⟢ _Backup snapshot failed — refusing to wipe without a recovery path._`);
+  }
+
   // Cancel the user's active market listings/auctions first so nothing
   // sells a card that is about to be deleted.
   await CardMarket.updateMany(
-    { sellerId: mentioned, status: 'active' },
+    { sellerId: { $in: variants }, status: 'active' },
     { $set: { status: 'cancelled', completedAt: new Date() } }
   );
-  // Delete all decks, then all cards.
-  await CardDeck.deleteMany({ userId: mentioned });
-  const deleted = await UserCard.deleteMany({ userId: mentioned });
+  // Delete all decks, then all cards (across every identity form).
+  await CardDeck.deleteMany(ownerFilter);
+  const deleted = await UserCard.deleteMany(ownerFilter);
 
-  console.log(`[CardSystem][${botConfig.getBotId()}] SUPER RC by ${senderJid}: wiped ${deleted.deletedCount} cards from ${mentioned}`);
+  console.log(`[CardSystem][${botConfig.getBotId()}] SUPER RC by ${senderJid}: wiped ${deleted.deletedCount} cards from ${mentioned} (variants: ${variants.join(', ')}) | BACKUP ${backupId} (${backupRows.length} rows) — restore with .j unsrc`);
   return reply(
     `🧹  *SUPER RC EXECUTED*\n\n` +
     `👤 ⟢ *Target:* _@${economy.getDisplayName(mentioned)}_\n` +
@@ -5714,6 +5759,55 @@ async function cmdSuperRc(senderJid, reply, args = [], m = {}) {
     `📚 ⟢ *Decks deleted:* _${deckCount}_\n` +
     `🏪 ⟢ *Listings cancelled:* _${activeListings}_\n\n` +
     `📦 ⟢ _The user's collection has been completely wiped._`,
+    { mentions: [mentioned] }
+  );
+}
+
+/**
+ * cmdRestoreCards - 💡 TASK 15C: undo a Super RC wipe. Card-mod exclusive.
+ *   .j unsrc @user  → re-inserts the most recent unrestored backup for that
+ * player (matched across ALL identity forms). Rows go back with their
+ * original _ids/userIds; anything that already exists (duplicate _id, e.g. a
+ * card re-gained since the wipe) is skipped without breaking the batch.
+ */
+async function cmdRestoreCards(senderJid, reply, args = [], m = {}) {
+  const p = P();
+  const mentioned = resolveMentionJid(getTaggedJid(m));
+  if (!mentioned) {
+    return reply(`♻️  *RESTORE CARDS*\n\n⌨️ ⟢ *Usage:* _\`${p} unsrc @user\` — puts back their last wiped collection_`);
+  }
+
+  const variants = await cardOwnerVariants(mentioned);
+  const backup = await CardBackup.findOne({ variants: { $in: variants }, restoredAt: null }).sort({ createdAt: -1 });
+  if (!backup) {
+    return reply(`📭  *NO BACKUP FOUND*\n\n👤 ⟢ _@${economy.getDisplayName(mentioned)} has no unrestored wipe backups._`, { mentions: [mentioned] });
+  }
+
+  let inserted = 0;
+  let skipped = 0;
+  if (backup.rows && backup.rows.length) {
+    try {
+      const res = await UserCard.insertMany(backup.rows, { ordered: false });
+      inserted = (res && res.length) || 0;
+    } catch (e) {
+      // ordered:false — partial success lands in e.insertedDocs, dupes in e.writeErrors
+      inserted = (e && e.insertedDocs && e.insertedDocs.length) || 0;
+      skipped = (e && e.writeErrors && e.writeErrors.length) || 0;
+    }
+  }
+  skipped = (backup.rows ? backup.rows.length : 0) - inserted;
+
+  backup.restoredAt = new Date();
+  backup.restoredBy = senderJid;
+  await backup.save();
+
+  console.log(`[CardSystem][${botConfig.getBotId()}] RESTORE by ${senderJid}: backup ${backup._id} → re-inserted ${inserted} cards for ${mentioned} (skipped ${skipped} already-present)`);
+  return reply(
+    `♻️  *COLLECTION RESTORED*\n\n` +
+    `👤 ⟢ *Target:* _@${economy.getDisplayName(mentioned)}_\n` +
+    `🃏 ⟢ *Cards put back:* _${inserted}_\n` +
+    `🔁 ⟢ *Already present (skipped):* _${Math.max(skipped, 0)}_\n` +
+    `🕐 ⟢ *Wiped on:* _${backup.createdAt ? backup.createdAt.toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : 'unknown'}_`,
     { mentions: [mentioned] }
   );
 }
