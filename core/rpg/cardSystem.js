@@ -43,6 +43,59 @@ const User       = require('../models/User');
 const System     = require('../models/System');
 const economy    = require('./economy');
 
+// ── OWNER IDENTITY MERGE (Task 15, owner 2026-10-21: "lost most of their card
+// collection") ────────────────────────────────────────────────────────────────
+// A player's messages arrive under DIFFERENT jid forms (phone @s.whatsapp.net
+// in some chats, @lid in LID groups) — card claims landed on whichever form the
+// bot saw, so a collection can silently SPLIT across identities and the player
+// only sees one shard ("my collection is gone"). Every owner-keyed READ below
+// now goes through ownerOf(): the exact jid PLUS every other form mapped to the
+// same phone via LidMapping. Writes stay on the arrival form (no data moves,
+// no balance changes) — reads just show the WHOLE collection.
+const _ownerVariantsCache = new Map(); // jid -> { v: [jid...], ts }
+const OWNER_VARIANTS_TTL_MS = 5 * 60 * 1000;
+
+async function cardOwnerVariants(jid) {
+  const key = String(jid || '');
+  if (!key.includes('@')) return [key];
+  const hit = _ownerVariantsCache.get(key);
+  if (hit && Date.now() - hit.ts < OWNER_VARIANTS_TTL_MS) return hit.v;
+  const v = [key];
+  try {
+    const digits = key.split('@')[0];
+    const isPhone = key.endsWith('@s.whatsapp.net');
+    const isLid = key.endsWith('@lid');
+    if (isPhone || isLid) {
+      const LidMapping = require('../models/LidMapping');
+      let phone = null;
+      if (isPhone) phone = digits;
+      else {
+        const m = await LidMapping.findOne({ lid: digits }).lean();
+        if (m && m.phone) phone = m.phone;
+      }
+      if (phone) {
+        const phoneForm = phone + '@s.whatsapp.net';
+        if (!v.includes(phoneForm)) v.push(phoneForm);
+        const lids = await LidMapping.find({ phone }).lean();
+        for (const lm of lids) {
+          const f = lm.lid + '@lid';
+          if (!v.includes(f)) v.push(f);
+        }
+      }
+    }
+  } catch (e) {
+    console.log('[cardSystem] ownerVariants fallback (single identity):', e.message);
+  }
+  _ownerVariantsCache.set(key, { v, ts: Date.now() });
+  return v;
+}
+
+// The owner-keyed filter for reads/guards — spread it FIRST so extra fields win.
+async function ownerOf(jid) {
+  const v = await cardOwnerVariants(jid);
+  return v.length === 1 ? { userId: jid } : { userId: { $in: v } };
+}
+
 // ── Config ───────────────────────────────────────────────────────────────────
 const botConfig  = require('../../botConfig');
 const ZENI       = () => botConfig.getCurrency().symbol;
@@ -1628,7 +1681,7 @@ async function cmdClaim(args, senderJid, reply, chatId) {
 
   try {
     // Check if the user already owns at least one copy of this card.
-    const alreadyOwned = await UserCard.findOne({ userId: senderJid, cardId: spawn.card.id }).lean();
+    const alreadyOwned = await UserCard.findOne({ ...(await ownerOf(senderJid)), cardId: spawn.card.id }).lean();
 
     await UserCard.create({ userId: senderJid, cardId: spawn.card.id, copyNumber: spawn.copyNumber });
     // 💡 FIX 2026-08-31 (stale stat write): spawn.stat is a Mongoose doc loaded
@@ -1797,7 +1850,7 @@ async function sendCardMedia(sock, chatId, buffer, caption, mentions) {
 async function cmdCardsTier(senderJid, reply, chatId) {
   const inst = getInst();
   const p = P();
-  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
+  const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
   if (!owned.length) return reply(`📭  *COLLECTION EMPTY*\n\n💡 ⟢ _Claim cards from group spawns to start collecting_`);
 
   // Group by Tier
@@ -1985,11 +2038,11 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
     
     let uc = null;
     let collIndex = null;
-    if (input.includes('-')) uc = await UserCard.findOne({ userId: senderJid, cardId: input });
+    if (input.includes('-')) uc = await UserCard.findOne({ ...(await ownerOf(senderJid)), cardId: input });
     else {
       const idx = parseInt(input);
       if (!isNaN(idx)) {
-        const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
+        const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
         // 💡 FIX 2026-10-08: index against the SAME list the collection
         // prints (orphans excluded in both places) so `.j coll <n>` always
         // opens the card shown as #n.
@@ -2024,7 +2077,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   }
 
   console.log(`🃏 [cmdColl] querying UserCard.find | senderJid=${senderJid?.split('@')[0]}`);
-  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
+  const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
   console.log(`🃏 [cmdColl] UserCard.find returned ${owned.length} cards`);
   if (!owned.length) {
     console.log(`🃏 [cmdColl] collection empty, sending text reply`);
@@ -2147,7 +2200,7 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
   if (args.length > 0) {
     const slot = parseInt(args[0]);
     if (!isNaN(slot)) {
-        const uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: slot });
+        const uc = await UserCard.findOne({ ...(await ownerOf(senderJid)), inMainDeck: true, mainDeckSlot: slot });
         if (uc) {
             const card = CARD_INDEX()[uc.cardId];
             const stat = await CardStat.findOne({ cardId: uc.cardId });
@@ -2170,7 +2223,7 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
     return sendUsage(reply, `${p} deck`, `${p} deck [slot_number]\n• Animated grid: \`${p} deck --anim\``, `${p} deck 1`);
   }
 
-  const deck = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
+  const deck = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: true }).sort({ mainDeckSlot: 1 });
   if (!deck.length) return reply(`📭  *MAIN DECK EMPTY*\n\n💡 ⟢ _Move cards in from your collection to build your deck_`);
 
   // Build requested template
@@ -2258,12 +2311,12 @@ async function cmdScc(senderJid, reply, chatId, args = []) {
   // map from COLL-ONLY cards (matching .g coll numbering). The old code built
   // collNumberMap from ALL cards, so the numbers didn't match what .g coll
   // showed - and the collNum was computed but never rendered in the output.
-  const allOwned = await UserCard.find({ userId: senderJid }).sort({ createdAt: 1 });
+  const allOwned = await UserCard.find({ ...(await ownerOf(senderJid)) }).sort({ createdAt: 1 });
 
   // Build coll-number map from COLL-ONLY cards (not in deck, not for sale).
   // This matches the numbering used by .g coll, .g t2deck, .g burn, .g cg, etc.
   const collOnly = await UserCard.find({
-    userId: senderJid,
+    ...(await ownerOf(senderJid)),
     inMainDeck: false,
     inCustomDeck: false,
     forSale: false,
@@ -2357,7 +2410,7 @@ async function cmdMaker(senderJid, reply, chatId, args = []) {
   const makerQuery = args.join(' ').replace(/["']/g, '').toLowerCase().trim();
   if (!makerQuery) return sendUsage(reply, `${P()} maker`, `${P()} maker "<maker_name>"`, `${P()} maker Mah_xee`);
 
-  const owned = await UserCard.find({ userId: senderJid }).sort({ createdAt: 1 });
+  const owned = await UserCard.find({ ...(await ownerOf(senderJid)) }).sort({ createdAt: 1 });
   const filtered = owned.filter(uc => {
     const card = CARD_INDEX()[uc.cardId];
     return card?.creator?.toLowerCase().includes(makerQuery);
@@ -2403,7 +2456,7 @@ async function cmdBurn(senderJid, reply, chatId, args = []) {
   // 💡 FIX 2026-10-08: exclude inAuction too - burning an auction-committed
   // card let the auction later "sell" a card that no longer existed (winner
   // paid for nothing).
-  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false }).sort({ createdAt: 1 });
+  const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false }).sort({ createdAt: 1 });
   const uc = owned[index - 1];
   if (!uc) return reply(`❌  *CARD NOT FOUND*\n\n📍 ⟢ _Not in your collection_`);
 
@@ -2445,7 +2498,7 @@ async function cmdAccept(senderJid, reply, chatId) {
     // the burn preview and the confirmation - the old code deleted by id
     // blindly, destroying a card the user no longer owned (worst case: the
     // buyer's freshly purchased card went up in smoke).
-    const stillMine = await UserCard.findOne({ _id: pending.ucId, userId: senderJid });
+    const stillMine = await UserCard.findOne({ _id: pending.ucId, ...(await ownerOf(senderJid)) });
     if (!stillMine) {
       inst.pendingBurns.delete(key);
       await reply(`❌  *BURN CANCELLED*\n\n📍 ⟢ _That card is no longer in your collection_`);
@@ -2590,7 +2643,7 @@ async function cmdFc(senderJid, reply, args = []) {
   const matches = [];
 
   // 1. Search Main Deck
-  const deck = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
+  const deck = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: true }).sort({ mainDeckSlot: 1 });
   for (const uc of deck) {
     const card = CARD_INDEX()[uc.cardId];
     if (uc.cardId.toLowerCase() === query || (card?.cardName && card.cardName.toLowerCase().includes(query))) {
@@ -2605,7 +2658,7 @@ async function cmdFc(senderJid, reply, args = []) {
   }
 
   // 2. Search Custom Decks
-  const customDecks = await CardDeck.find({ userId: senderJid });
+  const customDecks = await CardDeck.find({ ...(await ownerOf(senderJid)) });
   for (const cd of customDecks) {
     for (let i = 0; i < cd.cards.length; i++) {
       const ucId = cd.cards[i];
@@ -2626,7 +2679,7 @@ async function cmdFc(senderJid, reply, args = []) {
   }
 
   // 3. Search Collection (cards not in any deck, not for sale)
-  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
+  const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
   for (let i = 0; i < owned.length; i++) {
     const uc = owned[i];
     const card = CARD_INDEX()[uc.cardId];
@@ -2890,8 +2943,8 @@ async function cmdT2Deck(senderJid, reply, args = []) {
 
   // 💡 FIX 2026-10-08: exclude inAuction - moving an auction-committed card
   // into the deck/custom-deck desyncs the auction settlement.
-  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false }).sort({ createdAt: 1 });
-  const deck  = await UserCard.find({ userId: senderJid, inMainDeck: true }).sort({ mainDeckSlot: 1 });
+  const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false }).sort({ createdAt: 1 });
+  const deck  = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: true }).sort({ mainDeckSlot: 1 });
 
   const slotsAvailable = MAIN_DECK_SIZE - deck.length;
   if (slotsAvailable <= 0) return reply(`❌  *DECK FULL*\n\n🔢 ⟢ _Your main deck is full (${MAIN_DECK_SIZE}/12)_\n📍 ⟢ _Move a card back to your collection first_`);
@@ -2942,8 +2995,8 @@ async function cmdT2CDeck(senderJid, reply, args = []) {
   }
 
   // 💡 FIX 2026-10-08: exclude inAuction here as well (same desync as t2deck).
-  const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false }).sort({ createdAt: 1 });
-  const decks = await CardDeck.find({ userId: senderJid });
+  const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false }).sort({ createdAt: 1 });
+  const decks = await CardDeck.find({ ...(await ownerOf(senderJid)) });
   if (decks.length === 0) return reply(`❌  *NO CUSTOM DECKS*\n\n💡 ⟢ _Create one first with_ _.create deck <name>_`);
 
   let targetDeck = decks.find(d => d.name.toLowerCase() === deckNameQuery.toLowerCase());
@@ -3102,7 +3155,7 @@ async function cmdEShopDeckTrading(senderJid, reply, chatId, args = [], isMod = 
       return sendUsage(reply, `${p} eshop deck sell`, `${p} eshop deck sell <deck_name> <price>`, `${p} eshop deck sell Waifus 50000`);
     }
 
-    const deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${escapeRegex(deckName)}$`, 'i') } });
+    const deck = await CardDeck.findOne({ ...(await ownerOf(senderJid)), name: { $regex: new RegExp(`^${escapeRegex(deckName)}$`, 'i') } });
     if (!deck) return reply(`❌  *DECK NOT FOUND*\n\n🃏 ⟢ *Deck:* _"${deckName}"_`);
     if (deck.cards.length === 0) return reply(`❌  *EMPTY DECK*\n\n🃏 ⟢ _You cannot sell an empty deck!_`);
 
@@ -3215,7 +3268,7 @@ async function cmdT2Coll(senderJid, reply, args = []) {
 
   // 💡 P3 (2026-08-16): "all" - empty entire main deck back to collection.
   if (args[0]?.toLowerCase() === 'all') {
-    const allDecked = await UserCard.find({ userId: senderJid, inMainDeck: true });
+    const allDecked = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: true });
     if (!allDecked.length) return reply(`❌  *DECK ALREADY EMPTY*\n\n📭 ⟢ _Your main deck has no cards to move_`);
     let count = 0;
     for (const uc of allDecked) {
@@ -3233,7 +3286,7 @@ async function cmdT2Coll(senderJid, reply, args = []) {
 
   const results = [];
   for (const slot of slots) {
-    const uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: slot });
+    const uc = await UserCard.findOne({ ...(await ownerOf(senderJid)), inMainDeck: true, mainDeckSlot: slot });
     if (!uc) { results.push(`❌ Slot #${slot} - empty`); continue; }
     const card = CARD_INDEX()[uc.cardId];
     uc.inMainDeck = false;
@@ -3278,7 +3331,7 @@ async function cmdT2CColl(senderJid, reply, args = []) {
     return sendUsage(reply, `${p} t2ccoll`, `${p} t2ccoll <slot> [slot2]... <deck_name>`, `${p} t2ccoll 3 Waifus\n${p} t2ccoll 1 5 10 Best Cards`);
   }
 
-  const decks = await CardDeck.find({ userId: senderJid });
+  const decks = await CardDeck.find({ ...(await ownerOf(senderJid)) });
   if (decks.length === 0) return reply(`❌  *NO CUSTOM DECKS*\n\n💡 ⟢ _Create one first with_ _.create deck <name>_`);
 
   let targetDeck = decks.find(d => d.name.toLowerCase() === deckNameQuery.toLowerCase());
@@ -3461,7 +3514,7 @@ async function cmdTcoll(senderJid, reply, chatId, args = []) {
   const tierMode = args.includes('--tier');
 
   // Fetch ALL cards regardless of deck/market status
-  const allOwned = await UserCard.find({ userId: senderJid }).sort({ createdAt: 1 });
+  const allOwned = await UserCard.find({ ...(await ownerOf(senderJid)) }).sort({ createdAt: 1 });
   if (!allOwned.length) return reply(`📭  *TRUE COLLECTION EMPTY*\n\n💡 ⟢ _Every card you own, across all decks_`);
 
   if (tierMode) {
@@ -3527,7 +3580,7 @@ async function cmdEcoll(senderJid, reply, chatId, args = []) {
   const p = P();
 
   // Fetch ALL cards, filter to event cards only
-  const allOwned = await UserCard.find({ userId: senderJid }).sort({ createdAt: 1 });
+  const allOwned = await UserCard.find({ ...(await ownerOf(senderJid)) }).sort({ createdAt: 1 });
   const eventCards = [];
   allOwned.forEach((uc, i) => {
     const card = CARD_INDEX()[uc.cardId];
@@ -3585,8 +3638,8 @@ async function cmdSwapCard(senderJid, reply, args = []) {
 
   if (isNaN(a) || isNaN(b)) return sendUsage(reply, `${p} swap card`, `${p} swap card <a> and <b>`, `${p} swap card 1 and 2`);
 
-  const cardA = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: a });
-  const cardB = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: b });
+  const cardA = await UserCard.findOne({ ...(await ownerOf(senderJid)), inMainDeck: true, mainDeckSlot: a });
+  const cardB = await UserCard.findOne({ ...(await ownerOf(senderJid)), inMainDeck: true, mainDeckSlot: b });
 
   if (!cardA && !cardB) return reply(`❌  *EMPTY SLOTS*\n\n🔢 ⟢ _Both deck slots are empty — nothing to swap_`);
 
@@ -3629,7 +3682,7 @@ async function cmdCG(senderJid, reply, args = [], m) {
   let uc;
   let sourceLabel;
   if (wantsDeck) {
-    uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: index });
+    uc = await UserCard.findOne({ ...(await ownerOf(senderJid)), inMainDeck: true, mainDeckSlot: index });
     sourceLabel = `Main Deck (Slot #${index})`;
   } else {
     // Numbering matches `.coll` EXACTLY: non-deck, non-custom, non-sale,
@@ -3637,7 +3690,7 @@ async function cmdCG(senderJid, reply, args = [], m) {
     // In-auction cards STAY in the numbering (they show in .coll too), so
     // indexes never shift; the inAuction guard below catches those with a
     // friendly error instead of silently skipping and shifting numbers.
-    const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
+    const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
     uc = owned.filter(o => CARD_INDEX()[o.cardId])[index - 1];
     sourceLabel = `Collection #${index}`;
   }
@@ -3663,7 +3716,7 @@ async function cmdCG(senderJid, reply, args = [], m) {
   // state (ghost listings, phantom deck slots).
   // Also pull the card out of any custom-deck array it still lingers in.
   if (uc.inCustomDeck && uc.customDeckName) {
-    await CardDeck.updateMany({ userId: senderJid, name: uc.customDeckName }, { $pull: { cards: uc._id } }).catch(() => {});
+    await CardDeck.updateMany({ ...(await ownerOf(senderJid)), name: uc.customDeckName }, { $pull: { cards: uc._id } }).catch(() => {});
   }
   uc.userId = targetJid;
   // 💡 FIX 2026-10-08 (owner report): a received card kept its ORIGINAL claim
@@ -3889,7 +3942,7 @@ async function cmdSC(senderJid, reply, args = []) {
 
   if (isNaN(slot) || isNaN(price) || price < 1) return sendUsage(reply, `${p} sc`, `${p} sc <deck_slot> <price>`, `${p} sc 1 5000`);
 
-  const uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: slot });
+  const uc = await UserCard.findOne({ ...(await ownerOf(senderJid)), inMainDeck: true, mainDeckSlot: slot });
   if (!uc) return reply(`❌  *EMPTY SLOT*\n\n🔢 ⟢ _No card in deck slot #${slot}_`);
   if (uc.isLocked) return reply(`🔒  *CARD LOCKED*\n\n📍 ⟢ _Unlock it first_`);
   // 💡 FIX 2026-08-31 (double-commit): a card already listed for sale or in an
@@ -3923,9 +3976,9 @@ async function cmdLock(senderJid, reply, args = []) {
   let uc;
   const slot = parseInt(input);
   if (!isNaN(slot)) {
-    uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: slot });
+    uc = await UserCard.findOne({ ...(await ownerOf(senderJid)), inMainDeck: true, mainDeckSlot: slot });
   } else {
-    uc = await UserCard.findOne({ userId: senderJid, cardId: input });
+    uc = await UserCard.findOne({ ...(await ownerOf(senderJid)), cardId: input });
   }
 
   if (!uc) return reply(`❌  *CARD NOT FOUND*\n\n📍 ⟢ _Not found in your collection_`);
@@ -3945,7 +3998,7 @@ async function cmdMerge(senderJid, reply, args = []) {
   // 💡 FIX 2026-10-08 (vanishing cards): the filter missed inCustomDeck and
   // inAuction, so "merging duplicates" silently DELETED custom-deck copies
   // and cards committed to an auction. Both are now protected.
-  const owned = await UserCard.find({ userId: senderJid, cardId: query, inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false, isLocked: false });
+  const owned = await UserCard.find({ ...(await ownerOf(senderJid)), cardId: query, inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false, isLocked: false });
   if (owned.length < 2) return reply(`🧬  *NOT ENOUGH COPIES*\n\n🔢 ⟢ _You need at least 2 unlocked copies of_ _${query}_`);
 
   try {
@@ -3962,7 +4015,7 @@ async function cmdMergeAll(senderJid, reply) {
   try {
     // 💡 FIX 2026-10-08 (vanishing cards): same missing guards as .merge -
     // mass-merge used to eat custom-deck copies and auction-committed cards.
-    const owned = await UserCard.find({ userId: senderJid, inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false, isLocked: false });
+    const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false, isLocked: false });
     const groups = {};
     owned.forEach(uc => {
       if (!groups[uc.cardId]) groups[uc.cardId] = [];
@@ -3992,7 +4045,7 @@ async function cmdMergeAll(senderJid, reply) {
 }
 
 async function cmdListDecks(senderJid, reply) {
-  const decks = await CardDeck.find({ userId: senderJid });
+  const decks = await CardDeck.find({ ...(await ownerOf(senderJid)) });
   if (decks.length === 0) return reply(`📭  *NO CUSTOM DECKS*\n\n💡 ⟢ _Create one with_ _.create deck <name>_`);
 
   let msg = `📂 *YOUR CUSTOM DECKS*\n\n`;
@@ -4040,7 +4093,7 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
     
     if (!deckName || isNaN(slot)) return reply(`❌ Usage: \`${p} cdeck <name> remove <slot>\``);
     
-    const deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${escapeRegex(deckName)}$`, 'i') } });
+    const deck = await CardDeck.findOne({ ...(await ownerOf(senderJid)), name: { $regex: new RegExp(`^${escapeRegex(deckName)}$`, 'i') } });
     if (!deck) return reply(`❌  *DECK NOT FOUND*\n\n🃏 ⟢ *Deck:* _"${deckName}"_`);
     
     const ucId = deck.cards[slot - 1];
@@ -4081,10 +4134,10 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
   //   2. Try exact (case-insensitive) match first
   //   3. Fall back to substring match if no exact match
   // This mirrors the more lenient matching in cmdT2CDeck.
-  let deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') } });
+  let deck = await CardDeck.findOne({ ...(await ownerOf(senderJid)), name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') } });
   if (!deck) {
     // Fallback: substring match
-    const allDecks = await CardDeck.find({ userId: senderJid });
+    const allDecks = await CardDeck.find({ ...(await ownerOf(senderJid)) });
     deck = allDecks.find(d => d.name.toLowerCase() === name.toLowerCase())
        || allDecks.find(d => d.name.toLowerCase().includes(name.toLowerCase()));
   }
@@ -4157,7 +4210,7 @@ async function cmdRenameDeck(senderJid, reply, args = []) {
   if (!oldName || !newName) return sendUsage(reply, `${p} rename deck`, `${p} rename deck <old> | <new>`, `${p} rename deck Waifus | Best Waifus`);
 
   try {
-    const deck = await CardDeck.findOne({ userId: senderJid, name: { $regex: new RegExp(`^${escapeRegex(oldName)}$`, 'i') } });
+    const deck = await CardDeck.findOne({ ...(await ownerOf(senderJid)), name: { $regex: new RegExp(`^${escapeRegex(oldName)}$`, 'i') } });
     if (!deck) return reply(`❌  *DECK NOT FOUND*\n\n🃏 ⟢ *Deck:* _"${oldName}"_`);
 
     deck.name = newName;
@@ -4221,7 +4274,7 @@ async function cmdAuction(senderJid, reply, args = []) {
     return sendUsage(reply, `${p} auction`, `${p} auction <deck_slot> <min_bid> <duration>`, `${p} auction 1 1000 1d\n💡 Duration units: m (min), h (hour), d (day)`);
   }
 
-  const uc = await UserCard.findOne({ userId: senderJid, inMainDeck: true, mainDeckSlot: slot });
+  const uc = await UserCard.findOne({ ...(await ownerOf(senderJid)), inMainDeck: true, mainDeckSlot: slot });
   if (!uc) return reply(`❌  *EMPTY SLOT*\n\n🔢 ⟢ _No card in deck slot #${slot}_`);
   if (uc.isLocked) return reply(`🔒  *CARD LOCKED*\n\n📍 ⟢ _Unlock it first_`);
   // 💡 FIX 2026-08-31 (double-commit): block auctioning a card that's already
