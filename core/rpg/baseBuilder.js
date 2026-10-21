@@ -381,6 +381,21 @@ async function zoomIn(ctx, rec, st) {
     return;
 }
 
+/** GIF -> H.264 MP4 (even dimensions, aspect kept, faststart) — WhatsApp video messages must be MP4. */
+function gifToMp4Even(gifBuf) {
+    const fs = require('fs'), os = require('os'), path = require('path'), { execFile } = require('child_process');
+    return new Promise((resolve, reject) => {
+        const base = path.join(os.tmpdir(), `base_${process.pid}_${Date.now()}_${Math.floor(Math.random() * 1e6)}`);
+        const gi = base + '.gif', mo = base + '.mp4';
+        const clean = () => { try { fs.unlinkSync(gi); } catch (e) {} try { fs.unlinkSync(mo); } catch (e) {} };
+        try { fs.writeFileSync(gi, gifBuf); } catch (e) { return reject(e); }
+        execFile(process.env.FFMPEG_PATH || 'ffmpeg', ['-y', '-i', gi, '-movflags', 'faststart', '-pix_fmt', 'yuv420p', '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '24', '-an', mo], { timeout: 30000 }, (err) => {
+            if (err) { clean(); return reject(err); }
+            try { const out = fs.readFileSync(mo); clean(); out.length > 500 ? resolve(out) : reject(new Error('empty mp4')); } catch (e) { clean(); reject(e); }
+        });
+    });
+}
+
 /** `.j base fish` / `.j base hunt` (+ top-level `.j fish` / `.j hunt`) — the pond
  *  and the hunting grounds. Fish answers with the dock-POV catch GIF (Task 19);
  *  hunt answers with the hunting-grounds POV GIF from the animal sprite sheet
@@ -412,13 +427,8 @@ async function cmdActivity(ctx, kind) {
             // text rides the caption. Failure falls through to the static zoom
             // card, then text — the roll already happened exactly once.
             try { media = await require('./dockPov').renderFishingGif({ biome: biomeOf(rec), lvl: st.level, band: act.bandOf(res.drops, 'fish'), drops: res.drops, banner: res.banner }); } catch (e) { console.error('[base] fish gif failed:', e.message); }
-        } else {
-            // Task 20: same "bake once, keep it, overlay the new stuff" pipeline
-            // for the hunting grounds — animal sprite sheet (rabbit/boar/stag
-            // walk cycles) rides the kept clearing animation per (biome,
-            // barracks level); the band picks which animal shows AFTER the roll.
-            try { media = await require('./huntPov').renderHuntGif({ biome: biomeOf(rec), lvl: tier, band: act.bandOf(res.drops, 'hunt'), drops: res.drops, banner: res.banner }); } catch (e) { console.error('[base] hunt gif failed:', e.message); }
         }
+        // hunt: owner 2026-10-21 — ".j hunt" is a plain IMAGE (no GIF); falls straight to the zoomed forest card below
         if (!media || !media.buffer) {
             // §13/§14 static fallback: the scene plays the REAL result — hunting
             // spotlights the animal whose loot actually dropped (top drop).
@@ -438,10 +448,14 @@ async function cmdActivity(ctx, kind) {
             // cards, mentoring, burn/summon) sends { video, gifPlayback: true }.
             let isGif = false;
             try { isGif = require('../utils/gif89a').isGifBuffer(media.buffer); } catch (e) { /* plain image */ }
+            // ⚠ 2026-10-21 "the .j fish gif is broken": a raw GIF sent as `video` is not a valid
+            // WhatsApp video (it only plays MP4/H.264) — the summon lane converts with ffmpeg, so do the same.
+            let vid = media.buffer;
+            if (isGif) { try { vid = await gifToMp4Even(media.buffer); } catch (e) { console.error('[base] gif->mp4 failed:', e.message); isGif = false; } }
             const msg = isGif
-                ? { video: media.buffer, gifPlayback: true, caption: res.text }
+                ? { video: vid, gifPlayback: true, caption: res.text }
                 : { image: media.buffer, caption: res.text };
-            if (isGif && !msg.jpegThumbnail) msg.jpegThumbnail = require('../utils/gif89a').firstFrameJpeg(media.buffer);   // real frame-0 preview (renderers attach one; mediaCache warm hits don't carry it) — else the engine patch stamps gray on videos
+            if (isGif && !msg.jpegThumbnail) { try { msg.jpegThumbnail = require('../utils/gif89a').firstFrameJpeg(media.buffer); } catch (e) { /* engine stamps a thumb */ } }   // real frame-0 preview (renderers attach one; mediaCache warm hits don't carry it) — else the engine patch stamps gray on videos
             return ctx.sock.sendMessage(ctx.chatId, msg, { quoted: ctx.m });
         }
         return ctx.reply(res.text);
