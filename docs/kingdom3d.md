@@ -178,3 +178,11 @@ hamlets on land, determinism, name resolution both ways.
 - `.j world` / `guild map` now render `core/rpg/worldAtlasRenderer.js`: crisp 3D-hex Aldafold, every guild's castle + emblem plate on its realm, roster strip. `continentMapRenderer.renderContinentMap` delegates to it (legacy painted chart kept as fallback). Guild `continent`/`marker` are persisted (Guild model, loadGuilds, syncGuild).
 - Player base village tier = the Home's level: lv2 adds six corner watchtowers on the palisade; lv3 replaces the palisade with a stone curtain wall (laid in dry runs round lakes) with gate and banner towers.
 - Guild base tiers (hall 2-5) live in `guildBaseRenderer.js` (cobbles, second curtain, full city).
+
+## 2026-10-20 (b) — zoom cards, shop/barracks/hunting camp, pond angles, speed
+- **Speed:** `mediaCache` keys on a content hash of the render code + sprite manifest (not git HEAD) so unrelated deploys stop invalidating every baked card; animated loops are 14 frames (was 20).
+- **`core/rpg/structureScenes.js`:** zoomed iso close-up per structure + parchment info panel + optional result ribbon (`renderStructureCard`, `drawPanel`). Used by `.j base <#|name>` and by command results.
+- **New fixed structures:** `shop` (merchant market model, stall → bazaar) and `barracks` (summons barracks, tents → garrison keep), both in the base map; the hunting grounds now have a real camp (archery range, tents, targets) with its own plaque.
+- **Pond:** the pier is aimed at THIS base's lake (direction/shore follow the per-owner lake nook), dock props sit landward.
+- **Wiring:** `.j base 2` mines → card + mine list; `shop` → card + shop; `barracks`/`summons` → card + summons command; blacksmith → card + blacksmith; `.j base fish` / `.j base hunt` (`core/rpg/baseActivities.js`, cooldown stored on the Base doc) answer with a ribbon card; `.j mine <spot>` result plays on the mines card.
+- **Guild:** `.j guild` is now the HALL zoomed in with the guild's info panel (`renderGuildHallCard`); the old animated grounds moved to `.j guild grounds`. The emblem crowns the keep and the uploaded crest (`emblem.img`) fills the shield when present.

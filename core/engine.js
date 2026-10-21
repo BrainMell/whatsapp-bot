@@ -22242,6 +22242,7 @@ Admins can:
                               memberCount: (_g.members || []).length,
                               emblemColor: _g.emblem?.color || '',
                               emblemIcon: _g.emblem?.icon || '',
+                              emblemImg: _g.emblem?.img || '',
                               motto: _g.motto || '',
                               continent: _g.continent || '',
                             }, { static: false, celebrate: { building: String(buildingId).toLowerCase(), prev: Math.max(0, (((_g.buildings || {})[String(buildingId).toLowerCase()] || {}).level || 0) - 1) }, hint: `${buildingId.toUpperCase()} rises!` });
@@ -22496,6 +22497,7 @@ Admins can:
                         lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild status` ||
                         lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild` ||
                         lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild base` ||
+                        lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild grounds` ||
                         lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild hq`) {
                       try {
                         const userGuild = guilds.getUserGuild(senderJid);
@@ -22519,7 +22521,7 @@ Admins can:
                         let baseMedia = null;
                         try {
                           const gbr = require('./rpg/guildBaseRenderer');
-                          baseMedia = await gbr.renderGuildBaseImage({
+                          const _gst = {
                             name: userGuild,
                             level: guildLevel,
                             archetype: String(guild.type || 'ADVENTURER').toUpperCase(),
@@ -22532,9 +22534,35 @@ Admins can:
                             memberCap,
                             emblemColor: guild.emblem?.color || '',
                             emblemIcon: guild.emblem?.icon || '',
+                            emblemImg: guild.emblem?.img || '',
                             motto: guild.motto || '',
                             continent: guild.continent || '',     // realm → biome (continents.js); '' = legacy name-hash biome
-                          }, { hint: `${botConfig.getPrefix()} guild upgrade hall • ${botConfig.getPrefix()} guild donate • ${botConfig.getPrefix()} guild perks` });
+                          };
+                          const _P = botConfig.getPrefix();
+                          if (/ guild (base|hq|grounds)$/.test(lowerTxt)) {
+                            // the whole animated GROUNDS card (water, birds, smoke) — owner 2026-10-20: `.j guild` itself is the zoomed hall
+                            baseMedia = await gbr.renderGuildBaseImage(_gst, { hint: `${_P} guild upgrade hall • ${_P} guild donate • ${_P} guild perks` });
+                          } else {
+                            // 🏰 `.j guild` = the HALL zoomed in, emblem crowning the keep, the guild's information on the panel
+                            const _hl = _gst.buildings.hall;
+                            const _archLbl = { ADVENTURER: 'Adventurer', MERCHANT: 'Merchant', RESEARCH: 'Research' }[_gst.archetype] || 'Adventurer';
+                            const _hallNames = ['No hall', ...(((gbr.GUILD_STRUCTS || {}).hall || {}).levels || []).map((l) => l.name)];
+                            baseMedia = await gbr.renderGuildHallCard(_gst, {
+                              title: String(userGuild).slice(0, 20),
+                              subtitle: `${_hallNames[Math.min(_hallNames.length - 1, _hl)] || 'Guild Hall'} · ${_archLbl} Guild Lv ${guildLevel}`,
+                              note: guild.motto ? `“${String(guild.motto).slice(0, 80)}”` : `${_archLbl} guild of ${require('./rpg/continents').continentOf({ name: userGuild, continent: guild.continent }).name.replace(/^The /, '')}`,
+                              rows: [
+                                ['Members', `${_gst.memberCount} / ${memberCap}`],
+                                ['Guild hall', `Lv ${_hl}`],
+                                ['Bank', `${(guild.balance || 0).toLocaleString()}`],
+                                ['Realm', require('./rpg/continents').continentOf({ name: userGuild, continent: guild.continent }).name.replace(/^The /, '')],
+                                ['Training', `Lv ${_gst.buildings.training}`],
+                                ['Treasury', `Lv ${_gst.buildings.treasury}`],
+                              ],
+                              actions: [`${_P} guild upgrade hall`, `${_P} guild donate`, `${_P} guild perks`, `${_P} guild map`, `${_P} guild grounds`],
+                              footer: `${guildPoints.toLocaleString()} / ${guildXpNeed.toLocaleString()} guild XP`,
+                            });
+                          }
                         } catch (e) {
                           console.error('[guild] base grounds render failed:', e?.message || e);
                         }

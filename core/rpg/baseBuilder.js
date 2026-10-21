@@ -35,6 +35,8 @@ function fixedSeed() {
         { uid: uid(), type: 'mines', level: 1, x: LAYOUT.mines.x, y: LAYOUT.mines.y },
         { uid: uid(), type: 'pond', level: 1, x: LAYOUT.pond.x, y: LAYOUT.pond.y },
         { uid: uid(), type: 'hunting', level: 1, x: LAYOUT.hunting.x, y: LAYOUT.hunting.y },
+        { uid: uid(), type: 'shop', level: 1, x: LAYOUT.shop.x, y: LAYOUT.shop.y },
+        { uid: uid(), type: 'barracks', level: 1, x: LAYOUT.barracks.x, y: LAYOUT.barracks.y },
     ];
 }
 
@@ -57,7 +59,7 @@ async function loadBase(userId) {
     // — THE GATEHOUSE NOW GUARDS THE SOUTH GATE, owner "orientation still
     // weird") — relocate the FIXED structures so every base matches the new
     // village plan. Safe: nothing else can legally occupy these cells.
-    const ANCHORS = { house: LAYOUT.house, hunting: LAYOUT.hunting };
+    const ANCHORS = { house: LAYOUT.house, hunting: LAYOUT.hunting, shop: LAYOUT.shop, barracks: LAYOUT.barracks };
     // layout v3/v4 plot re-anchoring: built structures bought on the OLD plot
     // anchors re-seat onto the new ones (else a v2 blacksmith at 11,6 would
     // end up buried under the relocated house). Map chases every historical
@@ -226,104 +228,134 @@ async function enterStructure(ctx, idArg) {
         const lv = d.levels.find((l) => l.level === st.level) || d.levels[0];
         return homestead.viewRoom(ctx, hRec, { hint: `Your ${lv.name} (Structure #1, Lv.${st.level}) — ${ctx.prefix} home select <item> to rearrange.` });
     }
+    return zoomIn(ctx, rec, st);
+}
 
-    // ═══ WIRED CLOSE-UP (owner 2026-10-20: ".j base <index> … zoomed in … wire it all up") ═══
-    // every structure now opens a ZOOMED CARD of itself — the same seeded world as
-    // the base map, camera tight on the building — with the structure's live stats
-    // in the caption and the related command one tap away.
-    const idx = rec.structures.indexOf(st);
+// ═══════════════════════════════════════════════════════════════════════════
+// ZOOM CARDS — `.j base <#|name>` opens the structure close-up with its info panel,
+// then runs the command that belongs to the place (owner 2026-10-20: "wire it all up")
+// ═══════════════════════════════════════════════════════════════════════════
+const ALIASES = { mine: 'mines', mining: 'mines', cave: 'mines', fishing: 'pond', lake: 'pond', hunt: 'hunting', camp: 'hunting', market: 'shop', merchant: 'shop', store: 'shop', summons: 'barracks', summon: 'barracks', barrack: 'barracks', smith: 'blacksmith', forge: 'blacksmith', clinic: 'medbay', hospital: 'medbay', alchemist: 'alchemy' };
+const FLAVOUR = {
+    mines: 'Rich veins run deep below the hills.',
+    pond: 'Still water, hungry fish. Cast a line.',
+    hunting: 'Targets, tents and a trail into the deep woods.',
+    shop: 'The merchants of your village hawk their wares.',
+    barracks: 'Your bonded summons muster here between fights.',
+    blacksmith: 'The forge never goes cold.',
+    medbay: 'Bandages, tents and quiet healing.',
+    alchemy: 'Bubbling flasks and strange smoke.',
+};
+
+function biomeOf(rec) {
+    try {
+        const guilds = require('./guilds');
+        const gName = guilds.getUserGuild(rec.userId);
+        return require('./continents').baseBiome({ owner: economy.getDisplayName(rec.userId), guildName: gName || undefined, guild: gName ? guilds.getGuild(gName) : undefined });
+    } catch (e) { return 'isle'; }
+}
+
+function specFor(ctx, rec, st, extra = {}) {
+    const d = structDef(st.type);
     const lv = d.levels.find((l) => l.level === st.level) || d.levels[0];
     const next = d.levels.find((l) => l.level === st.level + 1);
-    const state = baseState(rec);
-    const upLine = next
-        ? `⬆️ Next: *${next.name}* — ${next.price.toLocaleString()} ZENI → \`${ctx.prefix} base upgrade #${idx + 1}\``
-        : `✨ Fully upgraded.`;
-
-    let media = null;
+    const P = ctx.prefix || '.j';
+    const idx = rec.structures.indexOf(st) + 1;
+    const rows = [['Level', `${st.level} / ${d.levels.length}`], ['Next upgrade', next ? `${next.price.toLocaleString()} ZENI` : (d.noUpgrade ? '—' : 'Maxed')]];
+    const acts = {
+        mines: [`${P} mine`, `${P} mine <spot>`, `${P} base upgrade mines`, `${P} sell <ore>`],
+        pond: [`${P} base fish`, `${P} base upgrade pond`, `${P} sell <fish>`],
+        hunting: [`${P} base hunt`, `${P} sell <pelt/meat>`],
+        shop: [`${P} shop`, `${P} buy <item>`, `${P} base upgrade shop`],
+        barracks: [`${P} summons`, `${P} summon <action>`, `${P} base upgrade barracks`],
+        blacksmith: [`${P} blacksmith`, `${P} repair <slot>`, `${P} base upgrade blacksmith`],
+        medbay: [`${P} clinic`, `${P} base upgrade medbay`],
+        alchemy: [`${P} recipes`, `${P} brew <potion>`, `${P} base upgrade alchemy`],
+    }[st.type] || [`${P} base upgrade #${idx}`];
     try {
-        media = await renderer.renderStructureCard(state, { type: st.type, index: idx });
-    } catch (cardErr) {
-        console.error('[base] structure card failed, text fallback:', cardErr.message);
-        media = null;
-    }
+        if (st.type === 'mines') rows.push(['Mining Lv', economy.getProfessionLevel(rec.userId, 'mining')]);
+        if (st.type === 'pond') rows.push(['Catch tier', ['Minnows', 'Trout', 'Koi'][st.level - 1] || '—']);
+        if (st.type === 'hunting') { const br = (rec.structures.find((x) => x.type === 'barracks') || {}).level || 1; rows.push(['Party', `Barracks Lv ${br}`]); }
+        if (st.type === 'shop') rows.push(['Wares', ['Stall', 'Shop', 'Bazaar'][st.level - 1] || '—']);
+    } catch (e) { /* stats are decoration */ }
+    return { title: d.name, subtitle: `${lv.name} · Lv ${st.level}`, note: FLAVOUR[st.type] || '', rows, actions: acts, footer: `${P} base ${idx} • ${P} base info`, ...extra };
+}
 
-    // per-type LIVE data + wiring (the "connect as much as you can" pass)
-    const lines = [];
-    let wired = null; // optional follow-up dispatch (e.g. barracks → summons roster)
-    switch (st.type) {
-        case 'mines': {
-            const miningLv = economy.getProfessionLevel(ctx.senderJid, 'mining');
-            let energy = null;
-            try {
-                const user = economy.getUser(ctx.senderJid);
-                const derived = require('./progression').getBaseStats(ctx.senderJid, user && user.class);
-                energy = economy.getPersistentEnergy(ctx.senderJid, derived.maxEnergy || 100);
-                lines.push(`⛏️ Mining Lv.*${miningLv}* • ⚡ Energy *${energy}/${derived.maxEnergy || 100}*`);
-            } catch (e) { lines.push(`⛏️ Mining Lv.*${miningLv}*`); }
-            lines.push(`▸ \`${ctx.prefix} mine\` — strike the veins`);
-            break;
-        }
-        case 'hunting': {
-            const hunter = economy.getUser(ctx.senderJid) || {};
-            const huntDayUtc = new Date().toISOString().slice(0, 10);
-            const hunts = (hunter.lastHuntDay || '') === huntDayUtc ? (hunter.huntCount || 0) : 0;
-            lines.push(`🏹 Hunts today: *${hunts}/10* — resets midnight UTC`);
-            lines.push(`▸ \`${ctx.prefix} hunt\` — take the hunt`);
-            break;
-        }
-        case 'pond':
-            lines.push(`🎣 The boardwalk sits over ${lv.level >= 3 ? 'crystal-clear' : lv.level >= 2 ? 'stocked' : 'quiet'} water.`);
-            break;
-        case 'market':
-            lines.push(`▸ \`${ctx.prefix} shop\` — RPG wares • \`${ctx.prefix} itemmarket\` — player stalls`);
-            break;
-        case 'barracks':
-            lines.push(`🛡️ Opening the summons roster…`);
-            wired = () => require('../commands/summonCommands').handleCommand(
-                ctx.sock, ctx.chatId, ctx.senderJid, economy.getDisplayName(ctx.senderJid), [], ctx.m);
-            break;
-        case 'blacksmith':
-            lines.push(`▸ \`${ctx.prefix} blacksmith\` — repair & enhance gear`);
-            break;
-        case 'medbay':
-            lines.push(`▸ \`${ctx.prefix} clinic\` — heal up`);
-            break;
-        case 'alchemy':
-            lines.push(`▸ \`${ctx.prefix} brew\` — the cauldron • \`${ctx.prefix} recipes\` — what's cookable`);
-            break;
-        default:
-            break;
-    }
+async function renderZoom(ctx, rec, st, extra = {}) {
+    const scenes = require('./structureScenes');
+    return scenes.renderStructureCard({ type: st.type, level: st.level, biome: biomeOf(rec), seed: rec.userId, spec: specFor(ctx, rec, st, extra) });
+}
 
-    const head = `🏗️ *${d.name}* — Structure #${idx + 1} (Lv.${st.level} · ${lv.name})\n📍 Plot (${st.x},${st.y}) · 🌍 ${realmNameOf(state)}`;
-    if (media) {
-        const cap = `${head}\n${lines.length ? '\n' + lines.join('\n') + '\n' : '\n'}${upLine}`;
-        try {
-            const payload = media.contentType === 'video/mp4'
-                ? { video: media.buffer, gifPlayback: true, caption: cap }
-                : { image: media.buffer, caption: cap };
-            const sent = await ctx.sock.sendMessage(ctx.chatId, payload, { quoted: ctx.m });
-            if (wired) { try { await wired(); } catch (e) { console.error('[base] wired view failed:', e.message); } }
-            return sent;
-        } catch (sendErr) {
-            console.error('[base] structure card send failed:', sendErr.message);
-            // fall through to the text form
-        }
+/** Zoom card for another command's result (e.g. `.j mine`): never creates a base — returns null if the user has none. */
+async function zoomForCommand(ctx, type, extra = {}) {
+    try {
+        const rec = await Base.findOne({ userId: ctx.senderJid }).lean();
+        if (!rec) return null;
+        const have = (rec.structures || []).filter((x) => structDef(x.type));
+        let st = have.find((x) => x.type === type);
+        if (!st) { const f = fixedSeed().find((x) => x.type === type); if (!f) return null; st = f; have.push(f); }
+        const r = { ...rec, structures: have };
+        return await renderZoom({ prefix: ctx.prefix || '.j' }, r, st, extra);
+    } catch (e) { console.error('[base] zoomForCommand:', e.message); return null; }
+}
+
+async function followUp(ctx, st) {
+    const { sock, chatId, senderJid } = ctx;
+    try {
+        if (st.type === 'mines') return await require('../commands/rpgCommands').mineOre(sock, chatId, senderJid, undefined);
+        if (st.type === 'shop') return await require('../commands/shopCommands').displayShop(sock, chatId, 'all');
+        if (st.type === 'barracks') return await require('../commands/summonCommands').handleCommand(sock, chatId, senderJid, economy.getDisplayName(senderJid), [], ctx.m);
+        if (st.type === 'blacksmith') return await require('../commands/repairCommands').displayBlacksmith(sock, chatId, senderJid);
+        if (st.type === 'medbay') return await ctx.reply(`🏥 Type \`${ctx.prefix} clinic\` to be treated at your Med Bay.`);
+        if (st.type === 'alchemy') return await ctx.reply(`⚗️ Browse \`${ctx.prefix} recipes\` and brew with \`${ctx.prefix} brew <potion>\`.`);
+    } catch (e) { console.error('[base] follow-up failed:', e.message); }
+}
+
+async function zoomIn(ctx, rec, st) {
+    const d = structDef(st.type);
+    const lv = d.levels.find((l) => l.level === st.level) || d.levels[0];
+    const next = d.levels.find((l) => l.level === st.level + 1);
+    const idx = rec.structures.indexOf(st) + 1;
+    const cap = `🏗️ *${d.name}* — ${lv.name} (Lv.${st.level}) · #${idx}\n` +
+        (next ? `⬆️ Next: *${next.name}* — ${next.price.toLocaleString()} ZENI → \`${ctx.prefix} base upgrade #${idx}\`` : (d.noUpgrade ? '' : '✨ Fully upgraded.')) +
+        (st.type === 'pond' ? `\n🎣 Cast a line: \`${ctx.prefix} base fish\`` : '') +
+        (st.type === 'hunting' ? `\n🏹 Ride out: \`${ctx.prefix} base hunt\` (a stronger Barracks means a stronger party)` : '');
+    let media = null;
+    try { media = await renderZoom(ctx, rec, st); } catch (e) { console.error('[base] zoom render failed:', e.message); }
+    if (media && media.buffer && media.buffer.length > 500) {
+        await ctx.sock.sendMessage(ctx.chatId, { image: media.buffer, caption: cap }, { quoted: ctx.m });
+    } else {
+        await ctx.reply(cap);
     }
-    if (wired) { try { await wired(); } catch (e) { /* the text below still helps */ } }
-    const extra = lines.length ? `\n${lines.join('\n')}\n` : '\n';
-    return ctx.reply(
-        `🏗️ *${d.name}* — Structure (Lv.${st.level})\n` +
-        `Form: *${lv.name}* at plot (${st.x},${st.y})\n` +
-        extra +
-        upLine,
-    );
+    return followUp(ctx, st);
+}
+
+/** `.j base fish` / `.j base hunt` — the pond and the hunting grounds, with a zoomed result card. */
+async function cmdActivity(ctx, kind) {
+    const rec = await loadBase(ctx.senderJid);
+    const act = require('./baseActivities');
+    const type = kind === 'fish' ? 'pond' : 'hunting';
+    const st = rec.structures.find((x) => x.type === type);
+    if (!st) return ctx.reply('❌ That place does not exist in your base yet.');
+    const tier = type === 'pond' ? st.level : Math.max(1, (rec.structures.find((x) => x.type === 'barracks') || {}).level || 1);
+    if (opLocks.has(ctx.senderJid)) return ctx.reply('⏳ Your last base action is still settling — one moment.');
+    opLocks.add(ctx.senderJid);
+    try {
+        const last = ((rec.cooldowns || {})[kind]) || 0;
+        const res = await act.run(kind, ctx.senderJid, tier, last);
+        if (!res.ok) return ctx.reply(res.text);
+        try { await Base.updateOne({ userId: ctx.senderJid }, { $set: { [`cooldowns.${kind}`]: Date.now() } }); } catch (e) { /* cooldown best-effort */ }
+        let media = null;
+        try { media = await renderZoom(ctx, rec, st, { banner: res.banner, note: `Next try in ${act.fmtMs(act.RULES[kind].cooldownMs)}.` }); } catch (e) { console.error('[base] activity card failed:', e.message); }
+        if (media && media.buffer) return ctx.sock.sendMessage(ctx.chatId, { image: media.buffer, caption: res.text }, { quoted: ctx.m });
+        return ctx.reply(res.text);
+    } finally { opLocks.delete(ctx.senderJid); }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // BUILD / UPGRADE (§7/8) — atomic purchase, identical compensation contract
 // ═══════════════════════════════════════════════════════════════════════════
-const BUILDABLE = ['blacksmith', 'medbay', 'alchemy', 'market', 'barracks'];
+const BUILDABLE = ['blacksmith', 'medbay', 'alchemy'];
 
 async function cmdBuild(ctx, rec, args) {
     const type = String(args[0] || '').toLowerCase();
@@ -565,6 +597,10 @@ async function handleBaseCommand(ctx) {
             case 'house': case 'inside': {
                 return enterStructure(ctx, args[0] || 'house');
             }
+            case 'fish': case 'cast': case 'fishing':
+                return cmdActivity(ctx, 'fish');
+            case 'hunt': case 'hunting':
+                return cmdActivity(ctx, 'hunt');
             case 'build': case 'construct':
                 return cmdBuild(ctx, await loadBase(ctx.senderJid), args);
             case 'upgrade': case 'up':
@@ -575,6 +611,8 @@ async function handleBaseCommand(ctx) {
                 if (!ctx.isMod) return ctx.reply('❌ This command is for moderators and above only.');
                 return cmdAdmin(ctx, await loadBase(ctx.senderJid), args);
             case 'help': default:
+                if (/^\d+$/.test(sub)) return enterStructure(ctx, sub);
+                if (sub && sub !== 'help' && (ALIASES[sub] || structDef(sub))) return enterStructure(ctx, ALIASES[sub] || sub);
                 if (sub && sub !== 'help') {
                     // owner 2026-10-20 "wire it all up": a structure NAME is a view request —
                     // `.j base mines` ≡ `.j base <the mines' #id>`
@@ -590,6 +628,8 @@ async function handleBaseCommand(ctx) {
                     `• \`${ctx.prefix} base\` — outdoor base map\n` +
                     `• \`${ctx.prefix} base <#id | name>\` — open a structure (zoomed card)\n` +
                     `• \`${ctx.prefix} base house [#id]\` — enter a structure\n` +
+                    `• \`${ctx.prefix} base <#|mines|pond|hunting|shop|barracks>\` — zoom into a place (and open its command)\n` +
+                    `• \`${ctx.prefix} base fish\` / \`${ctx.prefix} base hunt\` — work the pond / hunting grounds\n` +
                     `• \`${ctx.prefix} base build <type> [plot#]\` — construct\n` +
                     `• \`${ctx.prefix} base upgrade <type|#id>\` — upgrade\n` +
                     `• \`${ctx.prefix} base info\` — ledger + plots\n` +
@@ -602,4 +642,4 @@ async function handleBaseCommand(ctx) {
     }
 }
 
-module.exports = { handleBaseCommand, viewBase, enterStructure, loadBase, plotsFor };
+module.exports = { handleBaseCommand, viewBase, enterStructure, loadBase, plotsFor, zoomForCommand };

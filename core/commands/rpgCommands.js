@@ -1150,6 +1150,15 @@ async function mineOre(sock, chatId, senderJid, locationId) {
     const energyLeft = economy.getPersistentEnergy(senderJid, maxEn);
     msg += `\n⚡ Energy Left: ${energyLeft}/${maxEn} (-${energyCost})\n📈 Mining XP: +${xpGained}`;
     if (levelUp?.leveledUp) msg += `\n✨ *LEVEL UP!* Mining is now Level ${levelUp.newLevel}!`;
+    // 🏔️ the result plays on the zoomed-in MINES card of the player's base, with the haul as a ribbon
+    // (owner 2026-10-20) — silent fallback to the plain text result if there is no base / render fails
+    try {
+        const lines = Object.entries(found).map(([id, qty]) => `${qty}× ${lootSystem.getItemInfo(id).name}`);
+        if (luckyFinds > 0) lines.push(`+${luckyFinds.toLocaleString()} ZENI (lucky find)`);
+        lines.push(`+${xpGained} Mining XP${levelUp?.leveledUp ? ` · LEVEL UP ${levelUp.newLevel}!` : ''}`);
+        const card = await require('../rpg/baseBuilder').zoomForCommand({ senderJid, prefix: getPrefix() }, 'mines', { banner: { head: loc.name, lines } });
+        if (card && card.buffer && card.buffer.length > 500) return await sock.sendMessage(chatId, { image: card.buffer, caption: msg });
+    } catch (e) { /* text result below */ }
     await sock.sendMessage(chatId, { text: msg });
 }
 

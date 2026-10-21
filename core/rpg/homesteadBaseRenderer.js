@@ -28,7 +28,7 @@ const ambient = require('./ambient');   // shared life layer (owner 2026-10-19: 
 const N = 16;                 // base tiles per side (saved-structure grid)
 const M = 15;                 // wilderness margin (hex cells) around the grid — big enough to over-cover the diagonal card
 const COLS = N + 2 * M, ROWS = N + 2 * M;
-const FRAMES = 14, FRAME_MS = 143;   // 2 s loop, 14 frames (cold bake was the slow part)
+const FRAMES = 14, FRAME_MS = 143;   // 2 s loop, 14 frames (cold bake was the slow part: ~30% cheaper than 20)
 const SCALE = parseFloat(process.env.RENDER_BASE_SCALE || '0.44') || 0.44;
 const ANIM_SCALE = parseFloat(process.env.RENDER_BASE_ANIM_SCALE || '0.62') || 0.62;
 const CARD_W = 1960, CARD_H = 1420;   // fixed card; terrain over-covers it (no floating diorama)
@@ -115,6 +115,8 @@ const LAYOUT = {
     pond: { x: 12, y: 1, fw: 2, fh: 2, zone: { x: 11, y: 0, fw: 5, fh: 4 } },
     // hunting = the stone gatehouse — now the VILLAGE GATE on the main
     // street (footprint centred on x=8); the woods gate gap lives at walkY.
+    shop: { x: 10, y: 11, fw: 2, fh: 2 },          // merchant market — south-east, fronting the south lane
+    barracks: { x: 13, y: 11, fw: 2, fh: 2 },      // summons barracks — beside the market
     hunting: { x: 7, y: 14, fw: 2, fh: 2, zone: { x: 0, y: 5, fw: 4, fh: 8 }, fenceCol: 4, walkY: 9, walkH: 2 },
     paths: [
         // main street — gate yard (south) up to the north lane junction
@@ -163,6 +165,8 @@ function mainSpriteOf(st, lvl, team) {
         return lvl === 1 ? { name: 'tent', sc: 2.1 } : { name: 'building_church_' + team, sc: lvl === 2 ? 1.35 : 1.8 };
     }
     if (T === 'alchemy') return lvl === 1 ? { name: 'barrel', sc: 1.6 } : { name: 'building_tavern_' + team, sc: lvl === 2 ? 1.5 : 1.9 };
+    if (T === 'shop') return { name: 'building_market_' + team, sc: lvl === 1 ? 1.25 : lvl === 2 ? 1.5 : 1.8 };
+    if (T === 'barracks') return lvl === 1 ? { name: 'tent', sc: 2.0 } : { name: 'building_barracks_' + team, sc: lvl === 2 ? 1.45 : 1.8 };
     if (T === 'mines') {
         // 47-k8 (owner: "implement some of the Clash assets ... make it fit in"): Clash-grade gold-mine
         // ladder on the SAME worksite — wooden hut → stone mine → deep dark seam (tinted to the palette,
@@ -362,6 +366,17 @@ function buildWorld(state, cel = null) {
             prev = [c, r];
         }
         if (K.hexDist(prev[0], prev[1], nr.to[0], nr.to[1]) <= 1 && !foot.has(keyOf(prev[0], prev[1]))) w.link(prev[0], prev[1], nr.to[0], nr.to[1]);
+    }
+    // ── the HUNTING CAMP (owner 2026-10-20: "first you'll have to make the hunting grounds"): a clearing in the west woods —
+    // archery range, hunters' tents, target butts, weapon rack — claimed BEFORE the wilds so trees leave it clear
+    {
+        const hp = (gx, gy, name, o = {}) => { const [c, r] = hc(gx, gy); if (!w.inb(c, r) || w.cell[r][c].water || w.cell[r][c].river) return; w.put(name, c, r, { ...(o || {}) }); claim(c, r); };
+        for (let gx = 0; gx <= 3; gx++) for (let gy = 6; gy <= 12; gy++) { if (gy === 9) continue; const [c, r] = hc(gx, gy); if (w.inb(c, r)) claim(c, r); }
+        hp(1, 11, K.hasSprite('building_archeryrange_' + team, 'iso') ? 'building_archeryrange_' + team : 'building_barracks_' + team, { sc: 1.35, flip: false });
+        hp(2, 7, 'tent', { sc: 1.3, flip: true }); hp(1, 7, 'tent', { sc: 1.1, flip: false });
+        hp(3, 11, 'target', { dz: 0.3 }); hp(3, 12, 'target', { dx: 0.2, dz: -0.2 }); hp(2, 12, 'target', { dz: 0.2 });
+        hp(2, 10, 'weaponrack'); hp(3, 7, 'bucket_arrows'); hp(0, 9, 'crate_A_small', { dx: 0.3 });
+        hp(0, 7, 'resource_lumber'); hp(2, 6, 'sack', { dx: 0.4 });
     }
     w.resolve();
 
@@ -675,16 +690,20 @@ function buildWorld(state, cel = null) {
                 else if (lvl === 2) { P('building_tavern_' + team, { sc: 1.5 }); P('barrel', { dx: 1.5, dz: 1.0 }); P('crate_B_small', { dx: -1.4, dz: 1.0 }); }
                 else { P('building_tavern_' + team, { sc: 1.9 }); P('building_windmill_' + team, { dx: -2.1, dz: -0.2, sc: 0.95 }); P('barrel', { dx: 1.8, dz: 1.1 }); P('crate_B_small', { dx: 0.9, dz: 1.7 }); P('coc_statue_wizard', { dx: 2.2, dz: 0.3, sc: 0.65 }); }
                 break;
-            case 'mines':                                                 // the worksite GROWS with the level —
-                // 47-k8: Clash gold-mine ladder leads (hut → stone → deep seam) with the old cave yard as fallback.
-                if (K.hasSprite('coc_mine_l1', 'iso')) {
-                    P('coc_mine_l' + lvl, { sc: lvl === 1 ? 1.05 : lvl === 2 ? 1.15 : 1.25, dx: 0.1, dz: 0.15 });
-                    P('resource_stone', { dx: 1.7, dz: 1.3 });
-                    P('coc_torch', { dx: -1.55, dz: 1.15, sc: 0.85, flip: true });
-                    if (lvl >= 2) P('wheelbarrow', { dx: 1.35, dz: 1.95, sc: 0.9 });
-                    if (lvl >= 3) { P('coc_skull_hog', { dx: -1.95, dz: 0.5, sc: 0.95 }); P('crate_long_A', { dx: 1.9, dz: 0.7 }); }
-                    break;
-                }
+            case 'shop':                                                  // the pack's merchant market, growing from stall to bazaar
+                P('building_market_' + team, { sc: lvl === 1 ? 1.25 : lvl === 2 ? 1.5 : 1.8 });
+                P('crate_A_small', { dx: 1.4, dz: 0.9 }); P('barrel', { dx: -1.3, dz: 1.0 });
+                if (lvl >= 2) { P('crate_long_A', { dx: -1.9, dz: 0.2 }); P('sack', { dx: 1.7, dz: 0.2 }); P('flag_' + team, { dx: 1.1, dz: -1.0 }); }
+                if (lvl >= 3) { P('building_market_' + team, { dx: -2.3, dz: -0.6, sc: 1.0, flip: true }); P('wheelbarrow', { dx: 0.4, dz: 1.8 }); P('crate_B_big', { dx: 2.0, dz: 1.0 }); }
+                break;
+            case 'barracks':                                              // summons barracks: muster tents → drill hall → garrison keep
+                if (lvl === 1) { P('tent', { sc: 2.0 }); P('tent', { dx: 1.7, dz: 0.5, sc: 1.4 }); P('weaponrack', { dx: -1.4, dz: 0.9 }); }
+                else if (lvl === 2) { P('building_barracks_' + team, { sc: 1.45 }); P('weaponrack', { dx: -1.6, dz: 1.0 }); P('target', { dx: 1.7, dz: 1.0 }); }
+                else { P('building_barracks_' + team, { sc: 1.8 }); P('building_tower_A_' + team, { dx: -2.1, dz: -0.3, sc: 0.9 }); P('weaponrack', { dx: -1.4, dz: 1.5 }); P('target', { dx: 1.9, dz: 1.0 }); P('flag_' + team, { dx: 1.2, dz: -1.2 }); }
+                break;
+            case 'mines':                                                 // the pack cave (walkway-into-rocks) is THE mine at every level —
+                // owner 2026-10-19: "Move the cave inside the base ... For the player base not just the guild base".
+                // The worksite GROWS with the level: bare cave → ladder + cart → full ore-hoist yard.
                 if (K.hasSprite('building_mine_' + team, 'iso')) {
                     P(B('mine'), { sc: lvl === 1 ? 1.55 : lvl === 2 ? 1.75 : 1.95, dx: 0.1, dz: 0.15 });
                     P('resource_stone', { dx: 1.7, dz: 1.3 });
@@ -698,32 +717,36 @@ function buildWorld(state, cel = null) {
                 }
                 P('building_mine_' + team, { sc: lvl === 1 ? 1.35 : lvl === 2 ? 1.6 : 1.85 });
                 break;
-            case 'market':                                                // the Clash market pack (owner 2026-10-20)
-                if (lvl === 1) { P('house_shop_' + team, { sc: 1.5 }); P('crate_open', { dx: 1.5, dz: 0.9 }); P('barrel', { dx: -1.4, dz: 1.0 }); P('sack', { dx: 1.2, dz: -0.8 }); }
-                else if (lvl === 2) { P('building_market_' + team, { sc: 1.55 }); P('crate_A_small', { dx: 1.6, dz: 0.9 }); P('barrel', { dx: -1.5, dz: 1.1 }); P('sack', { dx: -0.9, dz: -1.2 }); P('wheelbarrow', { dx: 0.9, dz: 1.8, sc: 0.9 }); }
-                else { P('building_market_' + team, { sc: 1.9 }); P('crate_A_big', { dx: 1.7, dz: 0.9 }); P('crate_B_big', { dx: -1.7, dz: 1.0 }); P('barrel', { dx: -1.2, dz: -1.3 }); P('sack', { dx: 1.0, dz: -1.5 }); P('coc_flag_rally', { dx: -2.2, dz: 0.2, sc: 0.85 }); P('wheelbarrow', { dx: 1.1, dz: 1.9, sc: 0.95 }); }
-                break;
-            case 'barracks':                                              // the summons muster yard
-                if (lvl === 1) { P('building_barracks_' + team, { sc: 1.4 }); P('weaponrack', { dx: 1.5, dz: 0.9 }); P('target', { dx: -1.5, dz: 1.0, sc: 0.95 }); }
-                else if (lvl === 2) { P('building_barracks_' + team, { sc: 1.65 }); P('weaponrack', { dx: 1.6, dz: 1.0 }); P('target', { dx: -1.6, dz: 1.1, sc: 1.0 }); P('tent', { dx: 0.9, dz: -1.6, sc: 0.9 }); P('coc_torch', { dx: -0.9, dz: -1.5, sc: 0.9 }); }
-                else { P('building_barracks_' + team, { sc: 1.95 }); P('weaponrack', { dx: 1.8, dz: 1.0 }); P('target', { dx: -1.8, dz: 1.2, sc: 1.05 }); P('coc_flag_rally', { dx: -2.3, dz: -0.2, sc: 0.9 }); P('coc_statue_mighty', { dx: 2.2, dz: -0.4, sc: 0.6 }); P('coc_torch', { dx: 0.8, dz: -1.7, sc: 0.95 }); }
-                break;
-            case 'pond': {                                              // the lakeside boardwalk: a pier out over the water
-                const [sc1, sr1] = hc(st.x + def.fw - 1, st.y + def.fh - 1);
+            case 'pond': {                                              // the lakeside boardwalk: a pier out over the water, aimed at THIS base's lake
+                // (owner 2026-10-20: "fix the pond generation, the angles should be different") — the lake
+                // nook, the shore cell and the pier heading all follow the per-base lake, so ponds differ.
+                let sc1 = cells[0][0], sr1 = cells[0][1], bdl = 1e9;
+                for (const [c, r] of cells) { const dd = K.hexDist(c, r, lc, lr); if (dd < bdl) { bdl = dd; sc1 = c; sr1 = r; } }
+                let pd = 0, pb = 1e9;
+                for (let e = 0; e < 6; e++) {
+                    const nb = K.neighbor(sc1, sr1, e);
+                    if (cells.some(([c, r]) => c === nb[0] && r === nb[1])) continue;
+                    const dd = K.hexDist(nb[0], nb[1], lc, lr) + (e === 3 || e === 4 ? 0.4 : 0);   // W/NW piers hide behind the dock hut: slightly less likely
+                    if (dd < pb) { pb = dd; pd = e; }
+                }
                 const len = lvl === 1 ? 2 : lvl === 2 ? 3 : 4;
-                for (let i = 1; i <= len; i++) { const kk = w.at(sc1 + i, sr1); if (kk) { kk.water = true; kk.river = false; } }     // make sure the pier is over water
-                lakeShore.push([sc1, sr1, len]);
-                P('barrel', { dx: -1.2, dz: 0.9 }); P('crate_open', { dx: 0.4, dz: 1.3 }); P('bucket_water', { dx: -0.4, dz: -1.1 });
-                if (lvl >= 2) { P('sack', { dx: -1.7, dz: 0.2 }); P('resource_lumber', { dx: -1.3, dz: -0.9 }); }
-                if (lvl >= 3) { P(B('watermill'), { dx: -0.2, dz: -2.3, sc: 0.95 }); }
+                { let cc = sc1, rr = sr1; for (let i = 0; i < len; i++) { const nb = K.neighbor(cc, rr, pd); const kk = w.at(nb[0], nb[1]); if (kk) { kk.water = true; kk.river = false; } cc = nb[0]; rr = nb[1]; } }
+                lakeShore.push([sc1, sr1, len, pd]);
+                // dock yard props sit on the landward side, opposite the pier
+                const w0 = K.hexWorld(sc1, sr1), w1 = K.hexWorld(...K.neighbor(sc1, sr1, pd));
+                const vx = w1.x - w0.x, vz = w1.z - w0.z, px = -vz, pz = vx;          // pier direction + perpendicular
+                const back = (a2, b2) => ({ dx: -vx * a2 + px * b2, dz: -vz * a2 + pz * b2 });
+                P('barrel', back(0.8, 0.5)); P('crate_open', back(0.5, -0.9)); P('bucket_water', back(1.2, 0.0));
+                if (lvl >= 2) { P('sack', back(1.1, 0.9)); P('resource_lumber', back(0.3, 1.2)); }
+                if (lvl >= 3) { P(B('watermill'), { ...back(1.9, 0.2), sc: 0.95 }); }
                 break;
             }
             default: break;
         }
     }
     w.resolve();                                                      // re-resolve now that the pier cells are water
-    for (const [c, r, len] of lakeShore) {
-        const cells = w.layPier(c, r, 0, len);
+    for (const [c, r, len, pd] of lakeShore) {
+        const cells = w.layPier(c, r, pd || 0, len);
         const last = cells[cells.length - 1];
         if (last) { w.put('barrel', last[0], last[1], { dx: 0.15, dz: 0.2, h: 0.12, sc: 0.8 }); }
     }
@@ -819,10 +842,10 @@ async function buildScene(state, opts = {}) {
     const k = SCALE;
     const smoke = [];
     for (const it of info) {
-        if (it.st.type === 'hunting') continue;
         const lv = it.def.levels.find((l) => l.level === it.lvl) || it.def.levels[0];
-        const p = w.proj(it.cen.x, it.cen.z + 2.1, 0);
-        plaque(octx, p.x, p.y + 2 * k * 2, it.def.name, `${lv.name} · Lv ${it.lvl}`, k);
+        const huntSpot = it.st.type === 'hunting' ? K.hexWorld(...hc(2, 10)) : null;      // the plaque stands at the hunting CAMP, not the gatehouse
+        const p = huntSpot ? w.proj(huntSpot.x, huntSpot.z + 1.5, 0) : w.proj(it.cen.x, it.cen.z + 2.1, 0);
+        plaque(octx, p.x, p.y + 2 * k * 2, it.st.type === 'hunting' ? 'Hunting Grounds' : it.def.name, it.st.type === 'hunting' ? 'Hunting Camp' : `${lv.name} · Lv ${it.lvl}`, k);
         if (it.st.type === 'house' || it.st.type === 'blacksmith' || it.st.type === 'alchemy') {
             const sp = w.proj(it.cen.x + 0.5, it.cen.z - 0.4, 2.2); smoke.push({ x: sp.x, y: sp.y, smoky: it.st.type === 'blacksmith' });
         }

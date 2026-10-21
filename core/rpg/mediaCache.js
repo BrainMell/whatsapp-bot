@@ -51,9 +51,10 @@ let CODE_VER = 'v2';
 // (owner 2026-10-20: ".j base / .j guild generate super slow now"). Art/render changes still bust it.
 try {
     const crypto = require('crypto');
+    const rpg = path.join(__dirname);
+    const files = ['kingdom3d.js', 'kingdomTerrain.js', 'ambient.js', 'guildBaseRenderer.js', 'homesteadBaseRenderer.js', 'worldAtlasRenderer.js', 'structureScenes.js']
+        .map((f) => path.join(rpg, f)).concat([path.join(rpg, '..', 'rpgasset', 'kingdom3d', 'manifest.json')]);
     const h = crypto.createHash('sha1');
-    const files = ['kingdom3d.js', 'kingdomTerrain.js', 'ambient.js', 'guildBaseRenderer.js', 'homesteadBaseRenderer.js', 'worldAtlasRenderer.js', 'emojiBitmap.js', 'emojiFont.js']
-        .map((f) => path.join(__dirname, f)).concat([path.join(__dirname, '..', 'rpgasset', 'kingdom3d', 'manifest.json')]);
     for (const f of files) { try { h.update(fs.readFileSync(f)); } catch (e) { /* optional file */ } }
     CODE_VER = `c${h.digest('hex').slice(0, 10)}`;
 } catch (e) { /* keeps 'v2' */ }

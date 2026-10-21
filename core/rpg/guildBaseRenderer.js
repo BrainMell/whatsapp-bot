@@ -30,7 +30,7 @@ const emojiFontMod = require('./emojiFont');   // 2026-10-20: emblem emoji glyph
 const { emojiFont, fillTextMixed } = emojiFontMod;
 const emojiBitmap = require('./emojiBitmap');   // 2026-10-20 12:20Z: big emblem bitmaps for the castle close-up card
 
-const FRAMES = 14, FRAME_MS = 143;   // 2 s loop, 14 frames (cold bake was the slow part)
+const FRAMES = 14, FRAME_MS = 143;   // 2 s loop, 14 frames (cold bake was the slow part: ~30% cheaper than 20)
 const COLS = 23, ROWS = 31, CC = 11, CR = 15;   // oversized grid: terrain runs past every edge of the card, castle on (11,15)
 const OLD_COLS = 17, OLD_ROWS = 15, OLD_CC = 8, OLD_CR = 7;   // the framing the card was designed around
 const SCALE = parseFloat(process.env.RENDER_GUILD_SCALE || '0.5') || 0.5;
@@ -697,7 +697,13 @@ function plaque(ctx, x, y, title, sub, k) {
     ctx.restore();
 }
 
-function drawBanner(ctx, x, y, k, flagCol, flagD, icon, t) {
+async function loadCrest(state) {
+    try { if (state && typeof state.emblemImg === 'string' && /^data:image\/(png|jpe?g|webp);base64,/.test(state.emblemImg)) return await require('canvas').loadImage(state.emblemImg); } catch (e) { /* glyph fallback */ }
+    return null;
+}
+const crestKey = (state) => (state && state.emblemImg ? hashStr(String(state.emblemImg)) : '');
+
+function drawBanner(ctx, x, y, k, flagCol, flagD, icon, t, crest) {
     // the guild EMBLEM crowns the castle (owner 2026-10-19: "by guild banner I ment the
     // guild emblem, it ahould be the thing onto of the castle") — a heraldic shield on a
     // short mast at the keep peak, flanked by two small waving pennants so the top of
@@ -741,7 +747,16 @@ function drawBanner(ctx, x, y, k, flagCol, flagD, icon, t) {
     ctx.strokeStyle = '#e8c15a'; ctx.lineWidth = Math.max(2, 3.4 * k2); ctx.stroke();
     shield(sw - 9 * k2, topY + 4.5 * k2, sh - 7 * k2);
     ctx.strokeStyle = 'rgba(255,244,208,0.5)'; ctx.lineWidth = Math.max(1, 1.6 * k2); ctx.stroke();
-    if (icon) {
+    if (crest) {                                                   // the guild's UPLOADED crest fills the shield (owner: emblem.img)
+        ctx.save();
+        shield(sw - 9 * k2, topY + 4.5 * k2, sh - 7 * k2); ctx.clip();
+        const bw0 = sw - 9 * k2, bh0 = sh - 7 * k2, by0 = topY + 4.5 * k2;
+        const sc0 = Math.max(bw0 / crest.width, bh0 / crest.height);
+        ctx.drawImage(crest, x - crest.width * sc0 / 2, by0 + bh0 / 2 - crest.height * sc0 / 2, crest.width * sc0, crest.height * sc0);
+        ctx.restore();
+        shield(sw - 9 * k2, topY + 4.5 * k2, sh - 7 * k2);
+        ctx.strokeStyle = 'rgba(255,244,208,0.55)'; ctx.lineWidth = Math.max(1, 1.6 * k2); ctx.stroke();
+    } else if (icon) {
         ctx.fillStyle = '#fff4d0'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.font = emojiFont(String(icon).slice(0, 2), 36 * k2);
         fillTextMixed(ctx, String(icon).slice(0, 2), x, topY + sh * 0.4);
@@ -756,7 +771,7 @@ function drawBanner(ctx, x, y, k, flagCol, flagD, icon, t) {
 const _scenes = new Map();
 const SCENE_MAX = 4;
 function sceneKey(state, opts) {
-    return hashStr(JSON.stringify(['guild-life1', state.name, state.level, state.archetype, state.buildings, state.memberCount, state.emblemColor, state.emblemIcon, state.biome, state.continent, (opts && opts.celebrate && typeof opts.celebrate === 'object') ? opts.celebrate : '']));
+    return hashStr(JSON.stringify(['guild-life1', state.name, state.level, state.archetype, state.buildings, state.memberCount, state.emblemColor, state.emblemIcon, crestKey(state), state.biome, state.continent, (opts && opts.celebrate && typeof opts.celebrate === 'object') ? opts.celebrate : '']));
 }
 
 async function buildScene(state, opts = {}) {
@@ -817,7 +832,7 @@ async function buildScene(state, opts = {}) {
     const walkers = ambient.buildWalkers(w, seed, { n: 9, maxY: H - 190 });   // villagers on the roads
     const boats = ambient.buildBoats(water, seed, k);                     // wilds trees for the wind shuffle
     const smoke = smokeAnchors.map((a) => { const p = w.proj(a.x, a.z + 0.35, a.h); return { x: p.x, y: p.y, smoky: false }; });
-    const scene = { canvas, W, H, w, banner: { x: bpos.x, y: bpos.y, flagCol, flagD: archC.flagD, icon: state.emblemIcon || '' }, k, biome: w.biome, realm: w.biome, water, sway, walkers, boats, smoke, seed, fall };
+    const scene = { canvas, W, H, w, banner: { x: bpos.x, y: bpos.y, flagCol, flagD: archC.flagD, icon: state.emblemIcon || '', crest: await loadCrest(state) }, k, biome: w.biome, realm: w.biome, water, sway, walkers, boats, smoke, seed, fall };
     _scenes.set(key0, scene);
     while (_scenes.size > SCENE_MAX) _scenes.delete(_scenes.keys().next().value);
     return scene;
@@ -838,7 +853,7 @@ async function renderFrame(state, frame, opts = {}) {
     ctx.drawImage(sc.canvas, 0, 0);
     const t = (frame || 0) / FRAMES;
     // waving banner over the keep
-    if (sc.banner) drawBanner(ctx, sc.banner.x, sc.banner.y, sc.k, sc.banner.flagCol, sc.banner.flagD, sc.banner.icon, t);
+    if (sc.banner) drawBanner(ctx, sc.banner.x, sc.banner.y, sc.k, sc.banner.flagCol, sc.banner.flagD, sc.banner.icon, t, sc.banner.crest);
     if (opts.animate || frame > 0) {
         const seed = hashStr(state.name || 'guild');
         ambient.animateWater(ctx, sc, t, await ambient.glints());   // lakes/lava shimmer + sparkles + shore ripples
@@ -1014,7 +1029,7 @@ function cachePut(map, k, out) {
 const _renderCache = new Map();
 const CACHE_TTL = 10 * 60 * 1000;
 function stateHash(state, opts = {}) {
-    return hashStr(JSON.stringify(['v12-life', state.name, state.biome || '', state.continent || '', state.level, state.archetype, state.buildings, state.memberCount, state.memberCap, state.emblemColor, state.emblemIcon, state.motto, opts.hint || '', opts.static === true ? 1 : 0, opts.celebrate ? JSON.stringify(opts.celebrate) : '']));
+    return hashStr(JSON.stringify(['v12-life', state.name, state.biome || '', state.continent || '', state.level, state.archetype, state.buildings, state.memberCount, state.memberCap, state.emblemColor, state.emblemIcon, crestKey(state), state.motto, opts.hint || '', opts.static === true ? 1 : 0, opts.celebrate ? JSON.stringify(opts.celebrate) : '']));
 }
 
 async function renderGuildBaseImage(state, opts = {}) {
@@ -1047,124 +1062,39 @@ async function renderGuildBaseImage(state, opts = {}) {
     return out;
 }
 
+
 // ═══════════════════════════════════════════════════════════════════════════
-//  EMBLEM CLOSE-UP CARD (owner 2026-10-20 12:20Z: "If someone does .j guild
-//  emblem and they already have an emblem show an image of their castle
-//  zoomed in with the emblem really big and visible")
-//
-//  Zooms the cached kingdom scene into the keep and crowns it with a LARGE
-//  heraldic shield: uploaded image emblems paint inside the shield (cover
-//  fit — same priority they get on every card), emoji emblems paint as the
-//  color bitmap at ~300px. Static JPEG, no HUD, no animation — this card is
-//  about the crest. Rides the same scene cache + renderQueue as the base
-//  card, so a close-up costs ~nothing after the first render.
+//  GUILD HALL CARD — `.j guild`: the keep zoomed in, the emblem crowning it, and the
+//  guild's information on the panel (owner 2026-10-20: "the guild hall should obviously
+//  be a card zoomed in with the guilds information"). Static JPEG, disk-cached.
+//  spec → structureScenes.drawPanel (title/subtitle/rows/actions/note/footer/banner)
 // ═══════════════════════════════════════════════════════════════════════════
-const _emblemCards = new Map();
-async function renderGuildEmblemCard(state, opts = {}) {
-    const imgKey = state.emblemImg ? hashStr(state.emblemImg) : 0;
-    const key = hashStr(JSON.stringify(['emblem-closeup-v1', state.name, state.biome || '', state.continent || '', state.level, state.archetype, state.buildings, state.emblemColor, state.emblemIcon, imgKey, (opts.celebrate && typeof opts.celebrate === 'object') ? opts.celebrate : '']));
-    const hit = _emblemCards.get(key);
-    if (hit && (Date.now() - hit.ts) < CACHE_TTL) return hit;
-    const out = await mediaCache.cached('guildemblem', key, async () => {
-        const sc = await buildScene(state, opts);
-        const OUT = 1080;
-        const canvas = require('canvas').createCanvas(OUT, OUT);
-        const ctx = canvas.getContext('2d');
-
-        // ── zoom crop: the castle keep fills the lower two-thirds of the card ──
-        const bx = sc.banner.x, by = sc.banner.y;          // castle roof point (scene px)
-        let CS = Math.max(560, Math.min(sc.W, sc.H) * 0.55);   // scene-px crop side
-        CS = Math.min(CS, sc.W, sc.H);
-        const Z = OUT / CS;                                 // zoom factor
-        let cropX = bx - (OUT * 0.5) / Z;
-        let cropY = by - (OUT * 0.62) / Z;                  // roof at 62% height: keep body below, shield room above
-        cropX = Math.max(0, Math.min(cropX, sc.W - CS));
-        cropY = Math.max(0, Math.min(cropY, sc.H - CS));
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(sc.canvas, cropX, cropY, CS, CS, 0, 0, OUT, OUT);
-
-        const rx = Math.round((bx - cropX) * Z);
-        const ry = Math.round((by - cropY) * Z);            // roof point in output px
-
+const HALL_W = 1400, HALL_H = 1000, HALL_ZOOM = 0.78;
+async function renderGuildHallCard(state, spec = {}) {
+    const key = hashStr(JSON.stringify(['hall2', state.name, state.biome || '', state.continent || '', state.level, state.archetype, state.buildings, state.memberCount, state.emblemColor, state.emblemIcon, crestKey(state), spec]));
+    return mediaCache.cached('guildhall', key, async () => {
+        try { require('./worldMapRenderer')._ensureFonts(); } catch (e) { /* default fonts */ }
+        const SC = require('./structureScenes');
+        const { w, castle, hall } = buildWorld(state, null);
+        w.scale = HALL_ZOOM;
+        const wc = K.hexWorld(castle[0], castle[1]);
+        w.layoutFixed(HALL_W, HALL_H, wc.x, wc.z + 0.5, HALL_W / 2, (HALL_H - SC.PANEL_H) * 0.76);
+        const cv = require('canvas').createCanvas(HALL_W, HALL_H), ctx = cv.getContext('2d');
+        const seed = hashStr(state.name || 'guild');
+        const bi = (K.biomeInfo().biomes || {})[w.biome];
+        const bd = w.biome === 'isle' ? { top: '#cfe8ef', mid: '#8fc7b2', bot: '#3f7a5c' } : bi ? { top: bi.backdrop[0], mid: bi.backdrop[1], bot: bi.backdrop[2] } : {};
+        await w.draw(ctx, { drawBackdrop: (c2) => K.paintBackdrop(c2, HALL_W, HALL_H, seed, { clouds: 6, cloudScale: HALL_ZOOM, ...bd }) });
         const archC = ARCH[state.archetype] || ARCH.ADVENTURER;
         const flagCol = (state.emblemColor && /^#[0-9a-fA-F]{3,8}$/.test(state.emblemColor)) ? state.emblemColor : archC.flag;
-        const flagD = archC.flagD;
-
-        // ── mast planted behind the keep's roof mass (same trick as drawBanner:
-        // dips behind the roof so the crest reads as grown out of the castle) ──
-        let MAST = 92;
-        const SW = 430, SH = 540;
-        let topY = ry - MAST - SH;
-        if (topY < 26) { MAST = Math.max(30, ry - 26 - SH); topY = ry - MAST - SH; }
-        ctx.save();
-        ctx.strokeStyle = '#3a2a18';
-        ctx.lineWidth = 12;
-        ctx.beginPath(); ctx.moveTo(rx, ry + 30); ctx.lineTo(rx, topY + SH * 0.55); ctx.stroke();
-
-        // heater shield with a soft drop shadow, gold trim + inner light border
-        const shield = (w0, y0, h0, cx0) => {
-            ctx.beginPath();
-            ctx.moveTo(cx0 - w0 / 2, y0);
-            ctx.lineTo(cx0 + w0 / 2, y0);
-            ctx.quadraticCurveTo(cx0 + w0 / 2, y0 + h0 * 0.55, cx0, y0 + h0);
-            ctx.quadraticCurveTo(cx0 - w0 / 2, y0 + h0 * 0.55, cx0 - w0 / 2, y0);
-            ctx.closePath();
-        };
-        ctx.shadowColor = 'rgba(12,8,4,0.55)';
-        ctx.shadowBlur = 34;
-        ctx.shadowOffsetY = 14;
-        shield(SW, topY, SH, rx);
-        const g = ctx.createLinearGradient(rx, topY, rx, topY + SH);
-        g.addColorStop(0, flagCol); g.addColorStop(1, flagD);
-        ctx.fillStyle = g; ctx.fill();
-        ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-        ctx.strokeStyle = '#e8c15a'; ctx.lineWidth = 8; ctx.stroke();
-        shield(SW - 20, topY + 10, SH - 16, rx);
-        ctx.strokeStyle = 'rgba(255,244,208,0.5)'; ctx.lineWidth = 3; ctx.stroke();
-
-        // ── the crest itself: uploaded image first (cards give it priority),
-        // else the emoji as a ~300px COLOR bitmap (owner: "use colors") ──
-        let drewImg = false;
-        if (state.emblemImg) {
-            try {
-                const b64 = String(state.emblemImg).split(',')[1] || '';
-                const buf = Buffer.from(b64, 'base64');
-                if (buf.length > 128) {
-                    const img = new (require('canvas').Image)();
-                    img.src = buf;
-                    ctx.save();
-                    shield(SW - 34, topY + 16, SH - 30, rx);
-                    ctx.clip();
-                    const side = Math.min(SW, SH) - 90;
-                    const ix = rx - side / 2, iy = topY + 16 + (SH - 30 - side) / 2;
-                    ctx.drawImage(img, ix, iy, side, side);
-                    ctx.restore();
-                    drewImg = true;
-                }
-            } catch (e) { drewImg = false; }
-        }
-        const icon = state.emblemIcon ? String(state.emblemIcon).slice(0, 2) : '';
-        if (!drewImg && icon) {
-            let drew = false;
-            if (emojiFontMod.colorEmojiReady() && emojiBitmap.measure(icon, 300) > 0) {
-                ctx.font = '300px "' + emojiFontMod.FAMILY + '"';
-                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                fillTextMixed(ctx, icon, rx, topY + SH * 0.42);   // color bitmap path
-                drew = true;
-            }
-            if (!drew) {   // mono fallback (color font missing / glyph absent)
-                ctx.fillStyle = '#fff4d0';
-                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                ctx.font = emojiFont(icon, 214);
-                ctx.fillText(icon, rx, topY + SH * 0.42);
-            }
-        }
-        ctx.restore();
-        return encodeOut(canvas);
-    }, null, { label: 'bake:guildbase', timeoutMs: 90000 });   // serialize with the other kingdom bakes (47-k9 lesson)
-    cachePut(_emblemCards, key, out);
-    return out;
+        const roofH = [0, 2.3, 2.2, 2.0, 4.1, 4.1][Math.max(0, Math.min(5, hall))] || 2.5;
+        const bp = w.proj(wc.x, wc.z, roofH + 0.1);
+        drawBanner(ctx, bp.x, bp.y, HALL_ZOOM, flagCol, archC.flagD, state.emblemIcon || '', 0.1, await loadCrest(state));
+        const vg = ctx.createRadialGradient(HALL_W / 2, HALL_H * 0.42, HALL_H * 0.25, HALL_W / 2, HALL_H * 0.45, HALL_H * 0.95);
+        vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.34)');
+        ctx.fillStyle = vg; ctx.fillRect(0, 0, HALL_W, HALL_H);
+        SC.drawPanel(ctx, HALL_W, HALL_H, { accent: flagCol, ...spec });
+        return { buffer: cv.toBuffer('image/jpeg', { quality: 0.9 }), contentType: 'image/jpeg' };
+    });
 }
 
-module.exports = { GUILD_STRUCTS, GUILD_PLOTS, ARCH, FRAMES, renderFrame, renderGuildBaseImage, renderGuildEmblemCard, encodeFramesToMp4 };
+module.exports = { GUILD_STRUCTS, GUILD_PLOTS, ARCH, FRAMES, renderFrame, renderGuildBaseImage, renderGuildHallCard, encodeFramesToMp4 };

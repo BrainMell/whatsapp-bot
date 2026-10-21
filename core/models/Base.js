@@ -27,6 +27,9 @@ const BaseSchema = new mongoose.Schema(
 
     structures: { type: [StructureSchema], default: [] },
 
+    // per-activity cooldown timestamps (fish / hunt) — see rpg/baseActivities.js
+    cooldowns: { type: mongoose.Schema.Types.Mixed, default: {} },
+
     createdAt: { type: Number, default: () => Date.now() },
     updatedAt: { type: Number, default: () => Date.now() },
   },
