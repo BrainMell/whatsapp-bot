@@ -485,14 +485,34 @@ function buildScene(type, lvl, biome, seed, o = {}) {
             break;
         }
         case 'barracks': {
-            if (lvl === 1) { P('tent', { sc: 3.0 }); P('tent', { dx: 3.0, dz: 0.8, sc: 2.2 }); P('tent', { dx: -3.0, dz: 0.9, sc: 2.2, flip: true }); }
-            else P(B('barracks'), { sc: lvl === 2 ? 2.5 : 3.0 });
-            P('weaponrack', { dx: -2.6, dz: 2.0, sc: 1.5 }); P('target', { dx: 2.8, dz: 2.1, sc: 1.4 }); P('target', { dx: 3.9, dz: 1.2, sc: 1.4 }); P('bucket_arrows', { dx: 1.8, dz: 2.9, sc: 1.3 });
-            if (lvl >= 2) { P('flag_' + team, { dx: -1.6, dz: -2.3, sc: 1.4 }); P('flag_' + team, { dx: 1.8, dz: -2.3, sc: 1.4 }); }
-            if (lvl >= 3) { P(B('tower_A'), { dx: -4.2, dz: -0.6, sc: 1.6 }); P(B('tower_A'), { dx: 4.3, dz: -0.8, sc: 1.6 }); P('weaponrack', { dx: -1.4, dz: 3.2, sc: 1.4 }); }
-            // 🐉 §8: the yard is a summon staging ground — rune-marked pad in
-            // front, brighter when a summon action runs there
-            w.overlay((c2, p, k) => drawSummonCircle(c2, p.x, p.y, (activity === 'summoning' ? 120 : 92) * k * 2 / 1.5, activity === 'summoning' ? '#a98fff' : '#8f7bff'), 0, 0, { dx: cen.x + 0.3, dz: cen.z + 2.1 });
+            // OWNER 2026-10-21 ("the barracks is azzz, redo it"): a proper walled FORT — stone curtain wall with a gatehouse
+            // facing the camera, packed-earth parade ground inside, the barracks block / tents at the back, targets + weapon
+            // racks along the yard, banners at the gate and the rune-marked summon pad in the middle of the square.
+            const ringC = K.ring(CC, CR, 2);
+            const gateRowB = CR + 2;
+            const gateB = ringC.filter(([, r]) => r === gateRowB).sort((x, y) => Math.abs(x[0] - CC) - Math.abs(y[0] - CC))[0];
+            for (const [c, r] of K.ring(CC, CR, 1).concat([[CC, CR]])) w.put('building_dirt', c, r, { layer: 'flat', sc: 1.0 });
+            w.layWall(ringC, { closed: true, gates: new Set([`${gateB[0]},${gateB[1]}`]), outside: true });
+            // the keep at the back of the yard
+            if (lvl === 1) { P('tent', { dx: -0.6, dz: -2.3, sc: 2.3 }); P('tent', { dx: 2.1, dz: -2.0, sc: 1.9 }); P('tent', { dx: -3.0, dz: -1.5, sc: 1.8, flip: true }); }
+            else P(B('barracks'), { dx: 0.2, dz: -1.9, sc: lvl === 2 ? 1.35 : 1.65 });
+            if (lvl >= 2) {                                    // corner towers on the northern wall corners
+                const north = ringC.filter(([, r]) => r === CR - 2).sort((x, y) => x[0] - y[0]);
+                const tw = lvl >= 3 ? B('tower_A') : 'flag_' + team;
+                if (north.length) { const L = north[0], R = north[north.length - 1]; w.put(tw, L[0], L[1], { sc: lvl >= 3 ? 1.2 : 1.4 }); w.put(tw, R[0], R[1], { sc: lvl >= 3 ? 1.2 : 1.4 }); }
+            }
+            // drill yard dressing
+            P('weaponrack', { dx: -3.0, dz: 0.3, sc: 1.5 }); P('weaponrack', { dx: -3.0, dz: 1.5, sc: 1.5, flip: true });
+            P('target', { dx: 3.1, dz: -0.2, sc: 1.5 }); P('target', { dx: 3.1, dz: 1.2, sc: 1.5 }); P('bucket_arrows', { dx: 2.2, dz: 0.5, sc: 1.4 });
+            if (lvl >= 2) { P('crate_A_small', { dx: -2.2, dz: -0.5, sc: 1.2 }); P('barrel', { dx: -2.1, dz: 1.9, sc: 1.2 }); }
+            if (lvl >= 3) { P('wheelbarrow', { dx: 2.4, dz: 1.9, sc: 1.2 }); P('weaponrack', { dx: -1.8, dz: -0.5, sc: 1.4 }); }
+            // banners flanking the gatehouse
+            const gq = K.hexWorld(gateB[0], gateB[1]);
+            w.put('flag_' + team, 0, 0, { wx: gq.x - 1.7, wz: gq.z + 0.1, sc: 1.5 }); w.put('flag_' + team, 0, 0, { wx: gq.x + 1.7, wz: gq.z + 0.1, sc: 1.5 });
+            // 🐉 the summon pad in the heart of the square (brighter while a summon action runs)
+            const hot = activity === 'summoning';
+            w.overlay((c2, p, k) => drawSummonCircle(c2, p.x, p.y, (hot ? 138 : 108) * k * 2 / 1.5, hot ? '#b79bff' : '#8f7bff'), 0, 0, { dx: cen.x, dz: cen.z + 0.9 });
+            if (lvl >= 2) for (const sx of [-1, 1]) w.overlay((c2, p, k) => drawSummonCircle(c2, p.x, p.y, 46 * k * 2 / 1.5, '#7f8cff'), 0, 0, { dx: cen.x + sx * 2.3, dz: cen.z + 1.0 });
             break;
         }
         case 'hunting': {
