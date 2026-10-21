@@ -32,6 +32,54 @@ const hashStr = (s) => K.hashStr(String(s || ''));
 const GW = 480, GH = 360, FRAMES = 16, DELAY_MS = 120;   // 1.92s loop
 const CONTAINER_MAGIC = 'DOCKPOV1';
 
+// ── the float (owner Task 20: "the tip of the fishing thing to be on top of
+// the water, appearing to be bobbing in and out of it") ──
+// Geometry shared by the base painter and the catch overlay so both agree to
+// the pixel: rest centre (bx,by), body radius bs, and the FIXED waterline the
+// body rises through / sinks under. One full in/out cycle per GIF loop.
+function floatGeom(w, h) {
+    const hz = Math.round(HORIZON * h), edgeY = Math.round(DOCK_EDGE * h);
+    const by = hz + (edgeY - hz) * 0.46;
+    const bs = h * 0.024;
+    return { bx: w * 0.52, by, bs, wlY: by + bs * 0.55 };
+}
+function floatBob(t, bs) { return Math.sin(t * Math.PI * 2) * bs * 0.45; }
+function floatY(t, h, dip = 0) { const g = floatGeom(480, h); return g.by + floatBob(t, g.bs) + dip; }
+/** Rod + line + float. The body is drawn twice against a clipped waterline —
+ *  dry colours above it, wet-tinted below — so it visibly crosses the surface;
+ *  the antenna tip rides highest and is the last thing a bite pulls under. */
+function paintFloat(ctx, w, h, t, P, { rod = true, line = true, dip = 0 } = {}) {
+    const { bx, by, bs, wlY } = floatGeom(w, h);
+    const byy = by + floatBob(t, bs) + dip;
+    const tipX = bx + w * 0.17, tipY = by - h * 0.16;
+    if (rod) {
+        ctx.strokeStyle = P.wood[0]; ctx.lineWidth = Math.max(2, h * 0.011);
+        ctx.beginPath(); ctx.moveTo(w * 1.0, h * 0.99); ctx.quadraticCurveTo(bx + w * 0.24, by - h * 0.02, tipX, tipY); ctx.stroke();
+    }
+    if (line) {
+        ctx.strokeStyle = 'rgba(244,246,240,0.75)'; ctx.lineWidth = Math.max(1, h * 0.0035);
+        ctx.beginPath(); ctx.moveTo(tipX, tipY); ctx.lineTo(bx, byy - bs * 1.5); ctx.stroke();
+    }
+    const drawAll = (wet) => {  // red/white body + antenna + tip knob, wet = under waterline
+        ctx.fillStyle = wet ? '#8f3a2c' : '#d94f3a';
+        ctx.beginPath(); ctx.arc(bx, byy, bs, Math.PI, 0); ctx.fill();
+        ctx.fillStyle = wet ? '#a8c4bc' : '#f4f1e6';
+        ctx.beginPath(); ctx.arc(bx, byy, bs, 0, Math.PI); ctx.fill();
+        ctx.strokeStyle = wet ? '#241a10' : '#3a2a1a'; ctx.lineWidth = Math.max(1, bs * 0.16);
+        ctx.beginPath(); ctx.moveTo(bx, byy - bs * 0.72); ctx.lineTo(bx, byy - bs * 1.5); ctx.stroke();
+        ctx.fillStyle = wet ? '#c8b284' : '#f2e2b0';
+        ctx.beginPath(); ctx.arc(bx, byy - bs * 1.5, bs * 0.26, 0, Math.PI * 2); ctx.fill();
+    };
+    ctx.save(); ctx.beginPath(); ctx.rect(bx - bs * 1.3, 0, bs * 2.6, wlY); ctx.clip(); drawAll(false); ctx.restore();
+    ctx.save(); ctx.beginPath(); ctx.rect(bx - bs * 1.3, wlY, bs * 2.6, h - wlY); ctx.clip(); drawAll(true); ctx.restore();
+    // contact ripple at the waterline, breathing with the bob
+    ctx.strokeStyle = P.glint; ctx.globalAlpha = 0.2 + 0.1 * Math.sin(t * Math.PI * 2);
+    ctx.lineWidth = Math.max(1, h * 0.003);
+    ctx.beginPath(); ctx.ellipse(bx, wlY, bs * (1.5 + 0.25 * Math.sin(t * Math.PI * 2)), bs * 0.42, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
+    return { bx, byy, wlY, bs };
+}
+
 // ── biome palettes (flat, palette-friendly — the GIF quantizer loves these) ─
 // sky: [upper, mid, horizon glow] · water: far→near · shore/wood/trim props.
 const PALETTES = {
@@ -190,31 +238,23 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1, fish = true } = {})
         ctx.fillRect(0, edgeY, w, Math.max(1.5, h * 0.004)); ctx.globalAlpha = 1;
     }
 
-    // ── rod (bottom-right, held by the unseen angler) + line to the float ──
-    const bx = w * 0.52, by = hz + wh * 0.46;          // resting bobber point
-    const tipX = bx + w * 0.17, tipY = by - h * 0.16;
-    ctx.strokeStyle = P.wood[0]; ctx.lineWidth = Math.max(2, h * 0.011);
-    ctx.beginPath(); ctx.moveTo(w * 1.0, h * 0.99); ctx.quadraticCurveTo(bx + w * 0.24, by - h * 0.02, tipX, tipY); ctx.stroke();
-    ctx.strokeStyle = 'rgba(244,246,240,0.75)'; ctx.lineWidth = Math.max(1, h * 0.0035);
-    ctx.beginPath(); ctx.moveTo(tipX, tipY); ctx.lineTo(bx, by - h * 0.012); ctx.stroke();
-
-    // ── resting bobber (red over white) with a gentle loop bob ──
-    const bs = h * 0.022, bob2 = Math.sin(t * Math.PI * 2) * bs * 0.22;
-    ctx.fillStyle = '#d94f3a'; ctx.beginPath(); ctx.arc(bx, by + bob2, bs, Math.PI, 0); ctx.fill();
-    ctx.fillStyle = '#f4f1e6'; ctx.beginPath(); ctx.arc(bx, by + bob2, bs, 0, Math.PI); ctx.fill();
-    return { bx, by };
+    // ── rod + line + float, ON the water and bobbing in and out of it (Task 20)
+    paintFloat(ctx, w, h, t, P, { rod: true, line: true });
+    const __g = floatGeom(w, h);
+    return { bx: __g.bx, by: __g.by };
 }
 function i0(s) { return Math.abs(Math.round(s * 100)); }
 
 // ── catch overlays ("the new stuff" layered over the kept base frames) ──────
 // band: 'low' = subtle bite · 'mid' = medium fish closes in · 'epic' = big
 // approach + splash. Drawn AFTER the roll is known — never pre-signals rarity.
-function paintCatchOverlay(ctx, w, h, t, band, { bx, by }) {
-    // the bite: bobber dips + release rings around t≈0.72..0.95
+function paintCatchOverlay(ctx, w, h, t, band, _anchor, P = PALETTES.isle) {
+    const G = floatGeom(w, h), bs = G.bs;
+    // the bite: float is pulled UNDER at t≈0.72..0.95 (antenna tip last to go)
     const bite = t > 0.7 && t < 0.95 ? Math.sin(((t - 0.7) / 0.25) * Math.PI) : 0;
-    // track the base float's own loop bob EXACTLY so the overlay float covers it
-    const baseBob = Math.sin(t * Math.PI * 2) * (h * 0.022) * 0.22;
-    const byy = by + baseBob + bite * h * 0.018;
+    const dip = bite * bs * 1.35;
+    const byy = G.by + floatBob(t, bs) + dip;
+    const bx = G.bx;
     // expanding rings on the bite
     if (bite > 0.05) {
         const rr = 4 + bite * (band === 'epic' ? h * 0.05 : h * 0.03);
@@ -266,29 +306,25 @@ function paintCatchOverlay(ctx, w, h, t, band, { bx, by }) {
             ctx.globalAlpha = 1;
         }
     }
-    // re-draw the line+float ON TOP of the overlay so the bite reads through
-    // (rod tip stays FIXED — only the float and the line's lower end move)
-    const bs = h * 0.022;
-    ctx.strokeStyle = 'rgba(244,246,240,0.8)'; ctx.lineWidth = Math.max(1, h * 0.0035);
-    ctx.beginPath(); ctx.moveTo(bx + w * 0.17, by - h * 0.16); ctx.lineTo(bx, byy - bs); ctx.stroke();
-    ctx.fillStyle = '#d94f3a'; ctx.beginPath(); ctx.arc(bx, byy, bs, Math.PI, 0); ctx.fill();
-    ctx.fillStyle = '#f4f1e6'; ctx.beginPath(); ctx.arc(bx, byy, bs, 0, Math.PI); ctx.fill();
+    // re-draw the line+float ON TOP of the overlay so the bite reads through —
+    // same paintFloat as the base (rod tip FIXED, float pulled under by `dip`)
+    paintFloat(ctx, w, h, t, P, { rod: false, line: true, dip });
 }
 
 // ── base-frame container (PNG frames + tiny header) through mediaCache ─────
 // mediaCache stores ONE buffer per key: header line + JSON {gw,gh,delayMs,lens}
 // followed by the PNG blobs. Code-versioned keys mean art edits auto-invalidate.
-function packContainer(gw, gh, delayMs, pngs) {
+function packContainer(gw, gh, delayMs, pngs, magic = CONTAINER_MAGIC) {
     const lens = pngs.map((p) => p.length);
     const meta = JSON.stringify({ v: 1, gw, gh, delayMs, lens });
-    const head = Buffer.from(`${CONTAINER_MAGIC}\n${meta}\n`, 'utf8');
+    const head = Buffer.from(`${magic}\n${meta}\n`, 'utf8');
     return Buffer.concat([head, ...pngs]);
 }
-function unpackContainer(buf) {
+function unpackContainer(buf, magic = CONTAINER_MAGIC) {
     try {
         const headEnd = buf.indexOf(0x0A, buf.indexOf(0x0A) + 1);   // end of meta line
-        const magic = buf.slice(0, buf.indexOf(0x0A)).toString('utf8');
-        if (magic !== CONTAINER_MAGIC) return null;
+        const tag = buf.slice(0, buf.indexOf(0x0A)).toString('utf8');
+        if (tag !== magic) return null;
         const meta = JSON.parse(buf.slice(buf.indexOf(0x0A) + 1, headEnd).toString('utf8'));
         const pngs = []; let off = headEnd + 1;
         for (const l of meta.lens) { pngs.push(buf.slice(off, off + l)); off += l; }
@@ -326,10 +362,11 @@ async function getBaseFrames({ biome = 'isle', lvl = 1 } = {}) {
     return _imgCache.get(ck);
 }
 
-/** Exact resting-bobber anchor — MUST mirror paintFrame's numbers. */
+/** Resting-bobber anchor — kept for API compat; the float now owns its
+ *  geometry via floatGeom() (base painter and overlay both call that). */
 function anchorFor(w, h) {
-    const hz = Math.round(HORIZON * h), edgeY = Math.round(DOCK_EDGE * h);
-    return { bx: w * 0.52, by: hz + (edgeY - hz) * 0.46 };
+    const g = floatGeom(w, h);
+    return { bx: g.bx, by: g.by };
 }
 
 /** `.j fish` — the catch GIF: kept base frames + THIS catch's overlay, GIF89a. */
@@ -341,13 +378,14 @@ async function renderFishingGif({ biome = 'isle', lvl = 1, band = 'low' } = {}) 
         const { encodeGif } = require('../utils/gif89a');
         const base = await getBaseFrames({ biome, lvl });
         const anchor = anchorFor(base.gw, base.gh);
+        const P = PALETTES[biome] || PALETTES.isle;
         const frames = [];
         for (let i = 0; i < FRAMES; i++) {
             const cv = createCanvas(base.gw, base.gh), c2 = cv.getContext('2d');
             c2.drawImage(base.imgs[i], 0, 0, base.gw, base.gh);
             // "overlay the new stuff as the generation comes on": this catch's
             // bite/ripples/approach/splash drawn OVER the kept base animation.
-            paintCatchOverlay(c2, base.gw, base.gh, i / FRAMES, band, anchor);
+            paintCatchOverlay(c2, base.gw, base.gh, i / FRAMES, band, anchor, P);
             const d = c2.getImageData(0, 0, base.gw, base.gh);
             frames.push(Buffer.from(d.data.buffer, d.data.byteOffset, d.data.byteLength));
         }
@@ -362,4 +400,4 @@ function paintStill(ctx, w, h, { biome = 'isle', lvl = 1 } = {}) {
     return paintFrame(ctx, w, h, 0, { biome, lvl });
 }
 
-module.exports = { renderFishingGif, getBaseFrames, paintStill, paintFrame, paintCatchOverlay, packContainer, unpackContainer, anchorFor, PALETTES, GW, GH, FRAMES, DELAY_MS, CONTAINER_MAGIC };
+module.exports = { renderFishingGif, getBaseFrames, paintStill, paintFrame, paintCatchOverlay, paintFloat, floatGeom, floatBob, floatY, packContainer, unpackContainer, anchorFor, PALETTES, GW, GH, FRAMES, DELAY_MS, CONTAINER_MAGIC };

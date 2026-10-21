@@ -1,9 +1,11 @@
 'use strict';
 // ═══════════════════════════════════════════════════════════════════════════
-// qa_dockpov_gif.js — Task 19 (owner 2026-10-21):
+// qa_dockpov_gif.js — Task 19/20 (owner 2026-10-21):
 //   ".j hunt shouldn't have a timer only a limit per how many times a day"
 //   "fishing should be a gif — generate it once and keep it, overlay the new
 //    stuff as the generation comes on" + the real dock-POV camera.
+//   Task 20: "remove the timer from the fishing too" + the float bobbing in
+//   and out of the water. Hunt GIF/sprite-sheet QA lives in qa_huntpov_gif.js.
 // Tiers: source pins (everywhere) + REAL renders/GIF encodes + hunt-limit sim
 // (needs canvas/node_modules → run ON-BOX; sandbox passes pins and skips).
 // ═══════════════════════════════════════════════════════════════════════════
@@ -23,23 +25,25 @@ const mc = R('core/rpg/mediaCache.js');
 const dp = R('core/rpg/dockPov.js');
 const bm = R('core/models/Base.js');
 
-console.log('\n--- §A hunt: timer GONE, daily limit IN ---');
+console.log('\n--- §A hunt: timer GONE, daily limit IN · fish: NO timer at all (Task 20) ---');
 check('hunt has no cooldownMs (8m timer removed)', !/cooldownMs: 8 \* 60 \* 1000/.test(ba));
+check('fish has NO cooldown either (Task 20: line rest removed)', !/cooldownMs/.test(ba));
 check('hunt dailyLimit: 25 present', /dailyLimit: 25/.test(ba));
-check('fish keeps its 4m cooldown', /cooldownMs: 4 \* 60 \* 1000/.test(ba));
-check('run() reads cooldowns MAP (cd.fish / cd.huntDay / cd.huntCount)', /cd\.fish \|\| 0/.test(ba) && /cd\.huntDay === day/.test(ba) && /cd\.huntCount \|\| 0/.test(ba));
+check('run() reads cooldowns MAP for hunt only (cd.huntDay/Count, no cd.fish)', /cd\.huntDay === day/.test(ba) && /cd\.huntCount \|\| 0/.test(ba) && !/cd\.fish/.test(ba));
 check('limit message names the counter + UTC reset', /hunts used/.test(ba) && /midnight UTC/.test(ba));
 check('res carries dailyUsed + dailyDay on success', /out\.dailyUsed/.test(ba) && /out\.dailyDay/.test(ba));
 check('utcDay = UTC ISO date stamp', /toISOString\(\)\.slice\(0, 10\)/.test(ba));
+check('bandOf is kind-aware (fish koi/carp · hunt stag/boar)', /kind === 'hunt'/.test(ba) && /drops\.stag_antler/.test(ba) && /drops\.boar_tusk/.test(ba) && /drops\.crystal_koi/.test(ba));
 
-console.log('\n--- §B caller: persist counter, GIF path, gifPlayback ---');
+console.log('\n--- §B caller: persist counter, GIF paths, gifPlayback ---');
 check('cmdActivity passes the cooldowns MAP to run()', /act\.run\(kind, ctx\.senderJid, tier, rec\.cooldowns \|\| \{\}\)/.test(bb));
-check('hunt persists huntDay+huntCount; fish persists timestamp', /'cooldowns\.huntDay': res\.dailyDay/.test(bb) && /'cooldowns\.huntCount': res\.dailyUsed/.test(bb) && /'cooldowns\.fish': Date\.now\(\)/.test(bb));
+check('hunt persists huntDay+huntCount; fish persists NOTHING (no timer)', /'cooldowns\.huntDay': res\.dailyDay/.test(bb) && /'cooldowns\.huntCount': res\.dailyUsed/.test(bb) && !/'cooldowns\.fish'/.test(bb));
 check('fish tries the dock-POV GIF first', /require\('\.\/dockPov'\)\.renderFishingGif/.test(bb));
-check('band comes from REAL drops (act.bandOf(res.drops))', /act\.bandOf\(res\.drops\)/.test(bb));
+check('hunt tries the hunt-POV GIF (Task 20)', /require\('\.\/huntPov'\)\.renderHuntGif/.test(bb));
+check('band comes from REAL drops, kind-aware (act.bandOf(res.drops, kind))', /act\.bandOf\(res\.drops, 'fish'\)/.test(bb) && /act\.bandOf\(res\.drops, 'hunt'\)/.test(bb));
 check('static zoom card kept as fallback (gif failure ≠ gameplay failure)', /renderZoom\(ctx, rec, st, \{ banner: res\.banner, note/.test(bb));
 check('send probes isGifBuffer → gifPlayback', /isGifBuffer\(media\.buffer\)/.test(bb) && /gifPlayback = true/.test(bb));
-check('hunt note shows today counter; fish note shows next cast', /Hunts today: \$\{res\.dailyUsed\}/.test(bb) && /Next cast in \$\{act\.fmtMs\(act\.RULES\.fish\.cooldownMs\)\}/.test(bb));
+check('hunt note shows today counter; fish note says NO line rest', /Hunts today: \$\{res\.dailyUsed\}/.test(bb) && /No line rest/.test(bb));
 
 console.log('\n--- §C dock-POV module ---');
 check('dockPov exports the compose/still/frame API', /renderFishingGif, getBaseFrames, paintStill, paintFrame/.test(dp));
@@ -55,10 +59,21 @@ check('composed GIF cached under fishgif kind', /mediaCache\.cached\('fishgif'/.
 check('container roundtrip guards: magic + frame count', /CONTAINER_MAGIC/.test(dp) && /c\.pngs\.length !== FRAMES/.test(dp));
 check('gif89a encodeGif used (no new deps, no ffmpeg)', /require\('\.\.\/utils\/gif89a'\)/.test(dp) && /encodeGif\(\{ width: base\.gw/.test(dp));
 
-console.log('\n--- §D pond viewer + cache versioning ---');
+console.log('\n--- §C2 the float (Task 20: bobbing IN and OUT of the water) ---');
+check('float geometry shared by base + overlay (floatGeom/floatBob/paintFloat)', /function floatGeom/.test(dp) && /function floatBob/.test(dp) && /function paintFloat/.test(dp));
+check('fixed waterline the body crosses (wlY = by + bs·0.55)', /wlY: by \+ bs \* 0\.55/.test(dp));
+check('dry/wet clip split at the waterline (body visibly in the water)', /rect\(bx - bs \* 1\.3, 0, bs \* 2\.6, wlY\)/.test(dp) && /rect\(bx - bs \* 1\.3, wlY/.test(dp));
+check('antenna tip rides highest, drawn per half (last to go under)', /byy - bs \* 1\.5/.test(dp));
+check('bite pulls the float UNDER (dip 1.35·bs at peak)', /dip = bite \* bs \* 1\.35/.test(dp));
+check('overlay re-draws line+float via the same paintFloat', /paintFloat\(ctx, w, h, t, P, \{ rod: false, line: true, dip \}\)/.test(dp));
+check('contact ripple breathes with the bob', /contact ripple/.test(dp));
+check('container magic is parameterised (huntPov reuses the packer)', /function packContainer\(gw, gh, delayMs, pngs, magic = CONTAINER_MAGIC\)/.test(dp) && /function unpackContainer\(buf, magic = CONTAINER_MAGIC\)/.test(dp));
+
+console.log('\n--- §D pond + hunting viewers + cache versioning ---');
 check('pond viewer renders dock-POV still (canonical seed, no activity)', /isPondView = type === 'pond' && !activity/.test(sc) && /dockPov'\)\.paintStill/.test(sc));
-check('pond viewer key distinct (pond_pov) so activity cards unaffected', /isPondView \? 'pond_pov' : type/.test(sc));
-check('mediaCache CODE_VER includes dockPov.js', /'baseBuilder\.js', 'dockPov\.js'/.test(mc));
+check('pond viewer key distinct (pond_pov) so activity cards unaffected', /isPondView \? 'pond_pov' :/.test(sc));
+check('hunting viewer renders the clearing still (Task 20, hunt_pov key)', /isHuntView = type === 'hunting' && !activity/.test(sc) && /huntPov'\)\.paintStill/.test(sc) && /'hunt_pov'/.test(sc));
+check('mediaCache CODE_VER includes dockPov.js + huntPov.js', /'dockPov\.js', 'huntPov\.js'/.test(mc));
 check('Base.js cooldowns comment documents huntDay/huntCount', /huntDay \(UTC/.test(bm) && /no timer, Task 19/.test(bm));
 
 // ── runtime tier (needs node_modules — on-box) ──────────────────────────────
@@ -92,12 +107,13 @@ if (!canvasOk) {
         // day rollover: old huntDay stamp → fresh count
         const r2 = await act.run('hunt', T, 1, { huntDay: '2001-01-01', huntCount: 25 });
         check('new UTC day resets the counter (stale day → allowed again)', r2.ok === true && r2.dailyUsed === 1);
-        // fish cooldown still timed
+        // Task 20: fish has NO timer — even a fresh stamp must not gate it
         const rf = await act.run('fish', T, 1, { fish: Date.now() });
-        check('fish 4m rest intact (wait message)', rf.ok === false && /try again in/.test(rf.text));
-        const rf2 = await act.run('fish', T, 1, {});
-        check('fish with no stamp runs, drops enriched w/ rarity + value', rf2.ok === true && /UNCOMMON|COMMON|RARE|EPIC/.test(rf2.text) && /sells .?[\d,]+Z/.test(rf2.text));
-        check('bandOf: koi→epic, carp→mid, else low', act.bandOf({ crystal_koi: 1 }) === 'epic' && act.bandOf({ silver_carp: 2 }) === 'mid' && act.bandOf({ raw_fish: 3 }) === 'low' && act.bandOf({}) === 'low');
+        const rf2 = await act.run('fish', T, 1, { fish: Date.now() });
+        check('fish has NO timer (back-to-back casts both run)', rf.ok === true && rf2.ok === true);
+        check('fish drops enriched w/ rarity + value', /UNCOMMON|COMMON|RARE|EPIC/.test(rf2.text) && /sells .?[\d,]+Z/.test(rf2.text));
+        check('bandOf fish: koi→epic, carp→mid, else low', act.bandOf({ crystal_koi: 1 }, 'fish') === 'epic' && act.bandOf({ silver_carp: 2 }, 'fish') === 'mid' && act.bandOf({ raw_fish: 3 }, 'fish') === 'low');
+        check('bandOf hunt: stag→epic, boar→mid, else low', act.bandOf({ stag_antler: 1 }, 'hunt') === 'epic' && act.bandOf({ boar_tusk: 1 }, 'hunt') === 'mid' && act.bandOf({ venison: 2 }, 'hunt') === 'low');
     } finally { inv.addItem = origAdd; econ.addMoney = origMoney; }
 
     console.log('\n--- §F REAL renders: base frames, catch GIFs, viewer still ---');
@@ -106,12 +122,16 @@ if (!canvasOk) {
     const dpv = require(path.join(ROOT, 'core/rpg/dockPov'));
     const { createCanvas, Image } = require(path.join(ROOT, 'node_modules', 'canvas'));
 
-    // anchor mirrors the painted bobber (red half sampled at t=0)
+    // anchor mirrors the painted float (antenna knob sampled at the tip)
     const probe = createCanvas(dpv.GW, dpv.GH), pctx = probe.getContext('2d');
     dpv.paintFrame(pctx, dpv.GW, dpv.GH, 0, { biome: 'isle', lvl: 1 });
-    const a = dpv.anchorFor(dpv.GW, dpv.GH);
-    const pd = pctx.getImageData(Math.round(a.bx), Math.round(a.by) - 2, 1, 1).data;
-    check('anchorFor matches painted bobber (red cap sampled)', pd[0] > 140 && pd[1] < 120);
+    const g = dpv.floatGeom(dpv.GW, dpv.GH);
+    const knobY = Math.round(g.by + dpv.floatBob(0, g.bs) - g.bs * 1.5);
+    const kd = pctx.getImageData(Math.round(g.bx), knobY, 1, 1).data;
+    check('float antenna knob painted at the geometry anchor (pale tip sampled)', kd[0] > 180 && kd[1] > 160);
+    const wlY = Math.round(g.wlY), above = pctx.getImageData(Math.round(g.bx), Math.round(g.by), 1, 1).data;
+    const below = pctx.getImageData(Math.round(g.bx), wlY + 3, 1, 1).data;
+    check('waterline crossing: body ABOVE wl is bright red, BELOW wl is the wet tint', above[0] > 150 && above[0] > below[0] && below[0] < 180);
 
     const t0 = Date.now();
     const base = await dpv.getBaseFrames({ biome: 'isle', lvl: 1 });

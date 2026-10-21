@@ -39,7 +39,7 @@ check('engine dispatch calls bb.runActivity', /bb\.runActivity\(actCtx/.test(en)
 
 console.log('\n--- §6 result contract in structureScenes ---');
 check('buildScene accepts activity/spotlight/tint', /const activity = String\(o\.activity \|\| ''\)/.test(sc));
-check('cache key includes activity/spotlight/tint (sc2, pond_pov for the viewer)', /JSON\.stringify\(\['sc2', isPondView \? 'pond_pov' : type, lvl, biome, seed, activity, spotlight, tint, o\.spec \|\| \{\}\]\)/.test(sc));
+check('cache key includes activity/spotlight/tint (sc2, pond_pov/hunt_pov for the viewers)', /JSON\.stringify\(\['sc2', isPondView \? 'pond_pov' : isHuntView \? 'hunt_pov' : type, lvl, biome, seed, activity, spotlight, tint, o\.spec \|\| \{\}\]\)/.test(sc));
 check('renderStructureCard passes opts into buildScene', /buildScene\(type, lvl, biome, seed, \{ activity, spotlight, tint \}\)/.test(sc));
 
 console.log('\n--- painters exist (identity dressing) ---');
@@ -114,8 +114,8 @@ check('baseBuilder.js in CODE_VER hash inputs', /'structureScenes\.js', 'baseBui
 check('no new DB collection introduced', !/mongoose\.model\('(?!CardBackup|Base|UserCard|CardDeck|CardMarket|CardSpawn|CardStat|System|User|GuildWarEvent|RaidBoss)[A-Za-z]+'/g.test(bb) && !/new mongoose\.Schema/.test(bb));
 
 console.log('\n--- gameplay rules intact ---');
-// Task 19 (owner 2026-10-21): hunt timer REPLACED by a daily limit — fish keeps 4m.
-check('fish keeps 4m cooldown; hunt has NO timer, daily limit instead', /cooldownMs: 4 \* 60 \* 1000/.test(R('core/rpg/baseActivities.js')) && !/cooldownMs: 8 \* 60 \* 1000/.test(R('core/rpg/baseActivities.js')) && /dailyLimit: 25/.test(R('core/rpg/baseActivities.js')));
+// Task 19/20 (owner 2026-10-21): NO timers at all — hunt = 25/day count, fish = open.
+check('fish AND hunt have no cooldown timers; hunt keeps the 25/day limit', !/cooldownMs/.test(R('core/rpg/baseActivities.js')) && /dailyLimit: 25/.test(R('core/rpg/baseActivities.js')));
 check('claim window untouched in cardSystem', /const CLAIM_WINDOW_MS = 30 \* 60 \* 1000;/.test(R('core/rpg/cardSystem.js')));
 check('healToFull 12h cooldown flow untouched', /healToFull\(senderJid, maxHP\)/.test(en));
 

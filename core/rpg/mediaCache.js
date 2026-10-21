@@ -52,7 +52,7 @@ let CODE_VER = 'v2';
 try {
     const crypto = require('crypto');
     const rpg = path.join(__dirname);
-    const files = ['kingdom3d.js', 'kingdomTerrain.js', 'ambient.js', 'guildBaseRenderer.js', 'homesteadBaseRenderer.js', 'worldAtlasRenderer.js', 'structureScenes.js', 'baseBuilder.js', 'dockPov.js']
+    const files = ['kingdom3d.js', 'kingdomTerrain.js', 'ambient.js', 'guildBaseRenderer.js', 'homesteadBaseRenderer.js', 'worldAtlasRenderer.js', 'structureScenes.js', 'baseBuilder.js', 'dockPov.js', 'huntPov.js']
         .map((f) => path.join(rpg, f)).concat([path.join(rpg, '..', 'rpgasset', 'kingdom3d', 'manifest.json')]);
     const h = crypto.createHash('sha1');
     for (const f of files) { try { h.update(fs.readFileSync(f)); } catch (e) { /* optional file */ } }

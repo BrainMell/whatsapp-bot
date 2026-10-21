@@ -4,7 +4,8 @@
 //  (owner 2026-10-20: "first you'll have to make the hunting grounds … fix the
 //  pond", "connect as much as you can").  `.j base fish` / `.j base hunt`.
 //  Pure-ish: returns { ok, text, banner } — baseBuilder renders the zoom card.
-//  Cooldowns live on the Base doc (cooldowns.<kind>) so they survive restarts.
+//  Gating (Task 19/20): hunt = 25 rides per UTC day (cooldowns.huntDay/Count);
+//  fish = NO timer at all. State lives on the Base doc so it survives restarts.
 // ═══════════════════════════════════════════════════════════════════════════
 const economy = require('./economy');
 const inventorySystem = require('./inventorySystem');
@@ -25,7 +26,9 @@ try { for (const [id, d] of Object.entries(NEW_ITEMS)) if (lootSystem.ITEM_DATAB
 
 const RULES = {
     fish: {
-        cooldownMs: 4 * 60 * 1000, verb: 'cast your line', head: '🎣 Catch of the day',
+        // owner 2026-10-21 (Task 20): "Remove the timer from the fishing too" —
+        // the 4-minute line rest is GONE; the pond is cast-anytime now.
+        verb: 'cast your line', head: '🎣 Catch of the day',
         // [itemId, weight by pond level 1..3, qty min, qty max]
         table: [['raw_fish', [60, 45, 30], 1, 3], ['river_trout', [30, 35, 35], 1, 2], ['silver_carp', [9, 16, 22], 1, 1], ['crystal_koi', [1, 4, 13], 1, 1]],
         zeni: [20, 60],
@@ -50,10 +53,18 @@ function pick(table, tier) {
 const fmtMs = (ms) => { const s = Math.ceil(ms / 1000); return s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`; };
 // UTC calendar day stamp — the hunt limit resets at midnight UTC (1am WAT).
 const utcDay = (now = Date.now()) => new Date(now).toISOString().slice(0, 10);
-// Fishing GIF band for the dock-POV overlay (rarity is only signalled AFTER
-// the roll): COMMON/UNCOMMON rides quiet, RARE sends a carp close, EPIC brings
-// the big koi + splash. Hunt never reaches this.
-function bandOf(drops = {}) {
+// GIF overlay band for BOTH activities (rarity is only signalled AFTER the
+// roll — the overlay painter is chosen by band, never pre-signals it):
+//   fish: COMMON/UNCOMMON rides quiet, RARE sends a carp close, EPIC brings
+//         the big koi + splash (dockPov.js).
+//   hunt: pelt/venison ride quiet, RARE trots a boar through, EPIC steps a
+//         crowned stag into the clearing + antler glint (huntPov.js).
+function bandOf(drops = {}, kind = 'fish') {
+    if (kind === 'hunt') {
+        if (drops.stag_antler) return 'epic';
+        if (drops.boar_tusk) return 'mid';
+        return 'low';
+    }
     if (drops.crystal_koi) return 'epic';
     if (drops.silver_carp) return 'mid';
     return 'low';
@@ -66,23 +77,18 @@ function itemLine(id, q) {
 }
 
 /**
- * run(kind, userId, tier, cd) → { ok, wait?, text, banner, drops, dailyUsed?, dailyDay? }
+ * run(kind, userId, tier, cd) → { ok, text, banner, drops, dailyUsed?, dailyDay? }
  * tier: pond level (fish) / barracks level (hunt: the hunting party's strength).
- * cd: the Base doc's cooldowns map — fish keys off cd.fish (timestamp); hunt
- * keys off cd.huntDay/cd.huntCount (UTC-day counter, Task 19: no timer).
- * Caller persists the cooldown / day counter on ok.
+ * cd: the Base doc's cooldowns map — hunt keys off cd.huntDay/cd.huntCount
+ * (UTC-day counter, Task 19: no timer). Fish has NO gating at all (Task 20:
+ * owner removed the timer there too) — cd is only consulted for hunt.
+ * Caller persists the day counter on ok (hunt only).
  */
 async function run(kind, userId, tier, cd = {}) {
     const R = RULES[kind];
     if (!R) return { ok: false, text: '❌ Unknown activity.' };
     const now = Date.now();
-    if (kind === 'fish') {
-        const last = cd.fish || 0;
-        if (last && now - last < R.cooldownMs) {
-            const wait = R.cooldownMs - (now - last);
-            return { ok: false, wait, text: `⏳ Give it a moment — try again in *${fmtMs(wait)}*.` };
-        }
-    } else if (R.dailyLimit) {
+    if (R.dailyLimit) {
         const day = utcDay(now);
         const used = cd.huntDay === day ? (cd.huntCount || 0) : 0;
         if (used >= R.dailyLimit) {

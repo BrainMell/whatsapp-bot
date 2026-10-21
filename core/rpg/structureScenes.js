@@ -581,17 +581,21 @@ async function renderStructureCard(o = {}) {
     const biome = o.biome || 'isle';
     const activity = o.activity || '', spotlight = !!o.spotlight, tint = o.tint || '';
     // Task 19 (spec §Pond): the pond VIEWER is the true dock-POV composition as
-    // a clean still — no catch spotlight, no banner. Canonical seed so every
-    // player shares one bake per (biome, level) instead of one per user.
+    // a clean still — no catch spotlight, no banner. Task 20: the hunting
+    // grounds viewer gets the same treatment from huntPov. Canonical seeds so
+    // every player shares one bake per (biome, level) instead of one per user.
     const isPondView = type === 'pond' && !activity;
-    const seed = isPondView ? hashStr('dockpov-still') : hashStr(`${o.seed || 'x'}:${type}`);
-    const key = hashStr(JSON.stringify(['sc2', isPondView ? 'pond_pov' : type, lvl, biome, seed, activity, spotlight, tint, o.spec || {}]));
+    const isHuntView = type === 'hunting' && !activity;
+    const seed = isPondView ? hashStr('dockpov-still') : isHuntView ? hashStr('huntpov-still') : hashStr(`${o.seed || 'x'}:${type}`);
+    const key = hashStr(JSON.stringify(['sc2', isPondView ? 'pond_pov' : isHuntView ? 'hunt_pov' : type, lvl, biome, seed, activity, spotlight, tint, o.spec || {}]));
     return mediaCache.cached('structcard', key, async () => {
         fonts();
         const { createCanvas } = require('canvas');
         const cv = createCanvas(W, H), ctx = cv.getContext('2d');
         if (isPondView) {
             require('./dockPov').paintStill(ctx, W, H, { biome, lvl });
+        } else if (isHuntView) {
+            require('./huntPov').paintStill(ctx, W, H, { biome, lvl });
         } else {
             const { w, cen, focus } = buildScene(type, lvl, biome, seed, { activity, spotlight, tint });
             const bi = (K.biomeInfo('iso').biomes || {})[biome];
