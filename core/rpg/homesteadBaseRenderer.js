@@ -189,6 +189,15 @@ function mainSpriteOf(st, lvl, team) {
     if (T === 'barracks') return { name: 'building_barracks_' + team, sc: lvl === 1 ? 1.4 : lvl === 2 ? 1.65 : 1.95 };
     return null;
 }
+function drawSummonPad(ctx, x, y, r) {
+    ctx.save(); ctx.translate(x, y);
+    const g = ctx.createRadialGradient(0, 0, r * 0.1, 0, 0, r);
+    g.addColorStop(0, 'rgba(160,140,255,0.35)'); g.addColorStop(1, 'rgba(160,140,255,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(170,150,255,0.85)'; ctx.lineWidth = Math.max(1.5, r * 0.06);
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.8, r * 0.36, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+}
 function centroid(cells) {
     let x = 0, z = 0;
     for (const [c, r] of cells) { const w = K.hexWorld(c, r); x += w.x; z += w.z; }
@@ -373,22 +382,18 @@ function buildWorld(state, cel = null) {
         }
         if (K.hexDist(prev[0], prev[1], nr.to[0], nr.to[1]) <= 1 && !foot.has(keyOf(prev[0], prev[1]))) w.link(prev[0], prev[1], nr.to[0], nr.to[1]);
     }
-    // ── the HUNTING CAMP (owner 2026-10-20: "first you'll have to make the hunting grounds"): a clearing in the west woods —
-    // archery range, hunters' tents, target butts, weapon rack — claimed BEFORE the wilds so trees leave it clear
+    // ── the HUNTING GROUNDS = FOREST (owner 2026-10-21: "the hunting grounds is supposed to be a forest"): no camp, no
+    // buildings — the west woods stay thick and a small unclaimed-by-props glade holds wandering game (deer, boar, rabbit).
     {
-        const hp = (gx, gy, name, o = {}) => { const [c, r] = hc(gx, gy); if (!w.inb(c, r) || w.cell[r][c].water || w.cell[r][c].river) return; w.put(name, c, r, { ...(o || {}) }); claim(c, r); };
-        for (let gx = 0; gx <= 3; gx++) for (let gy = 6; gy <= 12; gy++) { if (gy === 9) continue; const [c, r] = hc(gx, gy); if (w.inb(c, r)) claim(c, r); }
-        hp(1, 11, K.hasSprite('building_archeryrange_' + team, 'iso') ? 'building_archeryrange_' + team : 'building_barracks_' + team, { sc: 1.35, flip: false });
-        hp(2, 7, 'tent', { sc: 1.3, flip: true }); hp(1, 7, 'tent', { sc: 1.1, flip: false });
-        hp(3, 11, 'target', { dz: 0.3 }); hp(3, 12, 'target', { dx: 0.2, dz: -0.2 }); hp(2, 12, 'target', { dz: 0.2 });
-        hp(2, 10, 'weaponrack'); hp(3, 7, 'bucket_arrows'); hp(0, 9, 'crate_A_small', { dx: 0.3 });
-        hp(0, 7, 'resource_lumber'); hp(2, 6, 'sack', { dx: 0.4 });
-        try {                                                          // fire pit + game in the glade (shared critter art, structureScenes)
+        for (let gx = 0; gx <= 3; gx++) for (let gy = 6; gy <= 12; gy++) { if (gy === 9) continue; const [c, r] = hc(MX(gx), gy); if (w.inb(c, r) && gx >= 1 && gx <= 2 && gy >= 5 && gy <= 8) claim(c, r); }
+        w.__huntCell = hc(MX(2), 7);
+        try {
             const SS = require('./structureScenes');
-            const cellOf = (gx, gy) => hc(gx, gy);
-            const [fc, fr] = cellOf(2, 8); w.overlay((ctx, p, k) => SS.drawCampfire(ctx, p.x, p.y, 30 * k * 2 / 1.5), fc, fr, { dx: 0.3 });
-            const [dc, dr] = cellOf(0, 11); w.overlay((ctx, p, k) => SS.drawDeer(ctx, p.x, p.y, 36 * k * 2 / 1.5, false, true), dc, dr, { dx: 0.2 });
-            const [bc, br] = cellOf(3, 8); w.overlay((ctx, p, k) => SS.drawDeer(ctx, p.x, p.y, 30 * k * 2 / 1.5, true, false), bc, br, {});
+            const crit = [[1, 6, 'deer', 38, false, true], [2, 7, 'deer', 32, true, false], [1, 8, 'boar', 30, false], [2, 5, 'deer', 26, true, false], [1, 5, 'boar', 24, true]];
+            for (const [gx, gy, kind, sz, fl, st2] of crit) {
+                const [cc, rr] = hc(MX(gx), gy); if (!w.inb(cc, rr) || w.cell[rr][cc].water) continue;
+                w.overlay((ctx, p, k) => { const z2 = sz * k * 2 / 1.5; if (kind === 'deer') SS.drawDeer(ctx, p.x, p.y, z2, fl, st2); else SS.drawBoar(ctx, p.x, p.y, z2, fl); }, cc, rr, { dx: (gy % 2 ? 0.2 : -0.2) });
+            }
         } catch (e) { /* decoration only */ }
     }
     w.resolve();
@@ -585,26 +590,6 @@ function buildWorld(state, cel = null) {
         }
     }
 
-    // ── the hunting camp (owner 2026-10-20: "you'll have to make the hunting grounds") ──
-    // the west woods were just trees — now they hold a real hunter's camp: archery
-    // target, canvas tent, torch line, sometimes a weapon rack. Placed BEFORE the
-    // wilds fill so the claimed cells stay clear of forest overgrowth.
-    {
-        const hzp = LAYOUT.hunting.zone;
-        const campProp = (name, gx, gy, o = {}) => {
-            const [cc, rr] = hc(MX(hzp.x + gx), hzp.y + gy);
-            if (!w.inb(cc, rr)) return;
-            const kk = w.cell[rr][cc];
-            if (kk.water || kk.coast || kk.road || used.has(keyOf(cc, rr))) return;
-            w.put(name, cc, rr, { flip: flip(), ...o });
-            claim(cc, rr);
-        };
-        campProp('target', 1, 5 + Math.floor(rng() * 2), { sc: 1.15 });        // archery butt in a clearing
-        campProp('tent', 2, 7 + Math.floor(rng() * 2), { sc: 1.05 });          // the hunter's canvas
-        campProp('coc_torch', 0, 6 + Math.floor(rng() * 3), { sc: 0.9 });      // torch by the path
-        if (rng() < 0.55) campProp('weaponrack', 3, 11 + Math.floor(rng() * 2), { sc: 0.9 });
-    }
-
     // ── fill the rest of the grid with biome wilds (village green = light, inside the palisade; far field = heavy) ──
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
         const k = w.cell[r][c];
@@ -617,7 +602,7 @@ function buildWorld(state, cel = null) {
             continue;
         }
         if (inGrid(gx, gy) && inZ(hz, MX(gx), gy)) {                      // hunting woods (W, mirrored per base)
-            if (x < 0.72) { w.put(TREES[Math.floor(rng() * 4)], c, r, { flip: flip() }); claim(c, r); }
+            if (x < 0.93) { w.put(TREES[Math.floor(rng() * 4)], c, r, { flip: flip() }); claim(c, r); }
             continue;
         }
         if (rd <= FAR_R - 1) {                                        // inside the palisade: tidy meadow
@@ -675,7 +660,7 @@ function buildWorld(state, cel = null) {
             }
             continue;
         }
-        if (st.type !== 'hunting') w.put('building_dirt', 0, 0, { wx: cen.x, wz: cen.z, layer: 'flat', sc: def.fw >= 3 ? 1.9 : 1.2 });
+        if (st.type !== 'hunting' && st.type !== 'barracks') w.put('building_dirt', 0, 0, { wx: cen.x, wz: cen.z, layer: 'flat', sc: def.fw >= 3 ? 1.9 : 1.2 });
         const P = (n, o = {}) => w.put(n, 0, 0, { wx: cen.x, wz: cen.z, ...(o.dx == null && o.dz == null && !('flip' in o) && (n.startsWith('building_') || n.startsWith('struct_')) ? { flip: ff } : {}), ...o });
         switch (st.type) {
             case 'house':
@@ -714,11 +699,21 @@ function buildWorld(state, cel = null) {
                 if (lvl >= 2) { P('crate_long_A', { dx: -1.9, dz: 0.2 }); P('sack', { dx: 1.7, dz: 0.2 }); P('flag_' + team, { dx: 1.1, dz: -1.0 }); }
                 if (lvl >= 3) { P('building_market_' + team, { dx: -2.3, dz: -0.6, sc: 1.0, flip: true }); P('wheelbarrow', { dx: 0.4, dz: 1.8 }); P('crate_B_big', { dx: 2.0, dz: 1.0 }); }
                 break;
-            case 'barracks':                                              // summons barracks: muster tents → drill hall → garrison keep
-                if (lvl === 1) { P('tent', { sc: 2.0 }); P('tent', { dx: 1.7, dz: 0.5, sc: 1.4 }); P('weaponrack', { dx: -1.4, dz: 0.9 }); }
-                else if (lvl === 2) { P('building_barracks_' + team, { sc: 1.45 }); P('weaponrack', { dx: -1.6, dz: 1.0 }); P('target', { dx: 1.7, dz: 1.0 }); }
-                else { P('building_barracks_' + team, { sc: 1.8 }); P('building_tower_A_' + team, { dx: -2.1, dz: -0.3, sc: 0.9 }); P('weaponrack', { dx: -1.4, dz: 1.5 }); P('target', { dx: 1.9, dz: 1.0 }); P('flag_' + team, { dx: 1.2, dz: -1.2 }); }
+            case 'barracks': {                                            // OWNER 2026-10-21: green ground + the SUMMON SPRITES (no building)
+                const SS = require('./structureScenes');
+                const n = lvl === 1 ? 2 : lvl === 2 ? 3 : 4;
+                const names = SS.pickSummons(hashStr(String(st.uid || st.type) + ':b'), n);
+                const spots = [[-2.1, 0.7], [2.1, 0.5], [0.0, -1.1], [0.0, 2.0]];
+                w.overlay((ctx, p, k) => { const rr = 230 * k * 2 / 1.5; const g = ctx.createRadialGradient(p.x, p.y, rr * 0.2, p.x, p.y, rr); g.addColorStop(0, 'rgba(96,170,76,0.95)'); g.addColorStop(0.7, 'rgba(96,170,76,0.8)'); g.addColorStop(1, 'rgba(96,170,76,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(p.x, p.y, rr, rr * 0.5, 0, 0, Math.PI * 2); ctx.fill(); }, 0, 0, { dx: cen.x, dz: cen.z + 0.3 });   // the green lawn under the muster
+                names.forEach((nm, i) => {
+                    const [ox, oz] = spots[i];
+                    w.overlay((ctx, p, k) => { const kk = k * 2 / 1.5; drawSummonPad(ctx, p.x, p.y, 62 * kk); SS.drawSummonSprite(ctx, p.x, p.y + 4 * kk, 150 * kk, nm, i % 2 === 1); }, 0, 0, { dx: cen.x + ox, dz: cen.z + oz });
+                });
+                P('flag_' + team, { dx: -1.9, dz: -0.9, sc: 1.1 });
+                if (lvl >= 2) P('flag_' + team, { dx: 1.9, dz: -0.9, sc: 1.1 });
+                if (lvl >= 3) { P('fence_wood_straight@0', { dx: -0.2, dz: 2.3 }); P('weaponrack', { dx: -1.9, dz: 1.5, sc: 0.9 }); }
                 break;
+            }
             case 'mines':                                                 // the pack cave (walkway-into-rocks) is THE mine at every level —
                 // owner 2026-10-19: "Move the cave inside the base ... For the player base not just the guild base".
                 // The worksite GROWS with the level: bare cave → ladder + cart → full ore-hoist yard.
@@ -861,9 +856,9 @@ async function buildScene(state, opts = {}) {
     const smoke = [];
     for (const it of info) {
         const lv = it.def.levels.find((l) => l.level === it.lvl) || it.def.levels[0];
-        const huntSpot = it.st.type === 'hunting' ? K.hexWorld(...hc(2, 10)) : null;      // the plaque stands at the hunting CAMP, not the gatehouse
+        const huntSpot = it.st.type === 'hunting' ? K.hexWorld(...(w.__huntCell || hc(2, 10))) : null;      // the plaque stands at the hunting CAMP, not the gatehouse
         const p = huntSpot ? w.proj(huntSpot.x, huntSpot.z + 1.5, 0) : w.proj(it.cen.x, it.cen.z + 2.1, 0);
-        plaque(octx, p.x, p.y + 2 * k * 2, it.st.type === 'hunting' ? 'Hunting Grounds' : it.def.name, it.st.type === 'hunting' ? 'Hunting Camp' : `${lv.name} · Lv ${it.lvl}`, k);
+        plaque(octx, p.x, p.y + 2 * k * 2, it.st.type === 'hunting' ? 'Hunting Grounds' : it.def.name, it.st.type === 'hunting' ? 'Deep Woods' : `${lv.name} · Lv ${it.lvl}`, k);
         if (it.st.type === 'house' || it.st.type === 'blacksmith' || it.st.type === 'alchemy') {
             const sp = w.proj(it.cen.x + 0.5, it.cen.z - 0.4, 2.2); smoke.push({ x: sp.x, y: sp.y, smoky: it.st.type === 'blacksmith' });
         }

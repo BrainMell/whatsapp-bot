@@ -151,6 +151,36 @@ function drawBoar(ctx, x, y, s, flip = false) {
     ctx.strokeStyle = dark; ctx.lineWidth = 0.07 * s; ctx.beginPath(); ctx.moveTo(-0.85 * s, -0.9 * s); ctx.quadraticCurveTo(-1.1 * s, -1.0 * s, -1.05 * s, -0.78 * s); ctx.stroke();   // tail
     ctx.restore();
 }
+// ── summon sprites (the real KayKit-style 320px summon art in rpgasset/summons) standing on the barracks ground ──
+const SUMMON_POOL = ['agumon', 'angemon', 'ancientgreymon', 'andromon', 'ankylomon', 'aegiochusmon', 'airdramon', 'ancientgarurumon', 'apollomon', 'angewomon'];
+const _sumImg = new Map();
+function loadSummon(name) {
+    if (_sumImg.has(name)) return _sumImg.get(name);
+    let im = null;
+    try {
+        const { Image } = require('canvas');
+        const fs = require('fs'), path = require('path');
+        const f = path.join(__dirname, '..', 'rpgasset', 'summons', 'digimon', name + '.png');
+        const buf = fs.readFileSync(f);
+        if (buf.length > 2000) { im = new Image(); im.src = buf; }
+    } catch (e) { im = null; }
+    _sumImg.set(name, im);
+    return im;
+}
+function pickSummons(seed, n) {
+    const pool = SUMMON_POOL.filter((nm) => loadSummon(nm));
+    const out = []; let h = (seed >>> 0) || 1;
+    while (out.length < n && pool.length) { h = (h * 1664525 + 1013904223) >>> 0; out.push(pool.splice(h % pool.length, 1)[0]); }
+    return out;
+}
+function drawSummonSprite(ctx, x, y, size, name, flip = false) {
+    const im = loadSummon(name); if (!im) return;
+    ctx.save(); ctx.translate(x, y);
+    shade(ctx, 0, 0, size * 0.36, size * 0.1);
+    if (flip) ctx.scale(-1, 1);
+    ctx.drawImage(im, -size / 2, -size * 0.92, size, size);
+    ctx.restore();
+}
 function drawCampfire(ctx, x, y, s) {
     ctx.save(); ctx.translate(x, y);
     const g = ctx.createRadialGradient(0, -0.3 * s, 0.1 * s, 0, -0.3 * s, 2.4 * s);
@@ -656,4 +686,4 @@ async function renderStructureCard(o = {}) {
     });
 }
 
-module.exports = { renderStructureCard, drawPanel, drawBanner, drawDeer, drawBoar, drawCampfire, drawMerchant, drawMiner, drawCauldron, drawBottleShelf, drawSummonCircle, drawMedCross, PANEL_H, W, H };
+module.exports = { renderStructureCard, drawPanel, drawBanner, drawDeer, drawBoar, drawCampfire, drawMerchant, drawMiner, drawCauldron, drawBottleShelf, drawSummonCircle, drawSummonSprite, pickSummons, drawMedCross, PANEL_H, W, H };
