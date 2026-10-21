@@ -165,7 +165,12 @@ function mainSpriteOf(st, lvl, team) {
         if (K.hasSprite('struct_med_tent', 'iso')) return { name: ['struct_med_tent', 'struct_med_infirmary', 'struct_med_sanatorium'][lvl - 1], sc: lvl === 1 ? 1.9 : lvl === 2 ? 1.65 : 1.5 };
         return lvl === 1 ? { name: 'tent', sc: 2.1 } : { name: 'building_church_' + team, sc: lvl === 2 ? 1.35 : 1.8 };
     }
-    if (T === 'alchemy') return lvl === 1 ? { name: 'barrel', sc: 1.6 } : { name: 'building_tavern_' + team, sc: lvl === 2 ? 1.5 : 1.9 };
+    if (T === 'alchemy') {
+        // dedicated models (alchemy centre 3D): brew hut → glasshouse → observatory;
+        // barrel/tavern stand-ins stay as the fallback when sprites are missing
+        if (K.hasSprite('struct_alc_brewhut', 'iso')) return { name: ['struct_alc_brewhut', 'struct_alc_glasshouse', 'struct_alc_observatory'][lvl - 1], sc: lvl === 1 ? 1.9 : lvl === 2 ? 1.75 : 1.6 };
+        return lvl === 1 ? { name: 'barrel', sc: 1.6 } : { name: 'building_tavern_' + team, sc: lvl === 2 ? 1.5 : 1.9 };
+    }
     if (T === 'shop') return { name: 'building_market_' + team, sc: lvl === 1 ? 1.25 : lvl === 2 ? 1.5 : 1.8 };
     if (T === 'barracks') return lvl === 1 ? { name: 'tent', sc: 2.0 } : { name: 'building_barracks_' + team, sc: lvl === 2 ? 1.45 : 1.8 };
     if (T === 'mines') {
@@ -693,7 +698,12 @@ function buildWorld(state, cel = null) {
                 else if (lvl === 2) { P('building_church_' + team, { sc: 1.35 }); P('tent', { dx: 1.7, dz: 0.8, sc: 1.2 }); P('bucket_water', { dx: -1.5, dz: 0.9 }); }
                 else { P('building_church_' + team, { sc: 1.8 }); P('building_well_' + team, { dx: 1.8, dz: 1.0 }); P('flag_' + team, { dx: -1.6, dz: 1.0 }); }
                 break;
-            case 'alchemy':
+            case 'alchemy':                                               // dedicated models: brew hut → glasshouse → observatory
+                if (K.hasSprite('struct_alc_brewhut', 'iso')) {
+                    P(['struct_alc_brewhut', 'struct_alc_glasshouse', 'struct_alc_observatory'][lvl - 1], { sc: lvl === 1 ? 1.9 : lvl === 2 ? 1.75 : 1.6 });
+                    P('bucket_water', { dx: 1.4, dz: 1.0 }); if (lvl === 3) P('coc_statue_wizard', { dx: -1.7, dz: 1.2, sc: 0.65 });
+                    break;
+                }
                 if (lvl === 1) { P('barrel', { sc: 1.6 }); P('bucket_water', { dx: 1.2, dz: 0.8 }); P('crate_open', { dx: -1.2, dz: 0.8 }); }
                 else if (lvl === 2) { P('building_tavern_' + team, { sc: 1.5 }); P('barrel', { dx: 1.5, dz: 1.0 }); P('crate_B_small', { dx: -1.4, dz: 1.0 }); }
                 else { P('building_tavern_' + team, { sc: 1.9 }); P('building_windmill_' + team, { dx: -2.1, dz: -0.2, sc: 0.95 }); P('barrel', { dx: 1.8, dz: 1.1 }); P('crate_B_small', { dx: 0.9, dz: 1.7 }); P('coc_statue_wizard', { dx: 2.2, dz: 0.3, sc: 0.65 }); }

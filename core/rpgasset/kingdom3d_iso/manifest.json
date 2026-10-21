@@ -8128,6 +8128,51 @@
    "ax": 65.0,
    "ay": 170.0,
    "kind": "object"
+  },
+  "struct_alc_brewhut": {
+   "file": "struct_alc_brewhut.png",
+   "w": 145,
+   "h": 153,
+   "ax": 71.51,
+   "ay": 119.91,
+   "sh": {
+    "file": "struct_alc_brewhut_sh.png",
+    "w": 132,
+    "h": 105,
+    "ax": 65.47,
+    "ay": 49.76
+   },
+   "kind": "object"
+  },
+  "struct_alc_glasshouse": {
+   "file": "struct_alc_glasshouse.png",
+   "w": 159,
+   "h": 197,
+   "ax": 84.37,
+   "ay": 143.5,
+   "sh": {
+    "file": "struct_alc_glasshouse_sh.png",
+    "w": 180,
+    "h": 119,
+    "ax": 76.39,
+    "ay": 65.76
+   },
+   "kind": "object"
+  },
+  "struct_alc_observatory": {
+   "file": "struct_alc_observatory.png",
+   "w": 147,
+   "h": 222,
+   "ax": 84.53,
+   "ay": 181.84,
+   "sh": {
+    "file": "struct_alc_observatory_sh.png",
+    "w": 155,
+    "h": 122,
+    "ax": 74.08,
+    "ay": 58.83
+   },
+   "kind": "object"
   }
  }
 }
