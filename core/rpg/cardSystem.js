@@ -12,6 +12,7 @@ const itemMarket = require('./itemMarket'); // kept for model access; commands r
 const playerMarket = require('./playerMarket');
 const path    = require('path');
 const axios   = require('axios');
+const animatedMedia = require('../utils/animatedMedia'); // webm→mp4 remux (WhatsApp can't render webm)
 const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
 
 // BUILD MARKER (47-k5, 2026-10-19): proves which build the RUNNING process
@@ -1735,7 +1736,13 @@ function getTopImageUrls(topCards) {
  * sources WhatsApp treated it as a broken static image. Now:
  *   - PNG/JPEG            → { image }
  *   - GIF (GIF8 magic)    → { image, gifPlayback: true }   (animates)
- *   - WebM/MP4 (EBML/ftyp)→ { video, gifPlayback: true }   (animates)
+ * 💡 FIX 2026-10-21 (owner: ".j eshop some cards aren't showing, 9 and 4"):
+ * WebM was still shipped RAW as {video} — WhatsApp cannot decode WebM, so
+ * the T6 shop cards (E-03004/E-03000) arrived as invisible bubbles. Now:
+ *   - WebM (EBML)         → ffmpeg remux → { video, gifPlayback, video/mp4 }
+ *                           (falls back to poster PNG, then an honest text)
+ *   - MP4 (ftyp)          → { video, gifPlayback, mimetype video/mp4 }
+ *   - anything else       → { image } (never raw video — always white-boxed)
  * This is the single sender for every card fallback path so the render
  * behavior can never drift between spawn / coll / deck / info again.
  */
@@ -1750,15 +1757,41 @@ async function sendCardMedia(sock, chatId, buffer, caption, mentions) {
   if (isGif) {
     return await sock.sendMessage(chatId, { image: buffer, gifPlayback: true, caption, ...m });
   }
+  // 💡 FIX 2026-10-21 (owner: ".j eshop some cards aren't showing, 9 and 4"):
+  // the two T6 deck cards (E-03004 Sylphiette, E-03000 Kurisu) are shoob
+  // *.webm files and WhatsApp CANNOT render WebM — the old code shipped the
+  // raw webm bytes as {video} and they arrived as an invisible/broken bubble.
+  // Route WebM through the local-ffmpeg → H.264 mp4 pipeline (identical to
+  // the proven mentoringCommands fix for this exact card, 2026-10-08) so the
+  // card plays as an animated GIF-style video. Poster frame / honest text
+  // fallbacks guarantee the slot is never silently invisible again.
   const isWebm = buffer[0] === 0x1A && buffer[1] === 0x45 && buffer[2] === 0xDF && buffer[3] === 0xA3; // EBML
   const isMp4  = buffer[4] === 0x66 && buffer[5] === 0x74 && buffer[6] === 0x79 && buffer[7] === 0x70; // 'ftyp'
-  return await sock.sendMessage(chatId, {
-    video: buffer,
-    gifPlayback: true,
-    ...(isWebm ? { mimetype: 'video/webm' } : {}),
-    caption,
-    ...m,
-  });
+  if (isWebm || isMp4) {
+    let mp4 = buffer;
+    if (isWebm) {
+      mp4 = await animatedMedia.webmToMp4(buffer);
+      if (!mp4) {
+        // remux refused — show the static first frame instead of nothing
+        const poster = await animatedMedia.webmPoster(buffer);
+        if (poster) {
+          return await sock.sendMessage(chatId, { image: poster, caption, ...m });
+        }
+        return await sock.sendMessage(chatId, { text: `${caption}\n\n⚠️  _Animated card art couldn't be processed right now — try again soon_` });
+      }
+    }
+    return await sock.sendMessage(chatId, {
+      video: mp4,
+      gifPlayback: true,
+      mimetype: 'video/mp4',
+      caption,
+      ...m,
+    });
+  }
+  // Unknown bytes (webp/avif/html…) used to fall through as {video}, which
+  // always white-screened. An image message is the only remaining chance of
+  // a visible render, so that's the default now — never raw video.
+  return await sock.sendMessage(chatId, { image: buffer, caption, ...m });
 }
 
 async function cmdCardsTier(senderJid, reply, chatId) {

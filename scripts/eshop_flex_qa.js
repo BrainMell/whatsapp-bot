@@ -162,10 +162,39 @@ async function connectDB() {
     const gif = await runFlexOne('gif', [0x47, 0x49, 0x46, 0x38, 0x39, 0x61, ...pad]);
     check('GIF8 → {image, gifPlayback:true}', gif.length === 1 && !!gif[0].content.image && gif[0].content.gifPlayback === true);
     const mp4 = await runFlexOne('mp4', [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, ...pad]);
-    check('MP4 → {video, gifPlayback:true}', mp4.length === 1 && !!mp4[0].content.video && mp4[0].content.gifPlayback === true);
+    check('MP4 → {video, gifPlayback, mimetype video/mp4}', mp4.length === 1 && !!mp4[0].content.video && mp4[0].content.gifPlayback === true && mp4[0].content.mimetype === 'video/mp4');
+    // 💡 2026-10-21 FIX REGRESSION: WebM is NEVER sent raw again — WhatsApp can't
+    // render it (owner: "eshop cards 9 and 4 aren't showing" = the 2 webm T6 cards).
+    // Synthetic garbage webm → ffmpeg remux + poster both fail → honest text fallback.
     const webm = await runFlexOne('webm', [0x1A, 0x45, 0xDF, 0xA3, ...pad]);
-    check('WebM → {video, gifPlayback, mimetype}', webm.length === 1 && !!webm[0].content.video && webm[0].content.mimetype === 'video/webm');
+    const webmRawLeak = webm.length === 1 && !!webm[0].content.video && webm[0].content.mimetype === 'video/webm';
+    const webmText = webm.length === 1 && !!webm[0].content.text && /couldn't be processed/.test(webm[0].content.text);
+    check('WebM garbage → never raw video/webm (text fallback)', !webmRawLeak && webmText, JSON.stringify(webm[0] && Object.keys(webm[0].content || {})));
+    // webp/unknown bytes → image (old code fell through to {video} = white box)
+    const webp = await runFlexOne('webp', [0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, ...pad]);
+    check('WEBP/unknown → {image} (never video)', webp.length === 1 && !!webp[0].content.image && !webp[0].content.video);
     axios.get = realGet;
+
+    // ── §6b REAL webm card E2E (live T6 deck entry, real ffmpeg remux) ────
+    console.log('\n── §6b real webm → animated mp4 ──');
+    const animatedMedia = require(path.join(BOT, 'core', 'utils', 'animatedMedia'));
+    const webmEntry = inst.eshopDeck.map((e, i) => e && String(e.imageUrl || '').toLowerCase().endsWith('.webm') ? { slot: i + 1, ...e } : null).filter(Boolean)[0];
+    if (webmEntry) {
+        const s0 = sent.length;
+        const r6b = [];
+        await cardSystem.eshopFlexView('qa@s.whatsapp.net', (t) => r6b.push(String(t)), 'qa:webm@chat', webmEntry.slot, webmEntry.slot);
+        const m6b = sent.slice(s0).filter(x => x.content && (x.content.image || x.content.video));
+        const conv0 = animatedMedia.stats.conversions, hit0 = animatedMedia.stats.cacheHits;
+        const v = m6b[0] && m6b[0].content;
+        check('real webm: exactly one VIDEO message, mimetype video/mp4', m6b.length === 1 && !!v && !!v.video && v.mimetype === 'video/mp4', m6b.length ? `shape=${JSON.stringify(Object.keys(v || {}))}` : `replies=${JSON.stringify(r6b).slice(0, 80)}`);
+        check('real webm: buffer is ftyp mp4, NOT EBML webm', !!v && !!v.video && v.video.toString('latin1', 4, 8) === 'ftyp' && !(v.video[0] === 0x1A && v.video[1] === 0x45), v ? `head=${v.video.slice(0, 12).toString('hex')}` : 'no msg');
+        check('real webm: caption carries slot# + buy hint', !!v && String(v.caption || '').includes(`#${webmEntry.slot}`) && String(v.caption || '').includes(`eshop buy ${webmEntry.slot}`));
+        // second peek must come from the sha1 disk cache — no second conversion
+        await cardSystem.eshopFlexView('qa@s.whatsapp.net', (t) => {}, 'qa:webm2@chat', webmEntry.slot, webmEntry.slot);
+        check('real webm: second view served from cache', animatedMedia.stats.cacheHits > hit0 || animatedMedia.stats.conversions === conv0, `conversions ${conv0}→${animatedMedia.stats.conversions}, cacheHits ${hit0}→${animatedMedia.stats.cacheHits}`);
+    } else {
+        skip('real webm card E2E', 'no .webm card in live deck right now');
+    }
 
     // ── §7 grid regression (untouched default path) ──────────────────────
     console.log('\n── §7 grid regression ──');
