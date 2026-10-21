@@ -28,28 +28,40 @@ function wrap(ctx, text, maxW) {
     if (cur) lines.push(cur);
     return lines;
 }
+/** The ESTABLISHED result ribbon — top-centre, dark + gold double border,
+ *  Cinzel Deco head + Cinzel lines. Task 22 (owner: "when I said to use the
+ *  same style for the overlays, I meant the other base commands… they already
+ *  have an established style"): the animated fish/hunt GIFs draw THEIR loot
+ *  banner through this exact painter, so every result overlay in the kingdom
+ *  wears the same style at the same proportions. Metrics are scaled off the
+ *  1400×1000 card canvas (u = h/1000) — at card size this is pixel-identical
+ *  to the old inline block. */
+function drawBanner(ctx, w, h, banner = {}) {
+    const head = String(banner.head || ''), lines = (banner.lines || []).slice(0, 6);
+    if (!head && !lines.length) return;
+    const u = h / 1000;
+    const bw = Math.min(w - 120 * u, 760 * u), bh = 64 * u + lines.length * 34 * u + 18 * u;
+    const bx = (w - bw) / 2, by = 36 * u;
+    ctx.save();
+    ctx.fillStyle = 'rgba(28,19,10,0.90)'; K.roundRect(ctx, bx, by, bw, bh, 18 * u); ctx.fill();
+    ctx.strokeStyle = '#c9a65a'; ctx.lineWidth = Math.max(1.5, 3 * u); K.roundRect(ctx, bx, by, bw, bh, 18 * u); ctx.stroke();
+    ctx.strokeStyle = 'rgba(201,166,90,0.35)'; ctx.lineWidth = Math.max(1, u); K.roundRect(ctx, bx + 7 * u, by + 7 * u, bw - 14 * u, bh - 14 * u, 13 * u); ctx.stroke();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `${Math.max(13, Math.round(34 * u))}px "Cinzel Deco", Cinzel`; ctx.fillStyle = '#f2dfa8';
+    ctx.fillText(head.slice(0, 42), w / 2, by + 40 * u);
+    ctx.font = `${Math.max(11, Math.round(25 * u))}px Cinzel`; ctx.fillStyle = '#e8d5a3';
+    lines.forEach((ln, i) => ctx.fillText(String(ln).slice(0, 56), w / 2, by + 84 * u + i * 34 * u));
+    ctx.restore();
+}
+
 /**
  * spec: { title, subtitle, rows:[[label,value],...] (≤6), actions:[string,...] (≤5), footer,
  *         banner:{ head, lines:[...] } , accent:'#c9a65a' }
  */
 function drawPanel(ctx, w, h, spec = {}) {
     const accent = spec.accent || '#c9a65a';
-    // result ribbon floats over the art, top-centre
-    if (spec.banner && (spec.banner.head || (spec.banner.lines || []).length)) {
-        const lines = (spec.banner.lines || []).slice(0, 6);
-        const bw = Math.min(w - 120, 760), bh = 64 + lines.length * 34 + 18;
-        const bx = (w - bw) / 2, by = 36;
-        ctx.save();
-        ctx.fillStyle = 'rgba(28,19,10,0.90)'; K.roundRect(ctx, bx, by, bw, bh, 18); ctx.fill();
-        ctx.strokeStyle = accent; ctx.lineWidth = 3; K.roundRect(ctx, bx, by, bw, bh, 18); ctx.stroke();
-        ctx.strokeStyle = 'rgba(201,166,90,0.35)'; ctx.lineWidth = 1; K.roundRect(ctx, bx + 7, by + 7, bw - 14, bh - 14, 13); ctx.stroke();
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.font = '34px "Cinzel Deco", Cinzel'; ctx.fillStyle = '#f2dfa8';
-        ctx.fillText(String(spec.banner.head || '').slice(0, 42), w / 2, by + 40);
-        ctx.font = '25px Cinzel'; ctx.fillStyle = '#e8d5a3';
-        lines.forEach((ln, i) => ctx.fillText(String(ln).slice(0, 56), w / 2, by + 84 + i * 34));
-        ctx.restore();
-    }
+    // result ribbon floats over the art, top-centre (shared painter — Task 22)
+    if (spec.banner && (spec.banner.head || (spec.banner.lines || []).length)) drawBanner(ctx, w, h, spec.banner);
     const x0 = 28, pw = w - 56, y0 = h - PANEL_H - 22;
     ctx.save();
     ctx.fillStyle = 'rgba(24,17,10,0.90)'; K.roundRect(ctx, x0, y0, pw, PANEL_H, 18); ctx.fill();
@@ -624,4 +636,4 @@ async function renderStructureCard(o = {}) {
     });
 }
 
-module.exports = { renderStructureCard, drawPanel, drawDeer, drawBoar, drawCampfire, drawMerchant, drawMiner, drawCauldron, drawBottleShelf, drawSummonCircle, drawMedCross, PANEL_H, W, H };
+module.exports = { renderStructureCard, drawPanel, drawBanner, drawDeer, drawBoar, drawCampfire, drawMerchant, drawMiner, drawCauldron, drawBottleShelf, drawSummonCircle, drawMedCross, PANEL_H, W, H };

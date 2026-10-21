@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 'use strict';
 // ═══════════════════════════════════════════════════════════════════════════
-//  BAKE THE POND GIRL — run ONCE; the output is COMMITTED to the repo.
-//  (owner Task 21: "I want this generated once and saved on the server, or in
-//  the repo permanently, as a usable asset and an overlay like the others.")
+//  BAKE THE POND DAY MASTER — run ONCE; the output is COMMITTED to the repo.
+//  (owner Task 21: "generated once and saved in the repo permanently, as a
+//  usable asset" — Task 22 keeps that model for the restored dock-POV master,
+//  no girl: "UNDO that fishing bullshit" — dock POV, moving water, swimming fish.)
 //
-//  Bakes the day-lit girl-angling master for each pond level (L1/L2/L3 —
+//  Bakes the day-lit dock-POV master for each pond level (L1/L2/L3 —
 //  L2 adds the rowboat, L3 the gold edge trim) as 16-frame PNG containers,
-//  writes them to core/assets/scenes/pond_girl_l{1,2,3}_v1.bin and drops a
+//  writes them to core/assets/scenes/pond_l{1,2,3}_v2.bin and drops a
 //  contact-sheet preview PNG next to them for eyeball QA. Deterministic:
 //  re-running produces byte-identical assets.
 // ═══════════════════════════════════════════════════════════════════════════
@@ -21,7 +22,7 @@ const dockPov = require('../core/rpg/dockPov');
     fs.mkdirSync(outDir, { recursive: true });
     for (const lvl of [1, 2, 3]) {
         const buf = dockPov.bakeLevelFrames(lvl);
-        const file = path.join(outDir, `pond_girl_l${lvl}_${dockPov.ASSET_VER}.bin`);
+        const file = path.join(outDir, `pond_l${lvl}_${dockPov.ASSET_VER}.bin`);
         fs.writeFileSync(file, buf);
         const c = dockPov.unpackContainer(buf);
         if (!c || c.pngs.length !== dockPov.FRAMES) throw new Error(`bake L${lvl}: container broken`);
@@ -33,7 +34,7 @@ const dockPov = require('../core/rpg/dockPov');
         for (let i = 0; i < imgs.length; i++) {
             s2.drawImage(imgs[i], (i % 4) * tw, Math.floor(i / 4) * th, tw, th);
         }
-        fs.writeFileSync(path.join(outDir, `pond_girl_l${lvl}_preview.png`), sheet.toBuffer('image/png'));
+        fs.writeFileSync(path.join(outDir, `pond_l${lvl}_preview.png`), sheet.toBuffer('image/png'));
         console.log(`L${lvl}: ${c.pngs.length} frames, container ${(buf.length / 1024).toFixed(0)}KB -> ${path.basename(file)}`);
     }
     console.log('BAKE OK — assets ready to commit');

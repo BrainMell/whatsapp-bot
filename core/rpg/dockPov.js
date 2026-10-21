@@ -1,32 +1,38 @@
 'use strict';
 // ═══════════════════════════════════════════════════════════════════════════
-//  THE POND — girl at the water (owner 2026-10-21, Task 21, 4th ask — verbatim:
-//  "I want the .j fish image to NOT be an image, but a girl that has the
-//  floating thing on the water, bobbing up and down slightly. And I want this
-//  generated once and saved on the server, or in the repo permanently, as a
-//  usable asset and an overlay like the others. We should implement an overlay
-//  that also explains this is the pond and shows what you caught.")
+//  THE POND — dock-POV fishing GIF (Task 22 UNDO + REBUILD, owner 18:01Z:
+//  "I meant GIF, not girl… UNDO that fishing bullshit you just did. I keep
+//  saying ANIMATE it so that the thing in the pond is bobbing up and down,
+//  the water looks like it's moving, and the fish too.").
 //
-//  What this is now:
-//    • THE SCENE — an angler girl seated on the dock edge, rod in her hands,
-//      red/white float ON the water bobbing gently in and out of it. Painted
-//      in the base's flat-shaded style, with a diegetic "THE POND" sign on a
-//      post, her bucket, a rod stand and a lantern (the lantern is a night
-//      light source).
-//    • GENERATED ONCE, SAVED FOREVER — the day master is baked ONCE by
-//      scripts/bake_pond_girl.js and COMMITTED to the repo at
-//      core/assets/scenes/pond_girl_l{1,2,3}.bin (16 PNG frames each, one per
-//      pond level: L2 adds the rowboat, L3 the gold edge trim). At runtime the
-//      committed asset is READ, never re-baked; if it is somehow missing the
-//      painter falls back to baking in place so nothing ever breaks.
-//    • OVERLAY LIKE THE OTHERS — per catch, the kept master frames get the
-//      catch overlay composited on top (bite pulls the float under, ripples,
-//      RARE carp closes in, EPIC koi + splash) plus a RESULT PLATE that
-//      explains this is the pond and shows what you caught (rarity-coloured).
-//    • DAY & NIGHT — the master is day-lit true colour; compose wears the
-//      shared dayNight cycle (dawn/golden/dusk/night grade) and lights the
-//      lantern + moon glints at night. Composites are disk-cached per
-//      (biome, level, phase, band); the final GIF is cached per loot plate.
+//  What changed in Task 22:
+//    • THE GIRL IS GONE — the Task 21 character scene is reverted to the
+//      Task 19/20 dock-POV composition (water fills the upper frame, dock
+//      planks in the lower foreground, rod + line + float on the water).
+//    • THE WATER MOVES — traveling wave crests on every band (nearer bands
+//      drift faster = parallax), two drifting ripple rings, the sun-glitter
+//      path and ambient sparkles from Task 20.
+//    • THE FISH SWIM — 2-4× the old speed with stronger tail wiggle, so the
+//      crossing is obvious inside the 1.92s loop.
+//    • THE FLOAT BOBS — Task 20 geometry verbatim: red/white body crossing
+//      the waterline every loop, contact ripple breathing with the bob.
+//    • RESULT OVERLAY = THE ESTABLISHED STYLE — the custom Task 21 plate is
+//      DELETED; loot rides the shared drawBanner() ribbon (structureScenes),
+//      the same top-centre gold banner every other base command uses.
+//    • DAY/NIGHT stays (owner asked for it across every render — never
+//      retracted): biome wash + per-phase celestial + grade + night lights.
+//
+//  Cache model ("generated once, saved permanently"):
+//    • DAY MASTER — 16 PNG frames per pond level, baked ONCE by
+//      scripts/bake_pond.js and COMMITTED to the repo at
+//      core/assets/scenes/pond_l{1,2,3}_v2.bin (replaces the girl assets).
+//      Runtime READS the committed asset; a bake only happens as fallback.
+//    • COMPOSE — master + biome wash + hour + lights, cached per
+//      (biome, level, phase, band). The catch overlay rides in here.
+//    • FINAL GIF — compose + established loot banner, cached per
+//      (biome, level, phase, band, banner-lines) so repeat catches are
+//      disk hits. Loot text also rides the WhatsApp caption upstream.
+//  Delivery: pure-JS gif89a → { image, gifPlayback: true } (the proven path).
 // ═══════════════════════════════════════════════════════════════════════════
 const fs = require('fs');
 const path = require('path');
@@ -36,38 +42,32 @@ const K = require('./kingdom3d');
 const hashStr = (s) => K.hashStr(String(s || ''));
 
 const GW = 480, GH = 360, FRAMES = 16, DELAY_MS = 120;   // 1.92s loop
-const CONTAINER_MAGIC = 'PONDGIRL1';
+const CONTAINER_MAGIC = 'PONDPOV2';
 const ASSET_DIR = path.join(__dirname, '..', 'assets', 'scenes');
-const ASSET_VER = 'v1';
+const ASSET_VER = 'v2';
 
-// ── the float (Task 20, kept: "the tip of the fishing thing to be on top of
-// the water, appearing to be bobbing in and out of it" — Task 21 softens the
-// bob: "bobbing up and down slightly") ──
-const BOB_AMP = 0.24;                                     // gentle idle bob (× body radius)
+// ── the float (Task 20 geometry verbatim — owner approved this bob) ────────
 function floatGeom(w, h) {
-    const hz = Math.round(HORIZON * h);
-    const by = hz + (h - hz) * 0.26;                      // sits in the near-middle reach
-    const bs = h * 0.026;
-    return { bx: w * 0.355, by, bs, wlY: by + bs * 0.55 };
+    const hz = Math.round(HORIZON * h), edgeY = Math.round(DOCK_EDGE * h);
+    const by = hz + (edgeY - hz) * 0.46;
+    const bs = h * 0.024;
+    return { bx: w * 0.52, by, bs, wlY: by + bs * 0.55 };
 }
-function floatBob(t, bs) { return Math.sin(t * Math.PI * 2) * bs * BOB_AMP; }
+function floatBob(t, bs) { return Math.sin(t * Math.PI * 2) * bs * 0.45; }
 function floatY(t, h, dip = 0) { const g = floatGeom(480, h); return g.by + floatBob(t, g.bs) + dip; }
-/** Rod + line + float. Body drawn twice against the waterline clip — dry
+/** Rod + line + float. Body drawn twice against a clipped waterline — dry
  *  colours above, wet-tinted below — so it visibly crosses the surface; the
  *  antenna tip rides highest and is the last thing a bite pulls under. */
-function paintFloat(ctx, w, h, t, P, { rod = true, line = true, dip = 0, rodFrom = null, rodTip = null } = {}) {
+function paintFloat(ctx, w, h, t, P, { rod = true, line = true, dip = 0 } = {}) {
     const { bx, by, bs, wlY } = floatGeom(w, h);
     const byy = by + floatBob(t, bs) + dip;
-    const tipX = rodTip ? rodTip.x : bx + w * 0.075, tipY = rodTip ? rodTip.y : by - h * 0.185;
+    const tipX = bx + w * 0.17, tipY = by - h * 0.16;
     if (rod) {
-        const hx = rodFrom ? rodFrom.x : w * 0.685, hy = rodFrom ? rodFrom.y : h * 0.615;
-        ctx.strokeStyle = P.wood[0]; ctx.lineWidth = Math.max(1.4, h * 0.0055);
-        ctx.beginPath(); ctx.moveTo(hx, hy);
-        ctx.quadraticCurveTo((hx + tipX) / 2 - w * 0.008, (hy + tipY) / 2 - h * 0.03, tipX, tipY);
-        ctx.stroke();
+        ctx.strokeStyle = P.wood[0]; ctx.lineWidth = Math.max(2, h * 0.011);
+        ctx.beginPath(); ctx.moveTo(w * 1.0, h * 0.99); ctx.quadraticCurveTo(bx + w * 0.24, by - h * 0.02, tipX, tipY); ctx.stroke();
     }
     if (line) {
-        ctx.strokeStyle = 'rgba(244,246,240,0.72)'; ctx.lineWidth = Math.max(1, h * 0.0032);
+        ctx.strokeStyle = 'rgba(244,246,240,0.75)'; ctx.lineWidth = Math.max(1, h * 0.0035);
         ctx.beginPath(); ctx.moveTo(tipX, tipY); ctx.lineTo(bx, byy - bs * 1.5); ctx.stroke();
     }
     const drawAll = (wet) => {
@@ -85,35 +85,46 @@ function paintFloat(ctx, w, h, t, P, { rod = true, line = true, dip = 0, rodFrom
     // contact ripple at the waterline, breathing with the bob
     ctx.strokeStyle = P.glint; ctx.globalAlpha = 0.2 + 0.1 * Math.sin(t * Math.PI * 2);
     ctx.lineWidth = Math.max(1, h * 0.003);
-    ctx.beginPath(); ctx.ellipse(bx, wlY, bs * (1.5 + 0.22 * Math.sin(t * Math.PI * 2)), bs * 0.4, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(bx, wlY, bs * (1.5 + 0.25 * Math.sin(t * Math.PI * 2)), bs * 0.42, 0, 0, Math.PI * 2); ctx.stroke();
     ctx.globalAlpha = 1;
     return { bx, byy, wlY, bs };
 }
 
-// ── layout: horizon, dock geometry ─────────────────────────────────────────
-const HORIZON = 0.24;
-const DOCK_X0 = 0.545;                                    // dock's left edge at frame bottom
-function dockEdgeY(w, h, x) {                             // water-facing edge line
-    const f = Math.max(0, Math.min(1, (x - w * DOCK_X0) / (w * (1 - DOCK_X0))));
-    return h * (0.715 - f * 0.105);
-}
-
-// ── day palettes (the master is painted in `isle`; other biomes are washes) ─
+// ── base palette (isle master — other biomes arrive as washes at compose) ──
 const PALETTES = {
     isle: {
-        sky: ['#a8d4e4', '#cde8dc', '#eee6c2'],
-        ridge: '#2e6e5c', water: ['#16444a', '#1a5560', '#20666e', '#2a7878', '#358a7e', '#449c82'],
+        sky: ['#b8d8e2', '#d8e8de', '#f2e4c0'], sun: '#f8f2d8',
+        ridge: '#2e6e5c', water: ['#143f46', '#17505a', '#1c6169', '#247476', '#2e867c', '#3b987f'],
         glint: '#d8f0e2', shimmer: ['#9fd8c8', '#c8ecdc'], fish: ['#0c3236', '#0a282c'],
         wood: ['#8a6a40', '#755732', '#5c4326'], rope: '#c9b088', lantern: '#f2d896',
     },
+    desert: {
+        sky: ['#e8d8ae', '#f0e2b8', '#f8ecc2'], sun: '#fcf4d8',
+        ridge: '#a8783e', water: ['#1e5a54', '#256a5e', '#2e7a66', '#3a8a6c', '#489a70', '#58aa74'],
+        glint: '#f4ecd2', shimmer: ['#c8e8b8', '#e2f4cc'], fish: ['#123c34', '#0c2c26'],
+        wood: ['#a8845a', '#8f6c46', '#6e5234'], rope: '#d8c098', lantern: '#f8e2a0',
+    },
+    tundra: {
+        sky: ['#c2d4e0', '#d8e4ea', '#ecf0ee'], sun: '#f4f8f8',
+        ridge: '#3c5468', water: ['#173248', '#1c3e54', '#224a5e', '#2a5668', '#33626e', '#3e6e74'],
+        glint: '#e2f0f4', shimmer: ['#a8ccd8', '#cce4ea'], fish: ['#0e2432', '#0a1c28'],
+        wood: ['#7c6248', '#68523c', '#523e2e'], rope: '#c0b49c', lantern: '#eee2b4',
+    },
+    highlands: {
+        sky: ['#d8c8a0', '#e8d4a4', '#f4e0ac'], sun: '#f8ecca',
+        ridge: '#8a5a24', water: ['#1c4a44', '#225a50', '#2a6a58', '#347a60', '#408a66', '#4e9a6a'],
+        glint: '#f4e4bc', shimmer: ['#d8e8a8', '#e8f2bc'], fish: ['#103430', '#0a2624'],
+        wood: ['#8a6238', '#744f2e', '#5a3d24'], rope: '#ccb284', lantern: '#f6dc9a',
+    },
+    volcanic: {
+        sky: ['#8a7a72', '#a89284', '#c8a882'], sun: '#f4d8a8',
+        ridge: '#3c3438', water: ['#22262c', '#2a3038', '#323c44', '#3c4a50', '#46585c', '#526666'],
+        glint: '#f8c890', shimmer: ['#e8a05c', '#f4bc78'], fish: ['#141a20', '#0e1216'],
+        wood: ['#6a5244', '#574238', '#423229'], rope: '#a89078', lantern: '#ffb864',
+    },
 };
-PALETTES.desert = { ...PALETTES.isle };
-PALETTES.tundra = { ...PALETTES.isle };
-PALETTES.highlands = { ...PALETTES.isle };
-PALETTES.volcanic = { ...PALETTES.isle };
 
-// Biome washes over the committed day master (sky band, water band, all-over).
-// Strong enough that each realm reads differently at a glance.
+// ── biome washes (Task 21 — master is isle; other realms wear their sky) ───
 const WASHERS = {
     isle: null,
     desert: { sky: 'rgba(238,208,128,0.42)', water: 'rgba(58,150,104,0.30)', all: 'rgba(206,174,102,0.10)' },
@@ -122,235 +133,172 @@ const WASHERS = {
     volcanic: { sky: 'rgba(88,68,62,0.46)', water: 'rgba(28,30,38,0.44)', all: 'rgba(70,40,32,0.20)' },
 };
 
-// ── THE GIRL — seated on the dock edge, rod in her hands, flat-shaded ──────
-// Anchor (gx, gy) = where she sits on the edge. Faces left (over the water).
-function paintGirl(ctx, w, h, t, P) {
-    const u = h / 360;
-    const gx = w * 0.745, gy = dockEdgeY(w, h, w * 0.745) - 2 * u;
-    const breathe = Math.sin(t * Math.PI * 2) * 1.3 * u;          // idle breathing
-    const sway = Math.sin(t * Math.PI * 2 + 0.9) * 1.6 * u;       // ponytail sway
-    const kick = Math.sin(t * Math.PI * 2 + 2.1) * 1.4 * u;       // dangling boots
-    const y = (dy) => gy + dy + breathe;                          // local y helper
-    const skin = '#e8b48c', skinD = '#cf9873';
-    const hair = '#5a3820', hairHi = '#6e4628';
-    const dress = '#3e7c78', dressD = '#2e5e5c';
-    const straw = '#d8b86a', strawD = '#b8974c', band = '#b05a48';
-    const boot = '#5c4430';
-    ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+// ── layout ──────────────────────────────────────────────────────────────────
+const HORIZON = 0.16, DOCK_EDGE = 0.63;
 
-    // dangling legs (far leg slightly behind, both kick gently out of phase)
-    ctx.strokeStyle = skinD; ctx.lineWidth = 4.4 * u;
-    ctx.beginPath(); ctx.moveTo(gx - 2 * u, y(-8 * u)); ctx.quadraticCurveTo(gx - 12 * u, y(-2 * u), gx - 13 * u, y(12 * u + kick)); ctx.stroke();
-    ctx.fillStyle = boot; ctx.beginPath();
-    ctx.ellipse(gx - 14 * u, y(14 * u + kick), 4.4 * u, 3 * u, 0.5, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = skin; ctx.lineWidth = 4.6 * u;
-    ctx.beginPath(); ctx.moveTo(gx - 5 * u, y(-7 * u)); ctx.quadraticCurveTo(gx - 15 * u, y(-1 * u), gx - 17 * u, y(11 * u - kick)); ctx.stroke();
-    ctx.fillStyle = boot; ctx.beginPath();
-    ctx.ellipse(gx - 18 * u, y(13 * u - kick), 4.6 * u, 3.1 * u, 0.5, 0, Math.PI * 2); ctx.fill();
+/** One base frame at loop position t∈[0,1). Deterministic per (biome,lvl). */
+function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1, fish = true } = {}) {
+    const P = PALETTES[biome] || PALETTES.isle;
+    const rng = K.mulberry32(hashStr(`dockpov:${biome}:${lvl}`));
+    const hz = Math.round(HORIZON * h), edgeY = Math.round(DOCK_EDGE * h);
+    const wh = edgeY - hz; // water height
 
-    // dress skirt spilling over the edge + torso
-    ctx.fillStyle = dressD; ctx.beginPath();
-    ctx.moveTo(gx + 9 * u, y(-6 * u)); ctx.quadraticCurveTo(gx + 2 * u, y(8 * u), gx - 8 * u, y(9 * u));
-    ctx.quadraticCurveTo(gx + 1 * u, y(2 * u), gx - 3 * u, y(-6 * u)); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = dress; ctx.beginPath();
-    ctx.moveTo(gx + 7 * u, y(-30 * u));                                   // torso
-    ctx.quadraticCurveTo(gx + 9 * u, y(-16 * u), gx + 8 * u, y(-5 * u));
-    ctx.lineTo(gx - 5 * u, y(-5 * u));
-    ctx.quadraticCurveTo(gx - 7 * u, y(-18 * u), gx - 5 * u, y(-30 * u));
-    ctx.closePath(); ctx.fill();
-    // rolled sleeves
-    ctx.fillStyle = dressD; ctx.beginPath();
-    ctx.ellipse(gx - 4 * u, y(-26 * u), 3.4 * u, 2.6 * u, -0.5, 0, Math.PI * 2); ctx.fill();
-
-    // arms reaching forward-down to the rod grip
-    ctx.strokeStyle = skin; ctx.lineWidth = 3.6 * u;
-    ctx.beginPath(); ctx.moveTo(gx - 3 * u, y(-27 * u)); ctx.quadraticCurveTo(gx - 10 * u, y(-25 * u), gx - 15 * u, y(-21 * u)); ctx.stroke();
-    ctx.strokeStyle = skinD; ctx.lineWidth = 3.4 * u;
-    ctx.beginPath(); ctx.moveTo(gx - 2 * u, y(-24 * u)); ctx.quadraticCurveTo(gx - 9 * u, y(-21 * u), gx - 14 * u, y(-18 * u)); ctx.stroke();
-
-    // head + face
-    ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(gx - 8 * u, y(-38 * u), 6.4 * u, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#241a10'; ctx.beginPath(); ctx.arc(gx - 11.4 * u, y(-39 * u), 0.9 * u, 0, Math.PI * 2); ctx.fill(); // eye
-    ctx.strokeStyle = skinD; ctx.lineWidth = 1.1 * u;
-    ctx.beginPath(); ctx.arc(gx - 11 * u, y(-36.4 * u), 1.6 * u, 0.15, 1.35); ctx.stroke();                              // smile
-
-    // hair: crown + long ponytail behind, swaying
-    ctx.fillStyle = hair; ctx.beginPath();
-    ctx.arc(gx - 8 * u, y(-40 * u), 6.8 * u, Math.PI * 0.86, Math.PI * 2.05); ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(gx - 3 * u, y(-42 * u));
-    ctx.quadraticCurveTo(gx + 5 * u + sway, y(-38 * u), gx + 6 * u + sway, y(-24 * u));
-    ctx.quadraticCurveTo(gx + 2 * u + sway * 0.5, y(-26 * u), gx - 1 * u, y(-35 * u));
-    ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = hairHi; ctx.lineWidth = 1.2 * u;
-    ctx.beginPath(); ctx.moveTo(gx + 2 * u + sway * 0.6, y(-36 * u)); ctx.quadraticCurveTo(gx + 5 * u + sway, y(-31 * u), gx + 5 * u + sway, y(-26 * u)); ctx.stroke();
-
-    // straw hat with a red band (the angler's signature)
-    ctx.fillStyle = strawD; ctx.beginPath();
-    ctx.ellipse(gx - 8 * u, y(-44.5 * u), 10.5 * u, 2.6 * u, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = straw; ctx.beginPath();
-    ctx.ellipse(gx - 8 * u, y(-46.5 * u), 6.8 * u, 4.2 * u, 0, Math.PI, 0); ctx.fill();
-    ctx.fillStyle = band; ctx.fillRect(gx - 14.6 * u, y(-47.6 * u), 13.2 * u, 2.2 * u);
-    ctx.restore();
-    return { gx, gy: y(-30 * u), hands: { x: gx - 15 * u, y: y(-20 * u) } };
-}
-
-// ── dock, sign, bucket, lantern ─────────────────────────────────────────────
-function paintDock(ctx, w, h, t, P, { lvl = 1 } = {}) {
-    const u = h / 360;
-    const x0 = w * DOCK_X0;
-    // deck surface
-    ctx.fillStyle = P.wood[1];
-    ctx.beginPath(); ctx.moveTo(x0, h); ctx.lineTo(x0, dockEdgeY(w, h, x0));
-    ctx.lineTo(w, dockEdgeY(w, h, w)); ctx.lineTo(w, h); ctx.closePath(); ctx.fill();
-    // board rows: lines parallel to the water-facing edge = the planks
-    ctx.strokeStyle = P.wood[2]; ctx.lineWidth = Math.max(1.2, h * 0.005);
-    for (const off of [0.10, 0.23, 0.38, 0.55]) {
-        ctx.beginPath();
-        ctx.moveTo(x0 + w * off * 0.35, h);
-        ctx.lineTo(x0 + w * off, dockEdgeY(w, h, x0 + w * off) + h * 0.016 + (h - dockEdgeY(w, h, x0 + w * off)) * off * 0.18);
-        ctx.stroke();
-    }
-    // edge board highlight + the front face dropping to the water
-    ctx.strokeStyle = P.wood[0]; ctx.lineWidth = Math.max(2.4, h * 0.011);
-    ctx.beginPath(); ctx.moveTo(x0, dockEdgeY(w, h, x0)); ctx.lineTo(w, dockEdgeY(w, h, w)); ctx.stroke();
-    ctx.fillStyle = P.wood[2];
-    ctx.beginPath(); ctx.moveTo(x0, dockEdgeY(w, h, x0)); ctx.lineTo(w, dockEdgeY(w, h, w));
-    ctx.lineTo(w, dockEdgeY(w, h, w) + h * 0.035); ctx.lineTo(x0, dockEdgeY(w, h, x0) + h * 0.05); ctx.closePath(); ctx.fill();
-    if (lvl >= 3) {   // kept well-funded pond: gold trim on the edge board
-        ctx.save(); ctx.strokeStyle = '#e2b84a'; ctx.lineWidth = Math.max(1.4, h * 0.005); ctx.globalAlpha = 0.85;
-        ctx.beginPath(); ctx.moveTo(x0, dockEdgeY(w, h, x0) + 1); ctx.lineTo(w, dockEdgeY(w, h, w) + 1); ctx.stroke(); ctx.restore();
-    }
-
-    // mooring post at the left corner with a coiled rope on top (no long sweep
-    // across the water — it read as a second fishing line)
-    const postX = x0 + w * 0.012, postTop = dockEdgeY(w, h, x0) - h * 0.075;
-    ctx.fillStyle = P.wood[0]; ctx.fillRect(postX, postTop, w * 0.024, h * 0.075 + h * 0.03);
-    ctx.fillStyle = P.wood[2]; ctx.fillRect(postX, postTop, w * 0.008, h * 0.075 + h * 0.03);
-    ctx.strokeStyle = P.rope; ctx.lineWidth = Math.max(1.2, h * 0.005);
-    ctx.beginPath(); ctx.ellipse(postX + w * 0.012, postTop - h * 0.004, w * 0.014, h * 0.006, 0, 0, Math.PI * 2); ctx.stroke();
-
-    // ── the sign: "THE POND" on a post at the dock corner (the overlay that
-    // explains the place, diegetic — baked into the master) ──
-    const sgx = x0 + w * 0.075, sgy = dockEdgeY(w, h, sgx);
-    ctx.fillStyle = P.wood[0]; ctx.fillRect(sgx - w * 0.004, sgy - h * 0.115, w * 0.009, h * 0.115);
-    const bw = w * 0.128, bh = h * 0.062, bx = sgx - bw * 0.5, by = sgy - h * 0.175;
-    ctx.fillStyle = '#e8d9ae'; ctx.strokeStyle = P.wood[2]; ctx.lineWidth = Math.max(1.4, h * 0.006);
-    ctx.beginPath(); ctx.rect(bx, by, bw, bh); ctx.fill(); ctx.stroke();
-    ctx.strokeStyle = 'rgba(90,64,32,0.5)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.rect(bx + 2.5 * u, by + 2.5 * u, bw - 5 * u, bh - 5 * u); ctx.stroke();
-    ctx.fillStyle = '#4a3418';
-    ctx.font = `bold ${Math.max(8, Math.round(h * 0.031))}px "Cinzel", sans-serif`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('THE POND', sgx, by + bh * 0.56);
-
-    // bucket (her keep-box) on the deck, right of the sign
-    const bck = w * 0.885, bcy = dockEdgeY(w, h, bck) + h * 0.055;
-    ctx.fillStyle = P.wood[2]; ctx.beginPath();
-    ctx.moveTo(bck - w * 0.024, bcy - h * 0.052); ctx.lineTo(bck + w * 0.024, bcy - h * 0.052);
-    ctx.lineTo(bck + w * 0.019, bcy); ctx.lineTo(bck - w * 0.019, bcy); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = P.wood[0]; ctx.fillRect(bck - w * 0.024, bcy - h * 0.052, w * 0.048, h * 0.012);
-    ctx.strokeStyle = P.rope; ctx.lineWidth = Math.max(1, h * 0.004);
-    ctx.beginPath(); ctx.arc(bck, bcy - h * 0.05, w * 0.02, Math.PI, 0); ctx.stroke();
-
-    // lantern post at the right edge — the pond's night light
-    const lpx = w * 0.965, lpy = dockEdgeY(w, h, lpx);
-    ctx.fillStyle = P.wood[0]; ctx.fillRect(lpx - w * 0.004, lpy - h * 0.21, w * 0.008, h * 0.21);
-    ctx.fillRect(lpx - w * 0.004, lpy - h * 0.21, w * 0.034, h * 0.008);
-    const lx = lpx + w * 0.026, ly = lpy - h * 0.185;
-    ctx.strokeStyle = P.wood[2]; ctx.lineWidth = Math.max(1, h * 0.004);
-    ctx.beginPath(); ctx.moveTo(lx, lpy - h * 0.202); ctx.lineTo(lx, ly + h * 0.03); ctx.stroke();
-    ctx.fillStyle = P.lantern; ctx.globalAlpha = 0.9;
-    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(lx - w * 0.011, ly, w * 0.022, h * 0.032, 2) : ctx.rect(lx - w * 0.011, ly, w * 0.022, h * 0.032); ctx.fill();
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = P.wood[2]; ctx.stroke();
-    return { lantern: { x: lx, y: ly + h * 0.016 }, sign: { x: sgx, y: by + bh / 2 } };
-}
-
-// ── one master frame (day-lit true colour; NO sun — compose adds the hour) ─
-function paintFrame(ctx, w, h, t, { lvl = 1 } = {}) {
-    const P = PALETTES.isle;
-    const rng = K.mulberry32(hashStr(`pondgirl:${ASSET_VER}:${lvl}`));
-    const hz = Math.round(HORIZON * h);
-    const wh = h - hz;
-
-    // sky: three flat bands + drifting clouds
+    // ── sky: three flat bands + distant ridge line (NO baked sun — the compose
+    // step paints the per-phase celestial: dawn/day/golden/dusk sun, night moon) ──
     ctx.fillStyle = P.sky[0]; ctx.fillRect(0, 0, w, Math.round(hz * 0.45));
     ctx.fillStyle = P.sky[1]; ctx.fillRect(0, Math.round(hz * 0.45), w, Math.round(hz * 0.3));
     ctx.fillStyle = P.sky[2]; ctx.fillRect(0, Math.round(hz * 0.75), w, hz - Math.round(hz * 0.75));
-    for (let i = 0; i < 3; i++) {
-        const cy = hz * (0.18 + rng() * 0.4), cw2 = w * (0.08 + rng() * 0.06), sp = 0.01 + rng() * 0.012;
-        const cx = (((rng() + t * sp) % 1.25) - 0.125) * w;
-        ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.beginPath(); ctx.ellipse(cx, cy, cw2, h * 0.014, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.ellipse(cx + cw2 * 0.5, cy - h * 0.008, cw2 * 0.55, h * 0.011, 0, 0, Math.PI * 2); ctx.fill();
-    }
-
-    // far shoreline ridge
+    // far shoreline: low irregular ridge across the horizon (behind water)
     ctx.fillStyle = P.ridge;
     ctx.beginPath(); ctx.moveTo(0, hz);
-    for (let x = 0; x <= w; x += w / 26) ctx.lineTo(x, hz - (2 + Math.floor(rng() * 4)) * (h / 360) * (rng() < 0.3 ? 2.6 : 1));
+    for (let x = 0; x <= w; x += w / 24) ctx.lineTo(x, hz - (2 + Math.floor(rng() * 4)) * (h / 360) * (rng() < 0.28 ? 3 : 1));
     ctx.lineTo(w, hz + 1); ctx.lineTo(0, hz + 1); ctx.closePath(); ctx.fill();
 
-    // water: flat perspective bands, far (thin, dark) → near (tall, light)
+    // ── water: flat perspective bands, far (thin, dark) → near (tall, light) ──
     let y = hz; const steps = P.water.length;
-    let span = wh * 0.02;
+    let span = wh * 0.028;
+    const bandYs = [hz];
     for (let i = 0; i < steps; i++) {
-        const y2 = i === steps - 1 ? h : Math.min(h, y + span);
+        const y2 = i === steps - 1 ? edgeY : Math.min(edgeY, y + span);
         ctx.fillStyle = P.water[i]; ctx.fillRect(0, y, w, y2 - y + 1);
-        y = y2 + 1; span *= 1.5;
+        y = y2 + 1; span *= 1.55;
+        bandYs.push(Math.min(edgeY, y));
     }
-    // ambient sparkles
-    for (let i = 0; i < 11; i++) {
+    // ── THE WATER MOVES (Task 22): traveling wave crests per band — light
+    // dashes drifting horizontally, nearer bands faster (parallax), directions
+    // alternating so the surface clearly flows in every frame of the loop. ──
+    for (let b = 1; b < steps; b++) {
+        const y0 = bandYs[b], y1 = (b + 1 <= steps - 1 ? bandYs[b + 1] : edgeY);
+        if (y1 - y0 < 2) continue;
+        const n = b < 3 ? 1 : 2;
+        for (let k = 0; k < n; k++) {
+            const sp = 0.045 + b * 0.02;                       // nearer = faster
+            const dir = b % 2 ? 1 : -1;
+            const ph = (((t * sp * dir) + k * 0.5 + b * 0.31) % 1 + 1) % 1;
+            const cx = ph * (w * 1.3) - w * 0.15;              // wraps offscreen
+            const cy = y0 + (y1 - y0) * (0.3 + 0.4 * ((k + b) % 2));
+            const lw = w * (0.05 + 0.018 * (b % 3));
+            ctx.fillStyle = P.shimmer[b % 2]; ctx.globalAlpha = 0.35;
+            ctx.fillRect(cx, cy, lw, Math.max(1, h * 0.0045));
+            ctx.globalAlpha = 1;
+        }
+    }
+    // ── drifting ripple rings — two slow expanding circles, staggered so one
+    // is always alive; they swell, fade, and re-seed offscreen-ish. ──
+    for (let k = 0; k < 2; k++) {
+        const ph = (t * 0.5 + k * 0.5) % 1;
+        const rx = w * (0.28 + 0.36 * k), ry2 = hz + wh * (0.34 + 0.22 * k);
+        const rr = (0.03 + ph * 0.09) * w;
+        ctx.strokeStyle = P.glint; ctx.globalAlpha = 0.32 * (1 - ph);
+        ctx.lineWidth = Math.max(1, h * 0.0035);
+        ctx.beginPath(); ctx.ellipse(rx, ry2, rr, rr * 0.36, 0, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
+    // sun glitter path: drifting dashes down the sun column (flat 2 tones)
+    // (the DAY column at x=0.68 — compose's phase celestial lines up with it)
+    const sgx = w * 0.68;
+    for (let i = 0; i < 14; i++) {
+        const ph = (t + rng()) % 1;
+        const gy = hz + wh * (0.08 + 0.84 * ph);
+        const gw2 = w * 0.02 + (gy - hz) / wh * w * 0.045;
+        ctx.fillStyle = P.shimmer[i % 2];
+        ctx.fillRect(sgx - gw2 / 2 + Math.sin(ph * 9 + i) * gw2 * 0.3, gy, gw2, Math.max(1, h * 0.006));
+    }
+    // ambient sparkles across the whole surface
+    for (let i = 0; i < 10; i++) {
         const ph = (t * 0.7 + rng() * 3) % 1;
-        const gx = rng() * w, gy = hz + wh * (0.08 + 0.86 * ((rng() + ph) % 1));
-        ctx.fillStyle = P.glint; ctx.globalAlpha = 0.45 + 0.4 * Math.sin(ph * Math.PI);
-        ctx.fillRect(gx, gy, w * 0.011 + 2, Math.max(1, h * 0.004)); ctx.globalAlpha = 1;
+        const gx = rng() * w, gy = hz + wh * (0.1 + 0.85 * ((rng() + ph) % 1));
+        ctx.fillStyle = P.glint; ctx.globalAlpha = 0.5 + 0.4 * Math.sin(ph * Math.PI);
+        ctx.fillRect(gx, gy, w * 0.012 + 2, Math.max(1, h * 0.004)); ctx.globalAlpha = 1;
     }
 
-    // fish silhouettes beneath the surface
-    const nf = 4 + Math.max(0, lvl - 1);
-    for (let i = 0; i < nf; i++) {
-        const depth = 0.2 + 0.62 * rng();
-        const fy = hz + wh * depth;
-        const fs = (h * 0.02) * (0.55 + depth);
-        const speed = 0.014 + rng() * 0.028;
-        const fx = ((rng() + t * speed * (rng() < 0.5 ? -1 : 1)) % 1 + 1) % 1 * w;
-        const wig = Math.sin(t * Math.PI * 4 + i * 1.7);
-        const yy = fy + Math.sin(t * Math.PI * 2 + i) * fs * 0.5;
-        ctx.fillStyle = P.fish[depth > 0.55 ? 0 : 1];
-        ctx.save(); ctx.translate(fx, yy);
-        ctx.beginPath(); ctx.ellipse(0, 0, fs * 1.15, fs * 0.34, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.moveTo(-fs * 1.05, 0);
-        ctx.lineTo(-fs * 1.6, (-0.3 + wig * 0.22) * fs); ctx.lineTo(-fs * 1.6, (0.3 + wig * 0.22) * fs);
-        ctx.closePath(); ctx.fill();
-        ctx.restore();
+    // ── THE FISH SWIM (Task 22): ambient silhouettes crossing the frame at
+    // 2-4× the old speed with a strong tail beat — their motion reads in a
+    // single 1.92s loop instead of needing three. ──
+    if (fish) {
+        const nf = 6 + Math.max(0, lvl - 1);
+        for (let i = 0; i < nf; i++) {
+            const depth = 0.25 + 0.7 * rng();               // 0=horizon 1=dock edge
+            const fy = hz + wh * depth;
+            const fs = (h * 0.019) * (0.55 + depth);        // nearer = bigger
+            const speed = 0.05 + rng() * 0.06;              // Task 22: was 0.016-0.046
+            const fx = ((rng() + t * speed * (rng() < 0.5 ? -1 : 1)) % 1 + 1) % 1 * w;
+            const wig = Math.sin(t * Math.PI * 6 + i * 1.7);
+            const yy = fy + Math.sin(t * Math.PI * 2 + i) * fs * 0.7;
+            ctx.fillStyle = P.fish[depth > 0.6 ? 0 : 1];
+            ctx.save(); ctx.translate(fx, yy);
+            ctx.beginPath(); ctx.ellipse(0, 0, fs * 1.15, fs * 0.34, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(-fs * 1.05, 0);
+            ctx.lineTo(-fs * 1.6, (-0.3 + wig * 0.3) * fs); ctx.lineTo(-fs * 1.6, (0.3 + wig * 0.3) * fs);
+            ctx.closePath(); ctx.fill();
+            ctx.restore();
+        }
     }
 
-    // L2+ rowboat moored on the left reach
+    // ── lvl dressing: rowboat silhouette (L2+) bobbing on the left reach ──
     if (lvl >= 2) {
-        const by2 = hz + wh * 0.30, bx2 = w * 0.14;
+        const by2 = hz + wh * 0.34, bx2 = w * 0.16;
         const bob = Math.sin(t * Math.PI * 2) * h * 0.004;
         ctx.fillStyle = P.wood[2];
         ctx.save(); ctx.translate(bx2, by2 + bob);
-        ctx.beginPath(); ctx.moveTo(-w * 0.05, 0);
-        ctx.quadraticCurveTo(-w * 0.028, h * 0.02, 0, h * 0.022);
-        ctx.quadraticCurveTo(w * 0.028, h * 0.02, w * 0.05, 0);
-        ctx.lineTo(w * 0.043, -h * 0.011); ctx.lineTo(-w * 0.043, -h * 0.011); ctx.closePath(); ctx.fill();
-        ctx.fillStyle = P.wood[1]; ctx.fillRect(-w * 0.046, -h * 0.014, w * 0.092, h * 0.004);
-        ctx.strokeStyle = P.rope; ctx.lineWidth = Math.max(1, h * 0.003);
-        ctx.beginPath(); ctx.moveTo(bx2 + w * 0.05, by2 + bob); ctx.lineTo(w * 0.015, by2 + h * 0.03); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-w * 0.055, 0);
+        ctx.quadraticCurveTo(-w * 0.03, h * 0.022, 0, h * 0.024);
+        ctx.quadraticCurveTo(w * 0.03, h * 0.022, w * 0.055, 0);
+        ctx.lineTo(w * 0.047, -h * 0.012); ctx.lineTo(-w * 0.047, -h * 0.012); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = P.wood[1]; ctx.fillRect(-w * 0.05, -h * 0.015, w * 0.1, h * 0.004);
         ctx.restore();
     }
 
-    // dock + props + girl + rod + float
-    const props = paintDock(ctx, w, h, t, P, { lvl });
-    const girl = paintGirl(ctx, w, h, t, P);
-    paintFloat(ctx, w, h, t, P, { rod: true, line: true, rodFrom: girl.hands, rodTip: { x: w * 0.525, y: h * 0.465 } });
-    return { ...props, girl };
-}
+    // ── the dock: planks in perspective, edge board at the water line ──
+    ctx.fillStyle = P.wood[1]; ctx.fillRect(0, edgeY, w, h - edgeY);
+    const seams = [-0.5, -0.28, -0.06, 0.16, 0.38, 0.6];
+    ctx.strokeStyle = P.wood[2]; ctx.lineWidth = Math.max(1.5, h * 0.008);
+    for (const s of seams) {
+        const xb = w * (0.5 + s);
+        const xe = w * (0.5 + s * 0.72);
+        ctx.beginPath(); ctx.moveTo(xb, h); ctx.lineTo(xe, edgeY); ctx.stroke();
+        const per = 3 + (i0(s) % 2 ? 2 : 0);
+        for (let k = 1; k <= per; k++) {
+            const f = k / (per + 1);
+            const px = xb + (xe - xb) * f, py = h + (edgeY - h) * f;
+            ctx.beginPath(); ctx.moveTo(px - w * 0.018, py); ctx.lineTo(px + w * 0.018, py); ctx.stroke();
+        }
+    }
+    ctx.fillStyle = P.wood[0]; ctx.fillRect(0, edgeY, w, Math.max(2, h * 0.012));
+    ctx.fillStyle = P.wood[2]; ctx.fillRect(0, edgeY + Math.max(2, h * 0.012), w, Math.max(3, h * 0.02));
+    // mooring post (right) + rope running to the left edge
+    const postX = w * 0.86, postW = w * 0.035;
+    ctx.fillStyle = P.wood[0]; ctx.fillRect(postX, edgeY - h * 0.1, postW, h * 0.1 + (h - edgeY) * 0.35);
+    ctx.fillStyle = P.wood[2]; ctx.fillRect(postX, edgeY - h * 0.1, postW * 0.35, h * 0.1 + (h - edgeY) * 0.35);
+    ctx.fillStyle = P.wood[2]; ctx.fillRect(postX - postW * 0.25, edgeY - h * 0.115, postW * 1.5, h * 0.016);
+    ctx.strokeStyle = P.rope; ctx.lineWidth = Math.max(1.5, h * 0.007);
+    ctx.beginPath(); ctx.moveTo(postX, edgeY - h * 0.05);
+    ctx.quadraticCurveTo(w * 0.4, edgeY + h * 0.06, w * 0.02, edgeY + h * 0.02); ctx.stroke();
+    // tackle box + (L2+) lantern glow pooled on the planks, left foreground
+    ctx.fillStyle = P.wood[2]; ctx.fillRect(w * 0.06, h * 0.86, w * 0.1, h * 0.09);
+    ctx.fillStyle = P.wood[0]; ctx.fillRect(w * 0.06, h * 0.86, w * 0.1, h * 0.024);
+    if (lvl >= 2) {
+        ctx.fillStyle = P.lantern; ctx.globalAlpha = 0.34;
+        ctx.beginPath(); ctx.ellipse(w * 0.2, h * 0.9, w * 0.13, h * 0.07, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = P.lantern; ctx.fillRect(w * 0.185, h * 0.8, w * 0.03, h * 0.06);
+    }
+    if (lvl >= 3) { // gold trim on the edge board — a kept, well-funded pond
+        ctx.fillStyle = P.lantern; ctx.globalAlpha = 0.8;
+        ctx.fillRect(0, edgeY, w, Math.max(1.5, h * 0.004)); ctx.globalAlpha = 1;
+    }
 
-// ── catch overlays ("the new stuff" over the kept master, rarity-safe) ─────
-function paintCatchOverlay(ctx, w, h, t, band, P = PALETTES.isle) {
+    // ── rod + line + float, ON the water and bobbing in and out of it ──
+    paintFloat(ctx, w, h, t, P, { rod: true, line: true });
+    const __g = floatGeom(w, h);
+    return { bx: __g.bx, by: __g.by };
+}
+function i0(s) { return Math.abs(Math.round(s * 100)); }
+
+// ── catch overlays ("the new stuff" layered over the kept base frames) ──────
+// band: 'low' = subtle bite · 'mid' = medium fish closes in · 'epic' = big
+// approach + splash. Drawn AFTER the roll is known — never pre-signals rarity.
+function paintCatchOverlay(ctx, w, h, t, band, _anchor, P = PALETTES.isle) {
     const G = floatGeom(w, h), bs = G.bs;
     const bite = t > 0.7 && t < 0.95 ? Math.sin(((t - 0.7) / 0.25) * Math.PI) : 0;
     const dip = bite * bs * 1.35;
@@ -367,8 +315,8 @@ function paintCatchOverlay(ctx, w, h, t, band, P = PALETTES.isle) {
     }
     if (band === 'mid' || band === 'epic') {
         const ap = Math.min(1, Math.max(0, (t - 0.12) / 0.58));
-        const fx = bx + w * (1 - ap) * 0.38, fy = byy - h * 0.01 + Math.sin(t * 9) * h * 0.004;
-        const fs = h * 0.032 * (0.6 + 0.4 * ap);
+        const fx = bx + w * (1 - ap) * 0.36, fy = byy - h * 0.01 + Math.sin(t * 9) * h * 0.004;
+        const fs = h * 0.03 * (0.6 + 0.4 * ap);
         if (ap > 0.02) {
             ctx.fillStyle = 'rgba(12,50,54,0.42)';
             ctx.save(); ctx.translate(fx, fy);
@@ -380,8 +328,8 @@ function paintCatchOverlay(ctx, w, h, t, band, P = PALETTES.isle) {
     }
     if (band === 'epic') {
         const ap = Math.min(1, Math.max(0, (t - 0.05) / 0.6));
-        const fx = bx - w * (1 - ap) * 0.44, fy = byy + h * 0.012 + Math.sin(t * 7) * h * 0.005;
-        const fs = h * 0.055 * (0.55 + 0.45 * ap);
+        const fx = bx - w * (1 - ap) * 0.42, fy = byy + h * 0.012 + Math.sin(t * 7) * h * 0.005;
+        const fs = h * 0.052 * (0.55 + 0.45 * ap);
         if (ap > 0.02) {
             ctx.save(); ctx.translate(fx, fy);
             ctx.fillStyle = 'rgba(10,44,48,0.5)';
@@ -402,9 +350,8 @@ function paintCatchOverlay(ctx, w, h, t, band, P = PALETTES.isle) {
             ctx.globalAlpha = 1;
         }
     }
-    // the line + float ride ON TOP of the overlay (rod tip fixed, float pulled under)
-    const girl = paintGirl(ctx, w, h, t, P);   // cheap re-draw keeps her arms over the line
-    paintFloat(ctx, w, h, t, P, { rod: false, line: true, dip, rodFrom: girl.hands, rodTip: { x: w * 0.525, y: h * 0.465 } });
+    // the line + float ride ON TOP of the overlay so the bite reads through
+    paintFloat(ctx, w, h, t, P, { rod: false, line: true, dip });
 }
 
 // ── hour dressing: celestial body + sun/moon glitter on the water ──────────
@@ -413,7 +360,7 @@ function paintCelestial(ctx, w, h, t, phase, { glitter = true } = {}) {
     if (phase === 'night') return;                    // moonStars() owns the night sky
     const conf = {
         dawn: { x: 0.18, y: 0.145, r: 0.05, col: '#ffd9a8', glow: 'rgba(255,190,130,0.35)' },
-        day: { x: 0.22, y: 0.085, r: 0.042, col: '#f8f2d8', glow: 'rgba(255,246,210,0.28)' },
+        day: { x: 0.68, y: 0.085, r: 0.042, col: '#f8f2d8', glow: 'rgba(255,246,210,0.28)' },
         golden: { x: 0.80, y: 0.155, r: 0.055, col: '#ffc478', glow: 'rgba(255,160,80,0.4)' },
         dusk: { x: 0.80, y: 0.20, r: 0.06, col: '#ff9a5a', glow: 'rgba(255,120,60,0.42)' },
     }[phase];
@@ -425,8 +372,9 @@ function paintCelestial(ctx, w, h, t, phase, { glitter = true } = {}) {
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sx, sy, sr * 3, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = conf.col; ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
-    // glitter path down the sun column (reflecting water scenes only)
-    if (glitter && (phase === 'dawn' || phase === 'day' || phase === 'golden' || phase === 'dusk')) {
+    // glitter path down the sun column (skips the dock planks below the edge)
+    if (glitter) {
+        const edgeY = Math.round(DOCK_EDGE * h);
         const rng = K.mulberry32(hashStr(`glitter:${phase}`));
         const wh = h - hz;
         for (let i = 0; i < 13; i++) {
@@ -434,7 +382,7 @@ function paintCelestial(ctx, w, h, t, phase, { glitter = true } = {}) {
             const gy = hz + wh * (0.05 + 0.8 * ph);
             const gw2 = w * 0.018 + (gy - hz) / wh * w * 0.04;
             const gx = sx - gw2 / 2 + Math.sin(ph * 9 + i) * gw2 * 0.3;
-            if (gx > w * DOCK_X0 && gy > dockEdgeY(w, h, gx)) continue;   // no glitter on the dock
+            if (gy > edgeY) continue;                  // no glitter on the dock
             ctx.globalAlpha = phase === 'dusk' ? 0.5 : 0.72;
             ctx.fillStyle = phase === 'dusk' ? '#ffb27a' : PALETTES.isle.shimmer[i % 2];
             ctx.fillRect(gx, gy, gw2, Math.max(1, h * 0.005));
@@ -484,7 +432,7 @@ function bakeLevelFrames(lvl = 1) {
 /** The committed repo asset (generated once, saved permanently) — read, never
  *  re-baked. Falls back to an in-place bake only if the file is missing. */
 function loadCommitted(lvl = 1) {
-    const p = path.join(ASSET_DIR, `pond_girl_l${Math.max(1, Math.min(3, lvl))}_${ASSET_VER}.bin`);
+    const p = path.join(ASSET_DIR, `pond_l${Math.max(1, Math.min(3, lvl))}_${ASSET_VER}.bin`);
     try {
         const buf = fs.readFileSync(p);
         const c = unpackContainer(buf);
@@ -496,7 +444,7 @@ function loadCommitted(lvl = 1) {
 /** Day master frames for a pond level — every player shares the one asset. */
 async function getBaseFrames({ lvl = 1 } = {}) {
     lvl = Math.max(1, Math.min(3, lvl));
-    const ck = `pondgirl:L${lvl}`;
+    const ck = `pondpov:L${lvl}`;
     if (_imgCache.has(ck)) return _imgCache.get(ck);
     const { buf, committed } = loadCommitted(lvl);
     const c = unpackContainer(buf);
@@ -507,7 +455,17 @@ async function getBaseFrames({ lvl = 1 } = {}) {
     return c;
 }
 
-/** `.j base pond` viewer still — the girl scene at any size, wearing the hour. */
+// night-light anchors on the RESTORED dock: the mooring post lantern + the
+// warm pool the L2 lantern casts over the planks.
+function dockAnchors(w, h, lvl = 1) {
+    const edgeY = Math.round(DOCK_EDGE * h);
+    return {
+        post: { x: w * 0.877, y: edgeY - h * 0.1 },
+        pool: { x: w * 0.2, y: h * 0.9 },
+    };
+}
+
+/** `.j base pond` viewer still — the dock-POV scene at any size, wearing the hour. */
 function paintStill(ctx, w, h, { lvl = 1, biome = 'isle', phase = null, t = 0 } = {}) {
     phase = phase || dayNight.phaseAt();
     paintFrame(ctx, w, h, t, { lvl });
@@ -521,31 +479,23 @@ function paintStill(ctx, w, h, { lvl = 1, biome = 'isle', phase = null, t = 0 } 
     paintCelestial(ctx, w, h, t, phase);
     dayNight.grade(ctx, w, h, phase);
     if (phase === 'night' || phase === 'dusk') {
-        const { lantern } = paintDockAnchors(w, h, lvl);
-        dayNight.light(ctx, lantern.x, lantern.y, h * 0.14, '#ffcf7a', phase === 'night' ? 0.5 : 0.3);
+        const A = dockAnchors(w, h, lvl);
+        dayNight.light(ctx, A.post.x, A.post.y, h * 0.14, '#ffcf7a', phase === 'night' ? 0.5 : 0.3);
+        if (lvl >= 2) dayNight.light(ctx, A.pool.x, A.pool.y, h * 0.1, '#ffc98a', phase === 'night' ? 0.22 : 0.12, false);
         if (phase === 'night') {
             dayNight.moonStars(ctx, w, h, { seed: 17, moonX: 0.18, moonY: 0.09, stars: Math.round(20 * w / GW), starAlpha: 0.85, skyH: HORIZON * 0.92 });
-            const gx = dockEdgeY(w, h, w * 0.745);
-            dayNight.light(ctx, w * 0.72, gx + h * 0.02, h * 0.1, '#ffc98a', 0.14, false);
             dayNight.light(ctx, w * 0.18, h * 0.52, h * 0.15, '#cfe0ff', 0.15, false);   // moon glint on the water
         }
     }
 }
 
-function paintDockAnchors(w, h, lvl) {
-    const x0 = w * DOCK_X0;
-    const lpx = w * 0.965, lpy = dockEdgeY(w, h, lpx);
-    return { lantern: { x: lpx + w * 0.026, y: lpy - h * 0.169 }, sign: { x: x0 + w * 0.075, y: 0 } };
-}
-
 // ── compose: master + biome wash + hour + lights + catch overlay ───────────
-// Cached per (biome, level, phase, band) — the plate (loot text) is drawn per
-// catch AFTER this, so the cache stays tiny while every catch still explains
-// itself on the image.
+// Cached per (biome, level, phase, band) — the loot banner is drawn per catch
+// AFTER this, so the cache stays tiny while every catch still explains itself.
 async function composePond({ biome = 'isle', lvl = 1, phase = null, band = 'low' } = {}) {
     lvl = Math.max(1, Math.min(3, lvl));
     phase = phase || dayNight.phaseAt();
-    const key = `pgc1:${biome}:L${lvl}:${phase}:${band}`;
+    const key = `pgc2:${biome}:L${lvl}:${phase}:${band}`;
     return mediaCache.cached('pondcompose', key, async () => {
         const { createCanvas } = require('canvas');
         const master = await getBaseFrames({ lvl });
@@ -563,12 +513,12 @@ async function composePond({ biome = 'isle', lvl = 1, phase = null, band = 'low'
             paintCelestial(c2, master.gw, master.gh, i / FRAMES, phase);
             dayNight.grade(c2, master.gw, master.gh, phase);
             if (phase === 'night' || phase === 'dusk') {
-                const { lantern } = paintDockAnchors(master.gw, master.gh, lvl);
-                dayNight.light(c2, lantern.x, lantern.y, master.gh * 0.15, '#ffcf7a', phase === 'night' ? 0.55 : 0.32);
+                const A = dockAnchors(master.gw, master.gh, lvl);
+                dayNight.light(c2, A.post.x, A.post.y, master.gh * 0.15, '#ffcf7a', phase === 'night' ? 0.55 : 0.32);
+                if (lvl >= 2) dayNight.light(c2, A.pool.x, A.pool.y, master.gh * 0.1, '#ffc98a', phase === 'night' ? 0.24 : 0.13, false);
                 if (phase === 'night') {   // moon over the pond + glint + warm pool on the deck
                     dayNight.moonStars(c2, master.gw, master.gh, { seed: 17, moonX: 0.18, moonY: 0.09, stars: 20, starAlpha: 0.85, skyH: HORIZON * 0.92 });
                     dayNight.light(c2, master.gw * 0.18, master.gh * 0.52, master.gh * 0.16, '#cfe0ff', 0.16, false);
-                    dayNight.light(c2, master.gw * 0.72, master.gh * 0.74, master.gh * 0.1, '#ffc98a', 0.15, false);
                 }
             }
             paintCatchOverlay(c2, master.gw, master.gh, i / FRAMES, band);
@@ -578,33 +528,8 @@ async function composePond({ biome = 'isle', lvl = 1, phase = null, band = 'low'
     });
 }
 
-// ── the RESULT PLATE — "explains this is the pond and shows what you caught" ─
+// ── loot lines for the banner when the caller has no res.banner (fallback) ──
 const RARITY_COL = { COMMON: '#e8e8e0', UNCOMMON: '#8ee08e', RARE: '#7ab8f0', EPIC: '#c9a0ff', LEGENDARY: '#f0c060' };
-function drawResultPlate(ctx, w, h, { title, lines = [] }) {
-    const u = h / 360;
-    const shown = lines.slice(0, 3);
-    const titleW = 7.4 * u * String(title || '').length;
-    const pw = Math.min(w * 0.62, Math.max(130 * u, titleW, ...shown.map((l) => 6.4 * u * l.text.length)) + 20 * u);
-    const ph = 26 * u + shown.length * 20 * u;
-    const x = 10 * u, y = h - ph - 10 * u;
-    ctx.save();
-    ctx.fillStyle = 'rgba(20,16,10,0.82)';
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(x, y, pw, ph, 8 * u); else ctx.rect(x, y, pw, ph);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(201,166,90,0.85)'; ctx.lineWidth = Math.max(1.2, 1.6 * u); ctx.stroke();
-    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.font = `bold ${Math.round(13 * u)}px "Cinzel", "Cinzel Deco", sans-serif`;
-    ctx.fillStyle = '#f2dfa8';
-    ctx.fillText(String(title || '').toUpperCase().slice(0, 22), x + 10 * u, y + 13 * u);
-    shown.forEach((l, i) => {
-        ctx.font = `bold ${Math.round(12.5 * u)}px "DejaVu Sans", sans-serif`;
-        ctx.fillStyle = l.color || '#f0ead8';
-        ctx.fillText(String(l.text).slice(0, 40), x + 10 * u, y + 30 * u + i * 20 * u);
-    });
-    ctx.restore();
-}
-
 function plateLines(kind = 'fish', drops = {}) {
     const NAMES = {
         fish: { raw_fish: ['Pond Minnow', 'COMMON', 40], river_trout: ['River Trout', 'UNCOMMON', 140], silver_carp: ['Silver Carp', 'RARE', 480], crystal_koi: ['Crystal Koi', 'EPIC', 1800] },
@@ -613,33 +538,35 @@ function plateLines(kind = 'fish', drops = {}) {
     return Object.entries(drops || {})
         .sort((a, b) => (NAMES[b[0]] ? NAMES[b[0]][2] * b[1] : 0) - (NAMES[a[0]] ? NAMES[a[0]][2] * a[1] : 0))
         .slice(0, 3)
-        .map(([id, q]) => {
-            const n = NAMES[id] || [id, 'COMMON', 0];
-            return { text: `${q}× ${n[0]}`, color: RARITY_COL[n[1]] || '#f0ead8' };
-        });
+        .map(([id, q]) => `${q}× ${(NAMES[id] || [id])[0]}`);
 }
 
 // ── `.j fish` — the catch GIF: kept master + hour + THIS catch's overlay +
-// the pond/catch plate. Final GIF cached per (biome, lvl, phase, band, loot). ─
-async function renderFishingGif({ biome = 'isle', lvl = 1, band = 'low', drops = {}, phase = null } = {}) {
+// the ESTABLISHED loot ribbon (structureScenes.drawBanner — the same style the
+// other base commands use; owner Task 22). Cached per (biome,lvl,phase,band,loot).
+const BANNER_FROM_FRAME = FRAMES - 5;   // ribbon rides the last 5 frames (~0.6s)
+async function renderFishingGif({ biome = 'isle', lvl = 1, band = 'low', drops = {}, phase = null, banner = null } = {}) {
     lvl = Math.max(1, Math.min(3, lvl));
     phase = phase || dayNight.phaseAt();
-    const lines = plateLines('fish', drops);
-    const plateKey = hashStr(JSON.stringify(lines));
-    const key = `pg2:${biome}:L${lvl}:${phase}:${band}:${plateKey}`;
+    const ribbon = banner && (banner.head || (banner.lines || []).length)
+        ? { head: String(banner.head || 'The Pond'), lines: (banner.lines || []).slice(0, 6) }
+        : { head: 'The Pond', lines: plateLines('fish', drops) };
+    const plateKey = hashStr(JSON.stringify(ribbon));
+    const key = `pg3:${biome}:L${lvl}:${phase}:${band}:${plateKey}`;
     return mediaCache.cached('fishgif', key, async () => {
         const { createCanvas } = require('canvas');
         const { encodeGif } = require('../utils/gif89a');
+        const scenes = require('./structureScenes');
         try { require('./worldMapRenderer')._ensureFonts(); } catch (e) { /* default fonts */ }
         const comp = await composePond({ biome, lvl, phase, band });
-        const c = unpackContainer(comp.buffer, 'PONDGIRL1');
+        const c = unpackContainer(comp.buffer);
         if (!c || c.pngs.length !== FRAMES) throw new Error('pond compose container unreadable');
         const imgs = decodePngs(c.pngs);
         const frames = [];
         for (let i = 0; i < FRAMES; i++) {
             const cv = createCanvas(c.gw, c.gh), c2 = cv.getContext('2d');
             c2.drawImage(imgs[i], 0, 0, c.gw, c.gh);
-            drawResultPlate(c2, c.gw, c.gh, { title: 'The Pond', lines });
+            if (i >= BANNER_FROM_FRAME) scenes.drawBanner(c2, c.gw, c.gh, ribbon);
             const d = c2.getImageData(0, 0, c.gw, c.gh);
             frames.push(Buffer.from(d.data.buffer, d.data.byteOffset, d.data.byteLength));
         }
@@ -652,8 +579,8 @@ async function renderFishingGif({ biome = 'isle', lvl = 1, band = 'low', drops =
 function anchorFor(w, h) { const g = floatGeom(w, h); return { bx: g.bx, by: g.by }; }
 
 module.exports = {
-    renderFishingGif, getBaseFrames, composePond, paintStill, paintFrame, paintGirl, paintDock,
-    paintCatchOverlay, paintFloat, floatGeom, floatBob, floatY, paintCelestial, drawResultPlate,
+    renderFishingGif, getBaseFrames, composePond, paintStill, paintFrame,
+    paintCatchOverlay, paintFloat, floatGeom, floatBob, floatY, paintCelestial,
     plateLines, packContainer, unpackContainer, anchorFor, bakeLevelFrames, loadCommitted,
-    PALETTES, WASHERS, RARITY_COL, GW, GH, FRAMES, DELAY_MS, CONTAINER_MAGIC, ASSET_VER, ASSET_DIR,
+    dockAnchors, PALETTES, WASHERS, RARITY_COL, GW, GH, FRAMES, DELAY_MS, CONTAINER_MAGIC, ASSET_VER, ASSET_DIR,
 };

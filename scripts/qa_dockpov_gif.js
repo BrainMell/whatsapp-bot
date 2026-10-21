@@ -46,17 +46,17 @@ check('send probes isGifBuffer → gifPlayback', /isGifBuffer\(media\.buffer\)/.
 check('hunt note shows today counter; fish note says NO line rest', /Hunts today: \$\{res\.dailyUsed\}/.test(bb) && /No line rest/.test(bb));
 
 console.log('\n--- §C the pond: girl-angler master asset (Task 21) ---');
-check('THE GIRL seated on the dock with the rod (owner: "a girl that has the floating thing on the water")', /function paintGirl/.test(dp) && /straw hat|straw = '#d8b86a'/.test(dp));
-check('float bobbing up and down SLIGHTLY (Task 21 softened bob: BOB_AMP 0.24)', /BOB_AMP = 0\.24/.test(dp) && /function floatBob/.test(dp));
+check('NO GIRL — dock-POV restored (owner Task 22: "I meant GIF, not girl… UNDO that fishing bullshit")', !/function paintGirl/.test(dp) && !/paintGirl\(/.test(dp) && /DOCK_EDGE/.test(dp));
+check('float bobbing up and down through the waterline (Task 20 bob restored: 0.45·bs)', /function floatBob/.test(dp) && /bs \* 0\.45;/.test(dp));
 check('committed repo asset loader (generated once, saved permanently)', /loadCommitted/.test(dp) && /ASSET_VER/.test(dp) && /assets', 'scenes/.test(dp));
-check('day master baked with NO sun (compose adds the hour per phase)', /NO sun — compose adds the hour/.test(dp));
-check('diegetic "THE POND" sign on the dock (the overlay that explains the place)', /THE POND/.test(dp) && /the sign: "THE POND" on a post/.test(dp));
-check('dayNight cycle wired into the compose (grade + lantern/moon lights)', /dayNight\.grade\(c2, master\.gw, master\.gh, phase\)/.test(dp) && /dayNight\.light\(c2, lantern\.x/.test(dp));
+check('master bakes NO sun — compose owns the hour (no twin suns)', !/fillStyle = P\.sun/.test(dp) && /paintCelestial.c2, master.gw, master.gh, i \/ FRAMES, phase./.test(dp));
+check('girl-scene sign is GONE — the established banner explains the place now (Task 22)', !/the sign: .THE POND. on a post/.test(dp) && /drawBanner/.test(dp));
+check('dayNight cycle wired into the compose (grade + post-lantern/pool lights)', /dayNight.grade.c2, master.gw, master.gh, phase./.test(dp) && /dockAnchors/.test(dp) && /dayNight.light.c2, A.post.x/.test(dp));
 check('biome washes keep the 5 realms distinct over the one master', /WASHERS/.test(dp) && /desert: \{/.test(dp) && /volcanic: \{/.test(dp));
-check('compose cached per (biome, level, phase, band) — pondcompose kind', /pgc1:\$\{biome\}:L\$\{lvl\}:\$\{phase\}:\$\{band\}/.test(dp) && /mediaCache\.cached\('pondcompose'/.test(dp));
-check('RESULT PLATE: explains the pond + shows the catch, rarity-coloured', /drawResultPlate/.test(dp) && /The Pond/.test(dp) && /RARITY_COL/.test(dp));
-check('final GIF cached per loot plate (pg2 + plateKey)', /pg2:\$\{biome\}:L\$\{lvl\}:\$\{phase\}:\$\{band\}:\$\{plateKey\}/.test(dp) && /mediaCache\.cached\('fishgif'/.test(dp));
-check('rarity signalled only AFTER the roll (overlay contract)', /rarity-safe/.test(dp));
+check('compose cached per (biome, level, phase, band) — pondcompose kind', /pgc2:\${biome}:L\${lvl}:\${phase}:\${band}/.test(dp) && /mediaCache.cached.'pondcompose'/.test(dp));
+check('RESULT OVERLAY = the ESTABLISHED banner (structureScenes.drawBanner, owner Task 22)', /scenes.drawBanner.c2, c.gw, c.gh, ribbon./.test(dp) && /BANNER_FROM_FRAME/.test(dp) && !/drawResultPlate/.test(dp));
+check('final GIF cached per loot banner (pg3 + plateKey)', /pg3:\${biome}:L\${lvl}:\${phase}:\${band}:\${plateKey}/.test(dp) && /mediaCache.cached.'fishgif'/.test(dp));
+check('rarity signalled only AFTER the roll (overlay contract)', /never pre-signals rarity/.test(dp));
 check('RARE→carp approach, EPIC→big koi + splash', /band === 'mid' \|\| band === 'epic'/.test(dp) && /band === 'epic'/.test(dp));
 check('GIF params: 480×360, 16 frames, 120ms', /GW = 480, GH = 360, FRAMES = 16, DELAY_MS = 120/.test(dp));
 check('container roundtrip guards: magic + frame count', /CONTAINER_MAGIC/.test(dp) && /c\.pngs\.length !== FRAMES/.test(dp));
@@ -68,7 +68,7 @@ check('fixed waterline the body crosses (wlY = by + bs·0.55)', /wlY: by \+ bs \
 check('dry/wet clip split at the waterline (body visibly in the water)', /rect\(bx - bs \* 1\.3, 0, bs \* 2\.6, wlY\)/.test(dp) && /rect\(bx - bs \* 1\.3, wlY/.test(dp));
 check('antenna tip rides highest, drawn per half (last to go under)', /byy - bs \* 1\.5/.test(dp));
 check('bite pulls the float UNDER (dip 1.35·bs at peak)', /dip = bite \* bs \* 1\.35/.test(dp));
-check('overlay re-draws line+float via the same paintFloat (rod false, dip passed)', /paintFloat\(ctx, w, h, t, P, \{ rod: false, line: true, dip, rodFrom: girl\.hands/.test(dp));
+check('overlay re-draws line+float via the same paintFloat (rod false, dip passed)', /paintFloat\(ctx, w, h, t, P, \{ rod: false, line: true, dip \}/.test(dp));
 check('contact ripple breathes with the bob', /contact ripple/.test(dp));
 check('container magic is parameterised (huntPov reuses the packer)', /function packContainer\(gw, gh, delayMs, pngs, magic = CONTAINER_MAGIC\)/.test(dp) && /function unpackContainer\(buf, magic = CONTAINER_MAGIC\)/.test(dp));
 
@@ -182,3 +182,12 @@ if (!canvasOk) {
     console.log(`${'='.repeat(54)}\nRESULT: ${pass} passed, ${fail} failed\n${'='.repeat(54)}`);
     process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error('QA crashed:', e); process.exit(1); });
+
+
+// ── Task 22 motion + overlay pins (owner: "the water looks like it's moving,
+// and the fish too" + "use the established overlay style") ──
+check('THE WATER MOVES: traveling wave crests per band (parallax, alternating direction)', /traveling wave crests per band/.test(dp) && /const sp = 0\.045 \+ b \* 0\.02/.test(dp));
+check('THE WATER MOVES: drifting ripple rings (two staggered, swell + fade)', /drifting ripple rings/.test(dp) && /t \* 0\.5 \+ k \* 0\.5/.test(dp));
+check('THE FISH SWIM: 2-4x old speed + strong tail beat (readable in one loop)', /const speed = 0\.05 \+ rng/.test(dp) && /Math\.sin\(t \* Math\.PI \* 6/.test(dp));
+check('banner accepted from the caller (res.banner) with a plateLines fallback', /banner = null/.test(dp) && /plateLines..fish., drops./.test(dp));
+check('banner rides the LAST 5 frames only (after the bite, never pre-signals)', /BANNER_FROM_FRAME = FRAMES - 5/.test(dp) && /i >= BANNER_FROM_FRAME/.test(dp));

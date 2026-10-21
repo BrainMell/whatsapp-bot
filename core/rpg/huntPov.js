@@ -4,7 +4,8 @@
 //  "make something like that for hunting too, find the appropriate animal
 //  sprites for that sprite sheet, and add the overlay to both" · Task 21:
 //  "find sprites of deers that fit and other animals grazing and fill them
-//  in. Place some grass around too." + the shared day/night cycle).
+//  in. Place some grass around too." · Task 22 UNDO/REBUILD: the pixel-block
+//  herd was torn out and redrawn in the established flat-shaded card style. + the shared day/night cycle).
 //
 //  Same contract as the pond (dockPov.js), applied to the hunt:
 //    • ANIMAL SPRITE SHEET — rabbit / boar / stag walk+hop cycles drawn in the
@@ -32,15 +33,16 @@ const hashStr = (s) => K.hashStr(String(s || ''));
 
 const GW = 480, GH = 360, FRAMES = 16, DELAY_MS = 120;   // 1.92s loop
 const CONTAINER_MAGIC = 'HUNTPOV1';
-const SHEET_MAGIC = 'HUNTSPR2';
-const CW = 96, CH = 72, COLS = 4;                        // sheet cell geometry
+const SHEET_MAGIC = 'HUNTSPR3';
+const CW = 128, CH = 96, COLS = 4;                       // sheet cell geometry (Task 22: bigger cells for the vector art)
 // Task 21: the sheet grew a proper deer herd + other grazing animals —
 // rabbit / boar / stag / alert-stag / DOE / DOE-GRAZING / FAWN / SHEEP.
 const ROW = { rabbit: 0, boar: 1, stag: 2, alert: 3, doe: 4, graze: 5, fawn: 6, sheep: 7 };
 const SHEET_ROWS = 8;
-// Uniform fit-scale: the tallest art (stag + antlers ≈ 50u) must stay inside
-// the 72px cell — 1.3 keeps every animal whole with a consistent pixel chunk.
-const SHEET_FIT = 1.3;
+// Blit compensation: the old 96×72 cells blitted at scale sc; the new vector
+// cells are 128×96, so every blit multiplies by 72/96 to keep the animals the
+// same physical size in the frame (and the epic glint anchors follow suit).
+const SHEET_COMP = 0.75;
 
 // ── biome palettes (flat, GIF-quantizer friendly) ──────────────────────────
 // sky 3 bands · cloud 2 tones · far treeline + dark · meadow far→near ·
@@ -284,7 +286,7 @@ function blitWildlife(ctx, w, h, t, sheet, { biome = 'isle', lvl = 1 } = {}) {
         if (row === ROW.graze) pose = Math.floor((((t * 1.7 + a.depth) % 1)) * 4);   // slow nibble
         else if (row === ROW.sheep) pose = Math.floor((((t * 1.4 + a.depth) % 1)) * 4);
         else if (row === ROW.fawn) pose = Math.floor((t * 3 + a.depth) % 4);         // hop-shuffle
-        blitAnimal(ctx, sheet, row, pose, a.x, a.y, a.sc, a.flip);
+        blitAnimal(ctx, sheet, row, pose, a.x, a.y, a.sc * SHEET_COMP, a.flip);
     }
 }
 
@@ -306,123 +308,154 @@ function campAnchors(w, h) {
 //  and kept through mediaCache ("find sprites of deers that fit and other
 //  animals grazing and fill them in" — same flat-shaded style as the camp).
 // ═══════════════════════════════════════════════════════════════════════════
-function px(ctx, x, y, w2, h2, col) { ctx.fillStyle = col; ctx.fillRect(x, y, w2, h2); }
-/** Draw one animal cell at origin (bottom-centre of its cell). pose 0..3. */
+// ── shared flat-shaded helpers — the ESTABLISHED card-art technique: the same
+// ellipse-body + stroked-limb language as structureScenes.drawDeer/drawBoar.
+// Task 22 rebuild (owner: "the hunting animals??? did you even inspect them???"
+// — fair: the old cells were fillRect pixel blocks that read as boxy llamas).
+function shadeAt(ctx, x, y, rx, ry, a = 0.25) { ctx.save(); ctx.fillStyle = `rgba(20,14,6,${a})`; ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+function strokeLeg(ctx, x1, y1, x2, y2, col, lw) { ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
+const TROT = [0.55, 0, -0.55, 0];   // leg swing (s units) per pose — diagonal pairs
+
+/** Draw one animal cell at origin (bottom-centre of its cell, ground at y=0).
+ *  pose 0..3. Curved, stroked, properly proportioned — the herd finally fits
+ *  the camp art it lives in. */
 function paintAnimal(ctx, kind, pose) {
-    const u = 2;                                  // pixel unit
-    const legA = [0.5, 0, -0.5, 0][pose % 4];     // simple trot swing
-    if (kind === 'rabbit') {
-        const squash = pose === 0 ? 1.25 : pose === 2 ? 0.85 : 1;   // crouch/air
-        const lift = pose === 2 ? -3 * u : 0;
-        const bw = 11 * u, bh = 5 * u * squash, by = -bh - lift;
-        px(ctx, -7 * u, by, 14 * u, bh, '#b8a48c');                              // body
-        px(ctx, -8 * u, by + 2 * u, 3 * u, 3 * u, '#f0e8d8');                    // tail puff
-        px(ctx, 3 * u, by - 2 * u, 5 * u, 4 * u, '#c4b098');                     // head
-        px(ctx, 7 * u, by - 1 * u, 1.5 * u, 1.5 * u, '#241a10');                 // eye
-        px(ctx, 4 * u, by - 6 * u, 1.5 * u, 5 * u, '#b8a48c');                   // ear 1
-        px(ctx, 6 * u, by - 5.5 * u, 1.5 * u, 4.5 * u, '#a89880');               // ear 2
-        px(ctx, 4 * u, by + bh, 2 * u, 2.5 * u, '#8a7a64');                      // front leg
-        px(ctx, -5 * u, by + bh, 2.5 * u, 2.5 * u + (pose === 1 ? 1.5 * u : 0), '#8a7a64'); // hind leg
-        px(ctx, 1 * u, by + bh, 2 * u, 2 * u, '#9a8a72');                        // mid leg
-    } else if (kind === 'boar') {
-        const by = -6 * u;
-        for (const [lx, la] of [[-5, legA], [-2, -legA], [2, legA], [5, -legA]]) {
-            px(ctx, lx * u, -3 * u, 1.8 * u, 3 * u + Math.abs(la) * u * 0.4, '#2e2014');   // feet on the ground, top inside the body
-        }
-        px(ctx, -6 * u, by, 12 * u, 5 * u, '#4a3526');                           // body
-        px(ctx, 3 * u, by - 1 * u, 5 * u, 4 * u, '#5c4331');                     // shoulder/head
-        px(ctx, 7.5 * u, by + 1 * u, 2.5 * u, 2 * u, '#c99a86');                 // snout
-        px(ctx, 7 * u, by + 2.5 * u, 1.2 * u, 2 * u, '#f1e6c8');                 // tusk
-        px(ctx, 5 * u, by - 0.5 * u, 1.5 * u, 1.5 * u, '#120a04');               // eye
-        px(ctx, 2 * u, by - 2 * u, 2.5 * u, 2 * u, '#4a3526');                   // ear
-        px(ctx, -7.5 * u, by - 1 * u, 1.5 * u, 3 * u, '#241810');                // tail nub
-        px(ctx, -4 * u, by + 1 * u, 4 * u, 1.2 * u, '#3a2a1c');                  // bristle strip
-    } else if (kind === 'doe' || kind === 'graze') {
-        // the doe: the stag's frame with NO antlers, slimmer + a lighter coat;
-        // 'graze' drops her head into the grass and nibbles (pose varies the bite)
-        const grazing = kind === 'graze';
-        const by = -9 * u, headDip = grazing ? 6.5 * u + Math.sin(pose * 1.57) * 1.2 * u : 0;
-        const tail = pose % 2 ? 1.2 * u : 0;                       // idle tail flick
-        for (const [lx, la] of [[-5, legA], [-2.5, -legA], [2.5, legA], [5.5, -legA]]) {
-            px(ctx, lx * u, -6 * u, 1.5 * u, 6 * u + Math.abs(la) * u * 0.4, '#7a4c24');
-        }
-        px(ctx, -6 * u, by, 12 * u, 4.2 * u, '#b07a44');           // body (lighter than the stag)
-        px(ctx, -4 * u, by + 3 * u, 8 * u, 1.4 * u, '#e8d0a4');    // belly
-        px(ctx, -7.5 * u, by - 0.5 * u - tail, 2 * u, 3 * u, '#f4ead6');   // tail
-        px(ctx, 3 * u, by - 5 * u + headDip * 0.4, 2.3 * u, 6 * u, '#b07a44');   // neck
-        if (grazing) {
-            px(ctx, 4.5 * u, by - 2.6 * u + headDip * 0.9, 4.5 * u, 2.1 * u, '#b07a44');   // head down in the grass
-            px(ctx, 8.6 * u, by - 1.8 * u + headDip * 0.9, 1.2 * u, 1.2 * u, '#2a1a0c');
-            px(ctx, 6.5 * u, by - 2.2 * u + headDip * 0.9, 1.2 * u, 1.2 * u, '#241810');
-            px(ctx, 4 * u, by - 4.2 * u + headDip * 0.9, 1.8 * u, 2.6 * u, '#8a5a2c');     // ear
-        } else {
-            px(ctx, 4.5 * u, by - 7 * u, 4.5 * u, 2.2 * u, '#b07a44');   // head high
-            px(ctx, 8.5 * u, by - 6.4 * u, 1.3 * u, 1.3 * u, '#2a1a0c');
-            px(ctx, 6.5 * u, by - 6.8 * u, 1.2 * u, 1.2 * u, '#241810');
-            px(ctx, 4 * u, by - 8 * u, 1.8 * u, 3 * u, '#8a5a2c');
-        }
-    } else if (kind === 'fawn') {
-        // the baby: half-size, spotted back; little hop-shuffle poses
-        const hop = pose === 1 ? -1.6 * u : 0;
-        const by = -5 * u + hop;
-        for (const [lx, la] of [[-3.5, legA], [-1.5, -legA], [1.5, legA], [3.5, -legA]]) {
-            px(ctx, lx * u, -3 * u, 1.1 * u, 3 * u + Math.abs(la) * u * 0.3, '#7a4c24');
-        }
-        px(ctx, -4 * u, by, 8 * u, 3 * u, '#c08a50');
-        for (const [sx2, sy2] of [[-2.5, 0.5], [-0.5, 1.2], [1.5, 0.5], [-1.5, 1.8], [0.5, 2.1]]) {
-            px(ctx, sx2 * u, by + sy2 * u, 0.9 * u, 0.9 * u, '#f0e2c0');   // white spots
-        }
-        px(ctx, 2.5 * u, by - 3.4 * u, 2 * u, 4 * u, '#c08a50');       // neck
-        px(ctx, 3.5 * u, by - 4.6 * u, 3.2 * u, 1.8 * u, '#c08a50');   // head
-        px(ctx, 6.2 * u, by - 4.1 * u, 1 * u, 1 * u, '#2a1a0c');       // nose
-        px(ctx, 5 * u, by - 4.3 * u, 0.9 * u, 0.9 * u, '#241810');     // eye
-        px(ctx, 3 * u, by - 5.6 * u, 1.4 * u, 2 * u, '#9a6a38');       // ear
-    } else if (kind === 'sheep') {
-        // the other grazer: round woolly body, dark face + legs, nibbling
-        const by = -7 * u, headDip = 4.5 * u + Math.sin(pose * 1.57) * 1 * u;
-        const wool = '#f0ead8', woolD = '#d8d0bc';
-        for (const [lx, la] of [[-4, legA], [-1.5, -legA], [1.5, legA], [4, -legA]]) {
-            px(ctx, lx * u, -3 * u, 1.4 * u, 3 * u, '#3a3228');
-        }
-        px(ctx, -6 * u, by, 12 * u, 4.6 * u, wool);                // wool body
-        px(ctx, -5 * u, by - 1 * u, 10 * u, 1.6 * u, woolD);       // wool shading
-        px(ctx, 4.5 * u, by - 1.5 * u + headDip * 0.55, 2 * u, 4 * u, '#3a3228');  // neck
-        px(ctx, 5 * u, by + headDip, 3.4 * u, 2 * u, '#3a3228');   // head down grazing
-        px(ctx, 7.8 * u, by + 1.2 * u + headDip, 1 * u, 1 * u, '#181008'); // eye
-        px(ctx, 3.8 * u, by - 2.4 * u + headDip * 0.4, 1.5 * u, 1.5 * u, '#2e2820'); // ear
-        px(ctx, -7 * u, by - 0.6 * u, 1.4 * u, 2.4 * u, wool);     // woolly tail
-    } else {                                                                       // stag (walk + alert)
+    const s = CH * 0.33;                      // body scale inside the cell
+    const legA = TROT[pose % 4];
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    if (kind === 'stag' || kind === 'alert' || kind === 'doe' || kind === 'graze' || kind === 'fawn') {
+        const fawn = kind === 'fawn';
+        const doe = kind === 'doe' || kind === 'graze' || fawn;
         const alert = kind === 'alert';
-        const by = -9 * u, headUp = alert ? 2.5 * u : 0;
-        for (const [lx, la] of [[-5, legA], [-2.5, -legA], [2.5, legA], [5.5, -legA]]) {
-            px(ctx, lx * u, -6 * u, 1.6 * u, 6 * u + Math.abs(la) * u * 0.4, '#6e4220');   // top tucks INTO the body, feet on the ground
+        const grazing = kind === 'graze';
+        const k = fawn ? 0.58 : doe ? 0.92 : 1;                 // size factor
+        const body = fawn ? '#c08a50' : doe ? '#b07a44' : '#a86a38';
+        const dark = fawn ? '#7a4c24' : doe ? '#7a4c24' : '#6e4220';
+        const belly = fawn ? '#e8cfa0' : '#e0c08e';
+        const ss = s * k;
+        const bob = alert ? 0 : Math.sin(pose * Math.PI / 2) * 0.035 * ss;   // walk bob
+        ctx.save(); ctx.translate(0, bob);
+        shadeAt(ctx, 0, 0.02 * ss, 1.2 * ss, 0.16 * ss);
+        // far legs (dark), body, near legs — diagonal trot pairs
+        for (const [lx, o] of [[-0.62, legA], [0.55, -legA]]) {
+            strokeLeg(ctx, lx * ss + 0.1 * ss, -0.75 * ss, lx * ss + o * ss * 0.35, -0.02 * ss, dark, 0.13 * ss);
         }
-        px(ctx, -6 * u, by, 12 * u, 4.5 * u, '#a86a38');                         // body
-        px(ctx, -4 * u, by + 3 * u, 8 * u, 1.5 * u, '#e0c08e');                  // belly
-        px(ctx, -7.5 * u, by - 0.5 * u, 2 * u, 3 * u, '#f4ead6');                // tail
-        px(ctx, 3 * u, by - 5 * u - headUp * 0.4, 2.5 * u, 6 * u, '#a86a38');    // neck
-        px(ctx, 4.5 * u, by - 7 * u - headUp, 4.5 * u, 2.2 * u, '#a86a38');      // head
-        px(ctx, 8.5 * u, by - 6.4 * u - headUp, 1.3 * u, 1.3 * u, '#2a1a0c');    // nose
-        px(ctx, 6.5 * u, by - 6.8 * u - headUp, 1.2 * u, 1.2 * u, '#241810');    // eye
-        px(ctx, 4 * u, by - 8 * u - headUp, 1.8 * u, 3 * u, '#8a5a2c');          // ear
-        const ay = by - 8.6 * u - headUp, ant = alert ? '#f0e0b0' : '#e6d3a8';   // antlers (brighter when alert)
-        px(ctx, 4.5 * u, ay - 4 * u, 1.2 * u, 4.5 * u, ant);
-        px(ctx, 3 * u, ay - 3.4 * u, 1.6 * u, 1.2 * u, ant); px(ctx, 6 * u, ay - 3.6 * u, 1.6 * u, 1.2 * u, ant);
-        px(ctx, 7 * u, ay - 3.2 * u, 1.2 * u, 3.4 * u, ant);
-        px(ctx, 8.2 * u, ay - 2.6 * u, 1.4 * u, 1.2 * u, ant); px(ctx, 6.2 * u, ay - 2.4 * u, 1.4 * u, 1.2 * u, ant);
+        ctx.fillStyle = body; ctx.strokeStyle = dark; ctx.lineWidth = 0.05 * ss;
+        ctx.beginPath(); ctx.ellipse(0, -0.95 * ss, 0.95 * ss, 0.46 * ss, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = belly; ctx.beginPath(); ctx.ellipse(0.05 * ss, -0.72 * ss, 0.7 * ss, 0.17 * ss, 0, 0, Math.PI); ctx.fill();
+        for (const [lx, o] of [[-0.45, -legA], [0.7, legA]]) {
+            strokeLeg(ctx, lx * ss, -0.7 * ss, lx * ss + o * ss * 0.35, -0.02 * ss, dark, 0.13 * ss);
+        }
+        // tail
+        ctx.fillStyle = '#f4ead6'; ctx.beginPath(); ctx.ellipse(-0.98 * ss, -1.08 * ss, 0.1 * ss, 0.17 * ss, -0.5, 0, Math.PI * 2); ctx.fill();
+        // neck + head — high, or down in the grass when grazing
+        ctx.fillStyle = body; ctx.strokeStyle = dark; ctx.lineWidth = 0.05 * ss;
+        if (grazing) {
+            const nib = Math.sin(pose * Math.PI / 2) * 0.06 * ss;
+            ctx.beginPath(); ctx.moveTo(0.65 * ss, -1.25 * ss); ctx.lineTo(0.95 * ss, -0.75 * ss + nib);
+            ctx.lineTo(1.28 * ss, -0.62 * ss + nib); ctx.lineTo(1.0 * ss, -1.0 * ss); ctx.closePath(); ctx.fill(); ctx.stroke();
+            ctx.beginPath(); ctx.ellipse(1.3 * ss, -0.6 * ss + nib, 0.3 * ss, 0.17 * ss, -0.35, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+            ctx.fillStyle = '#2a1a0c'; ctx.beginPath(); ctx.arc(1.56 * ss, -0.5 * ss + nib, 0.045 * ss, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = body; ctx.beginPath(); ctx.ellipse(1.06 * ss, -0.82 * ss + nib, 0.09 * ss, 0.2 * ss, 0.6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        } else {
+            const hy = alert ? 0.16 * ss : 0;
+            ctx.beginPath(); ctx.moveTo(0.65 * ss, -1.25 * ss); ctx.lineTo(1.0 * ss, -1.95 * ss - hy);
+            ctx.lineTo(1.28 * ss, -1.85 * ss - hy); ctx.lineTo(1.0 * ss, -1.0 * ss); ctx.closePath(); ctx.fill(); ctx.stroke();
+            ctx.beginPath(); ctx.ellipse(1.28 * ss, -1.9 * ss - hy, 0.3 * ss, 0.17 * ss, 0.35, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+            ctx.fillStyle = '#2a1a0c'; ctx.beginPath(); ctx.arc(1.52 * ss, -1.84 * ss - hy, 0.045 * ss, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(1.3 * ss, -1.95 * ss - hy, 0.035 * ss, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = body; ctx.beginPath(); ctx.ellipse(1.05 * ss, -2.05 * ss - hy, 0.1 * ss, 0.2 * ss, -0.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        }
+        // fawn spots
+        if (fawn) {
+            ctx.fillStyle = '#f0e2c0';
+            for (const [pxx, pyy] of [[-0.5, -1.05], [-0.15, -1.18], [0.2, -1.05], [-0.35, -0.85], [0.05, -0.82]]) {
+                ctx.beginPath(); ctx.ellipse(pxx * ss, pyy * ss, 0.055 * ss, 0.04 * ss, 0, 0, Math.PI * 2); ctx.fill();
+            }
+        }
+        // antlers (stag/alert only) — branched, pale gold
+        if (!doe) {
+            ctx.strokeStyle = alert ? '#f0e0b0' : '#e6d3a8'; ctx.lineWidth = 0.06 * ss;
+            const br = (bx, by, dx, dy) => { ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + dx * ss, by + dy * ss); ctx.stroke(); };
+            const ax = 1.12 * ss, ay = (grazing ? -0.85 : -2.1) * ss - (alert ? 0.16 * ss : 0);
+            br(ax, ay, -0.12, -0.55); br(ax - 0.12 * ss, ay - 0.55 * ss, -0.22, -0.18); br(ax - 0.12 * ss, ay - 0.55 * ss, 0.14, -0.2); br(ax - 0.05 * ss, ay - 0.3 * ss, 0.25, -0.12);
+            br(ax + 0.12 * ss, ay + 0.02 * ss, 0.1, -0.5); br(ax + 0.22 * ss, ay - 0.48 * ss, 0.2, -0.14); br(ax + 0.22 * ss, ay - 0.48 * ss, -0.08, -0.22);
+        }
+        ctx.restore();
+    } else if (kind === 'boar') {
+        const ss = s * 0.9;
+        const bob = Math.sin(pose * Math.PI / 2) * 0.03 * ss;
+        ctx.save(); ctx.translate(0, bob);
+        shadeAt(ctx, 0, 0.02 * ss, 1.1 * ss, 0.15 * ss);
+        const body = '#4a3526', dark = '#241810';
+        for (const lx of [-0.55, -0.25, 0.3, 0.6]) {
+            const o = (lx < 0 ? legA : -legA) * 0.35 * ss;
+            strokeLeg(ctx, lx * ss, -0.5 * ss, lx * ss + o, -0.02 * ss, dark, 0.14 * ss);
+        }
+        ctx.fillStyle = body; ctx.strokeStyle = dark; ctx.lineWidth = 0.05 * ss;
+        ctx.beginPath(); ctx.ellipse(0, -0.78 * ss, 0.9 * ss, 0.5 * ss, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#5c4331'; ctx.beginPath(); ctx.ellipse(0.7 * ss, -0.8 * ss, 0.42 * ss, 0.4 * ss, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#c99a86'; ctx.beginPath(); ctx.ellipse(1.12 * ss, -0.7 * ss, 0.17 * ss, 0.14 * ss, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = '#f1e6c8'; ctx.lineWidth = 0.06 * ss;
+        ctx.beginPath(); ctx.moveTo(1.02 * ss, -0.62 * ss); ctx.quadraticCurveTo(1.12 * ss, -0.42 * ss, 1.0 * ss, -0.4 * ss); ctx.stroke();
+        ctx.fillStyle = '#120a04'; ctx.beginPath(); ctx.arc(0.92 * ss, -0.92 * ss, 0.045 * ss, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = body; ctx.strokeStyle = dark; ctx.lineWidth = 0.04 * ss;
+        ctx.beginPath(); ctx.moveTo(0.62 * ss, -1.12 * ss); ctx.lineTo(0.78 * ss, -1.38 * ss); ctx.lineTo(0.9 * ss, -1.08 * ss); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = dark; ctx.lineWidth = 0.07 * ss;
+        const tf = Math.sin(pose * Math.PI / 2) * 0.06 * ss;
+        ctx.beginPath(); ctx.moveTo(-0.85 * ss, -0.9 * ss); ctx.quadraticCurveTo(-1.1 * ss, -1.0 * ss + tf, -1.05 * ss, -0.78 * ss + tf); ctx.stroke();
+        ctx.restore();
+    } else if (kind === 'sheep') {
+        const ss = s * 0.78;
+        const nib = Math.sin(pose * Math.PI / 2) * 0.05 * ss;
+        ctx.save();
+        shadeAt(ctx, 0, 0.02 * ss, 1.1 * ss, 0.14 * ss);
+        const wool = '#f0ead8', woolD = '#d8d0bc', face = '#3a3228';
+        for (const [lx, o] of [[-0.5, legA], [0.45, -legA]]) {
+            strokeLeg(ctx, lx * ss, -0.55 * ss, lx * ss + o * ss * 0.3, -0.02 * ss, face, 0.12 * ss);
+        }
+        // woolly body — overlapping puffs
+        ctx.fillStyle = wool; ctx.strokeStyle = woolD; ctx.lineWidth = 0.04 * ss;
+        for (const [pxx, pyy, pr] of [[-0.55, -0.85, 0.42], [-0.1, -1.0, 0.48], [0.4, -0.9, 0.44], [0.62, -0.62, 0.34], [-0.6, -0.55, 0.36], [0, -0.62, 0.5]]) {
+            ctx.beginPath(); ctx.ellipse(pxx * ss, pyy * ss, pr * ss, pr * 0.85 * ss, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        }
+        // dark head down in the grass + ear + wool tuft
+        ctx.fillStyle = face; ctx.strokeStyle = '#2a241c'; ctx.lineWidth = 0.035 * ss;
+        ctx.beginPath(); ctx.ellipse(0.98 * ss, -0.4 * ss + nib, 0.3 * ss, 0.2 * ss, -0.3, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#2a241c'; ctx.beginPath(); ctx.arc(1.18 * ss, -0.34 * ss + nib, 0.035 * ss, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = wool; ctx.beginPath(); ctx.ellipse(0.72 * ss, -0.62 * ss + nib, 0.14 * ss, 0.12 * ss, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = face; ctx.beginPath(); ctx.ellipse(0.82 * ss, -0.52 * ss + nib, 0.1 * ss, 0.06 * ss, 0.5, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+    } else {   // rabbit — hop cycle: crouch / stretch-air / land / sit
+        const ss = s * 0.62;
+        const squash = pose === 0 ? 1.2 : pose === 1 ? 0.85 : pose === 2 ? 0.9 : 1;
+        const lift = pose === 1 ? -0.3 * ss : 0;
+        ctx.save(); ctx.translate(0, lift);
+        shadeAt(ctx, 0, 0.02 * ss - lift * 0.5, 0.8 * ss, 0.12 * ss, 0.22 - (lift ? 0.08 : 0));
+        const fur = '#b8a48c', furD = '#8a7a64';
+        ctx.fillStyle = fur; ctx.strokeStyle = furD; ctx.lineWidth = 0.05 * ss;
+        ctx.beginPath(); ctx.ellipse(-0.25 * ss, -0.5 * ss * squash, 0.55 * ss, 0.4 * ss * squash, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(0.42 * ss, -0.72 * ss * squash, 0.26 * ss, 0.22 * ss, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        for (const [ex, rot] of [[0.5, -0.35], [0.62, 0.15]]) {
+            ctx.beginPath(); ctx.ellipse(ex * ss, -1.05 * ss * squash, 0.07 * ss, 0.26 * ss, rot, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        }
+        ctx.fillStyle = '#241a10'; ctx.beginPath(); ctx.arc(0.5 * ss, -0.74 * ss * squash, 0.04 * ss, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#f0e8d8'; ctx.beginPath(); ctx.ellipse(-0.72 * ss, -0.52 * ss * squash, 0.14 * ss, 0.13 * ss, 0, 0, Math.PI * 2); ctx.fill();
+        strokeLeg(ctx, -0.3 * ss, -0.3 * ss * squash, (-0.42 + legA * 0.3) * ss, -0.02 * ss, furD, 0.1 * ss);
+        strokeLeg(ctx, 0.4 * ss, -0.42 * ss * squash, (0.44 - legA * 0.3) * ss, -0.02 * ss, furD, 0.08 * ss);
+        ctx.restore();
     }
 }
+
 /** Bake (once) the sprite sheet PNG — 8 rows × 4 cols of CW×CH cells. */
 async function getHuntSpriteSheet() {
-    const out = await mediaCache.cached('huntsprites', 'hs2', async () => {
+    const out = await mediaCache.cached('huntsprites', 'hs3', async () => {
         const { createCanvas } = require('canvas');
         const cv = createCanvas(CW * COLS, CH * SHEET_ROWS), c2 = cv.getContext('2d');
-        c2.imageSmoothingEnabled = false;
         const kinds = Object.keys(ROW);
         for (let r = 0; r < SHEET_ROWS; r++) {
             for (let p = 0; p < COLS; p++) {
-                c2.save(); c2.translate(p * CW + CW / 2, (r + 1) * CH - 3);  // col p, row r
-                c2.scale(SHEET_FIT, SHEET_FIT);    // fit-scale: whole animal in every cell
+                c2.save(); c2.translate(p * CW + CW / 2, (r + 1) * CH - 4);  // col p, row r, ground near cell bottom
                 paintAnimal(c2, kinds[r], p);
                 c2.restore();
             }
@@ -438,12 +471,12 @@ async function getHuntSpriteSheet() {
 }
 /** Blit a sheet cell (with ground shadow) — flip for leftward travel. */
 function blitAnimal(ctx, sheet, row, col, x, y, scale = 1, flip = false, shadow = true) {
-    const dw = CW * scale, dh = CH * scale;
+    const dw = CW * scale * SHEET_COMP, dh = CH * scale * SHEET_COMP;
     if (shadow) {
         ctx.fillStyle = 'rgba(20,14,6,0.30)';
         ctx.beginPath(); ctx.ellipse(x, y - 2, dw * 0.3, dh * 0.05, 0, 0, Math.PI * 2); ctx.fill();
     }
-    ctx.save(); ctx.imageSmoothingEnabled = false;
+    ctx.save(); ctx.imageSmoothingEnabled = true;
     ctx.translate(Math.round(x), Math.round(y)); if (flip) ctx.scale(-1, 1);
     ctx.drawImage(sheet, col * CW, row * CH, CW, CH, -dw / 2, -dh, dw, dh);
     ctx.restore();
@@ -459,14 +492,14 @@ function paintHuntOverlay(ctx, w, h, t, band, sheet) {
             const x = w * (0.14 + 0.66 * u), gy = hz + (h - hz) * 0.56;
             const hop = Math.abs(Math.sin(u * Math.PI * 3)) * h * 0.035;
             const pose = Math.floor((u * 3 % 1) * 4) % 4;
-            blitAnimal(ctx, sheet, ROW.rabbit, pose, x, gy - hop, 0.62);
+            blitAnimal(ctx, sheet, ROW.rabbit, pose, x, gy - hop, 0.62 * SHEET_COMP);
         }
     } else if (band === 'mid') {
         // boar: trots in from the right, snout down, dust at its heels
         const u = Math.min(1, Math.max(0, (t - 0.04) / 0.9));
         if (u > 0 && u < 1) {
             const x = w * (0.88 - 0.74 * u), gy = hz + (h - hz) * (0.5 + 0.14 * u);
-            const sc = 1.5 + 0.3 * u, pose = Math.floor(u * 10) % 4;
+            const sc = (1.5 + 0.3 * u) * SHEET_COMP, pose = Math.floor(u * 10) % 4;
             for (let d = 0; d < 3; d++) {   // dust puffs behind
                 const da = Math.min(1, Math.max(0, u * 10 - Math.floor(u * 10)));
                 ctx.fillStyle = `rgba(200,180,140,${0.35 * (1 - da) * (1 - d * 0.3)})`;
@@ -491,12 +524,12 @@ function paintHuntOverlay(ctx, w, h, t, band, sheet) {
             if (t < PAUSE0) {
                 const u = (t - IN) / (PAUSE0 - IN);
                 x = w * (GAPX + 0.02 - 0.05 * u); gy = hz + (h - hz) * (0.44 + 0.2 * u);
-                sc = 0.8 + 0.25 * u; row = ROW.stag; pose = Math.floor(u * 8) % 4;
+                sc = (0.8 + 0.25 * u) * SHEET_COMP; row = ROW.stag; pose = Math.floor(u * 8) % 4;
             } else if (t < PAUSE1) {
-                x = w * (GAPX - 0.03); gy = hz + (h - hz) * 0.64; sc = 1.05; row = ROW.alert; pose = 0;
+                x = w * (GAPX - 0.03); gy = hz + (h - hz) * 0.64; sc = 1.05 * SHEET_COMP; row = ROW.alert; pose = 0;
                 if (t > 0.6 && t < 0.74) {   // antler glint — the crown reads gold
                     const gl = Math.sin(((t - 0.6) / 0.14) * Math.PI);
-                    const gx = x + 26 * sc, gyy = gy - CH * sc + 12 * sc;
+                    const gx = x + 26 * sc, gyy = gy - CH * sc + 12 * sc;   // sc already compensated
                     ctx.strokeStyle = `rgba(244,224,160,${0.5 + 0.5 * gl})`; ctx.lineWidth = Math.max(1, h * 0.004);
                     const r = (4 + gl * 6) * sc;
                     ctx.beginPath(); ctx.moveTo(gx - r, gyy); ctx.lineTo(gx + r, gyy); ctx.moveTo(gx, gyy - r); ctx.lineTo(gx, gyy + r); ctx.stroke();
@@ -505,7 +538,7 @@ function paintHuntOverlay(ctx, w, h, t, band, sheet) {
             } else {
                 const u = (t - PAUSE1) / (OUT - PAUSE1);
                 x = w * (GAPX - 0.03 + 0.5 * u * u); gy = hz + (h - hz) * (0.64 - 0.06 * u);
-                sc = 1.05; row = ROW.stag; pose = Math.floor(u * 8) % 4;
+                sc = 1.05 * SHEET_COMP; row = ROW.stag; pose = Math.floor(u * 8) % 4;
             }
             blitAnimal(ctx, sheet, row, pose, x, gy, sc);
         }
@@ -522,7 +555,7 @@ function decodePngs(pngs) {
 /** Bake (once) the base frames for a biome+level — the clearing WITH its
  *  grazing herd blitted in (Task 21). Every player shares one bake. */
 async function getHuntBaseFrames({ biome = 'isle', lvl = 1 } = {}) {
-    const key = `hp2:${biome}:L${Math.max(1, Math.min(3, lvl))}`;
+    const key = `hp3:${biome}:L${Math.max(1, Math.min(3, lvl))}`;
     const out = await mediaCache.cached('huntpov', key, async () => {
         const { createCanvas } = require('canvas');
         const sheet = await getHuntSpriteSheet();
@@ -554,7 +587,7 @@ async function getHuntBaseFrames({ biome = 'isle', lvl = 1 } = {}) {
 async function composeHunt({ biome = 'isle', lvl = 1, phase = null, band = 'low' } = {}) {
     lvl = Math.max(1, Math.min(3, lvl));
     phase = phase || dayNight.phaseAt();
-    const key = `hgc1:${biome}:L${lvl}:${phase}:${band}`;
+    const key = `hgc2:${biome}:L${lvl}:${phase}:${band}`;
     return mediaCache.cached('huntcompose', key, async () => {
         const { createCanvas } = require('canvas');
         const base = await getHuntBaseFrames({ biome, lvl });
@@ -585,12 +618,15 @@ async function composeHunt({ biome = 'isle', lvl = 1, phase = null, band = 'low'
 
 /** `.j hunt` — the hunt GIF: kept base frames + hour + THIS hunt's overlay +
  * the grounds/catch plate. Final GIF cached per (biome, lvl, phase, band, loot). */
-async function renderHuntGif({ biome = 'isle', lvl = 1, band = 'low', drops = {}, phase = null } = {}) {
+async function renderHuntGif({ biome = 'isle', lvl = 1, band = 'low', drops = {}, phase = null, banner = null } = {}) {
     lvl = Math.max(1, Math.min(3, lvl));
     phase = phase || dayNight.phaseAt();
-    const lines = dockPov.plateLines('hunt', drops);
-    const plateKey = K.hashStr(JSON.stringify(lines));
-    const key = `hg2:${biome}:L${lvl}:${phase}:${band}:${plateKey}`;
+    const lines = banner && (banner.head || (banner.lines || []).length)
+        ? (banner.lines || []).slice(0, 6)
+        : dockPov.plateLines('hunt', drops);
+    const head = banner && banner.head ? String(banner.head) : 'The Hunting Grounds';
+    const plateKey = K.hashStr(JSON.stringify({ head, lines }));
+    const key = `hg3:${biome}:L${lvl}:${phase}:${band}:${plateKey}`;
     return mediaCache.cached('huntgif', key, async () => {
         const { createCanvas } = require('canvas');
         const { encodeGif } = require('../utils/gif89a');
@@ -603,7 +639,7 @@ async function renderHuntGif({ biome = 'isle', lvl = 1, band = 'low', drops = {}
         for (let i = 0; i < FRAMES; i++) {
             const cv = createCanvas(c.gw, c.gh), c2 = cv.getContext('2d');
             c2.drawImage(imgs[i], 0, 0, c.gw, c.gh);
-            dockPov.drawResultPlate(c2, c.gw, c.gh, { title: 'The Hunting Grounds', lines });
+            if (i >= FRAMES - 5) require('./structureScenes').drawBanner(c2, c.gw, c.gh, { head, lines });   // ESTABLISHED ribbon (Task 22)
             const d = c2.getImageData(0, 0, c.gw, c.gh);
             frames.push(Buffer.from(d.data.buffer, d.data.byteOffset, d.data.byteLength));
         }

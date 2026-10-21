@@ -24,21 +24,21 @@ const sc = R('core/rpg/structureScenes.js');
 const mc = R('core/rpg/mediaCache.js');
 
 console.log('\n--- §A huntPov module: sheet, cache model, overlays ---');
-check('sprite sheet constants + row map (Task 21 herd: 8 rows)', /const CW = 96, CH = 72, COLS = 4/.test(hp) && /ROW = \{ rabbit: 0, boar: 1, stag: 2, alert: 3, doe: 4, graze: 5, fawn: 6, sheep: 7 \}/.test(hp) && /SHEET_ROWS = 8/.test(hp));
+check('sprite sheet constants + row map (Task 21 herd: 8 rows, Task 22 vector cells)', /const CW = 128, CH = 96, COLS = 4/.test(hp) && /ROW = . rabbit: 0, boar: 1, stag: 2, alert: 3, doe: 4, graze: 5, fawn: 6, sheep: 7 ./.test(hp) && /SHEET_ROWS = 8/.test(hp) && /SHEET_COMP = 0.75/.test(hp));
 check('deer herd + other grazers painted in the sheet (doe/graze/fawn/sheep)', /kind === 'doe' \|\| kind === 'graze'/.test(hp) && /kind === 'fawn'/.test(hp) && /kind === 'sheep'/.test(hp));
-check('sheet baked ONCE through mediaCache ("find the sprites, keep the sheet")', /mediaCache\.cached\('huntsprites', 'hs2'/.test(hp));
+check('sheet baked ONCE through mediaCache ("find the sprites, keep the sheet")', /mediaCache.cached.'huntsprites', 'hs3'/.test(hp));
 check('sheet is a real PNG drawn from walk-cycle painters', /function paintAnimal/.test(hp) && /toBuffer\('image\/png'\)/.test(hp));
-check('blits from the sheet with smoothing OFF (crisp pixels)', /imageSmoothingEnabled = false/.test(hp) && /drawImage\(sheet, col \* CW, row \* CH/.test(hp));
-check('same "bake once" base frames as the pond (canonical seed, no user seed)', /hp2:\$\{biome\}:L\$/.test(hp) && !/hp2:\$\{.*userId/.test(hp));
+check('blits from the sheet with smoothing ON (vector art scales cleanly)', /imageSmoothingEnabled = true/.test(hp) && /drawImage\(sheet, col \* CW, row \* CH/.test(hp));
+check('same "bake once" base frames as the pond (canonical seed, no user seed)', /hp3:\${biome}:L\$/.test(hp) && !/hp3:\${.*userId/.test(hp));
 check('base frames stored via mediaCache disk L2 (huntpov kind)', /mediaCache\.cached\('huntpov'/.test(hp));
-check('compose layer keyed by biome/level/PHASE/band (day/night, huntcompose kind)', /hgc1:\$\{biome\}:L\$\{lvl\}:\$\{phase\}:\$\{band\}/.test(hp) && /mediaCache\.cached\('huntcompose'/.test(hp));
-check('final GIF keyed per loot plate (hg2 + plateKey)', /hg2:\$\{biome\}:L\$\{lvl\}:\$\{phase\}:\$\{band\}:\$\{plateKey\}/.test(hp) && /mediaCache\.cached\('huntgif'/.test(hp));
+check('compose layer keyed by biome/level/PHASE/band (day/night, huntcompose kind)', /hgc2:\${biome}:L\${lvl}:\${phase}:\${band}/.test(hp) && /mediaCache.cached.'huntcompose'/.test(hp));
+check('final GIF keyed per loot banner (hg3 + plateKey)', /hg3:\${biome}:L\${lvl}:\${phase}:\${band}:\${plateKey}/.test(hp) && /mediaCache.cached.'huntgif'/.test(hp));
 check('WILDLIFE PLAN: herd lives in the base (stag/doe/fawn/sheep graze the meadow)', /function wildlifePlan/.test(hp) && /ROW\.stag/.test(hp) && /ROW\.graze/.test(hp) && /ROW\.fawn/.test(hp) && /ROW\.sheep/.test(hp) && /blitWildlife/.test(hp));
 check('reuses the dockPov PNG-frame packer with its own magic', /dockPov\.packContainer\(base\.gw, base\.gh, base\.delayMs, pngs, CONTAINER_MAGIC\)/.test(hp) && /'HUNTPOV1'/.test(hp));
 check('bands: low=rabbit hops, mid=boar + dust, epic=stag + flush + glint', /band === 'low'/.test(hp) && /ROW\.rabbit/.test(hp) && /ROW\.boar/.test(hp) && /ROW\.stag/.test(hp) && /ROW\.alert/.test(hp) && /antler glint/.test(hp));
 check('rarity signalled only AFTER the roll (overlay contract)', /band chosen AFTER the roll/.test(hp));
 check('day/night: grade + campfire/tent lights + moon/stars + fireflies at night', /dayNight\.grade\(c2, base\.gw, base\.gh, phase\)/.test(hp) && /campAnchors/.test(hp) && /dayNight\.moonStars/.test(hp) && /dayNight\.fireflies/.test(hp));
-check('result plate: the grounds + the loot on the image (owner Task 21 overlay)', /The Hunting Grounds/.test(hp) && /drawResultPlate/.test(hp));
+check('result overlay = the ESTABLISHED banner (Task 22), accepted from res.banner', /drawBanner/.test(hp) && /banner = null/.test(hp) && !/drawResultPlate/.test(hp));
 check('5 biome palettes (isle/desert/tundra/highlands/volcanic)', /isle: \{/.test(hp) && /desert: \{/.test(hp) && /tundra: \{/.test(hp) && /highlands: \{/.test(hp) && /volcanic: \{/.test(hp));
 check('grass: patches + nearly double tufts + tufts at every grazer\'s feet', /grass patches/.test(hp) && /ntuft = 44 \+ lvl \* 8/.test(hp) && /grass at each grazer/.test(hp));
 check('ambient life in the base: clouds drift, grass sways, fire flickers, bush rustles', /drifting clouds/.test(hp) && /sway/.test(hp) && /flick/.test(hp) && /rustle/.test(hp));
@@ -69,7 +69,7 @@ if (!canvasOk) {
     console.log('\n--- §C REAL renders: sheet, base frames, all 3 band GIFs ---');
     const t0 = Date.now();
     const sheet = await hpv.getHuntSpriteSheet();
-    check(`sprite sheet baked (${Date.now() - t0}ms, ${sheet.width}×${sheet.height}px = 4×8 cells incl. the herd)`, sheet.width === 384 && sheet.height === 576);
+    check(`sprite sheet baked (${Date.now() - t0}ms, ${sheet.width}×${sheet.height}px = 4×8 cells of 128×96 incl. the herd)`, sheet.width === 512 && sheet.height === 768);
     fs.writeFileSync(path.join(outDir, 'sprite_sheet.png'), sheet.src);
 
     // cells: every row must have non-empty pixels in every frame cell
@@ -131,3 +131,12 @@ if (!canvasOk) {
     console.log(`${'='.repeat(54)}\nRESULT: ${pass} passed, ${fail} failed\n${'='.repeat(54)}`);
     process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error('QA crashed:', e); process.exit(1); });
+
+
+// ── Task 22: the herd is REAL vector art now (owner: "that looks like shit") ──
+check('NO fillRect pixel animals left (the px() block painter is gone)', !/function px\(/.test(hp) && !/px\(ctx, -7/.test(hp));
+check('deer family = ellipse bodies + stroked legs (established card-art technique)', /ctx\.ellipse\(0, -0\.95 \* ss, 0\.95 \* ss, 0\.46 \* ss/.test(hp) && /function strokeLeg/.test(hp));
+check('stag antlers are BRANCHED lines, not white blobs', /const br = \(bx, by, dx, dy\)/.test(hp) && /#e6d3a8/.test(hp));
+check('sheep is woolly puffs, boar has tusk curve, fawn has spots', /woolly body/.test(hp) && /quadraticCurveTo\(1\.12 \* ss/.test(hp) && /fawn spots/.test(hp));
+check('real walk cycles: diagonal trot pairs + body bob (not static rects)', /const TROT = \[0\.55, 0, -0\.55, 0\]/.test(hp) && /Math\.sin\(pose \* Math\.PI \/ 2\) \* 0\.035/.test(hp));
+check('bigger cells (128x96) with blit compensation so on-screen size is unchanged', /const dw = CW \* scale \* SHEET_COMP, dh = CH \* scale \* SHEET_COMP/.test(hp));

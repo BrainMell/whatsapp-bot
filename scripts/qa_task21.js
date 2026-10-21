@@ -45,24 +45,24 @@ check('bands feather at their edges (no hard seam across scenes)', /setA|addColo
 check('light(): additive glow that punches through the dark (lighter composite)', /globalCompositeOperation = 'lighter'/.test(dn));
 check('moonStars() + fireflies() for the night scenes', /function moonStars/.test(dn) && /function fireflies/.test(dn));
 
-console.log('\n--- §2 the girl-angler master asset (committed to the repo) ---');
+console.log('\n--- §2 the dock-POV master asset (committed to the repo, Task 22 restore) ---');
 const ASSET_DIR = path.join(ROOT, 'core', 'assets', 'scenes');
-const assets = [1, 2, 3].map((l) => path.join(ASSET_DIR, `pond_girl_l${l}_v1.bin`));
-check('pond_girl_l1/l2/l3_v1.bin EXIST in core/assets/scenes (committed)', assets.every((p) => fs.existsSync(p)));
-const magics = assets.filter(fs.existsSync).map((p) => fs.readFileSync(p).slice(0, 9).toString('utf8'));
-check('all three assets carry the PONDGIRL1 container magic', magics.length === 3 && magics.every((m) => m === 'PONDGIRL1'));
+const assets = [1, 2, 3].map((l) => path.join(ASSET_DIR, `pond_l${l}_v2.bin`));
+check('pond_l1/l2/l3_v2.bin EXIST in core/assets/scenes (committed; girl assets DELETED)', assets.every((p) => fs.existsSync(p)) && !fs.existsSync(path.join(ASSET_DIR, 'pond_girl_l1_v1.bin')));
+const magics = assets.filter(fs.existsSync).map((p) => fs.readFileSync(p).slice(0, 8).toString('utf8'));
+check('all three assets carry the PONDPOV2 container magic', magics.length === 3 && magics.every((m) => m === 'PONDPOV2'));
 const sizes = assets.filter(fs.existsSync).map((p) => fs.statSync(p).size);
 check(`assets are real bakes (${sizes.map((s) => (s / 1024).toFixed(0) + 'KB').join(', ')}) — not stubs`, sizes.every((s) => s > 100000));
-check('preview contact sheets committed next to them', [1, 2, 3].every((l) => fs.existsSync(path.join(ASSET_DIR, `pond_girl_l${l}_preview.png`))));
-check('bake script committed (scripts/bake_pond_girl.js — re-runs byte-identical)', fs.existsSync(path.join(ROOT, 'scripts', 'bake_pond_girl.js')));
+check('preview contact sheets committed next to them', [1, 2, 3].every((l) => fs.existsSync(path.join(ASSET_DIR, `pond_l${l}_preview.png`))));
+check('bake script committed (scripts/bake_pond.js — re-runs byte-identical)', fs.existsSync(path.join(ROOT, 'scripts', 'bake_pond.js')));
 check('runtime READS the committed asset, bakes only as fallback', /function loadCommitted/.test(dp) && /fs\.readFileSync\(p\)/.test(dp) && /bakeLevelFrames\(lvl\)/.test(dp));
 check('loader exposes committed flag (qa can prove the repo asset is served)', /committed: true/.test(dp));
 
 console.log('\n--- §3 the pond overlay (explains the place + shows the catch) ---');
-check('result plate drawn per catch AFTER compose (loot text never in compose key)', /drawResultPlate\(c2, c\.gw, c\.gh, \{ title: 'The Pond', lines \}\)/.test(dp));
+check('established banner drawn per catch AFTER compose (loot text never in compose key)', /drawBanner.c2, c.gw, c.gh, ribbon./.test(dp) && !/drawResultPlate/.test(dp));
 check('plateLines maps real loot ids → names + rarity colours (both activities)', /plateLines/.test(dp) && /silver_carp/.test(dp) && /stag_antler/.test(dp) && /RARITY_COL/.test(dp));
 check('rarity colours: COMMON/UNCOMMON/RARE/EPIC all mapped', /COMMON: '#e8e8e0'/.test(dp) && /UNCOMMON: '#8ee08e'/.test(dp) && /RARE: '#7ab8f0'/.test(dp) && /EPIC: '#c9a0ff'/.test(dp));
-check('baseBuilder passes REAL drops into both GIF renderers', /drops: res\.drops/.test(bb));
+check('baseBuilder passes REAL drops + the REAL res.banner into both GIF renderers', /drops: res.drops, banner: res.banner/.test(bb));
 
 console.log('\n--- §4 hunt: deer herd + grazing animals + grass ---');
 check('8-row sheet with doe/graze/fawn/sheep', /doe: 4, graze: 5, fawn: 6, sheep: 7/.test(hp));
@@ -114,7 +114,7 @@ if (!canvasOk) {
     const gif = await dpv.renderFishingGif({ biome: 'isle', lvl: 2, band: 'epic', drops: { crystal_koi: 1 }, phase: 'night' });
     check('night catch GIF encodes GIF89a with the plate', gif.contentType === 'image/gif' && gif.buffer.slice(0, 6).toString('latin1') === 'GIF89a');
     const lines = dpv.plateLines('fish', { crystal_koi: 1, raw_fish: 3 });
-    check('plateLines order by value (koi first) + EPIC colour', lines[0].text.includes('Crystal Koi') && lines[0].color === '#c9a0ff');
+    check('plateLines order by value (koi first), plain strings for the established banner', Array.isArray(lines) && typeof lines[0] === 'string' && lines[0].includes('Crystal Koi') && lines[1].includes('Pond Minnow'));
     console.log(`\n${'='.repeat(54)}\nRESULT: ${pass} passed, ${fail} failed\n${'='.repeat(54)}`);
     process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error('QA crashed:', e); process.exit(1); });
