@@ -195,11 +195,12 @@ function getInst() {
       // in [min, max] for each fire instead of a fixed interval.
       // Backward compat: spawnIntervalMs is still read in places that expect a single value;
       // it's kept at the max value for legacy code paths.
-      // 💡 2026-10-08: default 30 min = 2 cards/hour (beta spawn-rate reset,
-      // requirements doc §6). Persisted DB value overrides this on load.
-      spawnIntervalMinMs: 30 * 60 * 1000,
-      spawnIntervalMaxMs: 30 * 60 * 1000,
-      spawnIntervalMs: 30 * 60 * 1000,  // legacy alias = max (for old code that reads this)
+      // 💡 2026-10-08: beta spawn-rate reset to 30 min = 2 cards/hour (§6).
+      // 💡 2026-10-21: raised to 12 min = 5 cards/hour (Mellow's request).
+      // Persisted DB value overrides this on load.
+      spawnIntervalMinMs: 12 * 60 * 1000,
+      spawnIntervalMaxMs: 12 * 60 * 1000,
+      spawnIntervalMs: 12 * 60 * 1000,  // legacy alias = max (for old code that reads this)
       // 💡 ESHOP DECK STATE
       eshopDeck: new Array(16).fill(null), // 16 slots, each null or { cardId, cardName, imageUrl, tier, anime, price }
       // 💡 PERF 2026-07-27: per-user render mode cache (hybrid vs static).
@@ -384,14 +385,14 @@ function rebuildSpawnTimersForInstance(inst) {
     return;
   }
 
-  const minMs = inst.spawnIntervalMinMs || (30 * 60 * 1000);
+  const minMs = inst.spawnIntervalMinMs || (12 * 60 * 1000);
   const maxMs = inst.spawnIntervalMaxMs || minMs;
 
   // 💡 FIX 2026-08-31 (stale closure): read the interval LIVE from `inst` at
   // every fire instead of closing over minMs/maxMs - a running timer chain
   // now adopts new spawnset values on the next fire.
   const randomDelay = () => {
-    const lo = inst.spawnIntervalMinMs || (30 * 60 * 1000);
+    const lo = inst.spawnIntervalMinMs || (12 * 60 * 1000);
     const hi = inst.spawnIntervalMaxMs || lo;
     if (lo === hi) return lo;
     return Math.floor(Math.random() * (hi - lo + 1)) + lo;
@@ -560,7 +561,7 @@ _Interval persists across bot restarts._`
 // 💡 PHASE 7 FIX 2026-08-30: getSpawnIntervalInfo returns min/max + isRandom
 function getSpawnIntervalInfo() {
   const inst = getInst();
-  const minMs = inst.spawnIntervalMinMs || (30 * 60 * 1000);
+  const minMs = inst.spawnIntervalMinMs || (12 * 60 * 1000);
   const maxMs = inst.spawnIntervalMaxMs || minMs;
   const ms = maxMs;  // legacy
   const minMinutes = Math.round(minMs / 60000);
@@ -4971,7 +4972,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       return true;
 
     // 💡 NEW: .g spawnset <minutes> - set per-bot spawn interval (owner-only)
-    // .g spawnset reset - restore default 20min
+    // .g spawnset reset - restore default 12min (5 cards/hour)
     // .g spawninfo - show current interval + calculated rates
     case 'spawnset': {
       // 💡 QA: changed from owner-only to mod+ (owner OR global mod OR card mod)
@@ -5015,8 +5016,8 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       }
 
       if (sub === 'reset' || sub === 'default') {
-        // 💡 2026-10-08: default is now 30 min = 2 cards/hour (§6).
-        const res = await setSpawnInterval(30, senderJid, isOwner || isMod || isCardMod);
+        // 💡 2026-10-21: default is now 12 min = 5 cards/hour.
+        const res = await setSpawnInterval(12, senderJid, isOwner || isMod || isCardMod);
         return reply(res.message), true;
       }
       if (!sub) {
@@ -5025,12 +5026,12 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
           `Usage:\n` +
           `• \`${p} spawnset <minutes>\` - set fixed interval (1 to 1440 min)\n` +
           `• \`${p} spawnset <min>-<max>\` - random interval within range (e.g. \`15-30\`)\n` +
-          `• \`${p} spawnset reset\` - restore default (30 min = 2 cards/hour)\n` +
+          `• \`${p} spawnset reset\` - restore default (12 min = 5 cards/hour)\n` +
           `• \`${p} spawnset tier <...>\` - tier spawn weights/chances (unchanged)\n` +
           `• \`${p} spawninfo\` - view current settings\n\n` +
           `Examples:\n` +
-          `• \`${p} spawnset 30\` → fixed 30 min (default, 2 spawns/hour)\n` +
-          `• \`${p} spawnset 15-30\` → random 15-30 min (avg ~4 spawns/hour)\n` +
+          `• \`${p} spawnset 12\` → fixed 12 min (default, 5 spawns/hour)\n` +
+          `• \`${p} spawnset 15-30\` → random 15-30 min (avg ~3 spawns/hour)\n` +
           `• \`${p} spawnset 10-45\` → random 10-45 min (more varied)\n` +
           `• \`${p} spawnset 60\` → fixed 1 spawn/hour\n\n` +
           `_Random ranges make spawns feel less predictable to players.\n` +
