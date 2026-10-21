@@ -89,7 +89,34 @@ check('rememberFact rejects junk', persona.rememberFact('', '', '') === false);
   const t1 = await persona.buildTurn({ chatId: CH, senderName: 'Mellow', text: 'sup dude', isAmbient: false });
   check('turn returns replies', t1 && t1.replies.length >= 1 && t1.replies.join(' ').includes('fr though'));
   check('REMEMBER executed during turn', JSON.stringify(kvStore._shared_persona_facts[CH]).includes('samurai'));
-  check('system prompt carries persona rules', groqCalls[0].messages[0].content.includes('You are joker') && groqCalls[0].messages[0].content.includes('NOT an AI'));
+  check('system prompt carries persona rules', groqCalls[0].messages[0].content.includes('You are joker') && groqCalls[0].messages[0].content.includes('not an AI'));
+  // 💡 REALGUY v3 (owner: over-punctuating / robotic): voice layer checks
+  const _src3 = require('fs').readFileSync(require('path').join(__dirname, '..', 'core', 'persona', 'personaEngine.js'), 'utf8');
+  check('v3: HOW YOU TEXT teaches no trailing periods', groqCalls[0].messages[0].content.includes('never end a message with a period'));
+  check('v3: HOW YOU TEXT bans semicolons/dashes/parens', groqCalls[0].messages[0].content.includes('no semicolons, no dashes, no parentheses'));
+  check('v3: quote-prefix mechanic explained to the model', groqCalls[0].messages[0].content.includes("that's the message they're replying to"));
+  check('v3: card/react context rule present', groqCalls[0].messages[0].content.includes('game cards and screenshots here'));
+  check('v3: honest-miss rule (admit you missed it or ask)', groqCalls[0].messages[0].content.includes('admit you missed it or ask'));
+  check('v3: Baileys quoted rides as THIRD arg (v2.5 bug: raw sends)', _src3.includes('sendMessage(chatId, content, quoted ? { quoted } : undefined)'));
+  check('v3: humanSend forwards opts.quoteM into silentSend', _src3.includes('silentSend(sock, chatId, content, opts.quoteM)'));
+  check('v3: em-dash/semicolon soften pass in cleanReplyText', _src3.includes('replace(/\\s*[—–]\\s*/g'));
+  check('v3: per-bubble trailing-period strip in chunkText', _src3.includes("x.endsWith('.') && !x.endsWith('...')") && _src3.includes('stripTrailingDot(t)'));
+  check('v3: trailing period stripped from a bubble', (() => {
+    const out = persona.chunkText('hey there. this is fine.');
+    return out.length === 1 && out[0] === 'hey there. this is fine';
+  })());
+  check('v3: ellipsis preserved by the strip', persona.chunkText('wait what...')[0] === 'wait what...');
+  check('v3: em-dash softened to comma speech', (() => {
+    const _mr = Math.random; Math.random = () => 0.99; // pin: no emoji re-add during this test
+    const out = persona.cleanReplyText('so sick — wait; no');
+    Math.random = _mr;
+    return out === 'so sick, wait, no';
+  })());
+  check('v3: no exemplar ends with a period', (() => {
+    const sys = groqCalls[0].messages[0].content;
+    const lines = (sys.match(/^you: .*$/gm) || []);
+    return lines.length >= 10 && lines.every((l) => !l.trim().endsWith('.'));
+  })());
   check('transcript rides into prompt', groqCalls[0].messages[0].content.includes('GROUP CHAT RIGHT NOW'));
 
   // ─── 9. buildTurn: SEARCH tool loop ────────────────────────────────────────
@@ -174,19 +201,20 @@ check('rememberFact rejects junk', persona.rememberFact('', '', '') === false);
     sys2.startsWith('You are joker from Persona 5.'));
   check('L2: dev-claim hallucination fuel REMOVED', !sys2.includes('You also built') && !sys2.includes('You also built and run'));
   check('L2: identity rule present (never built/coded/tested)',
-    sys2.includes('You did NOT build, code, make, run, fix or test'));
-  check('L2: redirects bot credit to mellow', sys2.includes("mellow's the one who builds stuff"));
+    sys2.includes("you didn't build, code, fix or test anything"));
+  check('L2: redirects bot credit to mellow', sys2.includes('mellow builds stuff'));
   check('L2: no dev-support offers ("let me know if something\'s glitchy" banned)',
     sys2.includes("let me know if something's glitchy"));
   check('L3: grounding safeguards ported (no invented off-screen events)',
-    sys2.includes('NEVER invent off-screen activities, memories or events') && sys2.includes('no "I just tested it"'));
-  check('L3: topic-acknowledgment rule present', sys2.includes('Answer what they actually said FIRST'));
+    sys2.includes('never invent events, activities or stories') && sys2.includes('i just tested it'));
+  check('L3: topic-acknowledgment rule present', sys2.includes('answer what they actually said first'));
   check('L4: Gen Z emoji protocol in prompt', sys2.includes('EMOJIS: you almost never use them') && sys2.includes('only 💀 😭 🤨 👀 🙄 😏'));
-  check('L4: banned AI-tell emojis named in prompt', sys2.includes('NEVER 😎 🤖 💥 🫡 ✨ 🚀 🎉 🔥'));
-  check('L5: few-shot exemplar block present (7 exchanges)',
-    (sys2.match(/^you: /gm) || []).length === 7 && sys2.includes('EXAMPLES OF YOUR EXACT VOICE'));
-  check('L5: bot-deflection exemplar pinned', sys2.includes("bold of you to ask. i'm just a guy with good timing"));
-  check('L5: anti-non-sequitur exemplar (say less repair)', sys2.includes("my bad, meant i'm with you"));
+  check('L4: banned AI-tell emojis named in prompt', sys2.includes('never 😎 🤖 💥 🫡 ✨ 🚀 🎉 🔥'));
+  check('L5: few-shot exemplar block present (10 exchanges)',
+    (sys2.match(/^you: /gm) || []).length === 10 && sys2.includes('EXAMPLES OF HOW YOUR TEXTS LOOK'));
+  check('L5: bot-deflection exemplar pinned', sys2.includes('you: bold of you to ask'));
+  check('L5: honesty exemplar (missed clip — ask, never fake it)', sys2.includes('nah i missed it, send it again'));
+  check('L5: quote/card-context exemplar pinned', sys2.includes("[Replying to Joker's message") && sys2.includes('120 deer is a whole buffet'));
   check('L7: profileText layer rides into prompt when provided', (() => {
     groqCalls = []; groqScript = ['sup'];
     return persona.buildTurn({ chatId: CH, senderName: 'Mellow', text: 'hey', isAmbient: false, profileText: 'Nickname: Mel; mains samurai' })
@@ -279,11 +307,14 @@ check('rememberFact rejects junk', persona.rememberFact('', '', '') === false);
   const sys3 = groqCalls[0].messages[0].content;
   check("prompt: WHO YOU'RE TALKING TO block rides with senderJid", sys3.includes("WHO YOU'RE TALKING TO") && sys3.includes("You're talking to Shadow"));
   check('prompt: PEOPLE YOU KNOW roster rides', sys3.includes('PEOPLE YOU KNOW IN THIS CHAT') && sys3.includes('Dave'));
-  check('prompt: NAMES style rule present', sys3.includes('NAMES: call people by the names they actually go by'));
+  check('prompt: NAMES style rule present (whoBlock teaches it)', sys3.includes('never use their WhatsApp name when you know what they go by') && sys3.includes("don't invent a name"));
   check('prompt: REMEMBER name hint present', sys3.includes('goes by <what they said>'));
 
   // ─── 20. REALGUY v2.5: engine.js source pins ───────────────────────────────
   check('trigger: ALWAYS quotes the triggering message', engineSrc.includes('{ quoteM: m },'));
+  // 💡 REALGUY v3 pins (owner round 4)
+  check('v3: cached replies quote too (quoteM on both send paths)', (engineSrc.match(/\{ quoteM: m \},/g) || []).length === 2);
+  check('v3: quoted card/photo gets a label (no more zero context)', engineSrc.includes('(a card/photo, no caption)') && engineSrc.includes("(it's a card/image)"));
   check('old conditional quote REMOVED', !engineSrc.includes('quoteM: isReplyToBot ? m : null'));
   check('trigger: digits-only LID/JID compare present', engineSrc.includes('const _digitsOf = (j) => String(j || "")') && engineSrc.includes('const _botIdDigits'));
   check('trigger: mention uses digit-core match', engineSrc.includes('_mentionedDigits.some'));

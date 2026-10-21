@@ -33442,8 +33442,23 @@ _(or reply to their message)_
                       quotedMsg.imageMessage?.caption ||
                       quotedMsg.videoMessage?.caption ||
                       "";
-                    
-                    if (quotedText.trim()) {
+                    // 💡 REALGUY v3 (owner: "I respond to a card and it replies
+                    // weirdly"): a quoted CARD/photo used to fall through here
+                    // with zero context (no caption → nothing) or a raw caption
+                    // blob — the model had no idea what was being shown and
+                    // confabulated. Label the media type so the persona knows
+                    // what it's looking at even without a caption.
+                    let quotedLabel = quotedText.trim();
+                    if (!quotedLabel) {
+                      if (quotedMsg.imageMessage) quotedLabel = "(a card/photo, no caption)";
+                      else if (quotedMsg.videoMessage) quotedLabel = "(a video, no caption)";
+                      else if (quotedMsg.stickerMessage) quotedLabel = "(a sticker)";
+                      else if (quotedMsg.audioMessage || quotedMsg.documentMessage) quotedLabel = "(a file/audio)";
+                      else quotedLabel = "(a message with no text)";
+                    } else if (quotedMsg.imageMessage) {
+                      quotedLabel += " (it's a card/image)";
+                    }
+                    {
                       const quotedParticipant = waContextInfo.participant;
                       let quotedName = "someone";
                       if (quotedParticipant) {
@@ -33455,7 +33470,7 @@ _(or reply to their message)_
                           quotedName = quotedUser?.nickname || economy.getDisplayName(normalizedQuotedJid);
                         }
                       }
-                      promptWithReply = `[Replying to ${quotedName}'s message: "${quotedText.trim()}"] ${prompt}`;
+                      promptWithReply = `[Replying to ${quotedName}'s message: "${quotedLabel}"] ${prompt}`;
                     }
                   }
 
@@ -33503,11 +33518,13 @@ _(or reply to their message)_
                     if (_hit && Date.now() - _hit.ts < AI_CACHE_TTL_MS) {
                       // 💡 REALGUY: cached answers go out with the same human
                       // cadence (typing presence + delays + chunks).
+                      // 💡 REALGUY v3: and they QUOTE too — a cached hit still
+                      // answers THIS message.
                       await personaEngine.humanSend(
                         sock,
                         chatId,
                         personaEngine.chunkText(_hit.reply),
-                        {},
+                        { quoteM: m },
                       );
                       return;
                     }

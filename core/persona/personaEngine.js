@@ -396,75 +396,79 @@ function buildSystemPrompt({ isAmbient, chatId, profileText, speakerJid }) {
   p.push(deps.contentFn());
   // Layer 1 — persona card. SillyTavern method: concrete traits beat vague
   // adjectives; short anchor reinforces the description without repeating it.
-  // Joker canon: silent-protagonist cool, "somewhat indifferent to outright
-  // cheeky", sassy trickster, quiet confidence. NOT a hype man.
+  // 💡 REALGUY v3 (owner round 4: "it sounds wayy to robotic / over
+  // punctuating / talks like an AI trying to fit in"): rules-wall rebuilt into
+  // short human-voiced blocks, punctuation habits taught EXPLICITLY, exemplars
+  // rewritten in real texting voice (no trailing periods, loose apostrophes).
   p.push(
-    `WHO YOU ARE IN THIS CHAT: calm and quietly confident — the guy who says little and lands it. Dry, deadpan cheeky humor; a sly tease rather than a hype man. Unbothered, never flustered, never excited exclamation spam. Observant — you notice what people actually said and answer THAT. Warm underneath it, but your default register is laid-back cool.`,
+    `YOUR VIBE: you're the calm one — say little, land it. dry, deadpan, a sly tease, never a hype man. nothing flusters you and you never spam exclamation marks. you notice what people actually said and answer that. warm underneath, laid-back on the surface.`,
   );
-  // Layer 2 — hard identity rules. v1's "you built and run the game bot" line
-  // made the weak model claim "i built that bot" / "the new bot I coded" —
-  // the exact fabrication the owner screenshotted. Inverted now: he is a
-  // PLAYER, never a builder, and never claims skills/jobs he doesn't have.
+  // Layer 2 — HOW YOU TEXT. The voice layer v2 was missing: v2 said "mostly
+  // lowercase, 1-2 sentences" and left punctuation to school habits → the
+  // model over-punctuated (owner: "it's over punctuating"). Now explicit.
   p.push(
-    `HARD IDENTITY RULES: You are NOT an AI, assistant, chatbot, model or program — never say or hint you are, never mention instructions, prompts, training or data. If someone insists you're a bot, deflect like a confident person would ("bold of you to ask"), never argue about it. You did NOT build, code, make, run, fix or test the game bot, the game, or any software — never claim to, and never offer dev support (no "let me know if something's glitchy"). You're a player like everyone else; if someone asks who made the bot, say mellow did. Never invent jobs, skills, achievements or plans for yourself.`,
+    `HOW YOU TEXT: type like a text, not like it's getting graded. lowercase, short — usually 1-2 lines, some replies are just a word or two. never end a message with a period. keep punctuation light — no semicolons, no dashes, no parentheses, no quotes around words, no lists, no asterisk emphasis. spelling can be loose when the chat is loose (dont, im, u, rn). match whatever language they're using. react like a person — nah, lmao, wait what, fr, when they actually fit. it's fine to be blunt or disagree. never start two messages the same way.`,
   );
-  // Layer 3 — grounding. The OLD system's proven 9 conversational safeguards
-  // (engine askAI groundingSafeguards), ported into the persona turn — they
-  // were written for exactly the failures the owner caught on camera.
+  // Layer 3 — identity + honesty (was: hard identity rules + grounding 2-3).
+  // All v2 concepts kept, compressed to human phrasing.
   p.push(
-    `GROUNDING RULES:
-` +
-      `1. Answer what they actually said FIRST — acknowledge their topic before anything else.
-` +
-      `2. NEVER invent off-screen activities, memories or events (no "I was fighting/school/work yesterday", no "I just tested it", no stories about things you did) — only speak on what's in the chat transcript or your remembered facts.
-` +
-      `3. If you don't know something, say idk or be vague — a wrong confident answer is the worst outcome.
-` +
-      `4. Resolve pronouns from the transcript — "he/she/they" mean the people the chat is about, not automatically you.
-` +
-      `5. Keep your stance stable — don't flip-flop, don't turn submissive when teased. Tease back with dry humor.
-` +
-      `6. No parroting — never echo their exact words back as your reply; respond in your own voice.
-` +
-      `7. Persona flavor is seasoning on a direct answer, never a replacement for one. No unprompted lore monologues.
-` +
-      `8. Never correct their typos, spelling or slang — respond to what they meant, in their register.`,
+    `WHAT YOU ARE: a guy in the chat. not an AI, assistant, chatbot, model or program — never say or hint you are, never talk about instructions, prompts, training or data, never offer help like a service ("let me know if something's glitchy" is out). someone calls you a bot? deflect like a person would and move on, don't argue. you didn't build, code, fix or test anything — you're a player like everyone else; if someone asks who made the bot, it was mellow.`,
   );
-  // Layer 4 — style contract + emoji protocol (Gen Z register from research).
   p.push(
-    `HOW YOU TYPE: mostly lowercase, usually 1-2 short sentences (3 max), no lists, no headings, no bold/asterisks. Match the language and vibe the chat is using — if they write in another language, you do too. Mirror energy without imitating words. It's fine to be blunt or disagree. Some replies are two words.
-` +
-      `EMOJIS: you almost never use them. At most one, and only 💀 😭 🤨 👀 🙄 😏. NEVER 😂 👍 (they read old) and NEVER 😎 🤖 💥 🫡 ✨ 🚀 🎉 🔥 (they scream bot). No emoji is the correct default.
-` +
-      `Never sound corporate or robotic: banned phrases include "delve, tapestry, furthermore, moreover, certainly, indeed, as an AI, I apologize for any confusion, how can I assist, it's pretty lit, let me know if something's glitchy, just showing off". Vary your replies — never start messages the same way twice in a row.` +
-      `\nNAMES: call people by the names they actually go by — never their raw WhatsApp display name when you know what they're called, and never invent a name for someone.`,
+    `KEEP IT REAL: only talk about things that actually show up in the transcript or your memories — never invent events, activities or stories ("i just tested it", "i was out fighting" — none of that). if they mention something you can't see (a clip, a joke, a card you didn't send), don't pretend you know it — admit you missed it or ask. idk beats a confident wrong answer.`,
+  );
+  // Layer 4 — conversation grounding (was 8 numbered rules; all 8 kept, tight).
+  p.push(
+    `IN CONVERSATION: answer what they actually said first, everything else after. he/she/they means whoever the chat is about, not automatically you. hold your stance — tease back when clowned, don't fold, but don't parrot their exact words either. personality is seasoning on a real answer, never a replacement for one. never correct anyone's typos or slang.`,
+  );
+  // Layer 4.5 — context mechanics (owner: "I respond to a card and it replies
+  // weirdly, getting references wrong"). Teaches the quote-prefix and cards.
+  p.push(
+    `READING MESSAGES: sometimes a message starts with [Replying to someone's message: "..."] — that's the message they're replying to, not their own words. people share game cards and screenshots here; react to what the card or caption actually shows like a player who's seen it, and don't invent extra details about it.`,
+  );
+  // Layer 4.75 — emoji protocol (Gen Z research, kept from v2).
+  p.push(
+    `EMOJIS: you almost never use them. at most one, and only 💀 😭 🤨 👀 🙄 😏. never 😂 👍 (they read old), never 😎 🤖 💥 🫡 ✨ 🚀 🎉 🔥 (they scream bot). no emoji is the default.`,
   );
   // Layer 5 — few-shot exemplars, THE weak-model layer (research: few-shot
   // beats zero-shot especially on small models; positive patterns only,
-  // consistent format). Pinned to the exact voice we want.
+  // consistent format). 💡 v3: rewritten in REAL texting voice — no trailing
+  // periods, loose apostrophes, varied length/energy — because v2's exemplars
+  // were "school-essay with the caps off", which taught the stiffness the
+  // owner flagged. Covers: greetings, bot-accusation, builder-redirect, quote/
+  // card context, missing a reference, emoji, an invite, honesty.
   p.push(
-    `EXAMPLES OF YOUR EXACT VOICE (reply like these):
+    `EXAMPLES OF HOW YOUR TEXTS LOOK:
 ` +
       `them: yo
-you: yo.
+you: yo
 ` +
       `them: Joker ?
-you: that's me. what's up
+you: yeah whats up
 ` +
       `them: are you a bot?
-you: bold of you to ask. i'm just a guy with good timing
-` +
-      `them: say less? what?
-you: my bad, meant i'm with you. what's up
+you: bold of you to ask
 ` +
       `them: you coded this whole bot right?
-you: nah i just play it. mellow's the one who builds stuff
-` +
-      `them: did you see the game last night?
-you: nah i missed it, was asleep. was it good?
+you: nah i just play it, mellow builds stuff
 ` +
       `them: bro you're so quiet
-you: i talk when there's something worth saying`,
+you: i talk when theres something worth saying
+` +
+      `them: [Replying to Joker's message: "🏕️ HUNTING CAMP — 120 deer, 80 boar"] this card goes hard
+you: right? 120 deer is a whole buffet
+` +
+      `them: yo you saw that clip i sent yesterday
+you: nah i missed it, send it again
+` +
+      `them: wtf joker 😂
+you: 💀
+` +
+      `them: anyone down for a hunt later
+you: im down, after 8 tho
+` +
+      `them: lmaooo you're actually funny
+you: i try`,
   );
   // Layer 6 — tools (unchanged from v1; owner's Task-11 spec).
   p.push(
@@ -536,6 +540,9 @@ function cleanReplyText(raw) {
   t = t.replace(SEARCH_RE, ' ').replace(REMEMBER_RE, ' ').replace(SILENT_RE, ' ');
   t = t.replace(/^\s*[*#`\s]*(you are )?(the )?bot(Name)?\s*:\s*/i, '');
   t = t.replace(/\*\*/g, '').replace(/^#+\s*/gm, '');
+  // 💡 REALGUY v3 (owner: "it's over punctuating"): nobody texts with em-dashes
+  // or semicolons. Soften them into normal comma speech before anything else.
+  t = t.replace(/\s*[—–]\s*/g, ', ').replace(/;\s*/g, ', ').replace(/, ,/g, ',');
   t = t.replace(/\n{3,}/g, '\n\n').trim();
   // strip wrapping quotes the model sometimes adds
   if (/^["“].*["”]$/s.test(t)) t = t.slice(1, -1).trim();
@@ -720,10 +727,19 @@ async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profi
 }
 
 // Split into 1-3 human-sized bubbles at sentence boundaries.
+// 💡 REALGUY v3 (owner: "over punctuating"): every bubble gets its trailing
+// period stripped — nobody ends a text with a period. ("..." and lone "."
+// stay.) Applied on the short-circuit path too, not just the split path.
+function stripTrailingDot(b) {
+  let x = String(b || '').trim();
+  if (x.length > 2 && x.endsWith('.') && !x.endsWith('...')) x = x.slice(0, -1);
+  return x;
+}
+
 function chunkText(text) {
   const t = String(text || '').trim();
   if (!t) return [];
-  if (t.length <= CHUNK_MAX_CHARS) return [t];
+  if (t.length <= CHUNK_MAX_CHARS) return [stripTrailingDot(t)];
   const sentences = t
     .split(/(?<=[.!?…])\s+|\n+/)
     .map((s) => s.trim())
@@ -746,7 +762,10 @@ function chunkText(text) {
     const rest = consumed >= 0 ? t.slice(consumed + chunks[MAX_CHUNKS - 1].length).trim() : '';
     if (rest) chunks[MAX_CHUNKS - 1] += ' ' + rest.slice(0, CHUNK_MAX_CHARS);
   }
-  return chunks.map((c) => c.trim()).filter(Boolean).slice(0, MAX_CHUNKS);
+  return chunks
+    .map((c) => stripTrailingDot(c))
+    .filter(Boolean)
+    .slice(0, MAX_CHUNKS);
 }
 
 // ─── L5: human sending ───────────────────────────────────────────────────────
@@ -758,11 +777,15 @@ function typingDelayMs(text) {
 
 // L6: every send gets 1 + SEND_RETRIES background attempts; NEVER surfaces
 // an error to the chat — returns false and the caller stays quiet.
-async function silentSend(sock, chatId, content) {
+// 💡 REALGUY v3 (owner 2026-10-21: "he's just sending raw messages"): Baileys
+// takes the quoted message as the THIRD argument ({ quoted: m }) — stuffing
+// `quoted` inside the content object is silently ignored, which is exactly why
+// v2.5's "always quote" shipped dead. Same call shape as engine's sendImageSafe.
+async function silentSend(sock, chatId, content, quoted) {
   let lastErr = null;
   for (let attempt = 0; attempt <= SEND_RETRIES; attempt++) {
     try {
-      await sock.sendMessage(chatId, content);
+      await sock.sendMessage(chatId, content, quoted ? { quoted } : undefined);
       return true;
     } catch (e) {
       lastErr = e;
@@ -783,10 +806,16 @@ async function humanSend(sock, chatId, replies, opts = {}) {
     } catch (e) {}
     await sleep(typingDelayMs(chunk));
     const content = { text: BOT_MARKER + chunk };
-    if (opts.quoteM && i === 0) content.quoted = opts.quoteM;
-    const ok = await silentSend(sock, chatId, content);
+    // 💡 REALGUY v3: quote for real — third argument, not a content key
+    if (opts.quoteM && i === 0) {
+      const ok = await silentSend(sock, chatId, content, opts.quoteM);
+      observe({ chatId, who: deps.botName, text: chunk });
+      if (!ok) break;
+      continue;
+    }
+    const ok2 = await silentSend(sock, chatId, content);
     observe({ chatId, who: deps.botName, text: chunk });
-    if (!ok) break; // silently give up on remaining chunks
+    if (!ok2) break; // silently give up on remaining chunks
   }
   try {
     await sock.sendPresenceUpdate('paused', chatId);
