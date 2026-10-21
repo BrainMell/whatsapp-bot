@@ -28,7 +28,7 @@ const ambient = require('./ambient');   // shared life layer (owner 2026-10-19: 
 const N = 16;                 // base tiles per side (saved-structure grid)
 const M = 15;                 // wilderness margin (hex cells) around the grid — big enough to over-cover the diagonal card
 const COLS = N + 2 * M, ROWS = N + 2 * M;
-const FRAMES = 20, FRAME_MS = 100;   // 2 s loop (birds cross the card once per loop)
+const FRAMES = 14, FRAME_MS = 143;   // 2 s loop, 14 frames (cold bake was the slow part)
 const SCALE = parseFloat(process.env.RENDER_BASE_SCALE || '0.44') || 0.44;
 const ANIM_SCALE = parseFloat(process.env.RENDER_BASE_ANIM_SCALE || '0.62') || 0.62;
 const CARD_W = 1960, CARD_H = 1420;   // fixed card; terrain over-covers it (no floating diorama)

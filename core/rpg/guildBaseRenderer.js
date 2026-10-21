@@ -30,7 +30,7 @@ const emojiFontMod = require('./emojiFont');   // 2026-10-20: emblem emoji glyph
 const { emojiFont, fillTextMixed } = emojiFontMod;
 const emojiBitmap = require('./emojiBitmap');   // 2026-10-20 12:20Z: big emblem bitmaps for the castle close-up card
 
-const FRAMES = 20, FRAME_MS = 100;   // 2 s loop (birds cross the card once per loop)
+const FRAMES = 14, FRAME_MS = 143;   // 2 s loop, 14 frames (cold bake was the slow part)
 const COLS = 23, ROWS = 31, CC = 11, CR = 15;   // oversized grid: terrain runs past every edge of the card, castle on (11,15)
 const OLD_COLS = 17, OLD_ROWS = 15, OLD_CC = 8, OLD_CR = 7;   // the framing the card was designed around
 const SCALE = parseFloat(process.env.RENDER_GUILD_SCALE || '0.5') || 0.5;

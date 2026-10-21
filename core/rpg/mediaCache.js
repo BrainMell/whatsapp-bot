@@ -46,12 +46,17 @@ const MIN_SIZE = 500; // smaller than this is a broken render — never cache
 // Non-git runtimes fall back to a bumped literal that can never collide with
 // the pre-fix key namespace.
 let CODE_VER = 'v2';
+// Key on the CONTENT of the render code + sprite manifest, NOT git HEAD: unrelated deploys
+// (every bot commit) no longer throw away every baked card and force a cold re-render
+// (owner 2026-10-20: ".j base / .j guild generate super slow now"). Art/render changes still bust it.
 try {
-    CODE_VER = `g${require('child_process').execSync('git rev-parse --short HEAD', {
-        cwd: repoRoot,
-        stdio: ['ignore', 'pipe', 'ignore'],
-    }).toString().trim()}`;
-} catch (e) { /* non-git runtime keeps 'v2' */ }
+    const crypto = require('crypto');
+    const h = crypto.createHash('sha1');
+    const files = ['kingdom3d.js', 'kingdomTerrain.js', 'ambient.js', 'guildBaseRenderer.js', 'homesteadBaseRenderer.js', 'worldAtlasRenderer.js', 'emojiBitmap.js', 'emojiFont.js']
+        .map((f) => path.join(__dirname, f)).concat([path.join(__dirname, '..', 'rpgasset', 'kingdom3d', 'manifest.json')]);
+    for (const f of files) { try { h.update(fs.readFileSync(f)); } catch (e) { /* optional file */ } }
+    CODE_VER = `c${h.digest('hex').slice(0, 10)}`;
+} catch (e) { /* keeps 'v2' */ }
     // env override: proof bakes/QA set CODE_VER to bust stale disk entries without touching production keys
     if (process.env.CODE_VER) CODE_VER = process.env.CODE_VER;
 
