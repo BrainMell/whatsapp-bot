@@ -26,6 +26,7 @@ const KT = require('./kingdomTerrain');
 const mediaCache = require('./mediaCache');
 const { encodeRawStreamMp4 } = require('../utils/bakeStream');   // 47-k10: streaming bake — one frame alive at a time
 const ambient = require('./ambient');   // shared life layer (owner 2026-10-19: "the guild card should also be a gif")
+const dayNight = require('./dayNight');   // Task 21: shared day/night cycle for every render
 const emojiFontMod = require('./emojiFont');   // 2026-10-20: emblem emoji glyphs; color bitmaps 2026-10-20 (owner 'use colors not hex code')
 const { emojiFont, fillTextMixed } = emojiFontMod;
 const emojiBitmap = require('./emojiBitmap');   // 2026-10-20 12:20Z: big emblem bitmaps for the castle close-up card
@@ -832,7 +833,9 @@ async function buildScene(state, opts = {}) {
     const walkers = ambient.buildWalkers(w, seed, { n: 9, maxY: H - 190 });   // villagers on the roads
     const boats = ambient.buildBoats(water, seed, k);                     // wilds trees for the wind shuffle
     const smoke = smokeAnchors.map((a) => { const p = w.proj(a.x, a.z + 0.35, a.h); return { x: p.x, y: p.y, smoky: false }; });
-    const scene = { canvas, W, H, w, banner: { x: bpos.x, y: bpos.y, flagCol, flagD: archC.flagD, icon: state.emblemIcon || '', crest: await loadCrest(state) }, k, biome: w.biome, realm: w.biome, water, sway, walkers, boats, smoke, seed, fall };
+    // Task 21 day/night: window/forge light anchors (the keep + every facility)
+    const lights = smokeAnchors.map((a) => { const p = w.proj(a.x, a.z + 0.35, a.h); return { x: p.x, y: p.y, warm: '#ffcf7a' }; });
+    const scene = { canvas, W, H, w, lights, banner: { x: bpos.x, y: bpos.y, flagCol, flagD: archC.flagD, icon: state.emblemIcon || '', crest: await loadCrest(state) }, k, biome: w.biome, realm: w.biome, water, sway, walkers, boats, smoke, seed, fall };
     _scenes.set(key0, scene);
     while (_scenes.size > SCENE_MAX) _scenes.delete(_scenes.keys().next().value);
     return scene;
@@ -883,6 +886,17 @@ async function renderFrame(state, frame, opts = {}) {
         ambient.drawBirds(ctx, sc.W, sc.H, t, seed);             // flocks crossing
         ambient.drawButterflies(ctx, sc.W, sc.H, t, seed);       // garden flutter
         ambient.drawTint(ctx, sc.W, sc.H, t);                    // warm/cool breathing
+    }
+    // ── DAY & NIGHT CYCLE (Task 21) — the guild grounds get darker and the
+    // keep's windows glow through the night; applies to the static card too ──
+    const dnPhase = opts.phase || dayNight.phaseAt();
+    dayNight.grade(ctx, sc.W, sc.H, dnPhase);
+    if (dnPhase === 'night' || dnPhase === 'dusk') {
+        for (const l of (sc.lights || [])) {
+            dayNight.light(ctx, l.x, l.y, sc.H * 0.05, l.warm, dnPhase === 'night' ? 0.5 : 0.26, false);
+            dayNight.light(ctx, l.x, l.y, sc.H * 0.013, l.warm, dnPhase === 'night' ? 0.55 : 0.3);
+        }
+        if (dnPhase === 'night') dayNight.moonStars(ctx, sc.W, sc.H, { seed: 61, moonX: 0.9, moonY: 0.06, stars: 14, starAlpha: 0.7, skyH: 0.20 });
     }
     if (opts.celebrate) {
         // owner 2026-10-19: the upgraded facility falls in and the confetti explodes FROM it —
@@ -1029,7 +1043,7 @@ function cachePut(map, k, out) {
 const _renderCache = new Map();
 const CACHE_TTL = 10 * 60 * 1000;
 function stateHash(state, opts = {}) {
-    return hashStr(JSON.stringify(['v12-life', state.name, state.biome || '', state.continent || '', state.level, state.archetype, state.buildings, state.memberCount, state.memberCap, state.emblemColor, state.emblemIcon, crestKey(state), state.motto, opts.hint || '', opts.static === true ? 1 : 0, opts.celebrate ? JSON.stringify(opts.celebrate) : '']));
+    return hashStr(JSON.stringify(['v12-life', state.name, state.biome || '', state.continent || '', state.level, state.archetype, state.buildings, state.memberCount, state.memberCap, state.emblemColor, state.emblemIcon, crestKey(state), state.motto, opts.hint || '', opts.static === true ? 1 : 0, opts.celebrate ? JSON.stringify(opts.celebrate) : '', (opts.phase || require('./dayNight').phaseAt())]));
 }
 
 async function renderGuildBaseImage(state, opts = {}) {

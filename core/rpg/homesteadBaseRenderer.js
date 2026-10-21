@@ -24,6 +24,7 @@ const K = require('./kingdom3d');
 const mediaCache = require('./mediaCache');
 const { encodeRawStreamMp4 } = require('../utils/bakeStream');   // 47-k10: streaming bake — one frame alive at a time
 const ambient = require('./ambient');   // shared life layer (owner 2026-10-19: "bring it to life")
+const dayNight = require('./dayNight');   // Task 21: shared day/night cycle for every render
 
 const N = 16;                 // base tiles per side (saved-structure grid)
 const M = 15;                 // wilderness margin (hex cells) around the grid — big enough to over-cover the diagonal card
@@ -870,7 +871,14 @@ async function buildScene(state, opts = {}) {
     const sway = await ambient.swayTrees(w);                         // tree sprites for the wind shuffle
     const walkers = ambient.buildWalkers(w, seed, { n: 10, maxY: CARD_H - 190 });
     const boats = ambient.buildBoats(water, seed, k);
-    const scene = { terrain, objects, W: CARD_W, H: CARD_H, w, k, smoke, biome, realm, water, sway, walkers, boats, seed, fall };
+    // Task 21 day/night: where the night LIGHT SOURCES live — every building
+    // gets a warm window glow once the sun is down.
+    const lights = [];
+    for (const it of info) {
+        const wp = w.proj(it.cen.x, it.cen.z, 1.5);
+        lights.push({ x: wp.x, y: wp.y, warm: it.st.type === 'blacksmith' ? '#ff9a4a' : it.st.type === 'alchemy' ? '#9ae89a' : '#ffcf7a' });
+    }
+    const scene = { terrain, objects, W: CARD_W, H: CARD_H, w, k, smoke, lights, biome, realm, water, sway, walkers, boats, seed, fall };
     _scenes.set(key0, scene);
     while (_scenes.size > SCENE_MAX) _scenes.delete(_scenes.keys().next().value);
     return scene;
@@ -919,6 +927,20 @@ async function renderFrame(state, frame, opts = {}) {
         ambient.drawBirds(ctx, sc.W, sc.H, t, seed);             // flocks crossing the sky
         ambient.drawButterflies(ctx, sc.W, sc.H, t, seed);       // garden flutter
         ambient.drawTint(ctx, sc.W, sc.H, t);                    // warm/cool breathing
+    }
+    // ── DAY & NIGHT CYCLE (Task 21: the village gets darker, its windows and
+    // forges glow through the dark) — applies to the static card too ──
+    const dnPhase = opts.phase || dayNight.phaseAt();
+    dayNight.grade(ctx, sc.W, sc.H, dnPhase);
+    if (dnPhase === 'night' || dnPhase === 'dusk') {
+        for (const l of (sc.lights || [])) {
+            dayNight.light(ctx, l.x, l.y, sc.H * 0.055, l.warm, dnPhase === 'night' ? 0.5 : 0.26, false);
+            dayNight.light(ctx, l.x, l.y, sc.H * 0.014, l.warm, dnPhase === 'night' ? 0.55 : 0.3);
+        }
+        if (dnPhase === 'night') {
+            dayNight.moonStars(ctx, sc.W, sc.H, { seed: 51, moonX: 0.9, moonY: 0.07, stars: 16, starAlpha: 0.75, skyH: 0.22 });
+            dayNight.fireflies(ctx, sc.W, sc.H, t, sc.seed, 6, { x: sc.W * 0.1, y: sc.H * 0.45, w: sc.W * 0.8, h: sc.H * 0.45 });
+        }
     }
     if (opts.celebrate) {
         // owner 2026-10-19: the building falls in and the confetti explodes FROM it —
@@ -1014,7 +1036,7 @@ function cachePut(map, k, out) {
 const _renderCache = new Map();
 const CACHE_TTL = 10 * 60 * 1000;
 function stateHash(state, opts = {}) {
-    return hashStr(JSON.stringify(['v11-iso-life', state.owner, realmBiome(state), state.structures, state.freePlots, opts.hint || '', opts.static ? 1 : 0, opts.celebrate ? JSON.stringify(opts.celebrate) : '']));
+    return hashStr(JSON.stringify(['v12-iso-life', state.owner, realmBiome(state), state.structures, state.freePlots, opts.hint || '', opts.static ? 1 : 0, opts.celebrate ? JSON.stringify(opts.celebrate) : '', opts.phase || dayNight.phaseAt()]));
 }
 
 async function renderBaseImage(state, opts = {}) {

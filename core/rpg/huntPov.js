@@ -1,8 +1,10 @@
 'use strict';
 // ═══════════════════════════════════════════════════════════════════════════
-//  HUNT POV — the hunting grounds as a living first-person scene (Task 20,
-//  owner: "make something like that for hunting too, find the appropriate
-//  animal sprites for that sprite sheet, and add the overlay to both").
+//  HUNT POV — the hunting grounds as a living first-person scene (Task 20:
+//  "make something like that for hunting too, find the appropriate animal
+//  sprites for that sprite sheet, and add the overlay to both" · Task 21:
+//  "find sprites of deers that fit and other animals grazing and fill them
+//  in. Place some grass around too." + the shared day/night cycle).
 //
 //  Same contract as the pond (dockPov.js), applied to the hunt:
 //    • ANIMAL SPRITE SHEET — rabbit / boar / stag walk+hop cycles drawn in the
@@ -23,15 +25,19 @@
 //  if anything here throws — the roll still happened exactly once).
 // ═══════════════════════════════════════════════════════════════════════════
 const mediaCache = require('./mediaCache');
+const dayNight = require('./dayNight');
 const dockPov = require('./dockPov');
 const K = require('./kingdom3d');
 const hashStr = (s) => K.hashStr(String(s || ''));
 
 const GW = 480, GH = 360, FRAMES = 16, DELAY_MS = 120;   // 1.92s loop
 const CONTAINER_MAGIC = 'HUNTPOV1';
-const SHEET_MAGIC = 'HUNTSPR1';
+const SHEET_MAGIC = 'HUNTSPR2';
 const CW = 96, CH = 72, COLS = 4;                        // sheet cell geometry
-const ROW = { rabbit: 0, boar: 1, stag: 2, alert: 3 };   // sheet rows
+// Task 21: the sheet grew a proper deer herd + other grazing animals —
+// rabbit / boar / stag / alert-stag / DOE / DOE-GRAZING / FAWN / SHEEP.
+const ROW = { rabbit: 0, boar: 1, stag: 2, alert: 3, doe: 4, graze: 5, fawn: 6, sheep: 7 };
+const SHEET_ROWS = 8;
 // Uniform fit-scale: the tallest art (stag + antlers ≈ 50u) must stay inside
 // the 72px cell — 1.3 keeps every animal whole with a consistent pixel chunk.
 const SHEET_FIT = 1.3;
@@ -92,11 +98,11 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1 } = {}) {
     const rng = K.mulberry32(hashStr(`huntpov:${biome}:${lvl}`));
     const hz = Math.round(HZ * h), foreY = Math.round(FORE * h);
 
-    // ── sky: three flat bands + sun ──
+    // ── sky: three flat bands (the sun/moon are added per-hour by the
+    // day/night cycle — dockPov.paintCelestial — so one base serves every hour) ──
     ctx.fillStyle = P.sky[0]; ctx.fillRect(0, 0, w, Math.round(hz * 0.45));
     ctx.fillStyle = P.sky[1]; ctx.fillRect(0, Math.round(hz * 0.45), w, Math.round(hz * 0.3));
     ctx.fillStyle = P.sky[2]; ctx.fillRect(0, Math.round(hz * 0.75), w, hz - Math.round(hz * 0.75));
-    ctx.fillStyle = P.sun; ctx.beginPath(); ctx.arc(w * 0.74, hz * 0.4, h * 0.05, 0, Math.PI * 2); ctx.fill();
 
     // drifting clouds (flat 2-tone puffs, slow loop drift)
     for (let i = 0; i < 3; i++) {
@@ -131,6 +137,17 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1 } = {}) {
     const bands = [[hz, foreY * 0.45], [foreY * 0.45, foreY * 0.68], [foreY * 0.68, h]];
     for (let i = 0; i < 3; i++) { ctx.fillStyle = P.meadow[i]; ctx.fillRect(0, bands[i][0], w, bands[i][1] - bands[i][0] + 1); }
 
+    // ── grass patches (Task 21: "place some grass around too") — soft darker
+    // swaths the grazers can stand in, seeded per (biome, lvl) ──
+    for (let i = 0; i < 9 + lvl * 2; i++) {
+        const f = rng();
+        const py = hz + (h - hz) * (0.1 + 0.85 * f), px2 = rng() * w;
+        const ps = h * 0.012 * (0.6 + f * 1.6);
+        ctx.fillStyle = i % 2 ? P.tuft : P.fg; ctx.globalAlpha = 0.16 + 0.1 * f;
+        ctx.beginPath(); ctx.ellipse(px2, py, ps * 2.4, ps * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+    }
+
     // ── trail: dirt path from bottom-centre converging to the treeline gap ──
     const tb = [w * 0.30, w * 0.56], tg = [w * (GAPX - 0.024), w * (GAPX + 0.024)];
     ctx.fillStyle = P.trail[1];
@@ -158,8 +175,9 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1 } = {}) {
         ctx.fillStyle = P.rock[0]; ctx.beginPath(); ctx.ellipse(rx - rs * 0.3, ry - rs * 0.3, rs * 1.1, rs * 0.55, 0, 0, Math.PI * 2); ctx.fill();
     }
 
-    // ── grass tufts: seeded, blades sway with per-tuft phase ──
-    const ntuft = 24 + lvl * 4;
+    // ── grass tufts: seeded, blades sway with per-tuft phase. Task 21: the
+    // grounds got noticeably lusher — nearly double the tufts. ──
+    const ntuft = 44 + lvl * 8;
     for (let i = 0; i < ntuft; i++) {
         const f = rng();                                   // 0=far 1=near
         const ty = hz + (h - hz) * (0.08 + 0.88 * f), tx = rng() * w;
@@ -218,11 +236,75 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1 } = {}) {
     return { gapX: w * GAPX, hz, foreY };
 }
 
+// ── the WILDLIFE PLAN (Task 21: deer herd + other animals grazing) ──────────
+// Deterministic per (biome, lvl): a stag + doe by the treeline, a grazing doe
+// and her fawn mid-field, two sheep nearer the foreground — kept off the trail
+// and clear of the camp. Blitted from the sprite sheet into every base frame.
+function wildlifePlan(w, h, { biome = 'isle', lvl = 1 } = {}) {
+    const rng = K.mulberry32(hashStr(`wildlife:${biome}:${lvl}`));
+    const hz = Math.round(HZ * h);
+    const put = (row, xF, depth, flip = false, scaleBump = 0) => {
+        const gy = hz + (h - hz) * depth;
+        const sc = (0.5 + depth * 0.7) * (1 + scaleBump);
+        const jitter = (rng() - 0.5) * w * 0.03;
+        return { row, x: w * xF + jitter, y: gy, sc, flip, depth };
+    };
+    const plan = [
+        put(ROW.stag, 0.155, 0.20, true),          // the old stag watches the treeline
+        put(ROW.graze, 0.235, 0.25),               // a doe grazes beside him
+        put(ROW.fawn, 0.255, 0.46),                // her fawn stays close
+        put(ROW.graze, 0.30, 0.52),                // another doe, head down
+        put(ROW.sheep, 0.60, 0.72, true),          // two sheep work the near grass
+        put(ROW.sheep, 0.665, 0.78, false, 0.05),
+        put(ROW.graze, 0.095, 0.66, true),         // a lone doe on the left reach
+    ];
+    // grass at each grazer's feet — "place some grass around too"
+    const tufts = [];
+    for (const a of plan) {
+        for (let i = 0; i < 5; i++) {
+            tufts.push({ x: a.x + (rng() - 0.5) * w * 0.05, y: a.y + (rng() - 0.2) * h * 0.012, s: (h * 0.008) * (0.5 + a.depth * 1.3) });
+        }
+    }
+    return { plan, tufts };
+}
+function blitWildlife(ctx, w, h, t, sheet, { biome = 'isle', lvl = 1 } = {}) {
+    const { plan, tufts } = wildlifePlan(w, h, { biome, lvl });
+    // fresh grass right at the hooves, swaying with the rest
+    ctx.strokeStyle = (PALETTES[biome] || PALETTES.isle).tuft; ctx.lineCap = 'round';
+    for (const tf of tufts) {
+        const sway = Math.sin(t * Math.PI * 2 + tf.x) * tf.s * 0.7;
+        ctx.lineWidth = Math.max(1, h * 0.0026);
+        for (const a of [-0.5, 0, 0.5]) {
+            ctx.beginPath(); ctx.moveTo(tf.x, tf.y);
+            ctx.quadraticCurveTo(tf.x + a * tf.s * 0.4, tf.y - tf.s * 0.7, tf.x + a * tf.s + sway, tf.y - tf.s * 1.4); ctx.stroke();
+        }
+    }
+    for (const a of plan) {
+        let row = a.row, pose = 0;
+        if (row === ROW.graze) pose = Math.floor((((t * 1.7 + a.depth) % 1)) * 4);   // slow nibble
+        else if (row === ROW.sheep) pose = Math.floor((((t * 1.4 + a.depth) % 1)) * 4);
+        else if (row === ROW.fawn) pose = Math.floor((t * 3 + a.depth) % 4);         // hop-shuffle
+        blitAnimal(ctx, sheet, row, pose, a.x, a.y, a.sc, a.flip);
+    }
+}
+
+// ── camp anchors for the night lights (fire + tent opening) ────────────────
+function campAnchors(w, h) {
+    const hz = Math.round(HZ * h), foreY = Math.round(FORE * h);
+    const campY = hz + (foreY - hz) * 0.42, campX = w * 0.80;
+    return {
+        fire: { x: campX - w * 0.075, y: campY + h * 0.012 },
+        tent: { x: campX, y: campY - h * 0.012 },
+        butt: { x: w * 0.66, y: hz + (foreY - hz) * 0.3 - h * 0.05 },
+    };
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
-//  ANIMAL SPRITE SHEET — rabbit / boar / stag, 4 walk-hop frames each, plus a
-//  head-high "alert" stag. Baked ONCE into one PNG and kept through mediaCache
-//  ("find the appropriate animal sprites for that sprite sheet" — these are
-//  this base's own animals, flat-shaded to match the camp critters).
+//  ANIMAL SPRITE SHEET — Task 21 herd: rabbit / boar / stag walk cycles +
+//  head-high alert stag + DOE (walk) + DOE-GRAZING (head down, nibbling) +
+//  FAWN (small, spotted) + SHEEP (woolly grazer). Baked ONCE into one PNG
+//  and kept through mediaCache ("find sprites of deers that fit and other
+//  animals grazing and fill them in" — same flat-shaded style as the camp).
 // ═══════════════════════════════════════════════════════════════════════════
 function px(ctx, x, y, w2, h2, col) { ctx.fillStyle = col; ctx.fillRect(x, y, w2, h2); }
 /** Draw one animal cell at origin (bottom-centre of its cell). pose 0..3. */
@@ -255,6 +337,60 @@ function paintAnimal(ctx, kind, pose) {
         px(ctx, 2 * u, by - 2 * u, 2.5 * u, 2 * u, '#4a3526');                   // ear
         px(ctx, -7.5 * u, by - 1 * u, 1.5 * u, 3 * u, '#241810');                // tail nub
         px(ctx, -4 * u, by + 1 * u, 4 * u, 1.2 * u, '#3a2a1c');                  // bristle strip
+    } else if (kind === 'doe' || kind === 'graze') {
+        // the doe: the stag's frame with NO antlers, slimmer + a lighter coat;
+        // 'graze' drops her head into the grass and nibbles (pose varies the bite)
+        const grazing = kind === 'graze';
+        const by = -9 * u, headDip = grazing ? 6.5 * u + Math.sin(pose * 1.57) * 1.2 * u : 0;
+        const tail = pose % 2 ? 1.2 * u : 0;                       // idle tail flick
+        for (const [lx, la] of [[-5, legA], [-2.5, -legA], [2.5, legA], [5.5, -legA]]) {
+            px(ctx, lx * u, -6 * u, 1.5 * u, 6 * u + Math.abs(la) * u * 0.4, '#7a4c24');
+        }
+        px(ctx, -6 * u, by, 12 * u, 4.2 * u, '#b07a44');           // body (lighter than the stag)
+        px(ctx, -4 * u, by + 3 * u, 8 * u, 1.4 * u, '#e8d0a4');    // belly
+        px(ctx, -7.5 * u, by - 0.5 * u - tail, 2 * u, 3 * u, '#f4ead6');   // tail
+        px(ctx, 3 * u, by - 5 * u + headDip * 0.4, 2.3 * u, 6 * u, '#b07a44');   // neck
+        if (grazing) {
+            px(ctx, 4.5 * u, by - 2.6 * u + headDip * 0.9, 4.5 * u, 2.1 * u, '#b07a44');   // head down in the grass
+            px(ctx, 8.6 * u, by - 1.8 * u + headDip * 0.9, 1.2 * u, 1.2 * u, '#2a1a0c');
+            px(ctx, 6.5 * u, by - 2.2 * u + headDip * 0.9, 1.2 * u, 1.2 * u, '#241810');
+            px(ctx, 4 * u, by - 4.2 * u + headDip * 0.9, 1.8 * u, 2.6 * u, '#8a5a2c');     // ear
+        } else {
+            px(ctx, 4.5 * u, by - 7 * u, 4.5 * u, 2.2 * u, '#b07a44');   // head high
+            px(ctx, 8.5 * u, by - 6.4 * u, 1.3 * u, 1.3 * u, '#2a1a0c');
+            px(ctx, 6.5 * u, by - 6.8 * u, 1.2 * u, 1.2 * u, '#241810');
+            px(ctx, 4 * u, by - 8 * u, 1.8 * u, 3 * u, '#8a5a2c');
+        }
+    } else if (kind === 'fawn') {
+        // the baby: half-size, spotted back; little hop-shuffle poses
+        const hop = pose === 1 ? -1.6 * u : 0;
+        const by = -5 * u + hop;
+        for (const [lx, la] of [[-3.5, legA], [-1.5, -legA], [1.5, legA], [3.5, -legA]]) {
+            px(ctx, lx * u, -3 * u, 1.1 * u, 3 * u + Math.abs(la) * u * 0.3, '#7a4c24');
+        }
+        px(ctx, -4 * u, by, 8 * u, 3 * u, '#c08a50');
+        for (const [sx2, sy2] of [[-2.5, 0.5], [-0.5, 1.2], [1.5, 0.5], [-1.5, 1.8], [0.5, 2.1]]) {
+            px(ctx, sx2 * u, by + sy2 * u, 0.9 * u, 0.9 * u, '#f0e2c0');   // white spots
+        }
+        px(ctx, 2.5 * u, by - 3.4 * u, 2 * u, 4 * u, '#c08a50');       // neck
+        px(ctx, 3.5 * u, by - 4.6 * u, 3.2 * u, 1.8 * u, '#c08a50');   // head
+        px(ctx, 6.2 * u, by - 4.1 * u, 1 * u, 1 * u, '#2a1a0c');       // nose
+        px(ctx, 5 * u, by - 4.3 * u, 0.9 * u, 0.9 * u, '#241810');     // eye
+        px(ctx, 3 * u, by - 5.6 * u, 1.4 * u, 2 * u, '#9a6a38');       // ear
+    } else if (kind === 'sheep') {
+        // the other grazer: round woolly body, dark face + legs, nibbling
+        const by = -7 * u, headDip = 4.5 * u + Math.sin(pose * 1.57) * 1 * u;
+        const wool = '#f0ead8', woolD = '#d8d0bc';
+        for (const [lx, la] of [[-4, legA], [-1.5, -legA], [1.5, legA], [4, -legA]]) {
+            px(ctx, lx * u, -3 * u, 1.4 * u, 3 * u, '#3a3228');
+        }
+        px(ctx, -6 * u, by, 12 * u, 4.6 * u, wool);                // wool body
+        px(ctx, -5 * u, by - 1 * u, 10 * u, 1.6 * u, woolD);       // wool shading
+        px(ctx, 4.5 * u, by - 1.5 * u + headDip * 0.55, 2 * u, 4 * u, '#3a3228');  // neck
+        px(ctx, 5 * u, by + headDip, 3.4 * u, 2 * u, '#3a3228');   // head down grazing
+        px(ctx, 7.8 * u, by + 1.2 * u + headDip, 1 * u, 1 * u, '#181008'); // eye
+        px(ctx, 3.8 * u, by - 2.4 * u + headDip * 0.4, 1.5 * u, 1.5 * u, '#2e2820'); // ear
+        px(ctx, -7 * u, by - 0.6 * u, 1.4 * u, 2.4 * u, wool);     // woolly tail
     } else {                                                                       // stag (walk + alert)
         const alert = kind === 'alert';
         const by = -9 * u, headUp = alert ? 2.5 * u : 0;
@@ -276,14 +412,14 @@ function paintAnimal(ctx, kind, pose) {
         px(ctx, 8.2 * u, ay - 2.6 * u, 1.4 * u, 1.2 * u, ant); px(ctx, 6.2 * u, ay - 2.4 * u, 1.4 * u, 1.2 * u, ant);
     }
 }
-/** Bake (once) the sprite sheet PNG — 4 rows × 4 cols of CW×CH cells. */
+/** Bake (once) the sprite sheet PNG — 8 rows × 4 cols of CW×CH cells. */
 async function getHuntSpriteSheet() {
-    const out = await mediaCache.cached('huntsprites', 'hs1', async () => {
+    const out = await mediaCache.cached('huntsprites', 'hs2', async () => {
         const { createCanvas } = require('canvas');
-        const cv = createCanvas(CW * COLS, CH * 4), c2 = cv.getContext('2d');
+        const cv = createCanvas(CW * COLS, CH * SHEET_ROWS), c2 = cv.getContext('2d');
         c2.imageSmoothingEnabled = false;
-        const kinds = ['rabbit', 'boar', 'stag', 'alert'];
-        for (let r = 0; r < 4; r++) {
+        const kinds = Object.keys(ROW);
+        for (let r = 0; r < SHEET_ROWS; r++) {
             for (let p = 0; p < COLS; p++) {
                 c2.save(); c2.translate(p * CW + CW / 2, (r + 1) * CH - 3);  // col p, row r
                 c2.scale(SHEET_FIT, SHEET_FIT);    // fit-scale: whole animal in every cell
@@ -383,15 +519,20 @@ function decodePngs(pngs) {
     return pngs.map((p) => { const im = new Image(); im.src = p; return im; });
 }
 
-/** Bake (once) the base frames for a biome+level. Every player shares one bake. */
+/** Bake (once) the base frames for a biome+level — the clearing WITH its
+ *  grazing herd blitted in (Task 21). Every player shares one bake. */
 async function getHuntBaseFrames({ biome = 'isle', lvl = 1 } = {}) {
-    const key = `hp1:${biome}:L${Math.max(1, Math.min(3, lvl))}`;
+    const key = `hp2:${biome}:L${Math.max(1, Math.min(3, lvl))}`;
     const out = await mediaCache.cached('huntpov', key, async () => {
         const { createCanvas } = require('canvas');
+        const sheet = await getHuntSpriteSheet();
         const pngs = [];
         for (let i = 0; i < FRAMES; i++) {
             const cv = createCanvas(GW, GH), c2 = cv.getContext('2d');
             paintFrame(c2, GW, GH, i / FRAMES, { biome, lvl });
+            // the deer herd + sheep live IN the clearing now (base art, graded
+            // with everything else by the day/night cycle at compose time)
+            blitWildlife(c2, GW, GH, i / FRAMES, sheet, { biome, lvl });
             pngs.push(cv.toBuffer('image/png'));
         }
         return { buffer: dockPov.packContainer(GW, GH, DELAY_MS, pngs, CONTAINER_MAGIC), contentType: 'application/x-huntpov' };
@@ -407,38 +548,93 @@ async function getHuntBaseFrames({ biome = 'isle', lvl = 1 } = {}) {
     return _imgCache.get(ck);
 }
 
-/** `.j hunt` — the hunt GIF: kept base frames + THIS hunt's overlay, GIF89a. */
-async function renderHuntGif({ biome = 'isle', lvl = 1, band = 'low' } = {}) {
+// ── compose: kept base frames + the hour's grade + night lights + overlay ──
+// Cached per (biome, level, phase, band); the loot plate is drawn per catch
+// AFTER this so the cache stays tiny while every hunt still explains itself.
+async function composeHunt({ biome = 'isle', lvl = 1, phase = null, band = 'low' } = {}) {
     lvl = Math.max(1, Math.min(3, lvl));
-    const key = `hg1:${biome}:L${lvl}:${band}`;
-    return mediaCache.cached('huntgif', key, async () => {
+    phase = phase || dayNight.phaseAt();
+    const key = `hgc1:${biome}:L${lvl}:${phase}:${band}`;
+    return mediaCache.cached('huntcompose', key, async () => {
         const { createCanvas } = require('canvas');
-        const { encodeGif } = require('../utils/gif89a');
         const base = await getHuntBaseFrames({ biome, lvl });
         const sheet = await getHuntSpriteSheet();
-        const frames = [];
+        const pngs = [];
         for (let i = 0; i < FRAMES; i++) {
             const cv = createCanvas(base.gw, base.gh), c2 = cv.getContext('2d');
             c2.drawImage(base.imgs[i], 0, 0, base.gw, base.gh);
+            dayNight.grade(c2, base.gw, base.gh, phase);
+            if (phase === 'night' || phase === 'dusk') {
+                const A = campAnchors(base.gw, base.gh);
+                dayNight.light(c2, A.fire.x, A.fire.y, base.gh * 0.13, '#ffb45a', phase === 'night' ? 0.6 : 0.34);
+                dayNight.light(c2, A.tent.x, A.tent.y, base.gh * 0.07, '#ffcf7a', phase === 'night' ? 0.34 : 0.18, false);
+                if (lvl >= 2) dayNight.light(c2, A.butt.x, A.butt.y, base.gh * 0.05, '#ffcf7a', 0.16, false);
+                if (phase === 'night') {
+                    dayNight.moonStars(c2, base.gw, base.gh, { seed: 901 + K.hashStr(String(biome)) % 97, moonX: 0.24, moonY: 0.10, stars: 22, skyH: HZ * 0.92 });
+                    dayNight.fireflies(c2, base.gw, base.gh, i / FRAMES, 71, 8, { x: 0, y: base.gh * 0.34, w: base.gw, h: base.gh * 0.6 });
+                }
+            }
             // "add the overlay to both": this hunt's animal + effects drawn OVER
             // the kept clearing animation — same contract as the pond.
             paintHuntOverlay(c2, base.gw, base.gh, i / FRAMES, band, sheet);
-            const d = c2.getImageData(0, 0, base.gw, base.gh);
+            pngs.push(cv.toBuffer('image/png'));
+        }
+        return { buffer: dockPov.packContainer(base.gw, base.gh, base.delayMs, pngs, CONTAINER_MAGIC), contentType: 'application/x-huntcompose' };
+    });
+}
+
+/** `.j hunt` — the hunt GIF: kept base frames + hour + THIS hunt's overlay +
+ * the grounds/catch plate. Final GIF cached per (biome, lvl, phase, band, loot). */
+async function renderHuntGif({ biome = 'isle', lvl = 1, band = 'low', drops = {}, phase = null } = {}) {
+    lvl = Math.max(1, Math.min(3, lvl));
+    phase = phase || dayNight.phaseAt();
+    const lines = dockPov.plateLines('hunt', drops);
+    const plateKey = K.hashStr(JSON.stringify(lines));
+    const key = `hg2:${biome}:L${lvl}:${phase}:${band}:${plateKey}`;
+    return mediaCache.cached('huntgif', key, async () => {
+        const { createCanvas } = require('canvas');
+        const { encodeGif } = require('../utils/gif89a');
+        try { require('./worldMapRenderer')._ensureFonts(); } catch (e) { /* default fonts */ }
+        const comp = await composeHunt({ biome, lvl, phase, band });
+        const c = dockPov.unpackContainer(comp.buffer, CONTAINER_MAGIC);
+        if (!c || c.pngs.length !== FRAMES) throw new Error('hunt compose container unreadable');
+        const imgs = decodePngs(c.pngs);
+        const frames = [];
+        for (let i = 0; i < FRAMES; i++) {
+            const cv = createCanvas(c.gw, c.gh), c2 = cv.getContext('2d');
+            c2.drawImage(imgs[i], 0, 0, c.gw, c.gh);
+            dockPov.drawResultPlate(c2, c.gw, c.gh, { title: 'The Hunting Grounds', lines });
+            const d = c2.getImageData(0, 0, c.gw, c.gh);
             frames.push(Buffer.from(d.data.buffer, d.data.byteOffset, d.data.byteLength));
         }
-        const gif = encodeGif({ width: base.gw, height: base.gh, frames, delayMs: base.delayMs, loop: 0 });
+        const gif = encodeGif({ width: c.gw, height: c.gh, frames, delayMs: c.delayMs, loop: 0 });
         if (!gif || gif.length < 500) throw new Error('hunt gif encode failed');
         return { buffer: gif, contentType: 'image/gif' };
     });
 }
 
-/** `.j base hunting` viewer still — same clearing composition, clean. */
-function paintStill(ctx, w, h, { biome = 'isle', lvl = 1 } = {}) {
-    return paintFrame(ctx, w, h, 0, { biome, lvl });
+/** `.j base hunting` viewer still — the clearing wearing the hour, herd in. */
+async function paintStill(ctx, w, h, { biome = 'isle', lvl = 1, phase = null } = {}) {
+    phase = phase || dayNight.phaseAt();
+    paintFrame(ctx, w, h, 0, { biome, lvl });
+    const sheet = await getHuntSpriteSheet();
+    blitWildlife(ctx, w, h, 0, sheet, { biome, lvl });
+    dockPov.paintCelestial(ctx, w, h, 0, phase, { glitter: false });
+    dayNight.grade(ctx, w, h, phase);
+    if (phase === 'night' || phase === 'dusk') {
+        const A = campAnchors(w, h);
+        dayNight.light(ctx, A.fire.x, A.fire.y, h * 0.13, '#ffb45a', phase === 'night' ? 0.6 : 0.34);
+        dayNight.light(ctx, A.tent.x, A.tent.y, h * 0.07, '#ffcf7a', phase === 'night' ? 0.34 : 0.18, false);
+        if (phase === 'night') {
+            dayNight.moonStars(ctx, w, h, { seed: 901 + K.hashStr(String(biome)) % 97, moonX: 0.24, moonY: 0.10, stars: Math.round(22 * w / GW), skyH: HZ * 0.92 });
+            dayNight.fireflies(ctx, w, h, 0, 71, 8, { x: 0, y: h * 0.34, w, h: h * 0.6 });
+        }
+    }
 }
 
 module.exports = {
-    renderHuntGif, getHuntBaseFrames, getHuntSpriteSheet, paintStill, paintFrame,
-    paintHuntOverlay, blitAnimal, paintAnimal, PALETTES, ROW, GW, GH, FRAMES, DELAY_MS,
+    renderHuntGif, composeHunt, getHuntBaseFrames, getHuntSpriteSheet, paintStill, paintFrame,
+    paintHuntOverlay, blitAnimal, blitWildlife, wildlifePlan, campAnchors, paintAnimal,
+    PALETTES, ROW, SHEET_ROWS, GW, GH, FRAMES, DELAY_MS,
     CONTAINER_MAGIC, SHEET_MAGIC, CW, CH, COLS,
 };

@@ -45,27 +45,30 @@ check('static zoom card kept as fallback (gif failure ≠ gameplay failure)', /r
 check('send probes isGifBuffer → gifPlayback', /isGifBuffer\(media\.buffer\)/.test(bb) && /gifPlayback = true/.test(bb));
 check('hunt note shows today counter; fish note says NO line rest', /Hunts today: \$\{res\.dailyUsed\}/.test(bb) && /No line rest/.test(bb));
 
-console.log('\n--- §C dock-POV module ---');
-check('dockPov exports the compose/still/frame API', /renderFishingGif, getBaseFrames, paintStill, paintFrame/.test(dp));
-check('true POV layout: horizon high, water upper frame, dock lower foreground', /HORIZON = 0\.16/.test(dp) && /DOCK_EDGE = 0\.63/.test(dp));
-check('GIF params: 480×360, 16 frames, 120ms', /GW = 480, GH = 360, FRAMES = 16, DELAY_MS = 120/.test(dp));
-check('ambient fish: 5-7 silhouettes by level (spec §Pond)', /nf = 5 \+ Math\.max\(0, lvl - 1\)/.test(dp));
-check('base frames keyed WITHOUT user seed (shared "generate once")', /dp1:\$\{biome\}:L\$/.test(dp) && !/dp1:\$\{.*userId/.test(dp));
-check('composed GIF keyed only by biome/level/band (no loot text in key)', /fg1:\$\{biome\}:L\$\{lvl\}:\$\{band\}/.test(dp));
-check('rarity signalled only AFTER the roll (overlay contract)', /Drawn AFTER the roll is known/.test(dp));
+console.log('\n--- §C the pond: girl-angler master asset (Task 21) ---');
+check('THE GIRL seated on the dock with the rod (owner: "a girl that has the floating thing on the water")', /function paintGirl/.test(dp) && /straw hat|straw = '#d8b86a'/.test(dp));
+check('float bobbing up and down SLIGHTLY (Task 21 softened bob: BOB_AMP 0.24)', /BOB_AMP = 0\.24/.test(dp) && /function floatBob/.test(dp));
+check('committed repo asset loader (generated once, saved permanently)', /loadCommitted/.test(dp) && /ASSET_VER/.test(dp) && /assets', 'scenes/.test(dp));
+check('day master baked with NO sun (compose adds the hour per phase)', /NO sun — compose adds the hour/.test(dp));
+check('diegetic "THE POND" sign on the dock (the overlay that explains the place)', /THE POND/.test(dp) && /the sign: "THE POND" on a post/.test(dp));
+check('dayNight cycle wired into the compose (grade + lantern/moon lights)', /dayNight\.grade\(c2, master\.gw, master\.gh, phase\)/.test(dp) && /dayNight\.light\(c2, lantern\.x/.test(dp));
+check('biome washes keep the 5 realms distinct over the one master', /WASHERS/.test(dp) && /desert: \{/.test(dp) && /volcanic: \{/.test(dp));
+check('compose cached per (biome, level, phase, band) — pondcompose kind', /pgc1:\$\{biome\}:L\$\{lvl\}:\$\{phase\}:\$\{band\}/.test(dp) && /mediaCache\.cached\('pondcompose'/.test(dp));
+check('RESULT PLATE: explains the pond + shows the catch, rarity-coloured', /drawResultPlate/.test(dp) && /The Pond/.test(dp) && /RARITY_COL/.test(dp));
+check('final GIF cached per loot plate (pg2 + plateKey)', /pg2:\$\{biome\}:L\$\{lvl\}:\$\{phase\}:\$\{band\}:\$\{plateKey\}/.test(dp) && /mediaCache\.cached\('fishgif'/.test(dp));
+check('rarity signalled only AFTER the roll (overlay contract)', /rarity-safe/.test(dp));
 check('RARE→carp approach, EPIC→big koi + splash', /band === 'mid' \|\| band === 'epic'/.test(dp) && /band === 'epic'/.test(dp));
-check('base frames stored via mediaCache (disk L2 = "generate once and keep it")', /mediaCache\.cached\('dockpov'/.test(dp));
-check('composed GIF cached under fishgif kind', /mediaCache\.cached\('fishgif'/.test(dp));
+check('GIF params: 480×360, 16 frames, 120ms', /GW = 480, GH = 360, FRAMES = 16, DELAY_MS = 120/.test(dp));
 check('container roundtrip guards: magic + frame count', /CONTAINER_MAGIC/.test(dp) && /c\.pngs\.length !== FRAMES/.test(dp));
-check('gif89a encodeGif used (no new deps, no ffmpeg)', /require\('\.\.\/utils\/gif89a'\)/.test(dp) && /encodeGif\(\{ width: base\.gw/.test(dp));
+check('gif89a encodeGif used (no new deps, no ffmpeg)', /require\('\.\.\/utils\/gif89a'\)/.test(dp) && /encodeGif\(\{ width: c\.gw/.test(dp));
 
-console.log('\n--- §C2 the float (Task 20: bobbing IN and OUT of the water) ---');
+console.log('\n--- §C2 the float (Task 20 kept: bobbing in/out; Task 21: slightly) ---');
 check('float geometry shared by base + overlay (floatGeom/floatBob/paintFloat)', /function floatGeom/.test(dp) && /function floatBob/.test(dp) && /function paintFloat/.test(dp));
 check('fixed waterline the body crosses (wlY = by + bs·0.55)', /wlY: by \+ bs \* 0\.55/.test(dp));
 check('dry/wet clip split at the waterline (body visibly in the water)', /rect\(bx - bs \* 1\.3, 0, bs \* 2\.6, wlY\)/.test(dp) && /rect\(bx - bs \* 1\.3, wlY/.test(dp));
 check('antenna tip rides highest, drawn per half (last to go under)', /byy - bs \* 1\.5/.test(dp));
 check('bite pulls the float UNDER (dip 1.35·bs at peak)', /dip = bite \* bs \* 1\.35/.test(dp));
-check('overlay re-draws line+float via the same paintFloat', /paintFloat\(ctx, w, h, t, P, \{ rod: false, line: true, dip \}\)/.test(dp));
+check('overlay re-draws line+float via the same paintFloat (rod false, dip passed)', /paintFloat\(ctx, w, h, t, P, \{ rod: false, line: true, dip, rodFrom: girl\.hands/.test(dp));
 check('contact ripple breathes with the bob', /contact ripple/.test(dp));
 check('container magic is parameterised (huntPov reuses the packer)', /function packContainer\(gw, gh, delayMs, pngs, magic = CONTAINER_MAGIC\)/.test(dp) && /function unpackContainer\(buf, magic = CONTAINER_MAGIC\)/.test(dp));
 

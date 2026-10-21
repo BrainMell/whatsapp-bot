@@ -100,6 +100,9 @@ async function renderLegacyChart(o = {}) {
         const ctx = canvas.getContext('2d');
         ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, W, H);
+        // Task 21: the legacy chart wears the hour too (pins + emblems drawn
+        // after, so they stay bright markers in the dark)
+        require('./dayNight').grade(ctx, W, H, require('./dayNight').phaseAt());
 
         const gName = o.guildName || null;
         if (gName) {

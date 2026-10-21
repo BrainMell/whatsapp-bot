@@ -411,13 +411,13 @@ async function cmdActivity(ctx, kind) {
             // ripples / RARE-EPIC approach / splash) is composited on top. Loot
             // text rides the caption. Failure falls through to the static zoom
             // card, then text — the roll already happened exactly once.
-            try { media = await require('./dockPov').renderFishingGif({ biome: biomeOf(rec), lvl: st.level, band: act.bandOf(res.drops, 'fish') }); } catch (e) { console.error('[base] fish gif failed:', e.message); }
+            try { media = await require('./dockPov').renderFishingGif({ biome: biomeOf(rec), lvl: st.level, band: act.bandOf(res.drops, 'fish'), drops: res.drops }); } catch (e) { console.error('[base] fish gif failed:', e.message); }
         } else {
             // Task 20: same "bake once, keep it, overlay the new stuff" pipeline
             // for the hunting grounds — animal sprite sheet (rabbit/boar/stag
             // walk cycles) rides the kept clearing animation per (biome,
             // barracks level); the band picks which animal shows AFTER the roll.
-            try { media = await require('./huntPov').renderHuntGif({ biome: biomeOf(rec), lvl: tier, band: act.bandOf(res.drops, 'hunt') }); } catch (e) { console.error('[base] hunt gif failed:', e.message); }
+            try { media = await require('./huntPov').renderHuntGif({ biome: biomeOf(rec), lvl: tier, band: act.bandOf(res.drops, 'hunt'), drops: res.drops }); } catch (e) { console.error('[base] hunt gif failed:', e.message); }
         }
         if (!media || !media.buffer) {
             // §13/§14 static fallback: the scene plays the REAL result — hunting

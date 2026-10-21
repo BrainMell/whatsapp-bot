@@ -580,6 +580,7 @@ async function renderStructureCard(o = {}) {
     const type = String(o.type || 'mines'), lvl = Math.max(1, Math.min(3, o.level || 1));
     const biome = o.biome || 'isle';
     const activity = o.activity || '', spotlight = !!o.spotlight, tint = o.tint || '';
+    const phase = o.phase || require('./dayNight').phaseAt();   // day/night cycle (Task 21)
     // Task 19 (spec §Pond): the pond VIEWER is the true dock-POV composition as
     // a clean still — no catch spotlight, no banner. Task 20: the hunting
     // grounds viewer gets the same treatment from huntPov. Canonical seeds so
@@ -587,21 +588,32 @@ async function renderStructureCard(o = {}) {
     const isPondView = type === 'pond' && !activity;
     const isHuntView = type === 'hunting' && !activity;
     const seed = isPondView ? hashStr('dockpov-still') : isHuntView ? hashStr('huntpov-still') : hashStr(`${o.seed || 'x'}:${type}`);
-    const key = hashStr(JSON.stringify(['sc2', isPondView ? 'pond_pov' : isHuntView ? 'hunt_pov' : type, lvl, biome, seed, activity, spotlight, tint, o.spec || {}]));
+    const key = hashStr(JSON.stringify(['sc3', isPondView ? 'pond_pov' : isHuntView ? 'hunt_pov' : type, lvl, biome, seed, activity, spotlight, tint, phase, o.spec || {}]));
     return mediaCache.cached('structcard', key, async () => {
         fonts();
         const { createCanvas } = require('canvas');
         const cv = createCanvas(W, H), ctx = cv.getContext('2d');
         if (isPondView) {
-            require('./dockPov').paintStill(ctx, W, H, { biome, lvl });
+            require('./dockPov').paintStill(ctx, W, H, { biome, lvl, phase });
         } else if (isHuntView) {
-            require('./huntPov').paintStill(ctx, W, H, { biome, lvl });
+            await require('./huntPov').paintStill(ctx, W, H, { biome, lvl, phase });
         } else {
             const { w, cen, focus } = buildScene(type, lvl, biome, seed, { activity, spotlight, tint });
             const bi = (K.biomeInfo('iso').biomes || {})[biome];
             const bd = biome === 'isle' ? BD.isle : bi ? { top: bi.backdrop[0], mid: bi.backdrop[1], bot: bi.backdrop[2] } : { top: '#356f6a', mid: '#1f4a4c', bot: '#0d2527' };
             w.layoutFixed(W, H, (focus || cen).x, (focus || cen).z, W / 2, (H - PANEL_H) * 0.52);
             await w.draw(ctx, { drawBackdrop: (c2) => { const g = c2.createLinearGradient(0, 0, 0, H); g.addColorStop(0, bd.top); g.addColorStop(0.5, bd.mid); g.addColorStop(1, bd.bot); c2.fillStyle = g; c2.fillRect(0, 0, W, H); } });
+            // Task 21 day/night: the close-up wears the hour; at night the
+            // structure's own windows/forge/cauldron glow through the dark.
+            const dn = require('./dayNight');
+            dn.grade(ctx, W, H, phase);
+            if (phase === 'night' || phase === 'dusk') {
+                const sp = w.proj(cen.x, cen.z, 1.4);
+                const warm = type === 'blacksmith' ? '#ff9a4a' : type === 'alchemy' ? '#8ee08e' : '#ffcf7a';
+                dn.light(ctx, sp.x, sp.y, H * 0.16, warm, phase === 'night' ? 0.4 : 0.22, false);
+                dn.light(ctx, sp.x, sp.y + H * 0.02, H * 0.08, warm, phase === 'night' ? 0.3 : 0.15);
+                if (phase === 'night') dn.moonStars(ctx, W, H, { seed: 31, moonX: 0.82, moonY: 0.09, stars: 0 });
+            }
         }
         // soft vignette so the panel + ribbon always read
         const vg = ctx.createRadialGradient(W / 2, H * 0.42, H * 0.25, W / 2, H * 0.45, H * 0.95);

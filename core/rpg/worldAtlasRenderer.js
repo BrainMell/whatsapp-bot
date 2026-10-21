@@ -287,7 +287,9 @@ async function renderWorldAtlasUnqueued(o = {}) {
         const guilds = (o.guilds || []).filter((g) => g && (g.name || g.guildName)).map(normGuild)
             .sort((a, b) => a.marker.y - b.marker.y);                                   // back-to-front
         const hi = o.highlight || null;
-        const key = K.hashStr(JSON.stringify([guilds.map((g) => [g.name, g.marker, g.hall, Math.min(g.members, 15), g.icon, g.color, g.type, g.img ? g.img.length : 0]), hi]));
+const dayNight = require('./dayNight');
+        const dnPhase = o.phase || dayNight.phaseAt();   // Task 21: the mortal world chart wears the hour
+        const key = K.hashStr(JSON.stringify([guilds.map((g) => [g.name, g.marker, g.hall, Math.min(g.members, 15), g.icon, g.color, g.type, g.img ? g.img.length : 0]), hi, dnPhase]));
         if (_memo.has(key)) return _memo.get(key);
 
         const { createCanvas } = require('canvas');
@@ -340,6 +342,16 @@ async function renderWorldAtlasUnqueued(o = {}) {
             const cc = Math.floor((wx - mx) / 29), rr2 = Math.floor((wy - my) / 17);
             if (t.realm[Math.min(t.rows - 1, rr2)] && t.realm[Math.min(t.rows - 1, rr2)][Math.min(t.cols - 1, cc)]) continue;
             ctx.beginPath(); ctx.moveTo(wx - 14, wy); ctx.quadraticCurveTo(wx - 7, wy - 5, wx, wy); ctx.quadraticCurveTo(wx + 7, wy + 5, wx + 14, wy); ctx.stroke();
+        }
+        // Task 21: the SEA + LAND wear the hour (grade stays inside the map
+        // frame so the parchment, plates and rosters stay readable). At night
+        // the moon rises over Aldafold and the sea goes deep-blue moonlit.
+        dayNight.grade(ctx, MW, MH, dnPhase, { x: mx, y: my, w: MW, h: MH });
+        if (dnPhase === 'night' || dnPhase === 'dusk') {
+            dayNight.moonStars(ctx, MW, MH, { seed: 41, moonX: 0.86, moonY: 0.1, stars: Math.round(18 * MW / 1000), mr: 13, starAlpha: 0.8, skyH: 0.45 });
+            ctx.save(); ctx.translate(mx, my); ctx.beginPath(); ctx.rect(0, 0, MW, MH); ctx.clip();
+            dayNight.light(ctx, MW * 0.86, MH * 0.1, MH * 0.07, '#cfe0ff', 0.2, false);
+            ctx.restore();
         }
         ctx.restore();
         ctx.strokeStyle = INK; ctx.lineWidth = 5; ctx.strokeRect(mx, my, MW, MH);

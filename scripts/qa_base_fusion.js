@@ -39,7 +39,7 @@ check('engine dispatch calls bb.runActivity', /bb\.runActivity\(actCtx/.test(en)
 
 console.log('\n--- §6 result contract in structureScenes ---');
 check('buildScene accepts activity/spotlight/tint', /const activity = String\(o\.activity \|\| ''\)/.test(sc));
-check('cache key includes activity/spotlight/tint (sc2, pond_pov/hunt_pov for the viewers)', /JSON\.stringify\(\['sc2', isPondView \? 'pond_pov' : isHuntView \? 'hunt_pov' : type, lvl, biome, seed, activity, spotlight, tint, o\.spec \|\| \{\}\]\)/.test(sc));
+check('cache key includes activity/spotlight/tint/phase (sc3, pond_pov/hunt_pov for the viewers)', /JSON\.stringify\(\['sc3', isPondView \? 'pond_pov' : isHuntView \? 'hunt_pov' : type, lvl, biome, seed, activity, spotlight, tint, phase, o\.spec \|\| \{\}\]\)/.test(sc));
 check('renderStructureCard passes opts into buildScene', /buildScene\(type, lvl, biome, seed, \{ activity, spotlight, tint \}\)/.test(sc));
 
 console.log('\n--- painters exist (identity dressing) ---');
