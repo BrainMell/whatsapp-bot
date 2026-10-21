@@ -175,6 +175,24 @@ function encodeGif({ width, height, frames, delayMs = 120, loop = 0 }) {
     }
 }
 
+/** Frame-0 JPEG for GIFs sent as { video, gifPlayback: true } — WhatsApp
+ *  builds the bubble preview from jpegThumbnail, and the engine patch stamps
+ *  a gray square on videos without one. node-canvas decodes GIF frame 0.
+ *  Never throws; null = caller falls back to the engine default. */
+function firstFrameJpeg(buf) {
+    try {
+        const { Image, createCanvas } = require('canvas');
+        const im = new Image();
+        im.src = buf;
+        if (!im.width || !im.height) return null;
+        const tw = 240, th = Math.round(240 * im.height / im.width);
+        const cv = createCanvas(tw, th), c = cv.getContext('2d');
+        c.drawImage(im, 0, 0, tw, th);
+        const jpg = cv.toBuffer('image/jpeg');
+        return jpg && jpg.length > 100 ? jpg : null;
+    } catch (e) { return null; }
+}
+
 // GIF87a/89a magic probe — send sites use this to pick gifPlayback
 function isGifBuffer(b) {
     return Buffer.isBuffer(b) && b.length > 6
@@ -182,4 +200,4 @@ function isGifBuffer(b) {
         && (b[3] === 0x38);                                   // '8'
 }
 
-module.exports = { encodeGif, isGifBuffer };
+module.exports = { firstFrameJpeg, encodeGif, isGifBuffer };

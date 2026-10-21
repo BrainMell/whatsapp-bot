@@ -429,8 +429,19 @@ async function cmdActivity(ctx, kind) {
             try { media = await renderZoom(ctx, rec, st, { banner: res.banner, note, activity: kind === 'fish' ? 'fishing' : 'hunting', spotlight: spot }); } catch (e) { console.error('[base] activity card failed:', e.message); }
         }
         if (media && media.buffer) {
-            const msg = { image: media.buffer, caption: res.text };
-            try { if (require('../utils/gif89a').isGifBuffer(media.buffer)) msg.gifPlayback = true; } catch (e) { /* plain image */ }
+            // ⚠ OWNER 2026-10-21 (fourth time he said it): "THE POND STILL SENDS
+            // AS AN IMAGE NOT A GIF." Root cause found in the Baileys proto:
+            // `gifPlayback` is a VIDEOmessage field — on imageMessage the flag
+            // is silently dropped, so { image, gifPlayback: true } lands as a
+            // STILL on the phone even though the bytes are a real GIF. Every
+            // animated lane that actually animates in this codebase (abyss
+            // cards, mentoring, burn/summon) sends { video, gifPlayback: true }.
+            let isGif = false;
+            try { isGif = require('../utils/gif89a').isGifBuffer(media.buffer); } catch (e) { /* plain image */ }
+            const msg = isGif
+                ? { video: media.buffer, gifPlayback: true, caption: res.text }
+                : { image: media.buffer, caption: res.text };
+            if (isGif && !msg.jpegThumbnail) msg.jpegThumbnail = require('../utils/gif89a').firstFrameJpeg(media.buffer);   // real frame-0 preview (renderers attach one; mediaCache warm hits don't carry it) — else the engine patch stamps gray on videos
             return ctx.sock.sendMessage(ctx.chatId, msg, { quoted: ctx.m });
         }
         return ctx.reply(res.text);

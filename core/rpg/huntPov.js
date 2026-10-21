@@ -25,6 +25,8 @@
 //  stays mandatory upstream (baseBuilder renders the static spotlight card
 //  if anything here throws — the roll still happened exactly once).
 // ═══════════════════════════════════════════════════════════════════════════
+const fs = require('fs');
+const path = require('path');
 const mediaCache = require('./mediaCache');
 const dayNight = require('./dayNight');
 const dockPov = require('./dockPov');
@@ -301,165 +303,118 @@ function campAnchors(w, h) {
     };
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  ANIMAL SPRITE SHEET — Task 21 herd: rabbit / boar / stag walk cycles +
-//  head-high alert stag + DOE (walk) + DOE-GRAZING (head down, nibbling) +
-//  FAWN (small, spotted) + SHEEP (woolly grazer). Baked ONCE into one PNG
-//  and kept through mediaCache ("find sprites of deers that fit and other
-//  animals grazing and fill them in" — same flat-shaded style as the camp).
-// ═══════════════════════════════════════════════════════════════════════════
-// ── shared flat-shaded helpers — the ESTABLISHED card-art technique: the same
-// ellipse-body + stroked-limb language as structureScenes.drawDeer/drawBoar.
-// Task 22 rebuild (owner: "the hunting animals??? did you even inspect them???"
-// — fair: the old cells were fillRect pixel blocks that read as boxy llamas).
-function shadeAt(ctx, x, y, rx, ry, a = 0.25) { ctx.save(); ctx.fillStyle = `rgba(20,14,6,${a})`; ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
-function strokeLeg(ctx, x1, y1, x2, y2, col, lw) { ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
-const TROT = [0.55, 0, -0.55, 0];   // leg swing (s units) per pose — diagonal pairs
-
-/** Draw one animal cell at origin (bottom-centre of its cell, ground at y=0).
- *  pose 0..3. Curved, stroked, properly proportioned — the herd finally fits
- *  the camp art it lives in. */
-function paintAnimal(ctx, kind, pose) {
-    const s = CH * 0.33;                      // body scale inside the cell
-    const legA = TROT[pose % 4];
-    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-    if (kind === 'stag' || kind === 'alert' || kind === 'doe' || kind === 'graze' || kind === 'fawn') {
-        const fawn = kind === 'fawn';
-        const doe = kind === 'doe' || kind === 'graze' || fawn;
-        const alert = kind === 'alert';
-        const grazing = kind === 'graze';
-        const k = fawn ? 0.58 : doe ? 0.92 : 1;                 // size factor
-        const body = fawn ? '#c08a50' : doe ? '#b07a44' : '#a86a38';
-        const dark = fawn ? '#7a4c24' : doe ? '#7a4c24' : '#6e4220';
-        const belly = fawn ? '#e8cfa0' : '#e0c08e';
-        const ss = s * k;
-        const bob = alert ? 0 : Math.sin(pose * Math.PI / 2) * 0.035 * ss;   // walk bob
-        ctx.save(); ctx.translate(0, bob);
-        shadeAt(ctx, 0, 0.02 * ss, 1.2 * ss, 0.16 * ss);
-        // far legs (dark), body, near legs — diagonal trot pairs
-        for (const [lx, o] of [[-0.62, legA], [0.55, -legA]]) {
-            strokeLeg(ctx, lx * ss + 0.1 * ss, -0.75 * ss, lx * ss + o * ss * 0.35, -0.02 * ss, dark, 0.13 * ss);
-        }
-        ctx.fillStyle = body; ctx.strokeStyle = dark; ctx.lineWidth = 0.05 * ss;
-        ctx.beginPath(); ctx.ellipse(0, -0.95 * ss, 0.95 * ss, 0.46 * ss, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = belly; ctx.beginPath(); ctx.ellipse(0.05 * ss, -0.72 * ss, 0.7 * ss, 0.17 * ss, 0, 0, Math.PI); ctx.fill();
-        for (const [lx, o] of [[-0.45, -legA], [0.7, legA]]) {
-            strokeLeg(ctx, lx * ss, -0.7 * ss, lx * ss + o * ss * 0.35, -0.02 * ss, dark, 0.13 * ss);
-        }
-        // tail
-        ctx.fillStyle = '#f4ead6'; ctx.beginPath(); ctx.ellipse(-0.98 * ss, -1.08 * ss, 0.1 * ss, 0.17 * ss, -0.5, 0, Math.PI * 2); ctx.fill();
-        // neck + head — high, or down in the grass when grazing
-        ctx.fillStyle = body; ctx.strokeStyle = dark; ctx.lineWidth = 0.05 * ss;
-        if (grazing) {
-            const nib = Math.sin(pose * Math.PI / 2) * 0.06 * ss;
-            ctx.beginPath(); ctx.moveTo(0.65 * ss, -1.25 * ss); ctx.lineTo(0.95 * ss, -0.75 * ss + nib);
-            ctx.lineTo(1.28 * ss, -0.62 * ss + nib); ctx.lineTo(1.0 * ss, -1.0 * ss); ctx.closePath(); ctx.fill(); ctx.stroke();
-            ctx.beginPath(); ctx.ellipse(1.3 * ss, -0.6 * ss + nib, 0.3 * ss, 0.17 * ss, -0.35, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-            ctx.fillStyle = '#2a1a0c'; ctx.beginPath(); ctx.arc(1.56 * ss, -0.5 * ss + nib, 0.045 * ss, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = body; ctx.beginPath(); ctx.ellipse(1.06 * ss, -0.82 * ss + nib, 0.09 * ss, 0.2 * ss, 0.6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        } else {
-            const hy = alert ? 0.16 * ss : 0;
-            ctx.beginPath(); ctx.moveTo(0.65 * ss, -1.25 * ss); ctx.lineTo(1.0 * ss, -1.95 * ss - hy);
-            ctx.lineTo(1.28 * ss, -1.85 * ss - hy); ctx.lineTo(1.0 * ss, -1.0 * ss); ctx.closePath(); ctx.fill(); ctx.stroke();
-            ctx.beginPath(); ctx.ellipse(1.28 * ss, -1.9 * ss - hy, 0.3 * ss, 0.17 * ss, 0.35, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-            ctx.fillStyle = '#2a1a0c'; ctx.beginPath(); ctx.arc(1.52 * ss, -1.84 * ss - hy, 0.045 * ss, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.arc(1.3 * ss, -1.95 * ss - hy, 0.035 * ss, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = body; ctx.beginPath(); ctx.ellipse(1.05 * ss, -2.05 * ss - hy, 0.1 * ss, 0.2 * ss, -0.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        }
-        // fawn spots
-        if (fawn) {
-            ctx.fillStyle = '#f0e2c0';
-            for (const [pxx, pyy] of [[-0.5, -1.05], [-0.15, -1.18], [0.2, -1.05], [-0.35, -0.85], [0.05, -0.82]]) {
-                ctx.beginPath(); ctx.ellipse(pxx * ss, pyy * ss, 0.055 * ss, 0.04 * ss, 0, 0, Math.PI * 2); ctx.fill();
-            }
-        }
-        // antlers (stag/alert only) — branched, pale gold
-        if (!doe) {
-            ctx.strokeStyle = alert ? '#f0e0b0' : '#e6d3a8'; ctx.lineWidth = 0.06 * ss;
-            const br = (bx, by, dx, dy) => { ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + dx * ss, by + dy * ss); ctx.stroke(); };
-            const ax = 1.12 * ss, ay = (grazing ? -0.85 : -2.1) * ss - (alert ? 0.16 * ss : 0);
-            br(ax, ay, -0.12, -0.55); br(ax - 0.12 * ss, ay - 0.55 * ss, -0.22, -0.18); br(ax - 0.12 * ss, ay - 0.55 * ss, 0.14, -0.2); br(ax - 0.05 * ss, ay - 0.3 * ss, 0.25, -0.12);
-            br(ax + 0.12 * ss, ay + 0.02 * ss, 0.1, -0.5); br(ax + 0.22 * ss, ay - 0.48 * ss, 0.2, -0.14); br(ax + 0.22 * ss, ay - 0.48 * ss, -0.08, -0.22);
-        }
-        ctx.restore();
-    } else if (kind === 'boar') {
-        const ss = s * 0.9;
-        const bob = Math.sin(pose * Math.PI / 2) * 0.03 * ss;
-        ctx.save(); ctx.translate(0, bob);
-        shadeAt(ctx, 0, 0.02 * ss, 1.1 * ss, 0.15 * ss);
-        const body = '#4a3526', dark = '#241810';
-        for (const lx of [-0.55, -0.25, 0.3, 0.6]) {
-            const o = (lx < 0 ? legA : -legA) * 0.35 * ss;
-            strokeLeg(ctx, lx * ss, -0.5 * ss, lx * ss + o, -0.02 * ss, dark, 0.14 * ss);
-        }
-        ctx.fillStyle = body; ctx.strokeStyle = dark; ctx.lineWidth = 0.05 * ss;
-        ctx.beginPath(); ctx.ellipse(0, -0.78 * ss, 0.9 * ss, 0.5 * ss, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = '#5c4331'; ctx.beginPath(); ctx.ellipse(0.7 * ss, -0.8 * ss, 0.42 * ss, 0.4 * ss, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = '#c99a86'; ctx.beginPath(); ctx.ellipse(1.12 * ss, -0.7 * ss, 0.17 * ss, 0.14 * ss, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        ctx.strokeStyle = '#f1e6c8'; ctx.lineWidth = 0.06 * ss;
-        ctx.beginPath(); ctx.moveTo(1.02 * ss, -0.62 * ss); ctx.quadraticCurveTo(1.12 * ss, -0.42 * ss, 1.0 * ss, -0.4 * ss); ctx.stroke();
-        ctx.fillStyle = '#120a04'; ctx.beginPath(); ctx.arc(0.92 * ss, -0.92 * ss, 0.045 * ss, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = body; ctx.strokeStyle = dark; ctx.lineWidth = 0.04 * ss;
-        ctx.beginPath(); ctx.moveTo(0.62 * ss, -1.12 * ss); ctx.lineTo(0.78 * ss, -1.38 * ss); ctx.lineTo(0.9 * ss, -1.08 * ss); ctx.closePath(); ctx.fill(); ctx.stroke();
-        ctx.strokeStyle = dark; ctx.lineWidth = 0.07 * ss;
-        const tf = Math.sin(pose * Math.PI / 2) * 0.06 * ss;
-        ctx.beginPath(); ctx.moveTo(-0.85 * ss, -0.9 * ss); ctx.quadraticCurveTo(-1.1 * ss, -1.0 * ss + tf, -1.05 * ss, -0.78 * ss + tf); ctx.stroke();
-        ctx.restore();
-    } else if (kind === 'sheep') {
-        const ss = s * 0.78;
-        const nib = Math.sin(pose * Math.PI / 2) * 0.05 * ss;
-        ctx.save();
-        shadeAt(ctx, 0, 0.02 * ss, 1.1 * ss, 0.14 * ss);
-        const wool = '#f0ead8', woolD = '#d8d0bc', face = '#3a3228';
-        for (const [lx, o] of [[-0.5, legA], [0.45, -legA]]) {
-            strokeLeg(ctx, lx * ss, -0.55 * ss, lx * ss + o * ss * 0.3, -0.02 * ss, face, 0.12 * ss);
-        }
-        // woolly body — overlapping puffs
-        ctx.fillStyle = wool; ctx.strokeStyle = woolD; ctx.lineWidth = 0.04 * ss;
-        for (const [pxx, pyy, pr] of [[-0.55, -0.85, 0.42], [-0.1, -1.0, 0.48], [0.4, -0.9, 0.44], [0.62, -0.62, 0.34], [-0.6, -0.55, 0.36], [0, -0.62, 0.5]]) {
-            ctx.beginPath(); ctx.ellipse(pxx * ss, pyy * ss, pr * ss, pr * 0.85 * ss, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        }
-        // dark head down in the grass + ear + wool tuft
-        ctx.fillStyle = face; ctx.strokeStyle = '#2a241c'; ctx.lineWidth = 0.035 * ss;
-        ctx.beginPath(); ctx.ellipse(0.98 * ss, -0.4 * ss + nib, 0.3 * ss, 0.2 * ss, -0.3, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = '#2a241c'; ctx.beginPath(); ctx.arc(1.18 * ss, -0.34 * ss + nib, 0.035 * ss, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = wool; ctx.beginPath(); ctx.ellipse(0.72 * ss, -0.62 * ss + nib, 0.14 * ss, 0.12 * ss, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = face; ctx.beginPath(); ctx.ellipse(0.82 * ss, -0.52 * ss + nib, 0.1 * ss, 0.06 * ss, 0.5, 0, Math.PI * 2); ctx.fill();
-        ctx.restore();
-    } else {   // rabbit — hop cycle: crouch / stretch-air / land / sit
-        const ss = s * 0.62;
-        const squash = pose === 0 ? 1.2 : pose === 1 ? 0.85 : pose === 2 ? 0.9 : 1;
-        const lift = pose === 1 ? -0.3 * ss : 0;
-        ctx.save(); ctx.translate(0, lift);
-        shadeAt(ctx, 0, 0.02 * ss - lift * 0.5, 0.8 * ss, 0.12 * ss, 0.22 - (lift ? 0.08 : 0));
-        const fur = '#b8a48c', furD = '#8a7a64';
-        ctx.fillStyle = fur; ctx.strokeStyle = furD; ctx.lineWidth = 0.05 * ss;
-        ctx.beginPath(); ctx.ellipse(-0.25 * ss, -0.5 * ss * squash, 0.55 * ss, 0.4 * ss * squash, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        ctx.beginPath(); ctx.ellipse(0.42 * ss, -0.72 * ss * squash, 0.26 * ss, 0.22 * ss, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        for (const [ex, rot] of [[0.5, -0.35], [0.62, 0.15]]) {
-            ctx.beginPath(); ctx.ellipse(ex * ss, -1.05 * ss * squash, 0.07 * ss, 0.26 * ss, rot, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        }
-        ctx.fillStyle = '#241a10'; ctx.beginPath(); ctx.arc(0.5 * ss, -0.74 * ss * squash, 0.04 * ss, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#f0e8d8'; ctx.beginPath(); ctx.ellipse(-0.72 * ss, -0.52 * ss * squash, 0.14 * ss, 0.13 * ss, 0, 0, Math.PI * 2); ctx.fill();
-        strokeLeg(ctx, -0.3 * ss, -0.3 * ss * squash, (-0.42 + legA * 0.3) * ss, -0.02 * ss, furD, 0.1 * ss);
-        strokeLeg(ctx, 0.4 * ss, -0.42 * ss * squash, (0.44 - legA * 0.3) * ss, -0.02 * ss, furD, 0.08 * ss);
-        ctx.restore();
-    }
+// ╔══════════════════════════════════════════════════════════════════════╗
+//  ANIMAL SPRITE SHEET — REAL ONLINE ASSETS (owner 2026-10-21: "I said FIND
+//  animal grazing assets ONLINE, ones that fit this theme, NOT fucking make
+//  them. … yes I saw your new deers they look trash"). The hand-drawn herd is
+//  REPLACED by frames sliced from CC-BY sprite sheets committed at
+//  core/assets/sprites/ (full credits + links: core/assets/sprites/CREDITS.md):
+//    • Calciumtrice "Deer" — male (antlers) + female, idle & GRAZING cycles
+//    • daneeklu "LPC style farm animals" — sheep eat cycle; pig eat cycle
+//      tinted boar-brown for the rooting boar (CC-BY allows derivatives)
+//    • Redshrike "Bunny Rabbit LPC style for PixelFarm" — hop frames
+//  Every row is normalised to face RIGHT (the old art's native direction), so
+//  wildlifePlan's flip semantics are untouched. A flat silhouette stands in
+//  for any row whose source file is ever missing.
+// ╚══════════════════════════════════════════════════════════════════════╝
+const SPRITE_DIR = path.join(__dirname, '..', 'assets', 'sprites');
+const _spriteImgs = new Map();
+function _spriteImg(name) {
+    if (_spriteImgs.has(name)) return _spriteImgs.get(name);
+    const { Image } = require('canvas');
+    const im = new Image();
+    im.src = fs.readFileSync(path.join(SPRITE_DIR, name));   // throws → caller falls back
+    _spriteImgs.set(name, im);
+    return im;
 }
 
-/** Bake (once) the sprite sheet PNG — 8 rows × 4 cols of CW×CH cells. */
+// Per-row slicing spec → 4 pose columns of CW×CH each.
+//   file, frames [sx, sy, sw, sh]×4, scale, flipSrc (source faces LEFT),
+//   tint (boar-brown pixel remap), dy (extra px the art bottom sits above the
+//   cell ground line, matching the old painters' ground anchoring).
+const SPRITE_ROWS = {
+    [ROW.rabbit]: { file: 'rabbit_lpc.png', scale: 0.95, flipSrc: false, frames: [
+        [27, 282, 26, 38], [59, 282, 28, 38], [91, 282, 38, 38], [134, 282, 33, 38]] },
+    [ROW.boar]:   { file: 'pig_eat.png', scale: 0.55, flipSrc: false, tint: true, frames: [
+        [0, 384, 128, 128], [128, 384, 128, 128], [256, 384, 128, 128], [384, 384, 128, 128]] },
+    [ROW.stag]:   { file: 'deer_male.png', scale: 2.75, flipSrc: true, frames: [
+        [0, 0, 32, 32], [32, 0, 32, 32], [64, 0, 32, 32], [96, 0, 32, 32]] },
+    [ROW.alert]:  { file: 'deer_male.png', scale: 2.75, flipSrc: true, frames: [
+        [0, 0, 32, 32], [0, 0, 32, 32], [0, 0, 32, 32], [0, 0, 32, 32]] },
+    [ROW.doe]:    { file: 'deer_female.png', scale: 2.75, flipSrc: true, frames: [
+        [0, 0, 32, 32], [32, 0, 32, 32], [64, 0, 32, 32], [96, 0, 32, 32]] },
+    [ROW.graze]:  { file: 'deer_female.png', scale: 2.75, flipSrc: true, frames: [
+        [0, 32, 32, 32], [32, 32, 32, 32], [64, 32, 32, 32], [96, 32, 32, 32]] },
+    [ROW.fawn]:   { file: 'deer_female.png', scale: 1.5, flipSrc: true, frames: [
+        [0, 0, 32, 32], [32, 0, 32, 32], [64, 0, 32, 32], [96, 0, 32, 32]] },
+    [ROW.sheep]:  { file: 'sheep_eat.png', scale: 0.62, flipSrc: false, frames: [
+        [0, 384, 128, 128], [128, 384, 128, 128], [256, 384, 128, 128], [384, 384, 128, 128]] },
+};
+
+/** Boar tint — the found pig sprite remapped from farm-pink to wild boar
+ *  browns (per-pixel multiply, alpha untouched). CC-BY allows derivatives. */
+function _tintBoar(c2, sw, sh) {
+    const d = c2.getImageData(0, 0, sw, sh), p = d.data;
+    for (let i = 0; i < p.length; i += 4) {
+        if (p[i + 3] === 0) continue;
+        const r = p[i], g = p[i + 1], b = p[i + 2];
+        if (r > g && g >= b) { p[i] = Math.round(r * 0.40); p[i + 1] = Math.round(g * 0.28); p[i + 2] = Math.round(b * 0.20); }
+    }
+    c2.putImageData(d, 0, 0);
+}
+
+/** Draw one sprite row's 4 poses into the sheet. Falls back to the vector
+ *  painter for any row whose source file is missing. */
+function paintSpriteRow(c2, row) {
+    const spec = SPRITE_ROWS[row];
+    const kinds = Object.keys(ROW);
+    for (let p = 0; p < COLS; p++) {
+        c2.save();
+        c2.translate(p * CW + CW / 2, (row + 1) * CH - 4);   // ground = cell bottom - 4
+        let done = false;
+        try {
+            const img = _spriteImg(spec.file);
+            const [sx, sy, sw, sh] = spec.frames[p];
+            const dw = sw * spec.scale, dh = sh * spec.scale;
+            c2.imageSmoothingEnabled = false;                // keep the pixels crisp
+            if (spec.tint) {
+                const off = _tintedFrame(sw, sh, img, sx, sy);
+                c2.drawImage(off, -dw / 2, -dh, dw, dh);
+            } else if (spec.flipSrc) {
+                c2.scale(-1, 1);
+                c2.drawImage(img, sx, sy, sw, sh, -dw / 2, -dh, dw, dh);
+            } else {
+                c2.drawImage(img, sx, sy, sw, sh, -dw / 2, -dh, dw, dh);
+            }
+            done = true;
+        } catch (e) { /* source missing → vector fallback below */ }
+        if (!done) {
+            // emergency fallback (sources are committed, so this should never
+            // fire): a flat silhouette so the clearing is never empty
+            c2.fillStyle = '#6e5a3e';
+            c2.beginPath(); c2.ellipse(0, -0.35 * CH * 0.33, CW * 0.28, CH * 0.16, 0, 0, Math.PI * 2); c2.fill();
+            c2.beginPath(); c2.arc(CW * 0.22, -0.62 * CH * 0.33, CH * 0.09, 0, Math.PI * 2); c2.fill();
+        }
+        c2.restore();
+    }
+}
+// small helper: tinted copy of one source frame (offscreen canvas)
+function _tintedFrame(sw, sh, img, sx, sy) {
+    const { createCanvas } = require('canvas');
+    const off = createCanvas(sw, sh), oc = off.getContext('2d');
+    oc.imageSmoothingEnabled = false;
+    oc.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+    _tintBoar(oc, sw, sh);
+    return off;
+}
+
+/** Bake (once) the sprite sheet PNG — 8 rows × 4 cols of CW×CH cells, now
+ *  from the REAL online assets (cache key bumped hs3 → hs4 for the swap). */
 async function getHuntSpriteSheet() {
-    const out = await mediaCache.cached('huntsprites', 'hs3', async () => {
+    const out = await mediaCache.cached('huntsprites', 'hs4-assets', async () => {
         const { createCanvas } = require('canvas');
         const cv = createCanvas(CW * COLS, CH * SHEET_ROWS), c2 = cv.getContext('2d');
-        const kinds = Object.keys(ROW);
-        for (let r = 0; r < SHEET_ROWS; r++) {
-            for (let p = 0; p < COLS; p++) {
-                c2.save(); c2.translate(p * CW + CW / 2, (r + 1) * CH - 4);  // col p, row r, ground near cell bottom
-                paintAnimal(c2, kinds[r], p);
-                c2.restore();
-            }
-        }
+        for (let r = 0; r < SHEET_ROWS; r++) paintSpriteRow(c2, r);
         return { buffer: cv.toBuffer('image/png'), contentType: 'image/png' };
     });
     if (!getHuntSpriteSheet._img || getHuntSpriteSheet._len !== out.buffer.length) {
@@ -469,6 +424,7 @@ async function getHuntSpriteSheet() {
     }
     return getHuntSpriteSheet._img;
 }
+
 /** Blit a sheet cell (with ground shadow) — flip for leftward travel. */
 function blitAnimal(ctx, sheet, row, col, x, y, scale = 1, flip = false, shadow = true) {
     const dw = CW * scale * SHEET_COMP, dh = CH * scale * SHEET_COMP;
@@ -582,6 +538,34 @@ async function getHuntBaseFrames({ biome = 'isle', lvl = 1 } = {}) {
 }
 
 // ── compose: kept base frames + the hour's grade + night lights + overlay ──
+// ── hunt treeline occluder — the skyline the sun sets behind ───────────────
+// ⚠⚠ rng sequence MUST stay identical to paintFrame's (clouds eat 12 calls =
+// 3 clouds × 4, then the treeline loop eats 34) — this replicates the treeline
+// so paintCelestial can CLIP the sun to the sky and REPAINT the trees over the
+// disc. Without this the sun floats on top of the forest (owner 2026-10-21).
+function huntOccluder(w, h, biome = 'isle', lvl = 1) {
+    const P = PALETTES[biome] || PALETTES.isle;
+    const hz = Math.round(HZ * h);
+    const rng = K.mulberry32(hashStr(`huntpov:${biome}:${lvl}`));
+    for (let i = 0; i < 12; i++) rng();                    // cloud rng calls (3 × 4)
+    const th = [];
+    for (let x = 0; x < w; x += w / 34) th.push(h * (0.045 + rng() * 0.05) * (Math.abs(x / w - GAPX) < 0.06 ? 0.45 : 1));
+    const step = w / 34;
+    return {
+        lineAt: (x) => hz - th[Math.max(0, Math.min(33, Math.floor(x / step)))],
+        repaint: (c) => {
+            // ⚠ shapes identical to paintFrame's treeline + gap + far strip
+            c.fillStyle = P.farDark;
+            for (let i = 0; i < 34; i++) {
+                const x = i * step;
+                c.beginPath(); c.moveTo(x, hz + 1); c.lineTo(x + w / 68, hz - th[i]); c.lineTo(x + step, hz + 1); c.closePath(); c.fill();
+            }
+            c.fillStyle = P.far; c.fillRect(0, hz, w, Math.max(2, h * 0.012));
+            c.fillStyle = P.gap; c.fillRect(w * GAPX - w * 0.028, hz - h * 0.035, w * 0.056, h * 0.047);
+        },
+    };
+}
+
 // Cached per (biome, level, phase, band); the loot plate is drawn per catch
 // AFTER this so the cache stays tiny while every hunt still explains itself.
 async function composeHunt({ biome = 'isle', lvl = 1, phase = null, band = 'low' } = {}) {
@@ -593,9 +577,11 @@ async function composeHunt({ biome = 'isle', lvl = 1, phase = null, band = 'low'
         const base = await getHuntBaseFrames({ biome, lvl });
         const sheet = await getHuntSpriteSheet();
         const pngs = [];
+        const OCC = huntOccluder(base.gw, base.gh, biome, lvl);   // sun sinks behind the treeline
         for (let i = 0; i < FRAMES; i++) {
             const cv = createCanvas(base.gw, base.gh), c2 = cv.getContext('2d');
             c2.drawImage(base.imgs[i], 0, 0, base.gw, base.gh);
+            dockPov.paintCelestial(c2, base.gw, base.gh, i / FRAMES, phase, { glitter: false, occluder: OCC });
             dayNight.grade(c2, base.gw, base.gh, phase);
             if (phase === 'night' || phase === 'dusk') {
                 const A = campAnchors(base.gw, base.gh);
@@ -636,16 +622,28 @@ async function renderHuntGif({ biome = 'isle', lvl = 1, band = 'low', drops = {}
         if (!c || c.pngs.length !== FRAMES) throw new Error('hunt compose container unreadable');
         const imgs = decodePngs(c.pngs);
         const frames = [];
+        let thumb = null;
         for (let i = 0; i < FRAMES; i++) {
             const cv = createCanvas(c.gw, c.gh), c2 = cv.getContext('2d');
             c2.drawImage(imgs[i], 0, 0, c.gw, c.gh);
             if (i >= FRAMES - 5) require('./structureScenes').drawBanner(c2, c.gw, c.gh, { head, lines });   // ESTABLISHED ribbon (Task 22)
+            if (i === 0) {
+                // real frame-0 JPEG for the video-bubble preview — GIFs go out
+                // as { video, gifPlayback: true } (WhatsApp proto) and the
+                // engine patch stamps gray on videos without a thumbnail.
+                try {
+                    const tw = 240, th = Math.round(240 * c.gh / c.gw);
+                    const tc = createCanvas(tw, th), tc2 = tc.getContext('2d');
+                    tc2.drawImage(cv, 0, 0, tw, th);
+                    thumb = tc.toBuffer('image/jpeg');
+                } catch (e) { thumb = null; }
+            }
             const d = c2.getImageData(0, 0, c.gw, c.gh);
             frames.push(Buffer.from(d.data.buffer, d.data.byteOffset, d.data.byteLength));
         }
         const gif = encodeGif({ width: c.gw, height: c.gh, frames, delayMs: c.delayMs, loop: 0 });
         if (!gif || gif.length < 500) throw new Error('hunt gif encode failed');
-        return { buffer: gif, contentType: 'image/gif' };
+        return { buffer: gif, contentType: 'image/gif', thumb };
     });
 }
 
@@ -655,7 +653,7 @@ async function paintStill(ctx, w, h, { biome = 'isle', lvl = 1, phase = null } =
     paintFrame(ctx, w, h, 0, { biome, lvl });
     const sheet = await getHuntSpriteSheet();
     blitWildlife(ctx, w, h, 0, sheet, { biome, lvl });
-    dockPov.paintCelestial(ctx, w, h, 0, phase, { glitter: false });
+    dockPov.paintCelestial(ctx, w, h, 0, phase, { glitter: false, occluder: huntOccluder(w, h, biome, lvl) });
     dayNight.grade(ctx, w, h, phase);
     if (phase === 'night' || phase === 'dusk') {
         const A = campAnchors(w, h);
@@ -670,7 +668,7 @@ async function paintStill(ctx, w, h, { biome = 'isle', lvl = 1, phase = null } =
 
 module.exports = {
     renderHuntGif, composeHunt, getHuntBaseFrames, getHuntSpriteSheet, paintStill, paintFrame,
-    paintHuntOverlay, blitAnimal, blitWildlife, wildlifePlan, campAnchors, paintAnimal,
+    paintHuntOverlay, blitAnimal, blitWildlife, wildlifePlan, campAnchors, huntOccluder,
     PALETTES, ROW, SHEET_ROWS, GW, GH, FRAMES, DELAY_MS,
     CONTAINER_MAGIC, SHEET_MAGIC, CW, CH, COLS,
 };

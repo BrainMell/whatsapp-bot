@@ -32,7 +32,9 @@
 //    • FINAL GIF — compose + established loot banner, cached per
 //      (biome, level, phase, band, banner-lines) so repeat catches are
 //      disk hits. Loot text also rides the WhatsApp caption upstream.
-//  Delivery: pure-JS gif89a → { image, gifPlayback: true } (the proven path).
+//  Delivery: pure-JS gif89a → { video, gifPlayback: true } — WhatsApp ONLY
+//  animates GIFs carried on a videoMessage; on imageMessage the flag is
+//  dropped and the phone shows a still (owner hit this 4× on 2026-10-21).
 // ═══════════════════════════════════════════════════════════════════════════
 const fs = require('fs');
 const path = require('path');
@@ -354,24 +356,65 @@ function paintCatchOverlay(ctx, w, h, t, band, _anchor, P = PALETTES.isle) {
     paintFloat(ctx, w, h, t, P, { rod: false, line: true, dip });
 }
 
+// ── far-shoreline silhouette — the MOUNTAINS the sun sets behind ───────────
+// ⚠⚠ MUST stay byte-identical with paintFrame's far-shoreline loop below
+// (same seed, same rng call order — the ridge is paintFrame's FIRST rng
+// consumer, so a fresh generator seeded the same reproduces it exactly).
+// This shape is the occluder paintCelestial repaints OVER the sun so the disc
+// physically sinks behind the horizon instead of floating on the water
+// (owner 2026-10-21: "why is the sun not disappearing behind the horizon with
+// mountains? why is it overlaying the image???").
+function ridgeSilhouette(w, h, lvl = 1) {
+    const rng = K.mulberry32(hashStr(`dockpov:isle:${Math.max(1, Math.min(3, lvl))}`));
+    const hz = Math.round(HORIZON * h), pts = [];
+    for (let x = 0; x <= w; x += w / 24) {
+        const hgt = (2 + Math.floor(rng() * 4)) * (h / 360) * (rng() < 0.28 ? 3 : 1);
+        pts.push(hz - hgt);
+    }
+    return { step: w / 24, pts, hz };
+}
+
 // ── hour dressing: celestial body + sun/moon glitter on the water ──────────
-function paintCelestial(ctx, w, h, t, phase, { glitter = true } = {}) {
+// The glow + disc are clipped to the SKY and the far skyline is REPAINTED over
+// them, so dawn/golden/dusk discs are physically cut by the mountains — dusk
+// leaves only a sliver above the ridge. `sink` = fraction of the disc below
+// the skyline (0 = touching the peaks, 1 = fully set). `occluder` lets other
+// scenes (the hunt treeline) supply their own skyline:
+//   { lineAt(x) → y, repaint(ctx) }.
+function paintCelestial(ctx, w, h, t, phase, { glitter = true, lvl = 1, occluder = null } = {}) {
     const hz = Math.round(HORIZON * h);
     if (phase === 'night') return;                    // moonStars() owns the night sky
     const conf = {
-        dawn: { x: 0.18, y: 0.145, r: 0.05, col: '#ffd9a8', glow: 'rgba(255,190,130,0.35)' },
-        day: { x: 0.68, y: 0.085, r: 0.042, col: '#f8f2d8', glow: 'rgba(255,246,210,0.28)' },
-        golden: { x: 0.80, y: 0.155, r: 0.055, col: '#ffc478', glow: 'rgba(255,160,80,0.4)' },
-        dusk: { x: 0.80, y: 0.20, r: 0.06, col: '#ff9a5a', glow: 'rgba(255,120,60,0.42)' },
+        dawn:   { x: 0.18, sink: 0.10, r: 0.050, col: '#ffd9a8', glow: 'rgba(255,190,130,0.35)' },
+        day:    { x: 0.68, y: 0.085,   r: 0.042, col: '#f8f2d8', glow: 'rgba(255,246,210,0.28)' },
+        golden: { x: 0.80, sink: 0.55, r: 0.055, col: '#ffc478', glow: 'rgba(255,160,80,0.40)' },
+        dusk:   { x: 0.80, sink: 0.82, r: 0.060, col: '#ff9a5a', glow: 'rgba(255,120,60,0.42)' },
     }[phase];
     if (!conf) return;
-    const sx = w * conf.x, sy = h * conf.y, sr = h * conf.r;
+    const sx = w * conf.x, sr = h * conf.r;
+    // skyline the sun sinks behind: caller's occluder, else the pond ridge
+    const occ = occluder || (() => {
+        const yAt = (x) => {
+            const sil = ridgeSilhouette(w, h, lvl);
+            const i = Math.max(0, Math.min(sil.pts.length - 1, Math.round(x / sil.step)));
+            return sil.pts[i];
+        };
+        return { lineAt: yAt, repaint: (c) => _repaintRidge(c, w, h, lvl) };
+    })();
+    const lineY = occ.lineAt(sx);
+    // sun centre: explicit y (day) or sunk against the skyline (rise/set)
+    const sy = conf.y != null ? h * conf.y : lineY - sr * (1 - 2 * conf.sink);
+    // glow + disc live in the SKY only — never wash over the water (the
+    // reflection lives in the glitter path below)
     ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, w, Math.max(1, Math.min(h, lineY + 2))); ctx.clip();
     const g = ctx.createRadialGradient(sx, sy, sr * 0.4, sx, sy, sr * 3);
     g.addColorStop(0, conf.glow); g.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sx, sy, sr * 3, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = conf.col; ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
+    // the mountains EAT the disc — repaint the skyline over the sun
+    if (occ.repaint) occ.repaint(ctx);
     // glitter path down the sun column (skips the dock planks below the edge)
     if (glitter) {
         const edgeY = Math.round(DOCK_EDGE * h);
@@ -389,6 +432,15 @@ function paintCelestial(ctx, w, h, t, phase, { glitter = true } = {}) {
         }
         ctx.globalAlpha = 1;
     }
+}
+
+// the ridge re-draw (occluder) — ⚠ shapes identical to paintFrame's loop
+function _repaintRidge(ctx, w, h, lvl = 1) {
+    const sil = ridgeSilhouette(w, h, lvl);
+    ctx.fillStyle = PALETTES.isle.ridge;
+    ctx.beginPath(); ctx.moveTo(0, sil.pts[0]);
+    for (let i = 1; i < sil.pts.length; i++) ctx.lineTo(i * sil.step, sil.pts[i]);
+    ctx.lineTo(w, sil.hz + 1); ctx.lineTo(0, sil.hz + 1); ctx.closePath(); ctx.fill();
 }
 
 // ── base-frame container (PNG frames + tiny header) through mediaCache ─────
@@ -476,7 +528,7 @@ function paintStill(ctx, w, h, { lvl = 1, biome = 'isle', phase = null, t = 0 } 
         ctx.fillStyle = wash.water; ctx.fillRect(0, hz, w, h - hz);
         if (wash.all) { ctx.fillStyle = wash.all; ctx.fillRect(0, 0, w, h); }
     }
-    paintCelestial(ctx, w, h, t, phase);
+    paintCelestial(ctx, w, h, t, phase, { lvl });
     dayNight.grade(ctx, w, h, phase);
     if (phase === 'night' || phase === 'dusk') {
         const A = dockAnchors(w, h, lvl);
@@ -510,7 +562,7 @@ async function composePond({ biome = 'isle', lvl = 1, phase = null, band = 'low'
                 c2.fillStyle = wash.water; c2.fillRect(0, hz, master.gw, master.gh - hz);
                 if (wash.all) { c2.fillStyle = wash.all; c2.fillRect(0, 0, master.gw, master.gh); }
             }
-            paintCelestial(c2, master.gw, master.gh, i / FRAMES, phase);
+            paintCelestial(c2, master.gw, master.gh, i / FRAMES, phase, { lvl });
             dayNight.grade(c2, master.gw, master.gh, phase);
             if (phase === 'night' || phase === 'dusk') {
                 const A = dockAnchors(master.gw, master.gh, lvl);
@@ -563,16 +615,28 @@ async function renderFishingGif({ biome = 'isle', lvl = 1, band = 'low', drops =
         if (!c || c.pngs.length !== FRAMES) throw new Error('pond compose container unreadable');
         const imgs = decodePngs(c.pngs);
         const frames = [];
+        let thumb = null;
         for (let i = 0; i < FRAMES; i++) {
             const cv = createCanvas(c.gw, c.gh), c2 = cv.getContext('2d');
             c2.drawImage(imgs[i], 0, 0, c.gw, c.gh);
             if (i >= BANNER_FROM_FRAME) scenes.drawBanner(c2, c.gw, c.gh, ribbon);
+            if (i === 0) {
+                // real frame-0 JPEG for the video-bubble preview — GIFs now go
+                // out as { video, gifPlayback: true } (WhatsApp proto) and the
+                // engine patch stamps a gray square on videos without one.
+                try {
+                    const tw = 240, th = Math.round(240 * c.gh / c.gw);
+                    const tc = createCanvas(tw, th), tc2 = tc.getContext('2d');
+                    tc2.drawImage(cv, 0, 0, tw, th);
+                    thumb = tc.toBuffer('image/jpeg');
+                } catch (e) { thumb = null; }
+            }
             const d = c2.getImageData(0, 0, c.gw, c.gh);
             frames.push(Buffer.from(d.data.buffer, d.data.byteOffset, d.data.byteLength));
         }
         const gif = encodeGif({ width: c.gw, height: c.gh, frames, delayMs: c.delayMs, loop: 0 });
         if (!gif || gif.length < 500) throw new Error('pond gif encode failed');
-        return { buffer: gif, contentType: 'image/gif' };
+        return { buffer: gif, contentType: 'image/gif', thumb };
     });
 }
 

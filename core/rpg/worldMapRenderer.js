@@ -647,6 +647,129 @@ function _drawAbyssDescent(ctx, x, yTop, scale = 1, label = true) {
 // and the World Beyond boundary arcing over the whole chart (its center rests
 // on the First World's bottom link - the exact pass-3 tangent geometry, seen
 // from inside at the link hour).
+
+// ─── CELESTIAL CHART LAYER (owner 2026-10-21: sun must visibly shift on the
+// world map + a little top-right sun/moon-phase icon from an asset pack) ────
+// Found icon assets (see core/assets/icons/moon/ credits in CREDITS.md and
+// the sprite dir): sun from "Sun and Moon" (OGA, permissive), 8 moon phases
+// from "2 Moon Phases Sets" by StarNinjas (OGA, CC0).
+const _ICON_DIR = path.join(__dirname, '..', 'assets');
+const _celestialIcons = { loaded: false, sun: null, moon: [] };
+function _loadCelestialIcons() {
+    if (_celestialIcons.loaded) return _celestialIcons;
+    _celestialIcons.loaded = true;
+    try {
+        const { Image } = require('canvas');
+        const sun = new Image();
+        sun.src = fs.readFileSync(path.join(_ICON_DIR, 'sprites', 'sky_7.png'));   // 64×32: sun | moon
+        _celestialIcons.sun = sun;
+        const NAMES = ['moon_new', 'moon_waxing_crescent', 'moon_first_quarter', 'moon_waxing_gibbous',
+            'moon_full', 'moon_waning_gibbous', 'moon_third_quarter', 'moon_waning_crescent'];
+        _celestialIcons.moon = NAMES.map((n) => {
+            try { const im = new Image(); im.src = fs.readFileSync(path.join(_ICON_DIR, 'icons', 'moon', `${n}.png`)); return im; }
+            catch (e) { return null; }
+        });
+    } catch (e) { /* icons missing → chart still renders, just unlabeled sky */ }
+    return _celestialIcons;
+}
+
+// real lunar phase: synodic month from the 2000-01-06 18:14 UTC new moon
+const _SYNODIC = 29.53058867;
+function _moonPhaseIndex(t) {
+    const age = (((t / 1000) - 947182440) % ( _SYNODIC * 86400) + _SYNODIC * 86400) % (_SYNODIC * 86400);
+    return Math.floor((age / (_SYNODIC * 86400)) * 8) % 8;
+}
+
+function _utcHourFloat(t) {
+    const d = new Date(Number(t) || Date.now());
+    return d.getUTCHours() + d.getUTCMinutes() / 60;
+}
+
+/** The chart's sky, part 1 — the orbiting sun/moon body. Called EARLY (right
+ *  after the boundary arc) so chart labels pill/worlds draw OVER it: at noon
+ *  the body crosses the WORLD BEYOND pill and must never hide its text.
+ *  Everything best-effort — never breaks the chart render. */
+function _paintCelestialBody(ctx, t) {
+    try {const icons = _loadCelestialIcons();
+        const CX = W / 2, CY = 660, ORB = 438;              // world circle + orbit radius
+        const h = _utcHourFloat(t);
+        const phase = (h >= 5 && h < 7) ? 'dawn' : (h >= 7 && h < 17) ? 'day'
+            : (h >= 17 && h < 18.5) ? 'golden' : (h >= 18.5 && h < 20) ? 'dusk' : 'night';
+        const isNight = phase === 'night';
+        // orbit position: dawn left → noon top → dusk right (day 5h..20h);
+        // the moon rides the same rim 20h..5h with the REAL lunar phase face
+        const prog = isNight ? (((h - 20 + 24) % 24) / 9) : ((h - 5) / 15);
+        const th = Math.PI * (1 - Math.min(1, Math.max(0, prog)));
+        const bx = CX + Math.cos(th) * ORB, by = CY - Math.sin(th) * ORB;
+
+        // the orbit guide — a fine dashed arc, antique-chart style
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(CX, CY, ORB, Math.PI, 0);
+        ctx.setLineDash([3, 7]);
+        ctx.strokeStyle = 'rgba(166,124,46,0.38)'; ctx.lineWidth = 1.2;
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+
+        // the body itself: warm halo + icon (sun) / cool halo + lunar-phase icon
+        const sun = icons.sun, moons = icons.moon;
+        const moonImg = isNight ? moons[_moonPhaseIndex(t)] : null;
+        const IR = 26;                                       // icon render radius
+        ctx.save();
+        const halo = ctx.createRadialGradient(bx, by, IR * 0.3, bx, by, IR * 2.6);
+        if (isNight) { halo.addColorStop(0, 'rgba(120,140,190,0.34)'); halo.addColorStop(1, 'rgba(120,140,190,0)'); }
+        else { halo.addColorStop(0, 'rgba(255,196,90,0.42)'); halo.addColorStop(1, 'rgba(255,196,90,0)'); }
+        ctx.fillStyle = halo;
+        ctx.beginPath(); ctx.arc(bx, by, IR * 2.6, 0, Math.PI * 2); ctx.fill();
+        if (!isNight && sun) {
+            ctx.imageSmoothingEnabled = false;               // pixel-art sun stays crisp
+            ctx.drawImage(sun, 0, 0, 32, 32, bx - IR, by - IR, IR * 2, IR * 2);
+            ctx.imageSmoothingEnabled = true;
+        } else if (isNight && moonImg) {
+            ctx.drawImage(moonImg, bx - IR, by - IR, IR * 2, IR * 2);
+        }
+        ctx.restore();
+
+    } catch (e) { /* never break the chart over the sky layer */ }
+}
+
+
+
+/** The chart's sky, part 2 — the top-right phase medallion (the "little icon"
+ *  the owner asked for): sun by day, the REAL lunar phase at night, caption =
+ *  current phase. Drawn LAST (topmost). */
+function _paintCelestialMedallion(ctx, t) {
+    try {
+        const icons = _loadCelestialIcons();
+        const sun = icons.sun, moons = icons.moon;
+        const h = _utcHourFloat(t);
+        const isNight = !(h >= 5 && h < 20);
+        const phase = (h >= 5 && h < 7) ? 'dawn' : (h >= 7 && h < 17) ? 'day'
+            : (h >= 17 && h < 18.5) ? 'golden' : (h >= 18.5 && h < 20) ? 'dusk' : 'night';
+        const moonImg = isNight ? moons[_moonPhaseIndex(t)] : null;
+        const mx = W - 108, my = 106, mr = 46;
+        ctx.save();
+        ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2);
+        ctx.fillStyle = PAL.parchment; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = PAL.frame; ctx.stroke();
+        ctx.beginPath(); ctx.arc(mx, my, mr - 5, 0, Math.PI * 2);
+        ctx.lineWidth = 1; ctx.strokeStyle = PAL.goldSoft; ctx.stroke();
+        const mir = 24;                                      // icon inside the medallion
+        if (!isNight && sun) {
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(sun, 0, 0, 32, 32, mx - mir, my - mir, mir * 2, mir * 2);
+            ctx.imageSmoothingEnabled = true;
+        } else if (isNight && moonImg) {
+            ctx.drawImage(moonImg, mx - mir, my - mir, mir * 2, mir * 2);
+        }
+        ctx.fillStyle = PAL.inkSoft;
+        ctx.font = '11px "Cinzel"'; ctx.textAlign = 'center';
+        ctx.fillText(phase.toUpperCase(), mx, my + mr + 16);
+        ctx.restore();
+    } catch (e) { /* never break the chart over the sky layer */ }
+}
+
 async function renderFirstWorldSheet(t = Date.now()) {
     const art = await _loadWorldArt();
     return _render(async (ctx) => {
@@ -668,6 +791,7 @@ async function renderFirstWorldSheet(t = Date.now()) {
         ctx.strokeStyle = 'rgba(58,42,30,0.4)'; ctx.lineWidth = 1.6; ctx.stroke();
         ctx.setLineDash([]);
         ctx.restore();
+        _paintCelestialBody(ctx, t);   // orbiting sun/moon — UNDER the chart labels
         _pillLabel(ctx, [
             { text: 'THE WORLD BEYOND', font: '13px "Cinzel"', color: PAL.ink },
             { text: 'its center rests on the bottom link', font: 'italic 11px "IM Fell Italic"', color: PAL.inkSoft },
@@ -854,6 +978,9 @@ async function renderFirstWorldSheet(t = Date.now()) {
         _centered(ctx, `"${_pfx1} world" - the chart every adventurer carries`,
             1352, 'italic 13px "IM Fell Italic"', PAL.inkSoft);
         _waxSeal(ctx, 80, H - 62, 'I');
+
+        // top-right phase medallion (Task 22-R) — sun by day, lunar phase at night
+        _paintCelestialMedallion(ctx, t);
     });
 }
 
