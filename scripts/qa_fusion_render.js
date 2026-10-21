@@ -34,11 +34,10 @@ const ACTIVITIES = ['', 'browse', 'mining', 'fishing', 'hunting', 'summoning', '
         check('no clock started → 0', q5 === 0);
     }
 
-    console.log('\n--- HINTS map (§5, prefix-aware) ---');
-    for (const [t, want] of [['pond', '.jb fish'], ['hunting', '.jb hunt'], ['medbay', '.jb clinic'], ['alchemy', '.jb recipes']]) {
-        const hints = bb.POTION_PLAN ? null : null;
-        const H = { pond: (P) => [`${P} fish`], hunting: (P) => [`${P} hunt`], medbay: (P) => [`${P} clinic`], alchemy: (P) => [`${P} recipes`] }[t];
-        check(`${t} hint resolves prefix`, H && H(want)[0] === want);
+    console.log('\n--- HINTS map (§5, prefix-aware, the REAL exported map) ---');
+    for (const [t, want] of [['pond', '.jb fish'], ['hunting', '.jb hunt'], ['mines', '.jb mine <spot>'], ['shop', '.jb shop'], ['barracks', '.jb summon'], ['blacksmith', '.jb blacksmith'], ['medbay', '.jb clinic'], ['alchemy', '.jb recipes']]) {
+        const H = bb.HINTS && bb.HINTS[t];
+        check(`${t} hint resolves prefix`, !!H && H('.jb')[0] === want);
     }
 
     console.log('\n--- render every type × level × activity (real pixels) ---');

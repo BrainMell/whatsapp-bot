@@ -707,4 +707,4 @@ async function handleBaseCommand(ctx) {
     }
 }
 
-module.exports = { handleBaseCommand, viewBase, enterStructure, loadBase, plotsFor, zoomForCommand, runActivity, getStructureLevel, potionStock, POTION_PLAN, collectMedbayPotions };
+module.exports = { handleBaseCommand, viewBase, enterStructure, loadBase, plotsFor, zoomForCommand, runActivity, getStructureLevel, potionStock, POTION_PLAN, collectMedbayPotions, HINTS };
