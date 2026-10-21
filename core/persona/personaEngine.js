@@ -65,6 +65,11 @@ const TURN_BACKOFF_MS = [800, 1600];
 const SEARCH_RESULT_CAP_CHARS = 700;
 const FACTS_KEY = '_shared_persona_facts';
 const FACTS_CAP_PER_CHAT = 30;
+// 💡 REALGUY v2.5 (owner 2026-10-21): the bot must know people by their
+// nicknames/monikers AND their WhatsApp names, and know the DIFFERENCE.
+const NAMES_KEY = '_shared_persona_names';
+const NAMES_CAP_PER_CHAT = 80; // roster entries per chat (LRU by last-seen)
+const MONIKERS_CAP = 4; // learned monikers per person
 // 💡 REALGUY v2 emoji protocol (owner: "set up a system where it doesn't usually
 // use emojis but not cool guy glasses and explosions like that"). Research:
 // Gen Z laughs with 💀 (😂 reads millennial), 👍 reads hostile, sparse ironic
@@ -93,6 +98,10 @@ function initPersona(d) {
   deps.smartGroqCall = d.smartGroqCall; // engine's rotating Groq caller
   deps.modelFn = d.modelFn || (() => null); // (msgLen) => model id
   deps.searchFn = d.searchFn || (async () => ''); // (query) => result digest
+  // 💡 REALGUY v2.5: engine-provided nickname resolver (economy profile
+  // nickname). (jid) => string|null — lets the persona call people by the
+  // name their profile actually carries.
+  deps.nameResolver = d.nameResolver || (() => null);
   // 💡 REALGUY v2: the old system's canonical persona line (botConfig
   // getContentDescription — joker's is "You are Joker from Persona 5.") now
   // anchors the persona prompt FIRST, exactly like the old askAI() pipeline.
@@ -102,7 +111,7 @@ function initPersona(d) {
 }
 
 // ─── L2: ambient awareness buffer ────────────────────────────────────────────
-function observe({ chatId, who, text, ts }) {
+function observe({ chatId, who, jid, text, ts }) {
   if (!chatId || typeof text !== 'string' || !text.trim()) return;
   const t = text.replace(/\s+/g, ' ').trim().slice(0, 300);
   if (!t) return;
@@ -111,7 +120,20 @@ function observe({ chatId, who, text, ts }) {
     buf = [];
     chatBuffers.set(chatId, buf);
   }
-  buf.push({ who: String(who || 'someone').slice(0, 40), text: t, ts: ts || Date.now() });
+  buf.push({
+    who: String(who || 'someone').slice(0, 40),
+    jid: jid ? String(jid) : null,
+    text: t,
+    ts: ts || Date.now(),
+  });
+  // 💡 REALGUY v2.5: every observed message teaches the roster — WhatsApp
+  // name + any self-introduced moniker ("call me X") — deterministically.
+  if (jid) {
+    try {
+      learnPushName(chatId, jid, who);
+      learnMonikerFromText(chatId, jid, t);
+    } catch (e) {}
+  }
   if (buf.length > BUFFER_CAP) buf.splice(0, buf.length - BUFFER_CAP);
 }
 
@@ -119,7 +141,10 @@ function transcriptBlock(chatId) {
   const buf = chatBuffers.get(chatId) || [];
   const recent = buf.slice(-TRANSCRIPT_LINES);
   if (!recent.length) return '';
-  return recent.map((m) => `${m.who}: ${m.text}`).join('\n');
+  // 💡 REALGUY v2.5: render each line under the person's BEST known name
+  // (profile nickname / moniker > WhatsApp name) so the model sees the names
+  // people actually use, not raw WhatsApp display names.
+  return recent.map((m) => `${bestName(chatId, m.jid, m.who)}: ${m.text}`).join('\n');
 }
 
 // ─── L2: long-term facts (shared system KV, Mongo-backed) ────────────────────
@@ -155,6 +180,193 @@ function factsBlock(chatId) {
   return arr.map((x) => `- ${x.n}: ${x.f}`).join('\n');
 }
 
+// ─── L2.5: name roster (REALGUY v2.5) ──────────────────────────────
+// Mongo-KV roster per chat: { [jid]: { w: whatsappName, m: [monikers], u: lastSeenTs } }
+// "Know the difference": w = what WhatsApp shows, m = what people are called.
+function getNamesMap() {
+  try {
+    const v = deps.system.get(NAMES_KEY, {});
+    return v && typeof v === 'object' ? v : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function getChatNames(chatId) {
+  const map = getNamesMap();
+  if (!map[chatId] || typeof map[chatId] !== 'object') map[chatId] = {};
+  return map[chatId];
+}
+
+function _saveNamesMap(map) {
+  try {
+    deps.system.set(NAMES_KEY, map); // cache-first persist (facts pattern)
+  } catch (e) {
+    console.error('[persona] failed to persist names roster:', e.message);
+  }
+}
+
+const MONIKER_FILLER = new Set([
+  'ok', 'okay', 'bro', 'dude', 'man', 'lol', 'lmao', 'yeah', 'ye', 'yep', 'yes',
+  'btw', 'tho', 'though', 'pls', 'plz', 'guys', 'haha', 'hahaha', 'fr', 'ong',
+  'idk', 'fam', 'chief', 'my', 'g', 'or', 'and', 'but', 'the', 'a', 'an', 'is',
+  'are', 'not', 'just', 'now', 'then', 'if', 'when', 'so', 'too', 'very',
+  'around', 'here', 'there', 'in', 'at', 'on', 'with', 'for', 'from', 'by',
+  'near', 'irl', 'online', 'sometimes', 'mostly', 'always', 'never', 'today',
+]);
+
+function _cleanMoniker(raw) {
+  let m = String(raw || '')
+    .trim()
+    .replace(/^["'`]+|["'`]+$/g, '')
+    .replace(/\s+/g, ' ');
+  if (!m) return null;
+  // walk from the start, stopping at the first filler/sentence word —
+  // "call me Shadow ok" → "Shadow" (never "Shadow ok")
+  const words = m.split(' ');
+  const keep = [];
+  for (const w of words) {
+    if (MONIKER_FILLER.has(w.toLowerCase())) break;
+    if (!/^[a-zA-Z0-9_]{2,20}$/.test(w)) break;
+    keep.push(w);
+    if (keep.length === 3) break;
+  }
+  if (!keep.length) return null;
+  m = keep.join(' ');
+  if (/^(dude|bro|man|anything|nothing|that|it|crazy|stupid|later|baby|guys)$/i.test(m)) return null;
+  return m.slice(0, 24);
+}
+
+// "call me X" / "i go by X" / "my name is X" → learn it (self-introductions
+// only; deterministic, no weak-model guesswork needed)
+const MONIKER_SELF_RE =
+  /\b(?:call me|you can call me|i go by|i'm going by|my nickname is|nick name is|nickname is|my name(?:'s| is))\s+([a-zA-Z0-9_]{2,20}(?:\s+[a-zA-Z0-9_]{2,20}){0,2})/i;
+
+function learnMonikerFromText(chatId, jid, text) {
+  if (!chatId || !jid || !text) return null;
+  const hit = MONIKER_SELF_RE.exec(String(text));
+  if (!hit) return null;
+  const moniker = _cleanMoniker(hit[1]);
+  if (!moniker) return null;
+  return learnMonikerFor(chatId, jid, moniker) ? moniker : null;
+}
+
+function learnMonikerFor(chatId, jid, moniker) {
+  const m = _cleanMoniker(moniker);
+  if (!chatId || !jid || !m) return false;
+  const map = getNamesMap();
+  const chat = getChatNames(chatId);
+  const key = String(jid);
+  const entry = chat[key] && typeof chat[key] === 'object' ? chat[key] : { w: '', m: [], u: 0 };
+  const list = Array.isArray(entry.m) ? entry.m : [];
+  const norm = m.toLowerCase();
+  if (!list.some((x) => String(x).toLowerCase() === norm)) {
+    list.push(m);
+    while (list.length > MONIKERS_CAP) list.shift();
+    entry.m = list;
+  }
+  entry.u = Date.now();
+  chat[key] = entry;
+  map[chatId] = chat;
+  _saveNamesMap(map);
+  return true;
+}
+
+function learnPushName(chatId, jid, name) {
+  if (!chatId || !jid) return false;
+  const w = String(name || '').trim().slice(0, 60);
+  if (!w || w === 'someone') return false;
+  const map = getNamesMap();
+  const chat = getChatNames(chatId);
+  const key = String(jid);
+  const entry = chat[key] && typeof chat[key] === 'object' ? chat[key] : { w: '', m: [], u: 0 };
+  const changed = entry.w !== w;
+  entry.w = w;
+  entry.u = Date.now();
+  chat[key] = entry;
+  if (changed) {
+    _evictNamesLru(chat);
+    map[chatId] = chat;
+    _saveNamesMap(map); // unchanged → no KV write storm
+  }
+  return true;
+}
+
+function _evictNamesLru(chat) {
+  const keys = Object.keys(chat);
+  if (keys.length <= NAMES_CAP_PER_CHAT) return;
+  keys
+    .sort((a, b) => (chat[a]?.u || 0) - (chat[b]?.u || 0))
+    .slice(0, keys.length - NAMES_CAP_PER_CHAT)
+    .forEach((k) => delete chat[k]);
+}
+
+function getPersonEntry(chatId, jid) {
+  if (!chatId || !jid) return null;
+  const chat = getNamesMap()[chatId];
+  const e = chat && chat[String(jid)];
+  return e && typeof e === 'object' ? e : null;
+}
+
+// Best callable name: profile nickname > learned moniker > WhatsApp name > fallback
+function bestName(chatId, jid, fallback) {
+  if (!jid) return String(fallback || 'someone');
+  let nick = null;
+  try {
+    nick = deps.nameResolver(jid) || null;
+  } catch (e) {}
+  const e = getPersonEntry(chatId, jid);
+  const moniker = e && Array.isArray(e.m) && e.m.length ? e.m[e.m.length - 1] : null;
+  return nick || moniker || (e && e.w) || String(fallback || 'someone');
+}
+
+// The speaker block: identity data + the "know the difference" teaching.
+function whoBlock(chatId, jid, fallbackName) {
+  if (!jid) return '';
+  const e = getPersonEntry(chatId, jid);
+  let nick = null;
+  try {
+    nick = deps.nameResolver(jid) || null;
+  } catch (e2) {}
+  const best =
+    nick || (e && Array.isArray(e.m) && e.m.length ? e.m[e.m.length - 1] : null) || (e && e.w) || fallbackName || null;
+  if (!best) return '';
+  const parts = [`You're talking to ${best}.`];
+  const bits = [];
+  if (e && e.w) bits.push(`their WhatsApp name is "${e.w}"`);
+  if (nick) bits.push(`their profile nickname is "${nick}"`);
+  if (e && Array.isArray(e.m) && e.m.length) bits.push(`they go by ${e.m.map((x) => `"${x}"`).join(' / ')} in here`);
+  if (bits.length) parts.push(bits.join('; ') + '.');
+  parts.push(
+    'WhatsApp display names are often random, real names or memes — NOT what people go by. Always call them by the name they actually use; never use their WhatsApp name when you know what they go by. If you don\'t know someone, don\'t invent a name for them.',
+  );
+  return parts.join(' ');
+}
+
+// Compact roster of people we know in this chat (cap 8, skip the speaker).
+function rosterBlock(chatId, excludeJid) {
+  const chat = getNamesMap()[chatId];
+  if (!chat) return '';
+  const lines = Object.keys(chat)
+    .filter((k) => k !== String(excludeJid))
+    .map((k) => {
+      const e = chat[k] || {};
+      let nick = null;
+      try {
+        nick = deps.nameResolver(k) || null;
+      } catch (e2) {}
+      const best = nick || (Array.isArray(e.m) && e.m.length ? e.m[e.m.length - 1] : null) || e.w;
+      if (!best) return null;
+      const monikers = Array.isArray(e.m) && e.m.length ? e.m.join('/') : null;
+      const extra = monikers && monikers !== best ? ` — goes by ${monikers}` : '';
+      const wa = e.w && e.w !== best ? ` (WhatsApp name: ${e.w})` : '';
+      return `- ${best}${wa}${extra}`;
+    })
+    .filter(Boolean)
+    .slice(-8);
+  return lines.length ? lines.join('\n') : '';
+}
+
 // ─── L1: ambient trigger ─────────────────────────────────────────────────────
 function shouldAmbient({ chatId, text, isGroup }) {
   if (!deps.ready || !isGroup || !chatId) return false;
@@ -178,7 +390,7 @@ function shouldAmbient({ chatId, text, isGroup }) {
 }
 
 // ─── L3: persona prompt (REALGUY v2 — built ON the old system) ───────────────
-function buildSystemPrompt({ isAmbient, chatId, profileText }) {
+function buildSystemPrompt({ isAmbient, chatId, profileText, speakerJid }) {
   const p = [];
   // Layer 0 — the old pipeline's canonical anchor line, FIRST, unchanged.
   p.push(deps.contentFn());
@@ -224,7 +436,8 @@ function buildSystemPrompt({ isAmbient, chatId, profileText }) {
 ` +
       `EMOJIS: you almost never use them. At most one, and only 💀 😭 🤨 👀 🙄 😏. NEVER 😂 👍 (they read old) and NEVER 😎 🤖 💥 🫡 ✨ 🚀 🎉 🔥 (they scream bot). No emoji is the correct default.
 ` +
-      `Never sound corporate or robotic: banned phrases include "delve, tapestry, furthermore, moreover, certainly, indeed, as an AI, I apologize for any confusion, how can I assist, it's pretty lit, let me know if something's glitchy, just showing off". Vary your replies — never start messages the same way twice in a row.`,
+      `Never sound corporate or robotic: banned phrases include "delve, tapestry, furthermore, moreover, certainly, indeed, as an AI, I apologize for any confusion, how can I assist, it's pretty lit, let me know if something's glitchy, just showing off". Vary your replies — never start messages the same way twice in a row.` +
+      `\nNAMES: call people by the names they actually go by — never their raw WhatsApp display name when you know what they're called, and never invent a name for someone.`,
   );
   // Layer 5 — few-shot exemplars, THE weak-model layer (research: few-shot
   // beats zero-shot especially on small models; positive patterns only,
@@ -257,8 +470,15 @@ you: i talk when there's something worth saying`,
   p.push(
     `TOOLS you can use when you feel like it (exact syntax, on their own line):\n` +
       `[SEARCH: short query] — output this ALONE and stop, if you need current or factual info. You'll be handed what you found, then answer casually — like you already knew it or just checked your phone. NEVER mention searching, results, sources, links or "according to".\n` +
-      `[REMEMBER: their name | short fact] — note something worth remembering about someone; you can also reply normally in the same message.`,
+      `[REMEMBER: their name | short fact] — note something worth remembering about someone; you can also reply normally in the same message. If someone tells you what to call them, remember it as [REMEMBER: <their name> | goes by <what they said>].`,
   );
+  // Layer 6.5 — WHO'S WHO (REALGUY v2.5): speaker identity + known-people
+  // roster. Teaches the WhatsApp-name vs moniker difference explicitly and
+  // gives the model the names people ACTUALLY use.
+  const who = whoBlock(chatId, speakerJid);
+  if (who) p.push(`--- WHO YOU'RE TALKING TO ---\n${who}`);
+  const roster = rosterBlock(chatId, speakerJid);
+  if (roster) p.push(`--- PEOPLE YOU KNOW IN THIS CHAT ---\n${roster}`);
   // Layer 7 — memory + the old system's profile layer (passed from engine.js).
   if (profileText && String(profileText).trim()) {
     p.push(
@@ -412,11 +632,11 @@ function formatToolResults(results) {
 }
 
 // ─── The turn: generate (with one tool round) → clean → chunk ────────────────
-async function buildTurn({ chatId, senderName, text, isAmbient, profileText }) {
+async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profileText }) {
   if (!deps.ready || !chatId) return null;
   const userText = String(text || '').slice(0, 1200);
   const messages = [
-    { role: 'system', content: buildSystemPrompt({ isAmbient, chatId, profileText }) },
+    { role: 'system', content: buildSystemPrompt({ isAmbient, chatId, profileText, speakerJid: senderJid }) },
     {
       role: 'user',
       content: isAmbient
@@ -599,11 +819,11 @@ async function silentRetryTurn(fn, opts = {}) {
 
 // L1 one-shot: roll the ambient dice, and if they hit, run a fully silent
 // ambient turn (generate → maybe [SILENT] → human send). Fire-and-forget.
-async function maybeAmbientChime({ sock, chatId, isGroup, senderName, text }) {
+async function maybeAmbientChime({ sock, chatId, isGroup, senderName, senderJid, text }) {
   try {
     if (!shouldAmbient({ chatId, text, isGroup })) return null;
     const turn = await silentRetryTurn(() =>
-      buildTurn({ chatId, senderName, text, isAmbient: true }),
+      buildTurn({ chatId, senderName, senderJid, text, isAmbient: true }),
     );
     if (!turn || !turn.replies || !turn.replies.length) return null;
     await humanSend(sock, chatId, turn.replies, {});
@@ -631,5 +851,12 @@ module.exports = {
   cleanReplyText,
   sanitizeEmoji,
   makeKeylessSearcher,
-  _internals: { getFactsMap, formatToolResults, transcriptBlock, EMOJI_ALLOW, EMOJI_BANNED, EMOJI_CHANCE },
+  // 💡 REALGUY v2.5: name roster
+  learnPushName,
+  learnMonikerFor,
+  learnMonikerFromText,
+  bestName,
+  whoBlock,
+  rosterBlock,
+  _internals: { getFactsMap, formatToolResults, transcriptBlock, getNamesMap, getPersonEntry, EMOJI_ALLOW, EMOJI_BANNED, EMOJI_CHANCE },
 };

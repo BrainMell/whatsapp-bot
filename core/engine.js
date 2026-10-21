@@ -5223,6 +5223,16 @@ What to do:
       // 💡 REALGUY v2: the old pipeline's canonical persona line anchors the
       // prompt FIRST again ("You are Joker from Persona 5.")
       contentFn: () => botConfig.getContentDescription(),
+      // 💡 REALGUY v2.5: economy profile nickname resolver — lets the persona
+      // call people by the name their profile carries (moniker > WhatsApp name).
+      nameResolver: (jid) => {
+        try {
+          const p = loadUserProfile(jid);
+          return (p && p.nickname) || null;
+        } catch (e) {
+          return null;
+        }
+      },
     });
     console.log(
       _personaReady
@@ -33212,31 +33222,56 @@ _(or reply to their message)_
                     m.message.audioMessage?.contextInfo ||
                     m.message.stickerMessage?.contextInfo;
 
-                  // 1. Mention Check (Normalized for all devices)
-                  const mentionedJids = (waContextInfo?.mentionedJid || []).map(
-                    (jid) => jidNormalizedUser(jid),
+                  // 1. Mention Check — 💡 REALGUY v2.5: digits-only compare.
+                  // LID groups deliver mentionedJid in mixed forms
+                  // (@lid / @s.whatsapp.net / :device suffixes); matching the
+                  // digit core against BOTH bot identities catches every form.
+                  const _digitsOf = (j) => String(j || "").split("@")[0].split(":")[0];
+                  const _botIdDigits = [_digitsOf(botJid), _digitsOf(botLid)].filter(Boolean);
+                  const _mentionedDigits = (waContextInfo?.mentionedJid || []).map(_digitsOf);
+                  const isBotMentioned = _mentionedDigits.some(
+                    (d) => d && _botIdDigits.includes(d),
                   );
-                  const isBotMentioned =
-                    mentionedJids.includes(botJid) ||
-                    (botLid && mentionedJids.includes(botLid));
 
-                  // 2. Reply Check
+                  // 2. Reply Check — same digits-only compare on the quoted
+                  // participant (replies to the bot's messages quote its LID
+                  // in LID groups, its phone JID elsewhere).
                   const quotedParticipant =
                     waContextInfo?.participant ||
                     (waContextInfo?.quotedMessage ? chatId : null);
-                  const isReplyToBot = quotedParticipant
-                    ? jidNormalizedUser(quotedParticipant) === botJid ||
-                      (botLid &&
-                        jidNormalizedUser(quotedParticipant) === botLid)
+                  const _quotedDigits = quotedParticipant
+                    ? _digitsOf(quotedParticipant)
+                    : null;
+                  const isReplyToBot = _quotedDigits
+                    ? _botIdDigits.includes(_quotedDigits)
                     : false;
 
                   // 3. Name Check (Ensure it's a whole word to avoid accidental triggers)
                   const botName = botConfig.getBotName().toLowerCase();
                   const nameRegex = new RegExp(`\\b${botName}\\b`, "i");
-                  const isBotNameMention = nameRegex.test(lowerTxt);
+                  // 💡 REALGUY v2.5: text-fragment fallback — some clients
+                  // leave a raw "@<digits>" fragment in the text instead of a
+                  // clean mention entity; treat @<botdigits> as a mention.
+                  const _mentionFragmentRe = _botIdDigits.length
+                    ? new RegExp(`@(${_botIdDigits.join("|")})\\b`)
+                    : null;
+                  const isBotNameMention =
+                    nameRegex.test(lowerTxt) ||
+                    (_mentionFragmentRe && _mentionFragmentRe.test(txt));
 
                   const hasTrigger =
                     isBotMentioned || isReplyToBot || isBotNameMention;
+
+                  // 💡 REALGUY v2.5: observability — the owner kept hitting
+                  // "the bot ignores messages" issues we couldn't see in the
+                  // logs. One line per triggered turn: type + chat + who.
+                  if (hasTrigger) {
+                    console.log(
+                      `🎯 [AI] trigger=${
+                        isBotMentioned ? "mention" : isReplyToBot ? "reply" : "name"
+                      } chat=${chatId} from=${m.pushName || senderJid}`,
+                    );
+                  }
 
                   // --- Smart Activation Fuse ---
                   // 💡 CRITICAL FIX: AI must be OFF everywhere (DMs AND groups)
@@ -33259,6 +33294,7 @@ _(or reply to their message)_
                     personaEngine.observe({
                       chatId,
                       who: m.pushName || economy.getDisplayName(senderJid) || "someone",
+                      jid: senderJid, // 💡 REALGUY v2.5: identity for the name roster
                       text: String(cleanTxt || txt || ""),
                       ts: Date.now(),
                     });
@@ -33275,6 +33311,7 @@ _(or reply to their message)_
                         chatId,
                         isGroup: !isDM,
                         senderName: m.pushName || "someone",
+                        senderJid, // 💡 REALGUY v2.5: ambient turns get identity too
                         text: String(cleanTxt || txt || ""),
                       })
                       .catch(() => {});
@@ -33504,6 +33541,7 @@ _(or reply to their message)_
                         personaEngine.buildTurn({
                           chatId,
                           senderName: m.pushName || "someone",
+                          senderJid, // 💡 REALGUY v2.5: powers the WHO'S WHO block
                           text: promptWithReply,
                           isAmbient: false,
                           profileText: _profileText,
@@ -33528,12 +33566,15 @@ _(or reply to their message)_
                     const stickerPath = getRandomSticker(mood);
 
                     // send the reply the human way (presence → typing delay →
-                    // chunks → paused; every send silently retried x2 more)
+                    // chunks → paused; every send silently retried x2 more).
+                    // 💡 REALGUY v2.5: ALWAYS quote the triggering message —
+                    // an unquoted reply in a busy GC reads as the bot talking
+                    // to nobody ("it wasn't even mentioning my messages").
                     await personaEngine.humanSend(
                       sock,
                       chatId,
                       _turn.replies,
-                      { quoteM: isReplyToBot ? m : null },
+                      { quoteM: m },
                     );
 
                     // Determine sticker probability based on mood

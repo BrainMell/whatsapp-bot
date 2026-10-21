@@ -242,6 +242,59 @@ check('rememberFact rejects junk', persona.rememberFact('', '', '') === false);
     engineSrc.includes('contentFn: () => botConfig.getContentDescription()'));
   check('profileText wired into persona buildTurn', engineSrc.includes('profileText: _profileText'));
 
+  // ─── 19. REALGUY v2.5: name roster (nicknames vs WhatsApp names) ──────────
+  const NCH = 'names@g.us';
+  persona.initPersona({ botName: 'joker', system: systemStub, smartGroqCall: groqStub, modelFn: () => 'FAST',
+    nameResolver: (jid) => (jid === 'prof@s.whatsapp.net' ? 'Mel' : null) });
+  check('learnPushName persists WhatsApp name', persona.learnPushName(NCH, 'a@s.whatsapp.net', 'John Doe') === true
+    && persona._internals.getNamesMap()[NCH]['a@s.whatsapp.net'].w === 'John Doe');
+  check('learnPushName rejects junk', persona.learnPushName(NCH, 'a@s.whatsapp.net', 'someone') === false);
+  check('moniker learned from "call me X"', persona.learnMonikerFromText(NCH, 'a@s.whatsapp.net', 'yo call me Shadow ok') === 'Shadow');
+  check('moniker learned from "my name is X"', persona.learnMonikerFromText(NCH, 'b@s.whatsapp.net', "my name is Dave btw") === 'Dave');
+  check('moniker learned from "I go by X"', persona.learnMonikerFromText(NCH, 'c@s.whatsapp.net', 'i go by Ghost around here') === 'Ghost');
+  check('stoplisted moniker rejected ("call me dude")', persona.learnMonikerFromText(NCH, 'd@s.whatsapp.net', 'dude just call me Dude') === null);
+  check('non-intro sentence rejected', persona.learnMonikerFromText(NCH, 'd@s.whatsapp.net', "let's call it a day guys") === null);
+  check('bestName: moniker beats WhatsApp name', persona.bestName(NCH, 'a@s.whatsapp.net', 'x') === 'Shadow');
+  check('bestName: profile nickname beats moniker', persona.bestName(NCH, 'prof@s.whatsapp.net', 'x') === 'Mel');
+  check('bestName: WhatsApp name fallback', persona.bestName(NCH, 'b@s.whatsapp.net', 'x') === 'Dave');
+  check('bestName: fallback when unknown', persona.bestName(NCH, 'zz@s.whatsapp.net', 'someone') === 'someone');
+  const wb = persona.whoBlock(NCH, 'a@s.whatsapp.net');
+  check('whoBlock: speaker + both name types', wb.includes("You're talking to Shadow") && wb.includes('"John Doe"') && wb.includes('they go by "Shadow"'));
+  check('whoBlock: teaches the DIFFERENCE explicitly', wb.includes('WhatsApp display names are often random') && wb.includes("don't invent a name"));
+  check('whoBlock empty without jid', persona.whoBlock(NCH, null) === '');
+  persona.learnMonikerFor(NCH, 'e@s.whatsapp.net', 'Shad');
+  persona.learnMonikerFor(NCH, 'e@s.whatsapp.net', 'Shady');
+  persona.learnMonikerFor(NCH, 'e@s.whatsapp.net', 'Shad0w');
+  persona.learnMonikerFor(NCH, 'e@s.whatsapp.net', 'Shad');
+  check('monikers capped at 4 per person', persona._internals.getPersonEntry(NCH, 'e@s.whatsapp.net').m.length === 3);
+  const rb = persona.rosterBlock(NCH, 'a@s.whatsapp.net');
+  check('rosterBlock: lists others, skips speaker', rb.includes('Dave') && rb.includes('Ghost') && !rb.includes('Shadow'));
+  check('rosterBlock: flags WhatsApp name when it differs', rb.includes('(WhatsApp name: John Doe)') === false && rb.includes('Dave'));
+  // transcript renders BEST names (observe with jid → roster + moniker learn)
+  persona.observe({ chatId: NCH, who: 'John Doe', jid: 'a@s.whatsapp.net', text: 'who is up for a raid' });
+  check('transcript renders moniker, not raw WhatsApp name', persona._internals.transcriptBlock(NCH).includes('Shadow: who is up for a raid'));
+  check('observe with jid learned pushname via transcript path', persona._internals.getPersonEntry(NCH, 'a@s.whatsapp.net').w === 'John Doe');
+  groqCalls = []; groqScript = ['yo'];
+  await persona.buildTurn({ chatId: NCH, senderName: 'John Doe', senderJid: 'a@s.whatsapp.net', text: 'hey', isAmbient: false });
+  const sys3 = groqCalls[0].messages[0].content;
+  check("prompt: WHO YOU'RE TALKING TO block rides with senderJid", sys3.includes("WHO YOU'RE TALKING TO") && sys3.includes("You're talking to Shadow"));
+  check('prompt: PEOPLE YOU KNOW roster rides', sys3.includes('PEOPLE YOU KNOW IN THIS CHAT') && sys3.includes('Dave'));
+  check('prompt: NAMES style rule present', sys3.includes('NAMES: call people by the names they actually go by'));
+  check('prompt: REMEMBER name hint present', sys3.includes('goes by <what they said>'));
+
+  // ─── 20. REALGUY v2.5: engine.js source pins ───────────────────────────────
+  check('trigger: ALWAYS quotes the triggering message', engineSrc.includes('{ quoteM: m },'));
+  check('old conditional quote REMOVED', !engineSrc.includes('quoteM: isReplyToBot ? m : null'));
+  check('trigger: digits-only LID/JID compare present', engineSrc.includes('const _digitsOf = (j) => String(j || "")') && engineSrc.includes('const _botIdDigits'));
+  check('trigger: mention uses digit-core match', engineSrc.includes('_mentionedDigits.some'));
+  check('trigger: reply-to-bot uses digit-core match', engineSrc.includes('_botIdDigits.includes(_quotedDigits)'));
+  check('trigger: @<digits> text-fragment fallback present', engineSrc.includes('_mentionFragmentRe'));
+  check('trigger: observability log line present', engineSrc.includes('🎯 [AI] trigger='));
+  check('trigger: nameResolver wired into initPersona', engineSrc.includes('nameResolver: (jid) =>'));
+  check('observe gets jid (roster learns every message)', engineSrc.includes('jid: senderJid, // 💡 REALGUY v2.5: identity for the name roster'));
+  check('ambient chime gets senderJid', engineSrc.includes('senderJid, // 💡 REALGUY v2.5: ambient turns get identity too'));
+  check('buildTurn gets senderJid (WHO IS WHO block)', engineSrc.includes('senderJid, // 💡 REALGUY v2.5: powers the WHO'));
+
   console.log(fails === 0 ? '\nALL CHECKS PASSED' : `\n${fails} CHECK(S) FAILED`);
   // let stdout drain (process.exit on a pipe truncates buffered console.log)
   process.exitCode = fails === 0 ? 0 : 1;
