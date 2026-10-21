@@ -89,6 +89,69 @@ function drawPanel(ctx, w, h, spec = {}) {
     ctx.restore();
 }
 
+
+// ── hunting-ground critters + campfire (procedural, no animal sprites in the pack) ──
+function shade(ctx, x, y, rx, ry, a = 0.28) { ctx.save(); ctx.fillStyle = `rgba(20,14,6,${a})`; ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+function drawDeer(ctx, x, y, s, flip = false, stag = true) {
+    ctx.save(); ctx.translate(x, y); if (flip) ctx.scale(-1, 1);
+    shade(ctx, 0, 0.05 * s, 1.15 * s, 0.26 * s);
+    const body = '#a86a38', dark = '#6e4220', belly = '#e0c08e';
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    // far legs, body, near legs
+    ctx.strokeStyle = dark; ctx.lineWidth = 0.13 * s;
+    for (const [lx, o] of [[-0.62, 0.05], [0.55, -0.04]]) { ctx.beginPath(); ctx.moveTo(lx + 0.12 * s, -0.75 * s); ctx.lineTo(lx * s + o * s, -0.02 * s); ctx.stroke(); }
+    ctx.fillStyle = body; ctx.strokeStyle = dark; ctx.lineWidth = 0.05 * s;
+    ctx.beginPath(); ctx.ellipse(0, -0.95 * s, 0.95 * s, 0.46 * s, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = belly; ctx.beginPath(); ctx.ellipse(0.05 * s, -0.72 * s, 0.7 * s, 0.17 * s, 0, 0, Math.PI); ctx.fill();
+    ctx.strokeStyle = dark; ctx.lineWidth = 0.13 * s;
+    for (const [lx, o] of [[-0.45, -0.04], [0.7, 0.05]]) { ctx.beginPath(); ctx.moveTo(lx * s, -0.7 * s); ctx.lineTo(lx * s + o * s, -0.02 * s); ctx.stroke(); }
+    // tail
+    ctx.fillStyle = '#f4ead6'; ctx.beginPath(); ctx.ellipse(-0.98 * s, -1.08 * s, 0.1 * s, 0.17 * s, -0.5, 0, Math.PI * 2); ctx.fill();
+    // neck + head
+    ctx.fillStyle = body; ctx.strokeStyle = dark; ctx.lineWidth = 0.05 * s;
+    ctx.beginPath(); ctx.moveTo(0.65 * s, -1.25 * s); ctx.lineTo(1.0 * s, -1.95 * s); ctx.lineTo(1.28 * s, -1.85 * s); ctx.lineTo(1.0 * s, -1.0 * s); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(1.28 * s, -1.9 * s, 0.3 * s, 0.17 * s, 0.35, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#2a1a0c'; ctx.beginPath(); ctx.arc(1.52 * s, -1.84 * s, 0.045 * s, 0, Math.PI * 2); ctx.fill();        // nose
+    ctx.beginPath(); ctx.arc(1.3 * s, -1.95 * s, 0.035 * s, 0, Math.PI * 2); ctx.fill();                                    // eye
+    ctx.fillStyle = body; ctx.beginPath(); ctx.ellipse(1.05 * s, -2.05 * s, 0.1 * s, 0.2 * s, -0.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();   // ear
+    if (stag) {                                                                                                              // antlers
+        ctx.strokeStyle = '#e6d3a8'; ctx.lineWidth = 0.06 * s;
+        const br = (bx, by, dx, dy) => { ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + dx * s, by + dy * s); ctx.stroke(); };
+        const ax = 1.12 * s, ay = -2.1 * s;
+        br(ax, ay, -0.12, -0.55); br(ax - 0.12 * s, ay - 0.55 * s, -0.22, -0.18); br(ax - 0.12 * s, ay - 0.55 * s, 0.14, -0.2); br(ax - 0.05 * s, ay - 0.3 * s, 0.25, -0.12);
+        br(ax + 0.12 * s, ay + 0.02 * s, 0.1, -0.5); br(ax + 0.22 * s, ay - 0.48 * s, 0.2, -0.14); br(ax + 0.22 * s, ay - 0.48 * s, -0.08, -0.22);
+    }
+    ctx.restore();
+}
+function drawBoar(ctx, x, y, s, flip = false) {
+    ctx.save(); ctx.translate(x, y); if (flip) ctx.scale(-1, 1);
+    shade(ctx, 0, 0.05 * s, 1.0 * s, 0.24 * s);
+    const body = '#4a3526', dark = '#241810';
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.strokeStyle = dark; ctx.lineWidth = 0.14 * s;
+    for (const lx of [-0.55, -0.25, 0.3, 0.6]) { ctx.beginPath(); ctx.moveTo(lx * s, -0.5 * s); ctx.lineTo(lx * s, -0.02 * s); ctx.stroke(); }
+    ctx.fillStyle = body; ctx.lineWidth = 0.05 * s;
+    ctx.beginPath(); ctx.ellipse(0, -0.78 * s, 0.9 * s, 0.5 * s, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#5c4331'; ctx.beginPath(); ctx.ellipse(0.7 * s, -0.8 * s, 0.42 * s, 0.4 * s, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();           // shoulder / head mass
+    ctx.fillStyle = '#c99a86'; ctx.beginPath(); ctx.ellipse(1.12 * s, -0.7 * s, 0.17 * s, 0.14 * s, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();           // snout
+    ctx.strokeStyle = '#f1e6c8'; ctx.lineWidth = 0.06 * s; ctx.beginPath(); ctx.moveTo(1.02 * s, -0.62 * s); ctx.quadraticCurveTo(1.12 * s, -0.42 * s, 1.0 * s, -0.4 * s); ctx.stroke();   // tusk
+    ctx.fillStyle = '#120a04'; ctx.beginPath(); ctx.arc(0.92 * s, -0.92 * s, 0.045 * s, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = body; ctx.strokeStyle = dark; ctx.lineWidth = 0.04 * s; ctx.beginPath(); ctx.moveTo(0.62 * s, -1.12 * s); ctx.lineTo(0.78 * s, -1.38 * s); ctx.lineTo(0.9 * s, -1.08 * s); ctx.closePath(); ctx.fill(); ctx.stroke();   // ear
+    ctx.strokeStyle = dark; ctx.lineWidth = 0.07 * s; ctx.beginPath(); ctx.moveTo(-0.85 * s, -0.9 * s); ctx.quadraticCurveTo(-1.1 * s, -1.0 * s, -1.05 * s, -0.78 * s); ctx.stroke();   // tail
+    ctx.restore();
+}
+function drawCampfire(ctx, x, y, s) {
+    ctx.save(); ctx.translate(x, y);
+    const g = ctx.createRadialGradient(0, -0.3 * s, 0.1 * s, 0, -0.3 * s, 2.4 * s);
+    g.addColorStop(0, 'rgba(255,190,90,0.55)'); g.addColorStop(1, 'rgba(255,150,40,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, -0.2 * s, 2.6 * s, 1.5 * s, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.lineCap = 'round'; ctx.strokeStyle = '#4a2c14'; ctx.lineWidth = 0.28 * s;
+    ctx.beginPath(); ctx.moveTo(-0.7 * s, -0.05 * s); ctx.lineTo(0.7 * s, -0.35 * s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-0.7 * s, -0.35 * s); ctx.lineTo(0.7 * s, -0.05 * s); ctx.stroke();
+    const flame = (w0, h0, col, dy) => { ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(-w0, -0.25 * s + dy); ctx.quadraticCurveTo(-w0 * 1.1, -h0 * 0.55 + dy, 0, -h0 + dy); ctx.quadraticCurveTo(w0 * 1.1, -h0 * 0.55 + dy, w0, -0.25 * s + dy); ctx.closePath(); ctx.fill(); };
+    flame(0.55 * s, 1.5 * s, '#e8541a', 0); flame(0.4 * s, 1.15 * s, '#ff9a2a', 0); flame(0.22 * s, 0.75 * s, '#ffe27a', 0);
+    ctx.restore();
+}
+
 // ── per-structure close-up compositions ──
 const TREES = ['trees_A_large', 'trees_B_large', 'trees_A_medium', 'trees_B_medium'];
 const SMALL = ['tree_single_A', 'tree_single_B', 'rock_single_A', 'rock_single_B', 'rock_single_C'];
@@ -104,7 +167,7 @@ function buildScene(type, lvl, biome, seed) {
     const has = (n) => K.hasSprite(n, 'iso');
 
     // pond: carve the lake first (direction varies per owner), before terrain resolves
-    let pier = null;
+    let pier = null, hunt = false;
     if (type === 'pond') {
         const ang = rng() * Math.PI * 2;
         const lw = { x: cen.x + Math.cos(ang) * 3.9, z: cen.z + Math.sin(ang) * 3.2 };
@@ -178,13 +241,30 @@ function buildScene(type, lvl, biome, seed) {
             break;
         }
         case 'hunting': {
-            P(has(B('archeryrange')) ? B('archeryrange') : B('barracks'), { sc: 2.5, dx: -0.8 });
-            P('tent', { dx: 3.4, dz: -1.2, sc: 2.2 }); P('tent', { dx: 3.9, dz: 1.3, sc: 1.8, flip: true });
-            P('target', { dx: -3.4, dz: 1.8, sc: 1.5 }); P('target', { dx: -2.2, dz: 2.8, sc: 1.5 }); P('target', { dx: -4.4, dz: 0.8, sc: 1.5 });
-            P('weaponrack', { dx: 1.6, dz: 2.1, sc: 1.5 }); P('bucket_arrows', { dx: 0.6, dz: 2.7, sc: 1.4 });
-            P('resource_lumber', { dx: 2.8, dz: 2.6, sc: 1.2 }); P('crate_A_small', { dx: 4.4, dz: 0.0, sc: 1.2 });
-            // a rough palisade segment behind the camp with a gate
-            for (let i = -3; i <= 3; i++) P(i === 0 ? 'fence_wood_straight_gate@0' : 'fence_wood_straight@0', { dx: i * 1.15, dz: -3.6, sc: 1.0 });
+            // a proper HUNTING GROUND (owner 2026-10-20): a stockaded camp in a forest clearing — hunter's lodge, archery range,
+            // target lane, fire pit with log seats, drying racks, trophy-ready weapon racks — and game wandering the glade.
+            P(has(B('archeryrange')) ? B('archeryrange') : B('barracks'), { sc: 2.2, dx: -1.6, dz: -1.2 });
+            P(has('house_roundhut_thatch') ? 'house_roundhut_thatch' : 'tent', { dx: 3.0, dz: -1.5, sc: 2.1 });
+            P('tent', { dx: 4.4, dz: 0.2, sc: 1.8, flip: true }); P('tent', { dx: 1.2, dz: -2.6, sc: 1.6 });
+            // fire pit: ring of stones + two log seats
+            for (let i = 0; i < 6; i++) { const a2 = i * Math.PI / 3; P(['rock_single_A', 'rock_single_B', 'rock_single_C'][i % 3], { dx: 0.9 + Math.cos(a2) * 0.62, dz: 1.5 + Math.sin(a2) * 0.5, sc: 0.8 }); }
+            P('resource_lumber', { dx: -0.4, dz: 1.9, sc: 0.85 }); P('resource_lumber', { dx: 2.2, dz: 1.2, sc: 0.85, flip: true });
+            // target lane + firing line
+            for (let i = 0; i < 4; i++) P('target', { dx: -3.2 - i * 0.55, dz: 2.6 + i * 0.95, sc: 1.4 });
+            P('bucket_arrows', { dx: -1.4, dz: 2.2, sc: 1.4 }); P('weaponrack', { dx: -2.4, dz: 1.2, sc: 1.4 }); P('weaponrack', { dx: 1.9, dz: -0.4, sc: 1.3, flip: true });
+            // drying racks + butchering table
+            P('pallet', { dx: 4.0, dz: 2.1, sc: 1.2 }); P('crate_long_A', { dx: 3.2, dz: 1.9, sc: 1.1 }); P('barrel', { dx: 2.6, dz: 2.5, sc: 1.2 });
+            P('tree_single_A_cut', { dx: -0.6, dz: -3.4, sc: 1.2 }); P('tree_single_B_cut', { dx: 5.0, dz: -1.0, sc: 1.1 });
+            // stockade behind the camp, with a gate
+            for (let i = -5; i <= 5; i++) P(i === 1 ? 'fence_wood_straight_gate@0' : 'fence_wood_straight@0', { dx: i * 1.15 - 0.4, dz: -4.4, sc: 1.0 });
+            // canvas overlays: the campfire flame + wandering game
+            const wp = (dx, dz) => ({ x: cen.x + dx, z: cen.z + dz });
+            const fire = wp(0.9, 1.5);
+            w.overlay((ctx, p, k) => drawCampfire(ctx, p.x, p.y, 44 * k * 2 / 1.5), 0, 0, { dx: fire.x, dz: fire.z });
+            const deer = [[-0.6, 4.9, false, true, 44], [6.6, 3.9, true, false, 40], [5.4, -3.2, true, true, 46]];
+            for (const [dx, dz, fl, st2, sz] of deer) { const q = wp(dx, dz); w.overlay((ctx, p, k) => drawDeer(ctx, p.x, p.y, sz * k * 2 / 1.5, fl, st2), 0, 0, { dx: q.x, dz: q.z }); }
+            { const q = wp(-6.6, 0.4); w.overlay((ctx, p, k) => drawBoar(ctx, p.x, p.y, 40 * k * 2 / 1.5, false), 0, 0, { dx: q.x, dz: q.z }); }
+            hunt = true;
             break;
         }
         case 'blacksmith': {
@@ -210,11 +290,11 @@ function buildScene(type, lvl, biome, seed) {
         default: P(B('home_A'), { sc: 2.4 }); break;
     }
     // wilds ring: trees / rocks beyond ~4.5 cells so the scene sits in its biome
-    const trees = ROCKY.has(biome) ? SMALL : TREES;
+    const trees = hunt ? TREES : (ROCKY.has(biome) ? SMALL : TREES);
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
         const d = K.hexDist(CC, CR, c, r), k = w.cell[r][c];
-        if (d < 4 || k.water || k.river) continue;
-        if (rng() < (d >= 7 ? 0.7 : 0.45)) w.put(trees[Math.floor(rng() * trees.length)], c, r, { flip: rng() < 0.5, sc: 0.95 + rng() * 0.2 });
+        if (d < (hunt ? 5 : 4) || k.water || k.river) continue;
+        if (rng() < (hunt ? (d >= 6 ? 0.97 : 0.88) : (d >= 7 ? 0.7 : 0.45))) w.put(trees[Math.floor(rng() * trees.length)], c, r, { flip: rng() < 0.5, sc: 0.95 + rng() * 0.2 });
     }
     return { w, cen, team, water: false };
 }
@@ -248,4 +328,4 @@ async function renderStructureCard(o = {}) {
     });
 }
 
-module.exports = { renderStructureCard, drawPanel, PANEL_H, W, H };
+module.exports = { renderStructureCard, drawPanel, drawDeer, drawBoar, drawCampfire, PANEL_H, W, H };

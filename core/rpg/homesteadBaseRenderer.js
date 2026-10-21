@@ -377,6 +377,13 @@ function buildWorld(state, cel = null) {
         hp(3, 11, 'target', { dz: 0.3 }); hp(3, 12, 'target', { dx: 0.2, dz: -0.2 }); hp(2, 12, 'target', { dz: 0.2 });
         hp(2, 10, 'weaponrack'); hp(3, 7, 'bucket_arrows'); hp(0, 9, 'crate_A_small', { dx: 0.3 });
         hp(0, 7, 'resource_lumber'); hp(2, 6, 'sack', { dx: 0.4 });
+        try {                                                          // fire pit + game in the glade (shared critter art, structureScenes)
+            const SS = require('./structureScenes');
+            const cellOf = (gx, gy) => hc(gx, gy);
+            const [fc, fr] = cellOf(2, 8); w.overlay((ctx, p, k) => SS.drawCampfire(ctx, p.x, p.y, 30 * k * 2 / 1.5), fc, fr, { dx: 0.3 });
+            const [dc, dr] = cellOf(0, 11); w.overlay((ctx, p, k) => SS.drawDeer(ctx, p.x, p.y, 36 * k * 2 / 1.5, false, true), dc, dr, { dx: 0.2 });
+            const [bc, br] = cellOf(3, 8); w.overlay((ctx, p, k) => SS.drawDeer(ctx, p.x, p.y, 30 * k * 2 / 1.5, true, false), bc, br, {});
+        } catch (e) { /* decoration only */ }
     }
     w.resolve();
 
