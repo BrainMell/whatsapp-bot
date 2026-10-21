@@ -579,18 +579,26 @@ const BD = { isle: { top: '#cfe8ef', mid: '#8fc7b2', bot: '#3f7a5c' } };
 async function renderStructureCard(o = {}) {
     const type = String(o.type || 'mines'), lvl = Math.max(1, Math.min(3, o.level || 1));
     const biome = o.biome || 'isle';
-    const seed = hashStr(`${o.seed || 'x'}:${type}`);
     const activity = o.activity || '', spotlight = !!o.spotlight, tint = o.tint || '';
-    const key = hashStr(JSON.stringify(['sc2', type, lvl, biome, seed, activity, spotlight, tint, o.spec || {}]));
+    // Task 19 (spec §Pond): the pond VIEWER is the true dock-POV composition as
+    // a clean still — no catch spotlight, no banner. Canonical seed so every
+    // player shares one bake per (biome, level) instead of one per user.
+    const isPondView = type === 'pond' && !activity;
+    const seed = isPondView ? hashStr('dockpov-still') : hashStr(`${o.seed || 'x'}:${type}`);
+    const key = hashStr(JSON.stringify(['sc2', isPondView ? 'pond_pov' : type, lvl, biome, seed, activity, spotlight, tint, o.spec || {}]));
     return mediaCache.cached('structcard', key, async () => {
         fonts();
         const { createCanvas } = require('canvas');
-        const { w, cen, focus } = buildScene(type, lvl, biome, seed, { activity, spotlight, tint });
-        const bi = (K.biomeInfo('iso').biomes || {})[biome];
-        const bd = biome === 'isle' ? BD.isle : bi ? { top: bi.backdrop[0], mid: bi.backdrop[1], bot: bi.backdrop[2] } : { top: '#356f6a', mid: '#1f4a4c', bot: '#0d2527' };
-        w.layoutFixed(W, H, (focus || cen).x, (focus || cen).z, W / 2, (H - PANEL_H) * 0.52);
         const cv = createCanvas(W, H), ctx = cv.getContext('2d');
-        await w.draw(ctx, { drawBackdrop: (c2) => { const g = c2.createLinearGradient(0, 0, 0, H); g.addColorStop(0, bd.top); g.addColorStop(0.5, bd.mid); g.addColorStop(1, bd.bot); c2.fillStyle = g; c2.fillRect(0, 0, W, H); } });
+        if (isPondView) {
+            require('./dockPov').paintStill(ctx, W, H, { biome, lvl });
+        } else {
+            const { w, cen, focus } = buildScene(type, lvl, biome, seed, { activity, spotlight, tint });
+            const bi = (K.biomeInfo('iso').biomes || {})[biome];
+            const bd = biome === 'isle' ? BD.isle : bi ? { top: bi.backdrop[0], mid: bi.backdrop[1], bot: bi.backdrop[2] } : { top: '#356f6a', mid: '#1f4a4c', bot: '#0d2527' };
+            w.layoutFixed(W, H, (focus || cen).x, (focus || cen).z, W / 2, (H - PANEL_H) * 0.52);
+            await w.draw(ctx, { drawBackdrop: (c2) => { const g = c2.createLinearGradient(0, 0, 0, H); g.addColorStop(0, bd.top); g.addColorStop(0.5, bd.mid); g.addColorStop(1, bd.bot); c2.fillStyle = g; c2.fillRect(0, 0, W, H); } });
+        }
         // soft vignette so the panel + ribbon always read
         const vg = ctx.createRadialGradient(W / 2, H * 0.42, H * 0.25, W / 2, H * 0.45, H * 0.95);
         vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.38)');

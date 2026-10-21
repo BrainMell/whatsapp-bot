@@ -31,7 +31,10 @@ const RULES = {
         zeni: [20, 60],
     },
     hunt: {
-        cooldownMs: 8 * 60 * 1000, verb: 'ride out with the hunting party', head: '🏹 The hunt returns',
+        // owner 2026-10-21 (Task 19): "The .j hunt shouldn't have a timer only a
+        // limit per how many times a day" — the 8-minute cooldown is GONE; the
+        // hunting party now rides out a fixed number of times per UTC day.
+        dailyLimit: 25, verb: 'ride out with the hunting party', head: '🏹 The hunt returns',
         table: [['rabbit_pelt', [55, 42, 30], 1, 3], ['venison', [32, 34, 34], 1, 2], ['boar_tusk', [11, 18, 24], 1, 1], ['stag_antler', [2, 6, 12], 1, 1]],
         zeni: [40, 120],
     },
@@ -45,18 +48,46 @@ function pick(table, tier) {
     return table[0];
 }
 const fmtMs = (ms) => { const s = Math.ceil(ms / 1000); return s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`; };
+// UTC calendar day stamp — the hunt limit resets at midnight UTC (1am WAT).
+const utcDay = (now = Date.now()) => new Date(now).toISOString().slice(0, 10);
+// Fishing GIF band for the dock-POV overlay (rarity is only signalled AFTER
+// the roll): COMMON/UNCOMMON rides quiet, RARE sends a carp close, EPIC brings
+// the big koi + splash. Hunt never reaches this.
+function bandOf(drops = {}) {
+    if (drops.crystal_koi) return 'epic';
+    if (drops.silver_carp) return 'mid';
+    return 'low';
+}
+// spec §Pond results: the catch line carries item, rarity and sell value.
+function itemLine(id, q) {
+    const info = (NEW_ITEMS[id] || lootSystem.getItemInfo(id) || {});
+    const bits = [info.rarity, info.value ? `sells ${Number(info.value).toLocaleString()}Z` : ''].filter(Boolean);
+    return `${q}× ${info.name || id}${bits.length ? ` — ${bits.join(' · ')}` : ''}`;
+}
 
 /**
- * run(kind, userId, tier, lastTs) → { ok, wait?, text, banner, drops }
- * tier: pond level (fish) / barracks level (hunt: the hunting party's strength). Caller persists the cooldown on ok.
+ * run(kind, userId, tier, cd) → { ok, wait?, text, banner, drops, dailyUsed?, dailyDay? }
+ * tier: pond level (fish) / barracks level (hunt: the hunting party's strength).
+ * cd: the Base doc's cooldowns map — fish keys off cd.fish (timestamp); hunt
+ * keys off cd.huntDay/cd.huntCount (UTC-day counter, Task 19: no timer).
+ * Caller persists the cooldown / day counter on ok.
  */
-async function run(kind, userId, tier, lastTs) {
+async function run(kind, userId, tier, cd = {}) {
     const R = RULES[kind];
     if (!R) return { ok: false, text: '❌ Unknown activity.' };
     const now = Date.now();
-    if (lastTs && now - lastTs < R.cooldownMs) {
-        const wait = R.cooldownMs - (now - lastTs);
-        return { ok: false, wait, text: `⏳ Give it a moment — try again in *${fmtMs(wait)}*.` };
+    if (kind === 'fish') {
+        const last = cd.fish || 0;
+        if (last && now - last < R.cooldownMs) {
+            const wait = R.cooldownMs - (now - last);
+            return { ok: false, wait, text: `⏳ Give it a moment — try again in *${fmtMs(wait)}*.` };
+        }
+    } else if (R.dailyLimit) {
+        const day = utcDay(now);
+        const used = cd.huntDay === day ? (cd.huntCount || 0) : 0;
+        if (used >= R.dailyLimit) {
+            return { ok: false, dailyUsed: used, dailyDay: day, text: `🏹 The hunting party is spent for today — *${used}/${R.dailyLimit}* hunts used. They rest until midnight UTC, then ride out again.` };
+        }
     }
     const rolls = 2 + Math.floor((tier - 1) * 1.2) + (Math.random() < 0.25 ? 1 : 0);
     const found = {};
@@ -71,11 +102,13 @@ async function run(kind, userId, tier, lastTs) {
     const zeni = R.zeni[0] + Math.floor(Math.random() * (R.zeni[1] - R.zeni[0] + 1)) * tier;
     let paid = 0;
     try { if (economy.addMoney(userId, zeni, kind === 'fish' ? 'Pond: fishing' : 'Hunting grounds')) paid = zeni; } catch (e) { /* best-effort */ }
-    const lines = Object.entries(found).map(([id, q]) => `${q}× ${(NEW_ITEMS[id] || lootSystem.getItemInfo(id)).name}`);
+    const lines = Object.entries(found).map(([id, q]) => (kind === 'fish' ? itemLine(id, q) : `${q}× ${(NEW_ITEMS[id] || lootSystem.getItemInfo(id)).name}`));
     if (!lines.length) return { ok: false, text: full ? '❌ Your bag is full — sell or store some items first.' : '🌫️ Nothing bit this time.' };
     if (paid) lines.push(`+${paid.toLocaleString()} ZENI`);
     const text = `${R.head}\nYou ${R.verb}…\n\n${lines.map((l) => `• ${l}`).join('\n')}${full ? '\n\n⚠️ Bag full — some of the haul was left behind.' : ''}`;
-    return { ok: true, text, banner: { head: R.head.replace(/^[^\w]+/, ''), lines }, drops: found };
+    const out = { ok: true, text, banner: { head: R.head.replace(/^[^\w]+/, ''), lines }, drops: found };
+    if (kind === 'hunt') { out.dailyUsed = (cd.huntDay === utcDay(now) ? (cd.huntCount || 0) : 0) + 1; out.dailyDay = utcDay(now); }
+    return out;
 }
 
-module.exports = { run, RULES, NEW_ITEMS, fmtMs };
+module.exports = { run, RULES, NEW_ITEMS, fmtMs, bandOf, utcDay, itemLine };

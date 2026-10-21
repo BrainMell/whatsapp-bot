@@ -381,7 +381,9 @@ async function zoomIn(ctx, rec, st) {
     return;
 }
 
-/** `.j base fish` / `.j base hunt` — the pond and the hunting grounds, with a zoomed result card. */
+/** `.j base fish` / `.j base hunt` (+ top-level `.j fish` / `.j hunt`) — the pond
+ *  and the hunting grounds. Fish answers with the dock-POV catch GIF (Task 19);
+ *  hunt keeps the static spotlight card. Loot text rides the caption either way. */
 async function cmdActivity(ctx, kind) {
     const rec = await loadBase(ctx.senderJid);
     const act = require('./baseActivities');
@@ -392,24 +394,48 @@ async function cmdActivity(ctx, kind) {
     if (opLocks.has(ctx.senderJid)) return ctx.reply('⏳ Your last base action is still settling — one moment.');
     opLocks.add(ctx.senderJid);
     try {
-        const last = ((rec.cooldowns || {})[kind]) || 0;
-        const res = await act.run(kind, ctx.senderJid, tier, last);
+        // Task 19: hunt has NO timer — run() reads huntDay/huntCount off the
+        // cooldowns map for the daily limit; fish still keys off cd.fish.
+        const res = await act.run(kind, ctx.senderJid, tier, rec.cooldowns || {});
         if (!res.ok) return ctx.reply(res.text);
-        try { await Base.updateOne({ userId: ctx.senderJid }, { $set: { [`cooldowns.${kind}`]: Date.now() } }); } catch (e) { /* cooldown best-effort */ }
+        try {
+            const setp = kind === 'hunt'
+                ? { 'cooldowns.huntDay': res.dailyDay, 'cooldowns.huntCount': res.dailyUsed }
+                : { 'cooldowns.fish': Date.now() };
+            await Base.updateOne({ userId: ctx.senderJid }, { $set: setp });
+        } catch (e) { /* cooldown best-effort */ }
         let media = null;
-        // §13/§14: the scene plays the REAL result — fishing ripples the bobber,
-        // hunting spotlights the animal whose loot actually dropped (top drop).
-        const spot = res.drops && Object.values(res.drops).reduce((a, b) => Math.max(a, b), 0) > 0;
-        try { media = await renderZoom(ctx, rec, st, { banner: res.banner, note: `Next try in ${act.fmtMs(act.RULES[kind].cooldownMs)}.`, activity: kind === 'fish' ? 'fishing' : 'hunting', spotlight: spot }); } catch (e) { console.error('[base] activity card failed:', e.message); }
-        if (media && media.buffer) return ctx.sock.sendMessage(ctx.chatId, { image: media.buffer, caption: res.text }, { quoted: ctx.m });
+        if (kind === 'fish') {
+            // Task 19: the dock-POV catch GIF — base animation baked once per
+            // (biome, level) and kept on disk; THIS catch's overlay (bite /
+            // ripples / RARE-EPIC approach / splash) is composited on top. Loot
+            // text rides the caption. Failure falls through to the static zoom
+            // card, then text — the roll already happened exactly once.
+            try { media = await require('./dockPov').renderFishingGif({ biome: biomeOf(rec), lvl: st.level, band: act.bandOf(res.drops) }); } catch (e) { console.error('[base] fish gif failed:', e.message); }
+        }
+        if (!media || !media.buffer) {
+            // §13/§14 static fallback: the scene plays the REAL result — hunting
+            // spotlights the animal whose loot actually dropped (top drop).
+            const spot = res.drops && Object.values(res.drops).reduce((a, b) => Math.max(a, b), 0) > 0;
+            const note = kind === 'hunt'
+                ? `Hunts today: ${res.dailyUsed}/${act.RULES.hunt.dailyLimit} · resets midnight UTC.`
+                : `Next cast in ${act.fmtMs(act.RULES.fish.cooldownMs)}.`;
+            try { media = await renderZoom(ctx, rec, st, { banner: res.banner, note, activity: kind === 'fish' ? 'fishing' : 'hunting', spotlight: spot }); } catch (e) { console.error('[base] activity card failed:', e.message); }
+        }
+        if (media && media.buffer) {
+            const msg = { image: media.buffer, caption: res.text };
+            try { if (require('../utils/gif89a').isGifBuffer(media.buffer)) msg.gifPlayback = true; } catch (e) { /* plain image */ }
+            return ctx.sock.sendMessage(ctx.chatId, msg, { quoted: ctx.m });
+        }
         return ctx.reply(res.text);
     } finally { opLocks.delete(ctx.senderJid); }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // §4/§13/§14: `.j fish` / `.j hunt` — the pond and hunting-ground actions now
-// answer to their own top-level commands (engine routes them here). Same rules,
-// same cooldowns, same loot as the old `.j base fish|hunt` — nothing rebalanced.
+// answer to their own top-level commands (engine routes them here). Same loot
+// as the old `.j base fish|hunt`; fish keeps its 4m rest, hunt is a daily
+// count (Task 19) — nothing else rebalanced.
 async function runActivity(ctx, kind) {
     return cmdActivity(ctx, kind === 'fish' || kind === 'cast' || kind === 'fishing' ? 'fish' : 'hunt');
 }
