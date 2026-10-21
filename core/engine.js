@@ -9827,6 +9827,52 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                       }
                     };
 
+                    // 💡 FIX 2026-10-21 (gstatus image/video STILL not rendering): Baileys only
+                    // fills imageMessage/videoMessage width+height (and video seconds) while it
+                    // computes the thumbnail itself - and we pre-supply jpegThumbnail (sharp is
+                    // banned here) which SKIPS that step. The status was therefore relayed with
+                    // NO dimensions; WhatsApp accepts it but never renders a media status that
+                    // has no width/height (plain messages tolerate it, statuses do not).
+                    // Verified against baileys rc13/rc14 prepareWAMessageMedia: dims come only
+                    // from the thumbnail path, and extra payload fields are spread into the
+                    // message, so we compute them here and pass them through.
+                    const gsImageDims = async (buf) => {
+                      try {
+                        const { Jimp } = require("jimp");
+                        const img = await Jimp.read(buf);
+                        const w = img.bitmap && img.bitmap.width, h = img.bitmap && img.bitmap.height;
+                        return w > 0 && h > 0 ? { width: w, height: h } : null;
+                      } catch (e) {
+                        console.log("[GStatus] image dims failed:", e?.message);
+                        return null;
+                      }
+                    };
+                    const gsVideoInfo = async (buf) => {
+                      const dir = await gfs.promises.mkdtemp(gpath.join(gos.tmpdir(), "gstat-"));
+                      try {
+                        const inP = gpath.join(dir, "in.mp4");
+                        await gfs.promises.writeFile(inP, buf);
+                        const out = await new Promise((resolve) => {
+                          const t = setTimeout(() => resolve(""), 10000);
+                          execFile("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height:stream_tags=rotate:stream_side_data=rotation:format=duration", "-of", "json", inP], (err, stdout) => {
+                            clearTimeout(t); resolve(err ? "" : String(stdout || ""));
+                          });
+                        });
+                        const j = JSON.parse(out || "{}");
+                        const st = (j.streams && j.streams[0]) || {};
+                        let width = Number(st.width) || 0, height = Number(st.height) || 0;
+                        const rot = Math.abs(Number((st.tags && st.tags.rotate) || (st.side_data_list && st.side_data_list[0] && st.side_data_list[0].rotation) || 0));
+                        if (rot === 90 || rot === 270) { const tmp = width; width = height; height = tmp; }
+                        const dur = parseFloat(j.format && j.format.duration);
+                        return { width: width || undefined, height: height || undefined, seconds: Number.isFinite(dur) && dur > 0 ? Math.max(1, Math.round(dur)) : undefined };
+                      } catch (e) {
+                        console.log("[GStatus] video info failed:", e?.message);
+                        return {};
+                      } finally {
+                        gfs.promises.rm(dir, { recursive: true, force: true }).catch(() => {});
+                      }
+                    };
+
                     const gsAudioSeconds = async (buf) => {
                       const dir = await gfs.promises.mkdtemp(gpath.join(gos.tmpdir(), "gstat-"));
                       try {
@@ -9892,6 +9938,8 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                         const __mt = gsCheckMediaType('image', msg);
                         if (__mt) payload.mimetype = __mt;
                         payload.jpegThumbnail = await gsImageThumbB64(mediaBuf);
+                        const __dims = await gsImageDims(mediaBuf);
+                        if (__dims) { payload.width = __dims.width; payload.height = __dims.height; }
                         if (caption) payload.caption = caption;
                         return payload;
                       }
@@ -9900,6 +9948,9 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                         const __mt = gsCheckMediaType('video', msg);
                         if (__mt) payload.mimetype = __mt;
                         payload.jpegThumbnail = await gsVideoThumbB64(mediaBuf);
+                        const __vi = await gsVideoInfo(mediaBuf);
+                        if (__vi.width && __vi.height) { payload.width = __vi.width; payload.height = __vi.height; }
+                        if (__vi.seconds) payload.seconds = __vi.seconds;
                         if (caption) payload.caption = caption;
                         return payload;
                       }
