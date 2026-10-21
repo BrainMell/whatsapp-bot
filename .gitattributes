@@ -109,3 +109,8 @@ core/rpgasset/fonts/NotoEmoji-Regular.ttf -text
 # (or hexbox on boxes with no system emoji font)
 core/rpgasset/fonts/NotoColorEmoji.ttf -filter -diff -merge -text
 core/rpgasset/fonts/NotoColorEmoji.ttf -text
+
+# pond/hunt scene bake previews must be real bytes everywhere (reset --hard
+# deploys on the boxes would otherwise serve LFS pointers; the .bin masters
+# next to them are already plain blobs — previews follow the same rule)
+core/assets/scenes/*.png -filter -diff -merge -text
