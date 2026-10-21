@@ -157,11 +157,21 @@ function parseShopArgs(raw) {
 
 const matchRank = (item, rank) => !rank || (item.rarity || 'COMMON').toUpperCase() === rank;
 
+// §7 base-fusion helper — one zoomed market card for shop moments (open /
+// purchase). Never creates a base, never touches the wallet; returns null on
+// any failure so the caller falls back to the plain text flow.
+async function marketCard(senderJid, banner, activity = 'shopping') {
+    try {
+        return await require('../rpg/baseBuilder').zoomForCommand({ senderJid, prefix: getPrefix() }, 'shop', { activity, banner });
+    } catch (e) { return null; }
+}
+const _cardOk = (c) => c && c.buffer && c.buffer.length > 500;
+
 // ==========================================
 // 🏪 SHOP DISPLAY
 // ==========================================
 
-async function displayShop(sock, chatId, category = 'all') {
+async function displayShop(sock, chatId, category = 'all', senderJid = null) {
     // 1. Shared catalog (single source of truth - see buildShopCatalog above)
     const { classItems, mainItems, summonItems } = buildShopCatalog();
     const p = getPrefix();
@@ -301,7 +311,22 @@ async function displayShop(sock, chatId, category = 'all') {
     msg += `━━━━━━━━━━━━━━━\n`;
     msg += `💡 Buy: \`${p} buy <id>\` or \`${p} buy <#>\` (e.g. \`${p} buy health_potion_shop\`) • 🏷️ \`${p} shop equipment legendary\``;
 
+    // §7: the market card leads (shopkeeper, stall, MARKET OPEN banner with
+    // the active view) — the full menu stays the authoritative text response.
+    try {
+        const c = await marketCard(senderJid || senderJidOfChat(sock, chatId), {
+            head: 'MARKET OPEN',
+            lines: [`Browsing: ${activeCat.name}${rankTag}`, `Buy with \`${p} buy <#>\``],
+        }, 'shopping');
+        if (_cardOk(c)) return void await sock.sendMessage(chatId, { image: c.buffer, caption: msg });
+    } catch (e) { /* card is a garnish — text below always ships */ }
     await sock.sendMessage(chatId, { text: msg });
+}
+
+// displayShop receives chatId only; resolve the buyer for the sender-scoped
+// base lookup (DMs: chatId IS the jid; groups: unknown → no card, text only).
+function senderJidOfChat(_sock, chatId) {
+    return chatId && String(chatId).endsWith('@s.whatsapp.net') ? chatId : null;
 }
 
 // ==========================================
@@ -467,9 +492,17 @@ async function buyItem(sock, chatId, senderJid, input) {
             const loreDrops = require('../rpg/loreDrops');
             __shopDrop = loreDrops.maybeDrop('trading', { userId: senderJid, chatId, chance: 0.08 });
         } catch (e) {}
-        await sock.sendMessage(chatId, {
-            text: `✅ *PURCHASE SUCCESSFUL!*\n\n${result.message}\n\n💸 Paid: ${getZENI()}${item.cost.toLocaleString()}`
-        });
+        const buyTxt = `✅ *PURCHASE SUCCESSFUL!*\n\n${result.message}\n\n💸 Paid: ${getZENI()}${item.cost.toLocaleString()}`;
+        // §7: the counter where it happened — the bought item + the real price
+        // on the market card. Never claims a purchase that didn't happen.
+        try {
+            const c = await marketCard(senderJid, {
+                head: 'PURCHASE COMPLETE',
+                lines: [`${item.icon || '🛍️'} ${item.name}`.slice(0, 56), `Paid: ${getZENI()}${item.cost.toLocaleString()}`],
+            }, 'shopping');
+            if (_cardOk(c)) return void await sock.sendMessage(chatId, { image: c.buffer, caption: buyTxt });
+        } catch (e) { /* text below */ }
+        await sock.sendMessage(chatId, { text: buyTxt });
         // 💡 Phase B TUTORIAL: buying lesson advances on a REAL purchase
         // (no-op unless a tutorial session is active).
         try { require('../rpg/tutorial').notify(senderJid, 'buy', { sock, chatId }).catch(() => {}); } catch (e) {}

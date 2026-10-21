@@ -486,7 +486,7 @@ const MINING_LOCATIONS = {
         name: 'Shimmering Caves',
         id: 'shimmering_caves',
         desc: 'A shallow cave system perfect for beginners.',
-        req: { level: 1, rank: 'F', miningLevel: 1 },
+        req: { level: 1, rank: 'F', mineBuilding: 1 },
         energyCost: 15,
         ores: [
             { id: 'iron_shard', weight: 60, min: 2, max: 5 },
@@ -498,7 +498,7 @@ const MINING_LOCATIONS = {
         name: 'Deep Vein Shafts',
         id: 'deep_vein_shafts',
         desc: 'Darker, deeper tunnels where precious metals congregate.',
-        req: { level: 15, rank: 'D', miningLevel: 5 },
+        req: { level: 15, rank: 'D', mineBuilding: 2 },
         energyCost: 25,
         ores: [
             { id: 'silver_ore', weight: 40, min: 2, max: 4 },
@@ -511,7 +511,7 @@ const MINING_LOCATIONS = {
         name: 'Volcanic Hollow',
         id: 'volcanic_hollow',
         desc: 'Extreme heat melts the rock, revealing rare obsidian and diamonds.',
-        req: { level: 30, rank: 'B', miningLevel: 15 },
+        req: { level: 30, rank: 'B', mineBuilding: 3 },
         energyCost: 40,
         ores: [
             { id: 'gold_ore', weight: 20, min: 2, max: 5 },
@@ -524,7 +524,7 @@ const MINING_LOCATIONS = {
         name: 'Void Fissure',
         id: 'void_fissure',
         desc: 'A tear in reality where dark matter and mana crystals crystallize.',
-        req: { level: 50, rank: 'S', miningLevel: 30 },
+        req: { level: 50, rank: 'S', mineBuilding: 3 },
         energyCost: 60,
         ores: [
             { id: 'mana_crystal', weight: 40, min: 2, max: 4 },

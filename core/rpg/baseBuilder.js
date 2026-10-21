@@ -232,10 +232,25 @@ async function enterStructure(ctx, idArg) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ZOOM CARDS — `.j base <#|name>` opens the structure close-up with its info panel,
-// then runs the command that belongs to the place (owner 2026-10-20: "wire it all up")
+// ZOOM CARDS — `.j base <#|name>` is a PURE VIEWER (owner spec §5, 2026-10-21):
+// one clean zoomed structure card + a caption naming the command that works here.
+// The viewer NEVER executes gameplay — fishing/hunting live at `.j fish` / `.j hunt`
+// (runActivity below), mining at `.j mine`, healing at `.j clinic`, brewing at
+// `.j brew`. Owner spec rule 1: gameplay rules/aliases stay intact otherwise.
 // ═══════════════════════════════════════════════════════════════════════════
-const ALIASES = { mine: 'mines', mining: 'mines', cave: 'mines', fishing: 'pond', lake: 'pond', hunt: 'hunting', camp: 'hunting', market: 'shop', merchant: 'shop', store: 'shop', summons: 'barracks', summon: 'barracks', barrack: 'barracks', smith: 'blacksmith', forge: 'blacksmith', clinic: 'medbay', hospital: 'medbay', alchemist: 'alchemy' };
+const ALIASES = { mine: 'mines', mining: 'mines', cave: 'mines', fish: 'pond', fishing: 'pond', cast: 'pond', lake: 'pond', hunt: 'hunting', hunting: 'hunting', camp: 'hunting', market: 'shop', merchant: 'shop', store: 'shop', summons: 'barracks', summon: 'barracks', barrack: 'barracks', smith: 'blacksmith', forge: 'blacksmith', clinic: 'medbay', hospital: 'medbay', heal: 'medbay', alchemist: 'alchemy', brew: 'alchemy' };
+// §5: ONE command-hint map — what the player can DO at each place (prefix-aware,
+// real commands only). Drives the panel's action list and the viewer caption.
+const HINTS = {
+    mines: (P) => [`${P} mine <spot>`, `${P} base upgrade mines`],
+    pond: (P) => [`${P} fish`, `${P} base upgrade pond`],
+    hunting: (P) => [`${P} hunt`, `${P} sell <pelt>`],
+    shop: (P) => [`${P} shop`, `${P} buy <item|#>`, `${P} base upgrade shop`],
+    barracks: (P) => [`${P} summon`, `${P} summons`, `${P} base upgrade barracks`],
+    blacksmith: (P) => [`${P} blacksmith`, `${P} repair <slot|#>`, `${P} forge <item>`],
+    medbay: (P) => [`${P} clinic`, `${P} base upgrade medbay`],
+    alchemy: (P) => [`${P} recipes`, `${P} brew <potion>`, `${P} base upgrade alchemy`],
+};
 const FLAVOUR = {
     mines: 'Rich veins run deep below the hills.',
     pond: 'Still water, hungry fish. Cast a line.',
@@ -262,18 +277,9 @@ function specFor(ctx, rec, st, extra = {}) {
     const P = ctx.prefix || '.j';
     const idx = rec.structures.indexOf(st) + 1;
     const rows = [['Level', `${st.level} / ${d.levels.length}`], ['Next upgrade', next ? `${next.price.toLocaleString()} ZENI` : (d.noUpgrade ? '—' : 'Maxed')]];
-    const acts = {
-        mines: [`${P} mine`, `${P} mine <spot>`, `${P} base upgrade mines`, `${P} sell <ore>`],
-        pond: [`${P} base fish`, `${P} base upgrade pond`, `${P} sell <fish>`],
-        hunting: [`${P} base hunt`, `${P} sell <pelt/meat>`],
-        shop: [`${P} shop`, `${P} buy <item>`, `${P} base upgrade shop`],
-        barracks: [`${P} summons`, `${P} summon <action>`, `${P} base upgrade barracks`],
-        blacksmith: [`${P} blacksmith`, `${P} repair <slot>`, `${P} base upgrade blacksmith`],
-        medbay: [`${P} clinic`, `${P} base upgrade medbay`],
-        alchemy: [`${P} recipes`, `${P} brew <potion>`, `${P} base upgrade alchemy`],
-    }[st.type] || [`${P} base upgrade #${idx}`];
+    const acts = (HINTS[st.type] ? HINTS[st.type](P) : [`${P} base upgrade #${idx}`]);
     try {
-        if (st.type === 'mines') rows.push(['Mining Lv', economy.getProfessionLevel(rec.userId, 'mining')]);
+        if (st.type === 'mines') rows.push(['Mines yield', ['×1.00', '×1.25', '×1.50'][st.level - 1] || '×1.00']);
         if (st.type === 'pond') rows.push(['Catch tier', ['Minnows', 'Trout', 'Koi'][st.level - 1] || '—']);
         if (st.type === 'hunting') { const br = (rec.structures.find((x) => x.type === 'barracks') || {}).level || 1; rows.push(['Party', `Barracks Lv ${br}`]); }
         if (st.type === 'shop') rows.push(['Wares', ['Stall', 'Shop', 'Bazaar'][st.level - 1] || '—']);
@@ -284,6 +290,61 @@ function specFor(ctx, rec, st, extra = {}) {
 async function renderZoom(ctx, rec, st, extra = {}) {
     const scenes = require('./structureScenes');
     return scenes.renderStructureCard({ type: st.type, level: st.level, biome: biomeOf(rec), seed: rec.userId, spec: specFor(ctx, rec, st, extra) });
+}
+
+/** §12/§16 helper — a structure's level WITHOUT creating/migrating anything.
+ * Free fixed structures default to 1; purchasable ones default to 0 (not built). */
+const FREE_TYPES = new Set(['house', 'mines', 'pond', 'hunting', 'shop', 'barracks']);
+async function getStructureLevel(userId, type) {
+    try {
+        const rec = await Base.findOne({ userId }, { structures: 1 }).lean();
+        const st = rec && (rec.structures || []).find((x) => x.type === type);
+        if (st) return Math.max(0, Math.min(3, st.level || 1));
+    } catch (e) { /* fall through to default */ }
+    return FREE_TYPES.has(type) ? 1 : 0;
+}
+
+// §16 — Med Bay passive potion production (owner-approved table, 2026-10-21).
+// Stock DERIVES from elapsed time since cooldowns.potion (reuses the existing
+// Base.cooldowns Mixed map — no new collections); collecting advances that
+// timestamp by exactly the granted amount, so partial progress is preserved.
+const POTION_PLAN = {
+    1: { id: 'minor_hp_potion', intervalMs: 12 * 60 * 60 * 1000, cap: 2 },
+    2: { id: 'hp_potion',       intervalMs: 8 * 60 * 60 * 1000,  cap: 3 },
+    3: { id: 'mega_potion',     intervalMs: 6 * 60 * 60 * 1000,  cap: 4 },
+};
+function potionStock(medbayLevel, lastTs, now = Date.now()) {
+    const plan = POTION_PLAN[medbayLevel];
+    if (!plan || !lastTs) return { qty: 0, plan };
+    return { qty: Math.min(plan.cap, Math.floor((now - lastTs) / plan.intervalMs)), plan };
+}
+/** Collect ready Med Bay potions (runs on every .j clinic visit). Concurrency-
+ * safe: an optimistic lock on cooldowns.potion means two simultaneous commands
+ * can never double-grant. Item grant happens BEFORE the clock advance and is
+ * rolled back if the lock is lost. Returns { qty, name }. */
+async function collectMedbayPotions(userId) {
+    try {
+        const lvl = await getStructureLevel(userId, 'medbay');
+        const plan = POTION_PLAN[lvl];
+        if (!plan) return { qty: 0 };
+        const rec = await Base.findOne({ userId }, { cooldowns: 1 }).lean();
+        const last = rec && rec.cooldowns ? rec.cooldowns.potion : 0;
+        const { qty } = potionStock(lvl, last);
+        if (qty <= 0) return { qty: 0 };
+        const inventorySystem = require('./inventorySystem');
+        const lootSystem = require('./lootSystem');
+        const added = await inventorySystem.addItem(userId, plan.id, qty);
+        if (!added || added.success === false) return { qty: 0 };
+        const r = await Base.updateOne(
+            { userId, 'cooldowns.potion': last },
+            { $set: { 'cooldowns.potion': (last || 0) + qty * plan.intervalMs, updatedAt: Date.now() } },
+        );
+        if (r.matchedCount === 0) {
+            try { await inventorySystem.removeItem(userId, plan.id, qty); } catch (e2) { /* best effort */ }
+            return { qty: 0 };
+        }
+        return { qty, name: (lootSystem.getItemInfo(plan.id) || {}).name || plan.id };
+    } catch (e) { console.error('[base] potion collect failed:', e.message); return { qty: 0 }; }
 }
 
 /** Zoom card for another command's result (e.g. `.j mine`): never creates a base — returns null if the user has none. */
@@ -297,18 +358,6 @@ async function zoomForCommand(ctx, type, extra = {}) {
         const r = { ...rec, structures: have };
         return await renderZoom({ prefix: ctx.prefix || '.j' }, r, st, extra);
     } catch (e) { console.error('[base] zoomForCommand:', e.message); return null; }
-}
-
-async function followUp(ctx, st) {
-    const { sock, chatId, senderJid } = ctx;
-    try {
-        if (st.type === 'mines') return await require('../commands/rpgCommands').mineOre(sock, chatId, senderJid, undefined);
-        if (st.type === 'shop') return await require('../commands/shopCommands').displayShop(sock, chatId, 'all');
-        if (st.type === 'barracks') return await require('../commands/summonCommands').handleCommand(sock, chatId, senderJid, economy.getDisplayName(senderJid), [], ctx.m);
-        if (st.type === 'blacksmith') return await require('../commands/repairCommands').displayBlacksmith(sock, chatId, senderJid);
-        if (st.type === 'medbay') return await ctx.reply(`🏥 Type \`${ctx.prefix} clinic\` to be treated at your Med Bay.`);
-        if (st.type === 'alchemy') return await ctx.reply(`⚗️ Browse \`${ctx.prefix} recipes\` and brew with \`${ctx.prefix} brew <potion>\`.`);
-    } catch (e) { console.error('[base] follow-up failed:', e.message); }
 }
 
 async function zoomIn(ctx, rec, st) {
@@ -327,7 +376,9 @@ async function zoomIn(ctx, rec, st) {
     } else {
         await ctx.reply(cap);
     }
-    return followUp(ctx, st);
+    // §5 2026-10-21: the viewer is READ-ONLY — the old followUp() that ran the
+    // place's command from a mere VIEW is gone (zero gameplay side effects).
+    return;
 }
 
 /** `.j base fish` / `.j base hunt` — the pond and the hunting grounds, with a zoomed result card. */
@@ -346,13 +397,23 @@ async function cmdActivity(ctx, kind) {
         if (!res.ok) return ctx.reply(res.text);
         try { await Base.updateOne({ userId: ctx.senderJid }, { $set: { [`cooldowns.${kind}`]: Date.now() } }); } catch (e) { /* cooldown best-effort */ }
         let media = null;
-        try { media = await renderZoom(ctx, rec, st, { banner: res.banner, note: `Next try in ${act.fmtMs(act.RULES[kind].cooldownMs)}.` }); } catch (e) { console.error('[base] activity card failed:', e.message); }
+        // §13/§14: the scene plays the REAL result — fishing ripples the bobber,
+        // hunting spotlights the animal whose loot actually dropped (top drop).
+        const spot = res.drops && Object.values(res.drops).reduce((a, b) => Math.max(a, b), 0) > 0;
+        try { media = await renderZoom(ctx, rec, st, { banner: res.banner, note: `Next try in ${act.fmtMs(act.RULES[kind].cooldownMs)}.`, activity: kind === 'fish' ? 'fishing' : 'hunting', spotlight: spot }); } catch (e) { console.error('[base] activity card failed:', e.message); }
         if (media && media.buffer) return ctx.sock.sendMessage(ctx.chatId, { image: media.buffer, caption: res.text }, { quoted: ctx.m });
         return ctx.reply(res.text);
     } finally { opLocks.delete(ctx.senderJid); }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// §4/§13/§14: `.j fish` / `.j hunt` — the pond and hunting-ground actions now
+// answer to their own top-level commands (engine routes them here). Same rules,
+// same cooldowns, same loot as the old `.j base fish|hunt` — nothing rebalanced.
+async function runActivity(ctx, kind) {
+    return cmdActivity(ctx, kind === 'fish' || kind === 'cast' || kind === 'fishing' ? 'fish' : 'hunt');
+}
+
 // BUILD / UPGRADE (§7/8) — atomic purchase, identical compensation contract
 // ═══════════════════════════════════════════════════════════════════════════
 const BUILDABLE = ['blacksmith', 'medbay', 'alchemy'];
@@ -393,6 +454,9 @@ async function cmdBuild(ctx, rec, args) {
             const r = await Base.updateOne({ userId: ctx.senderJid }, { $push: { structures: st }, $set: { updatedAt: Date.now() } }, { upsert: true });
             if (!r.acknowledged) throw new Error('write not acknowledged');
             rec.structures.push(st);
+            // §16: a freshly built Med Bay starts its potion clock NOW — no
+            // instant free potion (owner spec §16).
+            if (type === 'medbay') { try { await Base.updateOne({ userId: ctx.senderJid }, { $set: { 'cooldowns.potion': Date.now() } }); } catch (e) { /* clock start is best-effort */ } }
         } catch (writeErr) {
             console.error('[base] build delivery failed — refunding:', writeErr.message);
             economy.addMoney(ctx.senderJid, lv1.price, `Base: refund ${lv1.name}`);
@@ -597,10 +661,11 @@ async function handleBaseCommand(ctx) {
             case 'house': case 'inside': {
                 return enterStructure(ctx, args[0] || 'house');
             }
-            case 'fish': case 'cast': case 'fishing':
-                return cmdActivity(ctx, 'fish');
-            case 'hunt': case 'hunting':
-                return cmdActivity(ctx, 'hunt');
+            // §5 2026-10-21: `.j base fish` / `.j base hunt` are VIEWERS now —
+            // they fall through to the name-viewer path below (ALIASES fish/fishing/
+            // cast → pond, hunt/hunting → hunting). The ACTIONS answer to the
+            // top-level `.j fish` / `.j hunt` (engine → runActivity). No loot roll,
+            // no counters, no writes from a view.
             case 'build': case 'construct':
                 return cmdBuild(ctx, await loadBase(ctx.senderJid), args);
             case 'upgrade': case 'up':
@@ -628,8 +693,8 @@ async function handleBaseCommand(ctx) {
                     `• \`${ctx.prefix} base\` — outdoor base map\n` +
                     `• \`${ctx.prefix} base <#id | name>\` — open a structure (zoomed card)\n` +
                     `• \`${ctx.prefix} base house [#id]\` — enter a structure\n` +
-                    `• \`${ctx.prefix} base <#|mines|pond|hunting|shop|barracks>\` — zoom into a place (and open its command)\n` +
-                    `• \`${ctx.prefix} base fish\` / \`${ctx.prefix} base hunt\` — work the pond / hunting grounds\n` +
+                    `• \`${ctx.prefix} base <#|mines|pond|hunting|shop|barracks>\` — view a place (read-only close-up)\n` +
+                    `• \`${ctx.prefix} fish\` / \`${ctx.prefix} hunt\` — work the pond / hunting grounds\n` +
                     `• \`${ctx.prefix} base build <type> [plot#]\` — construct\n` +
                     `• \`${ctx.prefix} base upgrade <type|#id>\` — upgrade\n` +
                     `• \`${ctx.prefix} base info\` — ledger + plots\n` +
@@ -642,4 +707,4 @@ async function handleBaseCommand(ctx) {
     }
 }
 
-module.exports = { handleBaseCommand, viewBase, enterStructure, loadBase, plotsFor, zoomForCommand };
+module.exports = { handleBaseCommand, viewBase, enterStructure, loadBase, plotsFor, zoomForCommand, runActivity, getStructureLevel, potionStock, POTION_PLAN, collectMedbayPotions };

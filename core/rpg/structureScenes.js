@@ -152,12 +152,225 @@ function drawCampfire(ctx, x, y, s) {
     ctx.restore();
 }
 
+// ── fusion painters (base ⇄ command fusion, owner spec 2026-10-21) ──
+// Low-poly canvas figures in the same flat-shaded style as the KayKit sprites:
+// the missing props the manifest has no model for (merchant, miner, anvil,
+// cauldron, bottles, med cross, summoning circle, fish silhouettes).
+function drawMerchant(ctx, x, y, s, flip = false, wave = true) {
+    ctx.save(); ctx.translate(x, y); if (flip) ctx.scale(-1, 1);
+    shade(ctx, 0, 0.04 * s, 0.55 * s, 0.16 * s, 0.25);
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    // legs + boots
+    ctx.strokeStyle = '#3d2c18'; ctx.lineWidth = 0.11 * s;
+    ctx.beginPath(); ctx.moveTo(-0.14 * s, -0.42 * s); ctx.lineTo(-0.16 * s, -0.02 * s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0.14 * s, -0.42 * s); ctx.lineTo(0.16 * s, -0.02 * s); ctx.stroke();
+    // tunic body (warm merchant red) + apron
+    ctx.fillStyle = '#8f3b2a'; ctx.strokeStyle = '#4a1f14'; ctx.lineWidth = 0.05 * s;
+    ctx.beginPath(); ctx.moveTo(-0.34 * s, -0.42 * s); ctx.lineTo(0.34 * s, -0.42 * s); ctx.lineTo(0.26 * s, -1.25 * s); ctx.lineTo(-0.26 * s, -1.25 * s); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#d9c193'; ctx.beginPath(); ctx.moveTo(-0.16 * s, -0.42 * s); ctx.lineTo(0.16 * s, -0.42 * s); ctx.lineTo(0.12 * s, -1.1 * s); ctx.lineTo(-0.12 * s, -1.1 * s); ctx.closePath(); ctx.fill();
+    // arms — one resting, one raised in a welcome wave
+    ctx.strokeStyle = '#8f3b2a'; ctx.lineWidth = 0.12 * s;
+    ctx.beginPath(); ctx.moveTo(-0.26 * s, -1.12 * s); ctx.lineTo(-0.42 * s, -0.6 * s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0.26 * s, -1.12 * s); ctx.quadraticCurveTo(0.52 * s, -1.25 * s, wave ? 0.44 * s : 0.5 * s, wave ? -1.6 * s : -0.7 * s); ctx.stroke();
+    ctx.fillStyle = '#e8c39a'; ctx.beginPath(); ctx.arc(wave ? 0.44 * s : 0.5 * s, wave ? -1.66 * s : -0.66 * s, 0.09 * s, 0, Math.PI * 2); ctx.fill();
+    // head + beard + hat
+    ctx.fillStyle = '#e8c39a'; ctx.beginPath(); ctx.arc(0, -1.5 * s, 0.26 * s, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#cfc4b0'; ctx.beginPath(); ctx.moveTo(-0.16 * s, -1.42 * s); ctx.quadraticCurveTo(0, -1.1 * s, 0.16 * s, -1.42 * s); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#6b4a26'; ctx.beginPath(); ctx.ellipse(0, -1.74 * s, 0.34 * s, 0.09 * s, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-0.2 * s, -1.74 * s); ctx.quadraticCurveTo(0, -2.05 * s, 0.2 * s, -1.74 * s); ctx.closePath(); ctx.fill();
+    ctx.restore();
+}
+function drawMiner(ctx, x, y, s, flip = false) {
+    ctx.save(); ctx.translate(x, y); if (flip) ctx.scale(-1, 1);
+    shade(ctx, 0, 0.04 * s, 0.5 * s, 0.15 * s, 0.25);
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.strokeStyle = '#2f2418'; ctx.lineWidth = 0.11 * s;
+    ctx.beginPath(); ctx.moveTo(-0.12 * s, -0.4 * s); ctx.lineTo(-0.14 * s, -0.02 * s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0.12 * s, -0.4 * s); ctx.lineTo(0.14 * s, -0.02 * s); ctx.stroke();
+    // body (work tunic) + arms mid-swing
+    ctx.fillStyle = '#5b6a4a'; ctx.strokeStyle = '#2c3322'; ctx.lineWidth = 0.05 * s;
+    ctx.beginPath(); ctx.moveTo(-0.3 * s, -0.4 * s); ctx.lineTo(0.3 * s, -0.4 * s); ctx.lineTo(0.24 * s, -1.18 * s); ctx.lineTo(-0.24 * s, -1.18 * s); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = '#5b6a4a'; ctx.lineWidth = 0.12 * s;
+    ctx.beginPath(); ctx.moveTo(-0.2 * s, -1.05 * s); ctx.lineTo(-0.34 * s, -0.6 * s); ctx.stroke();
+    // swing arm + pickaxe raised overhead
+    ctx.beginPath(); ctx.moveTo(0.2 * s, -1.05 * s); ctx.lineTo(0.5 * s, -1.5 * s); ctx.stroke();
+    ctx.save(); ctx.translate(0.5 * s, -1.5 * s); ctx.rotate(-0.65);
+    ctx.strokeStyle = '#6e4a24'; ctx.lineWidth = 0.07 * s;
+    ctx.beginPath(); ctx.moveTo(-0.34 * s, 0.1 * s); ctx.lineTo(0.34 * s, -0.1 * s); ctx.stroke();
+    ctx.strokeStyle = '#9aa3ad'; ctx.lineWidth = 0.1 * s;
+    ctx.beginPath(); ctx.arc(0.42 * s, -0.14 * s, 0.2 * s, Math.PI * 0.75, Math.PI * 1.85); ctx.stroke();
+    ctx.restore();
+    // head + helmet + lamp
+    ctx.fillStyle = '#e8c39a'; ctx.beginPath(); ctx.arc(0, -1.4 * s, 0.24 * s, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#d7a13c'; ctx.beginPath(); ctx.arc(0, -1.5 * s, 0.27 * s, Math.PI, 0); ctx.fill();
+    ctx.fillRect(-0.3 * s, -1.52 * s, 0.6 * s, 0.07 * s);
+    ctx.fillStyle = '#ffe9a3'; ctx.beginPath(); ctx.arc(0.16 * s, -1.62 * s, 0.07 * s, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+}
+function drawSparks(ctx, x, y, s, seed = 1, n = 5) {
+    const rng = mulberry32(hashStr(`spark:${seed}`));
+    ctx.save(); ctx.translate(x, y);
+    for (let i = 0; i < n; i++) {
+        const a = -Math.PI / 2 + (rng() - 0.5) * 2.2, d = (0.35 + rng() * 1.15) * s, r = (0.03 + rng() * 0.05) * s;
+        ctx.fillStyle = ['#ffd45e', '#ff9a2a', '#e8541a'][i % 3];
+        ctx.globalAlpha = 0.55 + rng() * 0.45;
+        ctx.beginPath(); ctx.arc(Math.cos(a) * d, Math.sin(a) * d * 0.85, r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore(); ctx.globalAlpha = 1;
+}
+function drawAnvil(ctx, x, y, s, hot = false) {
+    ctx.save(); ctx.translate(x, y);
+    shade(ctx, 0, 0.03 * s, 0.6 * s, 0.15 * s, 0.28);
+    // glowing metal billet on the face
+    if (hot) {
+        const g = ctx.createRadialGradient(0, -0.72 * s, 0.02 * s, 0, -0.72 * s, 0.85 * s);
+        g.addColorStop(0, 'rgba(255,160,60,0.85)'); g.addColorStop(1, 'rgba(255,120,30,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, -0.72 * s, 0.85 * s, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#ff8c2e'; ctx.beginPath(); ctx.ellipse(0.02 * s, -0.74 * s, 0.3 * s, 0.08 * s, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = '#3c4148'; ctx.strokeStyle = '#191c20'; ctx.lineWidth = 0.04 * s;
+    // horn + face
+    ctx.beginPath(); ctx.moveTo(-0.55 * s, -0.62 * s); ctx.lineTo(0.2 * s, -0.7 * s); ctx.lineTo(0.62 * s, -0.6 * s); ctx.lineTo(0.28 * s, -0.48 * s); ctx.lineTo(-0.5 * s, -0.48 * s); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // waist + base
+    ctx.fillRect(-0.14 * s, -0.5 * s, 0.28 * s, 0.22 * s);
+    ctx.beginPath(); ctx.moveTo(-0.3 * s, -0.28 * s); ctx.lineTo(0.3 * s, -0.28 * s); ctx.lineTo(0.38 * s, -0.02 * s); ctx.lineTo(-0.38 * s, -0.02 * s); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+}
+function drawForgeGlow(ctx, x, y, s, strength = 1) {
+    ctx.save(); ctx.translate(x, y);
+    const g = ctx.createRadialGradient(0, 0, 0.1 * s, 0, 0, 1.6 * s);
+    g.addColorStop(0, `rgba(255,140,40,${0.55 * strength})`); g.addColorStop(0.5, `rgba(255,100,25,${0.28 * strength})`); g.addColorStop(1, 'rgba(255,90,20,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, 1.6 * s, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+}
+function drawCauldron(ctx, x, y, s, liquid = '#7ce07c', steam = true) {
+    ctx.save(); ctx.translate(x, y);
+    shade(ctx, 0, 0.04 * s, 0.8 * s, 0.2 * s, 0.3);
+    // liquid glow
+    const lg = ctx.createRadialGradient(0, -0.88 * s, 0.05 * s, 0, -0.88 * s, 0.9 * s);
+    lg.addColorStop(0, liquid); lg.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.globalAlpha = 0.5; ctx.fillStyle = lg; ctx.beginPath(); ctx.arc(0, -0.88 * s, 0.9 * s, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+    // body: squat black pot on legs
+    ctx.fillStyle = '#26221e'; ctx.strokeStyle = '#0e0c0a'; ctx.lineWidth = 0.05 * s;
+    ctx.beginPath(); ctx.ellipse(0, -0.55 * s, 0.72 * s, 0.55 * s, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    // rim + liquid surface
+    ctx.fillStyle = '#383028'; ctx.beginPath(); ctx.ellipse(0, -0.94 * s, 0.68 * s, 0.2 * s, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = liquid; ctx.beginPath(); ctx.ellipse(0, -0.94 * s, 0.55 * s, 0.13 * s, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.ellipse(-0.18 * s, -0.97 * s, 0.12 * s, 0.035 * s, 0, 0, Math.PI * 2); ctx.fill();
+    // legs
+    ctx.strokeStyle = '#0e0c0a'; ctx.lineWidth = 0.07 * s;
+    for (const lx of [-0.4, 0, 0.4]) { ctx.beginPath(); ctx.moveTo(lx * s, -0.22 * s); ctx.lineTo(lx * 1.1 * s, -0.02 * s); ctx.stroke(); }
+    if (steam) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 0.06 * s; ctx.lineCap = 'round';
+        for (const [ox, h] of [[-0.2, 0.9], [0.05, 1.25], [0.28, 0.75]]) {
+            ctx.beginPath(); ctx.moveTo(ox * s, -1.05 * s);
+            ctx.bezierCurveTo((ox - 0.18) * s, (-1.05 - h * 0.4) * s, (ox + 0.2) * s, (-1.05 - h * 0.7) * s, ox * s, (-1.05 - h) * s);
+            ctx.stroke();
+        }
+    }
+    ctx.restore();
+}
+function drawBottleShelf(ctx, x, y, s, colors = ['#7ce07c', '#6ea8ff', '#c07cff', '#ffd45e']) {
+    ctx.save(); ctx.translate(x, y);
+    shade(ctx, 0.1 * s, 0.02 * s, 1.05 * s, 0.18 * s, 0.22);
+    // low wooden bench
+    ctx.fillStyle = '#6e4a24'; ctx.strokeStyle = '#3d2a12'; ctx.lineWidth = 0.04 * s;
+    ctx.fillRect(-1.0 * s, -0.55 * s, 2.0 * s, 0.14 * s); ctx.strokeRect(-1.0 * s, -0.55 * s, 2.0 * s, 0.14 * s);
+    ctx.strokeStyle = '#3d2a12'; ctx.lineWidth = 0.06 * s;
+    for (const lx of [-0.85, 0.85]) { ctx.beginPath(); ctx.moveTo(lx * s, -0.42 * s); ctx.lineTo(lx * s, -0.02 * s); ctx.stroke(); }
+    // corked flasks
+    colors.slice(0, 4).forEach((c, i) => {
+        const bx = (-0.68 + i * 0.45) * s, bs = s * (0.85 + (i % 2) * 0.2);
+        ctx.fillStyle = c; ctx.globalAlpha = 0.9; ctx.strokeStyle = '#1c1710'; ctx.lineWidth = 0.035 * bs;
+        ctx.beginPath(); ctx.moveTo(bx - 0.1 * bs, -0.56 * bs * 0.55 - 0.28 * bs); ctx.lineTo(bx + 0.1 * bs, -0.56 * bs * 0.55 - 0.28 * bs); ctx.lineTo(bx + 0.16 * bs, -0.56 * bs); ctx.lineTo(bx - 0.16 * bs, -0.56 * bs); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.arc(bx, -0.56 * bs * 0.55 - 0.06 * bs, 0.15 * bs, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#8a6a3a'; ctx.fillRect(bx - 0.05 * bs, -0.56 * bs * 0.55 - 0.42 * bs, 0.1 * bs, 0.13 * bs);
+        ctx.globalAlpha = 1;
+    });
+    ctx.restore();
+}
+function drawSummonCircle(ctx, x, y, r, color = '#8f7bff') {
+    ctx.save(); ctx.translate(x, y);
+    const g = ctx.createRadialGradient(0, 0, r * 0.1, 0, 0, r);
+    g.addColorStop(0, 'rgba(143,123,255,0.30)'); g.addColorStop(1, 'rgba(143,123,255,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = color; ctx.lineWidth = Math.max(2, r * 0.07); ctx.globalAlpha = 0.85;
+    ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.45, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.62, r * 0.28, 0, 0, Math.PI * 2); ctx.stroke();
+    // runes around the ring
+    ctx.fillStyle = color;
+    for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        ctx.beginPath(); ctx.ellipse(Math.cos(a) * r * 0.82, Math.sin(a) * r * 0.37, r * 0.06, r * 0.09, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore(); ctx.globalAlpha = 1;
+}
+function drawMedCross(ctx, x, y, s) {
+    ctx.save(); ctx.translate(x, y);
+    ctx.fillStyle = '#f4f1e6'; ctx.strokeStyle = '#b04a3a'; ctx.lineWidth = 0.06 * s;
+    const w = 0.62 * s, h = 0.78 * s;
+    K.roundRect(ctx, -w / 2, -h, w, h, 0.1 * s); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#c0392b';
+    ctx.fillRect(-0.1 * s, -0.66 * s, 0.2 * s, 0.52 * s); ctx.fillRect(-0.24 * s, -0.5 * s, 0.48 * s, 0.2 * s);
+    ctx.restore();
+}
+function drawHealSparkles(ctx, x, y, s, seed = 1, n = 5) {
+    const rng = mulberry32(hashStr(`heal:${seed}`));
+    ctx.save(); ctx.translate(x, y); ctx.strokeStyle = '#8ff0a8'; ctx.lineWidth = 0.05 * s; ctx.lineCap = 'round';
+    for (let i = 0; i < n; i++) {
+        const px = (rng() - 0.5) * 2.4 * s, py = -(0.3 + rng() * 1.6) * s, r = (0.09 + rng() * 0.08) * s;
+        ctx.globalAlpha = 0.5 + rng() * 0.4;
+        ctx.beginPath(); ctx.moveTo(px - r, py); ctx.lineTo(px + r, py); ctx.moveTo(px, py - r); ctx.lineTo(px, py + r); ctx.stroke();
+    }
+    ctx.restore(); ctx.globalAlpha = 1;
+}
+function drawFishShadow(ctx, x, y, s, wig = 0, flip = false) {
+    ctx.save(); ctx.translate(x, y); if (flip) ctx.scale(-1, 1);
+    ctx.fillStyle = 'rgba(12,52,54,0.35)';
+    ctx.beginPath(); ctx.ellipse(0, 0, 0.62 * s, 0.2 * s, 0, 0, Math.PI * 2); ctx.fill();
+    // tail sways with wig
+    ctx.beginPath(); ctx.moveTo(-0.5 * s, 0);
+    ctx.lineTo(-0.92 * s, (-0.22 + wig * 0.16) * s); ctx.lineTo(-0.92 * s, (0.22 + wig * 0.16) * s); ctx.closePath(); ctx.fill();
+    ctx.restore();
+}
+function drawBobber(ctx, x, y, s) {
+    ctx.save(); ctx.translate(x, y);
+    ctx.fillStyle = '#d94f3a'; ctx.beginPath(); ctx.arc(0, -0.1 * s, 0.12 * s, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = '#f4f1e6'; ctx.beginPath(); ctx.arc(0, -0.1 * s, 0.12 * s, 0, Math.PI); ctx.fill();
+    ctx.strokeStyle = 'rgba(240,248,255,0.8)'; ctx.lineWidth = 0.03 * s;
+    ctx.beginPath(); ctx.moveTo(0, -0.22 * s); ctx.lineTo(0, -0.55 * s); ctx.stroke();
+    ctx.restore();
+}
+function drawRipple(ctx, x, y, r) {
+    ctx.save(); ctx.translate(x, y); ctx.strokeStyle = 'rgba(235,250,252,0.7)'; ctx.lineWidth = Math.max(1.5, r * 0.06);
+    for (const f of [1, 0.62, 0.3]) { ctx.globalAlpha = f; ctx.beginPath(); ctx.ellipse(0, 0, r * f, r * f * 0.42, 0, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.restore(); ctx.globalAlpha = 1;
+}
+function drawSpotlight(ctx, x, y, r) {
+    ctx.save(); ctx.translate(x, y);
+    ctx.fillStyle = 'rgba(255,214,110,0.16)'; ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#ffd66e'; ctx.lineWidth = Math.max(2, r * 0.055); ctx.setLineDash([r * 0.22, r * 0.16]);
+    ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.5, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    // attention glints
+    ctx.strokeStyle = '#ffe9a3'; ctx.lineWidth = Math.max(1.5, r * 0.04);
+    for (const [gx, gy, gr] of [[-r * 0.8, -r * 0.3, r * 0.1], [r * 0.85, -r * 0.2, r * 0.08]]) {
+        ctx.beginPath(); ctx.moveTo(gx - gr, gy); ctx.lineTo(gx + gr, gy); ctx.moveTo(gx, gy - gr); ctx.lineTo(gx, gy + gr); ctx.stroke();
+    }
+    ctx.restore();
+}
+
 // ── per-structure close-up compositions ──
 const TREES = ['trees_A_large', 'trees_B_large', 'trees_A_medium', 'trees_B_medium'];
 const SMALL = ['tree_single_A', 'tree_single_B', 'rock_single_A', 'rock_single_B', 'rock_single_C'];
 const ROCKY = new Set(['desert', 'volcanic']);
 
-function buildScene(type, lvl, biome, seed) {
+function buildScene(type, lvl, biome, seed, o = {}) {
+    // base ⇄ command fusion (owner spec 2026-10-21): o.activity names what is
+    // happening here ('shopping'|'mining'|'fishing'|'hunting'|'summoning'|
+    // 'healing'|'forging'|'repair'|'brewing'|'browse'), o.spotlight marks an
+    // actual result target, o.tint colours the alchemy liquid. Viewer cards
+    // pass none — clean scene, identity dressing only.
+    const activity = String(o.activity || '');
     const rng = mulberry32(seed);
     const team = TEAMS[Math.floor(rng() * 4)];
     const w = new K.HexWorld(COLS, ROWS, { scale: SCALE, biome, oobWater: false, view: 'iso' });
@@ -210,6 +423,24 @@ function buildScene(type, lvl, biome, seed) {
         else put('tent', 2.6, 0.4, { sc: 1.5 });
         const rl = ['waterlily_A', 'waterlily_B', 'waterplant_A', 'waterplant_B'];
         for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) { const k = w.cell[r][c]; if (k.tile === 'hex_water' && k.lake && rng() < 0.2) w.put(rl[Math.floor(rng() * 4)], c, r, { dx: (rng() - 0.5) * 0.8, dz: (rng() - 0.5) * 0.6, h: -0.2 }); }
+        // 🎣 §13: dark-teal fish silhouettes cruise under the surface (ambient
+        // identity — the viewer keeps them, the catch adds bobber + ripple).
+        const wp2 = (dx, dz) => ({ x: cen.x + dx, z: cen.z + dz });
+        const waterCells = [];
+        for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) { const k = w.cell[r][c]; if (k.water && k.lake) waterCells.push([c, r]); }
+        const nf = 4 + Math.floor(rng() * 4);
+        for (let i = 0; i < nf && waterCells.length; i++) {
+            const [fc, fr] = waterCells[Math.floor(rng() * waterCells.length)];
+            const q = K.hexWorld(fc, fr);
+            const fx = q.x + (rng() - 0.5) * 0.8, fz = q.z + (rng() - 0.5) * 0.8;
+            const fs = (26 + rng() * 22) * (i === 0 && activity === 'fishing' ? 1.7 : 1);
+            w.overlay((c2, p, k) => drawFishShadow(c2, p.x, p.y, fs * k * 2 / 1.5, (i % 3) - 1, rng() < 0.5), 0, 0, { dx: wp2(fx - cen.x, fz - cen.z).x, dz: wp2(fx - cen.x, fz - cen.z).z });
+        }
+        if (activity === 'fishing' && last) {
+            const bq = K.hexWorld(last[0], last[1]);
+            w.overlay((c2, p, k) => drawBobber(c2, p.x, p.y, 30 * k * 2 / 1.5), 0, 0, { dx: bq.x + 0.5 - cen.x, dz: bq.z + 0.3 - cen.z });
+            if (o.spotlight) w.overlay((c2, p, k) => drawRipple(c2, p.x, p.y, 90 * k * 2 / 1.5), 0, 0, { dx: bq.x + 0.5 - cen.x, dz: bq.z + 0.3 - cen.z });
+        }
         return { w, cen, team, water: true, focus: { x: cen.x * 0.35 + pier.lw.x * 0.65, z: cen.z * 0.35 + pier.lw.z * 0.65 } };
     }
     switch (type) {
@@ -222,6 +453,11 @@ function buildScene(type, lvl, biome, seed) {
             P('wheelbarrow', { dx: 1.5, dz: 2.4, sc: 1.2 });
             if (lvl >= 2) { P('ladder', { dx: -2.2, dz: 0.8, sc: 1.4 }); P('crate_long_A', { dx: -2.9, dz: 1.7, sc: 1.2 }); }
             if (lvl >= 3) { P('building_scaffolding', { dx: -2.6, dz: -0.6, sc: 1.5, flip: true }); P('resource_lumber', { dx: 0.4, dz: 2.9, sc: 1.2 }); P('crate_B_big', { dx: -1.6, dz: 2.5, sc: 1.1 }); }
+            // ⛏️ §12: a miner working the face — pickaxe up, chips flying
+            if (activity === 'mining') {
+                w.overlay((c2, p, k) => drawMiner(c2, p.x, p.y, 52 * k * 2 / 1.5, true), 0, 0, { dx: cen.x + 1.6, dz: cen.z + 1.9 });
+                w.overlay((c2, p, k) => drawSparks(c2, p.x - 18 * (k * 2 / 1.5), p.y - 60 * (k * 2 / 1.5), 40 * k * 2 / 1.5, seed, 7), 0, 0, { dx: cen.x + 1.6, dz: cen.z + 1.9 });
+            }
             break;
         }
         case 'shop': {
@@ -230,6 +466,10 @@ function buildScene(type, lvl, biome, seed) {
             P('crate_open', { dx: -3.1, dz: 0.6, sc: 1.3 });
             if (lvl >= 2) { P('crate_long_A', { dx: -2.0, dz: 2.4, sc: 1.2 }); P('wheelbarrow', { dx: 1.0, dz: 2.6, sc: 1.3 }); P('flag_' + team, { dx: 2.7, dz: -1.6, sc: 1.3 }); P('flag_' + team, { dx: -2.7, dz: -1.6, sc: 1.3 }); }
             if (lvl >= 3) { P(B('market'), { dx: -4.4, dz: -0.8, sc: 1.8, flip: true }); P(B('market'), { dx: 4.6, dz: -0.6, sc: 1.8 }); P('crate_B_big', { dx: 3.4, dz: 2.2, sc: 1.3 }); P(B('well'), { dx: 0.2, dz: 3.4, sc: 1.8 }); }
+            // 🛒 §7: the shopkeeper is the soul of a market — behind the counter,
+            // waving you in; a coin-glint sells 'open for business' in action mode
+            w.overlay((c2, p, k) => drawMerchant(c2, p.x, p.y, 54 * k * 2 / 1.5, true, true), 0, 0, { dx: cen.x - 1.15, dz: cen.z + 1.45 });
+            if (activity === 'shopping' || activity === 'browse') w.overlay((c2, p, k) => drawSparks(c2, p.x + 34 * (k * 2 / 1.5), p.y - 44 * (k * 2 / 1.5), 34 * k * 2 / 1.5, seed, 3), 0, 0, { dx: cen.x + 1.2, dz: cen.z + 1.1 });
             break;
         }
         case 'barracks': {
@@ -238,6 +478,9 @@ function buildScene(type, lvl, biome, seed) {
             P('weaponrack', { dx: -2.6, dz: 2.0, sc: 1.5 }); P('target', { dx: 2.8, dz: 2.1, sc: 1.4 }); P('target', { dx: 3.9, dz: 1.2, sc: 1.4 }); P('bucket_arrows', { dx: 1.8, dz: 2.9, sc: 1.3 });
             if (lvl >= 2) { P('flag_' + team, { dx: -1.6, dz: -2.3, sc: 1.4 }); P('flag_' + team, { dx: 1.8, dz: -2.3, sc: 1.4 }); }
             if (lvl >= 3) { P(B('tower_A'), { dx: -4.2, dz: -0.6, sc: 1.6 }); P(B('tower_A'), { dx: 4.3, dz: -0.8, sc: 1.6 }); P('weaponrack', { dx: -1.4, dz: 3.2, sc: 1.4 }); }
+            // 🐉 §8: the yard is a summon staging ground — rune-marked pad in
+            // front, brighter when a summon action runs there
+            w.overlay((c2, p, k) => drawSummonCircle(c2, p.x, p.y, (activity === 'summoning' ? 120 : 92) * k * 2 / 1.5, activity === 'summoning' ? '#a98fff' : '#8f7bff'), 0, 0, { dx: cen.x + 0.3, dz: cen.z + 2.1 });
             break;
         }
         case 'hunting': {
@@ -264,6 +507,8 @@ function buildScene(type, lvl, biome, seed) {
             const deer = [[-0.6, 4.9, false, true, 44], [6.6, 3.9, true, false, 40], [5.4, -3.2, true, true, 46]];
             for (const [dx, dz, fl, st2, sz] of deer) { const q = wp(dx, dz); w.overlay((ctx, p, k) => drawDeer(ctx, p.x, p.y, sz * k * 2 / 1.5, fl, st2), 0, 0, { dx: q.x, dz: q.z }); }
             { const q = wp(-6.6, 0.4); w.overlay((ctx, p, k) => drawBoar(ctx, p.x, p.y, 40 * k * 2 / 1.5, false), 0, 0, { dx: q.x, dz: q.z }); }
+            // 🏹 §14: the animal the hunt actually returned takes the spotlight
+            if (activity === 'hunting' && o.spotlight) w.overlay((ctx, p, k) => drawSpotlight(ctx, p.x, p.y + 26 * (k * 2 / 1.5), 130 * k * 2 / 1.5), 0, 0, { dx: wp(-0.6, 4.9).x, dz: wp(-0.6, 4.9).z });
             hunt = true;
             break;
         }
@@ -271,6 +516,12 @@ function buildScene(type, lvl, biome, seed) {
             P(B('blacksmith'), { sc: lvl === 1 ? 2.4 : lvl === 2 ? 2.8 : 3.2 });
             P('weaponrack', { dx: -2.7, dz: 1.8, sc: 1.5 }); P('resource_stone', { dx: 2.7, dz: 1.9, sc: 1.4 }); P('crate_A_small', { dx: 3.1, dz: 0.4, sc: 1.2 });
             if (lvl >= 3) { P('wheelbarrow', { dx: 1.2, dz: 2.8, sc: 1.3 }); P('barrel', { dx: -1.6, dz: 2.9, sc: 1.3 }); }
+            // 🔥 §9: a working forge — glowing mouth, anvil with (hot) billet;
+            // sparks fly when a repair/forge action just happened here
+            const forging = activity === 'forging' || activity === 'repair';
+            w.overlay((c2, p, k) => drawForgeGlow(c2, p.x, p.y - 40 * (k * 2 / 1.5), (forging ? 66 : 50) * k * 2 / 1.5, forging ? 1.25 : 0.8), 0, 0, { dx: cen.x + 0.4, dz: cen.z - 0.4 });
+            w.overlay((c2, p, k) => drawAnvil(c2, p.x, p.y, 56 * k * 2 / 1.5, forging), 0, 0, { dx: cen.x - 1.3, dz: cen.z + 1.9 });
+            if (forging) w.overlay((c2, p, k) => drawSparks(c2, p.x, p.y - 52 * (k * 2 / 1.5), 44 * k * 2 / 1.5, seed, 6), 0, 0, { dx: cen.x - 1.3, dz: cen.z + 1.9 });
             break;
         }
         case 'medbay': {
@@ -278,13 +529,33 @@ function buildScene(type, lvl, biome, seed) {
             else P(lvl === 1 ? 'tent' : B('church'), { sc: 2.6 });
             P('bucket_water', { dx: -2.6, dz: 1.8, sc: 1.4 }); P('sack', { dx: 2.7, dz: 1.8, sc: 1.4 });
             if (lvl >= 3) { P('flag_' + team, { dx: 3.2, dz: 0.3, sc: 1.4 }); P(B('well'), { dx: -3.4, dz: 0.2, sc: 1.8 }); }
+            // ⚕️ §11: the red-cross sign + a gentle green healing aura; plus-
+            // sparkles rise when a heal just landed here
+            w.overlay((c2, p, k) => drawMedCross(c2, p.x, p.y, 74 * k * 2 / 1.5), 0, 0, { dx: cen.x + 1.9, dz: cen.z + 1.35 });
+            if (activity === 'healing') {
+                w.overlay((c2, p, k) => { const g2 = c2.createRadialGradient(p.x, p.y - 60 * (k * 2 / 1.5), 10, p.x, p.y - 60 * (k * 2 / 1.5), 170 * (k * 2 / 1.5)); g2.addColorStop(0, 'rgba(110,230,150,0.30)'); g2.addColorStop(1, 'rgba(110,230,150,0)'); c2.fillStyle = g2; c2.beginPath(); c2.arc(p.x, p.y - 60 * (k * 2 / 1.5), 170 * (k * 2 / 1.5), 0, Math.PI * 2); c2.fill(); }, 0, 0, { dx: cen.x, dz: cen.z });
+                w.overlay((c2, p, k) => drawHealSparkles(c2, p.x, p.y, 56 * k * 2 / 1.5, seed, 6), 0, 0, { dx: cen.x, dz: cen.z + 0.6 });
+            }
             break;
         }
         case 'alchemy': {
-            if (lvl === 1) { P('barrel', { sc: 3.0 }); P('crate_open', { dx: -2.4, dz: 1.2, sc: 1.4 }); }
-            else P(B('tavern'), { sc: lvl === 2 ? 2.6 : 3.0 });
-            P('bucket_water', { dx: 2.6, dz: 1.7, sc: 1.4 });
-            if (lvl >= 3) P(B('windmill'), { dx: -4.2, dz: -0.8, sc: 1.8 });
+            // ⚗️ §10 REDESIGN (was barrel→tavern→windmill, read as a pub): a
+            // potion workshop — shack/tavern shell + bubbling cauldron front-
+            // centre, corked-flask bench, herb crates; the liquid takes the
+            // brewed item's colour (o.tint) when one was just crafted here.
+            const liquid = o.tint || '#7ce07c';
+            if (lvl === 1) {
+                P('tent', { sc: 2.6 });
+                P('crate_open', { dx: -2.2, dz: 1.4, sc: 1.3 }); P('bucket_water', { dx: 2.4, dz: 1.5, sc: 1.3 });
+            } else {
+                P(B('tavern'), { sc: lvl === 2 ? 2.6 : 3.0 });
+                P('crate_open', { dx: -2.4, dz: 1.6, sc: 1.3 });
+                if (lvl >= 3) P(B('windmill'), { dx: -4.4, dz: -1.2, sc: 1.6 });
+            }
+            P('sack', { dx: 2.9, dz: 0.6, sc: 1.2 });
+            w.overlay((c2, p, k) => drawCauldron(c2, p.x, p.y, (lvl >= 3 ? 64 : 54) * k * 2 / 1.5, liquid, true), 0, 0, { dx: cen.x + 0.5, dz: cen.z + 2.0 });
+            w.overlay((c2, p, k) => drawBottleShelf(c2, p.x, p.y, (lvl >= 2 ? 52 : 42) * k * 2 / 1.5, lvl >= 3 ? [liquid, '#6ea8ff', '#c07cff', '#ffd45e'] : undefined), 0, 0, { dx: cen.x - 1.9, dz: cen.z + 2.3 });
+            if (lvl >= 2) w.overlay((c2, p, k) => drawSparks(c2, p.x, p.y - 90 * (k * 2 / 1.5), (activity === 'brewing' ? 46 : 30) * k * 2 / 1.5, seed, activity === 'brewing' ? 6 : 3), 0, 0, { dx: cen.x + 0.5, dz: cen.z + 2.0 });
             break;
         }
         default: P(B('home_A'), { sc: 2.4 }); break;
@@ -309,11 +580,12 @@ async function renderStructureCard(o = {}) {
     const type = String(o.type || 'mines'), lvl = Math.max(1, Math.min(3, o.level || 1));
     const biome = o.biome || 'isle';
     const seed = hashStr(`${o.seed || 'x'}:${type}`);
-    const key = hashStr(JSON.stringify(['sc1', type, lvl, biome, seed, o.spec || {}]));
+    const activity = o.activity || '', spotlight = !!o.spotlight, tint = o.tint || '';
+    const key = hashStr(JSON.stringify(['sc2', type, lvl, biome, seed, activity, spotlight, tint, o.spec || {}]));
     return mediaCache.cached('structcard', key, async () => {
         fonts();
         const { createCanvas } = require('canvas');
-        const { w, cen, focus } = buildScene(type, lvl, biome, seed);
+        const { w, cen, focus } = buildScene(type, lvl, biome, seed, { activity, spotlight, tint });
         const bi = (K.biomeInfo('iso').biomes || {})[biome];
         const bd = biome === 'isle' ? BD.isle : bi ? { top: bi.backdrop[0], mid: bi.backdrop[1], bot: bi.backdrop[2] } : { top: '#356f6a', mid: '#1f4a4c', bot: '#0d2527' };
         w.layoutFixed(W, H, (focus || cen).x, (focus || cen).z, W / 2, (H - PANEL_H) * 0.52);
@@ -328,4 +600,4 @@ async function renderStructureCard(o = {}) {
     });
 }
 
-module.exports = { renderStructureCard, drawPanel, drawDeer, drawBoar, drawCampfire, PANEL_H, W, H };
+module.exports = { renderStructureCard, drawPanel, drawDeer, drawBoar, drawCampfire, drawMerchant, drawMiner, drawCauldron, drawBottleShelf, drawSummonCircle, drawMedCross, PANEL_H, W, H };

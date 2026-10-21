@@ -903,6 +903,19 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
     msg += `━━━━━━━━━━━━━━━\n`;
     msg += `💡 Craft: \`${p} ${cmdName} <#>\` (numbers from this list) or \`${p} ${cmdName} <id>\` (e.g. \`${p} ${cmdName} ${pageItems[0]?.id || 'refined_steel'}\`)\n`;
     msg += `📖 Page: \`${p} ${cmdName} page ${currentPage + 1 <= totalPages ? currentPage + 1 : 1}\`${searchQuery ? ` • \`${p} ${cmdName} search ${searchQuery} <page>\`` : ''}`;
+    // §9/§10 base-fusion: browsing a STATION opens at that station's building —
+    // BREWING at the alchemy bench, FORGE at the anvil. A menu view is NOT a
+    // craft: the banner says browsing, never a success. Text menu unchanged.
+    try {
+        const _cardOk = (c) => c && c.buffer && c.buffer.length > 500;
+        if (categoryFilter === 'BREWING') {
+            const c = await require('../rpg/baseBuilder').zoomForCommand({ senderJid, prefix: p }, 'alchemy', { activity: 'browse', banner: { head: 'BREWING LEDGER', lines: ['The cauldron idles, ready', `Brew with \`${p} brew <potion>\``] } });
+            if (_cardOk(c)) return void await sock.sendMessage(chatId, { image: c.buffer, caption: msg });
+        } else if (categoryFilter === 'FORGE') {
+            const c = await require('../rpg/baseBuilder').zoomForCommand({ senderJid, prefix: p }, 'blacksmith', { activity: 'browse', banner: { head: 'FORGE READY', lines: ['Recipes from the smithy ledger', `Forge with \`${p} forge <item>\``] } });
+            if (_cardOk(c)) return void await sock.sendMessage(chatId, { image: c.buffer, caption: msg });
+        }
+    } catch (e) { /* card is a garnish — the menu always ships */ }
     await sock.sendMessage(chatId, { text: msg });
 }
 
@@ -1053,7 +1066,13 @@ async function mineOre(sock, chatId, senderJid, locationId) {
     if (!sheet) return await sock.sendMessage(chatId, { text: `❌ Register first!` });
 
     const locations = craftingSystem.getMiningLocations();
-    const miningLevel = economy.getProfessionLevel(senderJid, 'mining');
+    // §12 (owner spec 2026-10-21): the Mines BUILDING level is the mining
+    // level — the separate mining profession is retired (stored data left
+    // untouched). No base = Mines Lv.1 (the fixed zone exists for everyone).
+    const _bb = require('../rpg/baseBuilder');
+    const minesLvl = Math.max(1, await _bb.getStructureLevel(senderJid, 'mines'));
+    const minesMult = [1, 1.25, 1.5][minesLvl - 1] || 1;
+    const minesDisc = [0, 3, 6, 9][minesLvl] || 0; // percentage points off energy
     // ⚔️ OWNER FIX (2026-10-05 "energy never gets finished"): the pool scales
     // to 1000+ (100 + 15/level + 3×MAG) while costs were FLAT (15-60) with a
     // mining-level discount flooring at 5 — and the 25% recovery roll (8-22)
@@ -1066,19 +1085,19 @@ async function mineOre(sock, chatId, senderJid, locationId) {
     const maxEn = derivedStats.maxEnergy || 100;
     // the discount shrinks the RATE, never below 5% of the pool — otherwise a
     // maxed profession pays 5 flat energy (0.5% of an endgame pool) forever
-    const pctCost = (loc) => Math.max(5, Math.round(maxEn * Math.max(5, loc.energyCost - Math.floor(miningLevel / 2)) / 100));
+    const pctCost = (loc) => Math.max(5, Math.round(maxEn * Math.max(5, loc.energyCost - minesDisc) / 100));
 
     if (!locationId) { 
-        let msg = `⛏️ *MINING* • Mining Lv.${miningLevel}\n━━━━━━━━━━━━━━━\n\n`;
+        let msg = `⛏️ *MINING* • Mines Lv.${minesLvl} · yield ×${minesMult}\n━━━━━━━━━━━━━━━\n\n`;
         const rankOrder = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS'];
         const userRankIdx = rankOrder.indexOf(sheet.adventurerRank);
 
         Object.values(locations).forEach(loc => { 
             const reqRankIdx = rankOrder.indexOf(loc.req.rank);
-            const levelReq = loc.req.miningLevel || 1;
-            const isLocked = sheet.level < loc.req.level || userRankIdx < reqRankIdx || miningLevel < levelReq;
+            const bldReq = loc.req.mineBuilding || 1;
+            const isLocked = sheet.level < loc.req.level || userRankIdx < reqRankIdx || minesLvl < bldReq;
             const cost = pctCost(loc);
-            if (isLocked) msg += `🔒 *${loc.name}* · Req Lv.${loc.req.level} + ${loc.req.rank}-Rank\n`;
+            if (isLocked) msg += `🔒 *${loc.name}* · Req Lv.${loc.req.level} + ${loc.req.rank}-Rank + Mines Lv.${bldReq}\n`;
             else msg += `✅ *${loc.name}* \`${loc.id}\` · ⚡ ${cost} Energy\n`;
         });
 
@@ -1093,10 +1112,10 @@ async function mineOre(sock, chatId, senderJid, locationId) {
     const rankOrder = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS'];
     const userRankIdx = rankOrder.indexOf(sheet.adventurerRank);
     const reqRankIdx = rankOrder.indexOf(loc.req.rank);
-    const miningLevelReq = loc.req.miningLevel || 1;
+    const mineBuildingReq = loc.req.mineBuilding || 1;
 
-    if (sheet.level < loc.req.level || userRankIdx < reqRankIdx || miningLevel < miningLevelReq) { 
-        return await sock.sendMessage(chatId, { text: `❌ *LOCATION LOCKED*\n\nYou need to be Lv.${loc.req.level}, ${loc.req.rank}-Rank, and Mining Lv.${miningLevelReq} to enter the ${loc.name}.` });
+    if (sheet.level < loc.req.level || userRankIdx < reqRankIdx || minesLvl < mineBuildingReq) { 
+        return await sock.sendMessage(chatId, { text: `❌ *LOCATION LOCKED*\n\nYou need to be Lv.${loc.req.level}, ${loc.req.rank}-Rank, and a Mines Lv.${mineBuildingReq} (\`${getPrefix()} base upgrade mines\`) to enter the ${loc.name}.` });
     }
 
     // PERSISTENT ENERGY SYSTEM (2026-09-17): mining drains the SAME
@@ -1108,8 +1127,8 @@ async function mineOre(sock, chatId, senderJid, locationId) {
 
     const leftAfterMine = Math.max(0, currentEnergy - energyCost);
     economy.setPersistentEnergy(senderJid, leftAfterMine, maxEn);
-    const xpGained = Math.floor(loc.energyCost * 20 + miningLevel * 5);
-    const levelUp = economy.addProfessionXP(senderJid, 'mining', xpGained);
+    // §12: no more mining-profession XP writes — the Mines building level IS
+    // the progression. Legacy user.professions.mining data stays untouched.
 
     if (Math.random() < 0.25) {
         // ⚔️ recovery is a fraction of the SPEND now — it can never net-gain
@@ -1120,7 +1139,7 @@ async function mineOre(sock, chatId, senderJid, locationId) {
 
     let msg = `⛏️ *MINING: ${loc.name.toUpperCase()}* ⛏️\n\nYou strike the veins of the earth...\n\n`;
     const luck = sheet.stats.luck || 5;
-    const baseRolls = 2 + Math.floor(miningLevel / 10);
+    const baseRolls = 2 + Math.floor((minesLvl - 1) * 1.5);
     const bonusRolls = Math.floor(luck / 15);
     const totalRolls = baseRolls + bonusRolls;
     const found = {};
@@ -1137,7 +1156,9 @@ async function mineOre(sock, chatId, senderJid, locationId) {
         for (const ore of loc.ores) {
             roll -= ore.weight;
             if (roll <= 0) {
-                const qty = ore.quantity || (Math.floor(Math.random() * (ore.max - ore.min + 1)) + ore.min);
+                const qty0 = ore.quantity || (Math.floor(Math.random() * (ore.max - ore.min + 1)) + ore.min);
+                // §12: the deeper mine yields more — deterministic rounding
+                const qty = Math.max(1, Math.round(qty0 * minesMult));
                 await inventorySystem.addItem(senderJid, ore.id, qty);
                 found[ore.id] = (found[ore.id] || 0) + qty;
                 break;
@@ -1148,15 +1169,14 @@ async function mineOre(sock, chatId, senderJid, locationId) {
     Object.entries(found).forEach(([id, qty]) => { msg += `- ${qty}x ${lootSystem.getItemInfo(id).name}\n`; });
     if (luckyFinds > 0) msg += `\n💰 *LUCKY FIND!* You found a lost pouch containing ${economy.getZENI()}${luckyFinds.toLocaleString()}!\n`;
     const energyLeft = economy.getPersistentEnergy(senderJid, maxEn);
-    msg += `\n⚡ Energy Left: ${energyLeft}/${maxEn} (-${energyCost})\n📈 Mining XP: +${xpGained}`;
-    if (levelUp?.leveledUp) msg += `\n✨ *LEVEL UP!* Mining is now Level ${levelUp.newLevel}!`;
-    // 🏔️ the result plays on the zoomed-in MINES card of the player's base, with the haul as a ribbon
-    // (owner 2026-10-20) — silent fallback to the plain text result if there is no base / render fails
+    msg += `\n⚡ Energy Left: ${energyLeft}/${maxEn} (-${energyCost})\n⛏️ Mines Lv.${minesLvl} · yield ×${minesMult}`;
+    // 🏔️ §12: the result plays on the zoomed-in MINES card with the miner
+    // swinging on the face, the haul as a ribbon — silent text fallback
     try {
         const lines = Object.entries(found).map(([id, qty]) => `${qty}× ${lootSystem.getItemInfo(id).name}`);
         if (luckyFinds > 0) lines.push(`+${luckyFinds.toLocaleString()} ZENI (lucky find)`);
-        lines.push(`+${xpGained} Mining XP${levelUp?.leveledUp ? ` · LEVEL UP ${levelUp.newLevel}!` : ''}`);
-        const card = await require('../rpg/baseBuilder').zoomForCommand({ senderJid, prefix: getPrefix() }, 'mines', { banner: { head: loc.name, lines } });
+        lines.push(`⚡ -${energyCost} energy · Mines Lv.${minesLvl} (×${minesMult})`);
+        const card = await _bb.zoomForCommand({ senderJid, prefix: getPrefix() }, 'mines', { activity: 'mining', banner: { head: loc.name, lines } });
         if (card && card.buffer && card.buffer.length > 500) return await sock.sendMessage(chatId, { image: card.buffer, caption: msg });
     } catch (e) { /* text result below */ }
     await sock.sendMessage(chatId, { text: msg });

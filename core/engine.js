@@ -10590,7 +10590,7 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                       const words = lowerTxt.split(' ');
                       const prefixPart = botConfig.getPrefix().toLowerCase();
                       const firstWord = words[0].startsWith(prefixPart) ? words[0].slice(prefixPart.length) : (words[0].startsWith('.') ? words[0].slice(1) : words[0]);
-                      const RPG_CMDS = new Set(['char', 'character', 'stats', 'kills', 'killcount', 'profile', 'me', 'whois', 'cardstyle', 'setdefaultcard', 'status', 'inventory', 'bag', 'inv', 'dismantle', 'equip', 'unequip', 'use', 'enhance', 'blacksmith', 'repair', 'inspect', 'shop', 'buy', 'recipes', 'craft', 'brew', 'forge', 'cook', 'source', 'mine', 'skill', 'skills', 'skilltree', 'st', 'abilities', 'allocate', 'classes', 'evolve', 'trial', 'quest', 'solo', 'adventure', 'join', 'stop', 'vote', 'raid', 'abyss', 'world', 'bounty', 'duel', 'challenge', 'pvp', 'combat', 'summon', 'summons', 'dragonlord', 'dglord', 'dragongod', 'rune', 'clinic', 'heal', 'health', 'hospital', 'rank', 'adventurer', 'monster', 'handbook', 'guide', 'lore', 'leaderboard', 'lb', 'upgrade', 'claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 't2edeck', 't2ecoll', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'cdeck', 'tokens', 'event', 'setprice', 'esummon', 'fc', 'spawn', 'listitem', 'unlistitem', 'buyitem', 'itemmarket', 'market', 'balance', 'bal', 'daily', 'register', 'deposit', 'withdraw', 'transfer', 'rob', 'bug', 'rich', 'lottery', 'invest', 'investment', 'gamble', 'slots', 'dice', 'coinflip', 'blackjack', 'roulette', 'plinko', 'wheel', 'crash', 'cups', 'scratch', 'rps', 'horse', 'hl', 'mines', 'penalty', 'guess', 'guild', 'reset', 'handbook', 'tutorial']);
+                      const RPG_CMDS = new Set(['char', 'character', 'stats', 'kills', 'killcount', 'profile', 'me', 'whois', 'cardstyle', 'setdefaultcard', 'status', 'inventory', 'bag', 'inv', 'dismantle', 'equip', 'unequip', 'use', 'enhance', 'blacksmith', 'repair', 'inspect', 'shop', 'buy', 'recipes', 'craft', 'brew', 'forge', 'cook', 'source', 'mine', 'fish', 'fishing', 'cast', 'hunt', 'hunting', 'skill', 'skills', 'skilltree', 'st', 'abilities', 'allocate', 'classes', 'evolve', 'trial', 'quest', 'solo', 'adventure', 'join', 'stop', 'vote', 'raid', 'abyss', 'world', 'bounty', 'duel', 'challenge', 'pvp', 'combat', 'summon', 'summons', 'dragonlord', 'dglord', 'dragongod', 'rune', 'clinic', 'heal', 'health', 'hospital', 'rank', 'adventurer', 'monster', 'handbook', 'guide', 'lore', 'leaderboard', 'lb', 'upgrade', 'claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 't2edeck', 't2ecoll', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'cdeck', 'tokens', 'event', 'setprice', 'esummon', 'fc', 'spawn', 'listitem', 'unlistitem', 'buyitem', 'itemmarket', 'market', 'balance', 'bal', 'daily', 'register', 'deposit', 'withdraw', 'transfer', 'rob', 'bug', 'rich', 'lottery', 'invest', 'investment', 'gamble', 'slots', 'dice', 'coinflip', 'blackjack', 'roulette', 'plinko', 'wheel', 'crash', 'cups', 'scratch', 'rps', 'horse', 'hl', 'mines', 'penalty', 'guess', 'guild', 'reset', 'handbook', 'tutorial']);
                       const isRpg = RPG_CMDS.has(firstWord.toLowerCase());
                       if (isRpg) {
                         const bypass = await testerSystem.canBypassRpgLock(senderJid, chatId);
@@ -11823,7 +11823,7 @@ _💡 Reply with another number from your search list!_`.trim();
                     // arg as a search query (known categories unchanged).
                     if (primaryCmd === "shop") {
                       const category = cmdArgs.slice(1).join(" ") || "all";
-                      await shopCommands.displayShop(sock, chatId, category);
+                      await shopCommands.displayShop(sock, chatId, category, senderJid);
                       return;
                     }
 
@@ -12640,7 +12640,17 @@ _💡 Reply with another number from your search list!_`.trim();
                           // 💡 Phase B TUTORIAL: already-full still counts as a
                           // hospital visit for the lesson (no-op unless active).
                           try { require('./rpg/tutorial').notify(senderJid, 'hospital', { sock, chatId, prefix: botConfig.getPrefix() }).catch(() => {}); } catch (e) {}
-                          return sock.sendMessage(chatId, { text: BOT_MARKER + "🏥 You're already at full health!" });
+                          // ⚗️ §16: the visit still collects any ready Med Bay potions.
+                          let __potFull = { qty: 0 };
+                          try { __potFull = await require('./rpg/baseBuilder').collectMedbayPotions(senderJid); } catch (e) {}
+                          const potTxtFull = __potFull.qty > 0 ? `\n\n⚗️ Med Bay stock collected: +${__potFull.qty}× ${__potFull.name}` : '';
+                          // ⚕️ §11: the visit plays on the Med Bay close-up (text fallback preserved)
+                          try {
+                            const card = await require('./rpg/baseBuilder').zoomForCommand({ senderJid, prefix: botConfig.getPrefix() }, 'medbay', { activity: 'healing', banner: { head: 'ALREADY AT FULL HEALTH', lines: [`HP ${maxHP}/${maxHP}`].concat(__potFull.qty > 0 ? [`Collected: +${__potFull.qty}× ${__potFull.name}`] : []) } });
+                            if (card && card.buffer && card.buffer.length > 500)
+                              return sock.sendMessage(chatId, { image: card.buffer, caption: BOT_MARKER + `🏥 You're already at full health!${potTxtFull}` });
+                          } catch (e) {}
+                          return sock.sendMessage(chatId, { text: BOT_MARKER + `🏥 You're already at full health!${potTxtFull}` });
                         }
 
                         // 💡 AUDIT FIX 2026-08-01: healToFull now returns {healed, onCooldown, cooldownRemainingMs}
@@ -12657,8 +12667,17 @@ _💡 Reply with another number from your search list!_`.trim();
                           const h = Math.floor(totalMin / 60);
                           const m = totalMin % 60;
                           const cdStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
+                          // ⚗️ §16: potions keep brewing while healing is on cooldown.
+                          let __potCd = { qty: 0 };
+                          try { __potCd = await require('./rpg/baseBuilder').collectMedbayPotions(senderJid); } catch (e) {}
+                          const cdLines = [`The healers rest — next full heal in ${cdStr}`, `HP ${currentHP}/${maxHP}`].concat(__potCd.qty > 0 ? [`Collected: +${__potCd.qty}× ${__potCd.name}`] : []);
+                          try {
+                            const card = await require('./rpg/baseBuilder').zoomForCommand({ senderJid, prefix: botConfig.getPrefix() }, 'medbay', { activity: 'healing', banner: { head: 'THE HEALERS ARE RESTING', lines: cdLines } });
+                            if (card && card.buffer && card.buffer.length > 500)
+                              return sock.sendMessage(chatId, { image: card.buffer, caption: BOT_MARKER + `🏥 *HOSPITAL COOLDOWN*\n\nThe hospital can only fully heal you once every 12 hours.\n\n⏳ Time remaining: *${cdStr}*\n\n💡 Your passive regen still works out of combat - your HP will slowly recover over time. Use \`${botConfig.getPrefix()} char\` to check your HP.${__potCd.qty > 0 ? `\n\n⚗️ Med Bay stock collected: +${__potCd.qty}× ${__potCd.name}` : ''}` });
+                          } catch (e) {}
                           return sock.sendMessage(chatId, {
-                            text: BOT_MARKER + `🏥 *HOSPITAL COOLDOWN*\n\nThe hospital can only fully heal you once every 12 hours.\n\n⏳ Time remaining: *${cdStr}*\n\n💡 Your passive regen still works out of combat - your HP will slowly recover over time. Use \`${botConfig.getPrefix()} char\` to check your HP.`,
+                            text: BOT_MARKER + `🏥 *HOSPITAL COOLDOWN*\n\nThe hospital can only fully heal you once every 12 hours.\n\n⏳ Time remaining: *${cdStr}*\n\n💡 Your passive regen still works out of combat - your HP will slowly recover over time. Use \`${botConfig.getPrefix()} char\` to check your HP.${__potCd.qty > 0 ? `\n\n⚗️ Med Bay stock collected: +${__potCd.qty}× ${__potCd.name}` : ''}`,
                           });
                         }
 
@@ -12669,9 +12688,20 @@ _💡 Reply with another number from your search list!_`.trim();
                           const loreDrops = require('./rpg/loreDrops');
                           __healDrop = loreDrops.maybeDrop('healing', { userId: senderJid, chatId, chance: 0.10 });
                         } catch (e) {}
-                        await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + `🏥 *HOSPITAL*\n\n❤️ HP restored: +${healed}\n📊 HP: ${maxHP}/${maxHP}\n\n_You are now at full health._\n\n⏳ _Next hospital visit available in 12 hours. Out-of-combat passive regen will keep you topped up between visits._`,
-                        });
+                        // ⚗️ §16: the visit collects any ready Med Bay potions
+                        // (grant happens server-side BEFORE the reply; no grant
+                        // unless the inventory write succeeded).
+                        let __pot = { qty: 0 };
+                        try { __pot = await require('./rpg/baseBuilder').collectMedbayPotions(senderJid); } catch (e) {}
+                        const healTxt = `🏥 *HOSPITAL*\n\n❤️ HP restored: +${healed}\n📊 HP: ${maxHP}/${maxHP}\n\n_You are now at full health._\n\n⏳ _Next hospital visit available in 12 hours. Out-of-combat passive regen will keep you topped up between visits._${__pot.qty > 0 ? `\n\n⚗️ Med Bay stock collected: +${__pot.qty}× ${__pot.name}` : ''}`;
+                        // ⚕️ §11: the heal plays on the Med Bay close-up — actual
+                        // +HP/HP numbers in the ribbon; plain text if render fails
+                        try {
+                          const card = await require('./rpg/baseBuilder').zoomForCommand({ senderJid, prefix: botConfig.getPrefix() }, 'medbay', { activity: 'healing', spotlight: true, banner: { head: 'YOU WERE HEALED', lines: [`+${healed} HP`, `HP ${maxHP}/${maxHP}`].concat(__pot.qty > 0 ? [`Collected: +${__pot.qty}× ${__pot.name}`] : []) } });
+                          if (card && card.buffer && card.buffer.length > 500)
+                            return sock.sendMessage(chatId, { image: card.buffer, caption: BOT_MARKER + healTxt });
+                        } catch (e) {}
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + healTxt });
                         // 💡 Phase B TUTORIAL: hospital lesson advances on a real heal
                         try { require('./rpg/tutorial').notify(senderJid, 'hospital', { sock, chatId, prefix: botConfig.getPrefix() }).catch(() => {}); } catch (e) {}
                         if (__healDrop) {
@@ -12685,6 +12715,20 @@ _💡 Reply with another number from your search list!_`.trim();
                         await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Hospital error: " + e.message });
                       }
                       return;
+                    }
+
+                    // 🎣🏹 `.j fish` / `.j hunt` (+ aliases) — the pond and the
+                    // hunting-ground actions (owner spec §4/§13/§14, 2026-10-21).
+                    // Previously these only lived at `.j base fish|hunt`; the base
+                    // names are read-only viewers now, the actions answer here.
+                    // Same rules, cooldowns and loot — no rebalance.
+                    if (primaryCmd === "fish" || primaryCmd === "fishing" || primaryCmd === "cast" || primaryCmd === "hunt" || primaryCmd === "hunting") {
+                        if (!economy.isRegistered(senderJid))
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Register first!" });
+                        const bb = require('./rpg/baseBuilder');
+                        const actCtx = { sock, chatId, senderJid, m, reply: (t) => sock.sendMessage(chatId, { text: BOT_MARKER + t }), prefix: botConfig.getPrefix() };
+                        await bb.runActivity(actCtx, primaryCmd === 'hunt' || primaryCmd === 'hunting' ? 'hunt' : 'fish');
+                        return;
                     }
 
                     // .j recipes

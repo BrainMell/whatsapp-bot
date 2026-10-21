@@ -20,6 +20,15 @@ const CONDITION_ICONS = {
     GOOD: '🟩'
 };
 
+// §9 base-fusion helper — one zoomed blacksmith card. Never creates a base;
+// returns null on any failure so the caller falls back to the text flow.
+async function smithCard(userId, banner, activity = 'browse') {
+    try {
+        return await require('../rpg/baseBuilder').zoomForCommand({ userId, prefix: getPrefix() }, 'blacksmith', { activity, banner });
+    } catch (e) { return null; }
+}
+const _cardOk = (c) => c && c.buffer && c.buffer.length > 500;
+
 function getConditionIcon(pct) {
     if (pct <= 0) return CONDITION_ICONS.BROKEN;
     if (pct < 0.25) return CONDITION_ICONS.SEVERE;
@@ -75,6 +84,20 @@ async function displayBlacksmith(sock, chatId, userId) {
     // message box (owner ruling: a drop is a distinct lore event).
     let __loreDrop = null;
     try { __loreDrop = loreDrops.maybeDrop('blacksmith', { userId, chatId, chance: 0.10 }); } catch (e) {}
+    // §9: the visit plays at the forge (FORGE READY banner + wallet) — the
+    // full gear/cost menu below remains the source of truth.
+    const forgeTxt = msg;
+    try {
+        const c = await smithCard(userId, {
+            head: 'FORGE READY',
+            lines: [`Wallet: ${getZENI()}${(user.wallet || 0).toLocaleString()}`, `Repair with \`${getPrefix()}repair <slot|#>\``],
+        }, 'browse');
+        if (_cardOk(c)) {
+            await sock.sendMessage(chatId, { image: c.buffer, caption: forgeTxt });
+            await loreDrops.sendOwn(sock, chatId, __loreDrop);
+            return;
+        }
+    } catch (e) { /* text below */ }
     await sock.sendMessage(chatId, { text: msg });
     await loreDrops.sendOwn(sock, chatId, __loreDrop);
 }
@@ -131,6 +154,18 @@ async function repair(sock, chatId, userId, target) {
         let __loreDrop = null;
         try { __loreDrop = loreDrops.maybeDrop('blacksmith', { userId, chatId, chance: 0.12 }); } catch (e) {}
 
+        // §9: sparks fly at the anvil — real total cost on the ribbon
+        try {
+            const c = await smithCard(userId, {
+                head: 'REPAIRS COMPLETE',
+                lines: [`${toRepair.length} item${toRepair.length === 1 ? '' : 's'} restored`, `Cost: ${getZENI()}${totalCost.toLocaleString()}`],
+            }, 'repair');
+            if (_cardOk(c)) {
+                await sock.sendMessage(chatId, { image: c.buffer, caption: successMsg });
+                await loreDrops.sendOwn(sock, chatId, __loreDrop);
+                return;
+            }
+        } catch (e) { /* text below */ }
         await sock.sendMessage(chatId, { text: successMsg });
         await loreDrops.sendOwn(sock, chatId, __loreDrop);
     }
@@ -188,6 +223,18 @@ async function repair(sock, chatId, userId, target) {
     let __loreDrop = null;
     try { __loreDrop = loreDrops.maybeDrop('blacksmith', { userId, chatId, chance: 0.12 }); } catch (e) {}
 
+    // §9: the repaired item lands on the anvil — real name + real cost
+    try {
+        const c = await smithCard(userId, {
+            head: 'REPAIR COMPLETE',
+            lines: [`${selectedItem.name}`.slice(0, 56), `Cost: ${getZENI()}${cost.toLocaleString()}`],
+        }, 'repair');
+        if (_cardOk(c)) {
+            await sock.sendMessage(chatId, { image: c.buffer, caption: successMsg });
+            await loreDrops.sendOwn(sock, chatId, __loreDrop);
+            return;
+        }
+    } catch (e) { /* text below */ }
     await sock.sendMessage(chatId, { text: successMsg });
     await loreDrops.sendOwn(sock, chatId, __loreDrop);
 }
