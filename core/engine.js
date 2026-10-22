@@ -16340,10 +16340,18 @@ Usage: ${newUsage}/5${warningText}`;
                   }
 
                   // 💡 NUKE - remove everyone in the GC that the bot can remove
-                  if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} nuke`) {
-                    if (!isOwner && !isGlobalMod(senderJid)) {
+                  // 💡 OWNER RULING 2026-10-22: nuke is OWNER-ONLY and TWO-STEP —
+                  // `.nuke` only ARMS it (shows the target count + instructions),
+                  // `.nuke confirm` within 60 seconds fires. Owner:
+                  // "only owner can use .j nuke, imfact add a are you sure message
+                  // with a confirmation sub command to that spefically".
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} nuke` ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} nuke confirm`
+                  ) {
+                    if (!isOwner) {
                       return await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + "❌ Only the bot owner or global mods can nuke a group.",
+                        text: BOT_MARKER + "❌ Only the bot owner can use nuke.",
                       });
                     }
                     if (!chatId.endsWith("@g.us")) {
@@ -16351,49 +16359,59 @@ Usage: ${newUsage}/5${warningText}`;
                         text: BOT_MARKER + "❌ This command only works in group chats.",
                       });
                     }
+                    const _nukePfx = botConfig.getPrefix();
+                    const isNukeConfirm =
+                      lowerTxt === `${_nukePfx.toLowerCase()} nuke confirm`;
 
                     try {
+                      if (isNukeConfirm) {
+                        // ── CONFIRM step: consume the armed nuke (if any, not expired)
+                        const targets = takeArmedNuke(chatId);
+                        if (!targets) {
+                          return await sock.sendMessage(chatId, {
+                            text: BOT_MARKER + `⚠️ No nuke is armed. Use \`${_nukePfx} nuke\` first — it stays armed for ${NUKE_CONFIRM_TTL_MS / 1000} seconds, then expires harmlessly.`,
+                          });
+                        }
+                        if (targets.length === 0) {
+                          return await sock.sendMessage(chatId, {
+                            text: BOT_MARKER + "⚠️ No removable participants found (all are admins or protected).",
+                          });
+                        }
+
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `☢️ *NUKE INCOMING*\n\nRemoving ${targets.length} participants...\n_This cannot be undone._`,
+                        });
+
+                        // WhatsApp allows max ~50 per groupParticipantsUpdate call
+                        // Process in batches of 50
+                        let removed = 0;
+                        let failed = 0;
+                        for (let i = 0; i < targets.length; i += 50) {
+                          const batch = targets.slice(i, i + 50);
+                          try {
+                            const result = await sock.groupParticipantsUpdate(chatId, batch, "remove");
+                            for (const r of result) {
+                              if (r.status === "200") removed++;
+                              else failed++;
+                            }
+                          } catch (e) {
+                            failed += batch.length;
+                          }
+                          // Small delay between batches to avoid rate limiting
+                          if (i + 50 < targets.length) {
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                          }
+                        }
+
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `☢️ *NUKE COMPLETE*\n\n✅ Removed: ${removed}\n❌ Failed (admins/bots): ${failed}\n📊 Total targeted: ${targets.length}`,
+                        });
+                        return;
+                      }
+
+                      // ── ARM step: compute targets, show the are-you-sure card
                       const groupInfo = await sock.groupMetadata(chatId);
-                      const participants = groupInfo.participants || [];
-
-                      // Don't remove: the bot itself, other bots, group admins, owner, mods
-                      const protectedJids = new Set();
-                      // Add bot's own JIDs
-                      protectedJids.add(botJid);
-                      if (botLid) protectedJids.add(botLid);
-                      // Add owner phones
-                      for (const phone of BOT_OWNER_PHONES) {
-                        protectedJids.add(`${phone}@s.whatsapp.net`);
-                        protectedJids.add(`${phone}@lid`);
-                      }
-                      // Add all global mods
-                      for (const mod of globalMods) protectedJids.add(mod);
-                      // Add all RPG mods
-                      for (const mod of rpgMods) protectedJids.add(mod);
-                      // Add all card mods
-                      for (const mod of cardsMods) protectedJids.add(mod);
-                      // Add override users
-                      for (const ou of overrideUsers) protectedJids.add(ou);
-                      // 👑 GC OWNER IMMUNITY: the marked owner of this group
-                      // survives a nuke.
-                      const _gcOwnerJid = getGcOwner(chatId);
-                      if (_gcOwnerJid) protectedJids.add(_gcOwnerJid);
-
-                      // Build list of targets - exclude admins and protected users
-                      const targets = [];
-                      for (const p of participants) {
-                        const pid = p.id;
-                        const isAdmin = p.admin === "admin" || p.admin === "superadmin";
-                        if (isAdmin) continue;
-                        if (protectedJids.has(pid)) continue;
-                        // 👑 GC OWNER IMMUNITY: identity-safe check (handles
-                        // @lid vs phone spellings of the marked owner).
-                        if (isGcOwner(pid, chatId)) continue;
-                        // Also check phone-based owner match
-                        const phone = pid.split("@")[0];
-                        if (BOT_OWNER_PHONES.includes(phone)) continue;
-                        targets.push(pid);
-                      }
+                      const targets = computeNukeTargets(groupInfo, { botJid, botLid }, chatId);
 
                       if (targets.length === 0) {
                         return await sock.sendMessage(chatId, {
@@ -16401,33 +16419,9 @@ Usage: ${newUsage}/5${warningText}`;
                         });
                       }
 
+                      armNuke(chatId, targets);
                       await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + `☢️ *NUKE INCOMING*\n\nRemoving ${targets.length} participants...\n_This cannot be undone._`,
-                      });
-
-                      // WhatsApp allows max ~50 per groupParticipantsUpdate call
-                      // Process in batches of 50
-                      let removed = 0;
-                      let failed = 0;
-                      for (let i = 0; i < targets.length; i += 50) {
-                        const batch = targets.slice(i, i + 50);
-                        try {
-                          const result = await sock.groupParticipantsUpdate(chatId, batch, "remove");
-                          for (const r of result) {
-                            if (r.status === "200") removed++;
-                            else failed++;
-                          }
-                        } catch (e) {
-                          failed += batch.length;
-                        }
-                        // Small delay between batches to avoid rate limiting
-                        if (i + 50 < targets.length) {
-                          await new Promise(resolve => setTimeout(resolve, 1000));
-                        }
-                      }
-
-                      await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + `☢️ *NUKE COMPLETE*\n\n✅ Removed: ${removed}\n❌ Failed (admins/bots): ${failed}\n📊 Total targeted: ${targets.length}`,
+                        text: BOT_MARKER + `☢️ *NUKE ARMED*\n\nThis will remove *${targets.length} participants* from this group.\n_This cannot be undone._\n\n➤ Are you sure? Reply \`${_nukePfx} nuke confirm\` within ${NUKE_CONFIRM_TTL_MS / 1000} seconds.\n_Do anything else and it expires harmlessly._`,
                       });
                     } catch (err) {
                       await sock.sendMessage(chatId, {
@@ -16471,8 +16465,10 @@ Usage: ${newUsage}/5${warningText}`;
                   // to manage the roster from chat ("i cant add or remove
                   // mods anymore???? tf fix that"). Restored the original
                   // behaviour: addmod is OWNER-ONLY (the privilege-escalation
-                  // fix stands - mods still cannot add mods), tier commands
-                  // are owner/General-Mod only. All writes go through the
+                  // fix stands - mods still cannot add mods), and per the
+                  // 2026-10-22 ruling EVERY mod-management command (delmod/
+                  // addrpgmod/delrpgmod/addcardsmod/delcardsmod/addquizmod/
+                  // delquizmod/cardmod) is OWNER-ONLY too. All writes go through the
                   // same DB-backed helpers + .j reloadmods reads them.
                   if (
                     lowerTxt.startsWith(
@@ -16516,17 +16512,19 @@ Usage: ${newUsage}/5${warningText}`;
                     return;
                   }
 
-                  // .j delmod - Remove a global moderator (Owner or General Mod)
+                  // .j delmod - Remove a global moderator (OWNER-ONLY)
                   if (
                     lowerTxt.startsWith(
                       `${botConfig.getPrefix().toLowerCase()} delmod`,
                     )
                   ) {
-                    if (!isOwner && !isGlobalMod(senderJid)) {
+                    // 💡 OWNER RULING 2026-10-22: only the owner manages mod
+                    // rosters ("only owner can make someone any mod").
+                    if (!isOwner) {
                       return await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          "❌ Only the owner or a global mod can remove global moderators.",
+                          "❌ Only the bot owner can remove global moderators.",
                       });
                     }
                     const target =
@@ -16580,17 +16578,18 @@ Usage: ${newUsage}/5${warningText}`;
                   // Mods cannot promote other Cards Mods.
                   // ═══════════════════════════════════════════════════════════════════
 
-                  // .g addrpgmod - Add an RPG Moderator (Owner or General Mod only)
+                  // .g addrpgmod - Add an RPG Moderator (OWNER-ONLY)
                   if (
                     lowerTxt.startsWith(
                       `${botConfig.getPrefix().toLowerCase()} addrpgmod`,
                     )
                   ) {
-                    if (!isOwner && !isGlobalMod(senderJid)) {
+                    // 💡 OWNER RULING 2026-10-22: only the owner manages mod rosters.
+                    if (!isOwner) {
                       return await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          "❌ Only the owner or a General Mod can add RPG moderators. RPG Mods cannot promote other mods.",
+                          "❌ Only the bot owner can add RPG moderators.",
                       });
                     }
                     const target =
@@ -16614,17 +16613,18 @@ Usage: ${newUsage}/5${warningText}`;
                     return;
                   }
 
-                  // .g delrpgmod - Remove an RPG Moderator
+                  // .g delrpgmod - Remove an RPG Moderator (OWNER-ONLY)
                   if (
                     lowerTxt.startsWith(
                       `${botConfig.getPrefix().toLowerCase()} delrpgmod`,
                     )
                   ) {
-                    if (!isOwner && !isGlobalMod(senderJid)) {
+                    // 💡 OWNER RULING 2026-10-22: only the owner manages mod rosters.
+                    if (!isOwner) {
                       return await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          "❌ Only the owner or a General Mod can remove RPG moderators.",
+                          "❌ Only the bot owner can remove RPG moderators.",
                       });
                     }
                     const target =
@@ -16656,17 +16656,18 @@ Usage: ${newUsage}/5${warningText}`;
                     return;
                   }
 
-                  // .g addcardsmod - Add a Cards Moderator
+                  // .g addcardsmod - Add a Cards Moderator (OWNER-ONLY)
                   if (
                     lowerTxt.startsWith(
                       `${botConfig.getPrefix().toLowerCase()} addcardsmod`,
                     )
                   ) {
-                    if (!isOwner && !isGlobalMod(senderJid)) {
+                    // 💡 OWNER RULING 2026-10-22: only the owner manages mod rosters.
+                    if (!isOwner) {
                       return await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          "❌ Only the owner or a General Mod can add Cards moderators. Cards Mods cannot promote other mods.",
+                          "❌ Only the bot owner can add Cards moderators.",
                       });
                     }
                     const target =
@@ -16700,17 +16701,18 @@ Usage: ${newUsage}/5${warningText}`;
                     return;
                   }
 
-                  // .g delcardsmod - Remove a Cards Moderator
+                  // .g delcardsmod - Remove a Cards Moderator (OWNER-ONLY)
                   if (
                     lowerTxt.startsWith(
                       `${botConfig.getPrefix().toLowerCase()} delcardsmod`,
                     )
                   ) {
-                    if (!isOwner && !isGlobalMod(senderJid)) {
+                    // 💡 OWNER RULING 2026-10-22: only the owner manages mod rosters.
+                    if (!isOwner) {
                       return await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          "❌ Only the owner or a General Mod can remove Cards moderators.",
+                          "❌ Only the bot owner can remove Cards moderators.",
                       });
                     }
                     const target =
@@ -16747,18 +16749,18 @@ Usage: ${newUsage}/5${warningText}`;
                   }
 
                   // .j addquizmod @user - promote to QUIZ Moderator (2026-09-27)
-                  // Owner or General Mod only. Quiz Mods can start/manage/configure
-                  // quizzes - nothing else.
+                  // OWNER-ONLY (2026-10-22 ruling). Quiz Mods can start/manage/
+                  // configure quizzes - nothing else.
                   if (
                     lowerTxt.startsWith(
                       `${botConfig.getPrefix().toLowerCase()} addquizmod`,
                     )
                   ) {
-                    if (!isOwner && !isGlobalMod(senderJid)) {
+                    if (!isOwner) {
                       return await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          "❌ Only the owner or a General Mod can add Quiz moderators.",
+                          "❌ Only the bot owner can add Quiz moderators.",
                       });
                     }
                     const target =
@@ -16782,17 +16784,18 @@ Usage: ${newUsage}/5${warningText}`;
                     return;
                   }
 
-                  // .j delquizmod @user - demote QUIZ Moderator
+                  // .j delquizmod @user - demote QUIZ Moderator (OWNER-ONLY)
                   if (
                     lowerTxt.startsWith(
                       `${botConfig.getPrefix().toLowerCase()} delquizmod`,
                     )
                   ) {
-                    if (!isOwner && !isGlobalMod(senderJid)) {
+                    // 💡 OWNER RULING 2026-10-22: only the owner manages mod rosters.
+                    if (!isOwner) {
                       return await sock.sendMessage(chatId, {
                         text:
                           BOT_MARKER +
-                          "❌ Only the owner or a General Mod can remove Quiz moderators.",
+                          "❌ Only the bot owner can remove Quiz moderators.",
                       });
                     }
                     const target =
@@ -33929,9 +33932,80 @@ function getSock() {
   return _moduleSock;
 }
 
+// ---------- ☢️ NUKE two-step confirm (2026-10-22 owner ruling) ----------
+// `.nuke` ARMS (stores targets for the chat), `.nuke confirm` within the TTL
+// fires. Helpers are module-scope + exported so QA can drive the state
+// machine without the live WhatsApp pipeline.
+const NUKE_CONFIRM_TTL_MS = 60_000;
+const pendingNukesByChat = new Map(); // chatId -> { at: number, targets: string[] }
+
+function armNuke(chatId, targets) {
+  pendingNukesByChat.set(chatId, { at: Date.now(), targets });
+}
+
+// Consumes the armed nuke (single-fire). Returns targets or null when
+// nothing is armed / the arm expired.
+function takeArmedNuke(chatId) {
+  const p = pendingNukesByChat.get(chatId);
+  pendingNukesByChat.delete(chatId);
+  if (!p) return null;
+  if (Date.now() - p.at > NUKE_CONFIRM_TTL_MS) return null;
+  return p.targets;
+}
+
+// Compute removable participants from group metadata. Same protection rules
+// as the original inline nuke block (admins, bots, owner phones, global/rpg/
+// cards mods, override users, GC owner - identity-safe).
+function computeNukeTargets(groupInfo, botIds = {}, chatId = null) {
+  const participants = groupInfo?.participants || [];
+  const protectedJids = new Set();
+  // Add bot's own JIDs
+  if (botIds.botJid) protectedJids.add(botIds.botJid);
+  if (botIds.botLid) protectedJids.add(botIds.botLid);
+  // Add owner phones
+  for (const phone of BOT_OWNER_PHONES) {
+    protectedJids.add(`${phone}@s.whatsapp.net`);
+    protectedJids.add(`${phone}@lid`);
+  }
+  // Add all global mods
+  for (const mod of globalMods) protectedJids.add(mod);
+  // Add all RPG mods
+  for (const mod of rpgMods) protectedJids.add(mod);
+  // Add all card mods
+  for (const mod of cardsMods) protectedJids.add(mod);
+  // Add override users
+  for (const ou of overrideUsers) protectedJids.add(ou);
+  // 👑 GC OWNER IMMUNITY: the marked owner of this group survives a nuke.
+  const _gcOwnerJid = getGcOwner(chatId);
+  if (_gcOwnerJid) protectedJids.add(_gcOwnerJid);
+
+  // Build list of targets - exclude admins and protected users
+  const targets = [];
+  for (const p of participants) {
+    const pid = p.id;
+    const isAdmin = p.admin === "admin" || p.admin === "superadmin";
+    if (isAdmin) continue;
+    if (protectedJids.has(pid)) continue;
+    // 👑 GC OWNER IMMUNITY: identity-safe check (handles
+    // @lid vs phone spellings of the marked owner).
+    if (isGcOwner(pid, chatId)) continue;
+    // Also check phone-based owner match
+    const phone = pid.split("@")[0];
+    if (BOT_OWNER_PHONES.includes(phone)) continue;
+    targets.push(pid);
+  }
+  return targets;
+}
+
 module.exports = {
   startBot,
   getSock,
+  // ☢️ Nuke two-step confirm (2026-10-22 owner ruling) — QA hooks
+  NUKE_CONFIRM_TTL_MS,
+  pendingNukesByChat,
+  armNuke,
+  takeArmedNuke,
+  computeNukeTargets,
   addGlobalMod,
   delGlobalMod,
   isGlobalMod,

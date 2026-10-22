@@ -4517,7 +4517,10 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       // matching the engine's restored addmod/delmod/addrpgmod/delrpgmod/
       // addcardsmod/delcardsmod. Roster writes still saveRoles() + sync
       // the engine's cardsMods Set so both systems agree.
-      if (!isOwner && !isMod) return reply('❌ Only the bot owner or a global mod can manage card moderators.'), true;
+      // 💡 OWNER RULING 2026-10-22: mod management is OWNER-ONLY across
+      // every system ("only owner can make someone any mod") - isMod no
+      // longer passes this gate.
+      if (!isOwner) return reply('❌ Only the bot owner can manage card moderators.'), true;
       const sub = args[0]?.toLowerCase();
       if (sub === 'add') {
         // 💡 FIX 2026-10-08: LID-resolve the mention so the roster key matches
