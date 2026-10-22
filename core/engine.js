@@ -16878,10 +16878,13 @@ Usage: ${newUsage}/5${warningText}`;
                   // 💡 PHASE 7 2026-08-29: Game Tester + tester GC + test mode + bug/issues
                   // ════════════════════════════════════════════════════════════════
 
-                  // .j addgtester @user - Promote to Game Tester (Owner/GlobalMod/RpgMod)
+                  // .j addgtester @user - Promote to Game Tester
+                  // 💡 OWNER RULING 2026-10-22: "only owner can make someone
+                  // any mod" — tester grants belong to the owner alone
+                  // (9cfd3357c covered the mod tiers; this closes the tester gap).
                   if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} addgtester`)) {
-                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
-                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner, Global Mod, or RPG Mod can add Game Testers." });
+                    if (!isOwner) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only the bot owner can add Game Testers. (2026-10-22 owner ruling: mod/tester rosters are managed by the owner alone.)" });
                     }
                     const target = getMentionOrReply(m) || (txt.split(" ")[2] && txt.split(" ")[2].includes("@") ? txt.split(" ")[2] : null);
                     if (!target) return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Tag someone to add as a Game Tester." });
@@ -16892,10 +16895,10 @@ Usage: ${newUsage}/5${warningText}`;
                     });
                   }
 
-                  // .j delgtester @user - Demote Game Tester
+                  // .j delgtester @user - Demote Game Tester (OWNER-ONLY 2026-10-22)
                   if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} delgtester`)) {
-                    if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid)) {
-                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only Owner, Global Mod, or RPG Mod can remove Game Testers." });
+                    if (!isOwner) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only the bot owner can remove Game Testers. (2026-10-22 owner ruling: mod/tester rosters are managed by the owner alone.)" });
                     }
                     const target = getMentionOrReply(m) || (txt.split(" ")[2] && txt.split(" ")[2].includes("@") ? txt.split(" ")[2] : null);
                     if (!target) return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Tag someone to remove from Game Testers." });
