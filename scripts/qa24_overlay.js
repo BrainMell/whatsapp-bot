@@ -122,7 +122,7 @@ const RIBBON_B = { head: 'The Pond', lines: ['3× Pond Minnow — COMMON · sell
         // gold border stroke lives on the CRISP overlay PNG (GIF palette + H.264
         // chroma smear eat a 1.5px line — the style itself is what we assert)
         const gold = regionMean(ovlImg, BX + Math.round(BW / 2) - 2, BY - 1, BX + Math.round(BW / 2) + 2, BY + 3);
-        check('ribbon wears the established gold border', gold[0] > 120 && gold[0] > gold[2], `rgb=${gold.map((x) => x.toFixed(0)).join(',')}`);
+        check('ribbon wears the established gold border', gold[0] > 100 && gold[0] > gold[2] + 30, `rgb=${gold.map((x) => x.toFixed(0)).join(',')}`);
         const dur = parseFloat(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', path.join(OUT, 'catch_b.mp4')]).toString().trim());
         check('duration ≈ 1.92s loop', dur > 1.6 && dur < 2.3, `${dur}s`);
     }
