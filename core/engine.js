@@ -10647,7 +10647,7 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                       const words = lowerTxt.split(' ');
                       const prefixPart = botConfig.getPrefix().toLowerCase();
                       const firstWord = words[0].startsWith(prefixPart) ? words[0].slice(prefixPart.length) : (words[0].startsWith('.') ? words[0].slice(1) : words[0]);
-                      const RPG_CMDS = new Set(['char', 'character', 'stats', 'kills', 'killcount', 'profile', 'me', 'whois', 'cardstyle', 'setdefaultcard', 'status', 'inventory', 'bag', 'inv', 'dismantle', 'equip', 'unequip', 'use', 'enhance', 'blacksmith', 'repair', 'inspect', 'shop', 'buy', 'recipes', 'craft', 'brew', 'forge', 'cook', 'source', 'mine', 'fish', 'fishing', 'cast', 'hunt', 'hunting', 'skill', 'skills', 'skilltree', 'st', 'abilities', 'allocate', 'classes', 'evolve', 'trial', 'quest', 'solo', 'adventure', 'join', 'stop', 'vote', 'raid', 'abyss', 'world', 'bounty', 'duel', 'challenge', 'pvp', 'combat', 'summon', 'summons', 'dragonlord', 'dglord', 'dragongod', 'rune', 'clinic', 'heal', 'health', 'hospital', 'rank', 'adventurer', 'monster', 'handbook', 'guide', 'lore', 'leaderboard', 'lb', 'upgrade', 'claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 't2edeck', 't2ecoll', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'cdeck', 'tokens', 'event', 'setprice', 'esummon', 'fc', 'spawn', 'listitem', 'unlistitem', 'buyitem', 'itemmarket', 'market', 'balance', 'bal', 'daily', 'register', 'deposit', 'withdraw', 'transfer', 'rob', 'bug', 'rich', 'lottery', 'invest', 'investment', 'gamble', 'slots', 'dice', 'coinflip', 'blackjack', 'roulette', 'plinko', 'wheel', 'crash', 'cups', 'scratch', 'rps', 'horse', 'hl', 'mines', 'penalty', 'guess', 'guild', 'reset', 'handbook', 'tutorial']);
+                      const RPG_CMDS = new Set(['char', 'character', 'stats', 'kills', 'killcount', 'profile', 'me', 'whois', 'cardstyle', 'setdefaultcard', 'status', 'inventory', 'bag', 'inv', 'dismantle', 'equip', 'unequip', 'use', 'enhance', 'blacksmith', 'repair', 'inspect', 'shop', 'buy', 'recipes', 'craft', 'brew', 'forge', 'cook', 'source', 'mine', 'fish', 'fishing', 'cast', 'hunt', 'hunting', 'skill', 'skills', 'skilltree', 'st', 'abilities', 'allocate', 'classes', 'evolve', 'trial', 'quest', 'solo', 'adventure', 'join', 'stop', 'vote', 'raid', 'dungeon', 'abyss', 'world', 'bounty', 'duel', 'challenge', 'pvp', 'combat', 'summon', 'summons', 'dragonlord', 'dglord', 'dragongod', 'rune', 'clinic', 'heal', 'health', 'hospital', 'rank', 'adventurer', 'monster', 'handbook', 'guide', 'lore', 'leaderboard', 'lb', 'upgrade', 'claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 't2edeck', 't2ecoll', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'cdeck', 'tokens', 'event', 'setprice', 'esummon', 'fc', 'spawn', 'listitem', 'unlistitem', 'buyitem', 'itemmarket', 'market', 'balance', 'bal', 'daily', 'register', 'deposit', 'withdraw', 'transfer', 'rob', 'bug', 'rich', 'lottery', 'invest', 'investment', 'gamble', 'slots', 'dice', 'coinflip', 'blackjack', 'roulette', 'plinko', 'wheel', 'crash', 'cups', 'scratch', 'rps', 'horse', 'hl', 'mines', 'penalty', 'guess', 'guild', 'reset', 'handbook', 'tutorial']);
                       const isRpg = RPG_CMDS.has(firstWord.toLowerCase());
                       if (isRpg) {
                         const bypass = await testerSystem.canBypassRpgLock(senderJid, chatId);
@@ -11950,7 +11950,15 @@ _💡 Reply with another number from your search list!_`.trim();
                     if (
                       primaryCmd === "quest" ||
                       primaryCmd === "solo" ||
-                      primaryCmd === "adventure"
+                      primaryCmd === "adventure" ||
+                      // 💡 SOLO-RAID FIX (2026-10-23, Task 9): players type
+                      // ".j dungeon enter" (Hotel Valhalla, 2026-10-22) —
+                      // that fell through every handler in total silence.
+                      // Route the natural phrasing into the quest family
+                      // (solo side): ".j dungeon" / ".j dungeon enter" now
+                      // answer with the dungeon menu, ".j dungeon f" starts
+                      // a solo F-rank raid.
+                      primaryCmd === "dungeon"
                     ) {
                       if (!economy.isRegistered(senderJid)) {
                         await sock.sendMessage(chatId, {
@@ -11971,7 +11979,7 @@ _💡 Reply with another number from your search list!_`.trim();
                         // .j quest resume / .j adventure resume (+ "continue") now
                         // rebuild the GROUP party fight from GroupCombatSnapshot
                         // (whole party + enemies restored exactly as they stood).
-                        const _resumeResult = (primaryCmd === "solo")
+                        const _resumeResult = (primaryCmd === "solo" || primaryCmd === "dungeon")
                           ? await guildAdventure.resumeSoloCombat(sock, chatId, senderJid)
                           : await guildAdventure.resumeGroupCombat(sock, chatId, senderJid);
                         return sock.sendMessage(chatId, {
@@ -11991,7 +11999,7 @@ _💡 Reply with another number from your search list!_`.trim();
                         return;
                       }
 
-                      const isSolo = primaryCmd === "solo";
+                      const isSolo = primaryCmd === "solo" || primaryCmd === "dungeon";
                       const isHardcore =
                         lowerTxt.includes("--hc") ||
                         lowerTxt.includes("--hardcore") ||

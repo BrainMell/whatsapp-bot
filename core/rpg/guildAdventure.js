@@ -2333,6 +2333,28 @@ async function sendMediaBounded(sock, chatId, payload, opts = {}) {
     return { ok: false, late: false };
   }
 }
+// 💡 SOLO-RAID WEDGE FIX (2026-10-23, Task 9): performAction /
+// performEnemyAction / promptPlayerAction / nextTurn all awaited RAW
+// sock.sendMessage() — one wedged Baileys send (socket stall, congested
+// single-lane send queue, hung media upload) left the turn promise
+// UNRESOLVED forever. The 90s/60s watchdogs then advanced into the next
+// turn, which wedged again: 274 "watchdog fired" events on 2026-10-22,
+// fights zombie-looping for hours, players locked out of solo raids with
+// "❌ You already have an active Solo raid!" while Abyss (separate store)
+// kept working. Every combat-path send now races a budget; a wedged send
+// continues in the background (never re-sent, never awaited) so the turn
+// ALWAYS settles. Same philosophy as sendMediaBounded below.
+const COMBAT_SEND_MS = Math.max(4000, parseInt(process.env.COMBAT_SEND_MS || '12000', 10) || 12000);
+async function boundedSend(sock, chatId, payload, label = 'combat') {
+  if (!sock || !chatId || !payload) return;
+  const sendP = Promise.resolve(sock.sendMessage(chatId, payload));
+  sendP.catch((e) => console.error(`[Quest] ${label} send failed:`, e?.message || e));
+  try {
+    await raceWithTimeout(sendP, COMBAT_SEND_MS, `send.${label}`);
+  } catch (e) {
+    console.warn(`[Quest] ⏱️ ${label} send wedged >${COMBAT_SEND_MS}ms — turn continues (send still draining in background)`);
+  }
+}
 function captionOf(payload) {
   return (payload && (payload.caption || payload.text)) || '';
 }
@@ -2379,6 +2401,26 @@ setInterval(() => {
                 gameStates.delete(key);
                 swept++;
                 console.log(`🧹 [GameStates] Reaped WEDGED turn-loop ${key} (combatProcessing stuck, no loop tick >30min).`);
+            } else if (
+              state.combatProcessing && state.lastLoopTick &&
+              (now - state.lastLoopTick) < STALE_STATE_TIMEOUT_MS &&
+              state.lastPlayerActionAt && (now - state.lastPlayerActionAt) > 20 * 60 * 1000 &&
+              (state.watchdogStrikes || 0) >= 3
+            ) {
+                // 💡 SOLO-RAID FIX (2026-10-23, Task 9): a LIVE zombie loop —
+                // the turn loop keeps ticking (watchdogs keep it armed, so the
+                // branch above never fired) but every automated turn wedges
+                // and the player has not managed to act for 20min. Used to
+                // cycle forever, pinning "You already have an active Solo
+                // raid!". Collapse it.
+                state.inCombat = false;
+                state.active = false;
+                if (state.timers) {
+                    Object.values(state.timers).forEach((t) => { if (t) clearTimeout(t); });
+                }
+                gameStates.delete(key);
+                swept++;
+                console.log(`🧹 [GameStates] Reaped LIVE zombie loop ${key} (watchdog-driven, no player action >20min).`);
             }
             continue;
         }
@@ -4894,6 +4936,29 @@ async function processCombatTurn(sock, sessionKey) {
         );
         return;
       }
+      // 💡 SOLO-RAID CIRCUIT BREAKER (2026-10-23, Task 9): watchdog
+      // advances are counted per session (see the enemy/summon/AFK race
+      // sites). 5 consecutive advances with NO real player action means
+      // every automated turn is wedging — a zombie loop that used to pin
+      // "You already have an active Solo raid!" until a restart. Collapse
+      // the fight cleanly and release the slot.
+      if ((state.watchdogStrikes || 0) >= 5) {
+        console.error(`[Quest] 💥 circuit breaker: ${state.watchdogStrikes} watchdog advances without player action for ${sessionKey} — collapsing zombie fight`);
+        state.inCombat = false;
+        state.active = false;
+        state.phase = "IDLE";
+        state.watchdogStrikes = 0;
+        if (state.timers) Object.values(state.timers).forEach((t) => { if (t) clearTimeout(t); });
+        try { clearCombatSnapshot(state).catch(() => {}); } catch (e) {}
+        try { cleanupCoopIndexForSession(sessionKey); } catch (e) {}
+        gameStates.delete(sessionKey);
+        boundedSend(sock, state.chatId, {
+          text: `☠️ *THE RAID DESTABILIZED*
+
+The dungeon collapsed after too many stalled turns. Your slot has been released — start fresh with \`${botConfig.getPrefix()} solo <rank>\`.`,
+        }, 'collapse').catch(() => {});
+        return;
+      }
       // 💡 RPG OPT PASS (2026-10-20): liveness stamp for the state reaper —
       // a LIVE loop can never go 30min without ticking (longest single wait
       // = the 4-min player window), so a stale stamp + combatProcessing stuck
@@ -5253,6 +5318,7 @@ async function processCombatTurn(sock, sessionKey) {
           performEnemyAction(sock, activeActor, sessionKey),
           new Promise((r) => setTimeout(() => {
             console.warn(`[Quest] ⏱️ enemy turn watchdog fired for ${activeActor?.name || '?'} (${sessionKey}) — advancing`);
+            state.watchdogStrikes = (state.watchdogStrikes || 0) + 1;
             r();
           }, 90000)),
         ]);
@@ -5264,6 +5330,7 @@ async function processCombatTurn(sock, sessionKey) {
           summonAI.performSummonAction(sock, activeActor, sessionKey),
           new Promise((r) => setTimeout(() => {
             console.warn(`[Quest] ⏱️ summon turn watchdog fired for ${activeActor?.name || '?'} (${sessionKey}) — advancing`);
+            state.watchdogStrikes = (state.watchdogStrikes || 0) + 1;
             r();
           }, 90000)),
         ]);
@@ -5326,7 +5393,7 @@ async function promptPlayerAction(sock, player, sessionKey) {
   if (state.roundLog && state.roundLog.length > 0) {
     const roundSummary = state.roundLog.join('\n─────────\n');
     try {
-      await sock.sendMessage(state.chatId, { text: roundSummary });
+      await boundedSend(sock, state.chatId, { text: roundSummary });
     } catch (e) {}
     state.roundLog = [];
   }
@@ -5377,7 +5444,7 @@ async function promptPlayerAction(sock, player, sessionKey) {
   }
 
   try {
-    await sock.sendMessage(state.chatId, { text: msg });
+    await boundedSend(sock, state.chatId, { text: msg });
   } catch (err) {
     console.error(
       "Failed to send player prompt in promptPlayerAction:",
@@ -5413,6 +5480,7 @@ async function promptPlayerAction(sock, player, sessionKey) {
             performAction(sock, player, { type: "defend" }, sessionKey),
             new Promise((r) => setTimeout(() => {
               console.warn(`[Quest] ⏱️ AFK auto-defend watchdog fired for ${player?.name || '?'} — advancing`);
+              state.watchdogStrikes = (state.watchdogStrikes || 0) + 1;
               r();
             }, 60000)),
           ]);
@@ -6026,13 +6094,13 @@ async function performAction(sock, player, action, sessionKey) {
               } else {
                 resultMsg += `\n💨 A diversion! You slip out of the Abyss with your loot!`;
                 try {
-                  await sock.sendMessage(state.chatId, { text: resultMsg });
+                  await boundedSend(sock, state.chatId, { text: resultMsg });
                 } catch (e) {}
                 const abyssSystem = require("./abyssSystem");
                 try {
                   const _retreatResult = await abyssSystem.retreat(_fleer.jid);
                   if (_retreatResult && _retreatResult.message) {
-                    await sock.sendMessage(state.chatId, {
+                    await boundedSend(sock, state.chatId, {
                       text: _retreatResult.message,
                     });
                   }
@@ -6047,7 +6115,7 @@ async function performAction(sock, player, action, sessionKey) {
             } else {
             resultMsg += `\n💨 The smoke bomb creates a diversion! The party escapes!`;
             try {
-              await sock.sendMessage(state.chatId, { text: resultMsg });
+              await boundedSend(sock, state.chatId, { text: resultMsg });
             } catch (e) {}
             return endAdventure(sock, sessionKey, false); // End without victory but alive
             }
@@ -6125,7 +6193,7 @@ async function performAction(sock, player, action, sessionKey) {
     // Log it so we can diagnose, but don't let it leave the player stuck.
     console.error('[Combat] performAction threw - cleaning up state:', err?.message || err, err?.stack || '');
     try {
-      await sock.sendMessage(state.chatId, { text: '⚠️ Action failed (error: ' + (err?.message || 'unknown') + '). Your turn has been reset - try again.' }).catch(() => {});
+      await boundedSend(sock, state.chatId, { text: '⚠️ Action failed (error: ' + (err?.message || 'unknown') + '). Your turn has been reset - try again.' }).catch(() => {});
     } catch (e) {}
     // 💡 TICKET #b4c0ff(c) (2026-09-21): the failed action used to leave the
     // turn promise UNRESOLVED forever - the turn timer was already cleared at
@@ -6205,7 +6273,7 @@ async function performEnemyAction(sock, enemy, sessionKey) {
         enemy.chargingSkill = decision.skill.id;
         enemy.chargeTarget = decision.target;
         try {
-          await sock.sendMessage(chatId, {
+          await boundedSend(sock, chatId, {
             text: decision.skill.msg || `⚠️ *${enemy.name}* is CHARGING UP a devastating attack!`,
           });
         } catch (err) {}
@@ -6236,7 +6304,7 @@ async function performEnemyAction(sock, enemy, sessionKey) {
         if (skillData && !skillData.nextSkill) {
           const target = enemy.chargeTarget || [...state.players, ...(state.summons || [])].find((p) => !p.isDead);
           try {
-            await sock.sendMessage(chatId, {
+            await boundedSend(sock, chatId, {
               text: `💥 *${enemy.name}* UNLEASHES *${skillData.name}*!`,
             });
           } catch (err) {}
@@ -6260,7 +6328,7 @@ async function performEnemyAction(sock, enemy, sessionKey) {
             const fullMsg = combatIntegration.isWarLogOff(chatId)
                 ? combatIntegration.compactCombatText(statusPrefix + abilityRes.message.trim())
                 : statusPrefix + abilityRes.message.trim();
-            try { await sock.sendMessage(chatId, { text: fullMsg }); } catch (e) {}
+            try { await boundedSend(sock, chatId, { text: fullMsg }); } catch (e) {}
           }
           setTimeout(() => resolve(), turnDelay);
           return;
@@ -6277,7 +6345,7 @@ async function performEnemyAction(sock, enemy, sessionKey) {
             enemy.chargeTarget || [...state.players, ...(state.summons || [])].find((p) => !p.isDead);
 
           try {
-            await sock.sendMessage(chatId, {
+            await boundedSend(sock, chatId, {
               text: `💥 *${enemy.name}* UNLEASHES THE CHARGE!`,
             });
           } catch (err) {}
@@ -6319,7 +6387,7 @@ async function performEnemyAction(sock, enemy, sessionKey) {
                 : statusPrefix + abilityRes.message.trim();
             let sentImmediately = false;
             try {
-              await sock.sendMessage(chatId, { text: fullMsg });
+              await boundedSend(sock, chatId, { text: fullMsg });
               sentImmediately = true;
             } catch (err) {}
             if (!sentImmediately) {
@@ -6374,7 +6442,7 @@ async function performEnemyAction(sock, enemy, sessionKey) {
           enemy.chargingSkill = skill.id;
           enemy.chargeTarget = target;
           try {
-            await sock.sendMessage(chatId, {
+            await boundedSend(sock, chatId, {
               text: `⚠️ *${enemy.name}* ${skill.msg}`,
             });
           } catch (err) {}
@@ -6429,7 +6497,7 @@ async function performEnemyAction(sock, enemy, sessionKey) {
               : abilityRes.message.trim();
           let sentImmediately = false;
           try {
-            await sock.sendMessage(chatId, { text: fullMsg });
+            await boundedSend(sock, chatId, { text: fullMsg });
             sentImmediately = true;
           } catch (err) {}
           // Only push to roundLog if the immediate send failed (avoids
@@ -6452,7 +6520,7 @@ async function performEnemyAction(sock, enemy, sessionKey) {
         const fleeSuccess = Math.random() < 0.50;
         if (fleeSuccess) {
           try {
-            await sock.sendMessage(chatId, {
+            await boundedSend(sock, chatId, {
               text: `💨 *${enemy.name}* FLEES from combat!\n_The enemy escaped - no rewards for this kill._`,
             });
           } catch (e) {}
@@ -6473,7 +6541,7 @@ async function performEnemyAction(sock, enemy, sessionKey) {
           return;
         } else {
           try {
-            await sock.sendMessage(chatId, {
+            await boundedSend(sock, chatId, {
               text: `💨 *${enemy.name}* tries to flee but FAILS!\n_The enemy wasted its turn in panic._`,
             });
           } catch (e) {}
@@ -6518,7 +6586,7 @@ async function performEnemyAction(sock, enemy, sessionKey) {
           // without calling resolve(), hanging combat forever. Now sends the
           // message and resolves properly.
           try {
-            await sock.sendMessage(chatId, { text: resultMsg });
+            await boundedSend(sock, chatId, { text: resultMsg });
           } catch (e) {}
           setTimeout(() => resolve(), turnDelay);
           return;
@@ -6700,7 +6768,7 @@ async function performEnemyAction(sock, enemy, sessionKey) {
       state.roundLog = state.roundLog || [];
       let sentImmediately = false;
       try {
-        await sock.sendMessage(chatId, { text: fullEnemyMsg });
+        await boundedSend(sock, chatId, { text: fullEnemyMsg });
         sentImmediately = true;
       } catch (err) {}
       // Fallback: push to roundLog only if the immediate send failed.
@@ -6783,7 +6851,7 @@ async function checkBossPhase(sock, boss, chatId) {
     }
 
     try {
-      await sock.sendMessage(chatId, { text: msg });
+      await boundedSend(sock, chatId, { text: msg });
     } catch (err) {
       console.error(
         `[Combat] Failed to send boss phase message: ${err.message}`,
@@ -7012,7 +7080,7 @@ async function handleDeath(
         const echoMsg = summonAI.applySoulEcho(summoner, entity);
         if (echoMsg && chatId) {
           try {
-            await sock.sendMessage(chatId, { text: echoMsg });
+            await boundedSend(sock, chatId, { text: echoMsg });
           } catch (e) {}
         }
         // Track echo absorption on user stats
@@ -7139,7 +7207,7 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
                 fs.unlinkSync(scene.imagePath);
             }, 5000);
           } else {
-            await sock.sendMessage(state.chatId, { text: scene.caption });
+            await boundedSend(sock, state.chatId, { text: scene.caption });
           }
         } catch (msgErr) {
           // 💡 RPG OPT PASS (2026-10-20): NO text fallback here anymore —
@@ -7168,7 +7236,7 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
               ? combatIntegration.generateTurnCaption(state.players, state.enemies, lastTurnInfo || {})
               : null)
             || `🎮 *TURN ${(lastTurnInfo && lastTurnInfo.turnNumber) || '?'}* — the battle moves on.`;
-          await sock.sendMessage(state.chatId, { text: caption });
+          await boundedSend(sock, state.chatId, { text: caption });
         } catch (e) {
           console.error('nextTurn text fallback failed:', e.message);
         }
@@ -7185,7 +7253,7 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
           const caption = combatIntegration.generateTurnCaption
             ? combatIntegration.generateTurnCaption(state.players, state.enemies, lastTurnInfo)
             : `🎮 *TURN ${lastTurnInfo.turnNumber || '?'}*`;
-          await sock.sendMessage(state.chatId, { text: caption });
+          await boundedSend(sock, state.chatId, { text: caption });
         } catch (e) {}
       }
     }
@@ -9784,6 +9852,14 @@ const stopQuest = (chatId, senderJid = null, isAdmin = false) => {
         wasSolo = state.solo;
         state.active = false;
         state.phase = "IDLE";
+        // 💡 SOLO-RAID FIX (2026-10-23, Task 9): stopping a mid-combat fight
+        // used to leave state.inCombat true — the still-running turn loop
+        // kept cycling on this detached state object (watchdog advances,
+        // auto-defends) forever after the Map delete. Kill the loop: bump
+        // the gen, drop inCombat, wake the blocked turn promise.
+        state.inCombat = false;
+        try { state.combatGen = (state.combatGen || 0) + 1; } catch (e) {}
+        try { if (state.resolveTurn) { const __r = state.resolveTurn; state.resolveTurn = null; __r(); } } catch (e) {}
         // 💡 COMBAT RESUME: a stopped quest drops its resume point (solo + group).
         // State-object form — also fixes the old bug where the bot-scoped
         // "bot|chat_jid" key hit clearSoloSnapshot's '@' shortcut and deleted nothing.
@@ -9810,6 +9886,14 @@ const stopQuest = (chatId, senderJid = null, isAdmin = false) => {
   const wasSolo = state.solo;
   state.active = false;
   state.phase = "IDLE";
+
+  // 💡 SOLO-RAID FIX (2026-10-23, Task 9): kill the turn loop too — see the
+  // admin-branch note above. Without this, ".j end" freed the session key
+  // but the detached loop kept cycling (and the fight could even keep
+  // auto-defending) until the process restarted.
+  state.inCombat = false;
+  try { state.combatGen = (state.combatGen || 0) + 1; } catch (e) {}
+  try { if (state.resolveTurn) { const __r = state.resolveTurn; state.resolveTurn = null; __r(); } } catch (e) {}
 
   // Clear all active timers
   if (state.timers) {
@@ -11746,6 +11830,13 @@ const handleCombatAction = async (
   }
 
   state.pendingActions[senderJid] = action;
+
+  // 💡 SOLO-RAID WEDGE FIX (2026-10-23, Task 9): a REAL player action was
+  // just accepted — this fight is alive. Reset the zombie-breaker counter
+  // and stamp the time so the sweeper can tell a live fight from a loop
+  // that only advances via watchdogs.
+  state.lastPlayerActionAt = Date.now();
+  state.watchdogStrikes = 0;
 
   // 💡 TUTORIAL: the action was ACCEPTED - tell the tutorial module so the
   // next lesson step fires (no-op unless a tutorial session is active).
