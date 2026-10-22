@@ -458,6 +458,11 @@ const summonFaceKey = (file) => String(file || '').replace(/\.png$/i, '').toUppe
 //                           universal rule... leave head room"); never flips
 // Unlisted files default to native-RIGHT (no flip), matching today's art.
 const PLAYER_ART_FACES_LEFT = new Set([
+        // 47-m3 (2026-10-22): lich.png is natively LEFT — 14x bisector skull
+        // crop shows the hood face-cavity + red eye cluster LEFT of content
+        // centre, staff orb trailing RIGHT (back side). Supersedes 47-l4's
+        // 'head-aperture' RIGHT claim (misread the hood). Mirror -> faces enemy.
+        "lich.png",
         "archdruid (2).png",
         "cleric (3).png",
         "nightblade (1).png",
