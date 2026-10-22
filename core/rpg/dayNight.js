@@ -82,24 +82,28 @@ const VIBRANT = {
         punch: '255,86,140', punchA: 0.32,
         glows: [[0.12, 0.34, 0.95, '255,170,120', 0.34], [0.30, 0.10, 0.55, '255,214,150', 0.20]],
         vig: 0.16,
+        rays: { src: [0.08, -0.04], rgb: '255,196,150', a: 0.22, n: 7, spread: 0.55, len: 1.25 },
     },
     golden: {
         cast: [[0, '255,214,150'], [0.5, '255,190,110'], [1, '255,150,84']], castA: 0.66,
         punch: '255,150,40', punchA: 0.26,
         glows: [[0.86, 0.22, 1.05, '255,190,90', 0.36], [0.70, 0.12, 0.5, '255,236,170', 0.22]],
         vig: 0.18,
+        rays: { src: [0.90, -0.05], rgb: '255,214,130', a: 0.26, n: 8, spread: 0.60, len: 1.3 },
     },
     dusk: {
         cast: [[0, '255,150,110'], [0.4, '226,120,160'], [0.75, '140,100,200'], [1, '70,76,170']], castA: 0.76,
         punch: '210,70,150', punchA: 0.28,
         glows: [[0.82, 0.30, 1.0, '255,120,60', 0.34], [0.50, 0.50, 0.9, '190,90,200', 0.14]],
         vig: 0.26,
+        rays: { src: [0.86, -0.04], rgb: '255,150,110', a: 0.18, n: 6, spread: 0.50, len: 1.1 },
     },
     night: {
         cast: [[0, '92,122,214'], [0.55, '70,96,188'], [1, '48,66,150']], castA: 0.80,
         punch: '60,90,235', punchA: 0.30,
         glows: [[0.80, 0.14, 0.85, '150,180,255', 0.20], [0.50, 0.55, 1.1, '70,100,220', 0.12]],
         vig: 0.34,
+        rays: { src: [0.80, -0.02], rgb: '150,185,255', a: 0.16, n: 5, spread: 0.40, len: 1.0 },
     },
 };
 
@@ -126,6 +130,28 @@ function grade(ctx, w, h, phaseId, box) {
         const g = ctx.createRadialGradient(cx, cy, R * 0.05, cx, cy, R);
         g.addColorStop(0, `rgba(${rgb},1)`); g.addColorStop(1, `rgba(${rgb},0)`);
         ctx.globalAlpha = ga; ctx.fillStyle = g; ctx.fillRect(x0, y0, ww, hh);
+    }
+    // 3b. light shafts ("god rays") fanning from the sun / moon — soft wedges that fade with distance
+    if (v.rays) {
+        const R = v.rays, sx = x0 + ww * R.src[0], sy = y0 + hh * R.src[1];
+        const L = Math.max(ww, hh) * R.len;
+        let sd = ((Math.round(sx) * 73856093) ^ (Math.round(ww) * 19349663)) >>> 0;
+        const rnd = () => { sd = (sd * 1664525 + 1013904223) >>> 0; return sd / 4294967296; };
+        blend('screen');
+        const base = Math.PI / 2 + (R.src[0] > 0.5 ? 0.38 : -0.38);          // aim across the scene, toward the far side
+        for (let i = 0; i < R.n; i++) {
+            const ang = base + (i / Math.max(1, R.n - 1) - 0.5) * R.spread + (rnd() - 0.5) * 0.08;
+            const half = 0.012 + rnd() * 0.03;                              // wedge half-width (rad)
+            const ex = sx + Math.cos(ang) * L, ey = sy + Math.sin(ang) * L;
+            const g = ctx.createLinearGradient(sx, sy, ex, ey);
+            g.addColorStop(0, `rgba(${R.rgb},1)`); g.addColorStop(0.55, `rgba(${R.rgb},0.35)`); g.addColorStop(1, `rgba(${R.rgb},0)`);
+            ctx.globalAlpha = R.a * (0.55 + 0.45 * rnd());
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.moveTo(sx, sy);
+            ctx.lineTo(sx + Math.cos(ang - half) * L, sy + Math.sin(ang - half) * L);
+            ctx.lineTo(sx + Math.cos(ang + half) * L, sy + Math.sin(ang + half) * L);
+            ctx.closePath(); ctx.fill();
+        }
     }
     // 4. vignette — dark edges so the lit centre pops
     blend('source-over');
