@@ -320,6 +320,16 @@ function buildWorld(state, cel = null) {
         }
     }
 
+    // ── 2026-10-22 ("the mine is beside a water source?"): the sea / lake / stream may never swallow a work site —
+    // carve a land apron round the mines, house, market and barracks (the pond keeps its water on purpose).
+    for (const [t, rad] of [['mines', 3], ['house', 3], ['shop', 2], ['barracks', 2]]) {
+        const L = LAYOUT[t]; if (!L) continue;
+        const [cc, cr] = hc(L.x + Math.floor(L.fw / 2), L.y + Math.floor(L.fh / 2));
+        for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+            if (K.hexDist(cc, cr, c, r) <= rad) { const kk = w.cell[r][c]; kk.water = false; kk.lake = false; kk.river = false; }
+        }
+    }
+
     // ── streets / plaza: the saved square-grid street plan re-drawn as hex lines ──
     const roadList = [];
     const roadCells = (cells, closed = false) => {
@@ -615,8 +625,8 @@ function buildWorld(state, cel = null) {
             continue;
         }
         if (rd <= FAR_R - 1) {                                        // inside the palisade: tidy meadow
-            if (x < 0.06) { w.put(SMALL_TREES[Math.floor(rng() * 4)], c, r, { sc: 0.85, flip: flip() }); claim(c, r); }
-            else if (x < 0.10) rock(c, r);
+            if (x < 0.15) { w.put(SMALL_TREES[Math.floor(rng() * 4)], c, r, { sc: 0.85, flip: flip() }); claim(c, r); }
+            else if (x < 0.19) rock(c, r);
             continue;
         }
         // far field — noise driven: ridges of mountains, rolling hills, woods, scatter; denser the further out
