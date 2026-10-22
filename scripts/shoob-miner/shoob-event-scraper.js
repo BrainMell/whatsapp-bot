@@ -44,6 +44,11 @@
  *      --merge-out <file>      ALSO write a full merged cards_data.json
  *                              (regular cards untouched + refreshed event block)
  *      --events <a,b,c>        restrict to these slugs (default: all discovered)
+ *      --passes <n>            full pagination passes per event. shoob.gg
+ *                              ROTATES each listing on every request, so one
+ *                              pass only samples a random slice of the pool;
+ *                              repeat until a pass adds nothing new (default
+ *                              4; use 12+ for a deep/first run)
  *      --concurrency <n>       parallel detail fetches (default 4)
  *      --delay <ms>            base politeness delay per worker (default 250)
  *      --refresh               re-fetch details even if cached in --out
@@ -89,6 +94,7 @@ const OPTS = {
   events:     argOf('--events', null),
   concurrency: parseInt(argOf('--concurrency', '4'), 10),
   delay:      parseInt(argOf('--delay', '250'), 10),
+  passes:     Math.max(1, parseInt(argOf('--passes', '4'), 10)),   // rotating-catalog convergence passes
   refresh:    argv.includes('--refresh'),
   prune:      argv.includes('--prune-removed'),
   animeNameMode: argOf('--anime-name', 'series'),
@@ -468,32 +474,56 @@ async function runPool(items, worker, concurrency, delay) {
     eventNameBySlug.set(slug, eventName);
     console.log(`[event] ${slug} -> "${eventName}" (site title: "${siteName}")`);
 
+    // ROTATING-CATALOG CRAWL (2026-10-23): shoob.gg re-shuffles each event's
+    // listing on every request (verified: ?page=2 returns different cards per
+    // fetch; the full Halloween pool is 1148 cards over 78 pages while one
+    // linear crawl stops at a random ~23-page slice and never sees the deep
+    // pages — that is how 805 Halloween cards incl. every Naruto card were
+    // missed). So a short page is NOT the last page and one no-fresh page
+    // does NOT mean we are done: walk the full pagination REPEATEDLY until a
+    // whole pass adds nothing new (or --passes cap). Details stay cached, so
+    // re-runs never re-fetch known cards.
     const seen = new Set();
-    let page = 1;
     let eventCount = 0;
     let pagesWithCards = 0;
     let listingFailures = 0;
-    for (; page <= MAX_PAGES_PER_EVENT; page++) {
-      let html;
-      try {
-        html = page === 1 ? firstHtml : await fetchText(`${BASE}/card-events/${slug}?page=${page}`);
-      } catch (e) {
-        // transient site stall — do NOT kill the whole run; keep what we have
-        console.warn(`[warn] listing page failed for ${slug}?page=${page}: ${e.message} — stopping this event here`);
-        listingFailures++;
-        break;
+    let pass = 0;
+    const MAX_NOFRESH_STREAK = 10;   // same-slice re-serve guard per pass
+    while (pass < OPTS.passes) {
+      pass++;
+      let freshInPass = 0;
+      let noFreshStreak = 0;
+      for (let page = 1; page <= MAX_PAGES_PER_EVENT; page++) {
+        let html;
+        try {
+          // page 1 must be RE-fetched every pass: the catalog rotates per
+          // request, so reusing firstHtml would pin pass 1's slice forever
+          html = await fetchText(`${BASE}/card-events/${slug}${page === 1 ? '' : `?page=${page}`}`);
+        } catch (e) {
+          // transient site stall — end this pass, keep what we have
+          console.warn(`[warn] listing page failed for ${slug}?page=${page}: ${e.message} — ending this pass here`);
+          listingFailures++;
+          break;
+        }
+        const rows = parseListingPage(html, slug);
+        if (!rows.length) break;              // pagination end for this pass
+        let added = 0;
+        for (const r of rows) {
+          if (!seen.has(r.mongoId)) { seen.add(r.mongoId); listing.push({ slug, eventName, ...r }); added++; }
+        }
+        eventCount += added;
+        freshInPass += added;
+        noFreshStreak = added === 0 ? noFreshStreak + 1 : 0;
+        if (pass === 1) { pagesWithCards++; processedPages.push(`event:${slug}:p${page}`); }
+        if (rows.length < PAGE_SIZE) break;   // short page = end of this pass
+        if (noFreshStreak >= MAX_NOFRESH_STREAK) break;  // stuck re-serving a known slice
+        await sleep(jitter(OPTS.delay * THROTTLE));
       }
-      const rows = parseListingPage(html, slug);
-      const fresh = rows.filter(r => !seen.has(r.mongoId));
-      if (!fresh.length) break;
-      fresh.forEach(r => { seen.add(r.mongoId); listing.push({ slug, eventName, ...r }); });
-      eventCount += fresh.length;
-      pagesWithCards++;
-      processedPages.push(`event:${slug}:p${page}`);
-      if (rows.length < PAGE_SIZE) break;   // short page = last page
-      await sleep(jitter(OPTS.delay * THROTTLE));
+      console.log(`[event] ${slug} pass ${pass}/${OPTS.passes}: +${freshInPass} new (total ${eventCount})`);
+      if (freshInPass === 0) break;           // converged — a full pass found nothing new
+      if (pass < OPTS.passes) await sleep(jitter(OPTS.delay * THROTTLE));
     }
-    console.log(`[event] ${slug}: ${eventCount} cards on ${pagesWithCards} page(s)${listingFailures ? ` (${listingFailures} page fetch failure${listingFailures > 1 ? 's' : ''})` : ''}`);
+    console.log(`[event] ${slug}: ${eventCount} cards over ${pass} pass(es)${listingFailures ? ` (${listingFailures} page fetch failure${listingFailures > 1 ? 's' : ''})` : ''}`);
   }
 
   // 4. dedupe listings across events (same mongoId twice = safety)
