@@ -146,6 +146,17 @@ async function saveState(rec) {
 // ═══════════════════════════════════════════════════════════════════════════
 // VIEWS
 // ═══════════════════════════════════════════════════════════════════════════
+/** Owner 2026-10-22: "players that don't have a guild shouldn't be able to view bases" — guildless players get a nudge instead. Mods bypass. */
+async function guildGate(ctx) {
+    try {
+        if (ctx.isMod) return false;
+        const g = require('./guilds').getUserGuild(ctx.senderJid);
+        if (g) return false;
+        await ctx.reply(`🏰 Bases belong to guild members. Join or found a guild first — \`${ctx.prefix} guild\` — then your base opens up.`);
+        return true;
+    } catch (e) { return false; }   // never lock a player out because the guild lookup failed
+}
+
 /** The shared render-state shape for every base view (map + close-ups). */
 function baseState(rec) {
     const state = {
@@ -169,6 +180,7 @@ function realmNameOf(state) {
 }
 
 async function viewBase(ctx, opts = {}) {
+    if (!(opts && opts.celebrate) && await guildGate(ctx)) return;
     const { sock, chatId, reply } = ctx;
     const rec = await loadBase(ctx.senderJid);
     const plots = plotsFor(rec);
@@ -221,6 +233,7 @@ async function viewBase(ctx, opts = {}) {
 
 /** `.j base house 1` / `.j house` / `.j base 1` — open a structure. */
 async function enterStructure(ctx, idArg) {
+    if (await guildGate(ctx)) return;
     const rec = await loadBase(ctx.senderJid);
     // number → structure #id in the listing order; 'house'/'home' → the house
     let st = null;
@@ -692,6 +705,7 @@ async function handleBaseCommand(ctx) {
             }
         }
     }
+    if (cmdWord !== 'baseadmin' && await guildGate(ctx)) return;
     let sub = (tokens[0] || '').toLowerCase();
     let args = tokens.slice(1);
     // `.j baseadmin <action> ...` — the word itself carries the admin intent

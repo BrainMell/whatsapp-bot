@@ -398,19 +398,8 @@ function buildWorld(state, cel = null) {
     }
     w.resolve();
 
-    // ── gatehouse + wall wings across the south gate (hunting structure) ──
-    const gh = LAYOUT.hunting;
-    {
-        const rowY = gh.y;
-        for (const gx of [6, 7, 9, 10]) { const [c, r] = hc(gx, rowY); if (!w.cell[r][c].water) { w.put('wall_straight@0', c, r, { sort: 0.2 }); claim(c, r); } }
-        const [c, r] = hc(8, rowY);
-        w.put('wall_straight_gate@0', c, r, { sort: 0.2 });
-        const [tc1, tr1] = hc(5, rowY), [tc2, tr2] = hc(11, rowY);
-        w.put(B('tower_A'), tc1, tr1, { sc: 0.95 }); w.put(B('tower_A'), tc2, tr2, { sc: 0.95 });
-        claim(tc1, tr1); claim(tc2, tr2);
-        w.put('flag_' + team, c, r, { dx: -1.15, dz: 0.5 }); w.put('flag_' + team, c, r, { dx: 1.15, dz: 0.5 });
-    }
-
+    // (2026-10-22: the stone wall + towers that used to cut across the south of the village are gone — the palisade's own
+    //  gate is the one entrance, so nothing wall-like sits INSIDE the base any more)
     // ── the wooden palisade: follows the hex edges of a ring round the whole village, one gate on the main street ──
     {
         const inside = (c, r) => ringDist(c, r) <= FAR_R - 1;
@@ -590,6 +579,22 @@ function buildWorld(state, cel = null) {
         }
     }
 
+    // ── 2026-10-22 "make it more base like": a small FARM quarter (fields + windmill + hay) on the free ground in the SW and a
+    // tree belt just inside the palisade — the village reads as a settled, working base instead of scattered huts in a big empty field.
+    {
+        const free = (c, r) => w.inb(c, r) && !w.cell[r][c].water && !w.cell[r][c].river && !w.cell[r][c].road && !w.cell[r][c].coast && !used.has(keyOf(c, r));
+        const fieldCells = [];
+        for (let gx = 3; gx <= 7; gx++) for (let gy = 11; gy <= 13; gy++) { const [c, r] = hc(gx, gy); if (free(c, r) && ringDist(c, r) <= FAR_R - 2) fieldCells.push([c, r]); }
+        const hasG = K.hasSprite('building_grain', 'iso');
+        let mill = false;
+        fieldCells.slice(0, 7).forEach(([c, r], i) => {
+            if (!mill && i === 3 && K.hasSprite('building_windmill_' + team, 'iso')) { w.put('building_windmill_' + team, c, r, { sc: 0.95 }); mill = true; claim(c, r); return; }
+            if (hasG) w.put('building_grain', c, r, {}); else w.put('sack', c, r, {});
+            claim(c, r);
+        });
+        if (fieldCells.length > 7) { const [c, r] = fieldCells[7]; w.put('sack', c, r, { dx: 0.3 }); claim(c, r); }
+    }
+
     // ── fill the rest of the grid with biome wilds (village green = light, inside the palisade; far field = heavy) ──
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
         const k = w.cell[r][c];
@@ -603,6 +608,10 @@ function buildWorld(state, cel = null) {
         }
         if (inGrid(gx, gy) && inZ(hz, MX(gx), gy)) {                      // hunting woods (W, mirrored per base)
             if (x < 0.93) { w.put(TREES[Math.floor(rng() * 4)], c, r, { flip: flip() }); claim(c, r); }
+            continue;
+        }
+        if (rd === FAR_R - 1) {                                       // tree belt hugging the inside of the fence
+            if (x < 0.55) { w.put(TREES[Math.floor(rng() * 4)], c, r, { sc: 0.9, flip: flip() }); claim(c, r); }
             continue;
         }
         if (rd <= FAR_R - 1) {                                        // inside the palisade: tidy meadow
