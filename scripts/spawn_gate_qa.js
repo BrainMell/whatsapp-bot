@@ -52,6 +52,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     const store = new botConfig.BotConfig(path.join(BOT, 'instances', INSTANCE));
     await botConfig.storage.run(store, async () => {
         console.log(`[qa] instance store botId=${botConfig.getBotId()} prefix=${botConfig.getPrefix()}`);
+        const P = botConfig.getPrefix(); // '.j' (Joker) vs '.jk' (Jake) — commands MUST use the instance prefix
         await cardSystem.init(mockSock, [], [], null);
         const inst = cardSystem.instances.get(botConfig.getBotId());
         check('init loaded card DB', (inst.ALL_CARDS || []).length > 100, `got ${(inst.ALL_CARDS || []).length}`);
@@ -72,25 +73,25 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
         console.log('\n── §1 .j spawn gate ──');
         const DENY = 'Spawn is restricted to the owner and card moderators.';
         const NOTFOUND = 'Card not found matching "ZZZNOCARDQA"';
-        check('global mod (isMod=true) DENIED', (await run('.j spawn ZZZNOCARDQA', GLOBALMOD, { isMod: true })).includes(DENY));
-        check('regular user DENIED', (await run('.j spawn ZZZNOCARDQA', RANDOM)).includes(DENY));
-        check('owner PASSES (bogus card → not-found reply, no spawn)', (await run('.j spawn ZZZNOCARDQA', OWNER, { isOwner: true })).includes(NOTFOUND));
-        check('cardmod Mahxee PASSES (roster path, isMod=false)', (await run('.j spawn ZZZNOCARDQA', CARDMOD)).includes(NOTFOUND));
+        check('global mod (isMod=true) DENIED', (await run(`${P} spawn ZZZNOCARDQA`, GLOBALMOD, { isMod: true })).includes(DENY));
+        check('regular user DENIED', (await run(`${P} spawn ZZZNOCARDQA`, RANDOM)).includes(DENY));
+        check('owner PASSES (bogus card → not-found reply, no spawn)', (await run(`${P} spawn ZZZNOCARDQA`, OWNER, { isOwner: true })).includes(NOTFOUND));
+        check('cardmod Mahxee PASSES (roster path, isMod=false)', (await run(`${P} spawn ZZZNOCARDQA`, CARDMOD)).includes(NOTFOUND));
 
         // ── §2 .j espawn gate (same force-spawn family) ──────────────
         console.log('\n── §2 .j espawn gate ──');
         const EDENY = 'Event spawn is restricted to the owner and card moderators.';
         const ENOTFOUND = 'Event card not found matching "ZZZNOCARDQA"';
-        check('global mod (isMod=true) DENIED', (await run('.j espawn ZZZNOCARDQA', GLOBALMOD, { isMod: true })).includes(EDENY));
-        check('regular user DENIED', (await run('.j espawn ZZZNOCARDQA', RANDOM)).includes(EDENY));
-        check('owner PASSES (bogus card → not-found reply)', (await run('.j espawn ZZZNOCARDQA', OWNER, { isOwner: true })).includes(ENOTFOUND));
-        check('cardmod Mahxee PASSES', (await run('.j espawn ZZZNOCARDQA', CARDMOD)).includes(ENOTFOUND));
+        check('global mod (isMod=true) DENIED', (await run(`${P} espawn ZZZNOCARDQA`, GLOBALMOD, { isMod: true })).includes(EDENY));
+        check('regular user DENIED', (await run(`${P} espawn ZZZNOCARDQA`, RANDOM)).includes(EDENY));
+        check('owner PASSES (bogus card → not-found reply)', (await run(`${P} espawn ZZZNOCARDQA`, OWNER, { isOwner: true })).includes(ENOTFOUND));
+        check('cardmod Mahxee PASSES', (await run(`${P} espawn ZZZNOCARDQA`, CARDMOD)).includes(ENOTFOUND));
 
         // ── §3 regression — non-spawn mod powers unchanged ───────────
         console.log('\n── §3 regression (non-spawn powers) ──');
         check('global mod still manages cardmods (.j cardmod list)',
-            (await run('.j cardmod list', GLOBALMOD, { isMod: true })).includes('CARD MODERATORS'));
-        const infoReply = await run('.j info ZZZNOCARDQA', CARDMOD);
+            (await run(`${P} cardmod list`, GLOBALMOD, { isMod: true })).includes('CARD MODERATORS'));
+        const infoReply = await run(`${P} info ZZZNOCARDQA`, CARDMOD);
         check('cardmod still reaches .j info (no permission error)', !infoReply.includes('Card info lookup is for'), infoReply.slice(0, 80));
 
         console.log(`\nRESULT: PASS=${PASS} FAIL=${FAIL}`);
