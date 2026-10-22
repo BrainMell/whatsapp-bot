@@ -60,7 +60,7 @@ async function gifToMp4Overlaid(gifBuf, pngBuf) {
         await _run([
             '-y', '-i', gi, '-i', pi,
             '-filter_complex',
-            '[0:v]scale=trunc(iw/2)*2:trunc(ih/2)*2[base];[base][1:v]overlay=0:0:format=auto:eof_action=repeat:shortest=1[out]',
+            '[0:v]scale=trunc(iw/2)*2:trunc(ih/2)*2[base];[base][1:v]overlay=0:0:format=auto:eof_action=repeat[out]',
             '-map', '[out]', '-movflags', 'faststart', '-pix_fmt', 'yuv420p',
             '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '24', '-an', mo,
         ]);
