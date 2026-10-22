@@ -25,6 +25,9 @@ function check(name, cond, extra) {
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 (async () => {
+    const t0 = Date.now();
+    const mark = (s) => process.stdout.write(`[t+${((Date.now() - t0) / 1000).toFixed(1)}s] ${s}\n`);
+    setTimeout(() => { console.log('QA_HARD_TIMEOUT'); process.exit(3); }, 150000).unref();
     const envPath = path.join(__dirname, '..', '.env');
     for (const line of fs.readFileSync(envPath, 'utf8').split('\n')) {
         const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
@@ -32,14 +35,17 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     }
     const mongoose = require('mongoose');
     const uri = process.env.MONGO_URI || process.env.MONGODB_URI;
+    mark('connecting mongo');
     await mongoose.connect(uri, { serverSelectionTimeoutMS: 8000 });
-    console.log(`[qa] mongo connected: ${mongoose.connection.name}`);
+    mark(`mongo connected: ${mongoose.connection.name}`);
 
     const BOT = path.join(__dirname, '..');
     const economy = require(path.join(BOT, 'core', 'rpg', 'economy'));
+    mark('loadEconomy starting (2778 users)');
     await economy.loadEconomy().catch(e => console.log(`[qa] economy warn: ${e.message}`));
+    mark('loadEconomy done');
 
-    const User = mongoose.model('User', new mongoose.Schema({}, { strict: false, collection: 'users' }));
+    const User = mongoose.models.User || mongoose.model('User');
     const QA_JID = `qa_regpersist_${Date.now()}@lid`;
     const NICK = 'QA RegPersist';
     let created = false;
@@ -47,11 +53,14 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
         // ── §1 register → PERSISTED ──────────────────────────────────────
         console.log('\n── §1 register → whole account reaches MongoDB ──');
         const reg = economy.registerUser(QA_JID, NICK);
+        mark('registerUser returned');
         check('registerUser returns success', reg && reg.success === true);
         created = reg && reg.success === true;
 
         await sleep(1400); // 500ms debounce + write margin
+        mark('debounce window elapsed, reading DB');
         const doc = await User.findOne({ userId: QA_JID }).lean();
+        mark('DB read done');
         check('doc EXISTS in MongoDB after debounce', !!doc);
         check('registered:true PERSISTED', doc && doc.registered === true, `got ${doc && doc.registered}`);
         check('wallet 1000 persisted', doc && doc.wallet === 1000, `got ${doc && doc.wallet}`);
@@ -80,8 +89,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
         // ── §4 restart-survival semantics (cache drop → DB is the truth) ─
         console.log('\n── §4 fresh-cache read (restart simulation) ──');
-        const Fresh = mongoose.model('UserFresh', new mongoose.Schema({}, { strict: false, collection: 'users' }));
-        const freshDoc = await Fresh.findOne({ userId: QA_JID }).lean();
+        const freshDoc = await User.findOne({ userId: QA_JID }).lean();
         check('a restarting process would load registered:true', freshDoc && freshDoc.registered === true);
 
         console.log(`\n═══ RESULT: ${PASS} passed, ${FAIL} failed ═══`);
@@ -91,6 +99,8 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
             await User.deleteMany({ userId: QA_JID });
             console.log(`[qa] cleaned up ${QA_JID}`);
         } catch (e) { console.log('[qa] cleanup warn:', e.message); }
-        await mongoose.disconnect().catch(() => {});
+        try { await mongoose.disconnect(); } catch (e) {}
+        console.log(`[qa] done (exit ${FAIL ? 1 : 0})`);
+        process.exit(FAIL ? 1 : 0);   // force clean exit: mongoose timers keep the loop alive
     }
 })().catch(e => { console.error('QA_FATAL:', e); process.exit(1); });
