@@ -53,6 +53,17 @@ const STARTER_OWNED = ['plant_flower'];
 const renderLocks = new Set();
 // ── per-user mutation locks (serialize buy/place/store/move per player) ──
 const opLocks = new Set();
+// Task 24 (owner 06:30Z, "just que the shi"): a second action from the same
+// user WAITS silently for the running one instead of bouncing with the
+// "⏳ still settling" message. Same 30s fail-safe cap as baseBuilder.
+const OP_WAIT_MAX_MS = 30000;
+async function waitOpLock(jid) {
+    const t0 = Date.now();
+    while (opLocks.has(jid)) {
+        if (Date.now() - t0 > OP_WAIT_MAX_MS) break;
+        await new Promise((r) => setTimeout(r, 200));
+    }
+}
 // ── purchase idempotency: message-id → expiry (WhatsApp redeliveries) ──
 const seenMsgIds = new Map();
 setInterval(() => {
@@ -325,9 +336,7 @@ async function cmdBuy(ctx, rec, args) {
         if (seenMsgIds.has(msgKey)) return ctx.reply(`♻️ That purchase already went through — *${it.name}* is in your storage.`);
         seenMsgIds.set(msgKey, Date.now());
     }
-    if (opLocks.has(ctx.senderJid)) {
-        return ctx.reply('⏳ Your last homestead action is still settling — one moment.');
-    }
+    await waitOpLock(ctx.senderJid);
     opLocks.add(ctx.senderJid);
     try {
         const balance = economy.getBalance(ctx.senderJid);

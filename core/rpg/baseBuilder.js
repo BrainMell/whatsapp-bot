@@ -20,6 +20,19 @@ function uid() { return `b${Date.now().toString(36)}${(_uidCounter++).toString(3
 
 // per-user mutation locks + purchase idempotency (same contract as homestead)
 const opLocks = new Set();
+// Task 24 (owner 06:30Z): "remove this '⏳ Your last base action is still
+// settling — one moment.' Just que the shi" — a second action from the same
+// user now WAITS silently for the running one instead of bouncing with a
+// settle message. Poll-wait with a hard cap so a wedged lock can never hang
+// a command forever (locks always free in finally; the cap is pure paranoia).
+const OP_WAIT_MAX_MS = 30000;
+async function waitOpLock(jid) {
+    const t0 = Date.now();
+    while (opLocks.has(jid)) {
+        if (Date.now() - t0 > OP_WAIT_MAX_MS) break;
+        await new Promise((r) => setTimeout(r, 200));
+    }
+}
 const seenMsgIds = new Map();
 setInterval(() => {
     const cutoff = Date.now() - 5 * 60 * 1000;
@@ -381,20 +394,9 @@ async function zoomIn(ctx, rec, st) {
     return;
 }
 
-/** GIF -> H.264 MP4 (even dimensions, aspect kept, faststart) — WhatsApp video messages must be MP4. */
-function gifToMp4Even(gifBuf) {
-    const fs = require('fs'), os = require('os'), path = require('path'), { execFile } = require('child_process');
-    return new Promise((resolve, reject) => {
-        const base = path.join(os.tmpdir(), `base_${process.pid}_${Date.now()}_${Math.floor(Math.random() * 1e6)}`);
-        const gi = base + '.gif', mo = base + '.mp4';
-        const clean = () => { try { fs.unlinkSync(gi); } catch (e) {} try { fs.unlinkSync(mo); } catch (e) {} };
-        try { fs.writeFileSync(gi, gifBuf); } catch (e) { return reject(e); }
-        execFile(process.env.FFMPEG_PATH || 'ffmpeg', ['-y', '-i', gi, '-movflags', 'faststart', '-pix_fmt', 'yuv420p', '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '24', '-an', mo], { timeout: 30000 }, (err) => {
-            if (err) { clean(); return reject(err); }
-            try { const out = fs.readFileSync(mo); clean(); out.length > 500 ? resolve(out) : reject(new Error('empty mp4')); } catch (e) { clean(); reject(e); }
-        });
-    });
-}
+/** GIF -> H.264 MP4 conversion now lives in core/utils/mediaConvert.js (Task 24)
+ *  — shared with the fish overlay lane so both boxes use one ffmpeg pipeline. */
+const mediaConvert = require('../utils/mediaConvert');
 
 /** `.j base fish` / `.j base hunt` (+ top-level `.j fish` / `.j hunt`) — the pond
  *  and the hunting grounds. Fish answers with the dock-POV catch GIF (Task 19);
@@ -408,7 +410,7 @@ async function cmdActivity(ctx, kind) {
     const st = rec.structures.find((x) => x.type === type);
     if (!st) return ctx.reply('❌ That place does not exist in your base yet.');
     const tier = type === 'pond' ? st.level : Math.max(1, (rec.structures.find((x) => x.type === 'barracks') || {}).level || 1);
-    if (opLocks.has(ctx.senderJid)) return ctx.reply('⏳ Your last base action is still settling — one moment.');
+    await waitOpLock(ctx.senderJid);
     opLocks.add(ctx.senderJid);
     try {
         // Task 19/20: NEITHER activity has a timer — run() reads huntDay/
@@ -439,6 +441,14 @@ async function cmdActivity(ctx, kind) {
             try { media = await renderZoom(ctx, rec, st, { banner: res.banner, note, activity: kind === 'fish' ? 'fishing' : 'hunting', spotlight: spot }); } catch (e) { console.error('[base] activity card failed:', e.message); }
         }
         if (media && media.buffer) {
+            // Task 24: the fish lane ships a REAL MP4 straight from dockPov —
+            // the cached pond GIF + the catch ribbon plastered in ONE ffmpeg
+            // pass. Send it as a video message as-is (already H.264/faststart).
+            if (media.contentType === 'video/mp4') {
+                const msg = { video: media.buffer, gifPlayback: true, caption: res.text };
+                if (media.thumb) msg.jpegThumbnail = media.thumb;
+                return ctx.sock.sendMessage(ctx.chatId, msg, { quoted: ctx.m });
+            }
             // ⚠ OWNER 2026-10-21 (fourth time he said it): "THE POND STILL SENDS
             // AS AN IMAGE NOT A GIF." Root cause found in the Baileys proto:
             // `gifPlayback` is a VIDEOmessage field — on imageMessage the flag
@@ -451,7 +461,7 @@ async function cmdActivity(ctx, kind) {
             // ⚠ 2026-10-21 "the .j fish gif is broken": a raw GIF sent as `video` is not a valid
             // WhatsApp video (it only plays MP4/H.264) — the summon lane converts with ffmpeg, so do the same.
             let vid = media.buffer;
-            if (isGif) { try { vid = await gifToMp4Even(media.buffer); } catch (e) { console.error('[base] gif->mp4 failed:', e.message); isGif = false; } }
+            if (isGif) { try { vid = await mediaConvert.gifToMp4Even(media.buffer); } catch (e) { console.error('[base] gif->mp4 failed:', e.message); isGif = false; } }
             const msg = isGif
                 ? { video: vid, gifPlayback: true, caption: res.text }
                 : { image: media.buffer, caption: res.text };
@@ -496,7 +506,7 @@ async function cmdBuild(ctx, rec, args) {
         if (!plot) return ctx.reply('🪧 No free plots remain — your base is at capacity.');
     }
     const lv1 = d.levels[0];
-    if (opLocks.has(ctx.senderJid)) return ctx.reply('⏳ Your last base action is still settling — one moment.');
+    await waitOpLock(ctx.senderJid);
     opLocks.add(ctx.senderJid);
     try {
         const balance = economy.getBalance(ctx.senderJid);
@@ -536,7 +546,7 @@ async function cmdUpgrade(ctx, rec, args) {
     if (d.noUpgrade) return ctx.reply(`🏹 The *${d.name}* stands as it is — the wilds need no walls raised higher.`);
     const next = d.levels.find((l) => l.level === st.level + 1);
     if (!next) return ctx.reply(`✨ Your *${d.name}* is already fully upgraded (*${(d.levels.at(-1)).name}*).`);
-    if (opLocks.has(ctx.senderJid)) return ctx.reply('⏳ Your last base action is still settling — one moment.');
+    await waitOpLock(ctx.senderJid);
     opLocks.add(ctx.senderJid);
     try {
         const balance = economy.getBalance(ctx.senderJid);

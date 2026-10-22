@@ -29,9 +29,12 @@
 //      Runtime READS the committed asset; a bake only happens as fallback.
 //    • COMPOSE — master + biome wash + hour + lights, cached per
 //      (biome, level, phase, band). The catch overlay rides in here.
-//    • FINAL GIF — compose + established loot banner, cached per
-//      (biome, level, phase, band, banner-lines) so repeat catches are
-//      disk hits. Loot text also rides the WhatsApp caption upstream.
+//    • FINAL — Task 24: the ribbon is NOT fused into the frames anymore.
+//      'fishbase' caches the CASED GIF per (biome, level, phase, band); the
+//      loot ribbon is a transparent PNG ('fishribbon', cached per loot text)
+//      plastered over it in ONE ffmpeg pass per catch — generating the
+//      overlay is all a new catch pays for. Ribbon rides EVERY frame (the
+//      `.j base` view look), not a 0.6s end-window.
 //  Delivery: pure-JS gif89a → { video, gifPlayback: true } — WhatsApp ONLY
 //  animates GIFs carried on a videoMessage; on imageMessage the flag is
 //  dropped and the phone shows a still (owner hit this 4× on 2026-10-21).
@@ -593,57 +596,143 @@ function plateLines(kind = 'fish', drops = {}) {
         .map(([id, q]) => `${q}× ${(NAMES[id] || [id])[0]}`);
 }
 
-// ── `.j fish` — the catch GIF: kept master + hour + THIS catch's overlay +
-// the ESTABLISHED loot ribbon (structureScenes.drawBanner — the same style the
-// other base commands use; owner Task 22). Cached per (biome,lvl,phase,band,loot).
-const BANNER_FROM_FRAME = FRAMES - 5;   // ribbon rides the last 5 frames (~0.6s)
+// ── Task 24 (owner 06:30Z): the catch ribbon is NO LONGER FUSED INTO THE
+// FRAMES. "Instead of the gif having the fish caught message at the end, it
+// should be an overlay like how it is when you use the .j base command to
+// view the pond, so the gif itself is cached, you just plaster that overlay
+// on it depending on what you catch, instead of fusing it into the
+// animation, so then you only have to generate the overlay and plaster it
+// on, making the generation wayyy faster."
+//
+//   • 'fishbase'   — the CASED GIF: master + wash + hour + catch-FX, NO
+//                    ribbon anywhere, cached per (biome, level, phase, band).
+//                    A warm hit skips every canvas draw AND the gif encode.
+//   • 'fishribbon' — the ribbon alone on a TRANSPARENT canvas, cached per
+//                    loot text: one small draw, reused by every catch.
+//   • final        — ONE ffmpeg pass plasters the ribbon over the cached base
+//                    GIF and ships H.264 (mediaConvert.gifToMp4Overlaid); if
+//                    ffmpeg is unavailable, a canvas-plaster + gif-encode
+//                    fallback keeps the old lane alive. 'fishbase' never
+//                    carries the ribbon either way, so loot text changes
+//                    never re-encode the animation.
+//   The ribbon rides EVERY frame now — the `.j base` view overlay look the
+//   owner asked for — not just the 0.6s end-window BANNER_FROM_FRAME gave it.
+
+/** The cased pond GIF — no ribbon, cached per (biome, level, phase, band). */
+async function getBaseGif({ biome = 'isle', lvl = 1, phase = null, band = 'low' } = {}) {
+    lvl = Math.max(1, Math.min(3, lvl));
+    phase = phase || dayNight.phaseAt();
+    const key = `pg4:${biome}:L${lvl}:${phase}:${band}`;
+    return mediaCache.cached('fishbase', key, async () => {
+        const { createCanvas } = require('canvas');
+        const { encodeGif } = require('../utils/gif89a');
+        const comp = await composePond({ biome, lvl, phase, band });
+        const c = unpackContainer(comp.buffer);
+        if (!c || c.pngs.length !== FRAMES) throw new Error('pond compose container unreadable');
+        const imgs = decodePngs(c.pngs);
+        const frames = [];
+        for (let i = 0; i < FRAMES; i++) {
+            const cv = createCanvas(c.gw, c.gh), c2 = cv.getContext('2d');
+            c2.drawImage(imgs[i], 0, 0, c.gw, c.gh);
+            const d = c2.getImageData(0, 0, c.gw, c.gh);
+            frames.push(Buffer.from(d.data.buffer, d.data.byteOffset, d.data.byteLength));
+        }
+        const gif = encodeGif({ width: c.gw, height: c.gh, frames, delayMs: c.delayMs, loop: 0 });
+        if (!gif || gif.length < 500) throw new Error('pond base gif encode failed');
+        return { buffer: gif, contentType: 'image/gif' };
+    });
+}
+
+/** The loot ribbon ALONE on a transparent GW×GH canvas — the plaster. */
+async function renderRibbonOverlay(ribbon) {
+    const plateKey = hashStr(JSON.stringify(ribbon));
+    return mediaCache.cached('fishribbon', `fr:${plateKey}`, async () => {
+        const { createCanvas } = require('canvas');
+        const scenes = require('./structureScenes');
+        try { require('./worldMapRenderer')._ensureFonts(); } catch (e) { /* default fonts */ }
+        const cv = createCanvas(GW, GH), c2 = cv.getContext('2d');
+        scenes.drawBanner(c2, GW, GH, ribbon);
+        const png = cv.toBuffer('image/png');
+        if (!png || png.length < 100) throw new Error('ribbon overlay render failed');
+        return { buffer: png, contentType: 'image/png' };
+    });
+}
+
 async function renderFishingGif({ biome = 'isle', lvl = 1, band = 'low', drops = {}, phase = null, banner = null } = {}) {
+    const t0 = Date.now();
     lvl = Math.max(1, Math.min(3, lvl));
     phase = phase || dayNight.phaseAt();
     const ribbon = banner && (banner.head || (banner.lines || []).length)
         ? { head: String(banner.head || 'The Pond'), lines: (banner.lines || []).slice(0, 6) }
         : { head: 'The Pond', lines: plateLines('fish', drops) };
     const plateKey = hashStr(JSON.stringify(ribbon));
-    const key = `pg3:${biome}:L${lvl}:${phase}:${band}:${plateKey}`;
-    return mediaCache.cached('fishgif', key, async () => {
-        const { createCanvas } = require('canvas');
-        const { encodeGif } = require('../utils/gif89a');
-        const scenes = require('./structureScenes');
-        try { require('./worldMapRenderer')._ensureFonts(); } catch (e) { /* default fonts */ }
-        const comp = await composePond({ biome, lvl, phase, band });
-        const c = unpackContainer(comp.buffer);
-        if (!c || c.pngs.length !== FRAMES) throw new Error('pond compose container unreadable');
-        const imgs = decodePngs(c.pngs);
-        const frames = [];
-        let thumb = null;
-        for (let i = 0; i < FRAMES; i++) {
-            const cv = createCanvas(c.gw, c.gh), c2 = cv.getContext('2d');
-            c2.drawImage(imgs[i], 0, 0, c.gw, c.gh);
-            if (i >= BANNER_FROM_FRAME) scenes.drawBanner(c2, c.gw, c.gh, ribbon);
-            if (i === 0) {
-                // real frame-0 JPEG for the video-bubble preview — GIFs now go
-                // out as { video, gifPlayback: true } (WhatsApp proto) and the
-                // engine patch stamps a gray square on videos without one.
-                try {
-                    const tw = 240, th = Math.round(240 * c.gh / c.gw);
-                    const tc = createCanvas(tw, th), tc2 = tc.getContext('2d');
-                    tc2.drawImage(cv, 0, 0, tw, th);
-                    thumb = tc.toBuffer('image/jpeg');
-                } catch (e) { thumb = null; }
-            }
-            const d = c2.getImageData(0, 0, c.gw, c.gh);
-            frames.push(Buffer.from(d.data.buffer, d.data.byteOffset, d.data.byteLength));
+    const key = `pg4o:${biome}:L${lvl}:${phase}:${band}:${plateKey}`;
+    const out = await mediaCache.cached('fishgif', key, async () => {
+        const base = await getBaseGif({ biome, lvl, phase, band });
+        const overlay = await renderRibbonOverlay(ribbon);
+        const { createCanvas, loadImage } = require('canvas');
+        // preview thumb = frame 0 + ribbon (what the phone shows in the bubble)
+        const makeThumb = async () => {
+            try {
+                const f0 = require('../utils/gif89a').firstFrameJpeg(base.buffer);
+                const tw = 240, th = Math.round(240 * GH / GW);
+                const tc = createCanvas(tw, th), tc2 = tc.getContext('2d');
+                tc2.drawImage(await loadImage(f0), 0, 0, tw, th);
+                tc2.drawImage(await loadImage(overlay.buffer), 0, 0, tw, th);
+                return tc.toBuffer('image/jpeg');
+            } catch (e) { return null; }
+        };
+        let buffer = null, contentType = null, lane = 'mp4-overlay';
+        try {
+            buffer = await require('../utils/mediaConvert').gifToMp4Overlaid(base.buffer, overlay.buffer);
+            contentType = 'video/mp4';
+        } catch (e) {
+            console.error('[fish-gif] ffmpeg overlay failed — canvas plaster fallback:', e.message);
         }
-        const gif = encodeGif({ width: c.gw, height: c.gh, frames, delayMs: c.delayMs, loop: 0 });
-        if (!gif || gif.length < 500) throw new Error('pond gif encode failed');
-        return { buffer: gif, contentType: 'image/gif', thumb };
+        if (!buffer) {
+            lane = 'canvas-plaster-gif';
+            const comp = await composePond({ biome, lvl, phase, band });
+            const c = unpackContainer(comp.buffer);
+            if (!c || c.pngs.length !== FRAMES) throw new Error('pond compose container unreadable');
+            const imgs = decodePngs(c.pngs);
+            const ovl = await loadImage(overlay.buffer);
+            const frames = [];
+            for (let i = 0; i < FRAMES; i++) {
+                const cv = createCanvas(c.gw, c.gh), c2 = cv.getContext('2d');
+                c2.drawImage(imgs[i], 0, 0, c.gw, c.gh);
+                c2.drawImage(ovl, 0, 0, c.gw, c.gh);
+                const d = c2.getImageData(0, 0, c.gw, c.gh);
+                frames.push(Buffer.from(d.data.buffer, d.data.byteOffset, d.data.byteLength));
+            }
+            buffer = require('../utils/gif89a').encodeGif({ width: c.gw, height: c.gh, frames, delayMs: c.delayMs, loop: 0 });
+            contentType = 'image/gif';
+        }
+        const thumb = await makeThumb();
+        console.log(`[fish-gif] ${lane} total=${Date.now() - t0}ms base=${base.cached ? 'hit' : 'MISS'} ribbon=${overlay.cached ? 'hit' : 'MISS'} (Task 24 plaster)`);
+        return { buffer, contentType, thumb };
     });
+    // Disk hits come back without `thumb` — rebuild it from the cached inputs
+    // (base GIF frame-0 + the cached ribbon PNG), never from the MP4.
+    if (out && out.buffer && !out.thumb) {
+        try {
+            const overlay = await renderRibbonOverlay(ribbon);
+            const base = await getBaseGif({ biome, lvl, phase, band });
+            const { createCanvas, loadImage } = require('canvas');
+            const f0 = require('../utils/gif89a').firstFrameJpeg(base.buffer);
+            const tw = 240, th = Math.round(240 * GH / GW);
+            const tc = createCanvas(tw, th), tc2 = tc.getContext('2d');
+            tc2.drawImage(await loadImage(f0), 0, 0, tw, th);
+            tc2.drawImage(await loadImage(overlay.buffer), 0, 0, tw, th);
+            out.thumb = tc.toBuffer('image/jpeg');
+        } catch (e) { /* engine stamps a thumb */ }
+    }
+    return out;
 }
 
 function anchorFor(w, h) { const g = floatGeom(w, h); return { bx: g.bx, by: g.by }; }
 
 module.exports = {
-    renderFishingGif, getBaseFrames, composePond, paintStill, paintFrame,
+    renderFishingGif, getBaseGif, renderRibbonOverlay, getBaseFrames, composePond, paintStill, paintFrame,
     paintCatchOverlay, paintFloat, floatGeom, floatBob, floatY, paintCelestial,
     plateLines, packContainer, unpackContainer, anchorFor, bakeLevelFrames, loadCommitted,
     dockAnchors, PALETTES, WASHERS, RARITY_COL, GW, GH, FRAMES, DELAY_MS, CONTAINER_MAGIC, ASSET_VER, ASSET_DIR,
