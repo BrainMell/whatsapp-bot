@@ -69,27 +69,69 @@ const GRADES = {
     ],
 };
 
+// ── VIBRANT GRADE (owner 2026-10-22: "increase the vibrancy of the different times") ────────────────
+// The first grade was plain alpha washes — they greyed the picture (night = murky navy, dawn/golden barely
+// visible). The vibrant grade works in three film-style passes so colours get RICHER, not muddier:
+//   1. MULTIPLY cast   — tints the whole frame through a sky-coloured gradient (keeps saturation, drops value)
+//   2. OVERLAY punch   — the same hue pushed back through "overlay" so mid-tones gain saturation + contrast
+//   3. SCREEN glow     — sun / horizon / moon light bleeding in (additive), then a gentle vignette
+// Each entry: cast = [[stopY, rgb]...] multiply, castA; punch = rgb, punchA; glows = [[x, y, r(of h), rgb, a]].
+const VIBRANT = {
+    dawn: {
+        cast: [[0, '255,176,176'], [0.5, '255,200,196'], [1, '186,176,240']], castA: 0.70,
+        punch: '255,86,140', punchA: 0.32,
+        glows: [[0.12, 0.34, 0.95, '255,170,120', 0.34], [0.30, 0.10, 0.55, '255,214,150', 0.20]],
+        vig: 0.16,
+    },
+    golden: {
+        cast: [[0, '255,214,150'], [0.5, '255,190,110'], [1, '255,150,84']], castA: 0.66,
+        punch: '255,150,40', punchA: 0.26,
+        glows: [[0.86, 0.22, 1.05, '255,190,90', 0.36], [0.70, 0.12, 0.5, '255,236,170', 0.22]],
+        vig: 0.18,
+    },
+    dusk: {
+        cast: [[0, '255,150,110'], [0.4, '226,120,160'], [0.75, '140,100,200'], [1, '70,76,170']], castA: 0.76,
+        punch: '210,70,150', punchA: 0.28,
+        glows: [[0.82, 0.30, 1.0, '255,120,60', 0.34], [0.50, 0.50, 0.9, '190,90,200', 0.14]],
+        vig: 0.26,
+    },
+    night: {
+        cast: [[0, '92,122,214'], [0.55, '70,96,188'], [1, '48,66,150']], castA: 0.80,
+        punch: '60,90,235', punchA: 0.30,
+        glows: [[0.80, 0.14, 0.85, '150,180,255', 0.20], [0.50, 0.55, 1.1, '70,100,220', 0.12]],
+        vig: 0.34,
+    },
+};
+
 /** Wear the hour onto a finished day-lit scene. `box` limits the grade to a
- *  sub-rectangle (the world atlas grades only its map area, not the parchments).
- *  Each band feathers at its edges so no hard seam crosses the scene. */
+ *  sub-rectangle (the world atlas grades only its map area, not the parchments). */
 function grade(ctx, w, h, phaseId, box) {
-    const stops = GRADES[phaseId];
-    if (!stops) return;                               // day: true colours
+    const v = VIBRANT[phaseId];
+    if (!v) return;                                   // day: true colours
     const x0 = box ? box.x : 0, y0 = box ? box.y : 0;
     const ww = box ? box.w : w, hh = box ? box.h : h;
-    const setA = (col, a) => col.replace(/,[\d.]+\)$/, `,${a})`);
     ctx.save();
     ctx.beginPath(); ctx.rect(x0, y0, ww, hh); ctx.clip();
-    for (const [a, b, col, alpha] of stops) {
-        const f = Math.min(0.28, (b - a) * 0.4);
-        const g = ctx.createLinearGradient(0, y0 + hh * a, 0, y0 + hh * b);
-        if (a > 0) g.addColorStop(0, setA(col, 0));
-        g.addColorStop(a > 0 ? f : 0, setA(col, alpha));
-        g.addColorStop(b < 1 ? 1 - f : 1, setA(col, alpha));
-        if (b < 1) g.addColorStop(1, setA(col, 0));
-        ctx.fillStyle = g;
-        ctx.fillRect(x0, y0 + hh * a, ww, hh * (b - a) + 1);
+    const blend = (mode) => { try { ctx.globalCompositeOperation = mode; } catch (e) { /* keep default */ } };
+    // 1. multiply cast through a sky gradient
+    const cg = ctx.createLinearGradient(0, y0, 0, y0 + hh);
+    for (const [at, rgb] of v.cast) cg.addColorStop(at, `rgb(${rgb})`);
+    blend('multiply'); ctx.globalAlpha = v.castA; ctx.fillStyle = cg; ctx.fillRect(x0, y0, ww, hh);
+    // 2. overlay punch (saturation + contrast in the mid-tones)
+    blend('overlay'); ctx.globalAlpha = v.punchA; ctx.fillStyle = `rgb(${v.punch})`; ctx.fillRect(x0, y0, ww, hh);
+    // 3. light bleeding in
+    blend('screen');
+    for (const [gx, gy, gr, rgb, ga] of v.glows) {
+        const cx = x0 + ww * gx, cy = y0 + hh * gy, R = Math.max(ww, hh) * gr * 0.62;
+        const g = ctx.createRadialGradient(cx, cy, R * 0.05, cx, cy, R);
+        g.addColorStop(0, `rgba(${rgb},1)`); g.addColorStop(1, `rgba(${rgb},0)`);
+        ctx.globalAlpha = ga; ctx.fillStyle = g; ctx.fillRect(x0, y0, ww, hh);
     }
+    // 4. vignette — dark edges so the lit centre pops
+    blend('source-over');
+    const vg = ctx.createRadialGradient(x0 + ww / 2, y0 + hh * 0.5, Math.min(ww, hh) * 0.35, x0 + ww / 2, y0 + hh * 0.5, Math.max(ww, hh) * 0.78);
+    vg.addColorStop(0, 'rgba(0,0,12,0)'); vg.addColorStop(1, `rgba(0,0,18,${v.vig})`);
+    ctx.globalAlpha = 1; ctx.fillStyle = vg; ctx.fillRect(x0, y0, ww, hh);
     ctx.restore();
     ctx.globalAlpha = 1;
 }
@@ -97,6 +139,7 @@ function grade(ctx, w, h, phaseId, box) {
 /** A LIGHT SOURCE at night — additive warm/cool glow that punches through the
  *  dark (windows, lanterns, campfires, moon glints). Drawn AFTER grade(). */
 function light(ctx, x, y, r, color = '#ffcf7a', alpha = 0.34, core = true) {
+    alpha = Math.min(1, alpha * 1.45); r = r * 1.15;   // 2026-10-22 vibrancy: lights bloom brighter + wider
     if (r <= 0 || alpha <= 0) return;
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
@@ -164,4 +207,4 @@ function fireflies(ctx, w, h, t, seed = 11, n = 7, box = null) {
     ctx.restore();
 }
 
-module.exports = { phaseAt, phaseInfo, grade, light, moonStars, fireflies, PHASES, GRADES };
+module.exports = { phaseAt, phaseInfo, grade, light, moonStars, fireflies, PHASES, GRADES, VIBRANT };
