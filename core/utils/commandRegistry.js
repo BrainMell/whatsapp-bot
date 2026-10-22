@@ -519,6 +519,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'mentor', desc: 'Mining-shoob dashboard (mods+): watch the mine, owner promotes. (Alias: mentoring)', usage: 'mentor [status|new|ids|find|preview|media]' },
     { cmd: 'instances', desc: 'Ops dashboard (mods+): every instance, uptime, heartbeat, connection state. (Aliases: instance, health)', usage: 'instances' },
     { cmd: 'opscheck', desc: 'Read-only ops check (mods+): deploy commit, uptime, host, pipeline.', usage: 'opscheck' },
+    { cmd: 'commit', desc: 'Show the latest deployed commit and its title (mods+). (Alias: lastcommit)', usage: 'commit' },
     { cmd: 'debug', desc: 'Dump live connection/queue internals for this instance (mods+).', usage: 'debug' },
     { cmd: 'quizmod', desc: 'Quiz Mods: tune per-group quiz config (timer, sections, VA cap).', usage: 'quizmod [setting] [value]' },
     { cmd: 'diag', desc: 'Image pipeline diagnostic (banner, renderers, send path).', usage: 'diag' },

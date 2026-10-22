@@ -11116,6 +11116,32 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
+                    // .j commit — mod command: the latest deployed commit and its title (owner 2026-10-22)
+                    if (primaryCmd === "commit" || primaryCmd === "lastcommit") {
+                      const isModUserCm = isOwner || isGlobalMod(senderJid) || isRpgMod(senderJid) || isCardsMod(senderJid) || overrideUsers.has(senderJid);
+                      if (!isModUserCm) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ This command is for moderators and above only.' });
+                        return;
+                      }
+                      try {
+                        const { execFile } = require('child_process');
+                        const repoDir = require('path').join(__dirname, '..');
+                        const out = await new Promise((resolve, reject) => execFile('git', ['-C', repoDir, 'log', '-1', '--format=%h%x1f%H%x1f%s%x1f%an%x1f%cI'], { timeout: 8000 }, (err, stdout) => err ? reject(err) : resolve(String(stdout || '').trim())));
+                        const [shortH, fullH, title, author, iso] = out.split('\x1f');
+                        if (!shortH || !title) throw new Error('no commit info');
+                        const when = iso ? new Date(iso).toISOString().replace('T', ' ').slice(0, 16) + ' UTC' : 'unknown';
+                        await sock.sendMessage(chatId, { text: BOT_MARKER +
+                          `🧾 *LATEST COMMIT*\n\n` +
+                          `📝 *${title}*\n` +
+                          `🔖 \`${shortH}\`\n` +
+                          `👤 ${author}\n` +
+                          `🕒 ${when}` }, { quoted: m });
+                      } catch (e) {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Could not read the commit (no git history on this deploy).' });
+                      }
+                      return;
+                    }
+
                     // 🧑‍🏫 .j mentoring — shoob.gg mining dashboard (2026-10-08)
                     // Mods+ can watch the mine; only the owner can promote.
                     if (primaryCmd === "mentoring" || primaryCmd === "mentor") {
