@@ -47,19 +47,22 @@ async function gifToMp4Even(gifBuf) {
 }
 
 /** Cached GIF + transparent PNG overlay → MP4 in ONE pass. The overlay rides
- *  EVERY frame (like the `.j base` view card) — no `enable=` window, the
- *  looped PNG input is cut by `-shortest` when the GIF stream ends. */
+ *  EVERY frame (like the `.j base` view card). The PNG rides as a single-
+ *  frame input: overlay's default eof_action=repeat holds it for the whole
+ *  clip, and shortest=1 INSIDE the filter ends the graph when the GIF ends.
+ *  (⚠ do NOT use `-loop 1` + `-shortest` here — that combo buffers forever
+ *  under filter_complex on ffmpeg 6.x and hits the 30s exec timeout.) */
 async function gifToMp4Overlaid(gifBuf, pngBuf) {
     const gi = _tmp('.gif'), pi = _tmp('.png'), mo = _tmp('.mp4');
     try {
         fs.writeFileSync(gi, gifBuf);
         fs.writeFileSync(pi, pngBuf);
         await _run([
-            '-y', '-i', gi, '-loop', '1', '-i', pi,
+            '-y', '-i', gi, '-i', pi,
             '-filter_complex',
-            '[0:v]scale=trunc(iw/2)*2:trunc(ih/2)*2[base];[base][1:v]overlay=0:0:format=auto[out]',
+            '[0:v]scale=trunc(iw/2)*2:trunc(ih/2)*2[base];[base][1:v]overlay=0:0:format=auto:eof_action=repeat:shortest=1[out]',
             '-map', '[out]', '-movflags', 'faststart', '-pix_fmt', 'yuv420p',
-            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '24', '-an', '-shortest', mo,
+            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '24', '-an', mo,
         ]);
         const out = fs.readFileSync(mo);
         if (out.length <= 500) throw new Error('empty mp4');

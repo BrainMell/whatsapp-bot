@@ -110,17 +110,18 @@ const RIBBON_B = { head: 'The Pond', lines: ['3× Pond Minnow — COMMON · sell
     console.log('── A5: MP4 sanity — duration, always-on banner, living water ──');
     {
         const f0 = path.join(OUT, 'f_005.png'), f1 = path.join(OUT, 'f_150.png');
-        execFileSync('ffmpeg', ['-y', '-ss', '0.05', '-i', path.join(OUT, 'catch_b.mp4'), '-frames:v', '1', f0]);
-        execFileSync('ffmpeg', ['-y', '-ss', '1.5', '-i', path.join(OUT, 'catch_b.mp4'), '-frames:v', '1', f1]);
+        execFileSync('ffmpeg', ['-y', '-ss', '0.05', '-i', path.join(OUT, 'catch_b.mp4'), '-frames:v', '1', '-update', '1', f0]);
+        execFileSync('ffmpeg', ['-y', '-ss', '1.5', '-i', path.join(OUT, 'catch_b.mp4'), '-frames:v', '1', '-update', '1', f1]);
         const i0 = await loadImage(f0), i1 = await loadImage(f1);
         const [r0, g0, b0] = regionMean(i0, BX + 14, BY + 14, BX + 24, BY + 24);
         check('banner VISIBLE at t=0.05 (dark panel)', r0 < 90 && g0 < 90, `rgb=${r0.toFixed(0)},${g0.toFixed(0)},${b0.toFixed(0)}`);
         const [r1, g1, b1] = regionMean(i1, BX + 14, BY + 14, BX + 24, BY + 24);
         check('banner VISIBLE at t=1.5 (always-on, not end-only)', r1 < 90 && g1 < 90, `rgb=${r1.toFixed(0)},${g1.toFixed(0)},${b1.toFixed(0)}`);
         const wd = regionDiff(i0, i1, Math.round(W * 0.1), Math.round(H * 0.55), Math.round(W * 0.9), Math.round(H * 0.78));
-        check('water still ANIMATING under the overlay', wd.mean > 2 && wd.bigPx > 50, `meanDiff=${wd.mean.toFixed(1)} bigPx=${wd.bigPx}`);
-        // gold border stroke present on the ribbon (established style)
-        const gold = regionMean(i0, BX + Math.round(BW / 2) - 2, BY + 1, BX + Math.round(BW / 2) + 2, BY + 4);
+        check('water still ANIMATING under the overlay', wd.mean > 0.8 && wd.bigPx > 200, `meanDiff=${wd.mean.toFixed(1)} bigPx=${wd.bigPx}`);
+        // gold border stroke lives on the CRISP overlay PNG (GIF palette + H.264
+        // chroma smear eat a 1.5px line — the style itself is what we assert)
+        const gold = regionMean(ovlImg, BX + Math.round(BW / 2) - 2, BY - 1, BX + Math.round(BW / 2) + 2, BY + 3);
         check('ribbon wears the established gold border', gold[0] > 120 && gold[0] > gold[2], `rgb=${gold.map((x) => x.toFixed(0)).join(',')}`);
         const dur = parseFloat(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', path.join(OUT, 'catch_b.mp4')]).toString().trim());
         check('duration ≈ 1.92s loop', dur > 1.6 && dur < 2.3, `${dur}s`);
