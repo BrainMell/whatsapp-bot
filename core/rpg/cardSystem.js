@@ -1140,6 +1140,7 @@ const TOKEN_CMD_EXCLUDED = new Set([
   'reloadcards', 'einfo', 'spawnset', 'spawninfo', 'trc', 'ci', 'rc', 'erc',
   'info', 'endauction', 'setauctiongc', 't2edeck', 'tokenreset', 'src', 'tokenlb', 'tlb',
   'unsrc', 'restorecards', // Task 15c: backup restore (mod management, never token-eligible)
+  'movecards', 'mc', // 💡 2026-10-23: mod-level card mover — never farms tokens
 ]);
 
 // MongoDB field names can't contain '.' or '$' on old versions - sanitize JIDs
@@ -5178,6 +5179,20 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
     case 'tlb':
       await cmdTokenLB(senderJid, reply, args);
       return true;
+
+    // ── 2026-10-23 OWNER REQUEST: mod-level account→account card mover ──
+    // Owner 2026-10-23: "There used to be a command that moves all of
+    // someone's cards from one account to another ... where the card mod,
+    // global mod or owner tags the 2 accounts with a mod command."
+    // No such command existed in repo history (pickaxe-swept) — built fresh
+    // on the cmdSuperRc two-step pattern. isCardMod (line ~4511) == owner ||
+    // global mod || card-system modJids || Cards-Mod tier — exactly the
+    // requested gate. Scope: CARDS ONLY (money/tokens/auctions stay).
+    case 'movecards':
+    case 'mc':
+      if (!isCardMod) return reply('❌ Only card moderators, global mods, or the owner can move cards between accounts.'), true;
+      await cmdMoveCards(senderJid, reply, args, m, chatId);
+      return true;
   }
 
   return false;
@@ -5873,10 +5888,194 @@ async function cmdTokenLB(senderJid, reply, args = []) {
   return reply(msg);
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+//  2026-10-23 OWNER REQUEST: .j movecards — mod-level account→account
+//  card mover. Owner: "There used to be a command that moves all of
+//  someone's cards from one account to another ... where the card mod,
+//  global mod or owner tags the 2 accounts with a mod command."
+//  No such command ever existed (repo history pickaxe-swept) — built on the
+//  cmdSuperRc two-step pattern (preview → confirm within 60s, per chat,
+//  single-fire). Scope: CARDS ONLY — wallet/bank/event-tokens and any active
+//  auction stay on the source account (a full account merge remains a
+//  manual DB operation).
+// ═══════════════════════════════════════════════════════════════════════
+
+// Armed previews per chat: chatId -> { src, dst, armedAt }
+const moveCardsArmed = new Map();
+const MOVECARDS_CONFIRM_WINDOW_MS = 60_000;
+
+// All-tagged-accounts extraction for two-target commands. getTaggedJid()
+// above returns only the FIRST mention — movecards needs BOTH tags, in tag
+// order. Order rule: 1st tag = SOURCE (loses its cards), 2nd = DESTINATION.
+// Accepts: multiple @mentions, one mention + reply/quote participant, or
+// raw JIDs as text args (the same fallback `cardmod add` accepts).
+function getTaggedJids(m) {
+  const msg = m?.message || {};
+  const ctx = msg.extendedTextMessage?.contextInfo
+    || msg.imageMessage?.contextInfo
+    || msg.videoMessage?.contextInfo
+    || msg.documentMessage?.contextInfo
+    || msg.stickerMessage?.contextInfo
+    || null;
+  const raw = [];
+  for (const j of (ctx?.mentionedJid || [])) if (j) raw.push(j);
+  if (ctx?.participant) raw.push(ctx.participant);
+  // Never let the bot itself be a move endpoint.
+  const botIds = [];
+  try {
+    const botUser = getInst()?.sock_ref?.user || {};
+    const norm = (j) => String(j || '').split('@')[0].split(':')[0];
+    for (const b of [botUser.id, botUser.lid]) if (b) botIds.push(norm(b));
+  } catch (e) { /* bot identity unavailable */ }
+  const out = [];
+  for (const j of raw) {
+    const r = resolveMentionJid(j); // 💡 same LID-resolve the 2026-10-08 vanishing-cards fix mandates
+    if (!r) continue;
+    if (botIds.includes(String(r).split('@')[0].split(':')[0])) continue;
+    if (!out.includes(r)) out.push(r);
+  }
+  return out;
+}
+
+/**
+ * cmdMoveCards - move ALL cards from one account to another.
+ *   .j movecards @oldAccount @newAccount  → preview (arms the chat)
+ *   .j movecards confirm                  → execute (60s window, single-fire)
+ * What moves: every UserCard copy that is NOT in an active auction.
+ * What's cleaned (2026-10-08 vanishing-cards transfer rules): copies are
+ * pulled out of the source's custom decks, per-user deck state + sale flags
+ * are reset, and the source's active market listings are cancelled (a
+ * listing paid post-move would yank the card from the new owner).
+ * Copy numbers are GLOBAL (allocated from cardStats.totalSpawned at claim),
+ * so cross-account moves can never collide or renumber.
+ */
+async function cmdMoveCards(senderJid, reply, args = [], m = {}, chatId = '') {
+  const p = P();
+  const sub = (args[0] || '').toLowerCase();
+
+  // ── FIRE PATH ──
+  if (sub === 'confirm') {
+    const pending = chatId ? moveCardsArmed.get(chatId) : null;
+    if (!pending) {
+      return reply(`❌  *NOTHING ARMED*\n\n⌨️ ⟢ _Use \`${p} movecards @oldAccount @newAccount\` first — it shows a preview._`);
+    }
+    if (Date.now() - pending.armedAt > MOVECARDS_CONFIRM_WINDOW_MS) {
+      moveCardsArmed.delete(chatId);
+      return reply(`⌛  *PREVIEW EXPIRED*\n\n⌨️ ⟢ _More than 60 seconds passed. Run \`${p} movecards @oldAccount @newAccount\` again._`);
+    }
+    moveCardsArmed.delete(chatId); // single-fire: the same confirm can never run twice
+    const { src, dst } = pending;
+
+    // Re-verify at fire time — the source may have traded/merged since preview.
+    const movableNow = await UserCard.countDocuments({ userId: src, inAuction: { $ne: true } });
+    if (movableNow === 0) {
+      return reply(`📭  *NOTHING TO MOVE*\n\n👤 ⟢ _@${economy.getDisplayName(src)} no longer has any movable cards._`, { mentions: [src] });
+    }
+
+    // Recipient economy account must exist (same as the gift path), so the
+    // incoming copies have a live owner doc with a save baseline.
+    try { economy.getOrCreateUser(dst); } catch (e) { /* non-fatal */ }
+
+    // Cards to move: everything not locked in an active auction.
+    const moving = await UserCard.find({ userId: src, inAuction: { $ne: true } }).select('_id').lean();
+    const moveIds = moving.map(d => d._id);
+
+    // Clean transfer (same rules as buycard/gift/auction-win paths):
+    // pull the copies from the source's custom decks, reset per-user deck
+    // membership + sale flags. isLocked rides along (it protects the CARD,
+    // not the account). Copy numbers are untouched — they are global.
+    let pulledDecks = 0;
+    if (moveIds.length) {
+      const deckRes = await CardDeck.updateMany({ userId: src }, { $pull: { cards: { $in: moveIds } } });
+      pulledDecks = deckRes.modifiedCount || 0;
+      await UserCard.updateMany(
+        { _id: { $in: moveIds } },
+        { $set: {
+            userId: dst,
+            forSale: false, salePrice: null,
+            inMainDeck: false, mainDeckSlot: null,
+            inCustomDeck: false, customDeckName: null, customDeckSlot: null,
+        } }
+      );
+    }
+
+    // Cancel the source's active market listings so nothing sells a card
+    // that just changed owners.
+    const cancelled = await CardMarket.updateMany(
+      { sellerId: src, status: 'active' },
+      { $set: { status: 'cancelled', completedAt: new Date() } }
+    );
+    const leftInAuction = await UserCard.countDocuments({ userId: src, inAuction: true });
+
+    console.log(`[CardSystem][${botConfig.getBotId()}] MOVECARDS by ${senderJid}: ${moveIds.length} cards ${src} -> ${dst} | listings cancelled ${cancelled.modifiedCount || 0} | decks cleaned ${pulledDecks} | auctions left ${leftInAuction}`);
+    return reply(
+      `✅  *CARDS MOVED!*\n\n` +
+      `📤 ⟢ *From:* _@${economy.getDisplayName(src)}_\n` +
+      `📥 ⟢ *To:* _@${economy.getDisplayName(dst)}_\n` +
+      `🃏 ⟢ *Moved:* _${moveIds.length} card${moveIds.length === 1 ? '' : 's'}_\n` +
+      `🏪 ⟢ *Listings cancelled:* _${cancelled.modifiedCount || 0}_\n` +
+      `📚 ⟢ *Decks cleaned:* _${pulledDecks}_\n` +
+      (leftInAuction > 0 ? `🔨 ⟢ *Left in active auction:* _${leftInAuction} — stays on the old account until it settles_\n` : '') +
+      `💰 ⟢ _Wallet, bank and event tokens were NOT touched — cards only._`,
+      { mentions: [src, dst] }
+    );
+  }
+
+  // ── ARM PATH (preview) ──
+  // Tagged accounts in order: @mentions, then reply/quote participant, then
+  // raw JID text args. First candidate = source, second = destination.
+  const candidates = getTaggedJids(m);
+  for (const a of args) {
+    if (typeof a === 'string' && a.includes('@') && /\d{5,}/.test(a)) {
+      const r = resolveMentionJid(a);
+      if (r && !candidates.includes(r)) candidates.push(r);
+    }
+  }
+  if (candidates.length < 2) {
+    return reply(
+      `🃏  *MOVE CARDS BETWEEN ACCOUNTS*\n\n` +
+      `⌨️ ⟢ *Usage:* _\`${p} movecards @oldAccount @newAccount\`_\n` +
+      `🧭 ⟢ _First tag = the account LOSING its cards, second tag = the account receiving them._\n` +
+      `➡️ ⟢ _Then \`${p} movecards confirm\` within 60 seconds to execute._`
+    );
+  }
+  const [src, dst] = candidates;
+  if (src === dst) {
+    return reply(`❌  *SAME ACCOUNT*\n\n🚫 ⟢ _Both tags resolved to the same account — nothing to move._`);
+  }
+
+  const totalCards   = await UserCard.countDocuments({ userId: src });
+  const auctionCards = await UserCard.countDocuments({ userId: src, inAuction: true });
+  const listings     = await CardMarket.countDocuments({ sellerId: src, status: 'active' });
+  const dstCards     = await UserCard.countDocuments({ userId: dst });
+
+  if (totalCards === 0) {
+    return reply(
+      `📭  *NOTHING TO MOVE*\n\n👤 ⟢ _@${economy.getDisplayName(src)} has no cards — nothing to move._`,
+      { mentions: [src] }
+    );
+  }
+
+  if (chatId) moveCardsArmed.set(chatId, { src, dst, armedAt: Date.now() });
+
+  return reply(
+    `⚠️  *MOVE CARDS — PREVIEW*\n\n` +
+    `📤 ⟢ *From:* _@${economy.getDisplayName(src)}_ — *${totalCards}* card${totalCards === 1 ? '' : 's'}\n` +
+    `📥 ⟢ *To:* _@${economy.getDisplayName(dst)}_ — currently *${dstCards}* card${dstCards === 1 ? '' : 's'}\n` +
+    `🏪 ⟢ *Market listings to cancel:* _${listings}_\n` +
+    (auctionCards > 0 ? `🔨 ⟢ *In active auction:* _${auctionCards} — stays on the old account_\n` : '') +
+    `\n⚠️ ⟢ _Cards only — wallet, bank, tokens and auctions stay on the source account._\n` +
+    `➡️ ⟢ _Reply \`${p} movecards confirm\` within 60 seconds to execute._`,
+    { mentions: [src, dst] }
+  );
+}
+
 module.exports = {
   init, handleCommand, doSpawn, CardStat, UserCard, CardMarket, CardDeck, instances,
   bindSocket,
   buildFcResultsMessage,
+  // 💡 2026-10-23 movecards export (QA harness + future admin tooling)
+  cmdMoveCards, moveCardsArmed,
   // 💡 Token event & eShop exports
   isTokenEventActive, startTokenEvent, stopTokenEvent,
   eshopAddCard, eshopRemoveCard, eshopSetPrice, eshopBuy,
