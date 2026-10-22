@@ -810,11 +810,23 @@ function registerUser(userId, nickname) {
   };
   
   economyData.set(resolvedId, userData);
-  stampSyncMeta(resolvedId, userData);
-  
+  // 💡 REGISTRATION-PERSISTENCE FIX (2026-10-22, owner: "players keep having to
+  // double register — their registration just got botched"): stamping the
+  // baseline WITH the fresh doc made the debounced saveUser() see
+  // baseline === payload → leafDiff emitted NOTHING → only {updatedAt} reached
+  // MongoDB. registered:true, class, wallet, the whole account lived in RAM
+  // and evaporated on every restart — players had to register again after each
+  // deploy/restart (DB proof: zero registered:true docs created since the
+  // Oct-15 leaf-diff commit 4e3f77e; composited $inc counters DID land, so
+  // money/tokens moved on a doc that still said registered:false — the
+  // franken-doc signature). Drop the baseline so the register save takes the
+  // no-baseline path (whole-account $set, safe: brand-new identity has no
+  // sibling contention); the stale-guard re-stamps after the write.
+  syncMeta.delete(resolvedId);
+
   // log the bonus
   logTransaction(resolvedId, "Registration Bonus", STARTING_BALANCE, userData.wallet);
-  
+
   scheduleSave(resolvedId);
   
   return {
