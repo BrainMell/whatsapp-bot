@@ -129,13 +129,16 @@ const RIBBON_B = { head: 'The Pond', lines: ['3× Pond Minnow — COMMON · sell
 
     console.log('── A6: ffmpeg-dead → canvas plaster GIF fallback ──');
     {
+        // ⚠ the phase trick alone can't isolate the key: when the real clock
+        // phase IS 'day', phaseAt() === 'day' and A6 would disk-hit A2's MP4.
+        // A UNIQUE ribbon guarantees a unique pg4o key at any hour.
+        const RIBBON_FB = { head: 'The Pond', lines: ['qa24-fallback-probe'] };
         process.env.FFMPEG_PATH = '/nonexistent-ffmpeg';
         const mod = require.resolve('../core/utils/mediaConvert');
         delete require.cache[mod];
-        process.env.CODE_VER = 'qa24fb';
         const dockPov2 = (() => { delete require.cache[require.resolve('../core/rpg/dockPov')]; return require('../core/rpg/dockPov'); })();
         const tC = Date.now();
-        const cC = await dockPov2.renderFishingGif({ biome: 'isle', lvl: 1, band: 'low', banner: RIBBON_A, phase: 'day' });
+        const cC = await dockPov2.renderFishingGif({ biome: 'isle', lvl: 1, band: 'low', banner: RIBBON_FB, phase: 'day' });
         check('fallback returned a GIF', cC.contentType === 'image/gif' && require('../core/utils/gif89a').isGifBuffer(cC.buffer), `${cC.buffer.length}B`);
         const f0j = require('../core/utils/gif89a').firstFrameJpeg(cC.buffer);
         const i0 = await loadImage(f0j);
