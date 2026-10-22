@@ -4856,8 +4856,13 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
     case 'decline':
       return await cmdDecline(senderJid, reply, chatId);
 
-    case 'spawn':
-      if (!isCardMod) return reply('❌ No permission.'), true;
+    case 'spawn': {
+      // 💡 OWNER RULING 2026-10-22 ("Remove global mods ability to use .j
+      // spawn, it's for only the owner me and cardmods"): forcing spawns is
+      // a card-moderator tool. isMod (global mods) no longer passes this
+      // gate — owner + cardmod roster + Cards-Mod tier only.
+      const canSpawn = isOwner || inst.modJids.has(senderJid) || isCardsMod;
+      if (!canSpawn) return reply('❌ Spawn is restricted to the owner and card moderators.'), true;
       let spawnQuery = args.join(' ').trim();
       let forceTier = null;
       if (spawnQuery.includes('|')) {
@@ -4866,15 +4871,20 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         forceTier = parts[1].trim();
       }
       if (!spawnQuery) return sendUsage(reply, `${p} spawn`, `${p} spawn <name or id> | <tier>`, `${p} spawn Roy mustang | 5`), true;
-      
+
       const spawnRes = await doSpawn(spawnQuery, forceTier, true, chatId);
       if (!spawnRes) return reply(`❌ Card not found matching "${spawnQuery}"${forceTier ? ` in Tier ${forceTier}` : ''}.`), true;
       return true;
+    }
 
     // 💡 .g espawn <name> - force-spawn an event (E-tier) card.
     // Shortcut for `.g spawn <name> | E`. Card-mod only.
-    case 'espawn':
-      if (!isCardMod) return reply('❌ No permission.'), true;
+    case 'espawn': {
+      // 💡 OWNER RULING 2026-10-22: same policy as .j spawn — the whole
+      // force-spawn family is owner + card moderators; global mods (isMod)
+      // lose it too.
+      const canEspawn = isOwner || inst.modJids.has(senderJid) || isCardsMod;
+      if (!canEspawn) return reply('❌ Event spawn is restricted to the owner and card moderators.'), true;
       const espawnQuery = args.join(' ').trim();
       if (!espawnQuery) {
         // No args → list all available event cards, grouped by event
@@ -4909,6 +4919,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         return reply(`❌ Event card not found matching "${espawnQuery}".\n\n${eventCards.length} event cards available. Use \`${p} espawn\` (no args) to list them all.`), true;
       }
       return true;
+    }
 
     // 💡 .g reloadcards - reload cards_data.json without restarting the bot.
     // Mod-only. Use after updating cards_data.json (e.g. after merging new
