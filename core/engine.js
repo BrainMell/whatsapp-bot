@@ -10567,6 +10567,12 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                   // 🧼 CLEAN TEXT: Strip WhatsApp formatting characters (*, ~, outer _) for command parsing
                   const cleanTxt = txt.replace(/[*~]/g, "").replace(/(?<!\w)_|_(?!\w)/g, "");
                   let lowerTxt = cleanTxt.toLowerCase().replace(/\s+/g, " ");
+                  // 💡 2026-10-22: common guild-command typos — normalize before
+                  // dispatch so the real handlers fire (owner: '.j guild tittle'
+                  // and '.j guild rank' died silently — 'ranks' is plural-only).
+                  lowerTxt = lowerTxt
+                    .replace(/ guild tittle(?= |$)/g, " guild title")
+                    .replace(/ guild rank(?!s)(?= |$)/g, " guild ranks");
 
                   // ⚡ PREFIX-LESS ALIASES (2026-09-17): '.lore' and '.updates …'
                   // work without any instance prefix; one sibling replies.
@@ -23210,6 +23216,17 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                       }
                       const result = await guilds.purgeAllGuilds();
                       return sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
+                    }
+
+                    // 💡 OWNER FIX 2026-10-22: `.guild <unknown>` used to fall
+                    // through every handler above and die in total silence
+                    // (owner: 'there's supposed to be an explainer message').
+                    // abyss/raid/rune all answer bad subs with a help card —
+                    // guild does the same now, pointing at `.guild guide`.
+                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild `) ||
+                        lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild`) {
+                      const _badSub = lowerTxt.slice(`${botConfig.getPrefix().toLowerCase()} guild`.length).trim().split(/\s+/)[0] || '';
+                      return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown guild command${_badSub ? `: \`${_badSub}\`` : ''}\n\n_Type \`${botConfig.getPrefix()} guild guide\` for the full command list._` });
                     }
 
                     // 💡 REMOVED 2026-09-12 (audit): `guild challenge` / `guild challenges`.
