@@ -10033,7 +10033,7 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                       const __gsMineK = `${jidNormalizedUser(sock2?.user?.id || "")}:${chatId2}`;
                       const __gsMineArr = globalThis.__gsMine.get(__gsMineK) || [];
                       __gsMineArr.push({ id: __gsId, ts: Date.now() });
-                      while (__gsMineArr.length > 5) __gsMineArr.shift();
+                      while (__gsMineArr.length > 30) __gsMineArr.shift();
                       globalThis.__gsMine.set(__gsMineK, __gsMineArr);
                       if (isMedia) console.log(`[GStatus] posted media ok (id=…${__gsId.slice(-8)}) in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
                       if (key2) await sock2.sendMessage(chatId2, { react: { text: "✅", key: key2 } }).catch(() => {});
@@ -18674,21 +18674,61 @@ Commands:
                       globalThis.__gsMine = globalThis.__gsMine || new Map();
                       const dMineK = `${jidNormalizedUser(sock?.user?.id || "")}:${chatId}`;
                       const dArr = globalThis.__gsMine.get(dMineK) || [];
-                      const dLast = dArr[dArr.length - 1];
-                      if (!dLast) {
+                      const dArg = String(argsGS[3] || "").toLowerCase();
+                      const dRevoke = async (rec) => {
+                        try { await sock.sendMessage(chatId, { delete: { remoteJid: chatId, fromMe: true, id: rec.id } }); return true; } catch (eD2) {
+                          console.log("[GStatus] delete(mine) failed:", eD2?.message); return false;
+                        }
+                      };
+                      if (!dArr.length) {
                         return await sock.sendMessage(chatId, {
                           text: BOT_MARKER + `I haven't posted a group status in this group since my last restart - nothing to delete.`,
                         });
                       }
-                      let dOk = false;
-                      try { await sock.sendMessage(chatId, { delete: { remoteJid: chatId, fromMe: true, id: dLast.id } }); dOk = true; } catch (eD2) {
-                        console.log("[GStatus] delete(mine) failed:", eD2?.message);
+                      // .gstatus delete all - revoke every status I posted here (since restart)
+                      if (dArg === "all") {
+                        const batch = dArr.splice(0, dArr.length);
+                        let okN = 0;
+                        for (const rec of batch) { if (await dRevoke(rec)) okN++; await new Promise((r) => setTimeout(r, 400)); }
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `🗑️ Revoked ${okN}/${batch.length} group status${batch.length === 1 ? "" : "es"} I posted here - check the Status tab (WhatsApp may refuse some).`,
+                        });
                       }
+                      // .gstatus delete <id> - full id or the last characters shown by `.gstatus list`
+                      if (dArg) {
+                        const idx = dArr.findIndex((r) => r.id.toLowerCase() === dArg || r.id.toLowerCase().endsWith(dArg.replace(/^…|^\.+/, "")));
+                        if (idx < 0) {
+                          return await sock.sendMessage(chatId, {
+                            text: BOT_MARKER + `No status of mine here matches \`${dArg}\`. Use \`${botConfig.getPrefix().toLowerCase()} gstatus list\` to see ids.`,
+                          });
+                        }
+                        const [rec] = dArr.splice(idx, 1);
+                        const ok1 = await dRevoke(rec);
+                        return await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + (ok1 ? `🗑️ Revoke sent for status …${rec.id.slice(-8)} - check the Status tab.` : `❌ WhatsApp refused the revoke - status revokes are best-effort.`),
+                        });
+                      }
+                      const dLast = dArr[dArr.length - 1];
+                      const dOk = await dRevoke(dLast);
                       dArr.pop();
                       return await sock.sendMessage(chatId, {
                         text: BOT_MARKER + (dOk
                           ? `🗑️ Revoke sent for my last group status here (id …${dLast.id.slice(-8)}) - check the Status tab.`
                           : `❌ WhatsApp refused the revoke - status revokes are best-effort.`),
+                      });
+                    }
+
+                    // .gstatus list - ids of the statuses I posted here (for `.gstatus delete <id>`)
+                    if (argsGS[2] === "list") {
+                      if (!canUseAdminCommands) {
+                        return await sock.sendMessage(chatId, { text: BOT_MARKER + "Admins only." });
+                      }
+                      const lArr = (globalThis.__gsMine && globalThis.__gsMine.get(`${jidNormalizedUser(sock?.user?.id || "")}:${chatId}`)) || [];
+                      const P = botConfig.getPrefix().toLowerCase();
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + (lArr.length
+                          ? `📌 Group statuses I posted here (newest last):\n` + lArr.map((r) => `• \`${r.id.slice(-8)}\` — ${new Date(r.ts).toISOString().slice(5, 16).replace("T", " ")} UTC`).join("\n") + `\n\n\`${P} gstatus delete <id>\` · \`${P} gstatus delete all\``
+                          : `I haven't posted a group status here since my last restart.`),
                       });
                     }
 
