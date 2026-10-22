@@ -111,13 +111,14 @@ const mulberry32 = K.mulberry32, hashStr = (s) => K.hashStr(String(s || ''));
 //   4. south lane east branch extended to x=14 so the SE terrace fronts it.
 const LAYOUT = {
     N,
-    house: { x: 10, y: 6, fw: 3, fh: 3 },
+    // LAYOUT v5 (2026-10-22, "move the buildings, make it more base like"): a compact village round the green —
+    // the HOUSE (town hall) sits at the head of the main street, mines + pond flank it on the north lane,
+    // market east and barracks west of the plaza, plots along the south lane.
+    house: { x: 7, y: 1, fw: 3, fh: 3 },
     mines: { x: 1, y: 1, fw: 2, fh: 2, zone: { x: 0, y: 0, fw: 5, fh: 4 } },
     pond: { x: 12, y: 1, fw: 2, fh: 2, zone: { x: 11, y: 0, fw: 5, fh: 4 } },
-    // hunting = the stone gatehouse — now the VILLAGE GATE on the main
-    // street (footprint centred on x=8); the woods gate gap lives at walkY.
-    shop: { x: 10, y: 11, fw: 2, fh: 2 },          // merchant market — south-east, fronting the south lane
-    barracks: { x: 13, y: 11, fw: 2, fh: 2 },      // summons barracks — beside the market
+    shop: { x: 10, y: 6, fw: 2, fh: 2 },
+    barracks: { x: 5, y: 6, fw: 2, fh: 2 },
     hunting: { x: 7, y: 14, fw: 2, fh: 2, zone: { x: 0, y: 5, fw: 4, fh: 8 }, fenceCol: 4, walkY: 9, walkH: 2 },
     paths: [
         // main street — gate yard (south) up to the north lane junction
@@ -395,16 +396,93 @@ function buildWorld(state, cel = null) {
     // ── the HUNTING GROUNDS = FOREST (owner 2026-10-21: "the hunting grounds is supposed to be a forest"): no camp, no
     // buildings — the west woods stay thick and a small unclaimed-by-props glade holds wandering game (deer, boar, rabbit).
     {
-        for (let gx = 0; gx <= 3; gx++) for (let gy = 6; gy <= 12; gy++) { if (gy === 9) continue; const [c, r] = hc(MX(gx), gy); if (w.inb(c, r) && gx >= 1 && gx <= 2 && gy >= 5 && gy <= 8) claim(c, r); }
-        w.__huntCell = hc(MX(2), 7);
+        for (let gx = 0; gx <= 3; gx++) for (let gy = 6; gy <= 12; gy++) { if (gy === 9) continue; const [c, r] = hc(gx, gy); if (w.inb(c, r) && gx >= 1 && gx <= 2 && gy >= 5 && gy <= 8) claim(c, r); }
+        w.__huntCell = hc(2, 7);
         try {
             const SS = require('./structureScenes');
             const crit = [[1, 6, 'deer', 38, false, true], [2, 7, 'deer', 32, true, false], [1, 8, 'boar', 30, false], [2, 5, 'deer', 26, true, false], [1, 5, 'boar', 24, true]];
             for (const [gx, gy, kind, sz, fl, st2] of crit) {
-                const [cc, rr] = hc(MX(gx), gy); if (!w.inb(cc, rr) || w.cell[rr][cc].water) continue;
+                const [cc, rr] = hc(gx, gy); if (!w.inb(cc, rr) || w.cell[rr][cc].water) continue;
                 w.overlay((ctx, p, k) => { const z2 = sz * k * 2 / 1.5; if (kind === 'deer') SS.drawDeer(ctx, p.x, p.y, z2, fl, st2); else SS.drawBoar(ctx, p.x, p.y, z2, fl); }, cc, rr, { dx: (gy % 2 ? 0.2 : -0.2) });
             }
         } catch (e) { /* decoration only */ }
+    }
+    // ── HOUSE-LEVEL ENVIRONMENT (owner 2026-10-22: "as the player upgrades his house the overall environment should improve,
+    //    brick roads blah blah"): lv1 = dirt lanes + palisade; lv2 = cobbled streets, lamp posts, flower beds, watchtowers;
+    //    lv3 = brick-paved streets, lamps on every lane, hedged gardens, statue + banners on the green, stone curtain wall.
+    {
+        const homeSt0 = (state.structures || []).find((x) => x.type === 'house');
+        const homeLv = Math.max(1, Math.min(3, (homeSt0 && homeSt0.level) || 1));
+        w.__homeLv = homeLv;
+        if (homeLv >= 2) {
+            const inVillage = (c, r) => ringDist(c, r) <= FAR_R - 1;
+            const rcells = roadList.filter(([c, r], i, a) => inVillage(c, r) && w.cell[r][c].road && a.findIndex((q) => q[0] === c && q[1] === r) === i);
+            const PAVE = homeLv >= 3
+                ? { edge: '#4a2217', base: '#a8472d', mortar: '#d98a63', dash: [4, 3.2], wd: 0.56 }
+                : { edge: '#44474c', base: '#8f949b', mortar: '#b7bbc1', dash: [2.4, 2.6], wd: 0.5 };
+            const segs = [];
+            for (const [c, r] of rcells) {
+                const a = K.hexWorld(c, r);
+                segs.push([a.x, a.z, a.x, a.z]);                                          // round cap at the centre
+                for (let e = 0; e < 6; e++) {
+                    const [nc, nr] = K.neighbor(c, r, e);
+                    if (!w.inb(nc, nr) || !w.cell[nr][nc].road || !inVillage(nc, nr)) continue;
+                    const b = K.hexWorld(nc, nr);
+                    segs.push([a.x, a.z, (a.x + b.x) / 2, (a.z + b.z) / 2]);
+                }
+            }
+            w.underlay((ctx, p, k) => {
+                const S = w.view.S * w.scale;
+                const stroke = (col, wd, dash) => {
+                    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = col; ctx.lineWidth = wd * S * 0.9; ctx.setLineDash(dash || []);
+                    ctx.beginPath();
+                    for (const [x1, z1, x2, z2] of segs) { const q1 = w.proj(x1, z1, 0.02), q2 = w.proj(x2, z2, 0.02); ctx.moveTo(q1.x, q1.y); ctx.lineTo(q2.x, q2.y + (x1 === x2 && z1 === z2 ? 0.01 : 0)); }
+                    ctx.stroke(); ctx.restore();
+                };
+                stroke(PAVE.edge, PAVE.wd + 0.1);
+                for (const [c, r] of [[pc, pr], ...K.ring(pc, pr, 1)]) {            // the green's square is paved edge to edge
+                    const poly = w.cellPoly(c, r, 0.02, 0.28);
+                    ctx.save(); ctx.fillStyle = PAVE.edge; ctx.beginPath(); poly.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); ctx.closePath(); ctx.fill(); ctx.restore();
+                    const poly2 = w.cellPoly(c, r, 0.02, 0.42);
+                    ctx.save(); ctx.fillStyle = PAVE.base; ctx.beginPath(); poly2.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); ctx.closePath(); ctx.fill(); ctx.restore();
+                }
+                stroke(PAVE.base, PAVE.wd);
+                stroke(PAVE.mortar, PAVE.wd * 0.96, PAVE.dash.map((d) => d * S * 0.09));
+                stroke(PAVE.base, PAVE.wd * 0.5);
+            }, 0, 0);
+            // lamp posts: every other cell of the main street (+ the plaza ring); lv3 adds every lane
+            const lampSet = new Set();
+            let li = 0;
+            for (const [c, r] of rcells) {
+                const g = ringDist(c, r);
+                const onMain = Math.abs(K.hexWorld(c, r).x - K.hexWorld(...hc(8, 0)).x) < 1.2;
+                if (!(onMain || homeLv >= 3 || g <= 3)) continue;
+                if ((li++) % 2) continue;
+                let ok = true; for (const q of lampSet) { const [qc, qr] = q.split(',').map(Number); if (K.hexDist(c, r, qc, qr) < 2) ok = false; }
+                if (!ok) continue;
+                lampSet.add(keyOf(c, r));
+                w.put('coc_torch', c, r, { dx: 0.8, dz: 0.5, sc: 0.8, sort: 0.2 });
+                if (homeLv >= 3 && (li % 4 === 1)) w.put('coc_torch', c, r, { dx: -0.8, dz: -0.5, sc: 0.8, sort: 0.2 });
+            }
+            // flower beds round the village green (coloured blooms on a dark soil ring)
+            const bloom = ['#ff6f91', '#ffd166', '#c77dff', '#ff9f43', '#ffffff'];
+            const ringG = K.ring(pc, pr, 2);
+            ringG.forEach(([c, r], i) => {
+                if (!w.inb(c, r) || w.cell[r][c].road || w.cell[r][c].water || used.has(keyOf(c, r))) return;
+                if (i % 2) return;
+                w.overlay((ctx, pp, k) => {
+                    const R0 = 34 * k * 2 / 1.5;
+                    ctx.save(); ctx.fillStyle = 'rgba(70,45,30,0.55)'; ctx.beginPath(); ctx.ellipse(pp.x, pp.y, R0, R0 * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+                    for (let j = 0; j < 9; j++) { const a = (j / 9) * Math.PI * 2 + i, rr = R0 * (0.25 + 0.6 * ((j * 7 + i) % 5) / 5); ctx.fillStyle = bloom[(i + j) % bloom.length]; ctx.beginPath(); ctx.arc(pp.x + Math.cos(a) * rr, pp.y + Math.sin(a) * rr * 0.55, Math.max(1.6, 3.2 * k), 0, Math.PI * 2); ctx.fill(); }
+                    ctx.restore();
+                }, c, r);
+                claim(c, r);
+            });
+            if (homeLv >= 3) {                                                            // the green gets a hero statue + banners
+                w.put('coc_statue_mighty', pc, pr, { dx: -0.9, dz: -0.7, sc: 0.9 });
+                for (const [dx, dz] of [[1.1, -0.6], [-1.1, 0.9]]) w.put('flag_' + team, pc, pr, { dx, dz, sc: 0.9 });
+            }
+        }
     }
     w.resolve();
 
@@ -611,12 +689,12 @@ function buildWorld(state, cel = null) {
         if (k.water || k.coast || k.road || used.has(keyOf(c, r))) continue;
         const gx = c - M, gy = r - M, x = rng();
         const rd = ringDist(c, r);
-        if (inGrid(gx, gy) && inZ(mz, MX(gx), gy)) {                      // quarry hills (NW, mirrored per base)
+        if (inGrid(gx, gy) && inZ(mz, gx, gy)) {                      // quarry hills (NW, mirrored per base)
             if (x < 0.62) { w.put(['mountain_A_grass_trees', 'mountain_B_grass', 'mountain_C_grass_trees', 'mountain_A'][Math.floor(rng() * 4)], c, r, { flip: flip() }); claim(c, r); }
             else if (x < 0.82) rock(c, r);
             continue;
         }
-        if (inGrid(gx, gy) && inZ(hz, MX(gx), gy)) {                      // hunting woods (W, mirrored per base)
+        if (inGrid(gx, gy) && inZ(hz, gx, gy)) {                      // hunting woods (W, mirrored per base)
             if (x < 0.93) { w.put(TREES[Math.floor(rng() * 4)], c, r, { flip: flip() }); claim(c, r); }
             continue;
         }

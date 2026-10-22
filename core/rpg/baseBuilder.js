@@ -72,20 +72,22 @@ async function loadBase(userId) {
     // — THE GATEHOUSE NOW GUARDS THE SOUTH GATE, owner "orientation still
     // weird") — relocate the FIXED structures so every base matches the new
     // village plan. Safe: nothing else can legally occupy these cells.
-    const ANCHORS = { house: LAYOUT.house, hunting: LAYOUT.hunting, shop: LAYOUT.shop, barracks: LAYOUT.barracks };
+    const ANCHORS = { house: LAYOUT.house, mines: LAYOUT.mines, pond: LAYOUT.pond, hunting: LAYOUT.hunting, shop: LAYOUT.shop, barracks: LAYOUT.barracks };
     // layout v3/v4 plot re-anchoring: built structures bought on the OLD plot
     // anchors re-seat onto the new ones (else a v2 blacksmith at 11,6 would
     // end up buried under the relocated house). Map chases every historical
     // anchor straight to its v4 home in ONE pass. Only EXACT anchors move —
     // admin-relocated structures keep their custom spot.
+    // v5 (2026-10-22): plots moved again — every historical anchor chases straight to its v5 home.
+    const NEW_PLOT = { 1: [12, 6], 2: [10, 11], 3: [5, 11], 4: [13, 11] };
+    const newKeys = new Set(Object.values(NEW_PLOT).map((a) => a.join(',')));
     const OLD_PLOT_ANCHORS = {
-        '11,6': [8, 1], '13,5': [8, 1],      // → #1 north terrace (fronts miners'/pond lane)
-        '11,10': [13, 7], '12,10': [13, 7], // → #2 SE terrace (fronts extended south lane)
-        '6,11': [5, 11], '5,11': [4, 5],     // → #3 west plaza frontage — v3's (5,11) sat
-                                             //   directly BEHIND the relocated gatehouse
-                                             //   on screen (same street diagonal), a built
-                                             //   structure there rendered ~90% hidden
+        '8,1': NEW_PLOT[1], '11,6': NEW_PLOT[1], '13,5': NEW_PLOT[1],
+        '13,7': NEW_PLOT[2], '11,10': NEW_PLOT[2], '12,10': NEW_PLOT[2],
+        '4,5': NEW_PLOT[3], '6,11': NEW_PLOT[3],
+        '2,13': NEW_PLOT[4],
     };
+    for (const k of Object.keys(OLD_PLOT_ANCHORS)) if (newKeys.has(k)) delete OLD_PLOT_ANCHORS[k];
     let dirty = missing.length > 0;
     for (const st of rec.structures || []) {
         const tgt = ANCHORS[st.type];
@@ -125,10 +127,10 @@ function plotsFor(rec) {
     // is a visual trap now: it sits directly BEHIND the relocated gatehouse
     // on the same screen diagonal, so a built structure rendered ~90% hidden
     const PLOTS = [
-        { id: 1, x: 8, y: 1 },
-        { id: 2, x: 13, y: 7 },
-        { id: 3, x: 4, y: 5 },
-        { id: 4, x: 2, y: 13 },
+        { id: 1, x: 12, y: 6 },
+        { id: 2, x: 10, y: 11 },
+        { id: 3, x: 5, y: 11 },
+        { id: 4, x: 13, y: 11 },
     ];
     return PLOTS.map((p) => {
         const cells = [];
