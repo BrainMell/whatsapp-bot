@@ -44,11 +44,12 @@
  *      --merge-out <file>      ALSO write a full merged cards_data.json
  *                              (regular cards untouched + refreshed event block)
  *      --events <a,b,c>        restrict to these slugs (default: all discovered)
- *      --passes <n>            full pagination passes per event. shoob.gg
- *                              ROTATES each listing on every request, so one
- *                              pass only samples a random slice of the pool;
- *                              repeat until a pass adds nothing new (default
- *                              4; use 12+ for a deep/first run)
+ *      --passes <n>            full pagination passes per event (default 4;
+ *                              use 12+ for a deep/first run). A pass ends at
+ *                              the first page with zero card links; passes
+ *                              repeat until one adds no new cards, defeating
+ *                              shoob's intermittent alternate tile template
+ *                              that used to truncate crawls mid-event.
  *      --concurrency <n>       parallel detail fetches (default 4)
  *      --delay <ms>            base politeness delay per worker (default 250)
  *      --refresh               re-fetch details even if cached in --out
@@ -94,7 +95,7 @@ const OPTS = {
   events:     argOf('--events', null),
   concurrency: parseInt(argOf('--concurrency', '4'), 10),
   delay:      parseInt(argOf('--delay', '250'), 10),
-  passes:     Math.max(1, parseInt(argOf('--passes', '4'), 10)),   // rotating-catalog convergence passes
+  passes:     Math.max(1, parseInt(argOf('--passes', '4'), 10)),   // multi-pass convergence (template-flake proof)
   refresh:    argv.includes('--refresh'),
   prune:      argv.includes('--prune-removed'),
   animeNameMode: argOf('--anime-name', 'series'),
@@ -330,33 +331,56 @@ function parseEventName(html, slug) {
  * production DB stores and what the bot's spawn renderer expects.
  */
 function parseListingPage(html, slug) {
-  const cards = [];
+  // v2 (2026-10-23): NEVER drop a tile. shoob intermittently serves an
+  // alternate tile template (3D-tilt "cardContent cardLoaded" wrapper with
+  // no .cardData child); the old parser skipped those, shrinking the page's
+  // row count and tripping the short-page break mid-catalog. Tiles whose
+  // name/media cannot be read here are still returned (with __unparsed) and
+  // get filled from their detail page (og:title / og:image) later.
+  const rows = [];
+  let anchors = 0;
   const anchorRe = /<a href="\/card-events\/([a-z0-9-]+)\/([0-9a-f]{24})">([\s\S]*?)<\/a>/g;
   let m;
   while ((m = anchorRe.exec(html)) !== null) {
     const [, evtSlug, mongoId, inner] = m;
     if (evtSlug !== slug) continue;
+    anchors++;
+    let imageUrl = null;
+    let cardName = null;
+    // primary template: <div class="cardData"><img|video src=... title=...>
     const media = inner.match(/<div class="cardData"><(img|video)\s+src="([^"]+)"([\s\S]*?)>/);
-    if (!media) continue;
-    const attrs = media[3];
-    const titleM = attrs.match(/title="([^"]*)"/);
-    const altM = attrs.match(/alt="([^"]*)"/);
-    const rawName = titleM ? titleM[1] : (altM ? altM[1] : '');
-    if (!rawName) continue;
-    let imageUrl = decodeEntities(media[2]);
+    if (media) {
+      const attrs = media[3];
+      const titleM = attrs.match(/title="([^"]*)"/);
+      const altM = attrs.match(/alt="([^"]*)"/);
+      const rawName = titleM ? titleM[1] : (altM ? altM[1] : '');
+      if (rawName) cardName = decodeEntities(rawName).trim();
+      imageUrl = decodeEntities(media[2]);
+    } else {
+      // alternate template: any img/video with a src + a title/alt nearby
+      const anyMedia = inner.match(/<(?:img|video)\s+[^>]*?\ssrc="([^"]+)"[^>]*>/);
+      if (anyMedia) {
+        imageUrl = decodeEntities(anyMedia[1]);
+        const tag = anyMedia[0];
+        const titleM = tag.match(/title="([^"]*)"/) || inner.match(/\stitle="([^"]*)"/);
+        const altM = tag.match(/alt="([^"]*)"/) || inner.match(/\salt="([^"]*)"/);
+        const rawName = titleM ? titleM[1] : (altM ? altM[1] : '');
+        if (rawName) cardName = decodeEntities(rawName).trim();
+      }
+    }
     // normalize resized variants -> full-res asset (matches production DB)
-    imageUrl = imageUrl.replace(/\/resized\/\d+_/, '/');
-    const cardName = decodeEntities(rawName).trim();
-    const tierFromCdn = (imageUrl.match(/\/images\/eventcards\/([^/]+)\//) || [])[1] || null;
-    cards.push({
+    if (imageUrl) imageUrl = imageUrl.replace(/\/resized\/\d+_/, '/');
+    const tierFromCdn = imageUrl ? ((imageUrl.match(/\/images\/eventcards\/([^/]+)\//) || [])[1] || null) : null;
+    rows.push({
       mongoId,
-      cardName,
-      imageUrl,
+      cardName: cardName || '',
+      imageUrl: imageUrl || '',
       tierFromCdn,
       detailUrl: `${BASE}/card-events/${slug}/${mongoId}`,
+      __unparsed: !(cardName && imageUrl),
     });
   }
-  return cards;
+  return { rows, anchors };
 }
 
 /**
@@ -384,7 +408,19 @@ function parseDetail(html) {
   const tierM = html.match(/Tier\s+([1-6S])\b/) || html.match(/\bT([1-6S])\b/);
   if (tierM) tier = tierM[1];
 
-  return { realSeries, creator, tier, desc };
+  // v2: og:title + og:image let alternate-template tiles (no readable
+  // listing markup) get their cardName/imageUrl from the detail page.
+  const ogTitle =
+    html.match(/property="og:title"\s+content="([\s\S]*?)"/) ||
+    html.match(/content="([\s\S]*?)"\s+property="og:title"/) || null;
+  const ogImage =
+    html.match(/property="og:image"\s+content="([\s\S]*?)"/) ||
+    html.match(/content="([\s\S]*?)"\s+property="og:image"/) || null;
+  return {
+    realSeries, creator, tier, desc,
+    ogTitle: ogTitle ? decodeEntities(ogTitle[1]).trim() : null,
+    ogImage: ogImage ? decodeEntities(ogImage[1]) : null,
+  };
 }
 
 // ── DB reference (id preservation + canonical event names) ──────────────────
@@ -474,56 +510,56 @@ async function runPool(items, worker, concurrency, delay) {
     eventNameBySlug.set(slug, eventName);
     console.log(`[event] ${slug} -> "${eventName}" (site title: "${siteName}")`);
 
-    // ROTATING-CATALOG CRAWL (2026-10-23): shoob.gg re-shuffles each event's
-    // listing on every request (verified: ?page=2 returns different cards per
-    // fetch; the full Halloween pool is 1148 cards over 78 pages while one
-    // linear crawl stops at a random ~23-page slice and never sees the deep
-    // pages — that is how 805 Halloween cards incl. every Naruto card were
-    // missed). So a short page is NOT the last page and one no-fresh page
-    // does NOT mean we are done: walk the full pagination REPEATEDLY until a
-    // whole pass adds nothing new (or --passes cap). Details stay cached, so
-    // re-runs never re-fetch known cards.
+    // ANCHOR-COMPLETE CRAWL (2026-10-23): the old loop trusted
+    // "parsed rows < 15 = last page", but shoob's alternate tile template
+    // can shrink a full page's parsed rows (verified: page 23 once parsed
+    // 11 of 15 tiles) — that break stranded EVERY crawl at page 23 and the
+    // miner silently missed 805/1148 Halloween cards incl. every Naruto
+    // card. Now: pagination is decided by ANCHOR count (0 anchors = page
+    // end), unparsed tiles are still recorded (name/media recovered from
+    // their detail pages), and the whole pagination is walked repeatedly
+    // (--passes) until a pass adds no new mongoIds, so template flakiness
+    // cannot lose cards.
     const seen = new Set();
     let eventCount = 0;
     let pagesWithCards = 0;
     let listingFailures = 0;
+    let unparsedTiles = 0;
     let pass = 0;
-    const MAX_NOFRESH_STREAK = 10;   // same-slice re-serve guard per pass
     while (pass < OPTS.passes) {
       pass++;
       let freshInPass = 0;
-      let noFreshStreak = 0;
       for (let page = 1; page <= MAX_PAGES_PER_EVENT; page++) {
         let html;
         try {
-          // page 1 must be RE-fetched every pass: the catalog rotates per
-          // request, so reusing firstHtml would pin pass 1's slice forever
+          // page 1 must be RE-fetched every pass: tile markup varies per
+          // request, so reusing firstHtml would pin pass 1's variants
           html = await fetchText(`${BASE}/card-events/${slug}${page === 1 ? '' : `?page=${page}`}`);
         } catch (e) {
-          // transient site stall — end this pass, keep what we have
+          // transient site stall — do NOT kill the whole run; end this pass
           console.warn(`[warn] listing page failed for ${slug}?page=${page}: ${e.message} — ending this pass here`);
           listingFailures++;
           break;
         }
-        const rows = parseListingPage(html, slug);
-        if (!rows.length) break;              // pagination end for this pass
+        const { rows, anchors } = parseListingPage(html, slug);
+        if (!anchors) break;              // page with zero card links = pagination end
         let added = 0;
         for (const r of rows) {
           if (!seen.has(r.mongoId)) { seen.add(r.mongoId); listing.push({ slug, eventName, ...r }); added++; }
+          if (r.__unparsed) unparsedTiles++;
         }
         eventCount += added;
         freshInPass += added;
-        noFreshStreak = added === 0 ? noFreshStreak + 1 : 0;
         if (pass === 1) { pagesWithCards++; processedPages.push(`event:${slug}:p${page}`); }
-        if (rows.length < PAGE_SIZE) break;   // short page = end of this pass
-        if (noFreshStreak >= MAX_NOFRESH_STREAK) break;  // stuck re-serving a known slice
+        if (anchors < PAGE_SIZE) break;   // genuinely short page (e.g. 8 tiles) = pass end
         await sleep(jitter(OPTS.delay * THROTTLE));
       }
       console.log(`[event] ${slug} pass ${pass}/${OPTS.passes}: +${freshInPass} new (total ${eventCount})`);
-      if (freshInPass === 0) break;           // converged — a full pass found nothing new
+      if (freshInPass === 0) break;       // converged — a full pass found nothing new
       if (pass < OPTS.passes) await sleep(jitter(OPTS.delay * THROTTLE));
     }
-    console.log(`[event] ${slug}: ${eventCount} cards over ${pass} pass(es)${listingFailures ? ` (${listingFailures} page fetch failure${listingFailures > 1 ? 's' : ''})` : ''}`);
+    if (unparsedTiles) console.warn(`[warn] ${slug}: ${unparsedTiles} tile fetch(es) came back unparsed — names/media will be recovered from detail pages`);
+    console.log(`[event] ${slug}: ${eventCount} cards on ${pagesWithCards} page(s) over ${pass} pass(es)${listingFailures ? ` (${listingFailures} page fetch failure${listingFailures > 1 ? 's' : ''})` : ''}`);
   }
 
   // 4. dedupe listings across events (same mongoId twice = safety)
@@ -552,7 +588,14 @@ async function runPool(items, worker, concurrency, delay) {
     try { fs.writeFileSync(cachePath, JSON.stringify(Object.fromEntries(detailByUrl))); } catch {}
   };
 
-  const needFetch = unique.filter(r => OPTS.refresh || !detailByUrl.has(r.detailUrl));
+  const needFetch = unique.filter(r => {
+    if (OPTS.refresh) return true;
+    const d = detailByUrl.get(r.detailUrl);
+    if (!d) return true;
+    // alternate-template tiles need (re)fetch until the cache holds og fields
+    if (r.__unparsed && !(d.ogTitle && d.ogImage)) return true;
+    return false;
+  });
   const cachedCount = unique.length - needFetch.length;
   console.log(`[details] ${cachedCount} cached, ${needFetch.length} to fetch`);
 
@@ -581,21 +624,31 @@ async function runPool(items, worker, concurrency, delay) {
     const eventName = row.eventName;
     const tier = d.tier || row.tierFromCdn || '1';
     const animeName = (OPTS.animeNameMode === 'series' && d.realSeries) ? d.realSeries : eventName;
+    // v2: alternate-template tiles fall back to the detail page's og fields
+    const cardName = row.cardName || d.ogTitle || '';
+    const imageUrl = row.imageUrl || d.ogImage || '';
     return {
-      cardName: row.cardName,
+      cardName,
       animeName,
       tier,
       // production DB convention: unknown makers are 'Anonymous' (legacy
       // Puppeteer scrape wrote that; keep it so values stay consistent)
       creator: (d.creator != null && d.creator !== '') ? d.creator : 'Anonymous',
-      imageUrl: row.imageUrl,
+      imageUrl,
       detailUrl: row.detailUrl,
-      description: `${row.cardName} from ${eventName}`,
+      description: `${cardName} from ${eventName}`,
       eventName,
       _mongoId: row.mongoId,
       _realSeries: d.realSeries,
     };
   });
+  {
+    // never emit nameless/medialess records: promote's block sanity rejects
+    // them; the next cycle re-fetches those tiles/details and retries
+    const incomplete = records.filter(r => !r.cardName || !r.imageUrl);
+    for (const r of incomplete) records.splice(records.indexOf(r), 1);
+    if (incomplete.length) console.warn(`[warn] dropped ${incomplete.length} record(s) still missing cardName/imageUrl after detail fallback — retried next cycle`);
+  }
 
   // 7. id assignment — preserve existing, append new (deterministic)
   let nextE = ref ? ref.maxE : 0;
