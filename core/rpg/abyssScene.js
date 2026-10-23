@@ -722,16 +722,20 @@ async function planCombatLayout(state, opts = {}) {
             for (const s of __summons) __arc.push({ kind: 'summon', ref: s });
             for (let i = 0; i < __arc.length && i < 2; i++) {
                 const a = __arc[i];
-                const slot = { cx: 400 - i * 118, gy: 640 + i * 8 };
+                // 2026-10-23 (owner: "abyss boss fights have unique arrangements ... summon placement is all wonky"):
+                // the old slots (cx 400/282, feet y 640/648) sat on the frozen HUD panel (x<500, top 648) and the two allies
+                // overlapped each other. Allies now flank the hero on the OPEN right side of the stage, staggered in depth,
+                // clear of the panel, facing the boss at centre (left-facing).
+                const slot = { cx: 800 + i * 215, gy: 735 - i * 34 };
                 if (a.kind === 'coop') {
                     const file = playerSpriteFileFor(a.ref);
                     const art = await coopMemberArt(a.ref);
                     plan.allies.push({
                         art,
                         cx: slot.cx, gy: slot.gy,
-                        h: Math.round(perspH(slot.gy) * (i === 0 ? 0.62 : 0.56)),
-                        // boss path hero faces the boss un-mirrored — members match
-                        flip: false,
+                        h: Math.round(perspH(slot.gy) * (i === 0 ? 0.56 : 0.5)),
+                        // right-flank members face LEFT toward the boss: mirror native-RIGHT art (LEFT / frontal stay)
+                        flip: (() => { const k = playerFaceKey(file); return !(PLAYER_ART_FACES_NEVER.has(k) || PLAYER_ART_FACES_LEFT.has(k)); })(),
                         name: safeName((a.ref && a.ref.name) || 'Ally', 16),
                         isCoop: true, file,
                     });
@@ -741,13 +745,13 @@ async function planCombatLayout(state, opts = {}) {
                     plan.allies.push({
                         art: art ? { img: art.img, file: art.file } : null,
                         cx: slot.cx, gy: slot.gy,
-                        h: Math.round(perspH(slot.gy) * (i === 0 ? 0.62 : 0.56)),
+                        h: Math.round(perspH(slot.gy) * (i === 0 ? 0.56 : 0.5)),
                         // round-16 FIX: boss allies stand LEFT of the boss and face
                         // RIGHT toward it — mirror the natively-LEFT art (same
                         // rule as the side-path ally arc). The old FACES_RIGHT
                         // test inverted this: boar/snake/dino/plaguefang/reptile
                         // were mirrored to face AWAY from the boss.
-                        flip: art ? SUMMON_FACES_LEFT.has(summonFaceKey(art.file)) : false,
+                        flip: art ? SUMMON_FACES_RIGHT.has(summonFaceKey(art.file)) : false,   // right flank → face LEFT: mirror native-RIGHT art
                         name: safeName(s.name, 16),
                     });
                 }
