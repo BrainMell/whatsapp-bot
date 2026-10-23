@@ -169,6 +169,7 @@ function mainSpriteOf(st, lvl, team) {
     if (T === 'alchemy') {
         // dedicated models (alchemy centre 3D): brew hut → glasshouse → observatory;
         // barrel/tavern stand-ins stay as the fallback when sprites are missing
+        if (K.hasSprite('struct_alc_tower_1', 'iso')) return { name: 'struct_alc_tower_' + lvl, sc: lvl === 1 ? 1.6 : lvl === 2 ? 1.5 : 1.4 };   // identity rework: stillhouse → balcony tower → research complex
         if (K.hasSprite('struct_alc_brewhut', 'iso')) return { name: ['struct_alc_brewhut', 'struct_alc_glasshouse', 'struct_alc_observatory'][lvl - 1], sc: lvl === 1 ? 1.9 : lvl === 2 ? 1.75 : 1.6 };
         return lvl === 1 ? { name: 'barrel', sc: 1.6 } : { name: 'building_tavern_' + team, sc: lvl === 2 ? 1.5 : 1.9 };
     }
@@ -781,7 +782,11 @@ function buildWorld(state, cel = null) {
                 else { P('building_church_' + team, { sc: 1.8 }); P('building_well_' + team, { dx: 1.8, dz: 1.0 }); P('flag_' + team, { dx: -1.6, dz: 1.0 }); }
                 break;
             case 'alchemy':                                               // dedicated models: brew hut → glasshouse → observatory
-                if (K.hasSprite('struct_alc_brewhut', 'iso')) {
+                if (K.hasSprite('struct_alc_tower_1', 'iso')) {
+                    P('struct_alc_tower_' + lvl, { sc: lvl === 1 ? 1.6 : lvl === 2 ? 1.5 : 1.4 });
+                    P('bucket_water', { dx: 1.5, dz: 1.1 }); if (lvl === 3) P('coc_statue_wizard', { dx: -1.8, dz: 1.2, sc: 0.65 });
+                    break;
+                } else if (K.hasSprite('struct_alc_brewhut', 'iso')) {
                     P(['struct_alc_brewhut', 'struct_alc_glasshouse', 'struct_alc_observatory'][lvl - 1], { sc: lvl === 1 ? 1.9 : lvl === 2 ? 1.75 : 1.6 });
                     P('bucket_water', { dx: 1.4, dz: 1.0 }); if (lvl === 3) P('coc_statue_wizard', { dx: -1.7, dz: 1.2, sc: 0.65 });
                     break;
