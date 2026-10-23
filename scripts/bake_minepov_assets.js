@@ -336,66 +336,128 @@ function hexGlow(hex) {
     return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},0.55)`;
 }
 
+/** rounded-rect path helper (r ≈ h/2 ⇒ capsule) */
+function rr(ctx, x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y); ctx.arc(x + w - r, y + r, r, -Math.PI / 2, 0);
+    ctx.lineTo(x + w, y + h - r); ctx.arc(x + w - r, y + h - r, r, 0, Math.PI / 2);
+    ctx.lineTo(x + r, y + h); ctx.arc(x + r, y + h - r, r, Math.PI / 2, Math.PI);
+    ctx.lineTo(x, y + r); ctx.arc(x + r, y + r, r, Math.PI, Math.PI * 1.5);
+    ctx.closePath();
+}
+
+/** small irregular ground pebble (rng consumed deterministically ⇒ loop closes) */
+function pebble(ctx, px, py, pr, fill, rng) {
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+        const a = i / 5 * Math.PI * 2 + rng() * 0.9;
+        const d = pr * (0.72 + rng() * 0.5);
+        const vx = px + Math.cos(a) * d, vy = py + Math.sin(a) * d * 0.7;
+        if (i === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
+    }
+    ctx.closePath(); ctx.fill();
+}
+
 /** ⚙️ the STEAM-DRILL RIG (Task 25, owner: "instead of a person doing that make
- *  it a machine or something") — replaces the miner at the SAME working spot:
- *  crawler tracks, riveted boiler hull, lit cab, spinning flywheel, exhaust
- *  smoke, and a drill bit chewing the face with a steady chip stream. Animated
- *  on t (flywheel spin, bit spiral, hull vibration, puff cycle, chip arcs) —
- *  pre-seeded so the 36-frame loop closes perfectly.
+ *  it a machine or something") — replaces the miner at the SAME working spot.
+ *  R2 (owner: "too boxy … vibe of something floating"): rounded capsule boiler,
+ *  arched cab + roof lip, tapered funnel with flared cap, steam dome, cleated
+ *  tracks sunk into the floor, two-layer shadow skewed with the torch light,
+ *  rubble piled against the tracks and under the bit, ground dust — the rig
+ *  reads as WEIGHED DOWN on the cavern floor. Animated on t (flywheel spin,
+ *  bit spiral, hull vibration, puff cycle, chip arcs) — pre-seeded so the
+ *  36-frame loop closes perfectly.
  */
 function machine(ctx, P, x, y, s, t, band, rng) {
     const TAU = Math.PI * 2;
     const vib = Math.sin(t * TAU * 6) * 0.9;            // hull vibration
-    // ground shadow
-    ctx.save(); ctx.globalAlpha = 0.3; ctx.fillStyle = '#000000';
-    ctx.beginPath(); ctx.ellipse(x - 6 * s, y + 2 * s, 86 * s, 8 * s, 0, 0, TAU); ctx.fill(); ctx.restore();
+
+    // ── GROUNDED: wide soft shadow, skewed toward +x (torch light is on the left)
+    const sg = ctx.createRadialGradient(x + 12 * s, y + 2 * s, 4 * s, x + 12 * s, y + 2 * s, 102 * s);
+    sg.addColorStop(0, 'rgba(0,0,0,0.36)'); sg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.save(); ctx.fillStyle = sg;
+    ctx.beginPath(); ctx.ellipse(x + 12 * s, y + 2 * s, 102 * s, 13 * s, 0, 0, TAU); ctx.fill(); ctx.restore();
+    // tight dark contact strip right under the tracks
+    ctx.save(); ctx.globalAlpha = 0.34; ctx.fillStyle = '#000000';
+    ctx.beginPath(); ctx.ellipse(x + 4 * s, y + 1 * s, 84 * s, 5 * s, 0, 0, TAU); ctx.fill(); ctx.restore();
 
     ctx.save(); ctx.translate(x + vib, y); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-    // ── crawler tracks
+    // ── crawler tracks (sunk 2px into the floor so the weight reads)
     ctx.fillStyle = '#1d1d24';
-    ctx.beginPath(); ctx.moveTo(-80 * s, -16 * s); ctx.lineTo(58 * s, -16 * s);
-    ctx.arc(58 * s, -9 * s, 9 * s, -Math.PI / 2, Math.PI / 2);
-    ctx.lineTo(-80 * s, 0); ctx.arc(-80 * s, -9 * s, 9 * s, Math.PI / 2, Math.PI * 1.5);
+    ctx.beginPath(); ctx.moveTo(-80 * s, -14 * s); ctx.lineTo(58 * s, -14 * s);
+    ctx.arc(58 * s, -7 * s, 9 * s, -Math.PI / 2, Math.PI / 2);
+    ctx.lineTo(-80 * s, 2 * s); ctx.arc(-80 * s, -7 * s, 9 * s, Math.PI / 2, Math.PI * 1.5);
     ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#34343e'; ctx.lineWidth = 2.2 * s;
+    for (const cx2 of [-70, -55, -40, -25, -10, 5, 20, 35, 50]) {
+        ctx.beginPath(); ctx.moveTo(cx2 * s, -14 * s); ctx.lineTo(cx2 * s, -4 * s); ctx.stroke();
+    }
     ctx.fillStyle = '#4a4a56';
-    for (const wx of [-62, -30, 2, 36]) { ctx.beginPath(); ctx.arc(wx * s, -9 * s, 6.5 * s, 0, TAU); ctx.fill();
-        ctx.fillStyle = '#101016'; ctx.beginPath(); ctx.arc(wx * s, -9 * s, 2.6 * s, 0, TAU); ctx.fill(); ctx.fillStyle = '#4a4a56'; }
-    // ── riveted boiler hull (rust red, torch-warmed)
+    for (const wx of [-62, -30, 2, 36]) { ctx.beginPath(); ctx.arc(wx * s, -7 * s, 6.5 * s, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#101016'; ctx.beginPath(); ctx.arc(wx * s, -7 * s, 2.6 * s, 0, TAU); ctx.fill(); ctx.fillStyle = '#4a4a56'; }
+    // ── riveted boiler hull — rounded CAPSULE (no more trapezoid)
     ctx.fillStyle = '#8a4a2a'; ctx.strokeStyle = '#2b150a'; ctx.lineWidth = 2.2 * s;
-    ctx.beginPath(); ctx.moveTo(-70 * s, -24 * s); ctx.lineTo(56 * s, -24 * s); ctx.lineTo(50 * s, -92 * s); ctx.lineTo(-64 * s, -92 * s); ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.strokeStyle = 'rgba(43,21,10,0.55)'; ctx.lineWidth = 1.2 * s;
-    ctx.beginPath(); ctx.moveTo(-67 * s, -56 * s); ctx.lineTo(53 * s, -56 * s); ctx.stroke();
+    rr(ctx, -74 * s, -94 * s, 132 * s, 72 * s, 35 * s); ctx.fill(); ctx.stroke();
+    // curved boiler bands — sell the cylinder
+    ctx.strokeStyle = 'rgba(43,21,10,0.5)'; ctx.lineWidth = 1.6 * s;
+    for (const bx of [-34, 4]) { ctx.beginPath(); ctx.ellipse(bx * s, -58 * s, 7 * s, 33 * s, 0, 0, TAU); ctx.stroke(); }
     ctx.fillStyle = '#c98a4a';
-    for (const [rx, ry] of [[-58, -84], [-58, -32], [44, -84], [44, -32], [-6, -32]]) { ctx.beginPath(); ctx.arc(rx * s, ry * s, 1.8 * s, 0, TAU); ctx.fill(); }
-    // torch-side rim light on the hull's left edge
-    ctx.strokeStyle = 'rgba(255,214,150,0.4)'; ctx.lineWidth = 1.6 * s;
-    ctx.beginPath(); ctx.moveTo(-70 * s, -24 * s); ctx.lineTo(-64 * s, -92 * s); ctx.stroke();
-    // ── cab with a lit window
+    for (const [rx2, ry2] of [[-54, -84], [-54, -32], [38, -84], [38, -32], [-12, -88], [-12, -28]]) {
+        ctx.beginPath(); ctx.arc(rx2 * s, ry2 * s, 1.8 * s, 0, TAU); ctx.fill();
+    }
+    // steam dome on the boiler top
+    ctx.fillStyle = '#95512d'; ctx.strokeStyle = '#2b150a'; ctx.lineWidth = 2 * s;
+    ctx.beginPath(); ctx.arc(-12 * s, -94 * s, 12 * s, Math.PI, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#c98a4a'; ctx.beginPath(); ctx.arc(-12 * s, -103 * s, 2 * s, 0, TAU); ctx.fill();
+    // torch-side rim light following the hull's left curve
+    ctx.strokeStyle = 'rgba(255,214,150,0.4)'; ctx.lineWidth = 1.8 * s;
+    ctx.beginPath(); ctx.arc(-39 * s, -58 * s, 34 * s, Math.PI * 0.72, Math.PI * 1.32); ctx.stroke();
+    // ── cab: arched top corners + roof lip (no hard box)
     ctx.fillStyle = '#a85a32'; ctx.strokeStyle = '#2b150a'; ctx.lineWidth = 2.2 * s;
-    ctx.fillRect(14 * s, -136 * s, 42 * s, 44 * s); ctx.strokeRect(14 * s, -136 * s, 42 * s, 44 * s);
-    ctx.fillStyle = '#2b150a'; ctx.fillRect(19 * s, -130 * s, 30 * s, 24 * s);
-    ctx.fillStyle = '#ffd98a'; ctx.fillRect(21 * s, -128 * s, 26 * s, 20 * s);
-    // ── exhaust stack + smoke puffs (loop-closing cycle)
-    ctx.fillStyle = '#3c3c46'; ctx.fillRect(-46 * s, -148 * s, 9 * s, 56 * s);
+    ctx.beginPath();
+    ctx.moveTo(14 * s, -92 * s);
+    ctx.lineTo(14 * s, -126 * s);
+    ctx.quadraticCurveTo(14 * s, -136 * s, 25 * s, -136 * s);
+    ctx.lineTo(53 * s, -136 * s);
+    ctx.quadraticCurveTo(64 * s, -136 * s, 64 * s, -126 * s);
+    ctx.lineTo(64 * s, -92 * s);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#7a3c20';
+    rr(ctx, 10 * s, -142 * s, 58 * s, 8 * s, 4 * s); ctx.fill();
+    // lit window (rounded)
+    ctx.fillStyle = '#2b150a'; rr(ctx, 20 * s, -124 * s, 30 * s, 22 * s, 5 * s); ctx.fill();
+    ctx.fillStyle = '#ffd98a'; rr(ctx, 22 * s, -122 * s, 26 * s, 18 * s, 4 * s); ctx.fill();
+    // ── exhaust funnel: tapered body + flared cap (classic steam funnel)
+    ctx.fillStyle = '#3c3c46'; ctx.strokeStyle = '#1c1c22'; ctx.lineWidth = 1.6 * s;
+    ctx.beginPath(); ctx.moveTo(-48 * s, -94 * s); ctx.lineTo(-44 * s, -136 * s);
+    ctx.lineTo(-35 * s, -136 * s); ctx.lineTo(-31 * s, -94 * s); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#4a4a56';
+    rr(ctx, -51 * s, -145 * s, 24 * s, 9 * s, 4.5 * s); ctx.fill();
+    // smoke puffs (loop-closing cycle)
     for (let i = 0; i < 3; i++) {
         const ph = (t * 0.9 + i / 3) % 1;
-        const px = -41 * s + Math.sin(ph * 5 + i * 2.1) * 4 * s, py = -152 * s - ph * 26 * s, pr = (4.5 + ph * 8) * s;
+        const px = -39 * s + Math.sin(ph * 5 + i * 2.1) * 4 * s, py = -150 * s - ph * 26 * s, pr = (4.5 + ph * 8) * s;
         ctx.save(); ctx.globalAlpha = 0.38 * (1 - ph);
         ctx.fillStyle = '#e8e4dc'; ctx.beginPath(); ctx.arc(px, py, pr, 0, TAU); ctx.fill(); ctx.restore();
     }
     // ── flywheel (spins with t)
     const fwA = t * TAU;
-    ctx.fillStyle = '#33333c'; ctx.beginPath(); ctx.arc(-32 * s, -58 * s, 20 * s, 0, TAU); ctx.fill();
-    ctx.strokeStyle = '#6a6a78'; ctx.lineWidth = 2.4 * s;
-    for (let i = 0; i < 6; i++) { const a2 = fwA + i / 6 * TAU; ctx.beginPath(); ctx.moveTo(-32 * s, -58 * s); ctx.lineTo(-32 * s + Math.cos(a2) * 17 * s, -58 * s + Math.sin(a2) * 17 * s); ctx.stroke(); }
-    ctx.fillStyle = '#c9a65a'; ctx.beginPath(); ctx.arc(-32 * s, -58 * s, 4 * s, 0, TAU); ctx.fill();
-    // ── drill boom + spinning bit (the face is to the RIGHT, contact ≈ +122)
+    ctx.fillStyle = '#33333c'; ctx.beginPath(); ctx.arc(-32 * s, -56 * s, 20 * s, 0, TAU); ctx.fill();
+    ctx.strokeStyle = '#6a6a78'; ctx.lineWidth = 2 * s;
+    ctx.beginPath(); ctx.arc(-32 * s, -56 * s, 20 * s, 0, TAU); ctx.stroke();
+    ctx.lineWidth = 2.4 * s;
+    for (let i = 0; i < 6; i++) { const a2 = fwA + i / 6 * TAU; ctx.beginPath(); ctx.moveTo(-32 * s, -56 * s); ctx.lineTo(-32 * s + Math.cos(a2) * 17 * s, -56 * s + Math.sin(a2) * 17 * s); ctx.stroke(); }
+    ctx.fillStyle = '#c9a65a'; ctx.beginPath(); ctx.arc(-32 * s, -56 * s, 4 * s, 0, TAU); ctx.fill();
+    // ── drill boom + spinning bit (the face is to the RIGHT, contact ≈ +124)
     ctx.strokeStyle = '#5a5a66'; ctx.lineWidth = 9 * s;
-    ctx.beginPath(); ctx.moveTo(48 * s, -84 * s); ctx.lineTo(106 * s, -58 * s); ctx.stroke();
-    ctx.fillStyle = '#6a6a78'; ctx.beginPath(); ctx.arc(48 * s, -84 * s, 7 * s, 0, TAU); ctx.fill();
-    // housing + spiral-striped bit, spiral phase rolls with t
+    ctx.beginPath(); ctx.moveTo(46 * s, -86 * s); ctx.lineTo(106 * s, -58 * s); ctx.stroke();
+    ctx.fillStyle = '#6a6a78'; ctx.beginPath(); ctx.arc(46 * s, -86 * s, 7 * s, 0, TAU); ctx.fill();
+    // rounded housing — wide enough to BRIDGE the boom and the bit (no gap)
     ctx.fillStyle = '#8a94a2'; ctx.strokeStyle = '#20242c'; ctx.lineWidth = 1.6 * s;
-    ctx.fillRect(100 * s, -72 * s, 16 * s, 26 * s); ctx.strokeRect(100 * s, -72 * s, 16 * s, 26 * s);
+    rr(ctx, 96 * s, -76 * s, 28 * s, 32 * s, 9 * s); ctx.fill(); ctx.stroke();
     const spin = (t * 4) % 1;
     ctx.save(); ctx.beginPath(); ctx.moveTo(116 * s, -70 * s); ctx.lineTo(132 * s, -58 * s); ctx.lineTo(122 * s, -24 * s); ctx.lineTo(108 * s, -40 * s); ctx.closePath(); ctx.clip();
     for (let i = -2; i < 7; i++) {
@@ -408,13 +470,37 @@ function machine(ctx, P, x, y, s, t, band, rng) {
     ctx.beginPath(); ctx.moveTo(116 * s, -70 * s); ctx.lineTo(132 * s, -58 * s); ctx.lineTo(122 * s, -24 * s); ctx.stroke();
     // headlamp on the cab's face-side
     const lampA = 0.75 + 0.25 * Math.sin(t * TAU * 3);
-    ctx.fillStyle = '#ffe9a8'; ctx.beginPath(); ctx.arc(58 * s, -112 * s, 3.4 * s, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#ffe9a8'; ctx.beginPath(); ctx.arc(61 * s, -116 * s, 3.4 * s, 0, TAU); ctx.fill();
     ctx.restore();
-    glow(ctx, x + 58 * s, y - 112 * s, 26 * s, 'rgba(255,224,150,0.8)', 0.45 * lampA);
+    glow(ctx, x + 61 * s, y - 116 * s, 26 * s, 'rgba(255,224,150,0.8)', 0.45 * lampA);
+
+    // ── GROUNDED details: rubble piled against the tracks + spoil under the bit
+    //    (pre-seeded — every frame shows the SAME rocks, loop closes)
+    const rockCols = [P.wall, P.wallDark, P.rim, P.wallLight];
+    for (let i = 0; i < 7; i++) {
+        const prx = (-88 + rng() * 138) * s, pry = (-1 + rng() * 4) * s, prd = (1.6 + rng() * 2.6) * s;
+        pebble(ctx, x + prx, y + pry, prd, rockCols[i % 4], rng);
+    }
+    for (let i = 0; i < 5; i++) {
+        const prx = (102 + rng() * 36) * s, pry = (-4 + rng() * 6) * s, prd = (1.8 + rng() * 3.2) * s;
+        pebble(ctx, x + prx, y + pry, prd, rockCols[(i + 1) % 4], rng);
+    }
+    // ground dust wisps drifting from the tracks toward the face
+    for (let i = 0; i < 3; i++) {
+        const ph = (t * 0.7 + i / 3) % 1;
+        ctx.save(); ctx.globalAlpha = 0.13 * (1 - ph);
+        ctx.fillStyle = P.dust;
+        ctx.beginPath(); ctx.ellipse(x + (60 + ph * 90) * s, y - 3 * s - ph * 5 * s, (7 + ph * 12) * s, (2.4 + ph * 3) * s, 0, 0, TAU); ctx.fill();
+        ctx.restore();
+    }
 
     // ── steady chip stream at the bit contact (pre-seeded, loops close)
     const fx = x + 124 * s, fy = y - 26 * s;
     glow(ctx, fx, fy, 26 * s, 'rgba(255,236,190,0.9)', 0.4 + 0.2 * Math.sin(t * TAU * 8));
+    // dust pulse where the chips land
+    ctx.save(); ctx.globalAlpha = 0.10 + 0.06 * Math.sin(t * TAU * 8);
+    ctx.fillStyle = P.dust;
+    ctx.beginPath(); ctx.ellipse(fx, y - 4 * s, 13 * s, 4.5 * s, 0, 0, TAU); ctx.fill(); ctx.restore();
     for (let i = 0; i < 6; i++) {
         const ph = (t + i / 6) % 1;
         const crng = mulberry32(0xC41F + i * 17);

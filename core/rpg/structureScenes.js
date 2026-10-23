@@ -306,63 +306,126 @@ function drawMiner(ctx, x, y, s, flip = false) {
     ctx.fillStyle = '#ffe9a3'; ctx.beginPath(); ctx.arc(0.16 * s, -1.62 * s, 0.07 * s, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
 }
+/** small irregular ground pebble (deterministic rng ⇒ same rocks every render) */
+function _pebble(ctx, px, py, pr, fill, rng) {
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+        const a = i / 5 * Math.PI * 2 + rng() * 0.9;
+        const d = pr * (0.72 + rng() * 0.5);
+        const vx = px + Math.cos(a) * d, vy = py + Math.sin(a) * d * 0.7;
+        if (i === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
+    }
+    ctx.closePath(); ctx.fill();
+}
 /** ⚙️ The mine MACHINE (Task 25, owner 2026-10-23: ".j mine, instead of a person
  *  doing that make it a machine or something"). A tracked steam-drill rig in the
- *  same flat-shaded style as the other actors: crawler tracks, riveted boiler
- *  hull, lit cab, flywheel, exhaust smoke and a drill bit chewing the rock face
- *  to the LEFT (flip to mirror). Anchor (x, y) = ground point, s ≈ height unit.
+ *  same flat-shaded style as the other actors. R2 (owner: "too boxy … vibe of
+ *  something floating — make sure visually it's clear it's on the ground"):
+ *  rounded capsule boiler, arched cab + roof lip, tapered funnel with flared
+ *  cap, steam dome, cleated tracks sunk into the floor, wide shadow skewed with
+ *  the light, contact darkening, rubble piled against the tracks and under the
+ *  bit, ground dust — the rig reads WEIGHED DOWN on the floor. Anchor (x, y) =
+ *  ground point, s ≈ height unit. Bit chews the face to the LEFT (flip mirrors).
  */
 function drawMineMachine(ctx, x, y, s, seed = 1, flip = false) {
     const rng = mulberry32(hashStr(`machine:${seed}`));
     ctx.save(); ctx.translate(x, y); if (flip) ctx.scale(-1, 1);
-    shade(ctx, 0, 0.05 * s, 1.5 * s, 0.2 * s, 0.28);
+    // ── grounded: wide soft shadow + tight contact strip under the tracks
+    ctx.save(); ctx.fillStyle = 'rgba(20,14,6,0.30)';
+    ctx.beginPath(); ctx.ellipse(0.05 * s, 0.055 * s, 1.68 * s, 0.22 * s, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    shade(ctx, 0.02 * s, 0.022 * s, 1.32 * s, 0.10 * s, 0.30);
     ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-    // ── crawler tracks
+    // ── crawler tracks (sunk into the floor so the weight reads)
     ctx.fillStyle = '#26262c';
-    ctx.beginPath(); ctx.moveTo(-1.18 * s, -0.5 * s); ctx.lineTo(1.02 * s, -0.5 * s);
-    ctx.arc(1.02 * s, -0.29 * s, 0.21 * s, -Math.PI / 2, Math.PI / 2);
-    ctx.lineTo(-1.18 * s, -0.08 * s);
-    ctx.arc(-1.18 * s, -0.29 * s, 0.21 * s, Math.PI / 2, Math.PI * 1.5);
+    ctx.beginPath(); ctx.moveTo(-1.18 * s, -0.47 * s); ctx.lineTo(1.02 * s, -0.47 * s);
+    ctx.arc(1.02 * s, -0.26 * s, 0.21 * s, -Math.PI / 2, Math.PI / 2);
+    ctx.lineTo(-1.18 * s, -0.05 * s);
+    ctx.arc(-1.18 * s, -0.26 * s, 0.21 * s, Math.PI / 2, Math.PI * 1.5);
     ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#3a3a44'; ctx.lineWidth = 0.03 * s;
+    for (const cx of [-1.06, -0.88, -0.7, -0.52, -0.34, -0.16, 0.02, 0.2, 0.38, 0.56, 0.74, 0.9]) {
+        ctx.beginPath(); ctx.moveTo(cx * s, -0.45 * s); ctx.lineTo(cx * s, -0.1 * s); ctx.stroke();
+    }
     ctx.fillStyle = '#51515a';
-    for (const wx of [-0.92, -0.32, 0.28, 0.82]) { ctx.beginPath(); ctx.arc(wx * s, -0.29 * s, 0.15 * s, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#1b1b20'; ctx.beginPath(); ctx.arc(wx * s, -0.29 * s, 0.06 * s, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#51515a'; }
-    // ── riveted boiler hull (rust red)
+    for (const wx of [-0.92, -0.32, 0.28, 0.82]) { ctx.beginPath(); ctx.arc(wx * s, -0.26 * s, 0.15 * s, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#1b1b20'; ctx.beginPath(); ctx.arc(wx * s, -0.26 * s, 0.06 * s, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#51515a'; }
+    // ── riveted boiler hull — rounded CAPSULE (no more trapezoid)
     ctx.fillStyle = '#8a4a2a'; ctx.strokeStyle = '#3f2010'; ctx.lineWidth = 0.045 * s;
-    ctx.beginPath(); ctx.moveTo(-1.02 * s, -0.52 * s); ctx.lineTo(0.98 * s, -0.52 * s); ctx.lineTo(0.9 * s, -1.38 * s); ctx.lineTo(-0.94 * s, -1.38 * s); ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.strokeStyle = 'rgba(63,32,16,0.55)'; ctx.lineWidth = 0.02 * s;
-    ctx.beginPath(); ctx.moveTo(-0.98 * s, -0.82 * s); ctx.lineTo(0.94 * s, -0.82 * s); ctx.stroke();
+    K.roundRect(ctx, -1.06 * s, -1.42 * s, 2.06 * s, 0.92 * s, 0.46 * s); ctx.fill(); ctx.stroke();
+    // curved boiler bands — sell the cylinder
+    ctx.strokeStyle = 'rgba(63,32,16,0.5)'; ctx.lineWidth = 0.022 * s;
+    for (const bx of [-0.52, 0.06]) { ctx.beginPath(); ctx.ellipse(bx * s, -0.96 * s, 0.1 * s, 0.43 * s, 0, 0, Math.PI * 2); ctx.stroke(); }
     ctx.fillStyle = '#c98a4a';
-    for (const [rx, ry] of [[-0.88, -1.26], [-0.88, -0.62], [0.84, -1.26], [0.84, -0.62], [0.0, -0.62]]) { ctx.beginPath(); ctx.arc(rx * s, ry * s, 0.028 * s, 0, Math.PI * 2); ctx.fill(); }
-    // ── cab (lit window)
+    for (const [rx, ry] of [[-0.82, -1.28], [-0.82, -0.62], [0.68, -1.28], [0.68, -0.62], [-0.18, -1.36], [-0.18, -0.56]]) { ctx.beginPath(); ctx.arc(rx * s, ry * s, 0.028 * s, 0, Math.PI * 2); ctx.fill(); }
+    // steam dome on the boiler top
+    ctx.fillStyle = '#95512d'; ctx.strokeStyle = '#3f2010'; ctx.lineWidth = 0.03 * s;
+    ctx.beginPath(); ctx.arc(-0.18 * s, -1.42 * s, 0.17 * s, Math.PI, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // rim light following the hull's left curve
+    ctx.strokeStyle = 'rgba(255,214,150,0.4)'; ctx.lineWidth = 0.028 * s;
+    ctx.beginPath(); ctx.arc(-0.83 * s, -0.96 * s, 0.46 * s, Math.PI * 0.72, Math.PI * 1.32); ctx.stroke();
+    // ── cab: arched top corners + roof lip
     ctx.fillStyle = '#a85a32'; ctx.strokeStyle = '#3f2010'; ctx.lineWidth = 0.045 * s;
-    ctx.fillRect(0.3 * s, -1.98 * s, 0.62 * s, 0.62 * s); ctx.strokeRect(0.3 * s, -1.98 * s, 0.62 * s, 0.62 * s);
-    ctx.fillStyle = '#3f2010'; ctx.fillRect(0.38 * s, -1.88 * s, 0.44 * s, 0.34 * s);
-    ctx.fillStyle = '#ffd98a'; ctx.fillRect(0.41 * s, -1.85 * s, 0.38 * s, 0.28 * s);
-    // exhaust + smoke puffs
-    ctx.fillStyle = '#4a4a52'; ctx.fillRect(-0.62 * s, -2.02 * s, 0.13 * s, 0.66 * s);
+    ctx.beginPath();
+    ctx.moveTo(0.28 * s, -1.38 * s);
+    ctx.lineTo(0.28 * s, -1.88 * s);
+    ctx.quadraticCurveTo(0.28 * s, -1.98 * s, 0.39 * s, -1.98 * s);
+    ctx.lineTo(0.78 * s, -1.98 * s);
+    ctx.quadraticCurveTo(0.9 * s, -1.98 * s, 0.9 * s, -1.88 * s);
+    ctx.lineTo(0.9 * s, -1.38 * s);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#7a3c20';
+    K.roundRect(ctx, 0.24 * s, -2.03 * s, 0.7 * s, 0.09 * s, 0.045 * s); ctx.fill();
+    // lit window (rounded)
+    ctx.fillStyle = '#3f2010'; K.roundRect(ctx, 0.36 * s, -1.82 * s, 0.4 * s, 0.3 * s, 0.06 * s); ctx.fill();
+    ctx.fillStyle = '#ffd98a'; K.roundRect(ctx, 0.39 * s, -1.79 * s, 0.34 * s, 0.24 * s, 0.05 * s); ctx.fill();
+    // ── exhaust funnel: tapered body + flared cap
+    ctx.fillStyle = '#4a4a52'; ctx.strokeStyle = '#23232a'; ctx.lineWidth = 0.03 * s;
+    ctx.beginPath(); ctx.moveTo(-0.66 * s, -1.42 * s); ctx.lineTo(-0.61 * s, -1.96 * s);
+    ctx.lineTo(-0.5 * s, -1.96 * s); ctx.lineTo(-0.45 * s, -1.42 * s); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#5a5a64';
+    K.roundRect(ctx, -0.69 * s, -2.05 * s, 0.3 * s, 0.11 * s, 0.055 * s); ctx.fill();
+    // smoke puffs
     for (let i = 0; i < 3; i++) {
-        const py = -2.1 * s - i * 0.24 * s, pr = (0.11 + rng() * 0.06) * s + i * 0.05 * s;
+        const py = -2.14 * s - i * 0.24 * s, pr = (0.11 + rng() * 0.06) * s + i * 0.05 * s;
         ctx.fillStyle = `rgba(232,228,220,${0.42 - i * 0.11})`;
-        ctx.beginPath(); ctx.arc((-0.56 + (rng() - 0.5) * 0.3) * s, py, pr, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc((-0.55 + (rng() - 0.5) * 0.3) * s, py, pr, 0, Math.PI * 2); ctx.fill();
     }
     // ── flywheel on the hull flank
     ctx.fillStyle = '#3a3a42'; ctx.beginPath(); ctx.arc(-0.42 * s, -0.95 * s, 0.3 * s, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#6a6a74'; ctx.lineWidth = 0.035 * s;
+    ctx.strokeStyle = '#6a6a74'; ctx.lineWidth = 0.03 * s;
+    ctx.beginPath(); ctx.arc(-0.42 * s, -0.95 * s, 0.3 * s, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = 0.035 * s;
     for (let i = 0; i < 6; i++) { const a2 = i / 6 * Math.PI * 2 + 0.3; ctx.beginPath(); ctx.moveTo(-0.42 * s, -0.95 * s); ctx.lineTo(-0.42 * s + Math.cos(a2) * 0.27 * s, -0.95 * s + Math.sin(a2) * 0.27 * s); ctx.stroke(); }
     ctx.fillStyle = '#c9a65a'; ctx.beginPath(); ctx.arc(-0.42 * s, -0.95 * s, 0.06 * s, 0, Math.PI * 2); ctx.fill();
     // ── drill boom + bit chewing the rock face to the left
     ctx.strokeStyle = '#5a5a64'; ctx.lineWidth = 0.14 * s;
-    ctx.beginPath(); ctx.moveTo(-0.9 * s, -1.05 * s); ctx.lineTo(-1.62 * s, -0.72 * s); ctx.stroke();
-    ctx.fillStyle = '#6a6a74'; ctx.beginPath(); ctx.arc(-0.9 * s, -1.05 * s, 0.11 * s, 0, Math.PI * 2); ctx.fill();
-    ctx.save(); ctx.translate(-1.62 * s, -0.72 * s); ctx.rotate(0.5);
-    for (let i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? '#b9c2cc' : '#8a94a0'; ctx.beginPath(); ctx.moveTo(-0.09 * s, -i * 0.13 * s); ctx.lineTo(0.09 * s, -i * 0.13 * s); ctx.lineTo(0.05 * s, -(i + 1) * 0.13 * s); ctx.lineTo(-0.05 * s, -(i + 1) * 0.13 * s); ctx.closePath(); ctx.fill(); }
-    ctx.fillStyle = '#e2e8ee'; ctx.beginPath(); ctx.moveTo(-0.05 * s, -0.52 * s); ctx.lineTo(0.05 * s, -0.52 * s); ctx.lineTo(0, -0.66 * s); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-0.88 * s, -1.06 * s); ctx.lineTo(-1.6 * s, -0.72 * s); ctx.stroke();
+    ctx.fillStyle = '#6a6a74'; ctx.beginPath(); ctx.arc(-0.88 * s, -1.06 * s, 0.11 * s, 0, Math.PI * 2); ctx.fill();
+    ctx.save(); ctx.translate(-1.6 * s, -0.72 * s); ctx.rotate(0.5);
+    // rounded housing collar — wide enough to BRIDGE boom and bit (no gap)
+    ctx.fillStyle = '#8a94a0'; ctx.strokeStyle = '#23232a'; ctx.lineWidth = 0.03 * s;
+    K.roundRect(ctx, -0.13 * s, -0.19 * s, 0.28 * s, 0.38 * s, 0.09 * s); ctx.fill(); ctx.stroke();
+    for (let i = 0; i < 3; i++) { ctx.fillStyle = i % 2 ? '#b9c2cc' : '#8a94a0'; ctx.beginPath(); ctx.moveTo(-0.09 * s, -(0.17 + i * 0.13) * s); ctx.lineTo(0.09 * s, -(0.17 + i * 0.13) * s); ctx.lineTo(0.05 * s, -(0.3 + i * 0.13) * s); ctx.lineTo(-0.05 * s, -(0.3 + i * 0.13) * s); ctx.closePath(); ctx.fill(); }
+    ctx.fillStyle = '#e2e8ee'; ctx.beginPath(); ctx.moveTo(-0.05 * s, -0.56 * s); ctx.lineTo(0.05 * s, -0.56 * s); ctx.lineTo(0, -0.72 * s); ctx.closePath(); ctx.fill();
     ctx.restore();
     // dust collar where the bit meets the face
     ctx.fillStyle = 'rgba(196,178,140,0.5)'; ctx.beginPath(); ctx.ellipse(-1.86 * s, -0.5 * s, 0.16 * s, 0.1 * s, -0.4, 0, Math.PI * 2); ctx.fill();
-    // headlamp
-    ctx.fillStyle = '#ffe9a3'; ctx.beginPath(); ctx.arc(0.95 * s, -1.16 * s, 0.055 * s, 0, Math.PI * 2); ctx.fill();
+    // headlamp on the cab's face-side
+    ctx.fillStyle = '#ffe9a3'; ctx.beginPath(); ctx.arc(0.88 * s, -1.7 * s, 0.055 * s, 0, Math.PI * 2); ctx.fill();
+    // ── grounded rubble: piled against the tracks + spoil under the bit
+    const rockCols = ['#3f2010', '#51443a', '#2e2a26', '#6a5a48'];
+    for (let i = 0; i < 6; i++) {
+        const px = (-1.32 + rng() * 2.42) * s, py = (-0.02 + rng() * 0.05) * s, pr2 = (0.03 + rng() * 0.035) * s;
+        _pebble(ctx, px, py, pr2, rockCols[i % 4], rng);
+    }
+    for (let i = 0; i < 4; i++) {
+        const px = (-2.0 + rng() * 0.52) * s, py = (-0.02 + rng() * 0.05) * s, pr2 = (0.03 + rng() * 0.04) * s;
+        _pebble(ctx, px, py, pr2, rockCols[(i + 1) % 4], rng);
+    }
+    // ground dust at the track base
+    ctx.fillStyle = 'rgba(200,184,150,0.10)';
+    ctx.beginPath(); ctx.ellipse(-1.5 * s, 0.02 * s, 0.32 * s, 0.06 * s, 0, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
 }
 
