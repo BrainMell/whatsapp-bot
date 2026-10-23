@@ -12,7 +12,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
 FRAMES = '/home/z/my-project/download/assets/packs/frames'
-OUT = '/tmp/hbqa/core/rpgasset/homestead/kit'
+OUT = os.environ.get('BAKE_OUT', '/tmp/hbkit/core/rpgasset/homestead/kit')
 os.makedirs(OUT, exist_ok=True)
 
 WALL_W, WALL_H, SKIRT = 64, 126, 14
@@ -66,8 +66,9 @@ def make_wall(src, box, tiles_y, out, tint=1.0, seed=1):
     im = load(src)
     wall = crop_tiled(im, box, WALL_W, WALL_H, tiles_y, seed=seed)
     if tint != 1.0:
-        arr = np.asarray(wall, float)[:, :, :3] * tint
-        wall = Image.fromarray(np.clip(arr, 0, 255).astype('uint8'), 'RGBA')
+        arr = np.asarray(wall, float).copy()
+        arr[..., :3] *= tint
+        wall = Image.fromarray(np.clip(arr, 0, 255).astype('uint8'))
     wall = seam_shade(wall, WALL_H)
     sprite = Image.new('RGBA', (WALL_W, WALL_TOTAL), (0, 0, 0, 0))
     sprite.paste(wall, (0, 0))
@@ -76,24 +77,89 @@ def make_wall(src, box, tiles_y, out, tint=1.0, seed=1):
     print(f'{out:22s} {WALL_W}x{WALL_TOTAL}')
     return sprite
 
-# ── wall tiers (theme -> pack source crop, f0 frontal faces) ──────────
-# t1 rustic plank  <- 66 norwegian timber plank band (trimmed off the roof edge)
-make_wall('66_norwegian_timber', (58, 106, 128, 126), 6, 'hou_wall_t1', seed=2)
-# t2 half-timber   <- 7 rustic kingdom plaster+timber band (flat, no roof)
-make_wall('7_rustic_kingdom', (65, 95, 125, 118), 5, 'hou_wall_t2', seed=3)
+def plank_base(seed=21, tint=1.28):
+    """t1: oak plank wall - the norwegian timber band upscaled + blurred so the
+    carved post rhythm melts into grain, then plank seams ruled at FINAL scale
+    (drawing them pre-downscale washed them out)."""
+    im = load('66_norwegian_timber')
+    big = crop_tiled(im, (58, 106, 152, 126), 256, 504, 9, jitter=7, seed=seed)
+    big = big.filter(ImageFilter.GaussianBlur(9))
+    planks = big.resize((WALL_W, WALL_H), Image.LANCZOS)
+    arr = np.asarray(planks, float).copy()
+    arr[..., :3] *= tint
+    planks = Image.fromarray(np.clip(arr, 0, 255).astype('uint8'))
+    d = ImageDraw.Draw(planks)
+    for row, y in enumerate(range(0, WALL_H, 14)):    # plank seams, crisp
+        d.line([(0, y), (WALL_W, y)], fill=(52, 30, 13, 210), width=1)
+        d.line([(0, y + 1), (WALL_W, y + 1)], fill=(255, 226, 170, 55), width=1)
+        for jx in (10 + (row % 2) * 18, 42 + (row % 3) * 9):   # butt joints
+            d.line([(jx, y + 2), (jx, y + 13)], fill=(48, 28, 12, 80), width=1)
+    return planks.convert('RGBA')
+
+def finish_wall(wall, out, skirt_box):
+    wall = seam_shade(wall, WALL_H)
+    im = load('66_norwegian_timber') if 'plank' in out else load('79_alsatian_timber')
+    sprite = Image.new('RGBA', (WALL_W, WALL_TOTAL), (0, 0, 0, 0))
+    sprite.paste(wall, (0, 0))
+    sprite.paste(skirt_band(load('79_alsatian_timber').crop(skirt_box) if 't2' in out else load('66_norwegian_timber').crop(skirt_box)), (0, WALL_H))
+    sprite.save(f'{OUT}/{out}.png', optimize=True)
+    print(f'{out:22s} {WALL_W}x{WALL_TOTAL}')
+    return sprite
+
+# t1 rustic oak planks (was the carved gallery band = read as shelving)
+finish_wall(plank_base(seed=21, tint=1.28), 'hou_wall_t1', (58, 106, 152, 126))
+# t2 clean pink plaster - alsatian LEFT tower shaft between crenellation and
+# the slit row (the old right-shaft crop dragged an orange ring beam in)
+make_wall('79_alsatian_timber', (32, 196, 60, 213), 4, 'hou_wall_t2', tint=1.06, seed=3)
+
+# window bays: clean base wall + ONE real pack window pasted in (the old win
+# crops tiled whole facades -> window-everywhere + roof fragments)
+WIN_BOX = (114, 93, 137, 109)      # alsatian blue-shuttered window, tight
+
+def make_window_bay(out, base_wall, win_tint=(1.0, 1.0, 1.0), seed=31, base_box=None, base_tint=1.0):
+    if base_wall == 'plank':
+        base = plank_base(seed=seed, tint=1.22)
+        skirt_box = (58, 106, 152, 126)
+    else:
+        im2 = load('79_alsatian_timber')
+        base = crop_tiled(im2, base_box or (32, 196, 60, 213), WALL_W, WALL_H, 1 if base_box else 4, seed=seed)
+        base = Image.fromarray(np.clip(np.asarray(base, float) * np.array([base_tint, base_tint, base_tint, 1.0]), 0, 255).astype('uint8'), 'RGBA')
+        skirt_box = base_box or (32, 196, 60, 213)
+    wim = load('79_alsatian_timber').crop(WIN_BOX)
+    ww, wh = 34, 24
+    wsc = wim.resize((ww, wh), Image.LANCZOS)
+    if win_tint != (1.0, 1.0, 1.0):
+        wa = np.asarray(wsc, float).copy()
+        for c_i, f in enumerate(win_tint[:3]):
+            wa[..., c_i] *= f
+        wsc = Image.fromarray(np.clip(wa, 0, 255).astype('uint8'), 'RGBA')
+    wx, wy = (WALL_W - ww) // 2, 26
+    d = ImageDraw.Draw(base)
+    d.rectangle([wx - 3, wy - 4, wx + ww + 2, wy + wh + 2], fill=(74, 49, 26, 255))   # timber frame
+    base.paste(wsc, (wx, wy))
+    d.rectangle([wx - 3, wy + wh + 2, wx + ww + 2, wy + wh + 6], fill=(96, 74, 52, 255))  # sill
+    d.rectangle([wx - 3, wy + wh + 6, wx + ww + 2, wy + wh + 9], fill=(0, 0, 0, 70))     # sill shadow
+    finish_wall(base, out, skirt_box)
+
+make_window_bay('hou_wall_t1_win', 'plank', win_tint=(1.12, 0.94, 0.72), seed=32)
+make_window_bay('hou_wall_t2_win', 'plaster', seed=33)
+make_window_bay('hou_wall_t5_win', 'plaster', seed=34, base_box=(76, 182, 94, 214), base_tint=1.08)
 # t3 brick         <- 71 flemish brick tower upper face (flat brick)
 make_wall('71_flemish_brick', (100, 20, 133, 60), 3, 'hou_wall_t3', seed=4)
 # t4 rubble stone  <- 7 rustic kingdom stone tower shaft (tall, flat)
 make_wall('7_rustic_kingdom', (48, 118, 76, 198), 2, 'hou_wall_t4', seed=5)
-# t5 dressed stone <- 79 alsatian timber plaster tower shaft (tall cream)
-make_wall('79_alsatian_timber', (58, 185, 92, 255), 2, 'hou_wall_t5', seed=6)
+# t5 dressed stone <- alsatian RIGHT tower plaster shaft (clean cream; both
+# the marble-citadel crop and the committed two-tower crop dragged dark
+# wedges/roof chips into the walls)
+make_wall('79_alsatian_timber', (76, 182, 94, 214), 1, 'hou_wall_t5', tint=1.02, seed=6)
 
-# window variants (real windows/shutters/slits from the same packs)
-make_wall('79_alsatian_timber', (30, 155, 105, 182), 4, 'hou_wall_t2_win', seed=7)
-make_wall('71_flemish_brick', (78, 105, 126, 170), 2, 'hou_wall_t3_win', seed=8)
-make_wall('62_alpine_granite', (58, 140, 108, 215), 2, 'hou_wall_t4_win', seed=9)
-make_wall('23_bergfried_keep', (100, 58, 130, 90), 4, 'hou_wall_t5_win', seed=10)
-make_wall('66_norwegian_timber', (85, 155, 160, 185), 2, 'hou_wall_t1_win', seed=11)
+# (t1_win / t2_win are built as composed bays above - the old facade-tile
+#  crops are gone: they carried roof fragments and parapets into the walls)
+make_wall('71_flemish_brick', (78, 105, 126, 170), 2, 'hou_wall_t3_win', seed=9)
+make_wall('62_alpine_granite', (58, 140, 108, 215), 2, 'hou_wall_t4_win', seed=10)
+# t5_win built as a composed bay above (bergfried facade-tile crop repeated
+# its window rows 4x per segment)
+#make_wall('23_bergfried_keep', (100, 58, 130, 90), 4, 'hou_wall_t5_win', seed=11)
 
 # ── doorframe: flemish gate arch ──────────────────────────────────────────
 im = load('71_flemish_brick')
