@@ -52,12 +52,15 @@ function sectionA() {
   ok("SSS-rank pays 10", drop("SSS", { victory: true }) === 10);
   ok("GOD pays 10", drop("GOD", { victory: true }) === 10);
   ok("DRAGON pays 2", drop("DRAGON", { victory: true }) === 2);
-  ok("A pays 2", drop("A", { victory: true }) === 2);
-  ok("B pays 2", drop("B", { victory: true }) === 2);
-  ok("C pays 1", drop("C", { victory: true }) === 1);
-  ok("D pays 1", drop("D", { victory: true }) === 1);
-  ok("E pays 0", drop("E", { victory: true }) === 0);
-  ok("F pays 0", drop("F", { victory: true }) === 0);
+  // 2026-10-22 rank-relative table (no playerRank → the dungeon's own base)
+  ok("A dungeon base 5", drop("A", { victory: true }) === 5);
+  ok("B dungeon base 4", drop("B", { victory: true }) === 4);
+  ok("C dungeon base 3", drop("C", { victory: true }) === 3);
+  ok("D dungeon base 2", drop("D", { victory: true }) === 2);
+  ok("E dungeon base 2", drop("E", { victory: true }) === 2);
+  ok("F dungeon base 2", drop("F", { victory: true }) === 2);
+  for (const [pr, dr, want] of [["F","F",2],["F","E",3],["E","E",2],["E","D",4],["C","C",3],["C","B",5],["B","B",4],["B","A",6],["A","A",5],["A","S",7]])
+    ok(`${pr}-rank in ${dr} dungeon pays ${want}`, drop(dr, { victory: true, playerRank: pr }) === want);
   ok("lowercase rank accepted", drop("sss", { victory: true }) === 10);
   ok("unknown rank pays 0", drop("XYZ", { victory: true }) === 0);
   ok("defeat/flee pays 0", drop("SSS", { victory: false }) === 0);

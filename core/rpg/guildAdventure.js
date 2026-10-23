@@ -10829,6 +10829,10 @@ const DUNGEON_SKILL_POINT_DROPS = {
   F: 0, E: 0, D: 1, C: 1, B: 2, A: 2, S: 5, SS: 7, SSS: 10, DRAGON: 2, GOD: 10,
 };
 
+const SP_LADDER = ["F", "E", "D", "C", "B", "A", "S", "SS", "SSS"];
+const SP_RANK_BASE = { F: 2, E: 2, D: 2, C: 3, B: 4, A: 5 };
+const SP_RANK_UP = { F: 3, E: 4, D: 4, C: 5, B: 6, A: 7 };
+
 /**
  * Skill points dropped by a dungeon clear. Pure + exported for QA.
  * @param {string} rank dungeon rank (F..GOD, DRAGON)
@@ -10840,7 +10844,17 @@ function getDungeonSkillPointDrop(rank, opts = {}) {
   if (opts.isAbyss) return 0;           // Abyss runs its own per-floor economy (separately tuned)
   const mode = String(opts.mode || "NORMAL").toUpperCase();
   if (mode === "TUTORIAL" || mode === "TUTORIAL_GROUP") return 0; // practice fights never pay
-  return DUNGEON_SKILL_POINT_DROPS[String(rank || "").toUpperCase()] || 0;
+  const dr = String(rank || "").toUpperCase();
+  // OWNER 2026-10-22 (rank-relative SP): a clear of your OWN rank's dungeon pays that rank's base; stepping UP one
+  // dungeon rank pays the "up" value. F:2/3 E:2/4 D:2/4 C:3/5 B:4/6 A:5/7 (D is interpolated — owner gave no D line).
+  const pr = String(opts.playerRank || "").toUpperCase();
+  const pi = SP_LADDER.indexOf(pr), di = SP_LADDER.indexOf(dr);
+  if (pi >= 0 && pi < SP_LADDER.indexOf("S") && di >= 0) {
+    if (di <= pi) return SP_RANK_BASE[SP_LADDER[Math.min(di, pi)]];          // own rank (or below): that dungeon's base
+    return SP_RANK_UP[pr] + (di - pi - 1);                                    // above: "up" value, +1 per extra rank beyond one
+  }
+  if (pi < 0 && di >= 0 && di < SP_LADDER.indexOf("S")) return SP_RANK_BASE[dr];  // unknown player rank: dungeon base
+  return DUNGEON_SKILL_POINT_DROPS[dr] || 0;                                  // S+ players / S+ lairs keep the high-tier ladder
 }
 
 async function endAdventure(sock, sessionKey, victory = true) {
@@ -11340,6 +11354,7 @@ async function endAdventure(sock, sessionKey, victory = true) {
       isDead: player.isDead,
       isAbyss: state.isAbyss,
       mode: state.mode,
+      playerRank: (() => { try { const _u = economy.getUser(player.jid); return (_u && _u.adventurerRank) || "F"; } catch (e) { return ""; } })(),
     });
 
     // Update stats and rank
