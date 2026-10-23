@@ -172,10 +172,11 @@ function getInst() {
       // 💡 TOKEN EVENT STATE
       tokenEventActive: false,     // toggled via .g event start/stop
       tokenEventStart: 0,          // timestamp event started
-      // 💡 TOKEN RATES (2026-10-08 requirements doc):
-      //   - Spawn-based: 1 token per 10 cards spawned, PER GROUP (independent
+      // 💡 TOKEN RATES (2026-10-08 requirements doc; rate retuned 2026-10-23):
+      //   - Spawn-based: 1 token per 2 cards spawned, PER GROUP (independent
       //     counters - activity in one group never affects another group's
-      //     progression). Replaces the old every-3rd-spawn + 25% RNG mechanic.
+      //     progression). Owner 2026-10-23: "tokens guaranteed with every 2
+      //     cards that spawn" — was 1 per 10 (which replaced every-3rd + 25% RNG).
       //   - Command-based (hidden): 1 token per 15 eligible player commands
       //     (claim excluded). Per-user counter.
       tokenSpawnCounters: new Map(),  // groupJid -> spawn count since last token
@@ -543,15 +544,15 @@ async function setSpawnInterval(minutesOrRange, callerJid, isOwner, maxMinutes) 
   const intervalLabel = minMins === maxMins ? `${minMins} minutes` : `${minMins}-${maxMins} minutes (random)`;
   const avgMinutes = (minMins + maxMins) / 2;
   const spawnsPerHour = Math.round(60 / avgMinutes * 10) / 10;
-  // 💡 2026-10-08: token rate is a flat 1 per 10 spawns (per group) - no RNG bonus layer.
-  const tokensPerHour = Math.round(spawnsPerHour / 10 * 10) / 10;
+  // 💡 2026-10-23: token rate is a flat 1 per 2 spawns (per group) - no RNG bonus layer (was 1 per 10).
+  const tokensPerHour = Math.round(spawnsPerHour / TOKEN_SPAWNS_PER_TOKEN * 10) / 10;
   return {
     success: true,
     message: `✅ Spawn interval set to *${intervalLabel}* for ${botConfig.getBotId()}.
 
 📊 Approximate rates (based on avg ${avgMinutes} min):
 • ${spawnsPerHour} spawns/hour
-• ~${tokensPerHour} event tokens/hour per group (during events, 1 per 10 spawns)
+• ~${tokensPerHour} event tokens/hour per group (during events, 1 per ${TOKEN_SPAWNS_PER_TOKEN} spawns)
 
 _Interval persists across bot restarts._`
   };
@@ -570,8 +571,8 @@ function getSpawnIntervalInfo() {
   // Average rate based on midpoint of range
   const avgMinutes = (minMinutes + maxMinutes) / 2;
   const spawnsPerHour = Math.round(60 / avgMinutes * 10) / 10;
-  // 💡 2026-10-08: 1 token per 10 spawns (per group), no RNG bonus layer.
-  const tokensPerHour = Math.round(spawnsPerHour / 10 * 10) / 10;
+  // 💡 2026-10-23: 1 token per 2 spawns (per group), no RNG bonus layer (was 1 per 10).
+  const tokensPerHour = Math.round(spawnsPerHour / TOKEN_SPAWNS_PER_TOKEN * 10) / 10;
   return {
     minutes: maxMinutes,  // legacy field (kept for backward compat)
     minMinutes,
@@ -948,11 +949,11 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
     }
 
     const spawnKey = `${targetGroup}_${card.id}`;
-    // 💡 TOKEN RATES (2026-10-08 requirements doc §2 + §14):
-    //   1 token per 10 cards spawned, with PER-GROUP counters - each group's
+    // 💡 TOKEN RATES (2026-10-08 doc §2 + §14; rate retuned 2026-10-23 owner: 1 per 2):
+    //   1 token per 2 cards spawned, with PER-GROUP counters - each group's
     //   progression is fully independent (activity in one group never
     //   advances another group's token clock). Counters only advance while
-    //   a token event is ACTIVE, so the 1-in-10 ratio maps exactly to
+    //   a token event is ACTIVE, so the 1-in-2 ratio maps exactly to
     //   event-window spawns. Replaces the old global every-3rd-spawn +
     //   25% RNG mechanic.
     let isTokenSpawn = false;
@@ -1118,7 +1119,7 @@ async function loadTokenEventState() {
 //  progression. Event activity in one group NEVER affects another group.
 // ═══════════════════════════════════════════════════════════════════════════
 
-const TOKEN_SPAWNS_PER_TOKEN  = 10;  // §2: 1 token per 10 cards
+const TOKEN_SPAWNS_PER_TOKEN  = 2;   // §2 owner 2026-10-23: "tokens guaranteed with every 2 cards that spawn" (was 1 per 10)
 const TOKEN_CMDS_PER_TOKEN    = 15;  // §3: 1 token per 15 eligible commands
 // 💡 47-l1 (owner 2026-10-20: "card tokens are spawning in even when people
 // aren't claiming cards???? recently all received tokens"): the §3 hidden
@@ -1730,7 +1731,7 @@ async function cmdClaim(args, senderJid, reply, chatId) {
 
     // 💡 TOKEN DROP (2026-10-08 requirements doc §2 + §4):
     // Single deterministic layer - a spawn is marked hasToken at SPAWN time
-    // (1 in 10 spawns per group, see doSpawn). On claim, if the event is
+    // (1 in 2 spawns per group, see doSpawn — owner retune 2026-10-23). On claim, if the event is
     // active AND the spawn is token-bearing, grant +1 token. No RNG layer.
     // §4: the message simply tells the player they received an Event Token -
     // it must NOT reveal the spawn rate, probability, or the mechanic.
