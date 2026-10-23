@@ -52,15 +52,25 @@ function bandFor(locId, drops = {}) {
     return 'low';
 }
 
-/** the loot ribbon ALONE on a transparent GW×GH canvas — the plaster. */
+/** the loot ribbon ALONE on a transparent GW×GH canvas — the plaster. Task 25:
+ *  the ribbon carries the haul's item portraits (lootArt) when drops rode in —
+ *  same gold-rimmed slots the fish lane got. */
 async function renderRibbonOverlay(ribbon) {
-    const plateKey = hashStr(JSON.stringify(ribbon));
+    const plateKey = hashStr(JSON.stringify({ head: ribbon.head, lines: ribbon.lines, drops: ribbon.drops || null }));
     return mediaCache.cached('mineribbon', `mr:${plateKey}`, async () => {
         const { createCanvas } = require('canvas');
         const scenes = require('./structureScenes');
         try { require('./worldMapRenderer')._ensureFonts(); } catch (e) { /* default fonts */ }
         const cv = createCanvas(GW, GH), c2 = cv.getContext('2d');
-        scenes.drawBanner(c2, GW, GH, ribbon);
+        const spec = { head: ribbon.head, lines: ribbon.lines };
+        if (ribbon.drops) {
+            try {
+                const art = await require('./lootArt').artForDrops(ribbon.drops);
+                if (art.length) spec.art = art;
+            } catch (e) { /* art is decorative */ }
+        }
+        if (spec.art && spec.art.length) scenes.drawLootBanner(c2, GW, GH, spec);
+        else scenes.drawBanner(c2, GW, GH, spec);
         const png = cv.toBuffer('image/png');
         if (!png || png.length < 100) throw new Error('mine ribbon render failed');
         return { buffer: png, contentType: 'image/png' };
@@ -104,8 +114,8 @@ async function renderMineCard({ loc, band = null, drops = {}, banner = null } = 
     const base = loadBaseMp4(loc, resolvedBand);
     if (!base) return null;
     const ribbon = banner && (banner.head || (banner.lines || []).length)
-        ? { head: String(banner.head || 'The Mines'), lines: (banner.lines || []).slice(0, 6) }
-        : { head: 'The Mines', lines: [] };
+        ? { head: String(banner.head || 'The Mines'), lines: (banner.lines || []).slice(0, 6), drops: drops || null }
+        : { head: 'The Mines', lines: [], drops: drops || null };
     const overlay = await renderRibbonOverlay(ribbon); // cached per loot text
     const thumb = await makeThumb(loc, resolvedBand, overlay ? overlay.buffer : null);
     const key = `mp:${loc}:${resolvedBand}:${hashStr(JSON.stringify(ribbon))}`;
