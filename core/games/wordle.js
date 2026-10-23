@@ -234,28 +234,34 @@ function _isStaffJid(jid) {
   }
 }
 
-function getLeaderboard() {
+// One ranked list shared by the text board AND the mention list (they used to be built separately — the mention list
+// forgot the staff filter, so the pinged people did not match the people shown).
+function getLeaderboardEntries(limit = 10) {
   const scores = system.get('wordle_scores', {});
-  const sorted = Object.entries(scores)
-    .filter(([jid, data]) => data.wins > 0 && !_isStaffJid(jid))
+  return Object.entries(scores)
+    .filter(([jid, data]) => data && data.wins > 0 && !_isStaffJid(jid))
     .sort(([, a], [, b]) => {
       const aPoints = a.points || 0;
       const bPoints = b.points || 0;
       if (aPoints !== bPoints) return bPoints - aPoints;
       if (a.wins !== b.wins) return b.wins - a.wins;
-      const aRate = a.wins / (a.wins + a.losses);
-      const bRate = b.wins / (b.wins + b.losses);
+      const aRate = a.wins / Math.max(1, a.wins + (a.losses || 0));
+      const bRate = b.wins / Math.max(1, b.wins + (b.losses || 0));
       return bRate - aRate;
     })
-    .slice(0, 10);
-  
+    .slice(0, limit);
+}
+
+function getLeaderboard() {
+  const sorted = getLeaderboardEntries(10);
   if (sorted.length === 0) return "No scores yet.";
-  
   return sorted.map(([jid, data], i) => {
     const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
     const points = data.points || 0;
-    const avgGuesses = data.wins > 0 ? (data.totalGuesses / data.wins).toFixed(1) : 'N/A';
-    return `${medal} ${data.name || 'User'}\n   💎 ${points}pts • ${data.wins}W-${data.losses}L • Avg: ${avgGuesses} • 🔥${data.currentStreak}`;
+    const avgGuesses = data.wins > 0 && data.totalGuesses ? (data.totalGuesses / data.wins).toFixed(1) : 'N/A';
+    // players with no saved display name get an @mention so WhatsApp renders their real name instead of "User"
+    const nm = data.name && !/^(user|player)$/i.test(data.name) ? data.name : `@${String(jid).split('@')[0].split(':')[0]}`;
+    return `${medal} ${nm}\n   💎 ${points}pts • ${data.wins}W-${data.losses || 0}L • Avg: ${avgGuesses} • 🔥${data.currentStreak || 0}`;
   }).join('\n\n');
 }
 
@@ -704,19 +710,7 @@ showLeaderboard: async (sock, chatId, botMarker, m) => {
   message += "└───────────────";
 
   try {
-    const scores = system.get('wordle_scores', {});
-    const sorted = Object.entries(scores)
-      .filter(([, data]) => data.wins > 0)
-      .sort(([, a], [, b]) => {
-        const aPoints = a.points || 0;
-        const bPoints = b.points || 0;
-        if (aPoints !== bPoints) return bPoints - aPoints;
-        if (a.wins !== b.wins) return b.wins - a.wins;
-        const aRate = a.wins / (a.wins + a.losses);
-        const bRate = b.wins / (b.wins + b.losses);
-        return bRate - aRate;
-      })
-      .slice(0, 10);
+    const sorted = getLeaderboardEntries(10);
     
     const mentionedJids = sorted.map(([jid, data]) => 
       data.fullJid || `${jid}@s.whatsapp.net`
