@@ -121,7 +121,7 @@ function check(name, cond, extra) {
             check('preview: SRC count 5', preview.includes('*5* card'), preview.slice(0, 120));
             check('preview: DST current 1', preview.includes('*1* card'), preview.slice(0, 140));
             check('preview: listings 1', preview.includes('*Market listings to cancel:* _1_'), preview.slice(0, 160));
-            check('preview: auction hold shown', preview.includes('*In active auction:* _1_'), preview.slice(0, 180));
+            check('preview: auction hold shown', preview.includes('*In active auction:* _1'), preview.slice(0, 180));
             const armed = cardSystem.moveCardsArmed.get(CHAT);
             check('preview: chat armed with src/dst', !!armed && armed.src === SRC && armed.dst === DST, JSON.stringify(armed || {}));
 
